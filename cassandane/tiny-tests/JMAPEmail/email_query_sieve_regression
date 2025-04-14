@@ -1,0 +1,286 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sieve_regression
+  :needs_component_sieve :NoMunge8Bit :RFC2047_UTF8
+{
+    my ($self)  = @_;
+    my $jmap    = $self->{jmap};
+    my $imap    = $self->{store}->get_client();
+    my $uuidgen = Data::UUID->new;
+
+    # This contains regression tests for cases where Email/query
+    # and JMAP Sieve jmapquery were notoriously known to differ.
+    # The tests assert that both implementations evaluate the
+    # Email query filter equally.
+
+    use utf8;
+
+    my @testCases = (
+        {
+            filter    => {},
+            body      => "foo",
+            wantMatch => 1,
+        },
+        {
+            filter    => { body => "foo" },
+            body      => "foo body",
+            wantMatch => 1,
+        },
+        {
+            filter    => { body => "foo" },
+            body      => "nomatch",
+            wantMatch => 0,
+        },
+        {
+            filter    => { body => "🥳🤦" },
+            body      => "🥳🤦 body",
+            wantMatch => 0,
+        },
+        {
+            filter => {
+                operator   => 'OR',
+                conditions => [
+                    { body => "🥳🤦" },
+                    {
+                        body => "foo",
+                    }
+                ]
+            },
+            body      => "🥳🤦 foo body",
+            wantMatch => 1,
+        },
+        {
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body => "🥳🤦" },
+                    {
+                        body => "foo",
+                    }
+                ]
+            },
+            body      => "🥳🤦 foo body",
+            wantMatch => 1,
+        },
+        {
+            filter => {
+                operator   => 'OR',
+                conditions => [ { body => "🥳🤦" } ]
+            },
+            body      => "🥳🤦 foo body",
+            wantMatch => 0,
+        },
+        {
+            filter => {
+                operator   => 'AND',
+                conditions => [ { body => "🥳🤦" } ]
+            },
+            body      => "🥳🤦 foo body",
+            wantMatch => 0,
+        },
+        {
+            # Was 'test_email_query_punct_no_text'
+            filter => {
+                operator   => 'OR',
+                conditions => [
+                    { from => '"="' },
+                ],
+            },
+            body      => "foo",
+            wantMatch => 0,
+        },
+        {
+            # Was 'test_email_query_utf8punct_term'
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body => "hello" },
+                    { body => "–" },    # that's 'EN DASH' (U+2013)
+                    { body => "world" }
+                ]
+            },
+            body      => "hello – world",
+            wantMatch => 1,
+        },
+        {
+            # Was 'test_email_query_dash_sieve'
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body => "hello" },
+                    { body => "-" },
+                    { body => "world" }
+                ]
+            },
+            body      => "hello - world",
+            wantMatch => 1,
+        },
+        {
+            # Was 'test_email_query_dash_sieve'
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body => "hello" },
+                    { body => "-" },
+                    { body => "world" }
+                ]
+            },
+            body      => "hello",
+            wantMatch => 0,
+        },
+        {
+            # Was 'test_email_query_dash_sieve'
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body => "hello" },
+                    { body => "-" },
+                    { body => "world" }
+                ]
+            },
+            body      => "world",
+            wantMatch => 0,
+        },
+        {
+            # Was 'test_email_query_sieve_8bit_header'
+            filter    => { subject => "płatność" },
+            subject   => "test płatność",
+            wantMatch => 1,
+        },
+        {
+            filter => {
+                body    => "foo",
+                minSize => 32,
+            },
+            body      => "foo body",
+            wantMatch => 1,
+        },
+        {
+            filter => {
+                operator   => 'AND',
+                conditions => [
+                    { body    => "foo" },
+                    { minSize => 32 },
+                ],
+            },
+            body      => "foo body",
+            wantMatch => 1,
+        },
+    );
+
+    xlog $self, "Create Sieve script for testing";
+    my $json = JSON::XS->new;
+    $json->utf8(1);
+    $json->pretty(1);
+    my $sieve = 'require ["imap4flags", "vnd.cyrus.jmapquery"];';
+    while (my ($i, $tc) = each @testCases) {
+        my $filter = $json->encode($tc->{filter});
+        $filter =~ s/\s+$//;
+        $sieve .= <<EOF;
+
+if jmapquery text:
+$filter
+.
+{
+  addflag "\$matched_testcase_$i";
+}
+EOF
+    }
+
+    no utf8;
+
+    $self->{instance}->install_sieve_script($sieve);
+    xlog $self, "Created Sieve script:\n" . $sieve;
+
+    xlog $self, "Get JMAP Email state";
+    my $res = $jmap->CallMethods([ [ 'Email/get', { ids => [] }, 'R1' ] ]);
+    my $emailState = $res->[0][1]{state};
+    $self->assert_not_null($emailState);
+
+    # Run tests
+
+    while (my ($i, $tc) = each @testCases) {
+        xlog $self, "Testcase $i: " . encode_json($tc->{filter});
+        xlog $self, "Testcase $i: deliver message";
+        my $uuid    = $uuidgen->create_str;
+        my $subject = $tc->{subject} // "subject$i";
+        my $body    = $tc->{body}    // "body$i";
+        my $mime    = <<"EOF";
+From: from\@local
+To: to\@local
+Subject: $subject
+Message-ID: <$uuid\@local>
+Date: Mon, 13 Apr 2020 17:24:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+$body
+EOF
+        $mime =~ s/\r?\n/\r\n/gs;
+        my $msg = Cassandane::Message->new();
+        $msg->set_lines(split /\n/, $mime);
+        $self->{instance}->deliver($msg);
+        $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+        my $res = $jmap->CallMethods([
+            [
+                'Email/changes', {
+                    sinceState => $emailState
+                }, 'R1'
+            ],
+            [
+                'Email/get',
+                {
+                    '#ids' => {
+                        resultOf => 'R1',
+                        name     => 'Email/changes',
+                        path     => '/created'
+                    },
+                    properties => [ 'subject', 'keywords' ],
+                },
+                'R2'
+            ],
+            [
+                'Email/query',
+                {
+                    filter => $tc->{filter},
+                },
+                'R3'
+            ],
+        ]);
+        $self->assert_num_equals(1, scalar @{ $res->[0][1]{created} });
+        my $email = $res->[1][1]{list}[0];
+        $self->assert_not_null($email);
+
+        xlog $self, "Testcase $i: assert Sieve rule";
+        my $keyword = "\$matched_testcase_$i";
+        if ($tc->{wantMatch}) {
+            $self->assert_equals(
+                JSON::true,
+                $email->{keywords}{$keyword}, JSON::true
+            );
+        } else {
+            $self->assert(not exists $email->{keywords}{$keyword});
+        }
+
+        xlog $self, "Testcase $i: assert Email/query";
+        if ($tc->{wantMatch}) {
+            $self->assert_deep_equals([ $email->{id} ], $res->[2][1]{ids});
+        } else {
+            $self->assert_num_equals(0, scalar @{ $res->[2][1]{ids} });
+        }
+
+        xlog $self, "Testcase $i: Destroy email";
+        $res = $jmap->CallMethods([ [
+            'Email/set',
+            {
+                destroy => [ $email->{id} ],
+            },
+            'R1'
+        ] ]);
+        $self->assert_deep_equals([ $email->{id} ], $res->[0][1]{destroyed});
+        $emailState = $res->[0][1]{newState};
+    }
+}
