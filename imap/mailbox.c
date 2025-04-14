@@ -46,6 +46,7 @@
 #endif
 #include <ctype.h>
 #include <errno.h>
+#include <libgen.h>
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #elif defined(HAVE_STDINT_H)
@@ -5993,14 +5994,42 @@ EXPORTED int mailbox_create(const char *name,
         r = IMAP_MAILBOX_BADNAME;
         goto done;
     }
-    mailbox->index_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (mailbox->index_fd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: create index failed",
+    char *copy = xstrdup(fname);
+    const char *dir = dirname(copy);
+#if defined(O_DIRECTORY)
+    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(dir, O_RDONLY, 0600);
+#endif
+    free(copy);
+    if (dirfd < 0) {
+        xsyslog(LOG_ERR, "IOERROR: open index dir failed",
                          "fname=<%s>",
                          fname);
         r = IMAP_IOERROR;
         goto done;
     }
+    copy = xstrdup(fname);
+    const char *leaf = basename(copy);
+    mailbox->index_fd = openat(dirfd, leaf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    free(copy);
+    if (mailbox->index_fd == -1) {
+        xsyslog(LOG_ERR, "IOERROR: create index failed",
+                         "fname=<%s>",
+                         fname);
+        r = IMAP_IOERROR;
+        close(dirfd);
+        goto done;
+    }
+    if (fsync(dirfd) < 0) {
+        xsyslog(LOG_ERR, "IOERROR: fsync index directory failed",
+                         "fname=<%s>",
+                         fname);
+        r = IMAP_IOERROR;
+        close(dirfd);
+        goto done;
+    }
+    close(dirfd);
     r = lock_blocking(mailbox->index_fd, fname);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: lock index failed",
