@@ -109,7 +109,7 @@ HIDDEN char *jmap_caleventnotif_format_fromheader(const char *userid)
     else {
         buf_printf(&buf, "<%s@%s>", userid, config_servername);
     }
-    char *notfrom = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
+    char *notfrom = charset_encode_addrheader(buf_cstring(&buf), buf_len(&buf), 0);
     buf_free(&buf);
     return notfrom;
 }

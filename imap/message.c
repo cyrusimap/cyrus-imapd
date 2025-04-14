@@ -1338,7 +1338,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
                 }
                 if (!has_highbit) continue;
                 /* Reencode the parameter value */
-                char *encvalue = charset_encode_mimeheader(param->value, strlen(param->value), 0);
+                char *encvalue = charset_encode_addrheader(param->value, strlen(param->value), 0);
                 if (encvalue) {
                     free(param->value);
                     param->value = encvalue;

@@ -152,7 +152,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
             buf_printf(&txn->buf, "<%s@%s>", txn->userid, config_servername);
         }
 
-        mimehdr = charset_encode_mimeheader(buf_cstring(&txn->buf),
+        mimehdr = charset_encode_addrheader(buf_cstring(&txn->buf),
                                             buf_len(&txn->buf), 0);
         fprintf(f, "From: %s\r\n", mimehdr);
         free(mimehdr);

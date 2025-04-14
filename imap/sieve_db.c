@@ -592,7 +592,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     else {
         buf_printf(&buf, "<%s@%s>", userid, config_servername);
     }
-    mimehdr = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
+    mimehdr = charset_encode_addrheader(buf_cstring(&buf), buf_len(&buf), 0);
     fprintf(f, "From: %s\r\n", mimehdr);
     free(mimehdr);
 

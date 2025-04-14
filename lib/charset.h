@@ -151,8 +151,29 @@ extern int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset
 
 extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
+/* "Q" encode the header field body (per RFC 2047) of 'len' bytes
+ * located at 'header'.
+ * Returns a buffer which the caller must free.
+ */
 extern char *charset_encode_mimeheader(const char *header, size_t len, int force_quote);
-extern char *charset_encode_mimephrase(const char *header);
+
+/* "Q" encode the header field body (per RFC 2047) of 'len' bytes
+ * located at 'header'. The header is assumed to contain a list of
+ * addresses, such as in a From or Cc header. For such addresses,
+ * the display name is encoded but the address part left unencoded.
+ * If the header value is not a valid address-list (per RFC 5322,
+ * 3.4), then this is equivalent to calling charset_encode_mimeheader.
+ * Returns a buffer which the caller must free.
+ */
+extern char *charset_encode_addrheader(const char *header, size_t len, int force_quote);
+
+/* "Q" encode the header phrase (per RFC 2047) of 'len' bytes
+ * located at 'phrase'. Quoting RFC 2047, this acts as a replacement
+ * for a 'word' entity within a 'phrase', for example, one that
+ * precedes an address in a From, To, or Cc header.
+ * Returns a buffer which the caller must free.
+ */
+extern char *charset_encode_mimephrase(const char *phrase);
 
 extern char *charset_unfold(const char *s, size_t len, int flags);
 
