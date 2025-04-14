@@ -126,6 +126,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 #define JMAPCACHE_CARDVERSION 1
 
+// clang-format off
 static jmap_method_t jmap_contact_methods_standard[] = {
 #ifdef HAVE_LIBICALVCARD
     {
@@ -191,7 +192,9 @@ static jmap_method_t jmap_contact_methods_standard[] = {
 #endif /* HAVE_LIBICALVCARD */
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_contact_methods_nonstandard[] = {
     {
         "ContactGroup/get",
@@ -249,6 +252,7 @@ static jmap_method_t jmap_contact_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 static char *_prodid = NULL;
 
@@ -529,6 +533,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     return r;
 }
 
+// clang-format off
 static const jmap_property_t contact_props[] = {
     {
         "id",
@@ -665,7 +670,9 @@ static const jmap_property_t contact_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
+// clang-format off
 static const jmap_property_t group_props[] = {
     {
         "id",
@@ -707,6 +714,7 @@ static const jmap_property_t group_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
 {
@@ -4999,6 +5007,7 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     return r;
 }
 
+// clang-format off
 static const jmap_property_t addressbook_props[] = {
     {
         "id",
@@ -5035,6 +5044,7 @@ static const jmap_property_t addressbook_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_addressbook_get(struct jmap_req *req)
 {
@@ -5796,6 +5806,7 @@ done:
  * JMAP ContactCard API
  ****************************************************************************/
 
+// clang-format off
 static const jmap_property_t card_props[] = {
     {
         "id",
@@ -6009,6 +6020,7 @@ static const jmap_property_t card_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 
 /*
@@ -6027,6 +6039,7 @@ struct comp_kind {
 #define FIELD_SKIP (1<<2)  /* Skip this field if extended field exists     */
 
 /* JSContact Name components - ordered per vcard_n_field */
+// clang-format off
 static const struct comp_kind n_comp_kinds[] = {
     { VCARD_N_FAMILY,          "surname",       FIELD_EXT,  VCARD_N_SECONDARY  },
     { VCARD_N_GIVEN,           "given",         0,          0                  },
@@ -6038,8 +6051,10 @@ static const struct comp_kind n_comp_kinds[] = {
     { VCARD_N_GENERATION,      "generation",    FIELD_BWD,  VCARD_N_SUFFIX     },
     { 0,                       NULL,            0,          0                  }
 };
+// clang-format on
 
 /* JSContact Address components - ordered per vcard_adr_field */
+// clang-format off
 static const struct comp_kind adr_comp_kinds[] = {
     { VCARD_ADR_PO_BOX,        "postOfficeBox", 0,          0                  },
     { VCARD_ADR_EXTENDED,      "apartment",     FIELD_SKIP, VCARD_ADR_ROOM     },
@@ -6062,6 +6077,7 @@ static const struct comp_kind adr_comp_kinds[] = {
     { VCARD_ADR_DIRECTION,     "direction",     FIELD_BWD,  VCARD_ADR_STREET   },
     { 0,                       NULL,            0,          0                  }
 };
+// clang-format on
 
 #define ALLOW_CALSCALE_PARAM      (1<<0)
 #define ALLOW_INDEX_PARAM         (1<<1)
@@ -8928,6 +8944,7 @@ struct param_prop_t {
     vcardparameter_kind kind;
 };
 
+// clang-format off
 struct param_prop_t phone_param_props[] = {
     { "features", VCARD_TYPE_PARAMETER  },
     { "label",    VCARD_X_PARAMETER     },
@@ -8935,11 +8952,13 @@ struct param_prop_t phone_param_props[] = {
     { "contexts", VCARD_TYPE_PARAMETER  },
     { NULL,       0                     }
 };
+// clang-format on
 
 #define comm_param_props    (phone_param_props+1)  // label, context & pref
 #define pref_param_props    (phone_param_props+2)  // context & pref
 #define context_param_props (phone_param_props+3)  // context
 
+// clang-format off
 struct param_prop_t directories_param_props[] = {
     { "listAs",    VCARD_INDEX_PARAMETER     },
     { "mediaType", VCARD_MEDIATYPE_PARAMETER },
@@ -8948,6 +8967,7 @@ struct param_prop_t directories_param_props[] = {
     { "contexts",  VCARD_TYPE_PARAMETER      },
     { NULL,       0                          }
 };
+// clang-format on
 
 #define resource_param_props (directories_param_props+1)  // no listAs
 

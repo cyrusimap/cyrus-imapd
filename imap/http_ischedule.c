@@ -98,6 +98,7 @@ static int dkim_auth(struct transaction_t *txn);
 static int meth_get_domainkey(struct transaction_t *txn, void *params);
 static time_t compile_time;
 
+// clang-format off
 static struct mime_type_t isched_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
@@ -117,7 +118,9 @@ static struct mime_type_t isched_mime_types[] = {
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
+// clang-format off
 struct namespace_t namespace_ischedule = {
     URL_NS_ISCHEDULE, 0, "ischedule", "/ischedule", ISCHED_WELLKNOWN_URI,
     http_allow_noauth, /*authschemes*/0,
@@ -149,7 +152,9 @@ struct namespace_t namespace_ischedule = {
         { NULL,                 NULL }  /* UNLOCK       */
     }
 };
+// clang-format on
 
+// clang-format off
 struct namespace_t namespace_domainkey = {
     URL_NS_DOMAINKEY, 0, "domainkey", "/domainkeys", "/.well-known/domainkey",
     http_allow_noauth, /*authschemes*/0,
@@ -179,6 +184,7 @@ struct namespace_t namespace_domainkey = {
         { NULL,                 NULL }  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 void isched_capa_hdr(struct transaction_t *txn, time_t *lastmod, struct stat *sb)

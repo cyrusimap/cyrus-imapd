@@ -296,6 +296,7 @@ static void end_icalendar(struct buf *buf);
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
+// clang-format off
 static struct mime_type_t caldav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { ICALENDAR_CONTENT_TYPE, "2.0", "ics",
@@ -322,14 +323,18 @@ static struct mime_type_t caldav_mime_types[] = {
 #endif
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
+// clang-format off
 static struct patch_doc_t caldav_patch_docs[] = {
     { ICALENDAR_CONTENT_TYPE "; component=VPATCH; optinfo=\"PATCH-VERSION:1\"",
       &caldav_patch },
     { NULL, &caldav_patch }
 };
+// clang-format on
 
 /* Array of supported REPORTs */
+// clang-format off
 static const struct report_type_t caldav_reports[] = {
 
     /* WebDAV Versioning (RFC 3253) REPORTs */
@@ -354,8 +359,10 @@ static const struct report_type_t caldav_reports[] = {
 
     { NULL, 0, NULL, NULL, 0, 0 }
 };
+// clang-format on
 
 /* Array of known "live" properties */
+// clang-format off
 static const struct prop_entry caldav_props[] = {
 
     /* WebDAV (RFC 4918) properties */
@@ -581,8 +588,10 @@ static const struct prop_entry caldav_props[] = {
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
+// clang-format on
 
 
+// clang-format off
 static struct meth_params caldav_params = {
     caldav_mime_types,
     &caldav_parse_path,
@@ -612,9 +621,11 @@ static struct meth_params caldav_params = {
     { 0, caldav_props },                        /* Allow infinite depth */
     caldav_reports
 };
+// clang-format on
 
 
 /* Namespace for CalDAV collections */
+// clang-format off
 struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, 0, "calendar", "/dav/calendars", "/.well-known/caldav",
     http_allow_noauth_get, /*authschemes*/0,
@@ -650,9 +661,11 @@ struct namespace_t namespace_calendar = {
         { &meth_unlock,         &caldav_params }        /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 /* Namespace for Freebusy Read URL */
+// clang-format off
 struct namespace_t namespace_freebusy = {
     URL_NS_FREEBUSY, 0, "freebusy", "/freebusy", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -683,6 +696,7 @@ struct namespace_t namespace_freebusy = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 static const struct cal_comp_t {
@@ -8003,6 +8017,7 @@ static int report_fb_query(struct transaction_t *txn,
 }
 
 
+// clang-format off
 static struct mime_type_t freebusy_mime_types[] = {
     /* First item MUST be the default type */
     { ICALENDAR_CONTENT_TYPE, "2.0", "ifb",
@@ -8019,6 +8034,7 @@ static struct mime_type_t freebusy_mime_types[] = {
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
 
 /* Execute a free/busy query per

@@ -77,14 +77,17 @@ static int jmap_backup_restore_mail(jmap_req_t *req);
 
 static char *_prodid = NULL;
 
+// clang-format off
 static jmap_method_t jmap_backup_methods_standard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 /* NOTE: we don't set flags to require CSTATE, because that holds
  * a user lock (exclusive if READ_WRITE is requested) for the entire
  * time the method is running.  Backup restores can be quite slow,
  * and we release locks in batches so that the user can keep working */
+// clang-format off
 static jmap_method_t jmap_backup_methods_nonstandard[] = {
     {
         "Backup/restoreContacts",
@@ -112,6 +115,7 @@ static jmap_method_t jmap_backup_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 {

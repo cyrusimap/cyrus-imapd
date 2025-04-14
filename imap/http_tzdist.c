@@ -103,6 +103,7 @@ static struct buf *icaltimezone_as_tzif_leap(icalcomponent* comp);
 static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
                                          icaltimetype *startp, icaltimetype *endp);
 
+// clang-format off
 static struct mime_type_t tz_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/calendar; charset=utf-8", "2.0", "ics",
@@ -127,9 +128,11 @@ static struct mime_type_t tz_mime_types[] = {
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
 
 /* Namespace for tzdist service */
+// clang-format off
 struct namespace_t namespace_tzdist = {
     URL_NS_TZDIST, 0, "tzdist", "/tzdist", TZDIST_WELLKNOWN_URI,
     http_allow_noauth, /*authschemes*/0,
@@ -161,6 +164,7 @@ struct namespace_t namespace_tzdist = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 #ifdef HAVE_SHAPELIB

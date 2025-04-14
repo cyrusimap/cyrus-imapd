@@ -67,6 +67,7 @@
 static int jmap_mdn_send(jmap_req_t *req);
 static int jmap_mdn_parse(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_mdn_methods_standard[] = {
     {
         "MDN/send",
@@ -82,10 +83,13 @@ static jmap_method_t jmap_mdn_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_mdn_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_mdn_init(jmap_settings_t *settings)
 {
