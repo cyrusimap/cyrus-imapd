@@ -107,6 +107,7 @@ static struct body *body_fetch_section(struct body *body, const char *section);
 
 
 /* Namespace for RSS feeds of mailboxes */
+// clang-format off
 struct namespace_t namespace_rss = {
     URL_NS_RSS, 0, "rss", "/rss", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -138,6 +139,7 @@ struct namespace_t namespace_rss = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 static void rss_init(struct buf *serverinfo __attribute__((unused)))

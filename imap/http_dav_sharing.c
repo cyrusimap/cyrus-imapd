@@ -119,6 +119,7 @@ static xmlDocPtr to_xml(const struct buf *buf)
     return doc;
 }
 
+// clang-format off
 static struct mime_type_t notify_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { DAVNOTIFICATION_CONTENT_TYPE, NULL, "xml",
@@ -128,8 +129,10 @@ static struct mime_type_t notify_mime_types[] = {
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
 /* Array of supported REPORTs */
+// clang-format off
 static const struct report_type_t notify_reports[] = {
 
     /* WebDAV Versioning (RFC 3253) REPORTs */
@@ -146,8 +149,10 @@ static const struct report_type_t notify_reports[] = {
 
     { NULL, 0, NULL, NULL, 0, 0 }
 };
+// clang-format on
 
 /* Array of known "live" properties */
+// clang-format off
 static const struct prop_entry notify_props[] = {
 
     /* WebDAV (RFC 4918) properties */
@@ -237,7 +242,9 @@ static const struct prop_entry notify_props[] = {
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
+// clang-format on
 
+// clang-format off
 static struct meth_params notify_params = {
     notify_mime_types,
     &notify_parse_path,
@@ -266,9 +273,11 @@ static struct meth_params notify_params = {
     { DAV_FINITE_DEPTH, notify_props},
     notify_reports
 };
+// clang-format on
 
 
 /* Namespace for WebDAV notification collections */
+// clang-format off
 struct namespace_t namespace_notify = {
     URL_NS_NOTIFY, 0, "notify", "/dav/notifications", NULL,
     http_allow_noauth_get, /*authschemes*/0,
@@ -302,6 +311,7 @@ struct namespace_t namespace_notify = {
         { NULL,                 NULL },                /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 static void my_dav_init(struct buf *serverinfo __attribute__((unused)))

@@ -149,6 +149,7 @@ static int report_card_query(struct transaction_t *txn,
 
 #ifdef HAVE_LIBICALVCARD
 
+// clang-format off
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
@@ -168,6 +169,7 @@ static struct mime_type_t carddav_mime_types[] = {
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
+// clang-format on
 
 #else /* !HAVE_LIBICALVCARD */
 
@@ -194,6 +196,7 @@ static struct mime_type_t carddav_mime_types[] = {
 #endif /* HAVE_LIBICALVCARD */
 
 /* Array of supported REPORTs */
+// clang-format off
 static const struct report_type_t carddav_reports[] = {
 
     /* WebDAV Versioning (RFC 3253) REPORTs */
@@ -216,8 +219,10 @@ static const struct report_type_t carddav_reports[] = {
 
     { NULL, 0, NULL, NULL, 0, 0 }
 };
+// clang-format on
 
 /* Array of known "live" properties */
+// clang-format off
 static const struct prop_entry carddav_props[] = {
 
     /* WebDAV (RFC 4918) properties */
@@ -357,7 +362,9 @@ static const struct prop_entry carddav_props[] = {
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
+// clang-format on
 
+// clang-format off
 static struct meth_params carddav_params = {
     carddav_mime_types,
     &carddav_parse_path,
@@ -387,9 +394,11 @@ static struct meth_params carddav_params = {
     { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
     carddav_reports
 };
+// clang-format on
 
 
 /* Namespace for Carddav collections */
+// clang-format off
 struct namespace_t namespace_addressbook = {
     URL_NS_ADDRESSBOOK, 0, "addressbook", "/dav/addressbooks", "/.well-known/carddav",
     http_allow_noauth_get, /*authschemes*/0,
@@ -423,6 +432,7 @@ struct namespace_t namespace_addressbook = {
         { &meth_unlock,         &carddav_params }       /* UNLOCK       */
     }
 };
+// clang-format on
 
 static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 {

@@ -54,6 +54,7 @@ static void prom_reset(void);
 static void prom_shutdown(void);
 static int prom_get(struct transaction_t *txn, void *params);
 
+// clang-format off
 struct namespace_t namespace_prometheus = {
     URL_NS_PROMETHEUS,
     /*enabled*/ 0,
@@ -94,6 +95,7 @@ struct namespace_t namespace_prometheus = {
         { NULL,                 NULL },                 /* UNLOCK       */
     },
 };
+// clang-format on
 
 static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
 {

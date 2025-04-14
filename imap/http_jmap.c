@@ -111,6 +111,7 @@ static struct connect_params ws_params = {
 
 
 /* Namespace for JMAP */
+// clang-format off
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
     jmap_need_auth, 0,
@@ -142,6 +143,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 
 /*

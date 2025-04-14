@@ -56,6 +56,7 @@
 static int meth_get_db(struct transaction_t *txn, void *params);
 
 /* Namespace for DB lookups */
+// clang-format off
 struct namespace_t namespace_dblookup = {
     URL_NS_DBLOOKUP, /*enabled*/1, "dblookup", "/dblookup", NULL,
     http_allow_noauth, /*authschemes*/0,
@@ -87,6 +88,7 @@ struct namespace_t namespace_dblookup = {
         { NULL,                 NULL }                  /* UNLOCK       */
     }
 };
+// clang-format on
 
 static int get_email(struct transaction_t *txn __attribute__((unused)),
                      const char *userid, const char *key)
