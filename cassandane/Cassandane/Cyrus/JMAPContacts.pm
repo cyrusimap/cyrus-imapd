@@ -49,10 +49,12 @@ use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;
 use File::Copy;
+use Cwd qw(abs_path getcwd);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 
 use charnames ':full';
 
@@ -4111,6 +4113,71 @@ EOF
     $self->assert_deep_equals({ foo => \@wantOtherAccountIds },
         $res->[0][1]{list}[0]{otherAccountContactIds});
 
+}
+
+sub test_contact_set_avatar_v4
+    :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    xlog $self, "Create a v4 vCard over CardDAV";
+    my $id = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+PRODID:+//IDN bitfire.at//DAVx5/4.2.0.3-gplay ez-vcard/0.11.3
+UID:$id
+FN:Foo
+N:;Foo;;;
+REV:20220504T040120Z
+END:VCARD
+EOF
+    $card =~ s/\r?\n/\r\n/gs;
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "Get JMAP Contact";
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['avatar', 'x-hasPhoto'],
+        }, 'R1']
+    ]);
+    my $contactId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($contactId);
+    $self->assert_null($res->[0][1]{list}[0]{avatar});
+
+    xlog $self, "Set avatar on contact";
+    my $binary = slurp_file(abs_path('data/logo.gif'));
+    my $data = $jmap->Upload($binary, "image/gif");
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            update => {
+                $contactId => {
+                    avatar => {
+                        blobId => $data->{blobId},
+                        type => "image/gif",
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+    my $avatarBlobId = $res->[0][1]{updated}{$contactId}{avatar}{blobId};
+    $self->assert_not_null($avatarBlobId);
+
+    xlog $self, "Get vCard over CardDAV as version 4.0";
+    $res = $carddav->Request('GET', $href, undef,
+        "Accept" => "text/vcard; version=4.0");
+    my $vcard = Net::CardDAVTalk::VCard->new_fromstring($res->{content});
+    my $photo = $vcard->{properties}->{photo}->[0] // undef;
+    $self->assert(not $photo->{binary});
+    $self->assert_equals("data:image/gif;base64,", substr($photo->{value}, 0, 22));
+
+    xlog $self, "Assert avatar blob contents";
+    $data = $jmap->Download('cassandane', $avatarBlobId);
+    $self->assert($binary eq $data->{content});
 }
 
 1;
