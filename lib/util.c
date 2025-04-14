@@ -565,32 +565,9 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
  */
 EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    char *path = xstrdupnull(pathname);    /* make a copy to write into */
-    char *p = path;
-    int save_errno;
-    struct stat sbuf;
-
-    if (!p || *p == '\0')
-        return -1;
-
-    while ((p = strchr(p+1, '/'))) {
-        *p = '\0';
-        if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-            save_errno = errno;
-            if (stat(path, &sbuf) == -1) {
-                errno = save_errno;
-                xsyslog(LOG_ERR, "IOERROR: creating directory",
-                                 "path=<%s>", path);
-                free(path);
-                return -1;
-            }
-        }
-        if (errno == EEXIST)
-            errno = 0;
-        *p = '/';
-    }
-
-    free(path);
+    int fd = xopendir(pathname, /*create*/1);
+    if (fd < 0) return -1;
+    close(fd);
     return 0;
 }
 
