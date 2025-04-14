@@ -643,7 +643,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
     else {
         buf_printf(&buf, "<%s@%s>", httpd_userid, config_servername);
     }
-    from = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
+    from = charset_encode_addrheader(buf_cstring(&buf), buf_len(&buf), 0);
 
     fprintf(f, "MIME-Version: 1.0 (Cyrus-JMAP/%s)\r\n"
             "X-Uniform-Type-Identifier: %s\r\n"

@@ -2402,7 +2402,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                 value = parse_string(value, variables);
             }
 
-            encoded_value = charset_encode_mimeheader(value, strlen(value), 0);
+            encoded_value = charset_encode_addrheader(value, strlen(value), 0);
 
             i->addheader(m, name, encoded_value, index);
             i->edited_headers = 1;
