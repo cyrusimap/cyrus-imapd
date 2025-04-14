@@ -50,6 +50,7 @@ const X_CLIENT = 'Cyrus/%s';  // Version filled in by printf() in http_caldav.c/
 const XML_CALCARD_NS = 'urn:ietf:params:xml:ns:ca' + (calendar ? 'ldav' : 'rddav');
 const DESCRIPTION = (calendar ? 'calendar' : 'addressbook') + '-description';
 const XML_APPLE_NS = 'http://apple.com/ns/ical/';
+const XML_CYRUS_NS = 'http://cyrusimap.org/ns/';
 
 function n(i) {
     const h = window.location.href;
@@ -251,6 +252,16 @@ function transpCalendar(i, transp) {
     if (transp)
         caltransp.appendChild(pu[0].createElementNS(XML_CALDAV_NS,
                                                     "C:transparent"));
+
+    pu[2].submit();
+}
+
+function scheduling(i, set) {
+    const pu = propupdate(!set, i);
+    const scheduling_enabled = pu[0].createElementNS(XML_CYRUS_NS, "scheduling-enabled");
+    pu[1].appendChild(scheduling_enabled);
+    if (!set)
+        scheduling_enabled.appendChild(pu[0].createTextNode("F"));
 
     pu[2].submit();
 }
