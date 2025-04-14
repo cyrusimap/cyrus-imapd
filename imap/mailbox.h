@@ -686,10 +686,13 @@ extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
-extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
-                          const char *uniqueid, int options, unsigned uidvalidity,
-                          modseq_t createdmodseq, modseq_t highestmodseq,
-                          struct mailbox **mailboxptr);
+#define mailbox_create(n, t, p, a, i, o, u, c, h, m) \
+    mailbox_create_version(n, 0, t, p, a, i, o, u, c, h, m)
+extern int mailbox_create_version(const char *name, int minor_version,
+                                  uint32_t mbtype, const char *part, const char *acl,
+                                  const char *uniqueid, int options, unsigned uidvalidity,
+                                  modseq_t createdmodseq, modseq_t highestmodseq,
+                                  struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                               const char *newname, const char *newuniqueid);

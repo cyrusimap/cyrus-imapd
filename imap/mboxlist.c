@@ -2049,11 +2049,11 @@ done:
  *
  */
 
-EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
-                                    unsigned options, modseq_t highestmodseq,
-                                    unsigned isadmin, const char *userid,
-                                    const struct auth_state *auth_state,
-                                    unsigned flags, struct mailbox **mboxptr)
+EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_version,
+                                            unsigned options, modseq_t highestmodseq,
+                                            unsigned isadmin, const char *userid,
+                                            const struct auth_state *auth_state,
+                                            unsigned flags, struct mailbox **mboxptr)
 {
     const char *mboxname = mbentry->name;
     char *uniqueid = xstrdupnull(mbentry->uniqueid);
@@ -2150,8 +2150,9 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         }
 
         /* Filesystem Operations */
-        r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
-                           options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
+        r = mailbox_create_version(mboxname, minor_version, mbtype,
+                                   newpartition, acl, newmbentry->uniqueid,
+                                   options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
         if (!r) r = mailbox_add_conversations(newmailbox, silent);
         if (r) {
             /* CREATE failed - remove mbentry */

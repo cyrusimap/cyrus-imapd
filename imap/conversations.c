@@ -365,8 +365,10 @@ EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *st
     return count;
 }
 
-EXPORTED int conversations_open_path(const char *fname, const char *userid, int shared,
-                                     struct conversations_state **statep)
+EXPORTED int conversations_open_path_version(const char *fname,
+                                             const char *userid, int shared,
+                                             struct conversations_state **statep,
+                                             int version)
 {
     struct conversations_open *open = NULL;
     const char *val = NULL;
@@ -399,11 +401,16 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     }
 
     /* set version -
-       for new files we use CONVERSATIONS_VERSION,
+       for new files we use the specified version or CONVERSATIONS_VERSION,
        otherwise we assume v1 unless/until we read VERSIONKEY
     */
     struct stat sbuf;
-    open->s.version = stat(fname, &sbuf) ? CONVERSATIONS_VERSION : 1;
+    if (!stat(fname, &sbuf))
+        open->s.version = 1;
+    else if (version)
+        open->s.version = version;
+    else
+        open->s.version = CONVERSATIONS_VERSION;
 
     /* open db */
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
@@ -483,13 +490,14 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     return 0;
 }
 
-EXPORTED int conversations_open_user(const char *userid, int shared,
-                                     struct conversations_state **statep)
+EXPORTED int conversations_open_user_version(const char *userid, int shared,
+                                             struct conversations_state **statep,
+                                             int version)
 {
     char *path = conversations_getuserpath(userid);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
-    r = conversations_open_path(path, userid, shared, statep);
+    r = conversations_open_path_version(path, userid, shared, statep, version);
     free(path);
     return r;
 }

@@ -6899,6 +6899,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *partition = NULL;
     const char *server = NULL;
     const char *uniqueid = NULL;
+    uint32_t minor_version = 0;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
@@ -6931,6 +6932,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
     dlist_getatom(extargs, "MAILBOXID", &uniqueid);
+    dlist_getnum32(extargs, "VERSION", &minor_version);
     if (dlist_getatom(extargs, "TYPE", &type)) {
         if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
         else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
@@ -6978,7 +6980,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     //
     // However, this only applies to frontends. If we're a backend, a frontend will
     // proxy the partition it wishes to create the mailbox on.
-    if ((server || partition || uniqueid) && !imapd_userisadmin) {
+    if (!imapd_userisadmin &&
+        (server || partition || uniqueid || minor_version)) {
         if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
             config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 
@@ -7213,10 +7216,11 @@ localcreate:
                 mbentry.name = (char *) mbname_intname(ancestor);
                 mbentry.partition = (char *) partition;
                 mbentry.mbtype = mbtype;
-                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                           imapd_userisadmin || imapd_userisproxyadmin,
-                                           imapd_userid, imapd_authstate,
-                                           flags, NULL/*mailboxptr*/);
+                r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                                   0/*options*/, 0/*highestmodseq*/,
+                                                   imapd_userisadmin || imapd_userisproxyadmin,
+                                                   imapd_userid, imapd_authstate,
+                                                   flags, NULL/*mailboxptr*/);
                 if (r) {
                     // XXX  should we delete the ancestors we just created?
                     break;
@@ -7238,10 +7242,11 @@ localcreate:
     mbentry.uniqueid = (char *) uniqueid;
     mbentry.mbtype = mbtype;
 
-    r = mboxlist_createmailbox(&mbentry, options, 0/*highestmodseq*/,
-                               imapd_userisadmin || imapd_userisproxyadmin,
-                               imapd_userid, imapd_authstate,
-                               flags, &mailbox);
+    r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                       options, 0/*highestmodseq*/,
+                                       imapd_userisadmin || imapd_userisproxyadmin,
+                                       imapd_userid, imapd_authstate,
+                                       flags, &mailbox);
 
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
@@ -7252,9 +7257,10 @@ localcreate:
 
             if (autocreatequotastorage > 0) {
                 mbentry.uniqueid = NULL;
-                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                           1/*isadmin*/, imapd_userid, imapd_authstate,
-                                           MBOXLIST_CREATE_NOTIFY, &mailbox);
+                r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                                   0/*options*/, 0/*highestmodseq*/,
+                                                   1/*isadmin*/, imapd_userid, imapd_authstate,
+                                                   MBOXLIST_CREATE_NOTIFY, &mailbox);
 
                 if (r) {
                     prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -9965,8 +9971,15 @@ static int parsecreateargs(struct dlist **extargs)
             }
             else {
                 prot_ungetc(c, imapd_in);
-                c = getword(imapd_in, &val);
-                dlist_setatom(res, name, val.s);
+                if (!strcmp(name, "VERSION")) {
+                    uint32_t ver = 0;
+                    c = getuint32(imapd_in, &ver);
+                    dlist_setnum32(res, name, ver);
+                }
+                else {
+                    c = getword(imapd_in, &val);
+                    dlist_setatom(res, name, val.s);
+                }
             }
         } while (c == ' ');
         if (c != ')') goto fail;
