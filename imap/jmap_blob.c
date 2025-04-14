@@ -64,6 +64,7 @@ static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_lookup(jmap_req_t *req);
 static int jmap_blob_upload(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_blob_methods_standard[] = {
     /* RFC 8620 */
     {
@@ -93,7 +94,9 @@ static jmap_method_t jmap_blob_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_core_methods_nonstandard[] = {
     {
         "Blob/get",
@@ -115,6 +118,7 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 static json_t *blob_capabilities = NULL;
 
@@ -379,6 +383,7 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
     return 0;
 }
 
+// clang-format off
 static const jmap_property_t blob_xprops[] = {
     {
         "data",
@@ -419,6 +424,7 @@ static const jmap_property_t blob_xprops[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 struct blob_range {
     size_t offset;
@@ -943,6 +949,7 @@ done:
     return 0;
 }
 
+// clang-format off
 static const jmap_property_t blob_upload_props[] = {
     {
         "id",
@@ -962,6 +969,7 @@ static const jmap_property_t blob_upload_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int _set_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg, int recurse, json_t **errp)
 {

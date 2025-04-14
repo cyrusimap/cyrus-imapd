@@ -62,6 +62,7 @@ static int jmap_core_echo(jmap_req_t *req);
 /* JMAP extension methods */
 static int jmap_usercounters_get(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_core_methods_standard[] = {
     {
         "Core/echo",
@@ -71,7 +72,9 @@ static jmap_method_t jmap_core_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_core_methods_nonstandard[] = {
     {
         "UserCounters/get",
@@ -81,6 +84,7 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_core_init(jmap_settings_t *settings)
 {
@@ -201,6 +205,7 @@ static int jmap_core_echo(jmap_req_t *req)
 }
 
 /* UserCounters/get method */
+// clang-format off
 static const jmap_property_t usercounters_props[] = {
     {
         "id",
@@ -350,6 +355,7 @@ static const jmap_property_t usercounters_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
 {

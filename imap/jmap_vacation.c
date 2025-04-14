@@ -73,6 +73,7 @@
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_vacation_methods_standard[] = {
     {
         "VacationResponse/get",
@@ -88,10 +89,13 @@ static jmap_method_t jmap_vacation_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_vacation_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 static int sieve_vacation_enabled = 0;
 
@@ -142,6 +146,7 @@ HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)
 }
 
 /* VacationResponse/get method */
+// clang-format off
 static const jmap_property_t vacation_props[] = {
     {
         "id",
@@ -181,6 +186,7 @@ static const jmap_property_t vacation_props[] = {
 
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 #define STATUS_ACTIVE    (1<<0)
 #define STATUS_CUSTOM    (1<<1)

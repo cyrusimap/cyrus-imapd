@@ -68,6 +68,7 @@
 static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req);
 static int jmap_admin_migrate_defaultalarms(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_admin_methods_nonstandard[] = {
     {
         "Admin/rewriteCalendarEventPrivacy",
@@ -83,6 +84,7 @@ static jmap_method_t jmap_admin_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_admin_init(jmap_settings_t *settings)
 {

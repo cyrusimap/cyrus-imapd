@@ -61,6 +61,7 @@ static int jmap_quota_get(jmap_req_t *req);
 static int jmap_quota_changes(jmap_req_t *req);
 static int jmap_quota_query(jmap_req_t *req);
 
+// clang-format off
 static jmap_method_t jmap_quota_methods_standard[] = {
     {
         "Quota/get",
@@ -82,7 +83,9 @@ static jmap_method_t jmap_quota_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_quota_methods_nonstandard[] = {
     {
         "Quota/get",
@@ -92,6 +95,7 @@ static jmap_method_t jmap_quota_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_quota_init(jmap_settings_t *settings)
 {
@@ -119,6 +123,7 @@ HIDDEN void jmap_quota_capabilities(json_t *account_capabilities)
 }
 
 /* Legacy Quota/get method */
+// clang-format off
 static const jmap_property_t legacy_quota_props[] = {
     {
         "id",
@@ -137,6 +142,7 @@ static const jmap_property_t legacy_quota_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int jmap_legacy_quota_get(jmap_req_t *req)
 {
@@ -400,6 +406,7 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 }
 
 /* Quota/get method */
+// clang-format off
 static const jmap_property_t quota_props[] = {
     {
         "id",
@@ -453,6 +460,7 @@ static const jmap_property_t quota_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static void fetch_quotas(struct qrock_t *qrock)
 {

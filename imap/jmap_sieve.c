@@ -88,6 +88,7 @@ static int jmap_sieve_test(jmap_req_t *req);
 static int maxscripts = 0;
 static json_int_t maxscriptsize = 0;
 
+// clang-format off
 static jmap_method_t jmap_sieve_methods_standard[] = {
     {
         "SieveScript/get",
@@ -115,7 +116,9 @@ static jmap_method_t jmap_sieve_methods_standard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
+// clang-format off
 static jmap_method_t jmap_sieve_methods_nonstandard[] = {
     {
         "SieveScript/get",
@@ -149,6 +152,7 @@ static jmap_method_t jmap_sieve_methods_nonstandard[] = {
     },
     { NULL, NULL, NULL, 0}
 };
+// clang-format on
 
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
@@ -233,6 +237,7 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
+// clang-format off
 static const jmap_property_t sieve_props[] = {
     {
         "id",
@@ -256,6 +261,7 @@ static const jmap_property_t sieve_props[] = {
     },
     { NULL, NULL, 0 }
 };
+// clang-format on
 
 static int getscript(void *rock, struct sieve_data *sdata)
 {
