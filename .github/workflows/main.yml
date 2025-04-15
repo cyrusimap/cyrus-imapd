@@ -61,7 +61,7 @@ jobs:
       id: cass1
       continue-on-error: true
       # We haven't figured out how to make Test::Core work in actions yet.
-      run: cyd test --slow "!Test::Core"
+      run: cyd test --slow --format prettier "!Test::Core"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
