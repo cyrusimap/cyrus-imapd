@@ -92,7 +92,7 @@ sub set_up
         url => '/',
         expandurl => 1,
     );
-    $self->{jmap}->DefaultUsing([
+    $self->jmap_default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',

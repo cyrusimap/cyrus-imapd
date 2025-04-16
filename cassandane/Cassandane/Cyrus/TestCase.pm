@@ -42,12 +42,14 @@ use strict;
 use warnings;
 use attributes;
 use version 0.77;
+use Carp ();
 use Cwd qw(abs_path);
 use Data::Dumper;
 use Digest::file qw(digest_file_hex);
 use File::Path qw(rmtree);
 use File::Temp qw(tempfile);
 use List::Util qw(uniq);
+use MIME::Base64 qw(encode_base64);
 use Scalar::Util qw(refaddr);
 
 use lib '.';
@@ -891,6 +893,46 @@ sub _setup_http_service_objects
 
         # preload default UA while the HTTP::Tiny env var is still set
         $self->{jmap}->ua();
+
+        my $base = "http://" . $service->host() . ":" . $service->port();
+        $base .= "/jmap";
+
+        my %jt_args = (
+            api_uri => "$base/",
+            upload_uri => "$base/upload/cassandane/",
+            download_uri => "$base/download/{accountId}/{blobId}/{name}/",
+        );
+
+        my $auth = 'Basic ' . encode_base64('cassandane:pass', '');
+
+        # Send jmap traffic to STDERR like Mail::JMAPTalk above does
+        local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
+            unless exists $ENV{JMAP_TESTER_LOGGER};
+
+        require JMAP::Tester;
+        $self->{jmap_tester} = JMAP::Tester->new(\%jt_args);
+        $self->{jmap_tester}->ua->set_default_header(
+            Authorization => $auth,
+        );
+
+        my $ws_base = $base =~ s/^http:/ws:/r;
+
+        # Ugh. We must load AnyEvent::Loop before JMAP::Tester::WebSocket,
+        # otherwise AnyEvent in Cassandane::Instance::notifyd will use
+        # AnyEvent::Impl::IOAsync which is ... not actually running (except
+        # when ::WebSocket makes a request) ... which will make the perl
+        # notifyd process hang and lock up the tests
+        require AnyEvent::Loop;
+        require JMAP::Tester::WebSocket;
+        $self->{jmap_tester_ws} = JMAP::Tester::WebSocket->new({
+            %jt_args,
+            ws_api_uri => "$ws_base/ws/",
+            authorization => $auth,
+            cache_connection => 1,
+        });
+        $self->{jmap_tester_ws}->ua->set_default_header(
+            Authorization => $auth,
+        );
     }
 
     xlog $self, "http service objects setup complete!";
@@ -1802,6 +1844,40 @@ sub check_user
                                        $expected->{sieve}->{active});
         }
     }
+}
+
+sub _get_jmaplike_instance
+{
+    my ($self, $type) = @_;
+
+    unless ($type =~ /^jmap_?/ && $self->can($type)) {
+        Carp::confess("$type doesn't look like a jmap tester class");
+    }
+
+    unless ($self->{$type}) {
+        Carp::confess("$type unavailable. Does httpmodules include jmap?");
+    }
+
+    return $self->{$type};
+}
+
+sub jmap           { shift->_get_jmaplike_instance("jmap");           }
+sub jmap_tester    { shift->_get_jmaplike_instance("jmap_tester");    }
+sub jmap_tester_ws { shift->_get_jmaplike_instance("jmap_tester_ws"); }
+
+sub jmap_default_using
+{
+    my ($self, $using) = @_;
+
+    unless ($self->{jmap}) {
+        Carp::confess("jmap unavailable. Does httpmodules include jmap?");
+    }
+
+    $self->jmap->DefaultUsing($using);
+    $self->jmap_tester->default_using($using);
+    $self->jmap_tester_ws->default_using($using);
+
+    return;
 }
 
 1;
