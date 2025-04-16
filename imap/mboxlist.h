@@ -172,9 +172,14 @@ int mboxlist_lookup_allow_all(const char *name,
 int mboxlist_lookup_by_uniqueid(const char *uniqueid,
                                 mbentry_t **entryptr, struct txn **tid);
 
+int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
+                              mbentry_t **entryptr, struct txn **tid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
+char *mboxlist_find_jmapid(const char *jmapid, const char *userid,
+                           const struct auth_state *auth_state);
 
 
 /* insert/delete stub entries */
@@ -214,11 +219,13 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
 /* create mailbox */
 /* if given a mailbox pointer, return the still-locked mailbox
  * for further manipulation */
-int mboxlist_createmailbox(const mbentry_t *mbentry,
-                           unsigned mboxopts, modseq_t highestmodseq,
-                           unsigned isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           unsigned flags, struct mailbox **mboxptr);
+#define mboxlist_createmailbox(m, o, h, a, u, s, f, p) \
+    mboxlist_createmailbox_version(m, 0, o, h, a, u, s, f, p)
+int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_version,
+                                   unsigned mboxopts, modseq_t highestmodseq,
+                                   unsigned isadmin, const char *userid,
+                                   const struct auth_state *auth_state,
+                                   unsigned flags, struct mailbox **mboxptr);
 
 /* create mailbox with wrapping namespacelock */
 int mboxlist_createmailboxlock(const mbentry_t *mbentry,
@@ -431,6 +438,6 @@ int mboxlist_delayed_delete_isenabled(void);
 /* Promote an intermediary mailbox to a real mailbox. */
 int mboxlist_promote_intermediary(const char *mboxname);
 
-int mboxlist_upgrade(int *upgraded);
+int mboxlist_upgrade(int *upgraded, int *need_jids);
 
 #endif

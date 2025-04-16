@@ -120,10 +120,17 @@ static void usage(void)
     exit(-1);
 }
 
+struct fix_rock {
+    struct buf last_userid;
+    modseq_t next_createdmodseq;
+    int need_jids;
+};
+
 /* Callback for use by process_mboxlist */
 static int fixmbox(const mbentry_t *mbentry,
-                   void *rock __attribute__((unused)))
+                   void *rock)
 {
+    struct fix_rock *frock = (struct fix_rock *) rock;
     int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
@@ -159,8 +166,9 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
-    /* make sure every local mbentry has a uniqueid!  */
-    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+    /* make sure every local mbentry has a uniqueid, createdmodseq & J record! */
+    if ((frock->need_jids || !mbentry->uniqueid || !mbentry->createdmodseq) &&
+        mbentry_is_local_mailbox(mbentry)) {
         struct mailbox *mailbox = NULL;
         mbentry_t *copy = NULL;
 
@@ -182,11 +190,35 @@ static int fixmbox(const mbentry_t *mbentry,
                               mbentry->name, mailbox->h.uniqueid);
         }
 
+        if (!mailbox->i.createdmodseq) {
+            /* yikes, no createdmodseq in header either! */
+            char *userid = mboxname_to_userid(mbentry->name);
+            if (strcmpsafe(userid, buf_cstring(&frock->last_userid))) {
+                buf_setcstr(&frock->last_userid, userid);
+                frock->next_createdmodseq = 1;
+            }
+            free(userid);
+            mailbox->i.createdmodseq = frock->next_createdmodseq++;
+            xsyslog(LOG_INFO, "mailbox header had no createdmodseq, creating one",
+                              "mboxname=<%s> newcreatedmodseq=<" MODSEQ_FMT ">",
+                              mbentry->name, mailbox->i.createdmodseq);
+        }
+
         copy = mboxlist_entry_copy(mbentry);
-        copy->uniqueid = xstrdup(mailbox->h.uniqueid);
-        xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
-                          "mboxname=<%s> newuniqueid=<%s>",
-                          copy->name, copy->uniqueid);
+
+        if (!mbentry->uniqueid) {
+            copy->uniqueid = xstrdup(mailbox->h.uniqueid);
+            xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
+                    "mboxname=<%s> newuniqueid=<%s>",
+                    copy->name, copy->uniqueid);
+        }
+
+        if (!mbentry->createdmodseq) {
+            copy->createdmodseq = mailbox->i.createdmodseq;
+            xsyslog(LOG_INFO, "mbentry had no createdmodseq, setting from header",
+                    "mboxname=<%s> newcreatedmodseqd=<" MODSEQ_FMT ">",
+                    copy->name, copy->createdmodseq);
+        }
 
         r = mboxlist_updatelock(copy, /*localonly*/1);
         if (r) {
@@ -218,11 +250,15 @@ skip_uniqueid:
 
 static void process_mboxlist(int *upgraded)
 {
+    int need_jids = 0;
+
     /* upgrade database to new mailboxes-by-id records */
-    mboxlist_upgrade(upgraded);
+    mboxlist_upgrade(upgraded, &need_jids);
 
     /* run fixmbox across all mboxlist entries */
-    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
+    struct fix_rock frock = { BUF_INITIALIZER, 1/*next_cmodseq*/, need_jids };
+    mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
+    buf_free(&frock.last_userid);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));

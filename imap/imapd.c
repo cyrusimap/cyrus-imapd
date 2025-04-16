@@ -255,7 +255,7 @@ struct appendstage {
     struct stagemsg *stage;
     FILE *f;
     strarray_t flags;
-    time_t internaldate;
+    struct timespec internaldate;
     int binary;
     struct entryattlist *annotations;
 };
@@ -527,7 +527,8 @@ static void cmd_unauthenticate(char *tag);
 static void cmd_noop(char *tag, char *cmd);
 static void capa_response(int flags);
 static void cmd_capability(char *tag);
-static int  cmd_append(char *tag, char *name, const char *cur_name, int isreplace);
+static int  cmd_append(char *tag, char *name, const char *cur_name,
+                       uint32_t replace_uid);
 static void cmd_select(char *tag, char *cmd, char *name);
 static void cmd_close(char *tag, char *cmd);
 static int parse_fetch_args(const char *tag, const char *cmd,
@@ -1717,7 +1718,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
 
-                cmd_append(tag.s, arg1.s, NULL, 0/*isreplace*/);
+                cmd_append(tag.s, arg1.s, NULL, 0 /*replace_uid*/);
 
                 prometheus_increment(CYRUS_IMAP_APPEND_TOTAL);
             }
@@ -2065,7 +2066,8 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c != ' ') goto missingargs;
 
-                cmd_append(tag.s, arg1.s, *arg2.s ? arg2.s : NULL, 0/*isreplace*/);
+                cmd_append(tag.s, arg1.s,
+                           *arg2.s ? arg2.s : NULL, 0/*replace_uid*/);
 
                 prometheus_increment(CYRUS_IMAP_APPEND_TOTAL);
             }
@@ -4201,7 +4203,8 @@ static char *normalize_mboxname(char *name, struct listargs *listargs)
  * 'cur_name' is the name of the currently selected mailbox (if any)
  * in case we have to resolve relative URLs
  */
-static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace)
+static int cmd_append(char *tag, char *name, const char *cur_name,
+                      uint32_t replace_uid)
 {
     int c;
     static struct buf arg;
@@ -4324,6 +4327,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         curstage = xzmalloc(sizeof(*curstage));
         ptrarray_push(&stages, curstage);
 
+        /* Initialize the internaldate to "now" */
+        clock_gettime(CLOCK_REALTIME, &curstage->internaldate);
+
         /* Set limit on the total number of bytes allowed for mailbox+append-opts */
         maxargssize_mark = prot_bytes_in(imapd_in) + (maxargssize - strlen(name));
 
@@ -4363,7 +4369,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         /* Parse internaldate */
         if (c == '\"' && !arg.s[0]) {
             prot_ungetc(c, imapd_in);
-            c = getdatetime(&(curstage->internaldate));
+            c = getdatetime(&(curstage->internaldate.tv_sec));
             if (c != ' ') {
                 parseerr = "Invalid date-time in Append command";
                 r = IMAP_PROTOCOL_ERROR;
@@ -4473,7 +4479,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         c = prot_getc(imapd_in);
 
         /* REPLACE doesn't support MULTIAPPEND */
-        if (isreplace) break;
+        if (replace_uid) break;
     }
 
  done:
@@ -4530,10 +4536,13 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                 body = NULL;
             }
             if (!r) {
-                r = append_fromstage(&appendstate, &body, curstage->stage,
-                                     curstage->internaldate, /*createdmodseq*/0,
-                                     &curstage->flags, 0,
-                                     &curstage->annotations);
+                struct append_metadata meta = {
+                    &curstage->internaldate, /*savedate*/ 0, /*cmodseq*/ 0,
+                    &curstage->flags, &curstage->annotations, /*nolink*/ 0,
+                    { replace_uid, replace_uid ? cur_name : NULL }
+                };
+                r = append_fromstage_full(&appendstate, &body,
+                                          curstage->stage, &meta);
             }
             if (body) {
                 message_free_body(body);
@@ -4548,7 +4557,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         append_abort(&appendstate);
     }
 
-    if (isreplace && doappenduid && !r) {
+    if (replace_uid && doappenduid && !r) {
         prot_printf(imapd_out, "* OK [APPENDUID %lu %u] %s\r\n",
                     uidvalidity, appendstate.baseuid,
                     error_message(IMAP_OK_COMPLETED));
@@ -4603,7 +4612,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                         appendstate.baseuid + appendstate.nummsg - 1);
         }
         prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
-    } else if (!isreplace) {
+    } else if (!replace_uid) {
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
@@ -6890,6 +6899,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *partition = NULL;
     const char *server = NULL;
     const char *uniqueid = NULL;
+    uint32_t minor_version = 0;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
@@ -6922,6 +6932,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
     dlist_getatom(extargs, "MAILBOXID", &uniqueid);
+    dlist_getnum32(extargs, "VERSION", &minor_version);
     if (dlist_getatom(extargs, "TYPE", &type)) {
         if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
         else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
@@ -6969,7 +6980,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     //
     // However, this only applies to frontends. If we're a backend, a frontend will
     // proxy the partition it wishes to create the mailbox on.
-    if ((server || partition || uniqueid) && !imapd_userisadmin) {
+    if (!imapd_userisadmin &&
+        (server || partition || uniqueid || minor_version)) {
         if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD ||
             config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 
@@ -7204,10 +7216,11 @@ localcreate:
                 mbentry.name = (char *) mbname_intname(ancestor);
                 mbentry.partition = (char *) partition;
                 mbentry.mbtype = mbtype;
-                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                           imapd_userisadmin || imapd_userisproxyadmin,
-                                           imapd_userid, imapd_authstate,
-                                           flags, NULL/*mailboxptr*/);
+                r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                                   0/*options*/, 0/*highestmodseq*/,
+                                                   imapd_userisadmin || imapd_userisproxyadmin,
+                                                   imapd_userid, imapd_authstate,
+                                                   flags, NULL/*mailboxptr*/);
                 if (r) {
                     // XXX  should we delete the ancestors we just created?
                     break;
@@ -7229,10 +7242,11 @@ localcreate:
     mbentry.uniqueid = (char *) uniqueid;
     mbentry.mbtype = mbtype;
 
-    r = mboxlist_createmailbox(&mbentry, options, 0/*highestmodseq*/,
-                               imapd_userisadmin || imapd_userisproxyadmin,
-                               imapd_userid, imapd_authstate,
-                               flags, &mailbox);
+    r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                       options, 0/*highestmodseq*/,
+                                       imapd_userisadmin || imapd_userisproxyadmin,
+                                       imapd_userid, imapd_authstate,
+                                       flags, &mailbox);
 
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
@@ -7243,9 +7257,10 @@ localcreate:
 
             if (autocreatequotastorage > 0) {
                 mbentry.uniqueid = NULL;
-                r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                           1/*isadmin*/, imapd_userid, imapd_authstate,
-                                           MBOXLIST_CREATE_NOTIFY, &mailbox);
+                r = mboxlist_createmailbox_version(&mbentry, minor_version,
+                                                   0/*options*/, 0/*highestmodseq*/,
+                                                   1/*isadmin*/, imapd_userid, imapd_authstate,
+                                                   MBOXLIST_CREATE_NOTIFY, &mailbox);
 
                 if (r) {
                     prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -7280,7 +7295,16 @@ localcreate:
     }
 
     /* Close newly created mailbox before writing annotations */
-    mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (cstate && cstate->version < 2) {
+        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        buf_putc(&buf, 'P');
+        MODSEQ_TO_JMAPID(&buf, mailbox_createdmodseq(mailbox));
+        mailboxid = buf_release(&buf);
+    }
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -9659,7 +9683,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
     int r;
     struct conversations_state *state = NULL;
 
-    if (!(statusitems & STATUS_CONVITEMS)) goto nonconv;
+    if (!(statusitems & (STATUS_CONVITEMS | STATUS_MAILBOXID))) goto nonconv;
     statusitems &= ~STATUS_CONVITEMS; /* strip them for the regular lookup */
 
     /* use the existing state if possible */
@@ -9678,6 +9702,16 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
             goto nonconv;
         }
         global_conversations = state;
+    }
+
+    if (!state || state->version < 2) {
+        sd->mailboxid = mbentry->uniqueid;
+    }
+    else {
+        static struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "P");
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+        sd->mailboxid = buf_cstring(&buf);
     }
 
     r = conversation_getstatus(state,
@@ -9937,8 +9971,15 @@ static int parsecreateargs(struct dlist **extargs)
             }
             else {
                 prot_ungetc(c, imapd_in);
-                c = getword(imapd_in, &val);
-                dlist_setatom(res, name, val.s);
+                if (!strcmp(name, "VERSION")) {
+                    uint32_t ver = 0;
+                    c = getuint32(imapd_in, &ver);
+                    dlist_setnum32(res, name, ver);
+                }
+                else {
+                    c = getword(imapd_in, &val);
+                    dlist_setatom(res, name, val.s);
+                }
             }
         } while (c == ' ');
         if (c != ')') goto fail;
@@ -15123,7 +15164,8 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     }
     else {
         /* Append the new message to local destination mailbox */
-        r = cmd_append(tag, name, index_mboxname(imapd_index), 1/*isreplace*/);
+        r = cmd_append(tag, name, index_mboxname(imapd_index),
+                       atoi(uidseq) /*replace_uid*/);
         if (r) goto cleanup;  // APPEND-specific error responses already sent
     }
 
