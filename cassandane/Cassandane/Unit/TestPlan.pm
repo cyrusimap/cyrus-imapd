@@ -944,6 +944,16 @@ sub _run_workitem
         }
     }
 
+    if ($test->{stop_errors}) {
+        for my $error (@{$test->{stop_errors}}) {
+            unless ((blessed($error) // '') eq 'Error::Simple') {
+                $error = Error::Simple->new($error);
+            }
+            $result->add_error($test,
+                               Test::Unit::Error->make_new_from_error($error));
+        }
+    }
+
     $self->_restore_stdout();
     if ($annotate_flag)
     {
