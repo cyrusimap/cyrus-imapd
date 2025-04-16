@@ -457,7 +457,8 @@ sub add_error
     # sorts of stuff we can't thaw.  We have enough information to
     # discover the right TestCase in the parent process.
     $exception->{'-object'} = undef;
-    $witem->{exception} = $exception;
+    $witem->{exceptions} //= [];
+    push @{$witem->{exceptions}}, $exception;
 }
 
 sub add_failure
@@ -984,8 +985,11 @@ sub _finish_workitem
     }
     elsif ($witem->{result} eq 'error')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_error($test, $witem->{exception});
+        for my $exception (@{$witem->{exceptions}}) {
+            $exception->{'-object'} = $test;
+
+            $result->add_error($test, $exception);
+        }
     }
     $result->end_test($test);
 }
