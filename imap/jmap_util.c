@@ -172,7 +172,12 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
                 r = 0;
             }
             else {
-                r = json_object_set(it, ref, newval);
+                if ((flags & PATCH_KEEP_EXISTING) && json_object_get(it, ref)) {
+                    r = 0;
+                }
+                else {
+                    r = json_object_set(it, ref, newval);
+                }
             }
 
             free(ref);
