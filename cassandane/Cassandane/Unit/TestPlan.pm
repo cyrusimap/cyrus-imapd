@@ -487,6 +487,7 @@ use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Util::Log;
+use Scalar::Util qw(blessed);
 
 my @test_roots = (
     'Cassandane/Test',
@@ -935,6 +936,9 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
+            unless ((blessed($ex) // '') eq 'Error::Simple') {
+                $ex = Error::Simple->new($ex);
+            }
             $result->add_error($test,
                                Test::Unit::Error->make_new_from_error($ex));
         }
