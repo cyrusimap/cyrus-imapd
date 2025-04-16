@@ -27,8 +27,9 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
                               int mandatory, json_t *invalid, const char *fmt,
                               void *dst);
 
-#define PATCH_NO_REMOVE   (1<<0) // only relevant for create
-#define PATCH_ALLOW_ARRAY (1<<1)
+#define PATCH_NO_REMOVE     (1<<0) // only relevant for create
+#define PATCH_ALLOW_ARRAY   (1<<1)
+#define PATCH_KEEP_EXISTING (1<<2) // only relevant for apply
 
 /* Apply patch to a deep copy of val and return the result.
  * Return NULL on error. If invalid is a JSON array, then
