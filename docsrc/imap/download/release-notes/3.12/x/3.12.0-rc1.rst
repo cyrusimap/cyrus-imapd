@@ -1,0 +1,154 @@
+:tocdepth: 3
+
+=====================================
+Cyrus IMAP 3.12.0-rc1 Release Notes
+=====================================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0-rc1/cyrus-imapd-3.12.0-rc1.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0-rc1/cyrus-imapd-3.12.0-rc1.tar.gz.sig
+
+.. _relnotes-3.12.0-rc1_changes:
+
+Major changes since the 3.10 series
+===================================
+
+* Add ``allowspecialusesubfolder`` :cyrusman:`imapd.conf(5)` option to permit
+  special-use subfolders.  Thanks Michael Menge.
+* Suppress duplicate calendar alarms in calalarmd.
+* Add ``caldav_alarm_suppress_file`` :cyrusman:`imapd.conf(5)` option to
+  specify a file whose existence suppresses calalarmd processing
+* Add ``caldav_alarm_db_path`` :cyrusman:`imapd.conf(5)` option
+* Add ``caldav_alarm_support_components`` :cyrusman:`imapd.conf(5)` option to
+  suppress alarms for all but select iCalendar component types.
+* Added ``--clearmodseq`` option to :cyrusman:`ctl_conversationsdb(8)`
+* Optional I/O throttling, for testing
+* The ``DAV:principal-property-search`` REPORT honours the previously set
+  ``DAV:displayname`` property on matches.  Thanks Дилян Палаузов.
+* Adds ``fatals_abort`` :cyrusman:`imapd.conf(5)` option for fatal errors to
+  abort and produce a core dump.
+* The CalDAV and CardDAV HTML administration pages allow editing the
+  ``DAV:displayname`` and ``description`` properties.  For calendars also the
+  ``color`` and ``order`` properties.  Thanks Дилян Палаузов.
+* Enables the calendar-timezone-id (:rfc:`7809`) DAV property even if tzdist
+  http module is disabled.
+* Adds support for IMAP JMAPACCESS (:rfc:`9698`).
+* Adds the :ref:`mboxgroups<auth_mech_mboxgroups>` authorization mechanism
+  for access control groups that are managed within Cyrus.
+* Adds support for IMAP PARTIAL (:rfc:`9394`) and INPROGRESS (:rfc:`9585`)
+  extensions
+* The IMAP parser now supports full 32-bit unsigned numbers
+* Adds support for IMAP UTF8=ACCEPT (:rfc:`6855`).  This extension will only
+  be advertised and supported if BOTH ``reject8bit`` and ``munge8bit``
+  :cyrusman:`imapd.conf(5)` options are disabled
+* User-defined flags are now replicated even when not in use on any messages.
+* Adds support for the `HAProxy`_ protocol.  The :cyrusman:`imapd(8)`,
+  :cyrusman:`pop3d(8)`, :cyrusman:`lmtpd(8)`, :cyrusman:`nntpd(8)`,
+  :cyrusman:`httpd(8)`, and :cyrusman:`timsieved(8)` service daemons now accept
+  a ``-H`` argument to enable this.
+* Adds support for ``comparator-i;unicode-casemap`` (:rfc:`5051`) to Sieve
+* Running processes can now have debug logging toggled on/off by sending
+  them SIGUSR1
+* Updates the email address parser to preserve non-ASCII characters in the
+  domain part.  To apply this to existing messages, :cyrusman:`reconstruct(8)`
+  the mailboxes with the ``-G`` option to force reparsing email headers.
+* :cyrusman:`master(8)` now restarts failing DAEMON processes, and SERVICE
+  processes with the ``babysit`` flag, forever, with a short delay in case of
+  recurring failures.  Previously, such processes that failed too many times in
+  a short space of time were disabled until the operator sent a SIGHUP.
+* Increased granularity of Prometheus report frequency configuration.
+* Adds JMAP Email/query filter conditions ``messageId``, ``references``, and
+  ``inReplyTo``.  See :ref:`upgrade_email_query_reindex`.
+* Add a ``skipuser-$userid`` touchfile to sync directories.  See
+  :cyrusman:`sync_client(8)`.
+* Adds ``replicaonly`` :cyrusman:`imapd.conf(5)` config option to mark a server
+  as being only a replica, blocking non-silent writes, and deactivating
+  :cyrusman:`calalarmd(8)` processing.
+
+.. _HAProxy: https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt
+
+Removed features
+================
+
+The following features and behaviours have been removed in 3.12.  If your
+deployment depends on these, you should not upgrade to 3.12.
+
+* The experimental Cyrus Backups feature has been removed.
+* DIGEST-MD5 and NTLM are no longer supported in httpd.  You may need to remove
+  DIGEST-MD5 from ``sasl_mech_list`` in :cyrusman:`imapd.conf(5)`.  Thanks
+  Дилян Палаузов.
+* The ``improved_mboxlist_sort`` :cyrusman:`imapd.conf(5)` option had no effect
+  since v3.6.  It is now deprecated.  Thanks Дилян Палаузов.
+* :cyrusman:`timsieved(8)` now always sends a capability response after a
+  successful authentication, per :rfc:`5804`.  The
+  ``sieve_sasl_send_unsolicited_capability`` :cyrusman:`imapd.conf(5)` option
+  is now deprecated.  Thanks Дилян Палаузов.
+* Support for the legacy IMAP XMOVE command has been removed.
+* Removed Kerberos 4 support.  Thanks Дилян Палаузов.
+* Removed MIT Kerberized POP3 support.  Thanks Дилян Палаузов.
+
+.. _relnotes_3.12.0-rc1_storage_changes:
+
+Storage changes
+===============
+
+* None so far
+
+Updates to default configuration
+================================
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behaviour has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+* The ``maxlogins_per_user`` and ``maxlogins_per_host``
+  :cyrusman:`imapd.conf(5)` options now apply per service, not globally.  So
+  for example if you have ``maxlogins_per_user: 5`` and some user has 5
+  active IMAP sessions, the user will still be able to access HTTP services.
+
+  The LMTP service now uses these limits too.  This can prevent resource
+  starvation when a lot of mail is being delivered to a mailbox that is locked
+  for a long time.  Instead of having many :cyrusman:`lmtpd(8)` processes
+  waiting on the lock, excess connections attempting delivery to the same
+  mailbox will be deferred with a 4xx response.
+* The ``prometheus_update_freq`` :cyrusman:`imapd.conf(5)` option has been
+  deprecated and replaced by ``prometheus_service_update_freq``,
+  ``prometheus_master_update_freq``, and ``prometheus_usage_update_freq``,
+  allowing these sets of statistics to be reported at different
+  frequencies.  The relatively-expensive usage statistics are no longer
+  reported by default.  To re-enable, configure a suitable update frequency
+  for ``prometheus_usage_update_freq``.
+
+Security fixes
+==============
+
+* Fixed :issue:`5046`: prevent Cyrus IMAP servers being used in Application
+  Layer Protocol Confusion (`ALPACA`_) attacks, particularly against web
+  browsers
+
+.. _ALPACA: https://alpaca-attack.com/ALPACA.pdf
+
+Significant bugfixes
+====================
+
+* Fixed :issue:`1763`: Adds a way to freeze an entire server temporarily while
+  taking snapshots or similar, using :cyrusman:`cyr_withlock_run(8)`.  This
+  relies on a new ``global_lock`` :cyrusman:`imapd.conf(5)` option being
+  enabled, which is enabled by default.  Whether or not this setting is
+  enabled, you can also use ``cyr_withlock_run --user`` to run a command with
+  a single user locked.
+* Fixed :issue:`5146`: can't subscribe to shared mailbox when username is a
+  prefix of owner's username
+
+  Subscriptions databases will be upgraded the next time they're opened, and
+  any bad entries due to the bug will be found and fixed.  You can force this
+  for a particular user by connecting to IMAP as them and issuing a command
+  like ``. LSUB "" "*"`` or similar, but this will happen anyway during normal
+  usage.
+* Fixed :issue:`4797`: all man pages are now always built and installed
+* Fixed :issue:`5309`: deadlock on shutdown (thanks Mark Cammidge)
+* Fixed :issue:`5380`: expunge only did one message at a time
