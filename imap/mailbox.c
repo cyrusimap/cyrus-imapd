@@ -6607,9 +6607,8 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     const message_t *msg;
     int r = 0;
 
-    int object_storage_enabled = 0 ;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
 
     /* Copy over meta files */
@@ -6624,40 +6623,64 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         xunlink(newbuf); /* Make link() possible */
 
         if (!mf->optional || stat(oldbuf, &sbuf) != -1) {
-            r = mailbox_copyfile(oldbuf, newbuf, mf->nolink);
+            r = mailbox_copyfile_fdptr(oldbuf, newbuf, mf->nolink, NULL);
             if (r) return r;
         }
     }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    int spoolfd = -1;
+    int archivefd = -1;
+    int *fdptr;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record),
-                MAX_MAILBOX_PATH);
-        if (!object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED)
-            xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
-                    MAX_MAILBOX_PATH);
-        else
-            xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
-                    MAX_MAILBOX_PATH);
-
-        if (!(object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED))    // if object storage do not move file
-           r = mailbox_copyfile(oldbuf, newbuf, 0);
-
-        if (r) break;
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
+        if (object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
             new_mailbox.part = (char*) config_defpartition ;
             r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
             if (r) break;
+            continue;
         }
 #endif
+
+        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record), MAX_MAILBOX_PATH);
+        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
+            xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
+                    MAX_MAILBOX_PATH);
+            fdptr = &archivefd;
+        }
+        else {
+            xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
+                    MAX_MAILBOX_PATH);
+            fdptr = &spoolfd;
+        }
+
+        // make sure the directory is open
+        if (*fdptr < 0) {
+            *fdptr = xopendir(newbuf, /*create*/1);
+            if (*fdptr < 0) {
+                r = IMAP_IOERROR;
+                break;
+            }
+        }
+
+        r = mailbox_copyfile_fdptr(oldbuf, newbuf, 0, fdptr);
+
+        if (r) break;
     }
     mailbox_iter_done(&iter);
+    if (archivefd >= 0) {
+        if (!r) r = fsync(archivefd) ? IMAP_IOERROR : 0;
+        close(archivefd);
+    }
+    if (spoolfd >= 0) {
+        if (!r) r = fsync(spoolfd) ? IMAP_IOERROR : 0;
+        close(spoolfd);
+    }
 
     return r;
 }
