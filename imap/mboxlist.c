@@ -3968,7 +3968,7 @@ static int alluser_cb(const mbentry_t *mbentry, void *rock)
 EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
 {
     init_internal();
-    struct alluser_rock urock = { proc, rock};
+    struct alluser_rock urock = { proc, rock };
     int r = mboxlist_allmbox(NULL, alluser_cb, &urock, /*flags*/0);
     return r;
 }
