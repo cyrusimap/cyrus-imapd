@@ -243,6 +243,7 @@ struct mailbox_header {
     char *name;
     char *acl;
     char *uniqueid;
+    char *jmapid;
     char *quotaroot;
     char *flagname[MAX_USER_FLAGS];
     int mbtype;
@@ -615,6 +616,7 @@ extern int mailbox_delete(struct mailbox **mailboxptr);
 extern const struct mboxlist_entry *mailbox_mbentry(const struct mailbox *mailbox);
 extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
+extern const char *mailbox_jmapid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
 extern const char *mailbox_quotaroot(const struct mailbox *mailbox);
@@ -687,7 +689,8 @@ extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd)
 
 extern int mailbox_create(const char *name, uint32_t mbtype, int minor_version,
                           const char *part, const char *acl,
-                          const char *uniqueid, int options, unsigned uidvalidity,
+                          const char *uniqueid, const char *jmapid,
+                          int options, unsigned uidvalidity,
                           modseq_t createdmodseq, modseq_t highestmodseq,
                           struct mailbox **mailboxptr);
 
@@ -717,6 +720,7 @@ extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mai
 #define mailbox_make_uniqueid(mailbox) mailbox_set_uniqueid(mailbox, makeuuid())
 
 extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
+extern void mailbox_set_jmapid(struct mailbox *mailbox, const char *jmapid);
 extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
 extern int mailbox_setversion(struct mailbox *mailbox, int version);

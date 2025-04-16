@@ -2068,6 +2068,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     if (!topart) topart = mailbox_partition(mailbox);
 
+    dlist_setatom(kl, "JMAPID", mailbox_jmapid(mailbox));
     dlist_setatom(kl, "UNIQUEID", mailbox_uniqueid(mailbox));
     dlist_setatom(kl, "MBOXNAME", mailbox_name(mailbox));
     if (mbtypes_sync(mailbox_mbtype(mailbox)))
@@ -2861,6 +2862,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
     const char *groups = NULL;
+    const char *jmapid = NULL;
 
     /* previous state markers */
     modseq_t since_modseq = 0;
@@ -2945,6 +2947,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
     dlist_getlist(kin, "USERFLAGS", &userflags);
     dlist_getatom(kin, "USERGROUPS", &groups);
+    dlist_getatom(kin, "JMAPID", &jmapid);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -2984,6 +2987,7 @@ static int sync_apply_mailbox(struct dlist *kin,
             mbentry.name = (char *) mboxname;
             mbentry.partition = (char *) partition;
             mbentry.uniqueid = (char *) uniqueid;
+            mbentry.jmapid = (char *) jmapid;
             mbentry.acl = (char *) acl;
             mbentry.mbtype = mbtype;
             mbentry.uidvalidity = uidvalidity;
@@ -3046,6 +3050,7 @@ static int sync_apply_mailbox(struct dlist *kin,
             mbentry.name = (char *) mboxname;
             mbentry.partition = (char *) partition;
             mbentry.uniqueid = (char *) uniqueid;
+            mbentry.jmapid = (char *) jmapid;
             mbentry.acl = (char *) acl;
             mbentry.mbtype = mbtype;
             mbentry.uidvalidity = uidvalidity;
@@ -3223,6 +3228,17 @@ static int sync_apply_mailbox(struct dlist *kin,
         strarray_fini(&mygroups);
     }
 
+    if (jmapid && strcmpnull(jmapid, mailbox_jmapid(mailbox))) {
+        mbentry_t *copy = mboxlist_entry_copy(mailbox_mbentry(mailbox));
+        free(copy->jmapid);
+        copy->jmapid = xstrdup(jmapid);
+        r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
+        mboxlist_entry_free(&copy);
+        if (r) goto done;
+
+        mailbox_set_jmapid(mailbox, jmapid);
+    }
+
     r = sync_mailbox_compare_update(mailbox, kr, 0, part_list);
     if (r) goto done;
 
@@ -3331,6 +3347,8 @@ done:
             r = IMAP_SYNC_CHECKSUM;
         }
     }
+
+    if (!r) mailbox_commit(mailbox);
 
     mailbox_close(&mailbox);
     mboxname_release(&namespacelock);
@@ -4539,6 +4557,7 @@ static int sync_restore_mailbox(struct dlist *kin,
     const char *mboxtype = NULL;
     const char *acl = NULL;
     const char *options_str = NULL;
+    const char *jmapid = NULL;
     modseq_t highestmodseq = 0;
     uint32_t uidvalidity = 0;
     struct dlist *kr = NULL;
@@ -4565,6 +4584,7 @@ static int sync_restore_mailbox(struct dlist *kin,
     }
 
     /* optional */
+    dlist_getatom(kin, "JMAPID", &jmapid);
     dlist_getatom(kin, "PARTITION", &partition);
     dlist_getatom(kin, "ACL", &acl);
     dlist_getatom(kin, "OPTIONS", &options_str);
@@ -4630,6 +4650,7 @@ static int sync_restore_mailbox(struct dlist *kin,
             mbentry.name = (char *) mboxname;
             mbentry.partition = (char *) partition;
             mbentry.uniqueid = (char *) uniqueid;
+            mbentry.jmapid = (char *) jmapid;
             mbentry.acl = (char *) acl;
             mbentry.mbtype = mbtype;
             mbentry.uidvalidity = uidvalidity;
@@ -5238,6 +5259,7 @@ static int sync_kl_parse(struct dlist *kin,
         }
 
         else if (!strcmp(kl->name, "MAILBOX")) {
+            const char *jmapid = NULL;
             const char *uniqueid = NULL;
             const char *mboxname = NULL;
             const char *mboxtype = NULL;
@@ -5280,6 +5302,7 @@ static int sync_kl_parse(struct dlist *kin,
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
             dlist_getnum64(kl, "FOLDERMODSEQ", &foldermodseq);
             dlist_getatom(kl, "USERGROUPS", &groups);
+            dlist_getatom(kl, "JMAPID", &jmapid);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL, NULL);
@@ -6639,6 +6662,7 @@ int sync_do_update_mailbox(struct sync_client_state *sync_cs,
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
 
+        dlist_setatom(kl, "JMAPID", mbentry->jmapid);
         dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
         dlist_setatom(kl, "MBOXNAME", mbentry->name);
         dlist_setatom(kl, "MBOXTYPE",
