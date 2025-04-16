@@ -476,6 +476,16 @@ static void run_audit_tool(const char *tool, const char *userid, const char *src
 
 EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 {
+    // check that the user exists
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    int r = mboxlist_lookup(inboxname, NULL, NULL);
+    free(inboxname);
+    if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
+    else if (r) {
+        syslog(LOG_ERR, "dav_reconstruct_user: %s FAILED %s", userid, error_message(r));
+        return r;
+    }
+
     syslog(LOG_NOTICE, "dav_reconstruct_user: %s", userid);
 
     struct buf fname = BUF_INITIALIZER;
@@ -487,7 +497,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
     struct mboxlock *namespacelock = user_namespacelock(userid);
 
-    int r = IMAP_IOERROR;
+    r = IMAP_IOERROR;
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
                                 config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     if (reconstruct_db) {

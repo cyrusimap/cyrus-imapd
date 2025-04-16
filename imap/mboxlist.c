@@ -3943,7 +3943,6 @@ EXPORTED int mboxlist_set_racls(int enabled)
 
 
 struct alluser_rock {
-    char *prev;
     user_cb *proc;
     void *rock;
 };
@@ -3951,33 +3950,26 @@ struct alluser_rock {
 static int alluser_cb(const mbentry_t *mbentry, void *rock)
 {
     struct alluser_rock *urock = (struct alluser_rock *)rock;
-    char *userid = mboxname_to_userid(mbentry->name);
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
     int r = 0;
 
-    if (userid) {
-        if (strcmpsafe(urock->prev, userid)) {
-            r = urock->proc(userid, urock->rock);
-            free(urock->prev);
-            urock->prev = userid;
-        } else
-            free(userid);
+    // non deleted user inbox only
+    if (!(mbentry->mbtype & MBTYPE_DELETED)
+     && !mbname_isdeleted(mbname)
+     && !strarray_size(mbname_boxes(mbname))
+     && mbname_userid(mbname)) {
+        r = urock->proc(mbname_userid(mbname), urock->rock);
     }
 
+    mbname_free(&mbname);
     return r;
 }
 
 EXPORTED int mboxlist_alluser(user_cb *proc, void *rock)
 {
-    struct alluser_rock urock;
-    int r = 0;
-
     init_internal();
-
-    urock.prev = NULL;
-    urock.proc = proc;
-    urock.rock = rock;
-    r = mboxlist_allmbox(NULL, alluser_cb, &urock, /*flags*/0);
-    free(urock.prev);
+    struct alluser_rock urock = { proc, rock };
+    int r = mboxlist_allmbox(NULL, alluser_cb, &urock, /*flags*/0);
     return r;
 }
 
