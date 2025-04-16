@@ -150,13 +150,21 @@ sub print_errors
     $self->_print($msg);
 
     my $i = 0;
+
+    my $annotations;
+
     for my $e (@{$result->errors()}) {
         chomp(my $e_to_str = $e);
         $i++;
-        $self->_print("$i) $e_to_str\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
+        $self->_print("$i) $e_to_str\n\n");
+
+        # These will always be the same since they share the same test object
+        # so we just need one of them...
+        $annotations ||= \$e->object->annotations();
     }
+
+    $self->_print("\nAnnotations:\n", $$annotations)
+        if $$annotations;
 }
 
 sub print_failures
