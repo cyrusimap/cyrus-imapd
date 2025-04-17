@@ -1000,6 +1000,116 @@ EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid,
     return 0;
 }
 
+/*
+ * read a single _J_mapid record from the mailboxes.db and return a pointer to it
+ */
+static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
+                                const char **dataptr, size_t *datalenptr,
+                                struct txn **tid, int wrlock)
+{
+    struct buf key = BUF_INITIALIZER;
+    int r;
+
+    if (!jmapid)
+        return IMAP_MAILBOX_NONEXISTENT;
+
+    mboxlist_jmapid_to_key(inboxid, jmapid, &key);
+
+    if (wrlock) {
+        r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
+                              dataptr, datalenptr, tid);
+    } else {
+        r = cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key),
+                          dataptr, datalenptr, tid);
+    }
+
+    switch (r) {
+    case CYRUSDB_OK:
+        /* no entry required, just checking if it exists */
+        r = 0;
+        break;
+
+    case CYRUSDB_AGAIN:
+        r = IMAP_AGAIN;
+        break;
+
+    case CYRUSDB_NOTFOUND:
+        r = IMAP_MAILBOX_NONEXISTENT;
+        break;
+
+    default:
+        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
+               jmapid, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        break;
+    }
+
+    buf_free(&key);
+    return r;
+}
+
+EXPORTED char *mboxlist_find_jmapid(const char *jmapid,
+                                    const char *userid,
+                                    const struct auth_state *auth_state __attribute__((unused)))
+{
+    int r;
+    const char *data;
+    size_t datalen;
+    mbentry_t *mbentry = NULL;
+    char *mbname = NULL;
+
+    init_internal();
+
+    r = mboxlist_read_jmapid(userid, jmapid, &data, &datalen, NULL, 0);
+    if (r) return NULL;
+
+    r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+    if (r) return NULL;
+
+    // only note the name down if it's not deleted
+    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+        mbname = mbentry->name;
+        mbentry->name = NULL;
+    }
+
+    mboxlist_entry_free(&mbentry);
+
+    return mbname;
+}
+
+/*
+ * Lookup 'jmapid' in the mailbox list, ignoring reserved records
+ */
+EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
+                                       mbentry_t **entryptr, struct txn **tid)
+{
+    mbentry_t *entry = NULL;
+    const char *data;
+    size_t datalen;
+    int r;
+
+    init_internal();
+
+    r = mboxlist_read_jmapid(inboxid, jmapid, &data, &datalen, tid, 0);
+    if (r) return r;
+
+    r = mboxlist_parse_entry(&entry, NULL, 0, data, datalen);
+    if (r) return r;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_RESERVE) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_RESERVED;
+    }
+
+    if (entryptr) {
+        *entryptr = entry;
+    }
+    else mboxlist_entry_free(&entry);
+
+    return 0;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
@@ -1376,7 +1486,6 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
             r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
             if (r) goto done;
         }
-
 
         if (old->uniqueid) {
             /* Get the existing I key if any */
