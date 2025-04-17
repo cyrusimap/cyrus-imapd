@@ -529,7 +529,7 @@ EXPORTED void xclosedir(int dirfd)
     errno = saved_errno;
 }
 
-static int xunlink_helper(const char *path, int *dirfdp)
+EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
 {
     int local_dirfd = -1;
     if (!dirfdp) dirfdp = &local_dirfd;
@@ -730,7 +730,7 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        xunlink_helper(from, from_dirfdp);
+        cyrus_unlink_fdptr(from, from_dirfdp);
     }
 
     return r;

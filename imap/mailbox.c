@@ -4794,7 +4794,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     const char *spoolfname = mailbox_spool_fname(mailbox, uid);
     const char *archivefname = mailbox_archive_fname(mailbox, uid);
 
-    if (xunlink(spoolfname) == 0) {
+    if (cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd) == 0) {
         if (config_auditlog) {
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4804,7 +4804,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     }
 
     if (strcmp(spoolfname, archivefname)) {
-        if (xunlink(archivefname) == 0) {
+        if (cyrus_unlink_fdptr(archivefname, &mailbox->archive_dirfd) == 0) {
             if (config_auditlog) {
                 syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4822,7 +4822,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
         /* we always remove the spool file here, because we've archived it */
         if (record->system_flags & FLAG_INTERNAL_ARCHIVED)
-            xunlink(spoolfname);
+            cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd);
 
         /* if the record is also deleted, we remove the objectstore copy */
         if (record->system_flags & FLAG_INTERNAL_UNLINKED)
@@ -4863,14 +4863,14 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 
     /* don't cleanup if it's the same file! */
     if (strcmp(spoolfname, archivefname)) {
+        // we want to remove the OTHER file - the one that we're not keeping
         if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             /* XXX - stat to make sure the other file exists first? - we mostly
             *  trust that we didn't do stupid things everywhere else, so maybe not */
-            xunlink(spoolfname);
+            cyrus_unlink_fdptr(spoolfname, &mailbox->archive_dirfd);
         }
-
         else {
-            xunlink(archivefname);
+            cyrus_unlink_fdptr(archivefname, &mailbox->spool_dirfd);
         }
     }
 }
@@ -5564,7 +5564,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     // didn't manage to store it, so remove the ARCHIVED flag
                     continue;
                 }
-                xunlink(srcname);
+                cyrus_unlink_fdptr(srcname, &mailbox->spool_dirfd);
             }
 #endif
             copyrecord.internal_flags |= FLAG_INTERNAL_ARCHIVED | FLAG_INTERNAL_NEEDS_CLEANUP;
