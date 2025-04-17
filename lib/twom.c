@@ -1937,7 +1937,8 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
 #endif
             free(copy);
             if (dirfd < 0) {
-                r = TWOM_NOTFOUND;
+                if (errno == ENOENT) r = TWOM_NOTFOUND;
+                else r = TWOM_IOERROR;
                 goto done;
             }
             copy = strdup(fname);
