@@ -154,7 +154,7 @@ static void downgrade_record(const struct index_record *record, char *buf,
         UP_modseqbase = OFFSET_MESSAGE_GUID+12;
 
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
-    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
     *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
     *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
@@ -907,9 +907,10 @@ EXPORTED int undump_mailbox(const char *mbname,
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mbentry_t *mbentry = NULL;
         r = mboxlist_lookup(mbname, &mbentry, NULL);
-        if (!r) r = mailbox_create(mbname, mbentry->mbtype,
+        if (!r) r = mailbox_create(mbname, mbentry->mbtype, /*version*/0,
                                    mbentry->partition, mbentry->acl,
-                                   mbentry->uniqueid, 0, 0, 0, 0, &mailbox);
+                                   mbentry->uniqueid, mbentry->jmapid,
+                                   0, 0, 0, 0, &mailbox);
         mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;
@@ -1312,7 +1313,7 @@ EXPORTED int undump_mailbox(const char *mbname,
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             fname = mailbox_record_fname(mailbox, record);
-            settime.actime = settime.modtime = record->internaldate;
+            settime.actime = settime.modtime = record->internaldate.tv_sec;
             if (utime(fname, &settime) == -1) {
                 r = IMAP_IOERROR;
                 mailbox_iter_done(&iter);

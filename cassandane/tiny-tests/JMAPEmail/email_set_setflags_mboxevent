@@ -10,6 +10,12 @@ sub test_email_set_setflags_mboxevent
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
     xlog $self, "create mailboxes";
     my $res = $jmap->CallMethods([
         ['Mailbox/set', {
@@ -22,10 +28,10 @@ sub test_email_set_setflags_mboxevent
                 },
             },
         }, "R1"]
-    ]);
-    my $mboxIdA = $res->[0][1]{created}{A}{id};
+    ], $using);
+    my $mboxIdA = $res->[0][1]{created}{A}{uniqueId};
     $self->assert_not_null($mboxIdA);
-    my $mboxIdB = $res->[0][1]{created}{B}{id};
+    my $mboxIdB = $res->[0][1]{created}{B}{uniqueId};
     $self->assert_not_null($mboxIdB);
 
     xlog $self, "Create emails";
