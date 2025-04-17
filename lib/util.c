@@ -460,16 +460,63 @@ EXPORTED int xrenameat(int dirfd, const char *src, const char *dest)
     return r;
 }
 
-EXPORTED int xopendir(const char *dest)
+static int xopendirpath(const char *path, int create)
+{
+#if defined(O_DIRECTORY)
+    int dirfd = open(path, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(path, O_RDONLY, 0600);
+#endif
+    if (dirfd >= 0) return dirfd; // exists, we're good
+    if (!create) return dirfd; // not creating? Bail
+
+    int parentfd = xopendir(path, create);
+    if (parentfd < 0) return parentfd; // failed, can't get further
+
+    char *copy = xstrdup(path);
+    const char *leaf = basename(copy);
+    // ignore exist, if someone else won that's OK
+    if (mkdirat(parentfd, leaf, 0755) == -1) {
+        if (errno != EEXIST) {
+            xsyslog(LOG_ERR, "IOERROR: failed to create intermediate directory",
+                             "filename=<%s>", path);
+            int saved_errno = errno;
+            free(copy);
+            close(parentfd);
+            errno = saved_errno;
+            return -1;
+        }
+        /* otherwise OK, directory already created */
+    }
+    else {
+        if (fsync(parentfd) < 0) {
+            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
+                             "filename=<%s>", path);
+            int saved_errno = errno;
+            free(copy);
+            close(parentfd);
+            errno = saved_errno;
+            return -1;
+        }
+    }
+
+    free(copy);
+    close(parentfd);
+
+#if defined(O_DIRECTORY)
+    dirfd = open(path, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    dirfd = open(path, O_RDONLY, 0600);
+#endif
+
+    return dirfd;
+}
+
+EXPORTED int xopendir(const char *dest, int create)
 {
     char *copy = xstrdup(dest);
     const char *dir = dirname(copy);
-
-#if defined(O_DIRECTORY)
-    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
-#else
-    int dirfd = open(dir, O_RDONLY, 0600);
-#endif
+    int dirfd = xopendirpath(dir, create);
     free(copy);
     return dirfd;
 }
@@ -482,13 +529,13 @@ EXPORTED void xclosedir(int dirfd)
     errno = saved_errno;
 }
 
-static int xunlink_helper(const char *path, int *dirfdp)
+EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
 {
     int local_dirfd = -1;
     if (!dirfdp) dirfdp = &local_dirfd;
 
-    if (!*dirfdp) *dirfdp = xopendir(path);
-    if (!*dirfdp) return -1;
+    if (*dirfdp < 0) *dirfdp = xopendir(path, /*create*/0);
+    if (*dirfdp < 0) return *dirfdp;
 
     int r = xunlinkat(*dirfdp, path, /*flags*/0);
 
@@ -501,7 +548,7 @@ static int xunlink_helper(const char *path, int *dirfdp)
 // destination directory before returning
 EXPORTED int cyrus_rename(const char *src, const char *dest)
 {
-    int dirfd = xopendir(dest);
+    int dirfd = xopendir(dest, /*create*/1);
     if (dirfd < 0) {
         return dirfd;
     }
@@ -518,32 +565,9 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
  */
 EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    char *path = xstrdupnull(pathname);    /* make a copy to write into */
-    char *p = path;
-    int save_errno;
-    struct stat sbuf;
-
-    if (!p || *p == '\0')
-        return -1;
-
-    while ((p = strchr(p+1, '/'))) {
-        *p = '\0';
-        if (mkdir(path, 0755) == -1 && errno != EEXIST) {
-            save_errno = errno;
-            if (stat(path, &sbuf) == -1) {
-                errno = save_errno;
-                xsyslog(LOG_ERR, "IOERROR: creating directory",
-                                 "path=<%s>", path);
-                free(path);
-                return -1;
-            }
-        }
-        if (errno == EEXIST)
-            errno = 0;
-        *p = '/';
-    }
-
-    free(path);
+    int fd = xopendir(pathname, /*create*/1);
+    if (fd < 0) return -1;
+    close(fd);
     return 0;
 }
 
@@ -560,32 +584,19 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
     int nolink = flags & COPYFILE_NOLINK;
     int keeptime = flags & COPYFILE_KEEPTIME;
     int nodirsync = flags & COPYFILE_NODIRSYNC;
+    char *copy = xstrdup(to);
+    const char *leaf = basename(copy);
 
     if (!dirfdp) dirfdp = &local_dirfd;
-
+    if (*dirfdp < 0) *dirfdp = xopendir(to, flags & COPYFILE_MKDIR);
     if (*dirfdp < 0) {
-        char *copy = xstrdup(to);
-        const char *dir = dirname(copy);
-#if defined(O_DIRECTORY)
-        *dirfdp = open(dir, O_RDONLY|O_DIRECTORY, 0600);
-#else
-        *dirfdp = open(dir, O_RDONLY, 0600);
-#endif
-        free(copy);
-    }
-    if (*dirfdp == -1) {
-        if (!(flags & COPYFILE_MKDIR))
-            xsyslog(LOG_ERR, "IOERROR: open directory failed",
-                             "filename=<%s>", to);
         r = -1;
         goto done;
     }
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
-        char *copy = xstrdup(to);
-        const char *file = basename(copy);
-        r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
+        r = linkat(AT_FDCWD, from, *dirfdp, leaf, 0);
         if (r && errno == EEXIST) {
             /* n.b. unlink rather than xunlink.  at this point we believe
              * a file definitely exists that we want to remove, so if
@@ -597,13 +608,11 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
                                  "filename=<%s>", to);
                 errno = 0;
                 r = -1;
-                free(copy);
                 goto done;
             }
 
-            r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
+            r = linkat(AT_FDCWD, from, *dirfdp, leaf, 0);
         }
-        free(copy);
         if (!r) goto sync;
     }
 
@@ -629,11 +638,10 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
         goto done;
     }
 
-    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    destfd = openat(*dirfdp, leaf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
-        if (!(flags & COPYFILE_MKDIR))
-            xsyslog(LOG_ERR, "IOERROR: create failed",
-                             "filename=<%s>", to);
+        xsyslog(LOG_ERR, "IOERROR: create failed",
+                         "filename=<%s>", to);
         r = -1;
         goto done;
     }
@@ -646,7 +654,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
         xsyslog(LOG_ERR, "IOERROR: retry_write failed",
                          "filename=<%s>", to);
         r = -1;
-        xunlink(to);  /* remove any rubbish we created */
+        xunlinkat(*dirfdp, leaf, /*flags*/0);  /* remove any rubbish we created */
         goto done;
     }
 
@@ -693,6 +701,7 @@ sync:
 
 done:
     map_free(&src_base, &src_size);
+    free(copy);
 
     if (srcfd != -1) close(srcfd);
     if (destfd != -1) close(destfd);
@@ -721,7 +730,7 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
 
     if (!r && (flags & COPYFILE_RENAME)) {
         /* remove the original file if the copy succeeded */
-        xunlink_helper(from, from_dirfdp);
+        cyrus_unlink_fdptr(from, from_dirfdp);
     }
 
     return r;

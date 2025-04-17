@@ -1605,7 +1605,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
             src_internal_flags & FLAG_INTERNAL_ARCHIVED) {
             struct index_record record;
             r = msgrecord_get_index_record(dst_msgrec, &record);
-            if (!r) r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
+            if (!r) r = objectstore_put(as->mailbox, &record, srcfname);   // put should just add the refcount.
         }
 #endif
 

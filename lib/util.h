@@ -221,8 +221,9 @@ extern char *create_tempdir(const char *path, const char *subname);
 extern int removedir(const char *path);
 
 /* Call rename but fsync the directory before returning success */
-extern int xopendir(const char *dest);
+extern int xopendir(const char *dest, int create);
 extern int xrenameat(int dirfd, const char *src, const char *dest);
+extern int cyrus_unlink_fdptr(const char *fname, int *dirfdp);
 extern void xclosedir(int dirfd);
 extern int cyrus_rename(const char *src, const char *dest);
 

@@ -232,7 +232,9 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
         /* copy the message file */
         fname = mailbox_record_fname(mailbox, &newrecord);
-        r = mailbox_copyfile(oldfname, fname, 0);
+        int *fdptr = (newrecord.internal_flags & FLAG_INTERNAL_ARCHIVED)
+                   ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+        r = mailbox_copyfile_fdptr(oldfname, fname, 0, fdptr);
         if (r) break;
 
         /* add the flag if requested */

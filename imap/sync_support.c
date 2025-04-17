@@ -2296,9 +2296,11 @@ static int sync_append_copyfile(struct mailbox *mailbox,
     if (mailbox_should_archive(mailbox, record, NULL))
         record->internal_flags |= FLAG_INTERNAL_ARCHIVED;
 
+    int *fdptr = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+               ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+
     destname = mailbox_record_fname(mailbox, record);
-    cyrus_mkdir(destname, 0755);
-    r = mailbox_copyfile(item->fname, destname, 0);
+    r = mailbox_copyfile_fdptr(item->fname, destname, 0, fdptr);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: copy file failed",
                          "filename=<%s> destination=<%s>",
@@ -2422,7 +2424,7 @@ redo:
             continue;
         }
 
-        if (mailbox_copyfile(mailbox_msg_path, stage_msg_path, 0) != 0) {
+        if (cyrus_copyfile(mailbox_msg_path, stage_msg_path, COPYFILE_MKDIR|COPYFILE_NODIRSYNC) != 0) {
             xsyslog(LOG_ERR, "IOERROR: link failed",
                              "mailbox_msg_path=<%s> stage_msg_path=<%s>",
                              mailbox_msg_path, stage_msg_path);
@@ -5570,7 +5572,9 @@ static int copy_local(struct mailbox *mailbox, unsigned uid)
     /* copy the file in to place */
     oldfname = xstrdup(mailbox_record_fname(mailbox, &oldrecord));
     newfname = xstrdup(mailbox_record_fname(mailbox, &newrecord));
-    r = mailbox_copyfile(oldfname, newfname, 0);
+    int *fdptr = (newrecord.internal_flags & FLAG_INTERNAL_ARCHIVED)
+               ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+    r = mailbox_copyfile_fdptr(oldfname, newfname, 0, fdptr);
     free(oldfname);
     free(newfname);
     if (r) return r;
