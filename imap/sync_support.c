@@ -2678,7 +2678,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             int hadsnoozed = 0;
             r = apply_annotations(mailbox, &copy, rannots, mannots, 0, &hadsnoozed);
             if (r) {
-                xsyslog(LOG_ERR, "SYNCERROR: failed to write merged annotations"
+                xsyslog(LOG_ERR, "SYNCERROR: failed to write merged annotations",
                                  "mailbox=<%s> recno=<%u> error=<%s>",
                                  mailbox_name(mailbox),
                                  rrecord->recno,

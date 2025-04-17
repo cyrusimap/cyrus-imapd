@@ -1229,8 +1229,12 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string comes from http_cal_abook_admin_js.h */
     buf_printf(body, http_cal_abook_admin_js,
                CYRUS_VERSION, http_cal_abook_admin_js_len);
+#pragma GCC diagnostic pop
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
