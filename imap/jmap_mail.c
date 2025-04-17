@@ -1172,8 +1172,9 @@ static json_t *_email_read_jannot(const jmap_req_t *req, msgrecord_t *mr,
 
 struct _email_find_rock {
     jmap_req_t *req;
-    char *mboxname;
+    char **mboxnameptr;
     uint32_t uid;
+    uint64_t internaldate;
 };
 
 static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
@@ -1223,23 +1224,24 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     if ((system_flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED))
         goto done;
 
-    d->mboxname = xstrdup(mbentry->name);
+    if (d->mboxnameptr) *(d->mboxnameptr) = xstrdup(mbentry->name);
     d->uid = rec->uid;
+    d->internaldate = rec->internaldate;
 
 done:
     mboxlist_entry_free(&mbentry);
     mailbox_close(&mbox);
-    return d->mboxname ? IMAP_OK_COMPLETED : 0;
+    return d->uid ? IMAP_OK_COMPLETED : 0;
 }
 
 static int _email_find_by_guid(jmap_req_t *req,
                                struct conversations_state *cstate,
                                const char *guid,
                                char **mboxnameptr,
-                               uint32_t *uidptr)
-
+                               uint32_t *uidptr,
+                               uint64_t *idateptr)
 {
-    struct _email_find_rock rock = { req, NULL, 0 };
+    struct _email_find_rock rock = { req, mboxnameptr, 0, 0 };
 
     if (!guid || !*guid) return IMAP_NOTFOUND;
 
@@ -1248,18 +1250,20 @@ static int _email_find_by_guid(jmap_req_t *req,
     /* Set return values */
     if (r == IMAP_OK_COMPLETED)
         r = 0;
-    else if (!rock.mboxname)
+    else if (!rock.uid)
         r = IMAP_NOTFOUND;
-    *mboxnameptr = rock.mboxname;
-    *uidptr = rock.uid;
+
+    if (uidptr) *uidptr = rock.uid;
+    if (idateptr) *idateptr = rock.internaldate;
     return r;
 }
 
-HIDDEN int jmap_email_find_by_guid(jmap_req_t *req,
+static int jmap_email_find_by_guid(jmap_req_t *req,
                                    const char *from_accountid,
                                    const char *guid,
                                    char **mboxnameptr,
-                                   uint32_t *uidptr)
+                                   uint32_t *uidptr,
+                                   uint64_t *idateptr)
 {
     const char *accountid = from_accountid ? from_accountid : req->accountid;
     int r;
@@ -1274,7 +1278,7 @@ HIDDEN int jmap_email_find_by_guid(jmap_req_t *req,
         mycstate = req->cstate;
     }
 
-    r = _email_find_by_guid(req, mycstate, guid, mboxnameptr, uidptr);
+    r = _email_find_by_guid(req, mycstate, guid, mboxnameptr, uidptr, idateptr);
     if (mycstate != req->cstate) {
         conversations_commit(&mycstate);
     }
@@ -1285,7 +1289,8 @@ static int _email_find_in_account(jmap_req_t *req,
                                   const char *account_id,
                                   const char *email_id,
                                   char **mboxnameptr,
-                                  uint32_t *uidptr)
+                                  uint32_t *uidptr,
+                                  uint64_t *idateptr)
 {
     int r;
 
@@ -1302,7 +1307,8 @@ static int _email_find_in_account(jmap_req_t *req,
     const char *guidrep = _guid_from_id(mycstate, email_id);
     if (!guidrep) return IMAP_NOTFOUND;
 
-    r = _email_find_by_guid(req, mycstate, guidrep, mboxnameptr, uidptr);
+    r = _email_find_by_guid(req, mycstate, guidrep,
+                            mboxnameptr, uidptr, idateptr);
     if (mycstate != req->cstate) {
         conversations_commit(&mycstate);
     }
@@ -1313,11 +1319,13 @@ HIDDEN int jmap_email_find(jmap_req_t *req,
                            const char *from_accountid,
                            const char *email_id,
                            char **mboxnameptr,
-                           uint32_t *uidptr)
+                           uint32_t *uidptr,
+                           uint64_t *idateptr)
 {
     const char *accountid = from_accountid ?  from_accountid : req->accountid;
 
-    return _email_find_in_account(req, accountid, email_id, mboxnameptr, uidptr);
+    return _email_find_in_account(req, accountid, email_id,
+                                  mboxnameptr, uidptr, idateptr);
 }
 
 struct email_getcid_rock {
@@ -6108,7 +6116,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
 
         const char *msgid = json_string_value(val);
 
-        r = jmap_email_find(req, NULL, msgid, &mboxname, &uid);
+        r = jmap_email_find(req, NULL, msgid, &mboxname, &uid, NULL);
         if (r) {
             if (r == IMAP_NOTFOUND) {
                 json_array_append_new(*notfound, json_string(msgid));
@@ -8490,7 +8498,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         struct mailbox *mbox = NULL;
 
         uint32_t uid;
-        int r = jmap_email_find(req, NULL, id, &mboxname, &uid);
+        int r = jmap_email_find(req, NULL, id, &mboxname, &uid, NULL);
         if (!r) {
             r = mailbox_open_irl(mboxname, &mbox);
             if (!r) {
@@ -9238,7 +9246,7 @@ static void _email_append(jmap_req_t *req,
     char *exist_mboxname = NULL;
     uint32_t exist_uid;
     r = jmap_email_find_by_guid(req, req->accountid, detail->blob_id+1,
-                            &exist_mboxname, &exist_uid);
+                                &exist_mboxname, &exist_uid, NULL);
     free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
         if (!r) r = IMAP_MAILBOX_EXISTS;
@@ -14663,7 +14671,7 @@ static int jmap_emailheader_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx
 
     /* Lookup emailid */
     r = jmap_email_find_by_guid(req, ctx->from_accountid, blobid,
-                                &mboxname, &uid);
+                                &mboxname, &uid, NULL);
     if (r) {
         if (r == IMAP_NOTFOUND) res = HTTP_NOT_FOUND;
         else {
