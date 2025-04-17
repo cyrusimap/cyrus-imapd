@@ -6634,6 +6634,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     int *fdptr;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
+        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record), MAX_MAILBOX_PATH);
 
 #if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)) {
@@ -6641,13 +6642,12 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
             memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
             new_mailbox.part = (char*) config_defpartition ;
-            r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
+            r = objectstore_put(&new_mailbox, record, oldbuf);   // put should just add to refcount.
             if (r) break;
             continue;
         }
 #endif
 
-        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record), MAX_MAILBOX_PATH);
         if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
                     MAX_MAILBOX_PATH);
