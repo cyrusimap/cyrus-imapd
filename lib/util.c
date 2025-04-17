@@ -584,6 +584,8 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
     int nolink = flags & COPYFILE_NOLINK;
     int keeptime = flags & COPYFILE_KEEPTIME;
     int nodirsync = flags & COPYFILE_NODIRSYNC;
+    char *copy = xstrdup(to);
+    const char *leaf = basename(copy);
 
     if (!dirfdp) dirfdp = &local_dirfd;
     if (*dirfdp < 0) *dirfdp = xopendir(to, flags & COPYFILE_MKDIR);
@@ -594,9 +596,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
-        char *copy = xstrdup(to);
-        const char *file = basename(copy);
-        r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
+        r = linkat(AT_FDCWD, from, *dirfdp, leaf, 0);
         if (r && errno == EEXIST) {
             /* n.b. unlink rather than xunlink.  at this point we believe
              * a file definitely exists that we want to remove, so if
@@ -608,13 +608,11 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
                                  "filename=<%s>", to);
                 errno = 0;
                 r = -1;
-                free(copy);
                 goto done;
             }
 
-            r = linkat(AT_FDCWD, from, *dirfdp, file, 0);
+            r = linkat(AT_FDCWD, from, *dirfdp, leaf, 0);
         }
-        free(copy);
         if (!r) goto sync;
     }
 
@@ -640,11 +638,10 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
         goto done;
     }
 
-    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    destfd = openat(*dirfdp, leaf, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (destfd == -1) {
-        if (!(flags & COPYFILE_MKDIR))
-            xsyslog(LOG_ERR, "IOERROR: create failed",
-                             "filename=<%s>", to);
+        xsyslog(LOG_ERR, "IOERROR: create failed",
+                         "filename=<%s>", to);
         r = -1;
         goto done;
     }
@@ -657,7 +654,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
         xsyslog(LOG_ERR, "IOERROR: retry_write failed",
                          "filename=<%s>", to);
         r = -1;
-        xunlink(to);  /* remove any rubbish we created */
+        xunlinkat(*dirfdp, leaf, /*flags*/0);  /* remove any rubbish we created */
         goto done;
     }
 
@@ -704,6 +701,7 @@ sync:
 
 done:
     map_free(&src_base, &src_size);
+    free(copy);
 
     if (srcfd != -1) close(srcfd);
     if (destfd != -1) close(destfd);
