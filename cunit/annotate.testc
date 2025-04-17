@@ -2216,7 +2216,7 @@ static int set_up(void)
 
     /* XXX API abuse? perhaps this should just call mboxlist_create,
      * XXX rather than the low level APIs. */
-    r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, PARTITION, ACL,
+    r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
                        makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
@@ -2243,7 +2243,7 @@ static int set_up(void)
 
     namespacelock = mboxname_usernamespacelock(MBOXNAME2_INT);
 
-    r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, PARTITION, ACL,
+    r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
                        makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
@@ -2270,7 +2270,7 @@ static int set_up(void)
 
     namespacelock = mboxname_usernamespacelock(MBOXNAME3_INT);
 
-    r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, PARTITION, ACL,
+    r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
                        makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,

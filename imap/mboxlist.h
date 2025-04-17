@@ -219,11 +219,13 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype,
 /* create mailbox */
 /* if given a mailbox pointer, return the still-locked mailbox
  * for further manipulation */
-int mboxlist_createmailbox(const mbentry_t *mbentry,
-                           unsigned mboxopts, modseq_t highestmodseq,
-                           unsigned isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           unsigned flags, struct mailbox **mboxptr);
+#define mboxlist_createmailbox(m, o, h, a, u, s, f, p) \
+    mboxlist_createmailbox_version(m, 0, o, h, a, u, s, f, p)
+int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_version,
+                                   unsigned mboxopts, modseq_t highestmodseq,
+                                   unsigned isadmin, const char *userid,
+                                   const struct auth_state *auth_state,
+                                   unsigned flags, struct mailbox **mboxptr);
 
 /* create mailbox with wrapping namespacelock */
 int mboxlist_createmailboxlock(const mbentry_t *mbentry,

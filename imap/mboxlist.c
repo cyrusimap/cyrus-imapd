@@ -2011,7 +2011,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     xzfree(mbentry->acl);
     mbentry->acl = xstrdupnull(parent->acl);
 
-    r = mailbox_create(mboxname, mbentry->mbtype,
+    r = mailbox_create(mboxname, mbentry->mbtype, 0 /* version */,
                        mbentry->partition, mbentry->acl,
                        mbentry->uniqueid, NULL /* jmapid */, 0 /* options */,
                        mbentry->uidvalidity,
@@ -2051,11 +2051,11 @@ done:
  *
  */
 
-EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
-                                    unsigned options, modseq_t highestmodseq,
-                                    unsigned isadmin, const char *userid,
-                                    const struct auth_state *auth_state,
-                                    unsigned flags, struct mailbox **mboxptr)
+EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_version,
+                                            unsigned options, modseq_t highestmodseq,
+                                            unsigned isadmin, const char *userid,
+                                            const struct auth_state *auth_state,
+                                            unsigned flags, struct mailbox **mboxptr)
 {
     const char *mboxname = mbentry->name;
     char *uniqueid = xstrdupnull(mbentry->uniqueid);
@@ -2154,7 +2154,8 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
         }
 
         /* Filesystem Operations */
-        r = mailbox_create(mboxname, mbtype, newpartition, acl, newmbentry->uniqueid,
+        r = mailbox_create(mboxname, mbtype, minor_version,
+                           newpartition, acl, newmbentry->uniqueid,
                            jmapid, options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
         if (!r) r = mailbox_add_conversations(newmailbox, silent);
         if (r) {

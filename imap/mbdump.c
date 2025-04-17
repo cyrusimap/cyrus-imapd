@@ -907,7 +907,7 @@ EXPORTED int undump_mailbox(const char *mbname,
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         mbentry_t *mbentry = NULL;
         r = mboxlist_lookup(mbname, &mbentry, NULL);
-        if (!r) r = mailbox_create(mbname, mbentry->mbtype,
+        if (!r) r = mailbox_create(mbname, mbentry->mbtype, /*version*/0,
                                    mbentry->partition, mbentry->acl,
                                    mbentry->uniqueid, mbentry->jmapid,
                                    0, 0, 0, 0, &mailbox);
