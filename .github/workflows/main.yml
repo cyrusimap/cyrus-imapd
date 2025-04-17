@@ -57,6 +57,10 @@ jobs:
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
         /usr/cyrus/libexec/master -V
         /usr/cyrus/sbin/cyr_buildinfo
+    - name: install EV
+      shell: bash
+      run: |
+        cpanm EV
     - name: run cassandane quietly
       id: cass1
       continue-on-error: true
