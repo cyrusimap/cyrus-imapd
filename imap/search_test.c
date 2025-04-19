@@ -47,7 +47,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
-#include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
 

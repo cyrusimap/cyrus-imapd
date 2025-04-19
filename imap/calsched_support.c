@@ -50,7 +50,6 @@
 #include "http_dav.h"
 #include "mailbox.h"
 #include "strarray.h"
-#include "syslog.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */

@@ -44,7 +44,6 @@
 #include <config.h>
 
 #include <string.h>
-#include <syslog.h>
 
 #include "jmap_api.h"
 #include "jmap_mail_query_parse.h"

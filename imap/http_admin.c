@@ -52,7 +52,6 @@
 #endif
 #include <ctype.h>
 #include <string.h>
-#include <syslog.h>
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
