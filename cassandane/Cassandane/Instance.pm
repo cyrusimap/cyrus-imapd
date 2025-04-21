@@ -1094,9 +1094,20 @@ sub create_user
         }
     }
 
+    my @mb_version;
+
+    if (my $version = $params{mailbox_version} // $self->{mailbox_version}) {
+        unless ($version =~ /\A[0-9]+\z/) {
+            require Carp;
+            Carp::confess("Invalid mailbox_version '$version'");
+        }
+
+        push @mb_version, [ 'VERSION', $version ];
+    }
+
     foreach my $mb (@mboxes)
     {
-        $adminclient->create($mb)
+        $adminclient->create($mb, @mb_version)
             or die "Cannot create $mb: $@";
         $adminclient->setacl($mb, admin => 'lrswipkxtecdan')
             or die "Cannot setacl for $mb: $@";
