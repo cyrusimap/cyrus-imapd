@@ -157,6 +157,8 @@ sub new
         if defined $params{smtpdaemon};
     $self->{lsan_suppressions} = $params{lsan_suppressions}
         if defined $params{lsan_suppressions};
+    $self->{mailbox_version} = $params{mailbox_version}
+        if defined $params{mailbox_version};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
