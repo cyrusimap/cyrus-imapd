@@ -154,6 +154,8 @@ sub new
         if defined $params{install_certificates};
     $self->{smtpdaemon} = $params{smtpdaemon}
         if defined $params{smtpdaemon};
+    $self->{mailbox_version} = $params{mailbox_version}
+        if defined $params{mailbox_version};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
