@@ -523,6 +523,12 @@ sub _run_magic
     if (defined $sub) {
         foreach my $a (attributes::get($sub))
         {
+            # Let test attributes to specify arguments
+            my $args;
+            if ($a =~ s/\((.*)\)//) {
+                $args = $1;
+            }
+
             my $m = lc($a);
             # ignore min/max version attribution here
             next if $a =~ m/^(?:min|max)_version_/;
@@ -534,7 +540,7 @@ sub _run_magic
                 unless defined $magic_handlers{$m};
             next if $seen{$m};
             $self->{_current_magic} = "Magic attribute $a";
-            $magic_handlers{$m}->($self);
+            $magic_handlers{$m}->($self, $args);
             $self->{_current_magic} = undef;
             $seen{$m} = 1;
         }
