@@ -182,7 +182,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_FALSE,                                         \
         "CU_ASSERT_STRING_EQUAL(%s=\"%s\",%s=\"%s\")",                  \
-        #actual, _a, #expected, _e);                                    \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
 #undef CU_ASSERT_STRING_EQUAL_FATAL
@@ -191,7 +192,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_TRUE,                                          \
         "CU_ASSERT_STRING_EQUAL_FATAL(%s=\"%s\",%s=\"%s\")",            \
-        #actual, _a, #expected, _e);                                    \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
 #undef CU_ASSERT_STRING_NOT_EQUAL
