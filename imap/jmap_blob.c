@@ -810,10 +810,12 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
             /* Read message record */
             struct message_guid guid;
+            struct timespec internaldate;
             bit64 cid = 0;
             msgrecord_t *mr = NULL;
             r = msgrecord_find(mbox, getblob->uid, &mr);
             if (!r) r = msgrecord_get_guid(mr, &guid);
+            if (!r) r = msgrecord_get_internaldate(mr, &internaldate);
             if (!r) r = msgrecord_get_cid(mr, &cid);
             msgrecord_unref(&mr);
             if (r) {
@@ -854,7 +856,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
                 case DATATYPE_EMAIL: {
                     char emailid[JMAP_EMAILID_SIZE];
-                    jmap_set_emailid(&guid, emailid);
+                    jmap_set_emailid_from_timespec(&internaldate, emailid);
                     strarray_add(ids, emailid);
                     break;
                     }
