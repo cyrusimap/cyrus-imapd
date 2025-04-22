@@ -702,12 +702,17 @@ sub test_upgrade_v19_to_v20
     # check_replication() will fail here due to the internaldate.nsec annotation
     # being present on the replica but NOT on the master
 
+    $self->{replica}->{re_use_dir} = 1;
+    $self->{replica}->stop();
+
     xlog $self, "Upgrade replica to mailbox version 20";
     $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
 
     xlog $self, "Upgrade replica to conv.db version 2";
     $self->{replica}->run_command({ cyrus => 1 },
                                   'ctl_conversationsdb', '-U', '-r');
+
+    $self->{replica}->start();
 
     # replicate new version to new version
     $self->run_replication();
