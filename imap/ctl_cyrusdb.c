@@ -125,6 +125,7 @@ struct fix_rock {
     struct buf jmapid;
     struct buf last_userid;
     uint64_t next_mboxnum;
+    int is_replica;
 };
 
 /* Callback for use by process_mboxlist */
@@ -147,6 +148,11 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                    "removed reserved mailbox '%s'",
                    mbentry->name);
         }
+        return 0;
+    }
+
+    if (frock->is_replica) {
+        /* mailbox ids should be obtained from the master, NOT generated here */
         return 0;
     }
 
@@ -259,7 +265,8 @@ static void process_mboxlist(int *upgraded)
     mboxlist_upgrade(upgraded);
 
     /* run fixmbox across all mboxlist entries */
-    struct fix_rock frock = { BUF_INITIALIZER, BUF_INITIALIZER, 0 };
+    struct fix_rock frock = { BUF_INITIALIZER, BUF_INITIALIZER, 0,
+                              config_getswitch(IMAPOPT_REPLICAONLY) };
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
     buf_free(&frock.last_userid);
     buf_free(&frock.jmapid);
