@@ -6371,6 +6371,23 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->h.jmapid = xstrdup(jmapid);
     buf_free(&buf);
 
+    if (!minor_version) {
+        minor_version = MAILBOX_MINOR_VERSION;
+
+        // Use the minor version of our parent, if exists
+        mbentry_t *mbentry = NULL;
+        mboxlist_findparent(name, &mbentry);
+        if (mbentry) {
+            struct mailbox *parent = NULL;
+            mailbox_open_from_mbe(mbentry, &parent);
+            if (parent) {
+                minor_version = parent->i.minor_version;
+                mailbox_close(&parent);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
     mailbox->i.minor_version = minor_version;
