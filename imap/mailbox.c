@@ -2054,6 +2054,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (version < 20) {
         record->internaldate.tv_sec  = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
+        record->internaldate.tv_nsec = UTIME_OMIT;
         record->sentdate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
         record->size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SIZE)));
         record->header_size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)));
@@ -2109,7 +2110,8 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     }
 
     cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
-    record->internaldate.tv_sec  = ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE)));
+    TIMESPEC_FROM_NANOSEC(&record->internaldate,
+                          ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE))));
     record->sentdate = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
     record->size = ntohll(*((bit64 *)(buf+OFFSET_SIZE)));
     record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
@@ -3314,7 +3316,8 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     }
 
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
-    *((bit64 *)(buf+OFFSET_INTERNALDATE)) = htonll(record->internaldate.tv_sec);
+    *((bit64 *)(buf+OFFSET_INTERNALDATE)) =
+        htonll(TIMESPEC_TO_NANOSEC(&record->internaldate));
     *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate);
     *((bit64 *)(buf+OFFSET_SIZE)) = htonll(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
@@ -3480,6 +3483,11 @@ static int mailbox_is_virtannot(struct mailbox *mailbox, const char *entry)
 {
     switch (mailbox->i.minor_version) {
     case 20:
+        // internaldate.nsec was introduced in v20
+        if (!strcmp(entry, IMAP_ANNOT_NS "internaldate.nsec")) return 1;
+
+        GCC_FALLTHROUGH
+
     case 19:
     case 18:
     case 17:
@@ -3521,6 +3529,14 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
 
     switch (mailbox->i.minor_version) {
     case 20:
+        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+            buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
+            crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+            buf_reset(&buf);
+        }
+
+        GCC_FALLTHROUGH
+
     case 19:
     case 18:
     case 17:
@@ -4845,8 +4861,9 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         }
     }
 
-    if (!record->internaldate.tv_sec)
-        record->internaldate.tv_sec = time(NULL);
+    if (!record->internaldate.tv_sec) {
+        clock_gettime(CLOCK_REALTIME, &record->internaldate);
+    }
     if (!record->gmtime)
         record->gmtime = record->internaldate.tv_sec;
     if (!record->sentdate) {
@@ -4885,8 +4902,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
             const char *fname = mailbox_record_fname(mailbox, record);
             int *fdptr = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
                        ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
-            if (cyrus_settime_fdptr(fname, &record->internaldate, fdptr) < 0)
+            if (cyrus_settime_fdptr(fname, &record->internaldate, fdptr) < 0) {
+                syslog(LOG_ERR, "failed to set mtime on %s: %m", fname);
                 return IMAP_IOERROR;
+            }
         }
 
         /* write the cache record before buffering the message, it
@@ -5536,6 +5555,30 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 buf_reset(&buf);
                 buf_printf(&buf, MODSEQ_FMT, record->createdmodseq);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+                if (r) goto done;
+            }
+        }
+
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+            mailbox->i.minor_version < 20 && repack->newmailbox.i.minor_version >= 20) {
+            /* extract internaldate.nsec */
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+            if (buf.len) {
+                const char *p = buf_cstring(&buf);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                copyrecord.internaldate.tv_nsec = newval;
+            }
+            buf_reset(&buf);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+            if (r) goto done;
+        }
+        if (mailbox->i.minor_version >= 20 && repack->newmailbox.i.minor_version < 20) {
+            if (record->internaldate.tv_nsec != UTIME_OMIT) {
+                buf_reset(&buf);
+                buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
+                r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
                 if (r) goto done;
             }
         }
@@ -7428,7 +7471,8 @@ static int records_match(const char *mboxname,
     int match = 1;
     int userflags_dirty = 0;
 
-    if (old->internaldate.tv_sec != new->internaldate.tv_sec) {
+    if (old->internaldate.tv_sec  != new->internaldate.tv_sec ||
+        old->internaldate.tv_nsec != new->internaldate.tv_nsec) {
         printf("%s uid %u mismatch: internaldate\n",
                mboxname, new->uid);
         match = 0;
@@ -7589,14 +7633,17 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     /* re-calculate all the "derived" fields by parsing the file on disk */
     if (re_parse) {
         /* set NULL in case parse finds a new value */
-        record->internaldate.tv_sec = 0;
+        record->internaldate.tv_sec  = 0;
+        record->internaldate.tv_nsec = UTIME_OMIT;
 
         r = message_parse(fname, record);
         if (r) goto out;
 
         /* unchanged, keep the old value */
-        if (!record->internaldate.tv_sec)
+        if (!record->internaldate.tv_sec) {
             record->internaldate.tv_sec  = copy.internaldate.tv_sec;
+            record->internaldate.tv_nsec = copy.internaldate.tv_nsec;
+        }
 
         /* it's not the same message! */
         if (!message_guid_equal(&record->guid, &copy.guid)) {
@@ -7677,10 +7724,16 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* get internaldate from the file if not set */
     if (!record->internaldate.tv_sec) {
-        if (did_stat || stat(fname, &sbuf) != -1)
+        if (did_stat || stat(fname, &sbuf) != -1) {
             record->internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
-        else
-            record->internaldate.tv_sec  = time(NULL);
+            record->internaldate.tv_nsec = sbuf.st_mtim.tv_nsec;
+        }
+        else {
+            struct timespec now;
+            clock_gettime(CLOCK_REALTIME, &now);
+            record->internaldate.tv_sec  = now.tv_sec;
+            record->internaldate.tv_nsec = now.tv_nsec;
+        }
     }
     if (!record->gmtime)
         record->gmtime = record->internaldate.tv_sec;
@@ -7849,8 +7902,10 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
         record.internal_flags |= FLAG_INTERNAL_SNOOZED;
 
     /* copy the timestamp from the file if not calculated */
-    if (!record.internaldate.tv_sec)
+    if (!record.internaldate.tv_sec) {
         record.internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
+        record.internaldate.tv_nsec = sbuf.st_mtim.tv_nsec;
+    }
 
     if (uid > mailbox->i.last_uid) {
         printf("%s uid %u found - adding\n", mailbox_name(mailbox), uid);
