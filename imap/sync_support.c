@@ -1464,6 +1464,18 @@ static void encode_annotations(struct dlist *parent,
 
     switch (mailbox->i.minor_version) {
     case 20:
+        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "internaldate.nsec");
+            dlist_setatom(aa, "USERID", "");
+            dlist_setnum64(aa, "MODSEQ", 0);
+            dlist_setnum64(aa, "VALUE", record->internaldate.tv_nsec);
+        }
+
+        GCC_FALLTHROUGH
+
     case 19:
     case 18:
     case 17:
@@ -1553,6 +1565,15 @@ static int decode_annotations(/*const*/struct dlist *annots,
         /* Look for and process "virtual" annotations */
         switch (mailbox->i.minor_version) {
         case 20:
+            if (!strcmp(entry, IMAP_ANNOT_NS "internaldate.nsec")) {
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->internaldate.tv_nsec = newval;
+                break;
+            }
+
+            GCC_FALLTHROUGH
+
         case 19:
         case 18:
         case 17:
@@ -1834,6 +1855,7 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     if (!dlist_getguid(kr, "GUID", &tmpguid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    record->internaldate.tv_nsec = UTIME_OMIT;
     record->guid = *tmpguid;
 
     /* parse the flags */
@@ -2695,7 +2717,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
-            copy.internaldate.tv_sec = mrecord.internaldate.tv_sec;
+            copy.internaldate.tv_sec  = mrecord.internaldate.tv_sec;
+            copy.internaldate.tv_nsec = mrecord.internaldate.tv_nsec;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;
@@ -5940,6 +5963,8 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     if (mp->last_updated != rp->last_updated)
         goto diff;
     if (mp->internaldate.tv_sec != rp->internaldate.tv_sec)
+        goto diff;
+    if (mp->internaldate.tv_nsec != rp->internaldate.tv_nsec)
         goto diff;
     if (mp->system_flags != rp->system_flags)
         goto diff;
