@@ -811,4 +811,7 @@ extern int mailbox_parse_datafilename(const char *name, uint32_t *uidp);
 
 extern struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_path);
 
+extern int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
+                                           struct index_record *record);
+
 #endif /* INCLUDED_MAILBOX_H */
