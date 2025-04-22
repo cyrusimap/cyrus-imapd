@@ -3721,11 +3721,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record.guid), 24);
-        emailid[25] = '\0';
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
+        struct buf emailid = BUF_INITIALIZER;
+        buf_putc(&emailid, 'S');
+        NANOSEC_TO_JMAPID(&emailid, TIMESPEC_TO_NANOSEC(&record.internaldate));
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
+        buf_free(&emailid);
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
@@ -6041,6 +6041,12 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_GUID:
             ret = message_guid_cmp(&md1->guid, &md2->guid);
+            break;
+        case SORT_EMAILID:
+            // EMAILIDs are an ASCII-order encoding of
+            // (UINT64_MAX - nano_internaldate)
+            ret = numcmp(UINT64_MAX - TIMESPEC_TO_NANOSEC(&md1->internaldate),
+                         UINT64_MAX - TIMESPEC_TO_NANOSEC(&md2->internaldate));
             break;
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
