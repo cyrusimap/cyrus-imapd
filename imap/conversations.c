@@ -194,7 +194,7 @@ static int _init_counted(struct conversations_state *state,
             char vbuf[16];
             snprintf(vbuf, sizeof(vbuf), "%d", state->version);
             r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
-                    vbuf, strlen(vbuf), &state->txn);
+                              vbuf, strlen(vbuf), &state->txn);
             if (r) {
                 syslog(LOG_ERR, "Failed to write version");
                 return r;
