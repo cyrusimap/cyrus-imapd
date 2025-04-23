@@ -855,8 +855,9 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     }
 
                 case DATATYPE_EMAIL: {
-                    char emailid[JMAP_EMAILID_SIZE];
-                    jmap_set_emailid_from_timespec(&internaldate, emailid);
+                    char emailid[JMAP_MAX_EMAILID_SIZE];
+                    jmap_set_emailid(req->cstate->version, &guid,
+                                     0, &internaldate, emailid);
                     strarray_add(ids, emailid);
                     break;
                     }
