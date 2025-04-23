@@ -3721,12 +3721,26 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        struct buf emailid = BUF_INITIALIZER;
-        buf_putc(&emailid, 'S');
-        NANOSEC_TO_JMAPID(&emailid, TIMESPEC_TO_NANOSEC(&record.internaldate));
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
-        buf_free(&emailid);
-        sepchar = ' ';
+        struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+        if (!cstate) {
+            xsyslog(LOG_ERR, "could not read conversations state",
+                    "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+        }
+        else {
+            struct buf emailid = BUF_INITIALIZER;
+            if (cstate->version < 2) {
+                buf_putc(&emailid, 'M');
+                buf_appendmap(&emailid, message_guid_encode(&record.guid), 24);
+            }
+            else {
+                buf_putc(&emailid, 'S');
+                NANOSEC_TO_JMAPID(&emailid,
+                                  TIMESPEC_TO_NANOSEC(&record.internaldate));
+            }
+            prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
+            buf_free(&emailid);
+            sepchar = ' ';
+        }
     }
     if ((fetchitems & FETCH_CID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {

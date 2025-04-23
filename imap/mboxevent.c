@@ -973,11 +973,14 @@ static const char *threadid(bit64 cid)
     return id;
 }
 
-static json_t *jmap_email(struct timespec *internaldate, bit64 cid, struct body *body)
+static json_t *jmap_email(int cstate_version,
+                          struct message_guid *guid,
+                          struct timespec *internaldate,
+                          bit64 cid, struct body *body)
 {
-    char emailid[JMAP_EMAILID_SIZE];
+    char emailid[JMAP_MAX_EMAILID_SIZE];
 
-    jmap_set_emailid_from_timespec(internaldate, emailid);
+    jmap_set_emailid(cstate_version, guid, 0, internaldate, emailid);
 
     return json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
                      "id", emailid,
@@ -1013,6 +1016,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 {
     char *msgid = NULL;
     struct body *body = NULL;
+    struct conversations_state *cstate = NULL;
 
     if (!event)
         return;
@@ -1065,9 +1069,13 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
-        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
-        jmap_set_emailid_from_timespec(&record->internaldate, emailid);
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char *emailid = xmalloc(JMAP_MAX_EMAILID_SIZE);
+            jmap_set_emailid(cstate->version, &record->guid,
+                             0, &record->internaldate, emailid);
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        }
     }
 
     /* add message THREADID */
@@ -1082,9 +1090,13 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
             return;
         message_read_bodystructure(record, &body);
 
-        json_t *email = jmap_email(&record->internaldate, record->cid, body);
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            json_t *email = jmap_email(cstate->version, &record->guid,
+                                       &record->internaldate, record->cid, body);
 
-        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
+            FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
+        }
     }
 
     /* add vnd.cmu.envelope */
@@ -1167,11 +1179,18 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     int r;
     uint32_t uid;
     struct body *body = NULL;
+    struct conversations_state *cstate = NULL;
 
     if (!event)
         return;
 
     init_internal();
+
+    struct mailbox *mailbox;
+    if ((r = msgrecord_get_mailbox(msgrec, &mailbox))) {
+        syslog(LOG_ERR, "mboxevent: can't extract mailbox: %s", error_message(r));
+        return;
+    }
 
     if ((r = msgrecord_get_uid(msgrec, &uid))) {
         syslog(LOG_ERR, "mboxevent: can't extract uid: %s", error_message(r));
@@ -1241,14 +1260,22 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
     /* add message EMAILID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
+        struct message_guid guid;
         struct timespec internaldate;
-        if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
             syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
             return;
         }
-        char *emailid = xmalloc(JMAP_EMAILID_SIZE);
-        jmap_set_emailid_from_timespec(&internaldate, emailid);
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
+            syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
+            return;
+        }
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            char *emailid = xmalloc(JMAP_MAX_EMAILID_SIZE);
+            jmap_set_emailid(cstate->version, &guid, 0, &internaldate, emailid);
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
+        }
     }
 
     /* add message THREADID */
@@ -1263,8 +1290,13 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
     /* add vnd.fastmail.jmapEmail */
     if (mboxevent_expected_param(event->type, EVENT_JMAP_EMAIL)) {
+        struct message_guid guid;
         struct timespec internaldate;
         bit64 cid;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
+        }
         if ((r = msgrecord_get_internaldate(msgrec, &internaldate))) {
             syslog(LOG_ERR, "mboxevent: can't extract internaldate: %s", error_message(r));
             return;
@@ -1277,9 +1309,13 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract body: %s", error_message(r));
             return;
         }
-        json_t *email = jmap_email(&internaldate, cid, body);
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            json_t *email = jmap_email(cstate->version, &guid,
+                                       &internaldate, cid, body);
 
-        FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
+            FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
+        }
     }
 
     /* add vnd.cmu.envelope */
@@ -1304,10 +1340,6 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
 
 #ifdef WITH_DAV
     /* add caldav items */
-    struct mailbox *mailbox;
-    r = msgrecord_get_mailbox(msgrec, &mailbox);
-    if (r) return;
-
     if (mbtypes_dav(mailbox_mbtype(mailbox)) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
