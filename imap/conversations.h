@@ -126,7 +126,7 @@ struct conv_thread {
     conv_thread_t *next;
     struct message_guid guid;
     uint32_t exists;
-    time_t internaldate;
+    uint64_t nano_internaldate; // nanoseconds since epoch
     modseq_t createdmodseq;
 };
 
@@ -140,7 +140,7 @@ struct conv_folder {
     uint32_t        prev_exists;
 };
 
-#define CONV_GUIDREC_VERSION 3          // (must be <= 127)
+#define CONV_GUIDREC_VERSION 4          // (must be <= 127)
 #define CONV_GUIDREC_BYNAME_VERSION 1   // last folders byname version
 
 struct conv_guidrec {
@@ -150,11 +150,11 @@ struct conv_guidrec {
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
-    conversation_id_t basecid;
+    conversation_id_t basecid;      // if version >= 3
     char            version;
     uint32_t        system_flags;   // if version >= 1
     uint32_t        internal_flags; // if version >= 1
-    time_t          internaldate;   // if version >= 1
+    uint64_t        nano_internaldate;   // if version >= 4 (nanoseconds since epoch)
 };
 
 struct conv_sender {
@@ -363,7 +363,7 @@ extern void conversation_update_sender(conversation_t *conv,
                                        ssize_t delta_exists);
 extern void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
-                                       time_t internaldate,
+                                       uint64_t nano_internaldate,
                                        modseq_t createdmodseq,
                                        int delta_exists);
 
