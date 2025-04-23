@@ -729,8 +729,9 @@ static int fix_modseqs(struct conversations_state *a,
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_thread(&convb, &threada->guid, threada->internaldate,
-                        threada->createdmodseq, /*delta_exists*/0);
+                conversation_update_thread(&convb, &threada->guid,
+                                           threada->nano_internaldate,
+                                           threada->createdmodseq, /*delta_exists*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip

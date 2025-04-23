@@ -3252,9 +3252,9 @@ static int emailsearch_is_mutable(struct emailsearch *search)
 struct guidsearch_match {
     char guidrep[MESSAGE_GUID_SIZE*2+1];
     uint32_t system_flags;
-    uint32_t internaldate;
+    uint64_t nano_internaldate;  // nanoseconds since epoch
     conversation_id_t cid;
-    bitvector_t folders; // only set if numfolders > 0
+    bitvector_t folders;    // only set if numfolders > 0
 };
 
 static void guidsearch_match_init(struct guidsearch_match *match,
@@ -3278,10 +3278,14 @@ static int guidsearch_match_cmp QSORT_R_COMPAR_ARGS(const void *va,
     while (sort->key != SORT_SEQUENCE) {
         int ret;
         switch (sort->key) {
-            case SORT_ARRIVAL:
-                ret = a->internaldate < b->internaldate ? -1 :
-                      a->internaldate > b->internaldate ?  1 : 0;
+            case SORT_ARRIVAL: {
+                struct timespec a_internaldate, b_internaldate;
+                TIMESPEC_FROM_NANOSEC(&a_internaldate, a->nano_internaldate);
+                TIMESPEC_FROM_NANOSEC(&b_internaldate, b->nano_internaldate);
+                ret = a_internaldate.tv_sec < b_internaldate.tv_sec ? -1 :
+                      a_internaldate.tv_sec > b_internaldate.tv_sec ?  1 : 0;
                 break;
+            }
             case SORT_GUID:
                 ret = memcmp(a->guidrep, b->guidrep, MESSAGE_GUID_SIZE*2);
                 break;
@@ -3918,8 +3922,8 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
         /* Update match for same guid */
         if (gsq->numfolders) bv_set(&prev->folders, rec->foldernum);
         prev->system_flags |= rec->system_flags;
-        if (rec->internaldate < prev->internaldate) {
-            prev->internaldate = rec->internaldate;
+        if (rec->nano_internaldate < prev->nano_internaldate) {
+            prev->nano_internaldate = rec->nano_internaldate;
         }
         return 0;
     }
@@ -3930,7 +3934,7 @@ static int guidsearch_add_guidrec(const conv_guidrec_t *rec,
     next->guidrep[MESSAGE_GUID_SIZE*2] = '\0';
     if (gsq->numfolders) bv_set(&next->folders, rec->foldernum);
     next->system_flags = rec->system_flags;
-    next->internaldate = rec->internaldate;
+    next->nano_internaldate = rec->nano_internaldate;
     next->cid = rec->cid;
     return 1;
 }
