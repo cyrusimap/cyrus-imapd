@@ -133,6 +133,54 @@ sub set_up
     ]);
 }
 
+sub upgrade_19_to_20
+{
+    my ($self) = @_;
+
+    {
+        xlog $self, "Upgrade master mailbox version 19 -> 20";
+
+        my $res = $self->{instance}->run_command_capture(
+            { cyrus => 1 },
+            qw(reconstruct -V 20 -u cassandane),
+        );
+
+        $self->assert_num_equals(0, $res->status);
+        $self->assert_str_equals("", $res->stderr);
+
+        my @lines = split(/\n/, $res->stdout);
+        $self->assert_num_not_equals(0, 0+@lines);
+
+        for my $line (@lines) {
+            $self->assert_matches(
+                qr/^Converted user.cassandane.* 19 to 20/,
+                $line
+            );
+        }
+    }
+
+    {
+        xlog $self, "Upgrade master to conv.db version 1 -> 2";
+
+        my $res = $self->{instance}->run_command_capture(
+            { cyrus => 1 },
+            qw(ctl_conversationsdb -U cassandane -v),
+        );
+
+        $self->assert_num_equals(0, $res->status);
+        $self->assert_str_equals("", $res->stderr);
+
+        my @lines = split(/\n/, $res->stdout);
+        $self->assert_num_not_equals(0, 0+@lines);
+
+        for my $line (@lines) {
+            $self->assert_matches(qr/^user.cassandane(\.|$)/, $line);
+        }
+    }
+
+    # Replica gets created at version 20 / mailbox version 2 so can't test...
+}
+
 use Cassandane::Tiny::Loader 'tiny-tests/MailboxVersion';
 
 1;
