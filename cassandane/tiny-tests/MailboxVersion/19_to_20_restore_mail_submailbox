@@ -1,0 +1,110 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_19_to_20_restore_mail_submailbox
+    :min_version_3_3 :MailboxVersion(19)
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $start = time();
+    sleep 2;
+
+    xlog "create mailbox tree";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                'A' => { name => 'A', parentId => undef },
+                'B' => { name => 'B', parentId => '#A'  },
+                'C' => { name => 'C', parentId => '#B'  }
+            }
+         }, "R1"]
+    ]);
+
+    my $aId = $res->[0][1]{created}{A}{id};
+    my $bId = $res->[0][1]{created}{B}{id};
+    my $cId = $res->[0][1]{created}{C}{id};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        $cId => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1"
+                }
+            },
+        }, 'R2'],
+        ['Email/get', {
+            ids => [ '#email1' ],
+            properties => ['receivedAt']
+         }, "R3"]
+    ]);
+    my $emailId1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailAt1 = $res->[1][1]{list}[0]{receivedAt};
+
+    xlog "destroy 'C' mailbox and its ancestors";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => ["$cId", "$bId", "$aId"],
+            onDestroyRemoveEmails => JSON::true
+         }, "R6"],
+    ]);
+    $self->assert_num_equals(3, scalar(@{$res->[0][1]{destroyed}}));
+    $self->assert_str_equals($cId, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_equals($bId, $res->[0][1]{destroyed}[1]);
+    $self->assert_str_equals($aId, $res->[0][1]{destroyed}[2]);
+
+    $self->upgrade_19_to_20();
+
+    my $diff = time() - $start;
+    my $period = "PT" . $diff . "S";
+
+    xlog "restore mail prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreMail', {
+            undoPeriod => $period
+         }, "R7"],
+        ['Mailbox/get', {
+         }, "R8"],
+        ['Email/get', {
+            ids => ["$emailId1"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt']
+         }, "R9"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreMail', $res->[0][0]);
+    $self->assert_str_equals('R7', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numDraftsRestored});
+    $self->assert_num_equals(1, $res->[0][1]{numNonDraftsRestored});
+
+    # Make sure that the proper mailbox tree was reconstructed
+    $self->assert_str_equals('Mailbox/get', $res->[1][0]);
+    $self->assert_str_equals('R8', $res->[1][2]);
+    $self->assert_num_equals(4, scalar(@{$res->[1][1]{list}}));
+
+    $self->assert_str_equals("A", $res->[1][1]{list}[1]{name});
+    my $newAId = $res->[1][1]{list}[1]{id};
+
+    $self->assert_str_equals("B", $res->[1][1]{list}[2]{name});
+    my $newBId = $res->[1][1]{list}[2]{id};
+    $self->assert_str_equals("$newAId", $res->[1][1]{list}[2]{parentId});
+
+    $self->assert_str_equals("C", $res->[1][1]{list}[3]{name});
+    my $newCId = $res->[1][1]{list}[3]{id};
+    $self->assert_str_equals("$newBId", $res->[1][1]{list}[3]{parentId});
+
+    # Not sure but I suspect $emailId1 will have changed?
+    $self->assert_str_equals('Email/get', $res->[2][0]);
+    $self->assert_str_equals('R9', $res->[2][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[2][1]{list}}));
+    $self->assert_str_equals("$emailId1", $res->[2][1]{list}[0]{id});
+    $self->assert_str_equals("$emailAt1", $res->[2][1]{list}[0]{receivedAt});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{keywords}->{'$restored'});
+    $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{mailboxIds}{$newCId});
+}
