@@ -517,6 +517,12 @@ static int meth_post(struct transaction_t *txn,
         txn->flags.conn = CONN_CLOSE;
     }
 
+    /* Check the size of the request */
+    else if (buf_len(&txn->req_body.payload) >
+        (size_t) my_jmap_settings.limits[MAX_SIZE_REQUEST]) {
+        ret = JMAP_LIMIT_SIZE;
+    }
+
     /* Parse the JSON request */
     else if (!(ret = parse_json_body(txn, &req))) {
         ret = jmap_api(txn, req, &res, &my_jmap_settings);
@@ -1454,8 +1460,16 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     /* Always start with fresh working buffer */
     buf_reset(&txn->buf);
 
-    /* Parse the JSON request */
-    ret = parse_json_body(txn, &req);
+    /* Check the size of the request */
+    if (buf_len(&txn->req_body.payload) >
+        (size_t) my_jmap_settings.limits[MAX_SIZE_REQUEST]) {
+        ret = JMAP_LIMIT_SIZE;
+    }
+    else {
+        /* Parse the JSON request */
+        ret = parse_json_body(txn, &req);
+    }
+
     if (ret) {
         ret = jmap_error_response(txn, ret, &res);
     }
