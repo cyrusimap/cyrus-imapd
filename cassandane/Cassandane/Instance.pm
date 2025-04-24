@@ -2001,6 +2001,45 @@ sub run_command
         $options = shift(@args);
     }
 
+    my $basedir = $self->{basedir};
+
+    my ($stdout, $stderr);
+
+    my $redirs = $options->{redirects} // {};
+
+    if ($redirs->{stdout} && (ref($redirs->{stdout}) // '') eq 'SCALAR') {
+        $stdout = $redirs->{stdout};
+
+        my $i = 0;
+
+        while (1) {
+            $redirs->{stdout} = "$basedir/$args[0].$i.stdout";
+            last if ! -e $redirs->{stdout};
+
+            $i++;
+        }
+    }
+
+    if ($redirs->{stderr} && (ref($redirs->{stderr}) // '') eq 'SCALAR') {
+        $stderr = $redirs->{stderr};
+
+        my $i = 0;
+
+        while (1) {
+            $redirs->{stderr} = "$basedir/$args[0].$i.stderr";
+            last if ! -e $redirs->{stderr};
+
+            $i++;
+        }
+    }
+
+    if ($options->{background} && ($stdout || $stderr)) {
+        require Carp;
+        Carp::confess("background doesn't work with SCALAR stdout/stderr!");
+    }
+
+
+
     # Always set these. If they weren't compiled in they won't be used.
     local $ENV{ASAN_OPTIONS} = ($ENV{ASAN_OPTIONS} // "")
         . ":log_path=" . $self->_sanitizer_log_dir("asan") . "asan";
@@ -2013,14 +2052,97 @@ sub run_command
     return $pid
         if ($options->{background});
 
+    my $ret;
+
     if (defined $got_exit) {
         # Child already reaped, pass it on
         $? = $got_exit;
 
-        return $self->_handle_wait_status($pid);
+        $ret = $self->_handle_wait_status($pid);
+    } else {
+        $ret = $self->reap_command($pid);
     }
 
-    return $self->reap_command($pid);
+    # Copy stdout/stderr into SCALAR refs if requested
+    if ($stdout) {
+        $$stdout = slurp_file($redirs->{stdout});
+
+        if (get_verbose()) {
+            xlog $self, "stdout: $$stdout";
+        }
+    }
+
+    if ($stderr) {
+        $$stderr = slurp_file($redirs->{stderr});
+
+        if (get_verbose()) {
+            xlog $self, "stderr: $$stderr";
+        }
+    }
+
+    return $ret;
+}
+
+# Like above, but automatically redirects stdout/stderr to scalar refs, then
+# returns an object that includes 'status', 'stdout', and 'stderr' to easily
+# inspect the results
+sub run_command_capture
+{
+    my ($self, @args) = @_;
+
+    my $options = {};
+    if (ref($args[0]) eq 'HASH') {
+        $options = shift(@args);
+    }
+
+    if ($options->{redirects}
+        && ($options->{redirects}{stdout} || $options->{redirects}{stderr})
+    ) {
+        require Carp;
+        Carp::confess("run_command_capture() can't be used with custom stdout/stderr redirects!");
+    }
+
+    if ($options->{background}) {
+        require Carp;
+        Carp::confess("run_command_capture() can't be used with background mode!");
+    }
+
+    my ($stdout, $stderr);
+
+    $options->{redirects}{stdout} = \$stdout;
+    $options->{redirects}{stderr} = \$stderr;
+
+    my $res = $self->run_command($options, @args);
+
+    return Cassandane::Instance::RunCommandOut->new({
+        status => $res,
+        stdout => $stdout,
+        stderr => $stderr,
+    });
+}
+
+{
+    package Cassandane::Instance::RunCommandOut;
+
+    sub new {
+        my ($class, $ref) = @_;
+
+        bless $ref, $class;
+    }
+
+    sub status { shift->{status} }
+
+    sub stdout {
+        my $stdout = shift->{stdout};
+
+        return $stdout // "";
+    }
+
+    sub stderr {
+        my $stderr = shift->{stderr};
+
+        return $stderr // "";
+    }
 }
 
 sub reap_command
