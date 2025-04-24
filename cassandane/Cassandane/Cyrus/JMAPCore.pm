@@ -67,6 +67,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  jmap_max_size_upload => '1k',
+                 jmap_max_size_request => '1k',
                  jmap_nonstandard_extensions => 'yes',
                  httpallowcompress => 'no');
 

@@ -265,11 +265,6 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
      * maxConcurrentRequests
      */
 
-    if (buf_len(&txn->req_body.payload) >
-        (size_t) settings->limits[MAX_SIZE_REQUEST]) {
-        return JMAP_LIMIT_SIZE;
-    }
-
     size_t i;
     json_t *val;
     json_array_foreach(calls, i, val) {
