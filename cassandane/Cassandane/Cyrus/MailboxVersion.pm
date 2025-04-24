@@ -98,6 +98,7 @@ sub new
         config => $config,
         jmap => 1,
         adminstore => 1,
+        replica => 1,
         services => [ 'imap', 'http', 'sieve' ],
         deliver => 1,
         smtpdaemon => 1,
