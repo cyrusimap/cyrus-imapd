@@ -68,8 +68,11 @@ sub test_no_shared_calendar
                     name => 'test',
                 },
             },
-            destroy => [$otherCalendarId],
         }, 'R3'],
+        ['Calendar/set', {
+            accountId => 'other',
+            destroy => [$otherCalendarId],
+        }, 'R3.5'],
         ['CalendarEvent/get', {
             accountId => 'other',
         }, 'R4'],
@@ -83,6 +86,6 @@ sub test_no_shared_calendar
     $self->assert_str_equals('notFound',
         $res->[2][1]{notUpdated}{$otherCalendarId}{type});
     $self->assert_str_equals('notFound',
-        $res->[2][1]{notDestroyed}{$otherCalendarId}{type});
-    $self->assert_deep_equals([], $res->[3][1]{list});
+        $res->[3][1]{notDestroyed}{$otherCalendarId}{type});
+    $self->assert_deep_equals([], $res->[4][1]{list});
 }

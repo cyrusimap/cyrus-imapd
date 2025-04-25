@@ -84,6 +84,8 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 jmap_max_objects_in_get => '3',
+                 jmap_max_objects_in_set => '5',
                  jmap_nonstandard_extensions => 'yes');
 
     my $self = $class->SUPER::new({

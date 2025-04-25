@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_request_too_large
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "Test too many ids";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            create => {
+                '1' => {
+                    blobId => "#A"
+                },
+                '2' => {
+                    blobId => "#B"
+                }
+            },
+            update => {
+                '3' => {
+                    name => "foo"
+                },
+                '4' => {
+                    name => "bar"
+                }
+            },
+            destroy => [ '5', '6' ],
+         }, "R1"],
+        ['SieveScript/get', {
+            ids => [ '1', '2', '3', '4' ]
+         }, "R2"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'requestTooLarge');
+    $self->assert_str_equals($res->[1][0], 'error');
+    $self->assert_str_equals($res->[1][1]{type}, 'requestTooLarge');
+}

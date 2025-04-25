@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_update_destroy
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "Test update + destroy";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            update => {
+                '1' => {
+                    name => "foo"
+                }
+            },
+            destroy => [ '1' ],
+         }, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][1]{notUpdated}{1}{type}, 'willDestroy');
+}

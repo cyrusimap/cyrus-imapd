@@ -61,10 +61,4 @@ ec JMAP_LIMIT_SIZE,
 ec JMAP_LIMIT_CALLS,
    "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxCallsInRequest"
 
-ec JMAP_LIMIT_OBJS_GET,
-   "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxObjectsInGet"
-
-ec JMAP_LIMIT_OBJS_SET,
-   "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxObjectsInSet"
-
 end
