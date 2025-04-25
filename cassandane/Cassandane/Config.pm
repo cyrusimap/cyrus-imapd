@@ -122,7 +122,7 @@ sub default
             # from cyr_info conf-default | grep _db:
             annotation_db => 'twoskip',
             backup_db => 'twoskip',
-            conversations_db => 'skiplist',
+            conversations_db => 'twoskip',
             duplicate_db => 'twoskip',
             mboxkey_db => 'twoskip',
             mboxlist_db => 'twoskip',
