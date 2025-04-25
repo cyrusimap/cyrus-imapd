@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_request_too_large
+{
+    my $self = shift;
+    my $jmap = $self->{jmap};
+
+    xlog "Assert Problem Details report";
+    my $httpReq = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+        },
+        content => 'X' x 1025,
+    };
+    my $httpRes = $jmap->ua->post($jmap->uri('cassandane'), $httpReq);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($httpReq, $httpRes);
+    }
+    $self->assert_str_equals("413", $httpRes->{status});
+    my $res = eval { decode_json($httpRes->{content}) };
+    $self->assert_str_equals("413", $res->{status});
+    $self->assert_str_equals("JMAP request exceeds a server limit",
+                             $res->{title});
+    $self->assert_str_equals("urn:ietf:params:jmap:error:limit", $res->{type});
+    $self->assert_str_equals("maxSizeRequest", $res->{limit});
+}
