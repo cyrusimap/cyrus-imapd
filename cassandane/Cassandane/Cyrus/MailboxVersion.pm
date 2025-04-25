@@ -130,19 +130,22 @@ sub set_up
         'https://cyrusimap.org/ns/jmap/blob',
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/notes',
+        'https://cyrusimap.org/ns/jmap/debug',
     ]);
 }
 
 sub upgrade_19_to_20
 {
-    my ($self) = @_;
+    my ($self, $user) = @_;
 
     {
-        xlog $self, "Upgrade master mailbox version 19 -> 20";
+        $user //= "cassandane";
+
+        xlog $self, "Upgrade master mailbox version 19 -> 20 for $user";
 
         my $res = $self->{instance}->run_command_capture(
             { cyrus => 1 },
-            qw(reconstruct -V 20 -u cassandane),
+            qw(reconstruct -V 20 -u), $user,
         );
 
         $self->assert_num_equals(0, $res->status);
@@ -153,18 +156,18 @@ sub upgrade_19_to_20
 
         for my $line (@lines) {
             $self->assert_matches(
-                qr/^Converted user.cassandane.* 19 to 20/,
+                qr/^Converted user.$user.* 19 to 20/,
                 $line
             );
         }
     }
 
     {
-        xlog $self, "Upgrade master to conv.db version 1 -> 2";
+        xlog $self, "Upgrade master to conv.db version 1 -> 2 for $user";
 
         my $res = $self->{instance}->run_command_capture(
             { cyrus => 1 },
-            qw(ctl_conversationsdb -U cassandane -v),
+            qw(ctl_conversationsdb -U), $user,  qw(-v),
         );
 
         $self->assert_num_equals(0, $res->status);
@@ -174,7 +177,7 @@ sub upgrade_19_to_20
         $self->assert_num_not_equals(0, 0+@lines);
 
         for my $line (@lines) {
-            $self->assert_matches(qr/^user.cassandane(\.|$)/, $line);
+            $self->assert_matches(qr/^user.$user(\.|$)/, $line);
         }
     }
 
