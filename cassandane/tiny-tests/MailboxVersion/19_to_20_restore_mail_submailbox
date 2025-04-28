@@ -99,11 +99,12 @@ sub test_19_to_20_restore_mail_submailbox
     my $newCId = $res->[1][1]{list}[3]{id};
     $self->assert_str_equals("$newBId", $res->[1][1]{list}[3]{parentId});
 
-    # Not sure but I suspect $emailId1 will have changed?
+    my $emailId1New = $self->lookup_email_id($emailId1);
+
     $self->assert_str_equals('Email/get', $res->[2][0]);
     $self->assert_str_equals('R9', $res->[2][2]);
     $self->assert_num_equals(1, scalar(@{$res->[2][1]{list}}));
-    $self->assert_str_equals("$emailId1", $res->[2][1]{list}[0]{id});
+    $self->assert_str_equals("$emailId1New", $res->[2][1]{list}[0]{id});
     $self->assert_str_equals("$emailAt1", $res->[2][1]{list}[0]{receivedAt});
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{keywords}->{'$restored'});
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{mailboxIds}{$newCId});
