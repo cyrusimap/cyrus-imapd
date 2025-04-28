@@ -92,10 +92,12 @@ sub test_restore_mail_submailbox
     $self->assert_str_equals("B", $res->[1][1]{list}[2]{name});
     my $newBId = $res->[1][1]{list}[2]{id};
     $self->assert_str_equals("$newAId", $res->[1][1]{list}[2]{parentId});
+    $self->assert_str_not_equals($newBId, $newAId);
 
     $self->assert_str_equals("C", $res->[1][1]{list}[3]{name});
     my $newCId = $res->[1][1]{list}[3]{id};
     $self->assert_str_equals("$newBId", $res->[1][1]{list}[3]{parentId});
+    $self->assert_str_not_equals($newCId, $newAId);
 
     $self->assert_str_equals('Email/get', $res->[2][0]);
     $self->assert_str_equals('R9', $res->[2][2]);

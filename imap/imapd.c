@@ -8124,8 +8124,8 @@ submboxes:
     }
 
     /* take care of intermediaries */
-    mboxlist_update_intermediaries(oldmailboxname, mbtype, 0);
-    mboxlist_update_intermediaries(newmailboxname, mbtype, 0);
+    mboxlist_update_intermediaries(oldmailboxname, mbtype);
+    mboxlist_update_intermediaries(newmailboxname, mbtype);
 
 respond:
 

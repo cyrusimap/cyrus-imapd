@@ -1757,7 +1757,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
  * will check for children when deciding whether to create or remove
  * intermediate folders */
 EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
-                                            int mbtype, modseq_t modseq)
+                                            int mbtype)
 {
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(frommboxname);
@@ -1815,8 +1815,6 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         newmbentry.name = (char *)mboxname;
         newmbentry.partition = partition;
         newmbentry.mbtype = mbtype;
-        newmbentry.createdmodseq = modseq;
-        newmbentry.foldermodseq = modseq;
         int flags = MBOXLIST_CREATE_KEEP_INTERMEDIARIES; // avoid infinite looping!
         flags |= MBOXLIST_CREATE_SYNC; /* for silent */
         r = mboxlist_createmailbox(&newmbentry, 0/*options*/, 0/*highestmodseq*/,
@@ -2018,7 +2016,7 @@ EXPORTED int mboxlist_createmailbox(const mbentry_t *mbentry,
 
     if (!r && !silent && !(flags & MBOXLIST_CREATE_KEEP_INTERMEDIARIES)) {
         /* create any missing intermediaries */
-        r = mboxlist_update_intermediaries(mboxname, mbtype, newmbentry->foldermodseq);
+        r = mboxlist_update_intermediaries(mboxname, mbtype);
     }
 
     if (r) {
@@ -2503,7 +2501,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
         /* any other updated intermediates get the same modseq */
         if (!r && !silent && !keep_intermediaries) {
-            r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, newmbentry->foldermodseq);
+            r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype);
         }
 
         /* Bump the modseq of entries of mbtype. There's still a tombstone
@@ -3001,8 +2999,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         r = mailbox_commit(newmailbox);
 
     if (!keep_intermediaries && !silent) {
-        if (!r) r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype, newmbentry->foldermodseq);
-        if (!r) r = mboxlist_update_intermediaries(newname, newmbentry->mbtype, newmbentry->foldermodseq);
+        if (!r) r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype);
+        if (!r) r = mboxlist_update_intermediaries(newname, newmbentry->mbtype);
     }
 
     if (r) {
