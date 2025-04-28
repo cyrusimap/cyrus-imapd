@@ -131,6 +131,7 @@ sub set_up
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/notes',
         'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/mail',
     ]);
 }
 
@@ -154,9 +155,12 @@ sub upgrade_19_to_20
         my @lines = split(/\n/, $res->stdout);
         $self->assert_num_not_equals(0, 0+@lines);
 
+        my $user_lp = $user =~ s/@.*//r;
+
         for my $line (@lines) {
+            next if $line =~ /^FAILED TO REPACK DELETED\.user\.$user\./;
             $self->assert_matches(
-                qr/^Converted user.$user.* 19 to 20/,
+                qr/^Converted user\.$user(\.[^\s]+)? version 19 to 20/,
                 $line
             );
         }
@@ -182,6 +186,23 @@ sub upgrade_19_to_20
     }
 
     # Replica gets created at version 20 / mailbox version 2 so can't test...
+}
+
+sub lookup_email_id
+{
+    my ($self, $oldid) = @_;
+
+    my $res = $self->{jmap}->CallMethods([
+        ['Email/lookup', {
+            oldIds => [ $oldid ]
+         }, "R1"]
+    ]);
+
+    my $new_id = $res->[0][1]->{ids}{$oldid};
+
+    $self->assert_not_null($new_id);
+
+    return $new_id;
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/MailboxVersion';
