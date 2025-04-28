@@ -49,7 +49,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sysexits.h>
-#include <syslog.h>
 #include <string.h>
 
 /* cyrus includes */

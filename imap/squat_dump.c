@@ -59,7 +59,6 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sysexits.h>
-#include <syslog.h>
 #include <string.h>
 
 #include "assert.h"
