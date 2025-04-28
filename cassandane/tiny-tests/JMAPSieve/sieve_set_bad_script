@@ -45,7 +45,6 @@ sub test_sieve_set_bad_script
                     blobId => $blobid
                 }
             },
-            destroy => [ "#1" ]
          }, "R2"]
     ]);
     $self->assert_not_null($res);
@@ -54,7 +53,4 @@ sub test_sieve_set_bad_script
 
     $self->assert_null($res->[1][1]{updated});
     $self->assert_str_equals('invalidScript', $res->[1][1]{notUpdated}{$id}{type});
-    $self->assert_not_null($res->[1][1]{destroyed});
-    $self->assert_str_equals($id, $res->[1][1]{destroyed}[0]);
-    $self->assert_null($res->[1][1]{notDestroyed});
 }

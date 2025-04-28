@@ -277,27 +277,6 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
         if (i >= (size_t) settings->limits[MAX_CALLS_IN_REQUEST]) {
             return JMAP_LIMIT_CALLS;
         }
-        const char *mname = json_string_value(json_array_get(val, 0));
-        mname = strchr(mname, '/');
-        if (!mname) continue;
-
-        mname++;
-        if (!strcmp(mname, "get")) {
-            json_t *ids = json_object_get(json_array_get(val, 1), "ids");
-            if (json_array_size(ids) >
-                (size_t) settings->limits[MAX_OBJECTS_IN_GET]) {
-                return JMAP_LIMIT_OBJS_GET;
-            }
-        }
-        else if (!strcmp(mname, "set")) {
-            json_t *args = json_array_get(val, 1);
-            size_t size = json_object_size(json_object_get(args, "create"));
-            size += json_object_size(json_object_get(args, "update"));
-            size += json_array_size(json_object_get(args, "destroy"));
-            if (size > (size_t) settings->limits[MAX_OBJECTS_IN_SET]) {
-                return JMAP_LIMIT_OBJS_SET;
-            }
-        }
     }
 
     json_array_foreach(using, i, val) {
@@ -351,8 +330,6 @@ HIDDEN int jmap_error_response(struct transaction_t *txn,
         GCC_FALLTHROUGH
 
     case JMAP_LIMIT_CALLS:
-    case JMAP_LIMIT_OBJS_GET:
-    case JMAP_LIMIT_OBJS_SET:
         limit = title + strlen(title) + 1;
         break;
 
@@ -1549,6 +1526,14 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
 
         else if (!strcmp(key, "ids")) {
             if (json_is_array(arg)) {
+                size_t size = json_array_size(arg);
+                if (size > (size_t) req->settings->limits[MAX_OBJECTS_IN_GET]) {
+                    *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                                     "description",
+                                     "number of ids exceeds maxObjectsInGet limit");
+                    return;
+                }
+
                 get->ids = json_array();
                 /* JMAP spec requires: "If an identical id is included
                  * more than once in the request, the server MUST only
@@ -1556,7 +1541,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
                  * argument of the response."
                  * So let's weed out duplicate ids here. */
                 hash_table _dedup = HASH_TABLE_INITIALIZER;
-                construct_hash_table(&_dedup, json_array_size(arg) + 1, 0);
+                construct_hash_table(&_dedup, size + 1, 0);
                 json_array_foreach(arg, i, val) {
                     const char *id = json_string_value(val);
                     if (!id) {
@@ -1583,6 +1568,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
                     if (hash_lookup(id, &_dedup)) {
                         continue;
                     }
+                    hash_insert(id, (void*)1, &_dedup);
                     json_array_append_new(get->ids, json_string(id));
                 }
                 free_hash_table(&_dedup, NULL);
@@ -1667,8 +1653,6 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
             }
         }
     }
-
-    /* Number of ids checked in validate_request() */
 }
 
 HIDDEN void jmap_get_fini(struct jmap_get *get)
@@ -1766,10 +1750,15 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     set->not_updated = json_object();
     set->not_destroyed = json_object();
 
-    const char *key;
-    json_t *arg, *val;
+    const char *key, *id;
+    json_t *arg, *val, *create = NULL, *update = NULL, *destroy = NULL;
+    hash_table willDestroy = HASH_TABLE_INITIALIZER;
+    uint64_t limit = req->settings->limits[MAX_OBJECTS_IN_SET];
+    uint64_t total = 0;
 
     json_object_foreach(jargs, key, arg) {
+        size_t size = 0;
+
         if (!strcmp(key, "accountId")) {
             /* already handled in jmap_api() */
         }
@@ -1787,16 +1776,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
         /* create */
         else if (!strcmp(key, "create")) {
             if (json_is_object(arg)) {
-                const char *id;
-                json_object_foreach(arg, id, val) {
-                    if (!json_is_object(val)) {
-                        jmap_parser_push(parser, "create");
-                        jmap_parser_invalid(parser, id);
-                        jmap_parser_pop(parser);
-                        continue;
-                    }
-                    json_object_set(set->create, id, val);
-                }
+                create = arg;
+                size = json_object_size(create);
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "create");
@@ -1806,16 +1787,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
         /* update */
         else if (!strcmp(key, "update")) {
             if (json_is_object(arg)) {
-                const char *id;
-                json_object_foreach(arg, id, val) {
-                    if (!json_is_object(val)) {
-                        jmap_parser_push(parser, "update");
-                        jmap_parser_invalid(parser, id);
-                        jmap_parser_pop(parser);
-                        continue;
-                    }
-                    json_object_set(set->update, id, val);
-                }
+                update = arg;
+                size = json_object_size(update);
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "update");
@@ -1824,47 +1797,105 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
         /* destroy */
         else if (!strcmp(key, "destroy")) {
-            if (JNOTNULL(arg)) {
-                jmap_parse_strings(arg, parser, "destroy");
-                if (!json_array_size(parser->invalid)) {
-                    json_decref(set->destroy);
-                    set->destroy = json_incref(arg);
-                }
+            if (json_is_array(arg)) {
+                destroy = arg;
+                size = json_array_size(destroy);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "destroy");
             }
         }
 
         else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
+
+        if (limit - total < size) {
+            *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                             "description",
+                             "total number of objects exceeds maxObjectsInSet limit");
+            return;
+        }
+
+        total += size;
     }
+
+    if (destroy) {
+        size_t i;
+
+        construct_hash_table(&willDestroy, json_array_size(destroy) + 1, 0);
+        json_array_foreach(destroy, i, val) {
+            if (!json_is_string(val)) {
+                jmap_parser_push_index(parser, "destroy", i, NULL);
+                jmap_parser_invalid(parser, NULL);
+                jmap_parser_pop(parser);
+                continue;
+            }
+
+            id = json_string_value(val);
+            if (!hash_lookup(id, &willDestroy)) {
+                hash_insert(id, (void*)1, &willDestroy);
+                json_array_append(set->destroy, val);
+            }
+        }
+    }
+
+    if (update) {
+        json_object_foreach(update, id, val) {
+            json_t *err = NULL;
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "update");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+
+            if (hash_lookup(id, &willDestroy)) {
+                err = json_pack("{s:s}", "type", "willDestroy");
+            }
+            else if (valid_props) {
+                /* Make sure no property is set without its capability */
+                jmap_set_validate_props(req, id, val, valid_props, &err);
+            }
+
+            // TODO We could report the following set errors here:
+            // - invalidPatch
+
+            if (err)
+                json_object_set_new(set->not_updated, id, err);
+            else
+                json_object_set(set->update, id, val);
+        }
+    }
+
+    if (create) {
+        json_object_foreach(create, id, val) {
+            json_t *err = NULL;
+
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "create");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+
+            if (valid_props) {
+                /* Make sure no property is set without its capability */
+                jmap_set_validate_props(req, NULL, val, valid_props, &err);
+            }
+
+            if (err)
+                json_object_set_new(set->not_created, id, err);
+            else
+                json_object_set(set->create, id, val);
+        }
+    }
+
+    free_hash_table(&willDestroy, NULL);
 
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
-    }
-
-    if (valid_props) {
-        json_t *jval;
-        /* Make sure no property is set without its capability */
-        json_object_foreach(json_object_get(jargs, "create"), key, jval) {
-            json_t *err = NULL;
-            jmap_set_validate_props(req, NULL, jval, valid_props, &err);
-            if (err) {
-                json_object_del(set->create, key);
-                json_object_set_new(set->not_created, key, err);
-            }
-        }
-        json_object_foreach(json_object_get(jargs, "update"), key, jval) {
-            json_t *err = NULL;
-            jmap_set_validate_props(req, key, jval, valid_props, &err);
-            if (err) {
-                json_object_del(set->update, key);
-                json_object_set_new(set->not_updated, key, err);
-            }
-        }
-        // TODO We could report the following set errors here:
-        // -invalidPatch
-        // - willDestroy
     }
 }
 

@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_get_duplicate
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $target = "INBOX.target";
+
+    xlog $self, "Install a sieve script filing all mail into a folder";
+    my $script = <<EOF;
+require ["fileinto"];\r
+fileinto "$target";\r
+EOF
+    $self->{instance}->install_sieve_script($script);
+
+    xlog "get all scripts";
+    my $res = $jmap->CallMethods([
+        ['SieveScript/get', {
+            properties => ['name', 'isActive'],
+         }, "R1"]]);
+
+    my $id = $res->[0][1]{list}[0]{id};
+
+    xlog "get script by id";
+    $res = $jmap->CallMethods([
+        ['SieveScript/get', {
+            ids => [$id, $id],
+         }, "R2"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('test1', $res->[0][1]{list}[0]{name});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isActive});
+}
