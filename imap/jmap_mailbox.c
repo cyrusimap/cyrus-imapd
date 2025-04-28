@@ -3979,7 +3979,7 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
         const char *old_imapname = strarray_nth(&update_intermediaries, i);
         /* XXX - we know these are mailboxes, so mbtype 0 is OK, but it's not an
          * ideal interface */
-        mboxlist_update_intermediaries(old_imapname, 0, 0);
+        mboxlist_update_intermediaries(old_imapname, 0);
         /* XXX error handling? */
     }
 
