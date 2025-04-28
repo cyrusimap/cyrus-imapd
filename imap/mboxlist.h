@@ -413,7 +413,7 @@ int mboxlist_setquotas(const char *root,
 int mboxlist_unsetquota(const char *root, int silent);
 
 /* handle interemediates */
-int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);
+int mboxlist_update_intermediaries(const char *mboxname, int mbtype);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
