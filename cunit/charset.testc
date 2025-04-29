@@ -374,9 +374,6 @@ static void test_encode_mimeheader(void)
              "=?UTF-8?Q?01234567890123456789012345678901234567890123456789012345?="
              "\r\n ""=?UTF-8?Q?=E2=82=AC?=", 0);
 
-    /* only encode display-name of address */
-    TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@example.com>", "=?UTF-8?Q?=22abc=E2=88=97xyz=22?= <foo@example.com>", 0);
-
     /* fold long lines with whitespace */
     TESTCASE("012345678 " "012345678 " "012345678 " "012345678 "
              "012345678 " "012345678 " "012345678 " "0123456789",
@@ -409,6 +406,59 @@ static void test_encode_mimeheader(void)
              "=?UTF-8?Q?" "0123456789" "0123456789" "0123456789" "0123456789"
              "0123456789" "0123456789" "01?=\r\n "
              "=?UTF-8?Q?" "2345678901" "2345678?=", 79);
+
+#undef TESTCASE
+}
+
+static void test_encode_addrheader(void)
+{
+    /* corner cases in Quoted-Printable */
+#define TESTCASE(in, exp) \
+    { \
+        static const char _in[] = (in); \
+        static const char _exp[] = (exp); \
+        char *s = charset_encode_addrheader(_in, 0, 0); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        char *unfolded = charset_unfold(s, strlen(s), CHARSET_UNFOLD_SKIPWS); \
+        CU_ASSERT_STRING_EQUAL(unfolded, _exp); \
+        free(unfolded); \
+        free(s); \
+    }
+
+    // Encode valid address lists as address list header:
+
+    /* multiple addresses */
+    TESTCASE("foo@local, bar@local", "foo@local, bar@local");
+
+    /* one display-name and address */
+    TESTCASE("\"abc\xe2\x88\x97xyz\" <foo@local>",
+             "=?UTF-8?Q?=22abc=E2=88=97xyz=22?= <foo@local>");
+
+    /* multiple display-names and addresses */
+    TESTCASE("\xf0\x9f\x99\x82 <foo@local>, "
+             "bar@local, "
+             "\xf0\x9f\xa4\xa1 <baz@local>",
+            "=?UTF-8?Q?=F0=9F=99=82?= <foo@local>, "
+             "bar@local, "
+            "=?UTF-8?Q?=F0=9F=A4=A1?= <baz@local>");
+
+    // Fall back encoding invalid address lists as regular header:
+
+    /* address and non-address text */
+    TESTCASE("foo@local, some stuff", "foo@local, some stuff");
+    TESTCASE("some stuff, foo@local", "some stuff, foo@local");
+
+    /* address and non-address non-ASCII text */
+    TESTCASE("foo@local, \xf0\x9f\x99\x82",
+             "=?UTF-8?Q?foo@local,_=F0=9F=99=82?=");
+
+    /* address and non-address text, multiple addresses */
+    TESTCASE("foo@local, some stuff, bar@local, other stuff",
+             "foo@local, some stuff, bar@local, other stuff");
+
+    /* display-name and address and trainling non-address text */
+    TESTCASE("\xc2\xa3 <foo@local>, stuff",
+             "=?UTF-8?Q?=C2=A3_<foo@local>,_stuff?=");
 
 #undef TESTCASE
 }

@@ -1246,7 +1246,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
-    header = charset_encode_mimeheader(mbuserid, 0, 0);
+    header = charset_encode_addrheader(mbuserid, 0, 0);
     fprintf(f, "From: %s <>\r\n", header);
     free(header);
 

@@ -410,7 +410,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
         buf_printf(&buf, "<%s@%s>", httpd_userid, config_servername);
     }
 
-    from = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
+    from = charset_encode_addrheader(buf_cstring(&buf), buf_len(&buf), 0);
 
     fprintf(f, "MIME-Version: 1.0\r\n"
             "Date: %s\r\n"
