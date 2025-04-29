@@ -1,0 +1,83 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_legacy_ids
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $talk->create('INBOX.foo');
+
+    my $data_file = abs_path("data/old-mailboxes/version19.tar.gz");
+    die "Old mailbox data does not exist: $data_file" if not -f $data_file;
+
+    xlog "installing version 19 mailboxes";
+    $self->{instance}->unpackfile($data_file, $self->{instance}->get_basedir());
+
+    xlog "reconstructing indexes at v19 to get predictable senddate";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+
+    xlog $self, "Fetching MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    my $res = $talk->get_response_code('status') || {};
+    my $id1 = $res->{INBOX}{mailboxid}[0];
+    my $id2 = $res->{'INBOX.foo'}{mailboxid}[0];
+
+    $self->assert_matches(qr/^[^P].*/, $id1);
+    $self->assert_matches(qr/^[^P].*/, $id2);
+
+    xlog $self, "get mailbox list";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => 'name' }]
+    }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($id2, $res->[0][1]->{ids}[1]);
+
+    xlog $self, "get mailboxes";
+    my $ids = $res->[0][1]->{ids};
+    $res = $jmap->CallMethods([['Mailbox/get', { ids => $ids }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_str_equals($id1, $res->[0][1]->{list}[0]{id});
+    $self->assert_str_equals($id2, $res->[0][1]->{list}[1]{id});
+
+    xlog $self, "Update $id2";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id2 => {
+                name => 'bar'
+            }
+        }
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id2});
+
+    my $state = $res->[0][1]->{newState};
+
+    xlog $self, "Create new mailhox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                1 => {
+                    name => 'baz',
+                    parentId => $id2
+                }
+            },
+        }, 'R1'],
+    ]);
+    my $id3 = $res->[0][1]->{created}{1}{id};
+    $self->assert_matches(qr/^[^P].*/, $id3);
+
+    xlog $self, "Check changes";
+    $res = $jmap->CallMethods([['Mailbox/changes',
+                                { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($id3, $res->[0][1]{created}[0]);
+
+    xlog $self, "Destroy $id3";
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [ $id3 ]
+    }, "R1"]]);
+    $self->assert_str_equals($id3, $res->[0][1]{destroyed}[0]);
+}

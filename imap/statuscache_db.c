@@ -388,7 +388,7 @@ HIDDEN void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sda
     assert(sdata);
 
     sdata->uidvalidity = mbentry->uidvalidity;
-    sdata->mailboxid = mbentry->uniqueid;
+    // sdata->mailboxid set in imapd_statusdata()
 
     sdata->statusitems |= STATUS_MBENTRYITEMS;
 }
@@ -409,7 +409,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;
-    sdata->mailboxid = mailbox_uniqueid(mailbox);
+    // sdata->mailboxid set in imapd_statusdata()
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
