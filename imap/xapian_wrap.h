@@ -90,6 +90,7 @@ extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or,
 extern xapian_query_t *xapian_query_new_matchall(const xapian_db_t *);
 extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
 extern xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
+extern void xapian_query_serialize(xapian_query_t *, struct buf*);
 extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *query,
                             int (*cb)(void *base, size_t n, void *rock), void *rock);
