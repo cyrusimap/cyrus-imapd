@@ -1613,6 +1613,21 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     json_t *online = json_array();
     int emailIndex = 0, defaultEmailIndex = -1;
 
+    // Generate lookup table for Apple's X-ABADR property values.
+    hash_table abadr_by_group = HASH_TABLE_INITIALIZER;
+    size_t nabadr = 0;
+    for (struct vparse_entry *it = card->properties; it; it = it->next) {
+        if (!strcasecmp(it->name, VCARD_APPLE_ABADR_PROPERTY))
+            nabadr++;
+    }
+    construct_hash_table(&abadr_by_group, nabadr + 1, 0);
+    for (struct vparse_entry *it = card->properties; it; it = it->next) {
+        if (!strcasecmp(it->name, VCARD_APPLE_ABADR_PROPERTY)) {
+            if (it->group && it->v.value)
+                hash_insert(it->group, xstrdup(it->v.value), &abadr_by_group);
+        }
+    }
+
     for (entry = card->properties; entry; entry = entry->next) {
         const struct vparse_param *param;
         const char *label = NULL;
@@ -1683,15 +1698,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             /* Read countryCode from same-grouped ABADR property, if any */
             const char *countrycode = NULL;
             if (entry->group) {
-                // O(n^2) n is the (presumably small) count of VCARD props
-                struct vparse_entry *iter;
-                for (iter = card->properties; iter; iter = iter->next) {
-                    if (!strcasecmpsafe(iter->group, entry->group) &&
-                            !strcasecmp(iter->name, VCARD_APPLE_ABADR_PROPERTY)) {
-                        countrycode = iter->v.value;
-                        break;
-                    }
-                }
+                countrycode = hash_lookup(entry->group, &abadr_by_group);
             }
 
             json_object_set_new(item, "street",
@@ -1929,6 +1936,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     if (empty) strarray_free(empty);
 
     free_hash_table(&labels, NULL);
+    free_hash_table(&abadr_by_group, free);
 
     return obj;
 }
