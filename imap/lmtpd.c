@@ -528,7 +528,7 @@ int deliver_mailbox(FILE *f,
     char *uuid = NULL;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-    time_t internaldate = 0;
+    struct timespec internaldate = { 0 };
 
     /* make sure we have an IMAP mailbox */
     if (mboxname_isnondeliverymailbox(mailboxname, 0/*mbtype*/)) {
@@ -585,15 +585,18 @@ int deliver_mailbox(FILE *f,
         r = message_parse_file_buf(f, &content->map, &content->body, NULL);
     }
 
+    /* initialize internaldate to "now" */
+    clock_gettime(CLOCK_REALTIME, &internaldate);
+
     /* if the body contains an x-deliveredinternaldate then that overrides all else */
     if (content->body->x_deliveredinternaldate) {
         time_from_rfc5322(content->body->x_deliveredinternaldate,
-                          &internaldate, DATETIME_FULL);
+                          &internaldate.tv_sec, DATETIME_FULL);
     }
     /* Otherwise we'll use a received date if there's one */
     else if (content->body->received_date) {
         time_from_rfc5322(content->body->received_date,
-                          &internaldate, DATETIME_FULL);
+                          &internaldate.tv_sec, DATETIME_FULL);
     }
 
     if (!r) {
@@ -613,7 +616,7 @@ int deliver_mailbox(FILE *f,
         }
 
         r = append_fromstage_full(&as, &content->body, stage,
-                                  internaldate, savedate, /*createdmodseq*/0,
+                                  &internaldate, savedate, /*createdmodseq*/0,
                                   flags, !singleinstance, &annotations);
 
         if (r) {

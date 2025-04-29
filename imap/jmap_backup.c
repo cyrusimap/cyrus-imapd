@@ -566,7 +566,8 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         strarray_add(flags, "$restored");
 
         /* append the message to the mailbox. */
-        r = append_fromstage(&as, &body, stage, record->internaldate.tv_sec,
+        r = append_fromstage(&as, &body, stage,
+                             (struct timespec *) &record->internaldate,
                              is_update ? record->createdmodseq : 0,
                              flags, /*nolink*/0, &annots);
 

@@ -1038,7 +1038,7 @@ static int jmap_upload(struct transaction_t *txn)
     struct stagemsg *stage = NULL;
     FILE *f = NULL;
     const char **hdr;
-    time_t now = time(NULL);
+    struct timespec now;
     struct appendstate as;
     char *accountid = NULL;
     char *normalisedtype = NULL;
@@ -1092,8 +1092,10 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
+    clock_gettime(CLOCK_REALTIME, &now);
+
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+    if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         txn->error.desc = "append_newstage() failed";
         ret = HTTP_SERVER_ERROR;
@@ -1169,7 +1171,7 @@ static int jmap_upload(struct transaction_t *txn)
     }
     else {
         char datestr[80];
-        time_to_rfc5322(now, datestr, sizeof(datestr));
+        time_to_rfc5322(now.tv_sec, datestr, sizeof(datestr));
         fprintf(f, "Date: %s\r\n", datestr);
     }
 
@@ -1216,7 +1218,7 @@ wrotebody:
     /* Append the message to the mailbox */
     strarray_append(&flags, "\\Deleted");
     strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
-    r = append_fromstage(&as, &body, stage, now, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage(&as, &body, stage, &now, 0, &flags, 0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
@@ -1244,7 +1246,7 @@ wrotebody:
     }
 
     char datestr[RFC3339_DATETIME_MAX];
-    time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
+    time_to_rfc3339(now.tv_sec + 86400, datestr, RFC3339_DATETIME_MAX);
 
     char blob_id[JMAP_BLOBID_SIZE];
     jmap_set_blobid(rawmessage ? &body->guid : &body->content_guid, blob_id);

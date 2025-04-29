@@ -1210,7 +1210,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     char *header;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     struct appendstate as;
-    time_t now = time(0);
+    struct timespec now;
     char *freeme = NULL;
     char datestr[80];
     static int64_t vcard_max_size = -1;
@@ -1223,8 +1223,10 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     init_internal();
 
+    clock_gettime(CLOCK_REALTIME, &now);
+
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox_name(mailbox), now, 0, &stage))) {
+    if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox_name(mailbox));
         return -1;
     }
@@ -1243,7 +1245,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     if (!resource) resource = freeme = strconcat(uid, ".vcf", (char *)NULL);
     mbuserid = mboxname_to_userid(mailbox_name(mailbox));
 
-    time_to_rfc5322(now, datestr, sizeof(datestr));
+    time_to_rfc5322(now.tv_sec, datestr, sizeof(datestr));
 
     /* XXX  This needs to be done via an LDAP/DB lookup */
     header = charset_encode_addrheader(mbuserid, 0, 0);
@@ -1299,7 +1301,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, now, createdmodseq, flags, 0, annots);
+    r = append_fromstage(&as, &body, stage, &now, createdmodseq, flags, 0, annots);
     if (body) {
         message_free_body(body);
         free(body);
