@@ -935,7 +935,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
  */
 EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
                                    struct stagemsg *stage,
-                                   time_t internaldate, time_t savedate,
+                                   struct timespec *internaldate, time_t savedate,
                                    modseq_t createdmodseq,
                                    const strarray_t *flags, int nolink,
                                    struct entryattlist **user_annotsp)
@@ -1067,9 +1067,15 @@ havefile:
     }
 
     /* And make sure it has a timestamp */
-    struct timespec t = { internaldate, UTIME_NOW };
-    if (!internaldate) t.tv_sec = time(NULL);
-    r = msgrecord_set_internaldate(msgrec, &t);
+    struct timespec now;
+    if (!internaldate || internaldate->tv_nsec >= UTIME_OMIT) {
+        clock_gettime(CLOCK_REALTIME, &now);
+        if (!internaldate)
+            internaldate = &now;
+        else
+            internaldate->tv_nsec = now.tv_nsec;
+    }
+    r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 
     /* should we archive it straight away? */
@@ -1238,7 +1244,7 @@ EXPORTED int append_removestage(struct stagemsg *stage)
 EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
                       struct protstream *messagefile,
                       unsigned long size,
-                      time_t internaldate,
+                      struct timespec *internaldate,
                       const strarray_t *flags)
 {
     struct mailbox *mailbox = as->mailbox;
@@ -1256,9 +1262,12 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* And make sure it has a timestamp */
-    struct timespec t = { internaldate, UTIME_NOW };
-    if (!internaldate) t.tv_sec = time(NULL);
-    r = msgrecord_set_internaldate(msgrec, &t);
+    struct timespec now;
+    if (!internaldate) {
+        clock_gettime(CLOCK_REALTIME, &now);
+        internaldate = &now;
+    }
+    r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 
     /* Create message file */
