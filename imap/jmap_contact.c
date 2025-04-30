@@ -1623,8 +1623,11 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     construct_hash_table(&abadr_by_group, nabadr + 1, 0);
     for (struct vparse_entry *it = card->properties; it; it = it->next) {
         if (!strcasecmp(it->name, VCARD_APPLE_ABADR_PROPERTY)) {
-            if (it->group && it->v.value)
-                hash_insert(it->group, xstrdup(it->v.value), &abadr_by_group);
+            if (it->group && it->v.value) {
+                buf_setcstr(&buf, it->group);
+                hash_insert(
+                    buf_ucase(&buf), xstrdup(it->v.value), &abadr_by_group);
+            }
         }
     }
 
@@ -1698,7 +1701,8 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             /* Read countryCode from same-grouped ABADR property, if any */
             const char *countrycode = NULL;
             if (entry->group) {
-                countrycode = hash_lookup(entry->group, &abadr_by_group);
+                buf_setcstr(&buf, entry->group);
+                countrycode = hash_lookup(buf_ucase(&buf), &abadr_by_group);
             }
 
             json_object_set_new(item, "street",
