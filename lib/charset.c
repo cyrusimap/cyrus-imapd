@@ -347,6 +347,28 @@ static const char index_64url[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
 };
+
+/*
+ * Table for decoding base64jmapid
+ */
+static const char index_64jmapid[256] = {
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XS,XS,XX, XX,XS,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XS,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX, 0,XX,XX,
+     1, 2, 3, 4,  5, 6, 7, 8,  9,10,XX,XX, XX,64,XX,XX,
+    XX,11,12,13, 14,15,16,17, 18,19,20,21, 22,23,24,25,
+    26,27,28,29, 30,31,32,33, 34,35,36,XX, XX,XX,XX,37,
+    XX,38,39,40, 41,42,43,44, 45,46,47,48, 49,50,51,52,
+    53,54,55,56, 57,58,59,60, 61,62,63,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
+};
 #define CHAR64(c, index)  (index[(unsigned char)(c)])
 
 EXPORTED int encoding_lookupname(const char *s)
@@ -374,6 +396,8 @@ EXPORTED int encoding_lookupname(const char *s)
             return ENCODING_BASE64;
         if (!strcasecmp(s, "BASE64URL"))
             return ENCODING_BASE64URL;
+        if (!strcasecmp(s, "BASE64JMAPID"))
+            return ENCODING_BASE64JMAPID;
         if (!strcasecmp(s, "BINARY"))
             return ENCODING_NONE;
         break;
@@ -405,6 +429,7 @@ EXPORTED const char *encoding_name(int encoding)
     case ENCODING_QP: return "QUOTED-PRINTABLE";
     case ENCODING_BASE64: return "BASE64";
     case ENCODING_BASE64URL: return "BASE64URL";
+    case ENCODING_BASE64JMAPID: return "BASE64JMAPID";
     case ENCODING_UNKNOWN: return "UNKNOWN";
     default: return "WTF";
     }
@@ -574,7 +599,7 @@ static int b64_flush(struct convert_rock *rock)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
     if (s->invalid) {
-        if (s->index == index_64url)
+        if (s->index != index_64)
             return -1;
         else
             xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
@@ -2348,7 +2373,12 @@ static struct convert_rock *b64_init(struct convert_rock *next, int enc)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct b64_state *state = xzmalloc(sizeof(struct b64_state));
-    state->index = enc == ENCODING_BASE64URL ? index_64url : index_64;
+    if (enc == ENCODING_BASE64JMAPID)
+        state->index = index_64jmapid;
+    else if (enc == ENCODING_BASE64URL)
+        state->index = index_64url;
+    else
+        state->index = index_64;
     rock->state = state;
     rock->f = b64_2byte;
     rock->flush = b64_flush;
@@ -2819,6 +2849,7 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
 
         case ENCODING_BASE64:
         case ENCODING_BASE64URL:
+        case ENCODING_BASE64JMAPID:
             input = b64_init(input, encoding);
             /* XXX have to have nl-mapping base64 in order to
              * properly count \n as 2 raw characters
@@ -2978,6 +3009,7 @@ EXPORTED int charset_to_utf8(struct buf *dst, const char *src, size_t len, chars
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
@@ -3040,6 +3072,7 @@ EXPORTED int charset_decode(struct buf *dst, const char *src, size_t len, int en
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
@@ -3063,8 +3096,25 @@ static void encode_b64(struct buf *dst, const char *src, size_t len, int encodin
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     static const char b64url[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    const char *b64 = encoding == ENCODING_BASE64URL ? b64url : b64std;
-    char pad = encoding == ENCODING_BASE64URL ? '\0' : '=';
+    static const char b64jmapid[] =
+        "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+    const char *b64;
+    char pad;
+
+    switch (encoding) {
+    case ENCODING_BASE64JMAPID:
+        b64 = b64jmapid;
+        pad = '\0';
+        break;
+    case ENCODING_BASE64URL:
+        b64 = b64url;
+        pad = '\0';
+        break;
+    default:
+        b64 = b64std;
+        pad = '=';
+        break;
+    }
 
     const uint8_t *s = (uint8_t*)src;
     size_t r = len;
@@ -3094,15 +3144,18 @@ static void encode_b64(struct buf *dst, const char *src, size_t len, int encodin
 
 EXPORTED int charset_encode(struct buf *dst, const char *src, size_t len, int encoding)
 {
-    if (encoding == ENCODING_NONE) {
+    switch (encoding) {
+    case ENCODING_NONE:
         buf_setmap(dst, src, len);
         return 0;
-    }
-    else if (encoding == ENCODING_BASE64 || encoding == ENCODING_BASE64URL) {
+
+    case ENCODING_BASE64:
+    case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         encode_b64(dst, src, len, encoding);
         return 0;
-    }
-    else if (encoding == ENCODING_QP) {
+
+    case ENCODING_QP: {
         size_t outlen = 0;
         char *val = charset_qpencode_mimebody(src, len, 0, &outlen);
         if (val && outlen)
@@ -3110,7 +3163,10 @@ EXPORTED int charset_encode(struct buf *dst, const char *src, size_t len, int en
         free(val);
         return 0;
     }
-    else return -1;
+
+    default:
+        return -1;
+    }
 }
 
 /* Decode bytes from src to sha1 of bytes */
@@ -3140,6 +3196,7 @@ EXPORTED int charset_decode_sha1(uint8_t dest[SHA1_DIGEST_LENGTH], size_t *decod
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
@@ -3606,6 +3663,7 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
@@ -3684,6 +3742,7 @@ EXPORTED int charset_extract(int (*cb)(const struct buf *, void *),
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         input = b64_init(input, encoding);
         /* XXX have to have nl-mapping base64 in order to
          * properly count \n as 2 raw characters
@@ -3754,6 +3813,7 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
 
     case ENCODING_BASE64:
     case ENCODING_BASE64URL:
+    case ENCODING_BASE64JMAPID:
         tobuffer = buffer_init(len);
         input = b64_init(tobuffer, encoding);
         break;
