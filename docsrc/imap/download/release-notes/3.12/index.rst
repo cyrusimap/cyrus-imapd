@@ -10,3 +10,4 @@ Cyrus IMAP 3.12 Releases
     x/*-alpha*
     x/*-beta*
     x/*-rc*
+    x/*
