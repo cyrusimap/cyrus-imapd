@@ -1,15 +1,15 @@
 :tocdepth: 3
 
-===================================
-Cyrus IMAP 3.12.0-rc1 Release Notes
-===================================
+===============================
+Cyrus IMAP 3.12.0 Release Notes
+===============================
 
 Download from GitHub:
 
-* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0-rc1/cyrus-imapd-3.12.0-rc1.tar.gz
-* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0-rc1/cyrus-imapd-3.12.0-rc1.tar.gz.sig
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0/cyrus-imapd-3.12.0.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.0/cyrus-imapd-3.12.0.tar.gz.sig
 
-.. _relnotes-3.12.0-rc1_changes:
+.. _relnotes-3.12.0_changes:
 
 Major changes since the 3.10 series
 ===================================
@@ -88,7 +88,7 @@ deployment depends on these, you should not upgrade to 3.12.
 * Removed Kerberos 4 support.  Thanks Дилян Палаузов.
 * Removed MIT Kerberized POP3 support.  Thanks Дилян Палаузов.
 
-.. _relnotes_3.12.0-rc1_storage_changes:
+.. _relnotes_3.12.0_storage_changes:
 
 Storage changes
 ===============
