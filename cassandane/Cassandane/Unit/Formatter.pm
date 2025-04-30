@@ -43,6 +43,7 @@ use warnings;
 
 use base 'Test::Unit::Listener';
 use Benchmark;
+use Date::Format;
 use IO::Handle;
 
 sub new
@@ -112,7 +113,10 @@ sub print_summary
     my ($self, $result, $start_time, $end_time) = @_;
 
     my $run_time = timediff($end_time, $start_time);
-    print "\n", "Time: ", timestr($run_time), "\n";
+
+    print "\n";
+    print "Time: ", timestr($run_time), "\n";
+    print "Finished: ", time2str("%T", $end_time->real()), "\n";
 
     $self->print_header($result);
     $self->print_errors($result);
