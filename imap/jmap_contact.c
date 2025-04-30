@@ -1552,7 +1552,11 @@ static json_t *jmap_contact_from_vcard(const char *userid,
 
     /* Fetch any Apple-style labels */
     hash_table labels = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&labels, 10, 0);
+    size_t nprops = 0;
+    for (entry = card->properties; entry; entry = entry->next) {
+        nprops++;
+    }
+    construct_hash_table(&labels, nprops + 1, 0);
     for (entry = card->properties; entry; entry = entry->next) {
         if (entry->group &&
             !strcasecmpsafe(entry->name, VCARD_APPLE_LABEL_PROPERTY)) {
@@ -1608,6 +1612,21 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     json_t *phones = json_array();
     json_t *online = json_array();
     int emailIndex = 0, defaultEmailIndex = -1;
+
+    // Generate lookup table for Apple's X-ABADR property values.
+    hash_table abadr_by_group = HASH_TABLE_INITIALIZER;
+    size_t nabadr = 0;
+    for (struct vparse_entry *it = card->properties; it; it = it->next) {
+        if (!strcasecmp(it->name, VCARD_APPLE_ABADR_PROPERTY))
+            nabadr++;
+    }
+    construct_hash_table(&abadr_by_group, nabadr + 1, 0);
+    for (struct vparse_entry *it = card->properties; it; it = it->next) {
+        if (!strcasecmp(it->name, VCARD_APPLE_ABADR_PROPERTY)) {
+            if (it->group && it->v.value)
+                hash_insert(it->group, xstrdup(it->v.value), &abadr_by_group);
+        }
+    }
 
     for (entry = card->properties; entry; entry = entry->next) {
         const struct vparse_param *param;
@@ -1679,15 +1698,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
             /* Read countryCode from same-grouped ABADR property, if any */
             const char *countrycode = NULL;
             if (entry->group) {
-                // O(n^2) n is the (presumably small) count of VCARD props
-                struct vparse_entry *iter;
-                for (iter = card->properties; iter; iter = iter->next) {
-                    if (!strcasecmpsafe(iter->group, entry->group) &&
-                            !strcasecmp(iter->name, VCARD_APPLE_ABADR_PROPERTY)) {
-                        countrycode = iter->v.value;
-                        break;
-                    }
-                }
+                countrycode = hash_lookup(entry->group, &abadr_by_group);
             }
 
             json_object_set_new(item, "street",
@@ -1925,6 +1936,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     if (empty) strarray_free(empty);
 
     free_hash_table(&labels, NULL);
+    free_hash_table(&abadr_by_group, free);
 
     return obj;
 }
@@ -7575,10 +7587,11 @@ static json_t *jmap_card_from_vcard(const char *userid,
        - Fetch Apple-style labels for pairing with grouped properties
        - Sort them by name and then by altid for calculating localizations
     */
-    construct_hash_table(&props_by_name, 100, 0);
-    construct_hash_table(&adrs, 10, 0);
-    construct_hash_table(&orgs, 10, 0);
-    construct_hash_table(&labels, 10, 0);
+    size_t nprops = vcardcomponent_count_properties(vcard, VCARD_ANY_PROPERTY, 0);
+    construct_hash_table(&props_by_name, nprops + 1, 0);
+    construct_hash_table(&adrs, nprops + 1, 0);
+    construct_hash_table(&orgs, nprops + 1, 0);
+    construct_hash_table(&labels, nprops + 1, 0);
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
@@ -7650,7 +7663,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         props_by_altid = hash_lookup(prop_name, &props_by_name);
         if (!props_by_altid) {
             props_by_altid = xzmalloc(sizeof(hash_table));
-            construct_hash_table(props_by_altid, 10, 0);
+            construct_hash_table(props_by_altid, nprops + 1, 0);
             hash_insert(prop_name, props_by_altid, &props_by_name);
         }
 
@@ -10837,8 +10850,19 @@ static int _jscard_to_vcard(struct jmap_req *req,
     /* Using reserved props is invalid */
     reject_reserved_props(arg, &parser);
 
-    construct_hash_table(&groups, 10, 0);
-    construct_hash_table(&l10n_by_key, 10, 0);
+    /* Estimate upper bound for required vCard groups */
+    size_t ngroups = 0;
+    json_object_foreach(arg, key, jval) {
+        ngroups += json_object_size(jval);
+    }
+    construct_hash_table(&groups, ngroups + 1, 0);
+
+    /* Estimate upper bound for localized property count */
+    size_t nl10n = 0;
+    json_object_foreach(json_object_get(arg, "localizations"), lang, jval) {
+        nl10n++;
+    }
+    construct_hash_table(&l10n_by_key, nl10n + 1, 0);
 
     deflang = json_string_value(json_object_get(arg, "language"));
     json_object_foreach(json_object_get(arg, "localizations"), lang, jval) {
@@ -10862,7 +10886,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
                 patches_by_id = hash_lookup(prop_key, &l10n_by_key);
                 if (!patches_by_id) {
                     patches_by_id = xzmalloc(sizeof(hash_table));
-                    construct_hash_table(patches_by_id, 10, 0);
+                    construct_hash_table(patches_by_id, ngroups + 1, 0);
                     hash_insert(prop_key, patches_by_id, &l10n_by_key);
                 }
 
