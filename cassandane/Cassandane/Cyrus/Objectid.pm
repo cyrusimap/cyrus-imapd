@@ -72,7 +72,7 @@ sub tear_down
 # Test uniqueid and rename
 #
 sub test_uniqueid
-    :AltNamespace :min_version_3_1
+    :AltNamespace :Conversations :min_version_3_1
 {
     my ($self) = @_;
 

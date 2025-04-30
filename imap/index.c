@@ -852,8 +852,15 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n",
-                mailbox_uniqueid(state->mailbox));
+    const char *mailboxid;
+    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+    if (!cstate || cstate->version < 2) {
+        mailboxid = mailbox_uniqueid(state->mailbox);
+    }
+    else {
+        mailboxid = mailbox_jmapid(state->mailbox);
+    }
+    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", mailboxid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -3320,7 +3327,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     int myrights = 0;
     struct mailbox *mailbox = NULL;
     msgrecord_t *msgrecord = NULL;
-    char *extname = NULL;
+    char *mboxval = NULL;
     int r = 0;
 
     assert(fmb_rock->state != NULL);
@@ -3362,19 +3369,28 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     if (fmb_rock->wantname) {
-        extname = mboxname_to_external(mbentry->name,
+        mboxval = mboxname_to_external(mbentry->name,
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
+    }
+    else if (!fmb_rock->fetchargs->convstate ||
+             fmb_rock->fetchargs->convstate->version < 2) {
+        mboxval = xstrdup(mbentry->uniqueid);
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        buf_putc(&buf, 'P');
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+        mboxval = buf_release(&buf);
     }
 
     if (fmb_rock->sep)
         prot_putc(fmb_rock->sep, fmb_rock->state->out);
-    prot_printf(fmb_rock->state->out, "%s",
-                fmb_rock->wantname ? extname : mbentry->uniqueid);
+    prot_printf(fmb_rock->state->out, "%s", mboxval);
     fmb_rock->sep = ' ';
 
 done:
-    if (extname) free(extname);
+    if (mboxval) free(mboxval);
     if (msgrecord) msgrecord_unref(&msgrecord);
     if (mailbox) mailbox_close(&mailbox);
     if (mbentry) mboxlist_entry_free(&mbentry);

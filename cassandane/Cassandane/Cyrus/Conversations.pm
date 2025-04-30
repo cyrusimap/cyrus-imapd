@@ -1116,6 +1116,16 @@ sub test_rename_between_users
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", cassandane => 'lrswipkxtecdn');
 
+    # Reset the conv.db versions to 1 (to force UUID-based MAILBOXIDs)
+    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $mdirs = $self->{instance}->run_mbpath(-u => 'manifold');
+
+    my $format = $self->{instance}->{config}->get('conversations_db');
+    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format,
+                                     ['SET', '$VERSION', '1']);
+    $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format,
+                                     ['SET', '$VERSION', '1']);
+
     my $talk = $self->{store}->get_client();
 
     $self->{store}->set_folder("INBOX");
@@ -1132,15 +1142,11 @@ sub test_rename_between_users
     $self->{store}->set_folder("user.manifold");
     $self->make_message("Man Msg");
 
-    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
-    my $mdirs = $self->{instance}->run_mbpath(-u => 'manifold');
-
     # folder IDs should be "INBOX", "foo", "bar"
 
     my $res = $talk->status('INBOX.foo', ['mailboxid']);
     my $fooid = $res->{'mailboxid'}->[0];
 
-    my $format = $self->{instance}->{config}->get('conversations_db');
     my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['SHOW']);
     my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format, ['SHOW']);
 
