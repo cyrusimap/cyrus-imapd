@@ -24,6 +24,12 @@ sub test_cyr_expire_delete_findpaths_nolegacy
     xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
+    # Reset the conv.db version to 1 (to force UUID-based MAILBOXIDs)
+    my $dirs = $self->{instance}->run_mbpath(-u => 'magicuser');
+    my $format = $self->{instance}->{config}->get('conversations_db');
+    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format,
+                                     ['SET', '$VERSION', '1']);
+
     my $res = $admintalk->status($inbox, ['mailboxid']);
     my $inboxid = $res->{mailboxid}[0];
     $res = $admintalk->status($subfolder, ['mailboxid']);
