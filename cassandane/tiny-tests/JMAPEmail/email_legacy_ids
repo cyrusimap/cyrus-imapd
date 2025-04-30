@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_legacy_ids
-    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -91,6 +91,22 @@ sub test_email_legacy_ids
 
     my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
     $self->assert_not_null($dstInboxId);
+
+    # GET session
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
+    my $session = eval { decode_json($RawResponse->{content}) };
+    my $capabilities = $session->{accounts}->{cassandane}->{accountCapabilities};
+    $self->assert_deep_equals({ hasCompactIds => JSON::false },
+                              $capabilities->{'https://cyrusimap.org/ns/jmap/mail'});
+    $capabilities = $session->{accounts}->{other}->{accountCapabilities};
+    $self->assert_deep_equals({ hasCompactIds => JSON::true },
+                              $capabilities->{'https://cyrusimap.org/ns/jmap/mail'});
 
     xlog $self, "Create new email";
     $res = $jmap->CallMethods([

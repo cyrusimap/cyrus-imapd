@@ -334,7 +334,9 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 #endif
 }
 
-HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel)
+HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
+                                   const char *accountid,
+                                   int mayCreateTopLevel)
 {
     json_t *sortopts = json_array();
     struct email_sortfield *sp;
@@ -362,8 +364,16 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
 
-    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
+    if (support_extensions) {
+        bool compactids = 0;
+        struct conversations_state *cstate;
+        if (!conversations_open_user(accountid, 0, &cstate)) {
+            compactids = (cstate->version >= 2);
+            conversations_commit(&cstate);
+        }
+
+        json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION,
+                            json_pack("{s:b}", "hasCompactIds", compactids));
     }
 
     jmap_mailbox_capabilities(account_capabilities, mayCreateTopLevel);

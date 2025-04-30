@@ -529,7 +529,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_core_capabilities(capas);
         jmap_blob_capabilities(capas);
         jmap_quota_capabilities(capas);
-        jmap_mail_capabilities(capas, mayCreateTopLevel);
+        jmap_mail_capabilities(capas, accountid, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_mdn_capabilities(capas);
         jmap_contact_capabilities(capas, authstate, authuserid, accountid);
@@ -557,7 +557,7 @@ static json_t *lookup_capabilities(const char *accountid,
             if (rock.has_mail) {
                 // we don't offer emailsubmission or vacation
                 // for shared accounts right now
-                jmap_mail_capabilities(capas, mayCreateTopLevel);
+                jmap_mail_capabilities(capas, accountid, mayCreateTopLevel);
             }
             if (rock.has_contacts) {
                 jmap_contact_capabilities(capas, authstate, authuserid, accountid);

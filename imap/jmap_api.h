@@ -255,7 +255,8 @@ extern void jmap_admin_init(jmap_settings_t *settings);
 extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_blob_capabilities(json_t *account_capabilities);
 extern void jmap_quota_capabilities(json_t *account_capabilities);
-extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
+extern void jmap_mail_capabilities(json_t *account_capabilities,
+                                   const char *accountid, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
