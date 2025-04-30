@@ -1472,7 +1472,9 @@ static int getmailboxexists(void *sc, const char *extname)
 static int getmailboxidexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;
-    char *intname = mboxlist_find_uniqueid(extname, sd->userid, sd->authstate);
+    char *intname = (*extname == JMAP_MAILBOXID_PREFIX) ?
+        mboxlist_find_jmapid(extname, sd->userid, sd->authstate) :
+        mboxlist_find_uniqueid(extname, sd->userid, sd->authstate);
     int exists = 0;
 
     if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
