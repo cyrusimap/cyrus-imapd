@@ -505,8 +505,6 @@ static struct capa_struct base_capabilities[] = {
     { "X-SIEVE-MAILBOX",       CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "XAPPLEPUSHSERVICE",     CAPA_OMNIAUTH|CAPA_STATE,         /* NS */
       { .statep = &apns_enabled }                             },
-    { "XCONVERSATIONS",        CAPA_POSTAUTH|CAPA_CONFIG,        /* CY */
-      { .config = IMAPOPT_CONVERSATIONS }                     },
     { "XLIST",                 CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "XUSERGROUPS",           CAPA_POSTAUTH|CAPA_STATE,
       { .statep = &auth_is_mboxgroups }                       }, /* CY */
@@ -899,7 +897,6 @@ static const struct client_behavior {
     { CB_UIDONLY,     "uidonly"     },
     { CB_UNSELECT,    "unselect"    },
     { CB_UTF8ACCEPT,  "utf8_accept" },
-    { CB_XCONV,       "xconv"       },
     { CB_XLIST,       "xlist"       },
     { 0,              NULL          }
 };
@@ -9498,7 +9495,6 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     static struct buf arg;
     unsigned statusitems = 0;
     int c;
-    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     c = prot_getc(imapd_in);
     if (c != '(') goto bad;
@@ -9542,15 +9538,6 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         }
         else if (!strcmp(arg.s, "deleted-storage")) {
             statusitems |= STATUS_DELETED_STORAGE;
-        }
-        else if (hasconv && !strcmp(arg.s, "xconvexists")) {
-            statusitems |= STATUS_XCONVEXISTS;
-        }
-        else if (hasconv && !strcmp(arg.s, "xconvunseen")) {
-            statusitems |= STATUS_XCONVUNSEEN;
-        }
-        else if (hasconv && !strcmp(arg.s, "xconvmodseq")) {
-            statusitems |= STATUS_XCONVMODSEQ;
         }
         else {
             static char buf[200];
@@ -9635,18 +9622,6 @@ static int print_statusline(const char *extname, unsigned statusitems,
                     sepchar, sd->deleted_storage);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_XCONVEXISTS) {
-        prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconv.threadexists);
-        sepchar = ' ';
-    }
-    if (statusitems & STATUS_XCONVUNSEEN) {
-        prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconv.threadunseen);
-        sepchar = ' ';
-    }
-    if (statusitems & STATUS_XCONVMODSEQ) {
-        prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconv.threadmodseq);
-        sepchar = ' ';
-    }
 
     prot_printf(imapd_out, ")\r\n");
 
@@ -9656,35 +9631,6 @@ static int print_statusline(const char *extname, unsigned statusitems,
 static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
                             struct statusdata *sd)
 {
-    int r;
-    struct conversations_state *state = NULL;
-
-    if (!(statusitems & STATUS_CONVITEMS)) goto nonconv;
-    statusitems &= ~STATUS_CONVITEMS; /* strip them for the regular lookup */
-
-    /* use the existing state if possible */
-    state = conversations_get_mbox(mbentry->name);
-
-    /* otherwise fetch a new one! */
-    if (!state) {
-        if (global_conversations) {
-            conversations_abort(&global_conversations);
-            global_conversations = NULL;
-        }
-        // we never write anything in STATUS calls, so shared is fine
-        r = conversations_open_mbox(mbentry->name, 1/*shared*/, &state);
-        if (r) {
-            /* maybe the mailbox doesn't even have conversations - just ignore */
-            goto nonconv;
-        }
-        global_conversations = state;
-    }
-
-    r = conversation_getstatus(state,
-                               CONV_FOLDER_KEY_MBE(state, mbentry), &sd->xconv);
-    if (r) return r;
-
-nonconv:
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)
         return index_status(imapd_index, sd);
@@ -9770,9 +9716,6 @@ static void cmd_status(char *tag, char *name)
 
     if (statusitems & STATUS_MAILBOXID)
         client_behavior_mask |= CB_OBJECTID;
-
-    if (statusitems & (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ))
-        client_behavior_mask |= CB_XCONV;
 
     /* check permissions */
     if (!r) {
@@ -13980,7 +13923,6 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "highestmodseq", "size", "mailboxid",
                     "deleted", "deleted-storage", "",
-                    "xconvexists", "xconvunseen", "xconvmodseq",
                     "createdmodseq", "sharedseen", NULL
                 };
 

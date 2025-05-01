@@ -274,19 +274,6 @@ extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
                       struct searchargs *searchargs, int usinguid,
                       struct progress_rock *prock);
-extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
-                      struct searchargs *searchargs,
-                      const struct windowargs * windowargs);
-extern int index_convmultisort(struct index_state *state,
-                               struct sortcrit *sortcrit,
-                               struct searchargs *searchargs,
-                               const struct windowargs * windowargs);
-extern int index_snippets(struct index_state *state,
-                          const struct snippetargs *snippetargs,
-                          struct searchargs *searchargs);
-extern int index_convupdates(struct index_state *state, struct sortcrit *sortcrit,
-                      struct searchargs *searchargs,
-                      const struct windowargs * windowargs);
 extern int index_thread(struct index_state *state, int algorithm,
                         struct searchargs *searchargs, int usinguid,
                         struct progress_rock *prock);

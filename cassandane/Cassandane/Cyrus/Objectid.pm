@@ -108,9 +108,6 @@ sub test_emailid_threadid
 
     $talk->create('foo');
 
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
-
     my %exp;
 
     $self->{store}->set_fetch_attributes('uid', 'cid');

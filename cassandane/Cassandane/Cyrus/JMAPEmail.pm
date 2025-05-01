@@ -207,9 +207,6 @@ sub email_query_window_internal
 
     my $imaptalk = $self->{store}->get_client();
 
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
-
     xlog $self, "generating email A";
     $exp{A} = $self->make_message("Email A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
