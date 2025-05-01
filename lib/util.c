@@ -571,8 +571,13 @@ EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused
     return 0;
 }
 
-static int _copyfile_helper(const char *from, const char *to, int flags, int *dirfdp)
+EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
+                                  int flags, int *dirfdp)
 {
+    /* copy over self is an error */
+    if (!strcmp(from, to))
+        return -1;
+
     int srcfd = -1;
     int destfd = -1;
     int local_dirfd = -1;
@@ -603,7 +608,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
              * unlink tells us ENOENT then that's super weird and we're
              * probably racing against something
              */
-            if (unlink(to) == -1) {
+            if (unlinkat(*dirfdp, leaf, 0) == -1) {
                 xsyslog(LOG_ERR, "IOERROR: unlinking to recreate failed",
                                  "filename=<%s>", to);
                 errno = 0;
@@ -691,7 +696,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags, int *di
 sync:
     if (!nodirsync && local_dirfd >= 0) {
         if (fsync(local_dirfd) < 0) {
-           xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
+            xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
                              "filename=<%s>", to);
             r = -1;
             xunlink(to);  /* remove any rubbish we created */
@@ -706,32 +711,6 @@ done:
     if (srcfd != -1) close(srcfd);
     if (destfd != -1) close(destfd);
     if (local_dirfd != -1) close(local_dirfd);
-
-    return r;
-}
-
-EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
-                                  int flags, int *from_dirfdp,
-                                  int *to_dirfdp)
-{
-    int r;
-
-    /* copy over self is an error */
-    if (!strcmp(from, to))
-        return -1;
-
-    r = _copyfile_helper(from, to, flags, to_dirfdp);
-
-    /* try creating the target directory if requested */
-    if (r && (flags & COPYFILE_MKDIR)) {
-        r = cyrus_mkdir(to, 0755);
-        if (!r) r = _copyfile_helper(from, to, flags & ~COPYFILE_MKDIR, to_dirfdp);
-    }
-
-    if (!r && (flags & COPYFILE_RENAME)) {
-        /* remove the original file if the copy succeeded */
-        cyrus_unlink_fdptr(from, from_dirfdp);
-    }
 
     return r;
 }

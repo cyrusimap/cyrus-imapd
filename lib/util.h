@@ -241,14 +241,12 @@ extern int cyrus_mkdir(const char *path, mode_t mode);
 enum {
     COPYFILE_NOLINK = (1<<0),
     COPYFILE_MKDIR  = (1<<1),
-    COPYFILE_RENAME = (1<<2),
-    COPYFILE_KEEPTIME = (1<<3),
-    COPYFILE_NODIRSYNC = (1<<4)
+    COPYFILE_KEEPTIME = (1<<2),
+    COPYFILE_NODIRSYNC = (1<<3)
 };
 
-extern int cyrus_copyfile_fdptr(const char *from, const char *to, int flags,
-                                int *from_dirfdp, int *to_dirfdp);
-#define cyrus_copyfile(from, to, flags) cyrus_copyfile_fdptr(from, to, flags, NULL, NULL)
+extern int cyrus_copyfile_fdptr(const char *from, const char *to, int flags, int *dirfdp);
+#define cyrus_copyfile(from, to, flags) cyrus_copyfile_fdptr(from, to, flags, NULL)
 
 enum {
     BEFORE_SETUID,
