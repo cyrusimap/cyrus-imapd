@@ -460,7 +460,9 @@ EXPORTED int xrenameat(int dirfd, const char *src, const char *dest)
     return r;
 }
 
-static int xopendirpath(const char *path, int create)
+#define XOPENDIR_CREATE 1
+#define XOPENDIR_NOSYNC 2
+static int xopendirpath(const char *path, int flags)
 {
 #if defined(O_DIRECTORY)
     int dirfd = open(path, O_RDONLY|O_DIRECTORY, 0600);
@@ -468,9 +470,9 @@ static int xopendirpath(const char *path, int create)
     int dirfd = open(path, O_RDONLY, 0600);
 #endif
     if (dirfd >= 0) return dirfd; // exists, we're good
-    if (!create) return dirfd; // not creating? Bail
+    if (!(flags & XOPENDIR_CREATE)) return dirfd; // not creating? Bail
 
-    int parentfd = xopendir(path, create);
+    int parentfd = xopendir(path, flags);
     if (parentfd < 0) return parentfd; // failed, can't get further
 
     char *copy = xstrdup(path);
@@ -488,7 +490,7 @@ static int xopendirpath(const char *path, int create)
         }
         /* otherwise OK, directory already created */
     }
-    else {
+    else if (!(flags & XOPENDIR_NOSYNC)) {
         if (fsync(parentfd) < 0) {
             xsyslog(LOG_ERR, "IOERROR: fsync directory failed",
                              "filename=<%s>", path);
@@ -512,11 +514,11 @@ static int xopendirpath(const char *path, int create)
     return dirfd;
 }
 
-EXPORTED int xopendir(const char *dest, int create)
+EXPORTED int xopendir(const char *dest, int flags)
 {
     char *copy = xstrdup(dest);
     const char *dir = dirname(copy);
-    int dirfd = xopendirpath(dir, create);
+    int dirfd = xopendirpath(dir, flags);
     free(copy);
     return dirfd;
 }
@@ -534,7 +536,7 @@ EXPORTED int cyrus_settime_fdptr(const char *path, struct timespec *when, int *d
     int local_dirfd = -1;
     if (!dirfdp) dirfdp = &local_dirfd;
 
-    if (*dirfdp < 0) *dirfdp = xopendir(path, /*create*/0);
+    if (*dirfdp < 0) *dirfdp = xopendir(path, /*flags*/0);
     if (*dirfdp < 0) return *dirfdp;
 
     struct timespec ts[2];
@@ -556,7 +558,7 @@ EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
     int local_dirfd = -1;
     if (!dirfdp) dirfdp = &local_dirfd;
 
-    if (*dirfdp < 0) *dirfdp = xopendir(path, /*create*/0);
+    if (*dirfdp < 0) *dirfdp = xopendir(path, /*flags*/0);
     if (*dirfdp < 0) return *dirfdp;
 
     char *copy = xstrdup(path);
@@ -573,7 +575,7 @@ EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
 // destination directory before returning
 EXPORTED int cyrus_rename(const char *src, const char *dest)
 {
-    int dirfd = xopendir(dest, /*create*/1);
+    int dirfd = xopendir(dest, XOPENDIR_CREATE);
     if (dirfd < 0) {
         return dirfd;
     }
@@ -587,10 +589,16 @@ EXPORTED int cyrus_rename(const char *src, const char *dest)
 
 /* Create all parent directories for the given path,
  * up to but not including the basename.
+ * NOTE: this used to just call:
+ *  mkdir ("/foo");
+ *  mkdir ("/foo/bar");
+ *   etc; all the way up to basename
+ *  Since it's used a lot for paths we don't care about, this API just uses _NOSYNC.
+ *  If you want sync, then call xopendir directly.
  */
 EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    int fd = xopendir(pathname, /*create*/1);
+    int fd = xopendir(pathname, XOPENDIR_CREATE|XOPENDIR_NOSYNC);
     if (fd < 0) return -1;
     close(fd);
     return 0;
@@ -618,7 +626,7 @@ EXPORTED int cyrus_copyfile_fdptr(const char *from, const char *to,
     const char *leaf = basename(copy);
 
     if (!dirfdp) dirfdp = &local_dirfd;
-    if (*dirfdp < 0) *dirfdp = xopendir(to, flags & COPYFILE_MKDIR);
+    if (*dirfdp < 0) *dirfdp = xopendir(to, flags & COPYFILE_MKDIR ? XOPENDIR_CREATE : 0);
     if (*dirfdp < 0) {
         r = -1;
         goto done;
