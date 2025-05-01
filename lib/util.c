@@ -529,6 +529,28 @@ EXPORTED void xclosedir(int dirfd)
     errno = saved_errno;
 }
 
+EXPORTED int cyrus_settime_fdptr(const char *path, struct timespec *when, int *dirfdp)
+{
+    int local_dirfd = -1;
+    if (!dirfdp) dirfdp = &local_dirfd;
+
+    if (*dirfdp < 0) *dirfdp = xopendir(path, /*create*/0);
+    if (*dirfdp < 0) return *dirfdp;
+
+    struct timespec ts[2];
+    ts[0] = *when;
+    ts[1] = *when;
+
+    char *copy = xstrdup(path);
+    const char *leaf = basename(copy);
+    int r = utimensat(*dirfdp, leaf, ts, 0);
+    free(copy);
+
+    if (local_dirfd >= 0) xclosedir(local_dirfd);
+
+    return r;
+}
+
 EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
 {
     int local_dirfd = -1;
