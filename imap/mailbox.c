@@ -57,7 +57,6 @@
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <utime.h>
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -4663,7 +4662,6 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                                 struct index_record *record)
 {
     int r;
-    struct utimbuf settime;
     uint32_t changeflags = CHANGE_ISAPPEND;
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -4760,10 +4758,16 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        settime.actime = settime.modtime = record->internaldate;
-        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
-            if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
+        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED))) { // mabe there is no file in directory.
+            const char *fname = mailbox_record_fname(mailbox, record);
+            int *fdptr = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+                       ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+            struct timespec ts;
+            ts.tv_sec = record->internaldate;
+            ts.tv_nsec = 0;
+            if (cyrus_settime_fdptr(fname, &ts, fdptr) < 0)
                 return IMAP_IOERROR;
+        }
 
         /* write the cache record before buffering the message, it
          * will set the cache_offset field. */
