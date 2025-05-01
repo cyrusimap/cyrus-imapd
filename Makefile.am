@@ -68,6 +68,14 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
+if ENABLE_RELEASE_CHECKS
+    CFG2HDR_FORBID_UNRELEASED=--forbid-unreleased
+    SPHINX_FAIL_ON_WARNINGS=-W --keep-going
+else
+    CFG2HDR_FORBID_UNRELEASED=
+    SPHINX_FAIL_ON_WARNINGS=
+endif
+
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
@@ -1588,12 +1596,6 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 
 lib/imapopts.h: lib/imapopts.c
 
-if ENABLE_RELEASE_CHECKS
-    CFG2HDR_FORBID_UNRELEASED="--forbid-unreleased"
-else
-    CFG2HDR_FORBID_UNRELEASED=
-endif
-
 lib/imapopts.c: lib/imapoptions tools/config2header
 	$(AM_V_GEN)$(top_srcdir)/tools/config2header \
 	    CC="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
@@ -1921,7 +1923,7 @@ clean-sphinx-cache:
 
 if HAVE_SPHINX_BUILD
 
-SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q
+SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS)
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
