@@ -57,7 +57,6 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <dirent.h>
-#include <utime.h>
 #include <limits.h>
 
 #include "assert.h"
