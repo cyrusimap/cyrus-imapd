@@ -537,7 +537,10 @@ EXPORTED int cyrus_unlink_fdptr(const char *path, int *dirfdp)
     if (*dirfdp < 0) *dirfdp = xopendir(path, /*create*/0);
     if (*dirfdp < 0) return *dirfdp;
 
-    int r = xunlinkat(*dirfdp, path, /*flags*/0);
+    char *copy = xstrdup(path);
+    const char *leaf = basename(copy);
+    int r = xunlinkat(*dirfdp, leaf, /*flags*/0);
+    free(copy);
 
     if (local_dirfd >= 0) xclosedir(local_dirfd);
 
