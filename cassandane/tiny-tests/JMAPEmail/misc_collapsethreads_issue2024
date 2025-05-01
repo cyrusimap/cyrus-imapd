@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_misc_collapsethreads_issue2024
-    :min_version_3_1 :needs_component_sieve
+    :min_version_3_1 :needs_component_sieve :Conversations
 {
     my ($self) = @_;
     my %exp;
@@ -13,9 +13,6 @@ sub test_misc_collapsethreads_issue2024
 
     # test that the collapseThreads property is echoed back verbatim
     # see https://github.com/cyrusimap/cyrus-imapd/issues/2024
-
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
     xlog $self, "generating email A";
     $exp{A} = $self->make_message("Email A");

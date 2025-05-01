@@ -2,17 +2,12 @@
 use Cassandane::Tiny;
 
 sub test_email_query_long
-    :min_version_3_1 :needs_component_sieve
+    :min_version_3_1 :needs_component_sieve :Conversations
 {
     my ($self) = @_;
     my %exp;
     my $jmap = $self->{jmap};
     my $res;
-
-    my $imaptalk = $self->{store}->get_client();
-
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
     for (1..100) {
         $self->make_message("Email $_");

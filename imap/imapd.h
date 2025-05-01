@@ -106,7 +106,6 @@ struct fetchargs {
     strarray_t attribs;
     int isadmin;
     struct auth_state *authstate;
-    hash_table *cidhash;          /* for XCONVFETCH */
     struct conversations_state *convstate; /* for FETCH_MAILBOXIDS */
 
     range_t partial;              /* For PARTIAL */
@@ -242,7 +241,7 @@ struct searchargs {
     uint64_t maxargssize_mark;
     unsigned did_objectid : 1;
 
-    /* For ESEARCH & XCONVMULTISORT */
+    /* For ESEARCH */
     const char *tag;
     int returnopts;
     struct namespace *namespace;
@@ -269,50 +268,6 @@ struct searchargs {
     } partial;
 };
 
-/* Windowing arguments for the XCONVSORT command */
-struct windowargs {
-    int conversations;          /* whether to limit the results by
-                                   conversation id */
-    uint32_t limit;             /* limit on how many messages to return,
-                                 * 0 means unlimited. */
-    uint32_t position;          /* 1-based index into results of first
-                                 * message to return.  0 means not
-                                 * specified which is the same as 1.
-                                 * Mutually exclusive with @anchor */
-    uint32_t anchor;            /* UID of a message used to locate the
-                                 * start of the window; 0 means not
-                                 * specified.  If the anchor is found,
-                                 * the first message reported will be
-                                 * the largest of 1 and the anchor minus
-                                 * @offset.  If specified but not found,
-                                 * an error will be returned.  Mutually
-                                 * exclusive with @position.*/
-    char *anchorfolder;         /* internal mboxname of a folder to
-                                 * which the anchor applies; only used
-                                 * for XCONVMULTISORT. */
-    uint32_t offset;
-    int changedsince;           /* if 1, show messages a) added since @uidnext,
-                                 * b) removed since @modseq, or c) modified
-                                 * since @modseq */
-    modseq_t modseq;
-    uint32_t uidnext;
-    uint32_t upto;              /* UID of a message used to terminate an
-                                 * XCONVUPDATES early, 0 means not
-                                 * specified.  */
-};
-
-struct snippetargs
-{
-    struct snippetargs *next;
-    char *mboxname;             /* internal */
-    uint32_t uidvalidity;
-    struct {
-        uint32_t *data;
-        int count;
-        int alloc;
-    } uids;
-};
-
 /* Bitmask for status queries (RFC 3501) */
 enum {
     STATUS_MESSAGES =           (1<<0),
@@ -327,15 +282,11 @@ enum {
     STATUS_DELETED_STORAGE =    (1<<9),  /* RFC 9208 */
 
     /* Non-standard */
-    STATUS_XCONVEXISTS =        (1<<11),
-    STATUS_XCONVUNSEEN =        (1<<12),
-    STATUS_XCONVMODSEQ =        (1<<13),
     STATUS_CREATEDMODSEQ =      (1<<14),
     STATUS_MBOPTIONS =          (1<<15)
     /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 
-#define STATUS_CONVITEMS (STATUS_XCONVEXISTS|STATUS_XCONVUNSEEN|STATUS_XCONVMODSEQ)
 #define STATUS_MBENTRYITEMS (STATUS_MAILBOXID|STATUS_UIDVALIDITY)
 #define STATUS_INDEXITEMS (STATUS_MESSAGES|STATUS_UIDNEXT|STATUS_SIZE|STATUS_HIGHESTMODSEQ|STATUS_CREATEDMODSEQ|STATUS_MBOPTIONS|STATUS_DELETED|STATUS_DELETED_STORAGE)
 #define STATUS_SEENITEMS (STATUS_RECENT|STATUS_UNSEEN)
@@ -474,9 +425,8 @@ enum {
     CB_UTF8ACCEPT  =  (1<<19),  /* ENABLE UTF8=ACCEPT                    */
 
     /* non-standard - track for possible deprecation                     */
-    CB_ANNOTATE    =  (1<<29),  /* GET/SETANNOTATION or FETCH ANNOTATION */
-    CB_XCONV       =  (1<<30),  /* STATUS XCONV*                         */
-    CB_XLIST       =  (1U<<31),  /* XLIST                                */
+    CB_ANNOTATE    =  (1<<30),  /* GET/SETANNOTATION or FETCH ANNOTATION */
+    CB_XLIST       =  (1U<<31), /* XLIST                                 */
 };
 
 #endif /* INCLUDED_IMAPD_H */
