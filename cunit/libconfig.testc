@@ -828,6 +828,19 @@ static void test_magic_configdirectory_default(void)
     CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/socket/idle");
 }
 
+static void test_configdirectory_missing(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(
+        /* configdirectory not specified */
+        "annotation_db: twoskip\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "configdirectory option not specified in configuration file"
+    );
+}
+
 static void test_deprecated_int(void)
 {
     /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
