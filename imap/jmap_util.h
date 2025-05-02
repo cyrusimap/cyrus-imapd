@@ -214,8 +214,11 @@ extern void jmap_set_emailid(int cstate_version,
 extern void jmap_set_mailboxid(int cstate_version,
                                const mbentry_t *mbentry, char *mboxid);
 
+#define JMAP_LEGACY_THREADID_PREFIX 'T'
+#define JMAP_THREADID_PREFIX 'A'
 #define JMAP_THREADID_SIZE 18
-extern void jmap_set_threadid(conversation_id_t cid, char *buf);
+extern void jmap_set_threadid(int cstate_version,
+                              conversation_id_t cid, char *thrid);
 
 #ifdef HAVE_ICAL
 struct jmap_caleventid {

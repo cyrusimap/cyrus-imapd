@@ -959,7 +959,7 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     }
 }
 
-static const char *threadid(bit64 cid)
+static const char *threadid(int cstate_version, bit64 cid)
 {
     static char id[JMAP_THREADID_SIZE];
 
@@ -967,7 +967,7 @@ static const char *threadid(bit64 cid)
         strlcpy(id, "NIL", JMAP_THREADID_SIZE);
     }
     else {
-        jmap_set_threadid(cid, id);
+        jmap_set_threadid(cstate_version, cid, id);
     }
 
     return id;
@@ -984,7 +984,7 @@ static json_t *jmap_email(int cstate_version,
 
     return json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
                      "id", emailid,
-                     "threadId", threadid(cid),
+                     "threadId", threadid(cstate_version, cid),
                      "sentAt", jmap_header_as_date(body->date),
                      "subject", jmap_header_as_text(body->subject),
                      "from",
@@ -1063,8 +1063,11 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message CID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_CID)) {
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
-                          xstrdup(conversation_id_encode(record->cid)));
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
+                              xstrdup(conversation_id_encode(cstate->version, record->cid)));
+        }
     }
 
     /* add message EMAILID */
@@ -1080,8 +1083,11 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
     /* add message THREADID */
     if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
-                          xstrdup(threadid(record->cid)));
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
+                              xstrdup(threadid(cstate->version, record->cid)));
+        }
     }
 
     /* add vnd.fastmail.jmapEmail */
@@ -1254,8 +1260,11 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
-                          xstrdup(conversation_id_encode(cid)));
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
+                              xstrdup(conversation_id_encode(cstate->version, cid)));
+        }
     }
 
     /* add message EMAILID */
@@ -1285,7 +1294,11 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
             return;
         }
-        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid(cid)));
+        if (!cstate) cstate = mailbox_get_cstate(mailbox);
+        if (cstate) {
+            FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
+                              xstrdup(threadid(cstate->version, cid)));
+        }
     }
 
     /* add vnd.fastmail.jmapEmail */
