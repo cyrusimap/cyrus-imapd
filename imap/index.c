@@ -3578,6 +3578,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
+    struct conversations_state *cstate = NULL;
     int fetchitems = fetchargs->fetchitems;
     struct buf buf = BUF_INITIALIZER;
     struct octetinfo *oi = NULL;
@@ -3737,7 +3738,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+        if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
         if (!cstate) {
             xsyslog(LOG_ERR, "could not read conversations state",
                     "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
@@ -3778,9 +3779,16 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             threadid[3] = '\0';
         }
         else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(record.cid), 16);
-            threadid[17] = '\0';
+            if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
+            if (!cstate) {
+                xsyslog(LOG_ERR, "could not read conversations state",
+                        "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+            }
+            else {
+                snprintf(threadid, sizeof(threadid), "%c%s",
+                         cstate->version < 2 ? 'T' : 'A', 
+                         conversation_id_encode(cstate->version, record.cid));
+            }
         }
 
         prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
