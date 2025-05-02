@@ -2828,12 +2828,10 @@ static void chdir_cores(void)
 {
     /* Set the current working directory where cores can go to die. */
     const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
-    /* XXX configdirectory is required, so it should never be NULL... */
-    if (path == NULL) {
-        path = getenv("TMPDIR");
-        if (path == NULL)
-            path = "/tmp";
-    }
+
+    /* configdirectory is required, so it should never be NULL... */
+    assert(path != NULL);
+
     if (chdir(path))
         fatalf(2, "couldn't chdir to %s: %m", path);
     chdir("cores");
