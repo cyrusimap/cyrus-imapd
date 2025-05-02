@@ -667,15 +667,21 @@ sub test_upgrade_v19_to_v20
     xlog $self, "Fetching EMAILIDs";
     $talk = $self->{master_store}->get_client();
     $talk->examine('INBOX');
-    my $res = $talk->fetch('1:*', '(UID EMAILID)');
+    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
     my $id1 = $res->{1}{emailid}[0];
     my $id2 = $res->{2}{emailid}[0];
     my $id3 = $res->{3}{emailid}[0];
     my $id4 = $res->{4}{emailid}[0];
+    my $thrid1 = $res->{1}{threadid}[0];
+    my $thrid2 = $res->{2}{threadid}[0];
     $self->assert_matches(qr/^M/, $id1);
     $self->assert_matches(qr/^M/, $id2);
     $self->assert_matches(qr/^M/, $id3);
     $self->assert_matches(qr/^M/, $id4);
+    $self->assert_matches(qr/^T/, $thrid1);
+    $self->assert_matches(qr/^T/, $thrid2);
+    $self->assert_equals($thrid1, $res->{3}{threadid}[0]);
+    $self->assert_equals($thrid1, $res->{4}{threadid}[0]);
 
     xlog $self, "Fetching MAILBOXIDs";
     $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
@@ -721,15 +727,21 @@ sub test_upgrade_v19_to_v20
     xlog $self, "Fetching EMAILIDs";
     $talk = $self->{master_store}->get_client();
     $talk->examine('INBOX');
-    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
     $id1 = $res->{1}{emailid}[0];
     $id2 = $res->{2}{emailid}[0];
     $id3 = $res->{3}{emailid}[0];
     $id4 = $res->{4}{emailid}[0];
+    $thrid1 = $res->{1}{threadid}[0];
+    $thrid2 = $res->{2}{threadid}[0];
     $self->assert_matches(qr/^S/, $id1);
     $self->assert_matches(qr/^S/, $id2);
     $self->assert_matches(qr/^S/, $id3);
     $self->assert_matches(qr/^S/, $id4);
+    $self->assert_matches(qr/^A/, $thrid1);
+    $self->assert_matches(qr/^A/, $thrid2);
+    $self->assert_equals($thrid1, $res->{3}{threadid}[0]);
+    $self->assert_equals($thrid1, $res->{4}{threadid}[0]);
 
     $talk->examine('INBOX.foo');
     $res = $talk->fetch('1:*', '(UID EMAILID)');
@@ -747,11 +759,13 @@ sub test_upgrade_v19_to_v20
     # since they are the encoded nanoseconds since epoch
     $talk = $self->{replica_store}->get_client();
     $talk->examine('INBOX');
-    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
     $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
     $self->assert_str_equals($id2, $res->{2}{emailid}[0]);
     $self->assert_str_equals($id3, $res->{3}{emailid}[0]);
     $self->assert_str_equals($id4, $res->{4}{emailid}[0]);
+    $self->assert_str_equals($thrid1, $res->{1}{threadid}[0]);
+    $self->assert_str_equals($thrid2, $res->{2}{threadid}[0]);
 
     $talk->examine('INBOX.foo');
     $res = $talk->fetch('1:*', '(UID EMAILID)');
