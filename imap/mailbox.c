@@ -2280,6 +2280,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
     /* audit logging */
     if (config_auditlog) {
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         char flagstr[FLAGMAPSTR_MAXLEN];
         flags_to_str(record, flagstr);
         if (change->flags & CHANGE_ISAPPEND)
@@ -2289,7 +2290,8 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    "sysflags=<%s> guid=<%s> cid=<%s> messageid=%s size=<" UINT64_FMT">",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
-                   message_guid_encode(&record->guid), conversation_id_encode(record->cid),
+                   message_guid_encode(&record->guid),
+                   conversation_id_encode(cstate ? cstate->version : 2, record->cid),
                    change->msgid, record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
@@ -2298,7 +2300,8 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    "sysflags=<%s> guid=<%s> cid=<%s> size=<" UINT64_FMT ">",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
-                   message_guid_encode(&record->guid), conversation_id_encode(record->cid),
+                   message_guid_encode(&record->guid),
+                   conversation_id_encode(cstate ? cstate->version : 2, record->cid),
                    record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
@@ -4790,6 +4793,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     if (config_auditlog) {
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         char oldflags[FLAGMAPSTR_MAXLEN], sysflags[FLAGMAPSTR_MAXLEN];
         flags_to_str(&oldrecord, oldflags);
         flags_to_str(record, sysflags);
@@ -4798,8 +4802,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
                session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                record->uid, message_guid_encode(&record->guid),
-               conversation_id_encode(record->cid), record->modseq,
-               oldflags, sysflags);
+               conversation_id_encode(cstate ? cstate->version : 2, record->cid),
+               record->modseq, oldflags, sysflags);
     }
 
     /* expunged tracking */
@@ -5912,13 +5916,15 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
         if (config_auditlog) {
+            struct conversations_state *cstate = mailbox_get_cstate(mailbox);
             char flagstr[FLAGMAPSTR_MAXLEN];
             flags_to_str(&copyrecord, flagstr);
             syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> "
                    "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
                    action, session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
-                   conversation_id_encode(copyrecord.cid), flagstr);
+                   conversation_id_encode(cstate ? cstate->version : 2, copyrecord.cid),
+                   flagstr);
         }
     }
 
