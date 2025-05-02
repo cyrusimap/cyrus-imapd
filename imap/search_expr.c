@@ -1964,7 +1964,7 @@ static int search_uint64_unserialise(struct protstream *prot, union search_value
 
 static void search_cid_serialise(struct buf *b, const union search_value *v)
 {
-    buf_appendcstr(b, conversation_id_encode(v->u));
+    buf_appendcstr(b, conversation_id_encode(0/*hex encoding*/, v->u));
 }
 
 static int search_cid_unserialise(struct protstream *prot, union search_value *v)
@@ -2072,23 +2072,6 @@ static int search_emailid_match(message_t *m, const union search_value *v,
     emailid[25] = '\0';
 
     return !strcmp(v->s, emailid);
-}
-
-static int search_threadid_match(message_t *m, const union search_value *v,
-                                 void *internalised __attribute__((unused)),
-                                 void *data1 __attribute__((unused)))
-{
-    conversation_id_t cid = 0;
-    char threadid[18];
-
-    int r = message_get_cid(m, &cid);
-    if (r) return 0;
-
-    threadid[0] = 'T';
-    memcpy(threadid+1, conversation_id_encode(cid), 16);
-    threadid[17] = '\0';
-
-    return !strcmp(v->s, threadid);
 }
 
 static int search_annotation_match(message_t *m, const union search_value *v,
@@ -3001,22 +2984,6 @@ EXPORTED void search_attr_init(void)
             /*internalise*/NULL,
             /*cmp*/ NULL,
             search_emailid_match,
-            search_string_serialise,
-            search_string_unserialise,
-            /*get_countability*/NULL,
-            search_string_duplicate,
-            search_string_free,
-            /*freeattr*/NULL,
-            /*dupattr*/NULL,
-            (void *)NULL
-        },{
-            "threadid",
-            /* flags */0,
-            SEARCH_PART_NONE,
-            SEARCH_COST_INDEX,
-            /*internalise*/NULL,
-            /*cmp*/ NULL,
-            search_threadid_match,
             search_string_serialise,
             search_string_unserialise,
             /*get_countability*/NULL,

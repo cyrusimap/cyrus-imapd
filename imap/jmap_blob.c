@@ -852,7 +852,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
                 case DATATYPE_THREAD: {
                     char threadid[JMAP_THREADID_SIZE];
-                    jmap_set_threadid(cid, threadid);
+                    jmap_set_threadid(req->cstate->version, cid, threadid);
                     strarray_add(ids, threadid);
                     break;
                     }

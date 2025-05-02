@@ -3065,23 +3065,33 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 }
 
 /* NOTE: this makes an "ATOM" return */
-EXPORTED const char *conversation_id_encode(conversation_id_t cid)
+EXPORTED const char *conversation_id_encode(int cstate_version,
+                                            conversation_id_t cid)
 {
-    static char text[2*sizeof(cid)+1];
+    static struct buf buf = BUF_INITIALIZER;
 
-    if (cid != NULLCONVERSATION) {
-        snprintf(text, sizeof(text), CONV_FMT, cid);
+    buf_reset(&buf);
+
+    if (cid == NULLCONVERSATION) {
+        buf_setcstr(&buf, "NIL");
+    } else if (cstate_version >= 2) {
+        uint64_t u64 = htonll(cid);
+        charset_encode(&buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
     } else {
-        strncpy(text, "NIL", sizeof(text));
+        buf_printf(&buf, CONV_FMT, cid);
     }
 
-    return text;
+    return buf_cstring(&buf);
 }
 
 EXPORTED int conversation_id_decode(conversation_id_t *cid, const char *text)
 {
     if (!strcmp(text, "NIL")) {
         *cid = NULLCONVERSATION;
+    } else if (strlen(text) == 11) {
+        static struct buf buf = BUF_INITIALIZER;
+        charset_decode(&buf, text, 11, ENCODING_BASE64JMAPID);
+        *cid = ntohll(*((uint64_t *) buf_base(&buf)));
     } else {
         if (strlen(text) != 16) return 0;
         *cid = strtoull(text, 0, 16);

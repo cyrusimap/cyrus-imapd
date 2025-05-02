@@ -1127,7 +1127,7 @@ static const char *_guid_from_id(struct conversations_state *cstate,
 static conversation_id_t _cid_from_id(const char *thrid)
 {
     conversation_id_t cid = 0;
-    if (thrid[0] == 'T')
+    if (thrid[0] == 'T' || thrid[0] == 'A')
         conversation_id_decode(&cid, thrid+1);
     return cid;
 }
@@ -4869,7 +4869,7 @@ static void emailquery_buildresult(struct emailquery *q,
         /* Set thread id by email id */
         if (q->findallinthread) {
             char threadid[JMAP_THREADID_SIZE];
-            jmap_set_threadid(match->cid, threadid);
+            jmap_set_threadid(q->cstate_version, match->cid, threadid);
             if (!json_object_get(q->thread_emailids, threadid)) {
                 /* First time we see this thread in the result */
                 json_t *emailids = json_array();
@@ -5792,7 +5792,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             continue;
 
         /* Report thread */
-        jmap_set_threadid(md->cid, thread_id);
+        jmap_set_threadid(req->cstate->version, md->cid, thread_id);
         if (conv.exists) {
             if (conv.createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
@@ -7432,7 +7432,7 @@ static int _email_get_meta(jmap_req_t *req,
         r = msgrecord_get_cid(msg->mr, &cid);
         if (r) goto done;
         char thread_id[JMAP_THREADID_SIZE];
-        jmap_set_threadid(cid, thread_id);
+        jmap_set_threadid(req->cstate->version, cid, thread_id);
         json_object_set_new(email, "threadId", json_string(thread_id));
     }
 
@@ -8452,7 +8452,7 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
         int r = _email_get_cid(req, id, &cid);
         if (!r && cid) {
             char thread_id[JMAP_THREADID_SIZE];
-            jmap_set_threadid(cid, thread_id);
+            jmap_set_threadid(req->cstate->version, cid, thread_id);
             json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thread_id);
             json_array_append_new(get->list, msg);
         }
@@ -9355,7 +9355,7 @@ static void _email_append(jmap_req_t *req,
     bit64 cid;
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
-    jmap_set_threadid(cid, detail->thread_id);
+    jmap_set_threadid(req->cstate->version, cid, detail->thread_id);
 
     /* Complete message creation */
     if (stage) {
@@ -14514,7 +14514,7 @@ static void _email_copy_bulk(jmap_req_t *req,
                                                              update->email_id),
                                                _email_exists_cb, &data);
 
-                    jmap_set_threadid(data.cid, thread_id);
+                    jmap_set_threadid(req->cstate->version, data.cid, thread_id);
                     jmap_set_blobid(&update->guid, blob_id);
 
                     json_object_set_new(copy->created, update->creation_id,
