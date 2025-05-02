@@ -1336,11 +1336,14 @@ EXPORTED void jmap_set_mailboxid(int cstate_version,
             JMAP_MAX_MAILBOXID_SIZE);
 }
 
-EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
+EXPORTED void jmap_set_threadid(int cstate_version,
+                                conversation_id_t cid, char *thrid)
 {
-    buf[0] = 'T';
-    memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
-    buf[JMAP_THREADID_SIZE-1] = 0;
+    char prefix =
+        cstate_version < 2 ? JMAP_LEGACY_THREADID_PREFIX : JMAP_THREADID_PREFIX;
+
+    snprintf(thrid, JMAP_THREADID_SIZE, "%c%s",
+             prefix, conversation_id_encode(cstate_version, cid));
 }
 
 EXPORTED char *jmap_role_to_specialuse(const char *role)
