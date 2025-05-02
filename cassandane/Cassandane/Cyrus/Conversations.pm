@@ -248,8 +248,8 @@ sub test_move_200
     my $threadid1 = $res->{1}{threadid}[0];
     my $emailid2 = $res->{2}{emailid}[0];
     my $threadid2 = $res->{2}{threadid}[0];
-    $self->assert_str_equals($threadid1, 'T' . $exp{A}->make_cid());
-    $self->assert_str_equals($threadid2, 'T' . $exp{B}->make_cid());
+    $self->assert_str_equals($threadid1, $exp{A}->make_thrid());
+    $self->assert_str_equals($threadid2, $exp{B}->make_thrid());
 
     # XXX probably should split the jmap stuff below into a separate
     # XXX test, so we can just mark it :needs_component_jmap instead

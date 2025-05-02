@@ -385,7 +385,8 @@ extern int conversations_undump(struct conversations_state *, FILE *);
 
 extern int conversations_truncate(struct conversations_state *);
 
-extern const char *conversation_id_encode(conversation_id_t cid);
+extern const char *conversation_id_encode(int cstate_version,
+                                          conversation_id_t cid);
 extern int conversation_id_decode(conversation_id_t *cid, const char *text);
 
 
