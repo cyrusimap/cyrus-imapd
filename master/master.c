@@ -2824,6 +2824,23 @@ static void check_undermanned(struct service *s, int si, int wdi)
     }
 }
 
+static void chdir_cores(void)
+{
+    /* Set the current working directory where cores can go to die. */
+    const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
+    /* XXX configdirectory is required, so it should never be NULL... */
+    if (path == NULL) {
+        path = getenv("TMPDIR");
+        if (path == NULL)
+            path = "/tmp";
+    }
+    if (chdir(path))
+        fatalf(2, "couldn't chdir to %s: %m", path);
+    chdir("cores");
+    /* XXX ignoring error when "cores" subdirectory missing */
+    errno = 0;
+}
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
@@ -2958,17 +2975,6 @@ int main(int argc, char **argv)
             exit(EX_OSERR);
         }
 
-        /* Set the current working directory where cores can go to die. */
-        const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
-        if (path == NULL) {
-                path = getenv("TMPDIR");
-                if (path == NULL)
-                        path = "/tmp";
-        }
-        if (chdir(path))
-            fatalf(2, "couldn't chdir to %s: %m", path);
-        r = chdir("cores");
-
         do {
             pid = fork();
 
@@ -3098,6 +3104,7 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+    if (daemon_mode) chdir_cores();
 #endif
 
     masterconf_getsection("START", &add_start, NULL);
@@ -3123,6 +3130,7 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+    if (daemon_mode) chdir_cores();
 #endif
 
     /* init ctable janitor */
