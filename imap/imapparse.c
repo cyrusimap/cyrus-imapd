@@ -1419,10 +1419,20 @@ static int get_search_criterion(struct protstream *pin,
             string_match(parent, arg.s, criteria.s, base);
         }
         else if (!strcmp(criteria.s, "threadid")) {   /* RFC 8474 */
+            conversation_id_t cid;
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
-            bytestring_match(parent, arg.s, criteria.s, base);
+            if ((arg.s[0] != 'A' && arg.s[0] != 'T') ||
+                !conversation_id_decode(&cid, arg.s+1)) {
+                prot_printf(pout, "%s BAD Invalid threadid in Search command\r\n",
+                            base->tag);
+                if (c != EOF) prot_ungetc(c, pin);
+                return EOF;
+            }
+            e = search_expr_new(parent, SEOP_MATCH);
+            e->attr = search_attr_find("cid");
+            e->value.u = cid;
 
             base->did_objectid = 1;
         }

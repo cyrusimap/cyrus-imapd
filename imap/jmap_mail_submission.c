@@ -792,7 +792,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
 
-    jmap_set_threadid(cid, thread_id);
+    jmap_set_threadid(req->cstate->version, cid, thread_id);
     json_object_set_new(emailsubmission, "threadId", json_string(thread_id));
 
     /* Close the message record and mailbox. There's a race
