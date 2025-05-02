@@ -2975,10 +2975,10 @@ int main(int argc, char **argv)
         for (fd = 0; fd < 3; fd++) {
             const char *file = (error_log && fd > 0 ?
                                 error_log : "/dev/null");
-            int mode = (fd > 0 ? O_WRONLY : O_RDWR) |
-                       (error_log && fd > 0 ? O_CREAT|O_APPEND : 0);
+            int flags = (fd > 0 ? O_WRONLY : O_RDWR)
+                        | (error_log && fd > 0 ? O_CREAT|O_APPEND|O_NOFOLLOW : 0);
             close(fd);
-            if (open(file, mode, 0666) != fd)
+            if (open(file, flags, 0666) != fd)
                 fatalf(2, "couldn't open %s: %m", file);
         }
     }
@@ -3007,7 +3007,7 @@ int main(int argc, char **argv)
 
         pidfile_lock = strconcat(pidfile, lock_suffix, (char *)NULL);
 
-        pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR|O_NOFOLLOW, 0644);
         if (pidlock_fd == -1) {
             syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
             exit(EX_OSERR);
@@ -3082,7 +3082,7 @@ int main(int argc, char **argv)
     }
 
     /* Write out the pidfile */
-    pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
+    pidfd = open(pidfile, O_CREAT|O_RDWR|O_NOFOLLOW, 0644);
     if (pidfd == -1) {
         int exit_result = EX_OSERR;
 
