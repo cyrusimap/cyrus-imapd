@@ -59,11 +59,7 @@ extern void config_read_string(const char *s);
  * which makes it rather hard to see why an assertion failed.  So we
  * replace the macros with improved ones, keeping the same API.
  */
-/* XXX Would like to add __attribute__((format(printf, 6, 7)))
- * XXX to this so the compiler can warn if it's misused, but it looks
- * XXX like it currently gets very confused by the layers of macros
- * XXX and produces bogus warnings. :(
- */
+__attribute__((format(printf, 6, 7)))
 extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue,
                                              unsigned int uiLine,
                                              const char strFile[],
@@ -186,7 +182,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_FALSE,                                         \
         "CU_ASSERT_STRING_EQUAL(%s=\"%s\",%s=\"%s\")",                  \
-        #actual, _a, #expected, _e);                                    \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
 #undef CU_ASSERT_STRING_EQUAL_FATAL
@@ -195,7 +192,8 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
     CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
         __FILE__, "", CU_TRUE,                                          \
         "CU_ASSERT_STRING_EQUAL_FATAL(%s=\"%s\",%s=\"%s\")",            \
-        #actual, _a, #expected, _e);                                    \
+        #actual, _a ? _a : "(null)",                                    \
+        #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
 #undef CU_ASSERT_STRING_NOT_EQUAL

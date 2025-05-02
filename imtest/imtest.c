@@ -1554,7 +1554,11 @@ static void print_command(const char *cmd, const char *arg)
     static struct buf buf = BUF_INITIALIZER;
 
     buf_reset(&buf);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* Format string comes from struct protocol_t protocols[] */
     buf_printf(&buf, cmd, arg);
+#pragma GCC diagnostic pop
     buf_replace_all(&buf, "\r\n", "\r\nC: ");
 
     printf("C: %s", buf_cstring(&buf));
@@ -1584,7 +1588,11 @@ static struct buf *ask_capability(struct protocol_t *prot,
         print_command(prot->capa_cmd.cmd, servername);
         printf("\r\n");
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+        /* Format string comes from struct protocol_t protocols[] */
         prot_printf(pout, prot->capa_cmd.cmd, servername);
+#pragma GCC diagnostic pop
         prot_puts(pout, "\r\n");
         prot_flush(pout);
     }
@@ -3229,7 +3237,11 @@ int main(int argc, char **argv)
             print_command(protocol->tls_cmd.cmd, servername);
             printf("\r\n");
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* Format string comes from struct protocol_t protocols[] */
             prot_printf(pout, protocol->tls_cmd.cmd, servername);
+#pragma GCC diagnostic pop
             prot_puts(pout, "\r\n");
             prot_flush(pout);
 

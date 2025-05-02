@@ -121,8 +121,12 @@ const char *icaltime_as_iso_string(const struct icaltimetype tt)
     else if (icaltime_is_utc(tt)) fmt = "%04d-%02d-%02dT%02d:%02d:%02dZ";
     else fmt = "%04d-%02d-%02dT%02d:%02d:%02d";
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string decided above */
     snprintf(str, sizeof(str), fmt, tt.year, tt.month, tt.day,
              tt.hour, tt.minute, tt.second);
+#pragma GCC diagnostic pop
 
     return str;
 }
@@ -150,7 +154,11 @@ const char *icalvalue_utcoffset_as_iso_string(const icalvalue* value)
     if (s > 0) fmt = "%c%02d:%02d:%02d";
     else fmt = "%c%02d:%02d";
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+    /* format string decided above */
     snprintf(str, sizeof(str), fmt, sign, abs(h), abs(m), abs(s));
+#pragma GCC diagnostic pop
 
     return str;
 }

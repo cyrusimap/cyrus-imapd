@@ -2674,13 +2674,23 @@ static void comma_list_body(struct buf *buf,
     for (i = 0; vals[i]; i++) {
         if (flags & (1 << i)) {
             buf_appendcstr(buf, sep);
-            if (has_args) buf_vprintf(buf, vals[i], args);
-            else buf_appendcstr(buf, vals[i]);
+            if (has_args) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+                buf_vprintf(buf, vals[i], args);
+#pragma GCC diagnostic pop
+            }
+            else {
+                buf_appendcstr(buf, vals[i]);
+            }
             sep = ", ";
         }
         else if (has_args) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
             /* discard any unused args */
             vsnprintf(NULL, 0, vals[i], args);
+#pragma GCC diagnostic pop
         }
     }
 }

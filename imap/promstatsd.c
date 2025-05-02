@@ -748,8 +748,17 @@ int main(int argc, char **argv)
         int ret;
         const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
         if (debugger) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+            /* This is exactly the kind of usage that -Wformat is designed to
+             * complain about (using user-supplied string as format argument),
+             * but in this case the "user" is the server administrator, and
+             * they're about to attach a debugger, so worrying about leaking
+             * contents of memory here is a little silly! :)
+             */
             snprintf(debugbuf, sizeof(debugbuf), debugger,
                      argv[0], getpid(), "promstatsd");
+#pragma GCC diagnostic pop
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
             syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
