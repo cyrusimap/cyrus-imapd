@@ -1395,19 +1395,47 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
     saslprops->ssf = (sasl_ssf_t) tls_cipher_usebits;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
-    if (SSL_session_reused(tls_conn)) {
-        saslprops->cbinding.len = SSL_get_finished(tls_conn,
-                                                   saslprops->tls_finished,
-                                                   MAX_FINISHED_LEN);
+    if (SSL_version(tls_conn) <= TLS1_2_VERSION) {
+        if (SSL_session_reused(tls_conn)) {
+            saslprops->cbinding.len =
+                SSL_get_finished(tls_conn,
+                                 saslprops->tls_finished,
+                                 MAX_FINISHED_LEN);
+        }
+        else {
+            saslprops->cbinding.len =
+                SSL_get_peer_finished(tls_conn,
+                                      saslprops->tls_finished,
+                                      MAX_FINISHED_LEN);
+        }
+        saslprops->cbinding.name = "tls-unique";
+        saslprops->cbinding.data = saslprops->tls_finished;
     }
+#if (OPENSSL_VERSION_NUMBER >= 0x10100001L)
     else {
-        saslprops->cbinding.len = SSL_get_peer_finished(tls_conn,
-                                                        saslprops->tls_finished,
-                                                        MAX_FINISHED_LEN);
-    }
+        /* see RFC 9266 Section 2, Definition of label, context, length */
+        static const char label[] = "EXPORTER-Channel-Binding";
+        static const size_t key_len = 32;
 
-    saslprops->cbinding.name = "tls-unique";
-    saslprops->cbinding.data = saslprops->tls_finished;
+        assert(key_len <= sizeof(saslprops->tls_finished));
+        if (1 != SSL_export_keying_material(tls_conn,
+                                            saslprops->tls_finished, key_len,
+                                            label, sizeof(label)-1,
+                                            0, 0, 0)) {
+            syslog(LOG_ERR, "Error reading EKM for channel binding");
+        }
+        else {
+            saslprops->cbinding.name = "tls-exporter";
+            saslprops->cbinding.data = saslprops->tls_finished;
+            saslprops->cbinding.len = key_len;
+        }
+    }
+#else
+    else {
+        /* This case should not happen. It's a strange OpenSSL variant */
+        syslog(LOG_ERR, "No EKM (channel binding) for TLS 1.3 or higher");
+    }
+#endif /* (OPENSSL_VERSION_NUMBER >= 0x10100001L) */
 #endif /* (OPENSSL_VERSION_NUMBER >= 0x0090800fL) */
 
 #if OPENSSL_VERSION_NUMBER >= 0x10002000L
