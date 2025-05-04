@@ -584,10 +584,9 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
                                 icalproperty_get_decoded_calendaraddress(prop));
              prop = icalcomponent_get_next_invitee(comp));
         if (!prop) {
-            /* Attendee added themselves to this recurrence */
-            assert(icalproperty_isa(att) == ICAL_ATTENDEE_PROPERTY);
-            prop = icalproperty_clone(att);
-            icalcomponent_add_property(comp, prop);
+            /* Don't allow party crashing */
+            attendee = NULL;
+            goto done;
         }
 
         /* Set PARTSTAT */
@@ -619,6 +618,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
 #endif
     }
 
+  done:
     free_hash_table(&override_table, NULL);
     free_hash_table(&rdate_table, NULL);
 
@@ -1421,6 +1421,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     case ICAL_METHOD_REPLY:
         attendee = deliver_merge_reply(ical, itip);
+        if (!attendee) {
+            SCHED_STATUS(sched_data, REQSTAT_REJECTED, SCHEDSTAT_REJECTED);
+            goto inbox;
+        }
+
         if (attendeep) *attendeep = attendee;
         break;
 
