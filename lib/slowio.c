@@ -76,7 +76,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
 
     if (n_bytes < 0) return; /* that wasn't a valid I/O op! */
 
-    if (clock_gettime(CLOCK_MONOTONIC, &now)) {
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now)) {
         xsyslog(LOG_DEBUG, "clock_gettime failed", NULL);
         errno = 0;
         return;
@@ -121,7 +121,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
             r = nanosleep(&sleeptime, &sleeptime);
         } while (r == -1 && errno == EINTR);
 
-        clock_gettime(CLOCK_MONOTONIC, &slowio->last_delay);
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &slowio->last_delay);
         slowio->bytes_since_last_delay = 0;
     }
 }
