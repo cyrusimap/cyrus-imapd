@@ -641,6 +641,11 @@ sub _pid_file
 
     $name ||= 'master';
 
+    if ($name eq 'master') {
+        my $pidfile = $self->{config}->get('master_pid_file');
+        return $self->{config}->substitute($pidfile) if $pidfile;
+    }
+
     return $self->{basedir} . "/run/$name.pid";
 }
 
@@ -969,7 +974,6 @@ sub _start_master
         # The following is added automatically by _fork_command:
         # '-C', $self->_imapd_conf(),
         '-l', '255',
-        '-p', $self->_pid_file(),
         '-d',
         '-M', $self->_master_conf(),
     );
