@@ -843,9 +843,12 @@ static int jmap_blob_lookup(jmap_req_t *req)
                 strarray_t *ids = values + i;
 
                 switch (item->typenum) {
-                case DATATYPE_MAILBOX:
-                    strarray_add(ids, uniqueid);
+                case DATATYPE_MAILBOX: {
+                    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+                    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+                    strarray_add(ids, mboxid);
                     break;
+                }
 
                 case DATATYPE_THREAD: {
                     char threadid[JMAP_THREADID_SIZE];
