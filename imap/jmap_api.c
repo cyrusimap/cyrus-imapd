@@ -1394,7 +1394,7 @@ HIDDEN int jmap_myrights(jmap_req_t *req, const char *mboxname)
 HIDDEN int jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid)
 {
     int rights = 0;
-    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
     if (mbentry) {
         rights = jmap_myrights_mbentry(req, mbentry);
     }
@@ -1403,7 +1403,7 @@ HIDDEN int jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid)
 
 HIDDEN int jmap_hasrights_mboxid(jmap_req_t *req, const char *mboxid, int rights)
 {
-    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
     return mbentry ? jmap_hasrights_mbentry(req, mbentry, rights) : 0;
 }
 
@@ -3242,6 +3242,47 @@ EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req,
 EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
 {
     const mbentry_t *mbentry = _mbentry_by_uniqueid(req, id, 1/*scope*/);
+    if (!mbentry) return NULL;
+    return mboxlist_entry_copy(mbentry);
+}
+
+EXPORTED const mbentry_t *jmap_mbentry_by_mboxid(jmap_req_t *req,
+                                                 const char *mboxid)
+{
+    char *key = strconcat(req->accountid, ".", mboxid, NULL);
+    mbentry_t *mbentry = NULL;
+
+    if (!req->mbentry_byid) {
+        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(req->mbentry_byid, 1024, 0);
+    }
+    else mbentry = hash_lookup(key, req->mbentry_byid);
+
+    if (!mbentry) {
+        int r = (*mboxid == JMAP_MAILBOXID_PREFIX) ?
+            mboxlist_lookup_by_jmapid(req->accountid, mboxid, &mbentry, NULL) :
+            mboxlist_lookup_by_uniqueid(mboxid, &mbentry, NULL);
+
+        if (r || !mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+            mboxname_isdeletedmailbox(mbentry->name, NULL) ||
+            /* make sure the user can "see" the mailbox */
+            !(jmap_myrights_mbentry(req, mbentry) & JACL_LOOKUP) ||
+            /* keep the lookup scoped to accountid */
+            !mboxname_userownsmailbox(req->accountid, mbentry->name)) {
+            mboxlist_entry_free(&mbentry);
+        }
+        else hash_insert(key, mbentry, req->mbentry_byid);
+    }
+
+    free(key);
+
+    return mbentry;
+}
+
+EXPORTED mbentry_t *jmap_mbentry_by_mboxid_copy(jmap_req_t *req,
+                                                const char *mboxid)
+{
+    const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
     if (!mbentry) return NULL;
     return mboxlist_entry_copy(mbentry);
 }
