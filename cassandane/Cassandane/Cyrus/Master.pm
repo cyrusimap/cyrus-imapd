@@ -1321,6 +1321,77 @@ sub test_sighup_reloading_proto
         $self->lemming_census());
 }
 
+sub test_pidfile_symlink
+{
+    my ($self) = @_;
+
+    $self->{instance}->_init_basedir_and_name();
+
+    # XXX it would be nice to put the symlink in the basedir, but anything
+    # XXX we put in there before start will be blown away by _build_skeleton.
+    # XXX instead, set stuff up in /tmp where it won't get trampled before use
+    my $tmp = "/tmp/cassandane-$self->{instance}->{name}";
+    my $symlink_target = "$tmp/rogue_master_pidfile";
+    my $pidfile = "$tmp/master.pid";
+
+    mkdir $tmp or die "mkdir $tmp: $!";
+    symlink $symlink_target, $pidfile
+        or die "symlink $symlink_target $pidfile: $!";
+
+    $self->{instance}->{config}->set('master_pid_file', $pidfile);
+
+    eval {
+        $self->start();
+    };
+    my $e = $@;
+    $self->assert_matches(qr{exited with code 71}, $e->text());
+
+    $self->assert_num_equals(0, $self->{instance}->is_running());
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{can't open pidfile: Too many levels});
+
+    unlink $pidfile;
+    unlink $symlink_target;
+    rmdir $tmp;
+}
+
+sub test_pidfile_lock_symlink
+{
+    my ($self) = @_;
+
+    $self->{instance}->_init_basedir_and_name();
+
+    # XXX it would be nice to put the symlink in the basedir, but anything
+    # XXX we put in there before start will be blown away by _build_skeleton.
+    # XXX instead, set stuff up in /tmp where it won't get trampled before use
+    my $tmp = "/tmp/cassandane-$self->{instance}->{name}";
+    my $symlink_target = "$tmp/rogue_master_pidfile_lock";
+    my $pidfile = "$tmp/master.pid";
+    my $pidfile_lock = "$pidfile.lock";
+
+    mkdir $tmp or die "mkdir $tmp: $!";
+    symlink $symlink_target, $pidfile_lock
+        or die "symlink $symlink_target $pidfile_lock: $!";
+
+    $self->{instance}->{config}->set('master_pid_file', $pidfile);
+
+    eval {
+        $self->start();
+    };
+    my $e = $@;
+    $self->assert_matches(qr{exited with code 71}, $e->text());
+
+    $self->assert_num_equals(0, $self->{instance}->is_running());
+    $self->assert_syslog_matches(
+        $self->{instance},
+        qr{can't open pidfile lock: \S+ \(Too many levels}
+    );
+
+    unlink $pidfile_lock;
+    unlink $symlink_target;
+    rmdir $tmp;
+}
+
 sub test_ready_file_new
 {
     my ($self) = @_;
