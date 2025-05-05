@@ -103,6 +103,7 @@ sub default
             configdirectory => '@basedir@/conf',
             syslog_prefix => '@name@',
             sievedir => '@basedir@/conf/sieve',
+            master_pid_file => '@basedir@/run/master.pid',
             master_ready_file => '@basedir@/master.ready',
             defaultpartition => 'default',
             defaultdomain => 'defdomain',
