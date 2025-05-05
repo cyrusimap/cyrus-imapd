@@ -48,5 +48,9 @@ EOF
     ]);
     $self->assert_str_equals('us', $res->[0][1]{list}[0]{addresses}[0]{countryCode});
     $self->assert_str_equals('xyz', $res->[0][1]{list}[0]{addresses}[0]{label});
+    $self->assert_str_equals('2 Example Avenue', $res->[0][1]{list}[0]{addresses}[0]{street});
+
     $self->assert_str_equals('de', $res->[0][1]{list}[0]{addresses}[1]{countryCode});
+    $self->assert_str_equals('Beispielstrasse 2', $res->[0][1]{list}[0]{addresses}[1]{street});
+
 }

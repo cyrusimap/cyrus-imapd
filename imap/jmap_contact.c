@@ -1698,13 +1698,6 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 buf_appendcstr(&buf, street);
             }
 
-            /* Read countryCode from same-grouped ABADR property, if any */
-            const char *countrycode = NULL;
-            if (entry->group) {
-                buf_setcstr(&buf, entry->group);
-                countrycode = hash_lookup(buf_ucase(&buf), &abadr_by_group);
-            }
-
             json_object_set_new(item, "street",
                                 jmap_utf8string(buf_cstring(&buf)));
             json_object_set_new(item, "locality",
@@ -1715,11 +1708,18 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                                 jmap_utf8string(strarray_safenth(a, 5)));
             json_object_set_new(item, "country",
                                 jmap_utf8string(strarray_safenth(a, 6)));
-            if (countrycode) {
-                buf_setcstr(&buf, countrycode);
-                buf_lcase(&buf);
-                json_object_set_new(item, "countryCode",
-                        jmap_utf8string(buf_cstring(&buf)));
+
+            /* Read countryCode from same-grouped ABADR property, if any */
+            if (entry->group) {
+                buf_setcstr(&buf, entry->group);
+                const char *countrycode = hash_lookup(buf_ucase(&buf), &abadr_by_group);
+
+                if (countrycode) {
+                    buf_setcstr(&buf, countrycode);
+                    buf_lcase(&buf);
+                    json_object_set_new(item, "countryCode",
+                            jmap_utf8string(buf_cstring(&buf)));
+                }
             }
 
             json_array_append_new(adr, item);
