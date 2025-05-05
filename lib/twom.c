@@ -1928,12 +1928,36 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     db->openfile->fd = fd;
     if (fd < 0) {
         if (setup->flags & TWOM_CREATE) {
-            fd = open(db->fname, O_RDWR|O_CREAT, 0644);
+            char *copy = strdup(fname);
+            const char *dir = dirname(copy);
+#if defined(O_DIRECTORY)
+            int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+            int dirfd = open(dir, O_RDONLY, 0600);
+#endif
+            free(copy);
+            if (dirfd < 0) {
+                if (errno == ENOENT) r = TWOM_NOTFOUND;
+                else r = TWOM_IOERROR;
+                goto done;
+            }
+            copy = strdup(fname);
+            const char *leaf = basename(copy);
+            fd = openat(dirfd, leaf, O_RDWR|O_CREAT, 0644);
+            free(copy);
             db->openfile->fd = fd;
             if (fd < 0) {
                 if (errno == ENOENT) r = TWOM_NOTFOUND;
+                else r = TWOM_IOERROR;
+                close(dirfd);
                 goto done;
             }
+            if (fsync(dirfd) < 0) {
+                r = TWOM_IOERROR;
+                close(dirfd);
+                goto done;
+            }
+            close(dirfd);
             r = initdb(db, setup->flags);
             if (r) goto done;
         }

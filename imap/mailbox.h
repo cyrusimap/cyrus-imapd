@@ -683,7 +683,6 @@ extern int mailbox_rename_copy(struct mailbox *oldmailbox,
 extern int mailbox_rename_cleanup(struct mailbox **mailboxptr);
 
 extern int mailbox_copyfile_fdptr(const char *from, const char *to, int nolink, int *dirfdp);
-#define mailbox_copyfile(from, to, nolink) mailbox_copyfile_fdptr(from, to, nolink, NULL)
 
 extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mailboxp);
 

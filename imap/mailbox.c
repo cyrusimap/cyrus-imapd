@@ -46,6 +46,7 @@
 #endif
 #include <ctype.h>
 #include <errno.h>
+#include <libgen.h>
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #elif defined(HAVE_STDINT_H)
@@ -56,7 +57,6 @@
 #include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <utime.h>
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -4662,7 +4662,6 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
                                 struct index_record *record)
 {
     int r;
-    struct utimbuf settime;
     uint32_t changeflags = CHANGE_ISAPPEND;
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -4759,10 +4758,16 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 
     if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
-        settime.actime = settime.modtime = record->internaldate;
-        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
-            if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
+        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED))) { // mabe there is no file in directory.
+            const char *fname = mailbox_record_fname(mailbox, record);
+            int *fdptr = (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+                       ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
+            struct timespec ts;
+            ts.tv_sec = record->internaldate;
+            ts.tv_nsec = 0;
+            if (cyrus_settime_fdptr(fname, &ts, fdptr) < 0)
                 return IMAP_IOERROR;
+        }
 
         /* write the cache record before buffering the message, it
          * will set the cache_offset field. */
@@ -4793,7 +4798,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     const char *spoolfname = mailbox_spool_fname(mailbox, uid);
     const char *archivefname = mailbox_archive_fname(mailbox, uid);
 
-    if (xunlink(spoolfname) == 0) {
+    if (cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd) == 0) {
         if (config_auditlog) {
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4803,7 +4808,7 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     }
 
     if (strcmp(spoolfname, archivefname)) {
-        if (xunlink(archivefname) == 0) {
+        if (cyrus_unlink_fdptr(archivefname, &mailbox->archive_dirfd) == 0) {
             if (config_auditlog) {
                 syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
@@ -4821,7 +4826,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
     if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
         /* we always remove the spool file here, because we've archived it */
         if (record->system_flags & FLAG_INTERNAL_ARCHIVED)
-            xunlink(spoolfname);
+            cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd);
 
         /* if the record is also deleted, we remove the objectstore copy */
         if (record->system_flags & FLAG_INTERNAL_UNLINKED)
@@ -4862,14 +4867,14 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
 
     /* don't cleanup if it's the same file! */
     if (strcmp(spoolfname, archivefname)) {
+        // we want to remove the OTHER file - the one that we're not keeping
         if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             /* XXX - stat to make sure the other file exists first? - we mostly
             *  trust that we didn't do stupid things everywhere else, so maybe not */
-            xunlink(spoolfname);
+            cyrus_unlink_fdptr(spoolfname, &mailbox->archive_dirfd);
         }
-
         else {
-            xunlink(archivefname);
+            cyrus_unlink_fdptr(archivefname, &mailbox->spool_dirfd);
         }
     }
 }
@@ -5510,9 +5515,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
     const message_t *msg;
     struct index_record copyrecord;
     const char *srcname = NULL;
-    int *srcdirfdp = NULL;
     const char *destname = NULL;
-    int *destdirfdp = NULL;
+    int *dirfdp = NULL;
     char *spoolcache = xstrdup(mailbox_meta_fname(mailbox, META_CACHE));
     char *archivecache = xstrdup(mailbox_meta_fname(mailbox, META_ARCHIVECACHE));
     int differentcache = strcmp(spoolcache, archivecache);
@@ -5538,9 +5542,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             srcname = mailbox_spool_fname(mailbox, copyrecord.uid);
-            srcdirfdp = &mailbox->spool_dirfd;
             destname = mailbox_archive_fname(mailbox, copyrecord.uid);
-            destdirfdp = &mailbox->archive_dirfd;
+            dirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5563,7 +5566,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     // didn't manage to store it, so remove the ARCHIVED flag
                     continue;
                 }
-                xunlink(srcname);
+                cyrus_unlink_fdptr(srcname, &mailbox->spool_dirfd);
             }
 #endif
             copyrecord.internal_flags |= FLAG_INTERNAL_ARCHIVED | FLAG_INTERNAL_NEEDS_CLEANUP;
@@ -5575,9 +5578,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                 continue;
             copyrecord = *record;
             destname = mailbox_spool_fname(mailbox, copyrecord.uid);
-            destdirfdp = &mailbox->spool_dirfd;
+            dirfdp = &mailbox->spool_dirfd;
             srcname = mailbox_archive_fname(mailbox, copyrecord.uid);
-            srcdirfdp = &mailbox->archive_dirfd;
 
             /* load cache before changing the flags */
             r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -5613,7 +5615,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             /* got a file to copy! */
             if (strcmp(srcname, destname)) {
                 r = cyrus_copyfile_fdptr(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME,
-                                         srcdirfdp, destdirfdp);
+                                         dirfdp);
                 if (r) {
                     xsyslog(LOG_ERR, "IOERROR: copyfile failed",
                                      "mailbox=<%s> record=<%u> "
@@ -5993,14 +5995,42 @@ EXPORTED int mailbox_create(const char *name,
         r = IMAP_MAILBOX_BADNAME;
         goto done;
     }
-    mailbox->index_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (mailbox->index_fd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: create index failed",
+    char *copy = xstrdup(fname);
+    const char *dir = dirname(copy);
+#if defined(O_DIRECTORY)
+    int dirfd = open(dir, O_RDONLY|O_DIRECTORY, 0600);
+#else
+    int dirfd = open(dir, O_RDONLY, 0600);
+#endif
+    free(copy);
+    if (dirfd < 0) {
+        xsyslog(LOG_ERR, "IOERROR: open index dir failed",
                          "fname=<%s>",
                          fname);
         r = IMAP_IOERROR;
         goto done;
     }
+    copy = xstrdup(fname);
+    const char *leaf = basename(copy);
+    mailbox->index_fd = openat(dirfd, leaf, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    free(copy);
+    if (mailbox->index_fd == -1) {
+        xsyslog(LOG_ERR, "IOERROR: create index failed",
+                         "fname=<%s>",
+                         fname);
+        r = IMAP_IOERROR;
+        close(dirfd);
+        goto done;
+    }
+    if (fsync(dirfd) < 0) {
+        xsyslog(LOG_ERR, "IOERROR: fsync index directory failed",
+                         "fname=<%s>",
+                         fname);
+        r = IMAP_IOERROR;
+        close(dirfd);
+        goto done;
+    }
+    close(dirfd);
     r = lock_blocking(mailbox->index_fd, fname);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: lock index failed",
@@ -6578,9 +6608,8 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     const message_t *msg;
     int r = 0;
 
-    int object_storage_enabled = 0 ;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
+    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
 
     /* Copy over meta files */
@@ -6595,40 +6624,64 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         xunlink(newbuf); /* Make link() possible */
 
         if (!mf->optional || stat(oldbuf, &sbuf) != -1) {
-            r = mailbox_copyfile(oldbuf, newbuf, mf->nolink);
+            r = mailbox_copyfile_fdptr(oldbuf, newbuf, mf->nolink, NULL);
             if (r) return r;
         }
     }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    int spoolfd = -1;
+    int archivefd = -1;
+    int *fdptr;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record),
-                MAX_MAILBOX_PATH);
-        if (!object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED)
-            xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
-                    MAX_MAILBOX_PATH);
-        else
-            xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
-                    MAX_MAILBOX_PATH);
-
-        if (!(object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED))    // if object storage do not move file
-           r = mailbox_copyfile(oldbuf, newbuf, 0);
-
-        if (r) break;
+        xstrncpy(oldbuf, mailbox_record_fname(mailbox, record), MAX_MAILBOX_PATH);
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
+        if (object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
             new_mailbox.part = (char*) config_defpartition ;
-            r = objectstore_put(&new_mailbox, record, newbuf);   // put should just add to refcount.
+            r = objectstore_put(&new_mailbox, record, oldbuf);   // put should just add to refcount.
             if (r) break;
+            continue;
         }
 #endif
+
+        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
+            xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
+                    MAX_MAILBOX_PATH);
+            fdptr = &archivefd;
+        }
+        else {
+            xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
+                    MAX_MAILBOX_PATH);
+            fdptr = &spoolfd;
+        }
+
+        // make sure the directory is open
+        if (*fdptr < 0) {
+            *fdptr = xopendir(newbuf, /*create*/1);
+            if (*fdptr < 0) {
+                r = IMAP_IOERROR;
+                break;
+            }
+        }
+
+        r = mailbox_copyfile_fdptr(oldbuf, newbuf, 0, fdptr);
+
+        if (r) break;
     }
     mailbox_iter_done(&iter);
+    if (archivefd >= 0) {
+        if (!r) r = fsync(archivefd) ? IMAP_IOERROR : 0;
+        close(archivefd);
+    }
+    if (spoolfd >= 0) {
+        if (!r) r = fsync(spoolfd) ? IMAP_IOERROR : 0;
+        close(spoolfd);
+    }
 
     return r;
 }
@@ -6857,14 +6910,14 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr)
  * Copy (or link) the file 'from' to the file 'to'
  */
 EXPORTED int mailbox_copyfile_fdptr(const char *from, const char *to,
-                                    int nolink, int *dest_dirfdp)
+                                    int nolink, int *dirfdp)
 {
     int flags = COPYFILE_MKDIR|COPYFILE_KEEPTIME;
     if (nolink) flags |= COPYFILE_NOLINK;
 
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
 
-    if (cyrus_copyfile_fdptr(from, to, flags, NULL, dest_dirfdp))
+    if (cyrus_copyfile_fdptr(from, to, flags, dirfdp))
         return IMAP_IOERROR;
 
     return 0;
