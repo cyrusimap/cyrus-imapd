@@ -1325,8 +1325,10 @@ sub test_ready_file_new
 {
     my ($self) = @_;
 
+    # config isn't fully initialised until start() is called, so we can't
+    # just read these the sensible way. instead, predict the defaults.
     my $ready_file = $self->{instance}->get_basedir() . '/conf/master.ready';
-    my $pid_file = $self->{instance}->_pid_file();
+    my $pid_file = $self->{instance}->get_basedir() . '/run/master.pid';
 
     # pid file should not already exist
     my $pid_sb = stat($pid_file);
@@ -1356,15 +1358,13 @@ sub test_ready_file_exists
 {
     my ($self) = @_;
 
-    # force basedir to be computed
-    $self->{instance}->get_basedir();
+    # config isn't fully initialised until start() is called, so we can't
+    # just read these the sensible way. instead, predict the defaults.
+    my $pid_file = $self->{instance}->get_basedir() . '/run/master.pid';
 
     # cannot be under basedir because it'll be blown away at startup
     my $ready_file = "/tmp/cassandane-$$-master.ready";
     $self->{instance}->{config}->set('master_ready_file', $ready_file);
-
-    # must be after the get_basedir() call above
-    my $pid_file = $self->{instance}->_pid_file();
 
     system("touch", $ready_file) == 0 or die "touch $ready_file: $?";
     sleep 3;
