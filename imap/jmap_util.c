@@ -64,6 +64,7 @@
 #include "times.h"
 #include "user.h"
 #include "xapian_wrap.h"
+#include "xstrlcpy.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>
@@ -1325,6 +1326,14 @@ EXPORTED void jmap_set_emailid(int cstate_version,
     }
 
     buf_cstring(&buf);
+}
+
+EXPORTED void jmap_set_mailboxid(int cstate_version,
+                                 const mbentry_t *mbentry, char *mboxid)
+{
+    strlcpy(mboxid,
+            cstate_version < 2 ? mbentry->uniqueid : mbentry->jmapid,
+            JMAP_MAX_MAILBOXID_SIZE);
 }
 
 EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)

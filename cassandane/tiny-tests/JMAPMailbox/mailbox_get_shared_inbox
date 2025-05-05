@@ -45,7 +45,7 @@ sub test_mailbox_get_shared_inbox
 
     my %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
     my $fooInbox = $m{'inbox'};
-    $self->assert_str_not_equals($inbox->{id}, $fooInbox->{id});
+    # NOTE: IDs of INBOXen will most likely be the same
     $self->assert_str_equals('inbox', $fooInbox->{role});
     my $box1 = $m{'box1'};
     $self->assert_str_equals('trash', $box1->{role});

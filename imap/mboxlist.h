@@ -173,10 +173,14 @@ int mboxlist_lookup_allow_all(const char *name,
 int mboxlist_lookup_by_uniqueid(const char *uniqueid,
                                 mbentry_t **entryptr, struct txn **tid);
 
+int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
+                              mbentry_t **entryptr, struct txn **tid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
-
+char *mboxlist_find_jmapid(const char *jmapid, const char *userid,
+                           const struct auth_state *auth_state);
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);

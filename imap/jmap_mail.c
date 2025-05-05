@@ -855,6 +855,9 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         return 0;
     }
 
+    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+    jmap_set_mailboxid(data->req->cstate->version, mbentry, mboxid);
+
     r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
@@ -884,10 +887,10 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
         if (r) goto done;
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
 
-        json_t *mboxdata = json_object_get(mboxs, mailbox_uniqueid(mbox));
+        json_t *mboxdata = json_object_get(mboxs, mboxid);
         if (!mboxdata) {
             mboxdata = json_object();
-            json_object_set_new(mboxs, mailbox_uniqueid(mbox), mboxdata);
+            json_object_set_new(mboxs, mboxid, mboxdata);
         }
 
         if (exists) {
@@ -2041,7 +2044,7 @@ emailsearch_folders_value_new(jmap_req_t *req,
     size_t i;
     json_array_foreach(jmboxids, i, jmboxid) {
         const char *mboxid = json_string_value(jmboxid);
-        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+        const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
         if (mbentry &&
                 !mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype) &&
                 jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
@@ -2926,7 +2929,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     json_object_foreach(filter, field, arg) {
         if (!strcmp(field, "inMailbox")) {
             if (json_is_string(arg)) {
-                const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, json_string_value(arg));
+                const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, json_string_value(arg));
                 if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                     jmap_parser_invalid(parser, field);
                 }
@@ -2940,7 +2943,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
                     const char *s = json_string_value(val);
                     int is_valid = 0;
                     if (s) {
-                        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, s);
+                        const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, s);
                         is_valid = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP);
                     }
                     if (!is_valid) {
@@ -2954,7 +2957,8 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     }
 }
 
-static struct sortcrit *_email_buildsort(json_t *sort, unsigned id_sort_key,
+static struct sortcrit *_email_buildsort(jmap_req_t *req,
+                                         json_t *sort, unsigned id_sort_key,
                                          int *sort_savedate)
 {
     json_t *jcomp;
@@ -3016,6 +3020,9 @@ static struct sortcrit *_email_buildsort(json_t *sort, unsigned id_sort_key,
         else if (!strcmp(prop, "addedDates") || !strcmp(prop, "snoozedUntil")) {
             const char *mboxid =
                 json_string_value(json_object_get(jcomp, "mailboxId"));
+            const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
+
+            mboxid = mbentry ? mbentry->uniqueid : NULL;
 
             if (sort_savedate) *sort_savedate = 1;
             sortcrit[j].key = (*prop == 's') ? SORT_SNOOZEDUNTIL : SORT_SAVEDATE;
@@ -3100,7 +3107,7 @@ static void emailsearch_init(struct emailsearch *search,
     unsigned id_sort_key = (req->cstate->version < 2) ? SORT_GUID : SORT_EMAILID;
 
     if (json_array_size(jsort)) {
-        search->sort = _email_buildsort(jsort, id_sort_key, &search->sort_savedate);
+        search->sort = _email_buildsort(req, jsort, id_sort_key, &search->sort_savedate);
     }
     else {
         struct sortcrit *sort = xzmalloc(3 * sizeof(struct sortcrit));
@@ -9119,7 +9126,7 @@ static void _email_append(jmap_req_t *req,
             mboxid = jmap_lookup_id(req, mboxid + 1);
         }
         if (!mboxid) continue;
-        const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+        const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
         if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
             r = IMAP_MAILBOX_NONEXISTENT;
             goto done;
@@ -11373,7 +11380,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
                 mbox_id = jmap_lookup_id(req, mbox_id + 1);
             }
             if (mbox_id) {
-                mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
+                mbentry = jmap_mbentry_by_mboxid(req, mbox_id);
             }
             if (!mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
                     mboxname_isdeletedmailbox(mbentry->name, NULL) ||
@@ -12924,25 +12931,28 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
         const char *mbox_id;
         json_t *jval;
         json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
-            int is_valid = 1;
+            const mbentry_t *mbentry = NULL;
+            int is_valid = 0;
             if (*mbox_id == '$') {
                 const char *role = mbox_id + 1;
-                const mbentry_t *mbentry = NULL;
-                if (!jmap_findmbox_role(bulk->req, role, &mbentry)) {
-                    json_object_del(update->mailboxids, mbox_id);
-                    json_object_set(update->mailboxids, mbentry->uniqueid, jval);
-                    mbox_id = mbentry->uniqueid;
-                }
-                else is_valid = 0;
+                jmap_findmbox_role(bulk->req, role, &mbentry);
             }
             else if (*mbox_id == '#') {
                 const char *resolved_mbox_id = jmap_lookup_id(req, mbox_id + 1);
                 if (resolved_mbox_id) {
-                    json_object_del(update->mailboxids, mbox_id);
-                    json_object_set(update->mailboxids, resolved_mbox_id, jval);
-                    mbox_id = resolved_mbox_id;
+                    mbentry = jmap_mbentry_by_mboxid(req, resolved_mbox_id);
                 }
-                else is_valid = 0;
+            }
+            else if (*mbox_id == JMAP_MAILBOXID_PREFIX) {
+                mbentry = jmap_mbentry_by_mboxid(req, mbox_id);
+            }
+            else is_valid = 1;
+
+            if (mbentry) {
+                json_object_del(update->mailboxids, mbox_id);
+                json_object_set(update->mailboxids, mbentry->uniqueid, jval);
+                mbox_id = mbentry->uniqueid;
+                is_valid = 1;
             }
 
             /* If trying to move a message in/out of $scheduled
