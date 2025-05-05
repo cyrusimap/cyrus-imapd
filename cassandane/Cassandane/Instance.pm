@@ -932,8 +932,6 @@ sub _read_pid_file
     my $file = $self->_pid_file($name);
     my $pid;
 
-    return undef if ( ! -f $file );
-
     open PID,'<',$file
         or return undef;
     while(<PID>)
@@ -982,7 +980,6 @@ sub _start_master
         xlog "_start_master: logging to $logfile";
         push(@cmd, '-L', $logfile);
     }
-    unlink $self->_pid_file();
     # Start master daemon
     $self->run_command({ cyrus => 1 }, @cmd);
 
