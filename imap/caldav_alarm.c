@@ -1465,7 +1465,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     /* Determine destination mailbox of moved email */
     if (destmboxid) {
         mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
+        r = (*destmboxid == JMAP_MAILBOXID_PREFIX) ?
+            mboxlist_lookup_by_jmapid(userid, destmboxid, &mbentry, NULL) :
+            mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
         if (!r && mbentry &&
             // MUST be an email mailbox
             (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
