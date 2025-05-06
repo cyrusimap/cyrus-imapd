@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_19_to_20_delete_tree
+    :min_version_3_7 :MailboxVersion(19)
+{
+    my ($self) = @_;
+
+    # Check for a bug found during testing - randomly deleting a mailbox
+    # tree would fail after upgrade because the ancestor sorting code was
+    # mixing old and new style ids and so not sorting at all, leaving the
+    # folder deletion order up to hash randomization in the C lib. Failure
+    # would be "mailboxHasChild" since a parent might be deleted before a
+    # child.
+    #
+    # We'll try 10 times for good measure.
+
+    for (1..10) {
+        my $user = $self->{instance}->create_user("foo${_}bar", mailbox_version => 19);
+
+        my $service = $self->{instance}->get_service("http");
+
+        my $otherJmap = Mail::JMAPTalk->new(
+            user => "foo${_}bar",
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/jmap/',
+        );
+
+        $otherJmap->DefaultUsing($self->{jmap}->DefaultUsing);
+
+        xlog "create mailbox tree";
+        my $res = $otherJmap->CallMethods([
+            ['Mailbox/set', {
+                create => {
+                    'A' => { name => "A", parentId => undef },
+                    'B' => { name => 'B', parentId => '#A'  },
+                    'C' => { name => 'C', parentId => '#B'  }
+                }
+             }, "R1"]
+        ]);
+
+        my $aId = $res->[0][1]{created}{A}{id};
+        my $bId = $res->[0][1]{created}{B}{id};
+        my $cId = $res->[0][1]{created}{C}{id};
+
+        $self->assert_not_null($_) for ($aId, $bId, $cId);
+
+        $self->upgrade_19_to_20("foo${_}bar");
+
+        xlog "destroy 'C' mailbox and its ancestors";
+        $res = $otherJmap->CallMethods([
+            ['Mailbox/set', {
+                destroy => ["$cId", "$bId", "$aId"],
+                onDestroyRemoveEmails => JSON::true
+             }, "R6"],
+        ]);
+
+        $self->assert_num_equals(3, scalar(@{$res->[0][1]{destroyed}}));
+
+        $self->assert_str_equals($cId, $res->[0][1]{destroyed}[0]);
+        $self->assert_str_equals($bId, $res->[0][1]{destroyed}[1]);
+        $self->assert_str_equals($aId, $res->[0][1]{destroyed}[2]);
+    }
+}
