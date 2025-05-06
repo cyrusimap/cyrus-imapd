@@ -500,6 +500,16 @@ magic(HttpAllowCorsFooExampleCom => sub {
     my $self = shift;
     $self->config_set(httpallowcors => 'https://foo.example.com');
 });
+magic(MailboxVersion => sub {
+    my ($self, $version) = @_;
+
+    unless ($version =~ /\A[0-9]+\z/) {
+        require Carp;
+        Carp::confess("Bad test spec, unknown mailbox version '$version'");
+    }
+
+    $self->{mailbox_version} = $version;
+});
 
 
 # Run any magic handlers indicated by the test name or attributes
@@ -523,6 +533,12 @@ sub _run_magic
     if (defined $sub) {
         foreach my $a (attributes::get($sub))
         {
+            # Let test attributes to specify arguments
+            my $args;
+            if ($a =~ s/\((.*)\)//) {
+                $args = $1;
+            }
+
             my $m = lc($a);
             # ignore min/max version attribution here
             next if $a =~ m/^(?:min|max)_version_/;
@@ -534,7 +550,7 @@ sub _run_magic
                 unless defined $magic_handlers{$m};
             next if $seen{$m};
             $self->{_current_magic} = "Magic attribute $a";
-            $magic_handlers{$m}->($self);
+            $magic_handlers{$m}->($self, $args);
             $self->{_current_magic} = undef;
             $seen{$m} = 1;
         }
@@ -618,6 +634,9 @@ sub _create_instances
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
         $instance_params{smtpdaemon} = $want->{smtpdaemon};
+
+        $instance_params{mailbox_version} = $self->{mailbox_version}
+            if exists $self->{mailbox_version};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);
