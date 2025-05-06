@@ -6926,6 +6926,8 @@ static int do_folders(struct sync_client_state *sync_cs,
         // ok, it's a rename and both source and destination names exist already,
         // is there an intermediate we can rename to?
 
+        sync_uncache(sync_cs, item->oldname);
+
         mbentry_t *mbentry_byid = NULL;
         if (mboxlist_lookup_by_uniqueid(item->uniqueid, &mbentry_byid, NULL)) continue;
         int i;
@@ -6938,6 +6940,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             // and then reuse this item for the rename from temporary to final
             free(item->oldname);
             item->oldname = xstrdup(histitem->name);
+            sync_uncache(sync_cs, item->oldname);
             break;
         }
         mboxlist_entry_free(&mbentry_byid);
