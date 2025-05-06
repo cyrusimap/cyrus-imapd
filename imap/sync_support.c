@@ -6897,8 +6897,10 @@ static int do_folders(struct sync_client_state *sync_cs,
             else {
                 /* we've found a rename! */
                 const char *part = topart ? topart : tombstone->partition;
-                sync_rename_list_add(rename_folders, tombstone->uniqueid, rfolder->name,
-                                     tombstone->name, part, tombstone->uidvalidity);
+                if (strcmp(tombstone->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
+                    sync_rename_list_add(rename_folders, tombstone->uniqueid, rfolder->name,
+                                         tombstone->name, part, tombstone->uidvalidity);
+                }
                 mboxlist_entry_free(&tombstone);
             }
         }
