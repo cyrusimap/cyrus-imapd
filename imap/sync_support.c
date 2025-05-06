@@ -7477,12 +7477,7 @@ int sync_do_user(struct sync_client_state *sync_cs,
     struct sync_quota_list *replica_quota = sync_quota_list_create();
     struct dlist *kl = NULL;
     struct mailbox *mailbox = NULL;
-
-    struct mboxlock *userlock = sync_lock(sync_cs, userid);
-    if (!userlock) {
-        r = IMAP_MAILBOX_LOCKED;
-        goto done;
-    }
+    struct mboxlock *userlock = NULL;
 
     if (sync_cs->flags & SYNC_FLAG_VERBOSE)
         printf("USER %s\n", userid);
@@ -7497,6 +7492,12 @@ redo:
     if (tries > 3) {
         syslog(LOG_ERR, "failed to sync user %s after 3 tries", userid);
         r = IMAP_SYNC_CHANGED;
+        goto done;
+    }
+
+    userlock = sync_lock(sync_cs, userid);
+    if (!userlock) {
+        r = IMAP_MAILBOX_LOCKED;
         goto done;
     }
 
@@ -7528,7 +7529,9 @@ redo:
     if (r) goto done;
 
     /* we don't hold locks while sending commands */
+    mboxname_release(&userlock);
     mailbox_close(&mailbox);
+
     r = do_user_main(sync_cs, userid, topart, replica_folders, replica_quota);
     if (r == IMAP_AGAIN) {
         // we've done a rename - have to try again!
