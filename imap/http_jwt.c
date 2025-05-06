@@ -123,15 +123,8 @@ static EVP_PKEY *read_public_key(struct buf *pem)
     EVP_PKEY *pkey = PEM_read_bio_PUBKEY(bp, NULL, NULL, NULL);
 
     if (pkey) {
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
         if (!EVP_PKEY_is_a(pkey, "RSA")) {
             xsyslog(LOG_ERR, "Unsupported public key", NULL);
-#else
-        int nid = EVP_PKEY_base_id(pkey);
-        if (nid != EVP_PKEY_RSA) {
-            xsyslog(LOG_ERR, "Unsupported public key",
-                    "type=<%s>", OBJ_nid2ln(nid));
-#endif
             EVP_PKEY_free(pkey);
             pkey = NULL;
         }
@@ -331,16 +324,11 @@ static int validate_pkey_type(struct jwt *jwt, EVP_PKEY *pkey)
     if (!jwt->nid)
         return 0;
 
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC"))
         return 1;
 
     if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA"))
         return 1;
-#else
-    if (jwt->nid == EVP_PKEY_base_id(pkey))
-        return 1;
-#endif
 
     return 0;
 }

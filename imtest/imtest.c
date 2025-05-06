@@ -400,20 +400,6 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-/* taken from OpenSSL apps/s_cb.c */
-static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
-                       int export __attribute__((unused)), int keylength)
-{
-    static RSA *rsa_tmp = NULL;
-
-    if (rsa_tmp == NULL) {
-        rsa_tmp = RSA_generate_key(keylength, RSA_F4, NULL, NULL);
-    }
-    return (rsa_tmp);
-}
-#endif
-
 /* taken from OpenSSL apps/s_cb.c
  * tim - this seems to just be giving logging messages
  */
@@ -496,11 +482,7 @@ static int tls_init_clientengine(int verifydepth, const char *var_tls_cert_file,
         return IMTEST_FAIL;
     }
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
     tls_ctx = SSL_CTX_new(TLS_client_method());
-#else
-    tls_ctx = SSL_CTX_new(SSLv23_client_method());
-#endif
     if (tls_ctx == NULL) {
         return IMTEST_FAIL;
     };
@@ -541,9 +523,6 @@ static int tls_init_clientengine(int verifydepth, const char *var_tls_cert_file,
             printf("TLS engine: cannot load cert/key data, may be a cert/key mismatch?\n");
             return IMTEST_FAIL;
         }
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-    SSL_CTX_set_tmp_rsa_callback(tls_ctx, tmp_rsa_cb);
-#endif
 
     verify_depth = verifydepth;
     SSL_CTX_set_verify(tls_ctx, verify_flags, verify_callback);
@@ -786,7 +765,6 @@ static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
     if (result!=SASL_OK)
         imtest_fatal("Error setting SASL property (external auth_id)");
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     static unsigned char finished[EVP_MAX_MD_SIZE];
     static struct sasl_channel_binding cbinding;
 
@@ -805,7 +783,6 @@ static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
     result = sasl_setprop(conn, SASL_CHANNEL_BINDING, &cbinding);
     if (result!=SASL_OK)
         imtest_fatal("Error setting SASL property (channel binding)");
-#endif /* (OPENSSL_VERSION_NUMBER >= 0x0090800fL) */
 
     prot_settls (pin,  tls_conn);
     prot_settls (pout, tls_conn);

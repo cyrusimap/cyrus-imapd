@@ -1,0 +1,19 @@
+
+Description:
+
+Remove support for OpenSSL < 3.0
+
+
+Documentation:
+
+Compiling Cyrus from source now requires OpenSSL >= 3.0 for TLS support.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.

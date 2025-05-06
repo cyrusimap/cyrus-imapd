@@ -1294,7 +1294,7 @@ x|xyes)
     # default args or --with-openssl
     #
     # Try pkg-config - OpenSSL >= 0.9.6 has openssl.pc
-    PKG_CHECK_MODULES(OPENSSL, openssl, [with_ssl=yes])
+    PKG_CHECK_MODULES(OPENSSL, [openssl >= 3.0], [with_ssl=yes])
     ssl_cppflags="$OPENSSL_CFLAGS"
     ssl_ldflags="$OPENSSL_LIBS"
     #

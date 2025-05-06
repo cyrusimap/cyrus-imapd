@@ -83,7 +83,6 @@
 #include "nonblock.h"
 #include "prot.h"
 #include "tls.h"
-#include "tls_th-lock.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -552,12 +551,6 @@ int service_init(int argc, char **argv,
 
     database_init();
 
-#ifdef HAVE_SSL
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-    CRYPTO_thread_setup();
-#endif
-#endif
-
     if (!masterp) {
         r = pthread_create(&t, NULL, &mupdate_client_start, NULL);
         if (r == 0) {
@@ -603,11 +596,6 @@ int service_init(int argc, char **argv,
 /* Called by service API to shut down the service */
 void service_abort(int error)
 {
-#ifdef HAVE_SSL
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-    CRYPTO_thread_cleanup();
-#endif
-#endif
     shut_down(error);
 }
 
@@ -2013,9 +2001,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
     prot_settls(C->pin, C->tlsconn);
     prot_settls(C->pout, C->tlsconn);
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     C->tls_comp = (void *) SSL_get_current_compression(C->tlsconn);
-#endif
 
     /* Reissue capability banner */
     dobanner(C);
@@ -2036,13 +2022,11 @@ static void cmd_compress(struct conn *C, const char *tag, const char *alg)
         prot_printf(C->pout,
                     "%s BAD DEFLATE active via COMPRESS\r\n", tag);
     }
-#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (C->tls_comp) {
         prot_printf(C->pout,
                     "%s NO %s active via TLS\r\n",
                     tag, SSL_COMP_get_name(C->tls_comp));
     }
-#endif
     else if (strcasecmp(alg, "DEFLATE")) {
         prot_printf(C->pout,
                     "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);
