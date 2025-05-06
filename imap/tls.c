@@ -563,7 +563,12 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
 
     /* set the expire time for the external cache, and prepend it to data */
-    expire = SSL_SESSION_get_time(sess) + SSL_SESSION_get_timeout(sess);
+#if OPENSSL_VERSION_NUMBER >= 0x30300000L
+    expire = SSL_SESSION_get_time_ex(sess);
+#else
+    expire = SSL_SESSION_get_time(sess);
+#endif
+    expire += SSL_SESSION_get_timeout(sess);
     memcpy(data, &expire, sizeof(time_t));
 
     if (len) {
