@@ -1,0 +1,187 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_legacy_ids
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+    :needs_component_calalarmd :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $talk = $self->{store}->get_client();
+
+    my $data_file = abs_path("data/old-mailboxes/version19.tar.gz");
+    die "Old mailbox data does not exist: $data_file" if not -f $data_file;
+
+    xlog "installing version 19 mailboxes";
+    $self->{instance}->unpackfile($data_file, $self->{instance}->get_basedir());
+
+    xlog $self, "adding JMAP IDs to mailboxes.db";
+    $self->{instance}->run_command({cyrus => 1}, 'ctl_cyrusdb', '-r');
+
+    xlog "reconstructing indexes at v19 to get predictable senddate";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # created and onSend properties
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Fetch MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    my $res = $talk->get_response_code('status') || {};
+    my $inboxid = $res->{INBOX}{mailboxid}[0];
+    my $fooid = $res->{'INBOX.foo'}{mailboxid}[0];
+
+    xlog "Set Scheduled role";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $fooid => {
+                    role => 'scheduled',
+                },
+            },
+        }, "R1"],
+    ]);
+
+    # Use our existing 2 mailboxes as Drafts, Scheduled, and Sent mailboxes
+    my $draftsid = $inboxid;
+    my $schedid = $fooid;
+    my $sentid = $inboxid;
+
+    xlog $self, "Get Identity and an email to submit";
+    $res = $jmap->CallMethods([
+        [ 'Identity/get', {}, "R0" ],
+        ['Email/query', {
+            filter => { subject => 'B' }
+         }, "R1"]
+    ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $emailid = $res->[1][1]->{ids}[0];
+
+    xlog $self, "Create an email submission";
+    $res = $jmap->CallMethods( [
+        [ 'EmailSubmission/set', {
+            create => {
+                '1' => {
+                    identityId => $identityid,
+                    emailId  => $emailid,
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => {
+                                "holdfor" => "30",
+                            }
+                        },
+                        rcptTo => [
+                            {
+                                email => 'rcpt1@localhost',
+                            }],
+                    },
+                    onSend => {
+                        moveToMailboxId => $sentid,
+                        setKeywords => { '$Sent' => $JSON::true },
+                    }
+                },
+            },
+            onSuccessUpdateEmail => {
+                '#1' => {
+                    "mailboxIds/$draftsid" => JSON::null,
+                    "mailboxIds/$schedid" => JSON::true,
+                },
+            }
+        }, "R1" ],
+        [ "Email/get", {
+            ids => ["$emailid"],
+            properties => ["mailboxIds", "keywords"],
+        }, "R2"],
+    ] );
+
+    xlog $self, "Check create and onSuccessUpdateEmail results";
+    my $subid = $res->[0][1]->{created}{1}{id};
+    $self->assert_str_equals('pending', $res->[0][1]->{created}{1}{undoStatus});
+
+    $self->assert_equals(JSON::null, $res->[1][1]->{updated}{emailid});
+
+    $self->assert_equals(JSON::true,
+                         $res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
+    $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
+
+    xlog $self, "Verify an event was added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+    xlog $self, "Query the submission by emailId";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/query', {
+            filter => {
+                emailIds => [ $emailid ],
+            }
+         }, "R1"]
+    ]);
+    $self->assert_str_equals($subid, $res->[0][1]->{ids}[0]);
+
+    xlog $self, "Upgrade to mailbox version 20";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', 'max');
+
+    xlog $self, "Upgrade to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
+
+    xlog $self, "Get new mailbox ids and email id";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', { }, "R1"],
+        ['Email/query', {
+            filter => { subject => 'B' }
+         }, "R2"]
+    ]);
+    $sentid = $inboxid = $res->[0][1]{ids}[0];
+    $schedid = $fooid = $res->[0][1]{ids}[1];
+    $emailid = $res->[1][1]->{ids}[0];
+
+    xlog $self, "Query the submission by new emailId";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/query', {
+            filter => {
+                emailIds => [ $emailid ],
+            }
+         }, "R1"]
+    ]);
+    $self->assert_str_equals($subid, $res->[0][1]->{ids}[0]);
+
+    xlog $self, "Trigger delivery of email submission";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    xlog $self, "Check onSend results";
+    $res = $jmap->CallMethods( [
+        [ 'EmailSubmission/get', {
+            ids => [ $subid ]
+        }, "R1"],
+        [ "Email/get", {
+            ids => ["$emailid"],
+            properties => ["mailboxIds", "keywords"],
+        }, "R2"],
+    ] );
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_str_equals('final', $res->[0][1]->{list}[0]->{undoStatus});
+    $self->assert_str_equals($emailid, $res->[0][1]->{list}[0]->{emailId});
+    $self->assert_str_equals($sentid,
+                             $res->[0][1]->{list}[0]->{onSend}{moveToMailboxId});
+
+    $self->assert_equals(JSON::true,
+                         $res->[1][1]->{list}[0]->{mailboxIds}{$sentid});
+    $self->assert_null($res->[1][1]->{list}[0]->{mailboxIds}{$schedid});
+
+    $self->assert_equals(JSON::true,
+                         $res->[1][1]->{list}[0]->{keywords}{'$sent'});
+
+    xlog $self, "Verify no events left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}
