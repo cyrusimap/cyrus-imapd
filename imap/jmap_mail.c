@@ -3283,10 +3283,16 @@ static void jmap_emailquery_fini(struct emailquery *q)
     json_decref(q->thread_emailids);
 }
 
-static char *_email_make_querystate(modseq_t modseq, uint32_t uid,
+static char *_email_make_querystate(jmap_req_t *req,
+                                    modseq_t modseq, uint32_t uid,
                                     modseq_t addrbook_modseq)
 {
     struct buf buf = BUF_INITIALIZER;
+
+    if (req->cstate->version >= 2) {
+        // add mandatory prefix
+        buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
+    }
     buf_printf(&buf, MODSEQ_FMT ":%u", modseq, uid);
     if (addrbook_modseq) {
         buf_printf(&buf, ",addrbook:" MODSEQ_FMT, addrbook_modseq);
@@ -3294,10 +3300,14 @@ static char *_email_make_querystate(modseq_t modseq, uint32_t uid,
     return buf_release(&buf);
 }
 
-static int _email_read_querystate(const char *s, modseq_t *modseq, uint32_t *uid,
+static int _email_read_querystate(jmap_req_t *req, const char *s,
+                                  modseq_t *modseq, uint32_t *uid,
                                   modseq_t *addrbook_modseq)
 {
     char sentinel = 0;
+
+    /* Check for mandatory prefix */
+    if (req->cstate->version >= 2 && *s++ != JMAP_STATE_STRING_PREFIX) return 0;
 
     /* Parse mailbox modseq and uid */
     int n = sscanf(s, MODSEQ_FMT ":%u%c", modseq, uid, &sentinel);
@@ -4969,7 +4979,7 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     modseq_t addrbook_modseq = contactgroups->size ?
         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
-    char *querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
+    char *querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
     struct buf fingerprint = BUF_INITIALIZER;
     emailquery_fingerprint(&fingerprint, req->userid, req->accountid, querystate, q);
@@ -5164,7 +5174,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     modseq_t addrbook_modseq = 0;
     int r = 0;
 
-    if (!_email_read_querystate(query->since_querystate,
+    if (!_email_read_querystate(req, query->since_querystate,
                                 &since_modseq, &since_uid,
                                 &addrbook_modseq)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
@@ -5358,7 +5368,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hashu64_table(&touched_cids, NULL);
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
+    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:
     if (r && *err == NULL) {
@@ -5382,7 +5392,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     modseq_t addrbook_modseq = 0;
     int r = 0;
 
-    if (!_email_read_querystate(query->since_querystate,
+    if (!_email_read_querystate(req, query->since_querystate,
                                 &since_modseq, &since_uid,
                                 &addrbook_modseq)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
@@ -5523,7 +5533,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
+    query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:
     if (r && *err == NULL) {
@@ -5695,7 +5705,8 @@ done:
 static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
+    struct jmap_changes changes =
+        { .prefixed_state = req->cstate->version >= 2 };
 
     /* Parse request */
     json_t *err = NULL;
@@ -5813,7 +5824,8 @@ done:
 static int jmap_thread_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
+    struct jmap_changes changes =
+        { .prefixed_state = req->cstate->version >= 2 };
 
     /* Parse request */
     json_t *err = NULL;
@@ -6523,7 +6535,7 @@ static int jmap_thread_get(jmap_req_t *req)
         goto done;
     }
 
-    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
+    get.state = jmap_state_string(req, 0, MBTYPE_EMAIL, 0);
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -8787,7 +8799,7 @@ static int jmap_email_get(jmap_req_t *req)
     else
         jmap_email_get_full(req, &get, &args);
 
-    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
+    get.state = jmap_state_string(req, 0, MBTYPE_EMAIL, 0);
 
     jmap_ok(req, jmap_get_reply(&get));
 
@@ -13792,16 +13804,18 @@ static int jmap_email_set(jmap_req_t *req)
         goto done;
     }
 
+    modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (set.if_in_state) {
-        if (atomodseq_t(set.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
+        const char *if_in_state = set.if_in_state;
+        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
+            atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        set.old_state = xstrdup(set.if_in_state);
     }
-    else {
-        set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
-    }
+
+    set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
     json_t *email;
     const char *creation_id;
@@ -13828,7 +13842,7 @@ static int jmap_email_set(jmap_req_t *req)
 
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
 
-    set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
+    set.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
     json_t *reply = jmap_set_reply(&set);
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
@@ -14146,16 +14160,17 @@ static int jmap_email_import(jmap_req_t *req)
         goto done;
     }
 
+    modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (if_in_state) {
-        if (atomodseq_t(if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
+        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
+            atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        old_state = xstrdup(if_in_state);
     }
-    else {
-        old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
-    }
+
+    old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
     json_object_foreach(emails, id, jemail_import) {
         /* Parse import */
@@ -14238,7 +14253,7 @@ static int jmap_email_import(jmap_req_t *req)
         json_object_set_new(jemail_import, "mailboxIds", orig_mailboxids);
     }
 
-    new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
+    new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
     /* Reply */
     jmap_ok(req, json_pack("{s:s s:s s:s s:O s:O}",
@@ -14535,21 +14550,27 @@ static int jmap_email_copy(jmap_req_t *req)
     if (copy.if_from_in_state) {
         struct mboxname_counters counters;
         assert (!mboxname_read_counters(srcinbox, &counters));
-        if (atomodseq_t(copy.if_from_in_state) != counters.mailmodseq) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        
+        struct conversations_state *from_cstate;
+        int r = conversations_open_user(copy.from_account_id, 0, &from_cstate);
+        if (r) {
+            syslog(LOG_ERR,
+                   "jmap_email_copy: can't open source conversations: %s",
+                   error_message(r));
+            jmap_error(req, jmap_server_error(r));
             goto done;
         }
-    }
 
-    if (copy.if_in_state) {
-        if (atomodseq_t(copy.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
+        int from_cstate_version = from_cstate->version;
+        conversations_commit(&from_cstate);
+
+        const char *if_from_in_state = copy.if_from_in_state;
+        if ((from_cstate_version >= 2 &&  // check for mandatory prefix
+             *if_from_in_state++ != JMAP_STATE_STRING_PREFIX) ||
+            atomodseq_t(if_from_in_state) != counters.mailmodseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        copy.old_state = xstrdup(copy.if_in_state);
-    }
-    else {
-        copy.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
     }
 
     int r = conversations_open_user(req->accountid, 0, &req->cstate);
@@ -14561,6 +14582,19 @@ static int jmap_email_copy(jmap_req_t *req)
         goto done;
     }
 
+    modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+    if (copy.if_in_state) {
+        const char *if_in_state = copy.if_in_state;
+        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
+            atomodseq_t(if_in_state) != old_modseq) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+    }
+
+    copy.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
+
     json_t *debug_bulkupdate = NULL;
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
@@ -14568,7 +14602,7 @@ static int jmap_email_copy(jmap_req_t *req)
     _email_copy_bulk(req, &copy, destroy_emails, debug_bulkupdate);
 
     /* Build response */
-    copy.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
+    copy.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
     json_t *reply = jmap_copy_reply(&copy);
     if (debug_bulkupdate) {

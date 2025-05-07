@@ -994,7 +994,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    get.state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
+    get.state = jmap_state_string(req, 0, MBTYPE_EMAIL, 0);
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
@@ -1554,9 +1554,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *query,
         query->result_position = result_pos;
     }
 
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, highest_modseq);
-    query->query_state = buf_release(&buf);
+    query->query_state = jmap_state_string(req, highest_modseq, MBTYPE_EMAIL, 0);
     query->can_calculate_changes = _mboxquery_can_calculate_changes(mbquery);
 
 done:
@@ -1706,7 +1704,12 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
         goto done;
     }
 
-    modseq_t sincemodseq = atomodseq_t(query.since_querystate);
+    modseq_t sincemodseq = 0;
+    const char *since_querystate = query.since_querystate;
+    if (req->cstate->version < 2 ||  // check for mandatory prefix
+        *since_querystate++ == JMAP_STATE_STRING_PREFIX) {
+        sincemodseq = atomodseq_t(since_querystate);
+    }
     if (!sincemodseq) {
         jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
         goto done;
@@ -1777,9 +1780,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     _mboxquery_free(&mbquery);
 
     /* Build response */
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, highestmodseq);
-    query.new_querystate = buf_release(&buf);
+    query.new_querystate = jmap_state_string(req, highestmodseq, MBTYPE_EMAIL, 0);
     jmap_ok(req, jmap_querychanges_reply(&query));
 
 done:
@@ -3969,7 +3970,7 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     }
 
     /* Fetch mailbox state */
-    set->super.new_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD));
+    set->super.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
     /* Prune intermediary mailbox trees without any children. Do this
      * after we fetched the mailbox state, so clients are forced to
@@ -4165,16 +4166,20 @@ static int jmap_mailbox_set(jmap_req_t *req)
         jmap_error(req, arg_err);
         goto done;
     }
+
+    modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (set.super.if_in_state) {
-        if (atomodseq_t(set.super.if_in_state) != jmap_modseq(req, MBTYPE_EMAIL, 0)) {
+        const char *if_in_state = set.super.if_in_state;
+        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
+            atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-        set.super.old_state = xstrdup(set.super.if_in_state);
     }
-    else {
-        set.super.old_state = modseqtoa(jmap_modseq(req, MBTYPE_EMAIL, 0));
-    }
+
+    set.super.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
+
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
     mboxname_release(&namespacelock);
@@ -4395,7 +4400,8 @@ done:
 static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
+    struct jmap_changes changes =
+        { .prefixed_state = req->cstate->version >= 2 };
     json_t *err = NULL;
 
     /* Parse request */
