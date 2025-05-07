@@ -118,15 +118,30 @@ extern FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
                                   const char *sourcefile);
 #define append_newstage(m, i, n, s) append_newstage_full((m), (i), (n), (s), NULL)
 
+struct append_metadata {
+    struct timespec *internaldate;
+    time_t savedate;
+    modseq_t createdmodseq;
+    const strarray_t *flags;
+    struct entryattlist **annotations;
+    unsigned nolink : 1;
+    struct {
+        uint32_t uid;
+        const char *mboxname;
+    } replacing;
+};
+
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage_full(struct appendstate *mailbox, struct body **body,
-                                 struct stagemsg *stage,
-                                 struct timespec *internaldate, time_t savedate,
-                                 modseq_t createdmodseq,
-                                 const strarray_t *flags, int nolink,
-                                 struct entryattlist **annotations);
-#define append_fromstage(m, b, s, i, c, f, n, a) \
-  append_fromstage_full((m), (b), (s), (i), 0, (c), (f), (n), (a))
+                              struct stagemsg *stage,
+                              struct append_metadata *meta);
+
+extern int append_fromstage(struct appendstate *mailbox, struct body **body,
+                            struct stagemsg *stage,
+                            struct timespec *internaldate,
+                            modseq_t createdmodseq,
+                            const strarray_t *flags, int nolink,
+                            struct entryattlist **annotations);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);
