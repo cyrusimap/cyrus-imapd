@@ -146,8 +146,28 @@ sub test_get_session
     $self->assert_equals(JSON::true, $primaryAccount->{isPersonal});
     my $accountCapabilities = $primaryAccount->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:blob'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
-    $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
+
+    {
+        my $ac_mail = $accountCapabilities->{'urn:ietf:params:jmap:mail'};
+
+        my $str = "foo\nbar\nBAZ\n";
+
+        use Test::Deep ':v1';
+        $self->assert_cmp_deeply(
+            {
+                # Presented in the same order as found in RFC 8621.
+                maxMailboxesPerEmail => 10,
+                maxMailboxDepth      => 11,
+                maxSizeMailboxName   => 100,
+                maxSizeAttachmentsPerEmail => 12,
+                emailQuerySortOptions => superbagof(),
+                maycreateTopLevelMailbox => JSON::true(),
+            },
+            $ac_mail,
+            "mail accountCapabilities look right",
+        );
+    }
+
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
     if ($buildinfo->get('component', 'sieve')) {
         $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
