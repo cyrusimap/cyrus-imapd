@@ -9531,26 +9531,29 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "uidvalidity")) {
             statusitems |= STATUS_UIDVALIDITY;
         }
-        else if (!strcmp(arg.s, "mailboxid")) {
-            statusitems |= STATUS_MAILBOXID;
-        }
         else if (!strcmp(arg.s, "unseen")) {
             statusitems |= STATUS_UNSEEN;
         }
-        else if (!strcmp(arg.s, "size")) {
-            statusitems |= STATUS_SIZE;
-        }
-        else if (!strcmp(arg.s, "highestmodseq")) {
+        else if (!strcmp(arg.s, "highestmodseq")) {    /* RFC 7162 */
             statusitems |= STATUS_HIGHESTMODSEQ;
         }
-        else if (!strcmp(arg.s, "createdmodseq")) {
-            statusitems |= STATUS_CREATEDMODSEQ;
+        else if (!strcmp(arg.s, "appendlimit")) {      /* RFC 7889 */
+            statusitems |= STATUS_APPENDLIMIT;
         }
-        else if (!strcmp(arg.s, "deleted")) {
+        else if (!strcmp(arg.s, "size")) {             /* RFC 8438 */
+            statusitems |= STATUS_SIZE;
+        }
+        else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
+            statusitems |= STATUS_MAILBOXID;
+        }
+        else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
         }
-        else if (!strcmp(arg.s, "deleted-storage")) {
+        else if (!strcmp(arg.s, "deleted-storage")) {  /* RFC 9208 */
             statusitems |= STATUS_DELETED_STORAGE;
+        }
+        else if (!strcmp(arg.s, "createdmodseq")) {    /* Non-standard */
+            statusitems |= STATUS_CREATEDMODSEQ;
         }
         else {
             static char buf[200];
@@ -9604,35 +9607,39 @@ static int print_statusline(const char *extname, unsigned statusitems,
         prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar, sd->uidvalidity);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_MAILBOXID) {
-        prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
-        sepchar = ' ';
-    }
     if (statusitems & STATUS_UNSEEN) {
         prot_printf(imapd_out, "%cUNSEEN %u", sepchar, sd->unseen);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_SIZE) {
-        prot_printf(imapd_out, "%cSIZE " QUOTA_T_FMT, sepchar, sd->size);
-        sepchar = ' ';
-    }
-    if (statusitems & STATUS_CREATEDMODSEQ) {
-        prot_printf(imapd_out, "%cCREATEDMODSEQ " MODSEQ_FMT,
-                    sepchar, sd->createdmodseq);
-        sepchar = ' ';
-    }
-    if (statusitems & STATUS_HIGHESTMODSEQ) {
+    if (statusitems & STATUS_HIGHESTMODSEQ) {    /* RFC 7162 */
         prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT,
                     sepchar, sd->highestmodseq);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_DELETED) {
+    if (statusitems & STATUS_APPENDLIMIT) {      /* RFC 7889 */
+        prot_printf(imapd_out, "%cAPPENDLIMIT %" PRIi64, sepchar, maxmsgsize);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_SIZE) {             /* RFC 8438 */
+        prot_printf(imapd_out, "%cSIZE " QUOTA_T_FMT, sepchar, sd->size);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
+        prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
         prot_printf(imapd_out, "%cDELETED %u", sepchar, sd->deleted);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_DELETED_STORAGE) {
+    if (statusitems & STATUS_DELETED_STORAGE) {  /* RFC 9208 */
         prot_printf(imapd_out, "%cDELETED-STORAGE " QUOTA_T_FMT,
                     sepchar, sd->deleted_storage);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_CREATEDMODSEQ) {    /* Non-standard */
+        prot_printf(imapd_out, "%cCREATEDMODSEQ " MODSEQ_FMT,
+                    sepchar, sd->createdmodseq);
         sepchar = ' ';
     }
 
@@ -13933,9 +13940,10 @@ static int list_data_remote(struct backend *be, char *tag,
                 /* print status items */
                 const char *status_items[] = {
                     /* XXX  MUST be in same order as STATUS_* bitmask */
-                    "messages", "recent", "uidnext", "uidvalidity",
-                    "unseen", "highestmodseq", "size", "mailboxid",
-                    "deleted", "deleted-storage", "",
+                    "messages", "recent", "uidnext", "uidvalidity", "unseen",
+                    "highestmodseq", "appendlimit", "size", "mailboxid",
+                    "deleted", "deleted-storage",
+                    "", "", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
