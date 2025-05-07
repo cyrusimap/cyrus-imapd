@@ -150,7 +150,8 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x10101000L)
+#define HAVE_MANUAL_DH_PARAMS 1
 static DH *dh_params = NULL;
 #endif
 
@@ -241,7 +242,7 @@ static int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
 }
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+#ifdef HAVE_MANUAL_DH_PARAMS
 /* Logic copied from OpenSSL apps/s_server.c: give the TLS context
  * DH params to work with DHE-* cipher suites. Hardcoded fallback
  * in case no DH params in server_key or server_cert.
@@ -295,7 +296,7 @@ static DH *load_dh_param(const char *dhfile, const char *keyfile, const char *ce
 
     return(ret);
 }
-#endif /* OPENSSL_VERSION_NUMBER >= 0x009080fL */
+#endif /* HAVE_MANUAL_DH_PARAMS */
 
 /* taken from OpenSSL apps/s_cb.c */
 
@@ -1025,9 +1026,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     SSL_CTX_set_tmp_rsa_callback(s_ctx, tmp_rsa_cb);
 #endif
 
-#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+#if (OPENSSL_VERSION_NUMBER >= 0x10101000L)
     SSL_CTX_set_dh_auto(s_ctx, 1);
-#elif (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
+#elif defined(HAVE_MANUAL_DH_PARAMS)
     /* Load DH params for DHE-* key exchanges */
     const char *server_dhparam_file = config_getstring(IMAPOPT_TLS_SERVER_DHPARAM);
     dh_params = load_dh_param(server_dhparam_file, server_key_file, server_cert_file);
@@ -1515,7 +1516,7 @@ EXPORTED int tls_shutdown_serverengine(void)
             sess_dbopen = 0;
         }
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL) && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+#ifdef HAVE_MANUAL_DH_PARAMS
         if (dh_params) DH_free(dh_params);
 #endif
     }
