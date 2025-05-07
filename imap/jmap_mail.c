@@ -108,6 +108,7 @@ static int jmap_email_changes(jmap_req_t *req);
 static int jmap_email_import(jmap_req_t *req);
 static int jmap_email_parse(jmap_req_t *req);
 static int jmap_email_copy(jmap_req_t *req);
+static int jmap_email_lookup(jmap_req_t *req);
 static int jmap_email_matchmime_method(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
@@ -197,6 +198,12 @@ static jmap_method_t jmap_mail_methods_standard[] = {
 
 // clang-format off
 static jmap_method_t jmap_mail_methods_nonstandard[] = {
+    {
+        "Email/lookup",
+        JMAP_MAIL_EXTENSION,
+        &jmap_email_lookup,
+        JMAP_NEED_CSTATE
+    },
     {
         "Email/matchMime",
         JMAP_MAIL_EXTENSION,
@@ -14607,6 +14614,70 @@ done:
     jmap_copy_fini(&copy);
     free(srcinbox);
     free(dstinbox);
+    return 0;
+}
+
+static int jmap_email_lookup(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *key;
+    json_t *val, *oldids = NULL;
+
+    json_object_foreach(req->args, key, val) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+        else if (!strcmp(key, "oldIds")) {
+            if (json_is_array(val)) oldids = val;
+        }
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
+    }
+
+    if (!oldids) {
+        jmap_parser_invalid(&parser, "oldIds");
+    }
+
+    if (json_array_size(parser.invalid)) {
+        jmap_error(req, json_pack("{s:s s:O}",
+                                  "type", "invalidArguments",
+                                  "arguments", parser.invalid));
+    }
+    else {
+        json_t *jid, *jids = json_object();
+        char newid[JMAP_EMAILID_SIZE];
+        size_t i;
+
+        json_array_foreach(oldids, i, jid) {
+            const char *oldid = json_string_value(jid);
+            const char *emailid = NULL;
+            uint64_t internaldate;
+
+            if (oldid) {
+                if (!jmap_email_find(req, NULL, oldid,
+                                     NULL, NULL, &internaldate)) {
+                    if (req->cstate->version < 2 ||
+                        *oldid == JMAP_EMAILID_PREFIX) {
+                        emailid = oldid;
+                    }
+                    else {
+                        jmap_set_emailid(req->cstate->version,
+                                         NULL, internaldate, NULL, newid);
+                        emailid = newid;
+                    }
+                }
+
+                json_object_set_new(jids, oldid,
+                                    emailid ? json_string(emailid) : json_null());
+            }
+        }
+
+        jmap_ok(req, json_pack("{s:o}", "ids", jids));
+    }
+
+    jmap_parser_fini(&parser);
+
     return 0;
 }
 
