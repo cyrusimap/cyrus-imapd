@@ -41,6 +41,8 @@ sub test_email_legacy_ids
     }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
+    my $state = $res->[0][1]->{queryState};
+    $self->assert_matches(qr/^[0-9].*/, $state);
 
     xlog $self, "get emails";
     my $ids = $res->[0][1]->{ids};
@@ -49,6 +51,7 @@ sub test_email_legacy_ids
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_str_equals($id1, $msg->{id});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{'state'});
 
     xlog $self, "Update $id2";
     $res = $jmap->CallMethods([['Email/set', {
@@ -61,6 +64,19 @@ sub test_email_legacy_ids
         }
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id2});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newState});
+
+    xlog $self, "get email list updates";
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sinceQueryState => $state,
+        sort => [{
+            property => 'receivedAt',
+        }],
+    }, "R1"]]);
+    $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldQueryState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newQueryState});
 
     xlog $self, "Destroy $id3";
     $res = $jmap->CallMethods([['Email/set', {
@@ -93,11 +109,13 @@ sub test_email_legacy_ids
     ]);
     my $id5 = $res->[0][1]->{created}{1}{id};
     $self->assert_matches(qr/^M/, $id5);
+    $state = $res->[0][1]->{newState};
 
     xlog $self, "Move $id4";
     $res = $jmap->CallMethods([
         ['Email/copy', {
             fromAccountId => 'cassandane',
+            ifFromInState => $state,
             accountId => 'other',
             create => {
                 1 => {
@@ -112,6 +130,10 @@ sub test_email_legacy_ids
     ]);
     $self->assert_str_equals($id4, $res->[0][1]->{created}{1}{id});
     $self->assert_str_equals($id4, $res->[1][1]{destroyed}[0]);
+    $self->assert_matches(qr/^J/, $res->[0][1]->{oldState});
+    $self->assert_matches(qr/^J/, $res->[0][1]->{newState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[1][1]->{oldState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[1][1]->{newState});
 
     # make the consistency check happy
     $self->{instance}->run_command({ cyrus => 1 },
