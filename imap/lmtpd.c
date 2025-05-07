@@ -615,9 +615,11 @@ int deliver_mailbox(FILE *f,
             }
         }
 
-        r = append_fromstage_full(&as, &content->body, stage,
-                                  &internaldate, savedate, /*createdmodseq*/0,
-                                  flags, !singleinstance, &annotations);
+        struct append_metadata meta = {
+            &internaldate, savedate, /*cmodseq*/ 0,
+            flags, &annotations, !singleinstance, /*replacing*/ { 0, NULL }
+        };
+        r = append_fromstage_full(&as, &content->body, stage, &meta);
 
         if (r) {
             append_abort(&as);
