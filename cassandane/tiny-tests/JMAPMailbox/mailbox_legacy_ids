@@ -36,6 +36,7 @@ sub test_mailbox_legacy_ids
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($id2, $res->[0][1]->{ids}[1]);
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{queryState});
 
     xlog $self, "get mailboxes";
     my $ids = $res->[0][1]->{ids};
@@ -43,6 +44,7 @@ sub test_mailbox_legacy_ids
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
     $self->assert_str_equals($id1, $res->[0][1]->{list}[0]{id});
     $self->assert_str_equals($id2, $res->[0][1]->{list}[1]{id});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{'state'});
 
     xlog $self, "Update $id2";
     $res = $jmap->CallMethods([['Mailbox/set', {
@@ -53,6 +55,8 @@ sub test_mailbox_legacy_ids
         }
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id2});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newState});
 
     my $state = $res->[0][1]->{newState};
 
@@ -74,6 +78,8 @@ sub test_mailbox_legacy_ids
     $res = $jmap->CallMethods([['Mailbox/changes',
                                 { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($id3, $res->[0][1]{created}[0]);
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldState});
+    $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newState});
 
     xlog $self, "Destroy $id3";
     $res = $jmap->CallMethods([['Mailbox/set', {
