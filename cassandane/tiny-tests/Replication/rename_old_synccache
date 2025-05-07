@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test replication of mailbox only after a rename
+#
+sub test_rename_old_synccache
+    :NoAltNameSpace :AllowMoves :Replication :SyncLog :DelayedDelete :SyncCache
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+    my $cachefname = "$self->{instance}->{basedir}/sync_cache.db";
+
+    xlog $self, "SYNC LOG FNAME $synclogfname";
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    $mastertalk->create("INBOX.sub");
+    $master_store->set_folder("INBOX.sub");
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 1;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_", store => $master_store);
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp, $master_store);
+
+    xlog $self, "run initial replication";
+    $self->run_replication();
+    #$self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('cassandane');
+
+    rename($cachefname, "$cachefname.junk");
+
+    xlog $self, "rename user";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename("user.cassandane", "user.dest");
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    $self->run_replication(user => 'dest');
+    $self->check_replication('dest');
+
+    xlog $self, "Rename again";
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->rename("user.dest", "user.third");
+
+    # replication works again
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('third');
+
+    # rename back sync-cache having missed the renames
+    rename("$cachefname.junk", $cachefname);
+
+    # copy messages to inbox to cause things to need to be synced
+    $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select("user.third.sub");
+    $admintalk->copy('1:*', 'user.third');
+
+    # replication works again
+    # NOTE - first one will fail due to bogus records in sync_cache, but second should work
+    eval { $self->run_replication(rolling => 1, inputfile => $synclogfname) };
+    $self->{instance}->getsyslog(); # clear syslog
+
+    # second run will make everything good again
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    unlink($synclogfname);
+    $self->check_replication('third');
+
+}

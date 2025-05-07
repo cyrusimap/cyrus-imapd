@@ -255,6 +255,9 @@ magic(ReverseACLs => sub {
 magic(RightNow => sub {
     shift->config_set(sync_rightnow_channel => '""');
 });
+magic(SyncCache => sub {
+    shift->config_set('sync_cache_db_path' => '@basedir@/sync_cache.db');
+});
 magic(SyncLog => sub {
     shift->config_set(sync_log => 1);
 });
