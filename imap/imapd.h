@@ -276,10 +276,11 @@ enum {
     STATUS_UIDVALIDITY =        (1<<3),
     STATUS_UNSEEN =             (1<<4),
     STATUS_HIGHESTMODSEQ =      (1<<5),  /* RFC 7162 */
-    STATUS_SIZE =               (1<<6),  /* RFC 8438 */
-    STATUS_MAILBOXID =          (1<<7),  /* RFC 8474 */
-    STATUS_DELETED =            (1<<8),  /* RFC 9051 */
-    STATUS_DELETED_STORAGE =    (1<<9),  /* RFC 9208 */
+    STATUS_APPENDLIMIT =        (1<<6),  /* RFC 7889 */
+    STATUS_SIZE =               (1<<7),  /* RFC 8438 */
+    STATUS_MAILBOXID =          (1<<8),  /* RFC 8474 */
+    STATUS_DELETED =            (1<<9),  /* RFC 9051 */
+    STATUS_DELETED_STORAGE =    (1<<10), /* RFC 9208 */
 
     /* Non-standard */
     STATUS_CREATEDMODSEQ =      (1<<14),
