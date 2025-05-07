@@ -112,6 +112,25 @@ static void test_limit2(void)
     }
 }
 
+void busywait_for(struct timespec *howlong)
+{
+    struct timespec start;
+    long long int max_tries = LLONG_MAX;
+
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+
+    for (long long int i = 0; i < max_tries; i++) {
+      struct timespec now;
+      clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+
+      if (now.tv_sec - start.tv_sec > howlong->tv_sec &&
+          now.tv_nsec - start.tv_nsec > howlong->tv_nsec
+      ) {
+          break;
+      }
+    }
+}
+
 static void test_slower_than_rate_limit(void)
 {
     struct slowio slowio = {0}, saved_slowio;
@@ -124,7 +143,7 @@ static void test_slower_than_rate_limit(void)
     /* pretend we're reading/writing slightly slower than the rate limit */
     for (i = 1; i <= 4; i++) {
         struct timespec io_delay = { i, 1000000 }; /* 1 ms over */
-        nanosleep(&io_delay, NULL);
+        busywait_for(&io_delay);
 
         memcpy(&saved_slowio, &slowio, sizeof(slowio));
         start = now_ms();
