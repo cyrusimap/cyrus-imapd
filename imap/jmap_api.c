@@ -1303,6 +1303,28 @@ HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
     return modseq;
 }
 
+static char *_state_string(int prefixed_state, modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (prefixed_state) {
+        // add mandatory prefix
+        buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
+    }
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+
+    return buf_release(&buf);
+}
+
+EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
+                                 int mbtype, int flags)
+{
+    // if we were not given a modseq, look it up by mbtype
+    if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
+
+    return _state_string(req->cstate->version >= 2, modseq);
+}
+
 HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 {
     /* XXX - look up root path from namespace? */
@@ -1952,7 +1974,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
     json_t *arg;
     int have_sincemodseq = 0;
 
-    memset(changes, 0, sizeof(struct jmap_changes));
+    // assume that we are given an initialized jmap_changes struct
     changes->created = json_array();
     changes->updated = json_array();
     changes->destroyed = json_array();
@@ -1964,9 +1986,14 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
 
         /* sinceState */
         else if (!strcmp(key, "sinceState")) {
-            if (json_is_string(arg) && imparse_isnumber(json_string_value(arg))) {
-                have_sincemodseq = 1;
-                changes->since_modseq = atomodseq_t(json_string_value(arg));
+            if (json_is_string(arg)) {
+                const char *since_state = json_string_value(arg);
+                if ((!changes->prefixed_state ||  // check for mandatory prefix
+                     *since_state++ == JMAP_STATE_STRING_PREFIX) &&
+                    imparse_isnumber(since_state)) {
+                    have_sincemodseq = 1;
+                    changes->since_modseq = atomodseq_t(since_state);
+                }
             }
         }
 
@@ -2008,8 +2035,10 @@ HIDDEN void jmap_changes_fini(struct jmap_changes *changes)
 HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();
-    char *old_state = modseqtoa(changes->since_modseq);
-    char *new_state = modseqtoa(changes->new_modseq);
+    char *old_state =
+        _state_string(changes->prefixed_state, changes->since_modseq);
+    char *new_state =
+        _state_string(changes->prefixed_state, changes->new_modseq);
 
     json_object_set_new(res, "oldState", json_string(old_state));
     json_object_set_new(res, "newState", json_string(new_state));

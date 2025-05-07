@@ -649,7 +649,7 @@ static void changes_cb(const char *id, void *val, void *rock)
 static int jmap_quota_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
 
     json_t *err = NULL;

@@ -322,6 +322,10 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
 #define JMAP_MODSEQ_FOLDER (1<<1)
 extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
 
+#define JMAP_STATE_STRING_PREFIX 'J'
+extern char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
+                               int mbtype, int flags);
+
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);
 
@@ -414,6 +418,9 @@ struct jmap_changes {
     /* Request arguments */
     modseq_t since_modseq;
     size_t max_changes;
+
+    /* Behavior control flags */
+    int prefixed_state;
 
     /* Response fields */
     modseq_t new_modseq;
