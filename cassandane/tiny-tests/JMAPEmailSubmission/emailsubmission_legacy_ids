@@ -22,9 +22,6 @@ sub test_emailsubmission_legacy_ids
     xlog "reconstructing indexes at v19 to get predictable senddate";
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
 
-    xlog $self, "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter');
-
     # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
     # created and onSend properties
     my @using = @{ $jmap->DefaultUsing() };
@@ -56,9 +53,7 @@ sub test_emailsubmission_legacy_ids
     xlog $self, "Get Identity and an email to submit";
     $res = $jmap->CallMethods([
         [ 'Identity/get', {}, "R0" ],
-        ['Email/query', {
-            filter => { subject => 'B' }
-         }, "R1"]
+        [ 'Email/query',  {}, "R1" ]
     ]);
     my $identityid = $res->[0][1]->{list}[0]->{id};
     my $emailid = $res->[1][1]->{ids}[0];
@@ -125,6 +120,14 @@ sub test_emailsubmission_legacy_ids
     ]);
     $self->assert_str_equals($subid, $res->[0][1]->{ids}[0]);
 
+    xlog $self, "Lookup existing email id (should return same id)";
+    $res = $jmap->CallMethods([
+        ['Email/lookup', {
+            oldIds => [ $emailid ]
+         }, "R1"]
+    ]);
+    $self->assert_str_equals($emailid, $res->[0][1]->{ids}{$emailid});
+
     xlog $self, "Upgrade to mailbox version 20";
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', 'max');
 
@@ -135,13 +138,21 @@ sub test_emailsubmission_legacy_ids
     xlog $self, "Get new mailbox ids and email id";
     $res = $jmap->CallMethods([
         ['Mailbox/query', { }, "R1"],
-        ['Email/query', {
-            filter => { subject => 'B' }
+        ['Email/lookup', {
+            oldIds => [ $emailid ]
          }, "R2"]
     ]);
     $sentid = $inboxid = $res->[0][1]{ids}[0];
     $schedid = $fooid = $res->[0][1]{ids}[1];
-    $emailid = $res->[1][1]->{ids}[0];
+    $emailid = $res->[1][1]->{ids}{$emailid};
+
+    xlog $self, "Lookup new email id (should return same id)";
+    $res = $jmap->CallMethods([
+        ['Email/lookup', {
+            oldIds => [ $emailid ]
+         }, "R1"]
+    ]);
+    $self->assert_str_equals($emailid, $res->[0][1]->{ids}{$emailid});
 
     xlog $self, "Query the submission by new emailId";
     $res = $jmap->CallMethods([
