@@ -9489,10 +9489,8 @@ static void cmd_starttls(char *tag, int imaps)
     imapd_starttls_done = 1;
     imapd_login_disabled = imapd_tls_allowed = imapd_tls_required = 0;
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
     if (imapd_tls_comp) imapd_compress_allowed = 0;
-#endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 }
 #else
 void cmd_starttls(char *tag __attribute__((unused)),
@@ -14531,13 +14529,11 @@ static void cmd_compress(char *tag, char *alg)
                     "%s BAD [COMPRESSIONACTIVE] DEFLATE active via COMPRESS\r\n",
                     tag);
     }
-#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (imapd_tls_comp) {
         prot_printf(imapd_out,
                     "%s NO [COMPRESSIONACTIVE] %s active via TLS\r\n",
                     tag, SSL_COMP_get_name(imapd_tls_comp));
     }
-#endif // defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (strcasecmp(alg, "DEFLATE")) {
         prot_printf(imapd_out,
                     "%s NO Unknown COMPRESS algorithm: %s\r\n", tag, alg);

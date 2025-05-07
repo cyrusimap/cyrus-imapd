@@ -1575,21 +1575,6 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
 }
 
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-/* taken from OpenSSL apps/s_cb.c */
-static RSA *tmp_rsa_cb(SSL *s __attribute__((unused)),
-                       int export __attribute__((unused)),
-                       int keylength)
-{
-    static RSA *rsa_tmp = NULL;
-
-    if (rsa_tmp == NULL) {
-        rsa_tmp = RSA_generate_key(keylength, RSA_F4, NULL, NULL);
-    }
-    return (rsa_tmp);
-}
-#endif
-
 /*
  * Seed the random number generator.
  */
@@ -1631,11 +1616,7 @@ static int tls_init_clientengine(struct imclient *imclient,
         return -1;
     }
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
     imclient->tls_ctx = SSL_CTX_new(TLS_client_method());
-#else
-    imclient->tls_ctx = SSL_CTX_new(SSLv23_client_method());
-#endif
     if (imclient->tls_ctx == NULL) {
         return -1;
     };
@@ -1677,10 +1658,6 @@ static int tls_init_clientengine(struct imclient *imclient,
             printf("[ TLS engine: cannot load cert/key data, may be a cert/key mismatch]\n");
             return -1;
         }
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-    SSL_CTX_set_tmp_rsa_callback(imclient->tls_ctx, tmp_rsa_cb);
-#endif
 
     verify_depth = verifydepth;
     SSL_CTX_set_verify(imclient->tls_ctx, verify_flags, verify_callback);

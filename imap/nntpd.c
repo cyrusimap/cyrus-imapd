@@ -4071,9 +4071,7 @@ static void cmd_starttls(int nntps)
     nntp_starttls_done = 1;
     nntp_tls_required = 0;
 
-#if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     nntp_tls_comp = (void *) SSL_get_current_compression(tls_conn);
-#endif
 
     /* close any selected group */
     if (group_state)
@@ -4098,13 +4096,11 @@ static void cmd_compress(char *alg)
         prot_printf(nntp_out,
                     "502 DEFLATE compression already active via COMPRESS\r\n");
     }
-#if defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (nntp_tls_comp) {
         prot_printf(nntp_out,
                     "502 %s compression already active via TLS\r\n",
                     SSL_COMP_get_name(nntp_tls_comp));
     }
-#endif // defined(HAVE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     else if (strcasecmp(alg, "DEFLATE")) {
         prot_printf(nntp_out,
                     "502 Unknown COMPRESS algorithm: %s\r\n", alg);
