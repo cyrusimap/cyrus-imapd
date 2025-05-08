@@ -180,16 +180,19 @@ static int _init_counted(struct conversations_state *state,
         val = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
         if (!val) val = "";
         vallen = strlen(val);
-        if (vallen && !state->is_shared) {
-            r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
-                    val, vallen, &state->txn);
-            if (r) {
-                syslog(LOG_ERR, "Failed to write counted_flags");
-                return r;
+        if (!state->is_shared) {
+            if (vallen) {
+                r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
+                                  val, vallen, &state->txn);
+                if (r) {
+                    syslog(LOG_ERR, "Failed to write counted_flags");
+                    return r;
+                }
             }
+
             // we use the lack of COUNTED_FLAGS to say it's a new DB, so set the version too
             char vbuf[16];
-            snprintf(vbuf, sizeof(vbuf), "%d", CONVERSATIONS_VERSION);
+            snprintf(vbuf, sizeof(vbuf), "%d", state->version);
             r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
                     vbuf, strlen(vbuf), &state->txn);
             if (r) {
@@ -364,8 +367,10 @@ EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *st
     return count;
 }
 
-EXPORTED int conversations_open_path(const char *fname, const char *userid, int shared,
-                                     struct conversations_state **statep)
+EXPORTED int conversations_open_path_version(const char *fname,
+                                             const char *userid, int shared,
+                                             struct conversations_state **statep,
+                                             int version)
 {
     struct conversations_open *open = NULL;
     const char *val = NULL;
@@ -397,21 +402,24 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         open->local_namespacelock = user_namespacelock_full(userid, locktype);
     }
 
+    /* set version -
+       for new files we use the specified version or CONVERSATIONS_VERSION,
+       otherwise we assume v0 unless/until we read VERSIONKEY
+    */
+    struct stat sbuf;
+    if (!stat(fname, &sbuf))
+        open->s.version = 0;
+    else if (version)
+        open->s.version = version;
+    else
+        open->s.version = CONVERSATIONS_VERSION;
+
     /* open db */
     int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
     r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
         _conv_remove(&open->s);
         return IMAP_IOERROR;
-    }
-
-    /* load or initialize counted flags */
-    cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
-    r = _init_counted(&open->s, val, vallen);
-    if (r) {
-        cyrusdb_abort(open->s.db, open->s.txn);
-        _conv_remove(&open->s);
-        return r;
     }
 
     /* parse the version */
@@ -426,6 +434,15 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
             return IMAP_MAILBOX_BADFORMAT;
         }
         open->s.version = version;
+    }
+
+    /* load or initialize counted flags */
+    cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
+    r = _init_counted(&open->s, val, vallen);
+    if (r) {
+        cyrusdb_abort(open->s.db, open->s.txn);
+        _conv_remove(&open->s);
+        return r;
     }
 
     /* we should just read the folder names up front too */
@@ -475,13 +492,14 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     return 0;
 }
 
-EXPORTED int conversations_open_user(const char *userid, int shared,
-                                     struct conversations_state **statep)
+EXPORTED int conversations_open_user_version(const char *userid, int shared,
+                                             struct conversations_state **statep,
+                                             int version)
 {
     char *path = conversations_getuserpath(userid);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
-    r = conversations_open_path(path, userid, shared, statep);
+    r = conversations_open_path_version(path, userid, shared, statep, version);
     free(path);
     return r;
 }
@@ -3232,6 +3250,7 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state, int wi
     }
 
     /* re-init the counted flags */
+    state->version = CONVERSATIONS_VERSION;
     r = _init_counted(state, NULL, 0);
     if (r) return r;
 
