@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_name_toolong
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create mailbox";
+    my $name = 'X' x 300;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "1" => { role => undef, name => $name },
+                "2" => { role => undef, name => 'foo' }
+            },
+            update => {
+                "#2" => { name => $name },
+            }
+         }, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('name', $res->[0][1]{notCreated}{1}{properties}[0]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{'#2'}{type});
+    $self->assert_str_equals('name', $res->[0][1]{notUpdated}{'#2'}{properties}[0]);
+}

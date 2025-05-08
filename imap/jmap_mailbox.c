@@ -152,9 +152,17 @@ HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
     }
 }
 
-HIDDEN void jmap_mailbox_capabilities(json_t *account_capabilities
-                                      __attribute__((unused)))
+HIDDEN void jmap_mailbox_capabilities(json_t *account_capabilities,
+                                      int mayCreateTopLevel)
 {
+    json_t *email_capa =
+        json_object_get(account_capabilities, JMAP_URN_MAIL);
+
+    json_object_set_new(email_capa, "maxMailboxDepth", json_null());
+    json_object_set_new(email_capa, "maxSizeMailboxName",
+                        json_integer(MAX_MAILBOX_NAME / 2));
+    json_object_set_new(email_capa, "mayCreateTopLevelMailbox",
+                        json_boolean(mayCreateTopLevel));
 }
 
 
@@ -1875,22 +1883,21 @@ static void _mboxset_args_parse(json_t *jargs,
     if (json_is_string(jname)) {
         char *name = charset_utf8_normalize(json_string_value(jname));
         size_t len = strlen(name);
-        int is_valid = 0;
+        int is_valid =  (len > MAX_MAILBOX_NAME / 2) ? 0 /*too long*/ : -1;
         size_t i;
-        for (i = 0; i < len; i++) {
+        for (i = 0; is_valid && i < len; i++) {
             if (iscntrl(name[i])) {
                 is_valid = 0;
-                break;
             }
             else if (!isspace(name[i])) {
                 is_valid = 1;
             }
         }
-        if (is_valid) {
+        if (is_valid > 0) {
             args->name = name;
         }
         else {
-            /* Empty string, bogus characters or just whitespace */
+            /* Empty string, too long, bogus characters or just whitespace */
             jmap_parser_invalid(parser, "name");
             free(name);
         }
