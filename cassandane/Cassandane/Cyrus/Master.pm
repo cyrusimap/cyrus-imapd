@@ -1345,8 +1345,10 @@ sub test_ready_file
 {
     my ($self) = @_;
 
+    # config isn't fully initialised until start() is called, so we can't
+    # just read these the sensible way. instead, predict the defaults.
     my $ready_file = $self->{instance}->get_basedir() . '/master.ready';
-    my $pid_file = $self->{instance}->_pid_file();
+    my $pid_file = $self->{instance}->get_basedir() . '/run/master.pid';
 
     # pid file should not already exist
     my $pid_sb = stat($pid_file);
