@@ -3174,9 +3174,8 @@ product version in the capabilities
    Two certificates can be set, e.g RSA and EC, if the filenames are separated with
    comma without spaces. */
 
-{ "tls_server_dhparam", NULL, STRING, "3.1.4" }
-/* File containing the DH parameters belonging to the certificate in
-   tls_server_cert. Used by OpenSSL before version 3.0. */
+{ "tls_server_dhparam", NULL, STRING, "UNRELEASED", "UNRELEASED" }
+/* Deprecated. No longer used. */
 
 { "tls_server_key", NULL, STRING, "3.1.8" }
 /* File containing the private key belonging to the certificate in
