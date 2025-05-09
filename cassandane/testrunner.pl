@@ -300,7 +300,7 @@ while (my $a = shift)
     }
     else
     {
-        push(@names, $a);
+        push(@names, split(/\s+/, $a));
     }
 }
 
