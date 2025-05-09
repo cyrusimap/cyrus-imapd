@@ -523,6 +523,27 @@ sub assert_not_file_test
                   "'$path' unexpectedly passed '$test_type' test");
 }
 
+sub assert_cmp_deeply
+{
+    my ($self, $have, $want, $desc) = @_;
+    $desc ||= "deep comparison matched";
+
+    require Test::Deep;
+    my ($ok, $stack) = Test::Deep::cmp_details($want, $have);
+
+    if ($ok) {
+        return $self->assert(1, $desc);
+    }
+
+    my ($package, $filename, $line) = caller;
+
+    my $diag = join qq{\n},
+               "deep comparison failed at $filename, line $line:\n",
+               Test::Deep::deep_diag($stack);
+
+    return $self->assert(0, $diag);
+}
+
 sub new_test_url
 {
     my ($self, $content_or_app) = @_;

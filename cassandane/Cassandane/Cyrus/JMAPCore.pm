@@ -68,6 +68,7 @@ sub new
                  httpmodules => 'carddav caldav jmap',
                  jmap_max_size_upload => '1k',
                  jmap_max_size_request => '1k',
+                 jmap_mail_max_size_attachments_per_email => '1m',
                  jmap_nonstandard_extensions => 'yes',
                  httpallowcompress => 'no');
 

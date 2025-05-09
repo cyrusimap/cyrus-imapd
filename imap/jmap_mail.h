@@ -62,6 +62,7 @@ extern void jmap_emailsubmission_init(jmap_settings_t *settings);
 extern void jmap_emailsubmission_capabilities(json_t *jcapabilities);
 
 extern void jmap_mailbox_init(jmap_settings_t *settings);
-extern void jmap_mailbox_capabilities(json_t *jcapabilities);
+extern void jmap_mailbox_capabilities(json_t *jcapabilities,
+                                      int mayCreateToplevel);
 
 #endif /* JMAP_MAIL_H */

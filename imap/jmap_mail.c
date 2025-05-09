@@ -347,12 +347,11 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
         max_size_attachments_per_email = 0;
     }
 
-    json_t *email_capabilities = json_pack("{s:i s:i s:i s:o, s:b}",
+    json_t *email_capabilities = json_pack("{s:i s:i s:i s:o}",
             "maxMailboxesPerEmail", JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
             "maxKeywordsPerEmail", JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL,
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
-            "emailsListSortOptions", sortopts,
-            "mayCreateTopLevelMailbox", mayCreateTopLevel);
+            "emailQuerySortOptions", sortopts);
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
 
@@ -360,7 +359,7 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
         json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
     }
 
-    jmap_mailbox_capabilities(account_capabilities);
+    jmap_mailbox_capabilities(account_capabilities, mayCreateTopLevel);
 }
 
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
