@@ -663,7 +663,8 @@ extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
 extern void mailbox_remove_files_from_object_storage(struct mailbox *mailbox, unsigned flags);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
-extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
+extern int mailbox_create(const char *name, uint32_t mbtype, int minor_version,
+                          const char *part, const char *acl,
                           const char *uniqueid, int options, unsigned uidvalidity,
                           modseq_t createdmodseq, modseq_t highestmodseq,
                           struct mailbox **mailboxptr);

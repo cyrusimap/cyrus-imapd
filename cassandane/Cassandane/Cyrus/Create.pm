@@ -45,7 +45,9 @@ use Data::Dumper;
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Slurp;
 use Cassandane::Instance;
+use Cyrus::IndexFile;
 
 $Data::Dumper::Sortkeys = 1;
 
@@ -204,6 +206,47 @@ sub test_good_mailboxes_virtdomains
         $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
     }
+}
+
+sub test_mailbox_version
+    :Conversations
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create user INBOX with index v19";
+    $admintalk->_imap_cmd('CREATE', 0, '',
+                          "user.other", [ 'VERSION', '19' ]);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Verify INBOX with index v19";
+    my $dir = $self->{instance}->folder_to_directory('user.other');
+    my $file = "$dir/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+    $self->assert_num_equals(19, $index->header('MinorVersion'));
+
+    xlog $self, "Create user INBOX.foo";
+    $admintalk->create('user.other.foo');
+
+    xlog $self, "Verify INBOX.foo with index v19";
+    $dir = $self->{instance}->folder_to_directory('user.other.foo');
+    $file = "$dir/cyrus.index";
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+    $self->assert_num_equals(19, $index->header('MinorVersion'));
+
+    xlog $self, "Verify conv.db is v1";
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/conv-output.txt";
+    $self->{instance}->run_command({ cyrus => 1,
+                                     redirects => { stdout => $outfile } },
+                                   'ctl_conversationsdb', '-d', 'other');
+    my $data = slurp_file($outfile);
+    $self->assert_matches(qr/\$VERSION\t1/, $data);
 }
 
 1;

@@ -5888,6 +5888,7 @@ unsigned mailbox_count_unseen(struct mailbox *mailbox)
  * don't need to lock the index file to work with it :) */
 EXPORTED int mailbox_create(const char *name,
                    uint32_t mbtype,
+                   int minor_version,
                    const char *part,
                    const char *acl,
                    const char *uniqueid,
@@ -5901,6 +5902,7 @@ EXPORTED int mailbox_create(const char *name,
     char quotaroot[MAX_MAILBOX_BUFFER];
     int hasquota;
     const char *fname;
+    mbname_t *mbname = NULL;
     struct mailbox *mailbox = NULL;
     int n;
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
@@ -5915,10 +5917,9 @@ EXPORTED int mailbox_create(const char *name,
     mailbox = create_listitem(lockname);
 
     /* needs to be an exclusive namelock to create a mailbox */
-    char *userid = mboxname_to_userid(name);
-    int haslock = user_isnamespacelocked(userid);
+    mbname = mbname_from_intname(name);
+    int haslock = user_isnamespacelocked(mbname_userid(mbname));
     assert(haslock == LOCK_EXCLUSIVE);
-    free(userid);
 
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
     if (r) {
@@ -6060,9 +6061,26 @@ EXPORTED int mailbox_create(const char *name,
     if (!createdmodseq || createdmodseq > highestmodseq)
         createdmodseq = highestmodseq;
 
+    if (!minor_version) {
+        minor_version = MAILBOX_MINOR_VERSION;
+
+        // Use the minor version of our parent, if exists
+        mbentry_t *mbentry = NULL;
+        mboxlist_findparent(name, &mbentry);
+        if (mbentry) {
+            struct mailbox *parent = NULL;
+            mailbox_open_from_mbe(mbentry, &parent);
+            if (parent) {
+                minor_version = parent->i.minor_version;
+                mailbox_close(&parent);
+            }
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
-    mailbox->i.minor_version = MAILBOX_MINOR_VERSION;
+    mailbox->i.minor_version = minor_version;
     mailbox->i.start_offset = INDEX_HEADER_SIZE;
     mailbox->i.record_size = INDEX_RECORD_SIZE;
     mailbox->i.options = options;
@@ -6079,6 +6097,21 @@ EXPORTED int mailbox_create(const char *name,
 
     mailbox->header_dirty = 1;
 
+    // If this is a new v19 (or earlier) INBOX, force creation of a v1 conv.db
+    if (minor_version < 20 &&
+        mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
+        int is_readonly = mailbox->is_readonly ||
+            mailbox->index_locktype == LOCK_SHARED;
+        r = conversations_open_user_version(mbname_userid(mbname), is_readonly,
+                                            &mailbox->local_cstate, 1);
+        if (r) {
+            xsyslog(LOG_ERR, "DBERROR: failed to open conversations",
+                    "mboxname=<%s> ro=<%s> error=<%s>", mailbox_name(mailbox),
+                    is_readonly ? "yes" : "no", error_message(r));
+            goto done;
+        }
+    }
+
     r = seen_create_mailbox(NULL, mailbox);
     if (r) goto done;
     r = mailbox_commit(mailbox);
@@ -6091,6 +6124,7 @@ EXPORTED int mailbox_create(const char *name,
                            mailbox_uniqueid(mailbox), mailbox->i.uidvalidity);
 
 done:
+    mbname_free(&mbname);
     if (!r && mailboxptr)
         *mailboxptr = mailbox;
     else
@@ -6783,12 +6817,12 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     modseq_t highestmodseq = silent ? oldmailbox->i.highestmodseq : 0;
 
     /* Create new mailbox */
-    r = mailbox_create(newname, mailbox_mbtype(oldmailbox), newpartition,
+    r = mailbox_create(newname, mailbox_mbtype(oldmailbox),
+                       oldmailbox->i.minor_version, newpartition,
                        mailbox_acl(oldmailbox), mailbox_uniqueid(oldmailbox),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
                        highestmodseq, &newmailbox);
-
     if (r) return r;
 
     /* Check quota if necessary */
@@ -7197,7 +7231,8 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
         /* no cyrus.index file at all - well, we're in a pickle!
          * no point trying to rescue anything else... */
         mailbox_close(&mailbox);
-        r = mailbox_create(name, mbentry->mbtype, mbentry->partition, mbentry->acl,
+        r = mailbox_create(name, mbentry->mbtype, 0 /* version */,
+                           mbentry->partition, mbentry->acl,
                            mbentry->uniqueid, options, 0, 0, 0, mbptr);
         mboxlist_entry_free(&mbentry);
         return r;

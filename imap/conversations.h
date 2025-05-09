@@ -231,10 +231,17 @@ extern void conversations_set_suffix(const char *suff);
 extern char *conversations_getmboxpath(const char *mboxname);
 extern char *conversations_getuserpath(const char *username);
 
-extern int conversations_open_path(const char *path, const char *userid, int shared,
-                                   struct conversations_state **statep);
-extern int conversations_open_user(const char *username, int shared,
-                                   struct conversations_state **statep);
+#define conversations_open_path(p, u, sh, sp) \
+    conversations_open_path_version(p, u, sh, sp, 0)
+extern int conversations_open_path_version(const char *path,
+                                           const char *userid, int shared,
+                                           struct conversations_state **statep,
+                                           int version);
+#define conversations_open_user(u, sh, sp) \
+    conversations_open_user_version(u, sh, sp, 0)
+extern int conversations_open_user_version(const char *username, int shared,
+                                           struct conversations_state **statep,
+                                           int version);
 extern int conversations_open_mbox(const char *mboxname, int shared,
                                    struct conversations_state **statep);
 extern struct conversations_state *conversations_get_path(const char *path);
