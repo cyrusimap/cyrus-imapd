@@ -850,6 +850,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
+    if (jmap_wantprop(rock->get->props, "mailboxUniqueId")) {
+        json_object_set_new(obj, "mailboxUniqueId",
+                            json_string(mbentry->uniqueid));
+    }
+
     json_array_append_new(rock->get->list, obj);
 
 done:
@@ -959,6 +964,11 @@ static const jmap_property_t calendar_props[] = {
     },
     {
         "calDavUrl",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mailboxUniqueId",
         JMAP_CALENDARS_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
@@ -2072,6 +2082,10 @@ static void setcalendars_create(struct jmap_req *req,
                         "myRights",
                         calendarrights_to_jmap(jmap_myrights_mbentry(req, mbentry),
                                                !strcmp(req->userid, req->accountid)));
+    if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+        json_object_set(*record, "mailboxUniqueId",
+                        json_string(mbentry->uniqueid));
+    }
     jmap_add_id(req, creation_id, uid);
 
 done:

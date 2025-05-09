@@ -22,6 +22,7 @@ sub test_calendar_set
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{created});
+    $self->assert_not_null($res->[0][1]{created}{1}{mailboxUniqueId});
 
     my $id = $res->[0][1]{created}{"1"}{id};
 
@@ -32,6 +33,7 @@ sub test_calendar_set
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isVisible});
+    $self->assert_not_null($res->[0][1]{list}[0]{mailboxUniqueId});
 
     xlog $self, "update calendar $id";
     $res = $jmap->CallMethods([
