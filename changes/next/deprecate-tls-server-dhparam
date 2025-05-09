@@ -1,0 +1,15 @@
+
+Description:
+
+Deprecate the 'tls_server_dhparam' option.
+This is no longer needed by OpenSSL >= 3.0.
+
+
+Config changes:
+
+The 'tls_server_dhparam' option is no longer used.
+
+
+Upgrade instructions:
+
+The 'tls_server_dhparam' can be removed from imapd.conf.
