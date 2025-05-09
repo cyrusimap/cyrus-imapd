@@ -927,7 +927,7 @@ done:
             else if (!strcmp(inputbuf, "auth")) {
                 cmd_auth(arg);
             }
-            else if (!strcmp(inputbuf, "stls") && tls_enabled()) {
+            else if (!strcmp(inputbuf, "stls") && tls_starttls_enabled()) {
                 if (arg) {
                     prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
                 } else {
@@ -1458,7 +1458,7 @@ static void cmd_capa(void)
         prot_write(popd_out, mechlist, strlen(mechlist));
     }
 
-    if (tls_enabled() && !popd_starttls_done && !popd_authstate) {
+    if (tls_starttls_enabled() && !popd_starttls_done && !popd_authstate) {
         prot_printf(popd_out, "STLS\r\n");
     }
     if (expire < 0) {

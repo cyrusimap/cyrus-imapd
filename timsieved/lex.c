@@ -101,7 +101,7 @@ static int token_lookup(const char *str)
 
     case 's':
         if (strcmp(str, "setactive")==0) return SETACTIVE;
-        if (strcmp(str, "starttls")==0 && tls_enabled())
+        if (strcmp(str, "starttls")==0 && tls_starttls_enabled())
             return STARTTLS;
         break;
 

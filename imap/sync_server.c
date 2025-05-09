@@ -291,7 +291,7 @@ static void dobanner(void)
             prot_printf(sync_out, "%s", mechlist);
         }
 
-        if (tls_enabled() && !sync_starttls_done) {
+        if (tls_starttls_enabled() && !sync_starttls_done) {
             prot_printf(sync_out, "* STARTTLS\r\n");
         }
 
@@ -655,7 +655,7 @@ static void cmdloop(void)
             break;
 
         case 'S':
-            if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+            if (!strcmp(cmd.s, "Starttls") && tls_starttls_enabled()) {
                 if (c == '\r') c = prot_getc(sync_in);
                 if (c != '\n') goto extraargs;
 

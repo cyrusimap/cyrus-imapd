@@ -430,7 +430,7 @@ static struct http_connection http_conn;
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
 static int httpd_tls_required = 0;
-static int httpd_tls_enabled = 0;
+static int httpd_starttls_enabled = 0;
 static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
 unsigned long config_httpmodules;
 
@@ -1307,7 +1307,7 @@ static int tls_init(int client_auth, struct buf *serverinfo)
         return HTTP_SERVER_ERROR;
     }
 
-    httpd_tls_enabled = 1;
+    httpd_starttls_enabled = config_getswitch(IMAPOPT_ALLOWSTARTTLS);
 
     return 0;
 }
@@ -1642,7 +1642,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     else if (txn->flags.ver == VER_1_1 &&
              !(txn->conn->tls_ctx || (txn->flags.conn & CONN_CLOSE))) {
         /* Advertise available upgrade protocols */
-        if (httpd_tls_enabled &&
+        if (httpd_starttls_enabled &&
             config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
             txn->flags.upgrade |= UPGRADE_TLS;
         }
@@ -2415,7 +2415,8 @@ static void parse_upgrade(struct transaction_t *txn)
         char *token;
 
         while ((token = tok_next(&tok))) {
-            if (!txn->conn->tls_ctx && httpd_tls_enabled &&
+            if (!txn->conn->tls_ctx && httpd_starttls_enabled &&
+                config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
                 !strcasecmp(token, TLS_VERSION)) {
                 /* Upgrade to TLS */
                 txn->flags.conn |= CONN_UPGRADE;

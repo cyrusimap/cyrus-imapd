@@ -1,0 +1,23 @@
+
+Description:
+
+The industry is deprecating STARTTLS in favor of implicit TLS over a
+dedicated port.  This PR disables opportunistic TLS by default.
+
+
+Documentation:
+
+imapd.conf(5)
+
+
+Config changes:
+
+Added the 'allowstarttls' option, which when enabled, allows upgrading a
+plaintext connection to use TLS.
+
+
+Upgrade instructions:
+
+Installations that need to service clients that use opportunistic TLS
+should enable the 'allowstarttls' option, or a protocol specific 'allowstarttls'
+option, E.g. 'imap_allowstarttls'.
