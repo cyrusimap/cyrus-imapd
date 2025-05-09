@@ -244,7 +244,7 @@ static int meth_get(struct transaction_t *txn,
             }
 
             etag = message_guid_encode(&record.guid);
-            lastmod = record.internaldate;
+            lastmod = record.internaldate.tv_sec;
             precond = check_precond(txn, etag, lastmod);
 
             switch (precond) {
