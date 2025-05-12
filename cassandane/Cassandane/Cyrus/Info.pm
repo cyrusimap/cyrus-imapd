@@ -205,6 +205,7 @@ sub test_lint_channels
         'banana_sync_host' => 'banana.internal',
         'banana_sync_trust_fund' => 'street art',
         'banana_tcp_keepalive' => 'yes',
+        'banana_sasl_mech_list' => 'PLAIN',
     );
 
     $self->_start_instances();
@@ -217,6 +218,7 @@ sub test_lint_channels
         [ sort(
             "banana_sync_trust_fund: street art\n",
             "banana_tcp_keepalive: yes\n",
+            "banana_sasl_mech_list: PLAIN\n",
         ) ],
         [ sort @output ]
     );
@@ -257,6 +259,35 @@ sub test_lint_partitions
             "archivepartition-bad: /tmp/abad\n",
             "foosearchpartition-bad: /tmp/sbad\n",
             "metapartition-bad: /tmp/mbad\n",
+        ) ],
+        [ sort @output ]
+    );
+}
+
+sub test_lint_services
+    :want_service_http :needs_component_httpd :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        'http_sasl_mech_list' => 'PLAIN',
+        'http_sasl_trust_fund' => 'street art',
+        'http_tcp_keepalive' => 'yes',
+        'http_trust_fund' => 'street art',
+    );
+
+    $self->_start_instances();
+
+    xlog $self, "test 'cyr_info conf-lint' with service-specific config";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+
+    $self->assert_deep_equals(
+        [ sort(
+            "http_trust_fund: street art\n",
+            # XXX we don't verify sasl keys, so this isn't reported
+            #"http_sasl_trust_fund: street art\n",
         ) ],
         [ sort @output ]
     );
