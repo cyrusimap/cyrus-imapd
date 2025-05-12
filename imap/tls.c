@@ -1903,3 +1903,9 @@ EXPORTED int tls_enabled(void)
 }
 
 #endif /* HAVE_SSL */
+
+
+EXPORTED int tls_starttls_enabled(void)
+{
+    return config_getswitch(IMAPOPT_ALLOWSTARTTLS) && tls_enabled();
+}
