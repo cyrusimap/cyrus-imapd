@@ -188,6 +188,7 @@ struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
+static int imapd_starttls_allowed = 0;
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
@@ -836,6 +837,7 @@ static void imapd_reset(void)
     imapd_compress_done = 0;
     imapd_tls_comp = NULL;
     imapd_starttls_done = 0;
+    imapd_starttls_allowed = tls_starttls_enabled();
     plaintextloginalert = NULL;
 
     saslprops_reset(&saslprops);
@@ -860,6 +862,8 @@ int service_init(int argc, char **argv, char **envp)
 
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
+
+    imapd_starttls_allowed = tls_starttls_enabled();
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();
@@ -1930,7 +1934,7 @@ static void cmdloop(void)
 
         case 'S':
             if (!strcmp(cmd.s, "Starttls")) {
-                if (!tls_enabled()) {
+                if (!imapd_starttls_allowed) {
                     /* we don't support starttls */
                     goto badcmd;
                 }
@@ -3471,7 +3475,7 @@ static void capa_response(int flags)
         prot_printf(imapd_out, " XAPPLEPUSHSERVICE");
     }
 
-    if (tls_enabled() && !imapd_starttls_done && !imapd_authstate) {
+    if (imapd_starttls_allowed && !imapd_starttls_done && !imapd_authstate) {
         prot_printf(imapd_out, " STARTTLS");
     }
     if (imapd_tls_required || imapd_authstate ||
@@ -8742,6 +8746,7 @@ static void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
+    imapd_starttls_allowed = 0;
     imapd_tls_required = 0;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)

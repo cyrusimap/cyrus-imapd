@@ -1311,7 +1311,8 @@ static void cmdloop(void)
             break;
 
         case 'S':
-            if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
+            if (!strcmp(cmd.s, "Starttls")) {
+                if (!tls_starttls_enabled()) goto badcmd;
                 if (c == '\r') c = prot_getc(nntp_in);
                 if (c != '\n') goto extraargs;
 
@@ -1745,7 +1746,7 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     }
 
     /* add STARTTLS */
-    if (tls_enabled() && !nntp_starttls_done && !nntp_authstate)
+    if (tls_starttls_enabled() && !nntp_starttls_done && !nntp_authstate)
         prot_printf(nntp_out, "STARTTLS\r\n");
 
     if (!nntp_tls_required) {
@@ -2394,7 +2395,7 @@ static void cmd_help(void)
 
     prot_printf(nntp_out, "\tQUIT\r\n"
                 "\t\tTerminate the session.\r\n");
-    if (tls_enabled() && !nntp_starttls_done && !nntp_authstate) {
+    if (tls_starttls_enabled() && !nntp_starttls_done && !nntp_authstate) {
         prot_printf(nntp_out, "\tSTARTTLS\r\n"
                     "\t\tStart a TLS negotiation.\r\n");
     }
