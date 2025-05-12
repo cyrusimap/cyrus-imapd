@@ -197,6 +197,13 @@ are listed with ``<none>''.
   This was implemented to prevent clients renaming Sent to Trash/Sent, 
   which would confused other clients. */
 
+{ "allowstarttls", 0, SWITCH, "UNRELEASED" }
+/* If enabled, allows upgrading a plaintext connection to use TLS
+   (a.k.a opportunistic TLS) via a protocol specific
+   command/mechanism.  IMAP, LMTP, NNTP, and ManageSieve use the
+   STARTTLS command.  POP3 uses the STLS command.  HTTP uses the
+   Upgrade header field. */
+
 { "allowusermoves", 0, SWITCH, "2.3.17" }
 /* Allow moving user accounts (with associated meta-data) via RENAME
    or XFER.

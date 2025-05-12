@@ -833,7 +833,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
         break;
 
     case 'S':
-        if (!strcmp(c->cmd.s, "Starttls")) {
+        if (!strcmp(c->cmd.s, "Starttls") && tls_starttls_enabled()) {
             CHECKNEWLINE(c, ch);
 
             /* XXX  discard any input pipelined after STARTTLS */
@@ -1038,7 +1038,7 @@ static void dobanner(struct conn *c)
     prot_printf(c->pout, "%s\r\n",
                 (ret == SASL_OK && mechcount > 0) ? mechs : "* AUTH");
 
-    if (tls_enabled() && !c->tlsconn) {
+    if (tls_starttls_enabled() && !c->tlsconn) {
         prot_printf(c->pout, "* STARTTLS\r\n");
     }
 

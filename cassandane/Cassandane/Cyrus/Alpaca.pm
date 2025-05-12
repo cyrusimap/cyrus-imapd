@@ -51,7 +51,11 @@ use Cassandane::Util::Socket;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({}, @_);
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(allowstarttls => 'on');
+
+    return $class->SUPER::new({config => $config}, @_);
 }
 
 sub set_up
