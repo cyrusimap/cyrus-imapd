@@ -250,10 +250,11 @@ static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
 }
 
 static int validate_request(struct transaction_t *txn, const json_t *req,
-                            jmap_settings_t *settings)
+                            jmap_settings_t *settings, int64_t *num_created_ids)
 {
     json_t *using = json_object_get(req, "using");
     json_t *calls = json_object_get(req, "methodCalls");
+    json_t *createdIds = json_object_get(req, "createdIds");
 
     if (!json_is_array(using) || !json_is_array(calls)) {
         return JMAP_NOT_REQUEST;
@@ -264,6 +265,21 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
      * maxConcurrentUpload
      * maxConcurrentRequests
      */
+
+    if (json_is_object(createdIds)) {
+        *num_created_ids = json_object_size(createdIds);
+
+        if (*num_created_ids > settings->limits[MAX_CREATEDIDS_IN_REQUEST]) {
+            return JMAP_LIMIT_CREATEDIDS;
+        }
+    }
+    else if (createdIds && !json_is_null(createdIds)) {
+        txn->error.desc = "Invalid createdIds argument";
+        return JMAP_NOT_REQUEST;
+    }
+    else {
+        *num_created_ids = 0;
+    }
 
     size_t i;
     json_t *val;
@@ -276,6 +292,17 @@ static int validate_request(struct transaction_t *txn, const json_t *req,
         }
         if (i >= (size_t) settings->limits[MAX_CALLS_IN_REQUEST]) {
             return JMAP_LIMIT_CALLS;
+        }
+
+        const char *mname = json_string_value(json_array_get(val, 0));
+        mname = strchr(mname, '/');
+        if (!mname) continue;
+
+        mname++;
+        if (!strcmp(mname, "set") || !strcmp(mname, "upload")) {
+            json_t *args = json_array_get(val, 1);
+            size_t size = json_object_size(json_object_get(args, "create"));
+            *num_created_ids += MIN(size, MAX_OBJECTS_IN_SET);
         }
     }
 
@@ -330,6 +357,7 @@ HIDDEN int jmap_error_response(struct transaction_t *txn,
         GCC_FALLTHROUGH
 
     case JMAP_LIMIT_CALLS:
+    case JMAP_LIMIT_CREATEDIDS:
         limit = title + strlen(title) + 1;
         break;
 
@@ -596,6 +624,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     int ret, do_perf = 0;
     char *account_inboxname = NULL;
     int return_created_ids = 0;
+    int64_t num_created_ids = 0;
     hash_table created_ids = HASH_TABLE_INITIALIZER;
     hash_table inmemory_blobs = HASH_TABLE_INITIALIZER;
     hash_table capabilities_by_accountid = HASH_TABLE_INITIALIZER;
@@ -607,7 +636,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     strarray_t scheduled_emails = STRARRAY_INITIALIZER;
 
     /* Validate Request object */
-    if ((ret = validate_request(txn, jreq, settings))) {
+    if ((ret = validate_request(txn, jreq, settings, &num_created_ids))) {
         return jmap_error_response(txn, ret, res);
     }
 
@@ -623,7 +652,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     construct_hash_table(&capabilities_by_accountid, 8, 0);
     construct_hash_table(&inmemory_blobs, 64, 0);
     construct_hash_table(&mbstates, 64, 0);
-    construct_hash_table(&created_ids, 1024, 0);
+    construct_hash_table(&created_ids, num_created_ids+1, 0);
 
     /* Parse client-supplied creation ids */
     json_t *jcreatedIds = json_object_get(jreq, "createdIds");
@@ -645,11 +674,6 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             }
             hash_insert(creation_id, xstrdup(id), &created_ids);
         }
-    }
-    else if (jcreatedIds && jcreatedIds != json_null()) {
-        txn->error.desc = "Invalid createdIds argument";
-        ret = HTTP_BAD_REQUEST;
-        goto done;
     }
 
     json_t *jusing = json_object_get(jreq, "using");

@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_too_many_createdids
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "Test too many createdIds";
+    my $httpReq = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => '{
+            "using" : ["urn:ietf:params:jmap:sieve"],
+            "methodCalls" : [["SieveScript/set", {
+                 "create" : { "1" : { "blobId" : "#A" } }
+            }, "R1"]],
+            "createdIds" : {
+                "A" : "a",
+                "B" : "b",
+                "C" : "c",
+                "D" : "d",
+                "E" : "e",
+                "F" : "f",
+                "G" : "g",
+                "H" : "h",
+                "I" : "i",
+                "J" : "j",
+                "K" : "k",
+                "L" : "l",
+                "M" : "m",
+                "N" : "n",
+                "O" : "o",
+                "P" : "p",
+                "Q" : "q",
+                "R" : "r",
+                "S" : "s",
+                "T" : "t",
+                "U" : "u",
+                "V" : "v",
+                "W" : "w",
+                "X" : "x",
+                "Y" : "y",
+                "Z" : "z"
+            }
+        }'
+    };
+    my $httpRes = $jmap->ua->post($jmap->uri('cassandane'), $httpReq);
+    $self->assert_str_equals("400", $httpRes->{status});
+    my $res = eval { decode_json($httpRes->{content}) };
+    $self->assert_str_equals("400", $res->{status});
+    $self->assert_str_equals("JMAP request exceeds a server limit",
+                             $res->{title});
+    $self->assert_str_equals("urn:ietf:params:jmap:error:limit", $res->{type});
+    $self->assert_str_equals("maxCreatedIdsInRequest", $res->{limit});
+}
