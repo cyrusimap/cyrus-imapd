@@ -50,6 +50,9 @@
 /* is tls enabled? */
 int tls_enabled(void);
 
+/* is starttls enabled? */
+int tls_starttls_enabled(void);
+
 /* name of the SSL/TLS sessions database */
 #define FNAME_TLSSESSIONS "/tls_sessions.db"
 

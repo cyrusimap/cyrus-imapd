@@ -198,7 +198,7 @@ static int imapd_idle_enabled = 0;
 static int imapd_notify_enabled = 0;
 static int imapd_login_disabled = 0;
 static int imapd_compress_allowed = 0;
-static int imapd_tls_allowed = 0;
+static int imapd_starttls_allowed = 0;
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static int imapd_tls_required = 0; /* is tls required? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
@@ -456,7 +456,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT=DISPLAY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 5957 */
     { "SPECIAL-USE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
     { "STARTTLS",              CAPA_PREAUTH|CAPA_STATE,          /* RFC 9051 */
-      { .statep = &imapd_tls_allowed }                        },
+      { .statep = &imapd_starttls_allowed }                        },
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
@@ -1020,7 +1020,7 @@ static void imapd_reset(void)
     imapd_compress_done = 0;
     imapd_tls_comp = NULL;
     imapd_starttls_done = 0;
-    imapd_tls_allowed = tls_enabled();
+    imapd_starttls_allowed = tls_starttls_enabled();
 #ifdef HAVE_ZLIB
     imapd_compress_allowed = 1;
 #endif
@@ -1049,7 +1049,7 @@ int service_init(int argc, char **argv, char **envp)
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    imapd_tls_allowed = tls_enabled();
+    imapd_starttls_allowed = tls_starttls_enabled();
 #ifdef HAVE_ZLIB
     imapd_compress_allowed = 1;
 #endif
@@ -2207,7 +2207,7 @@ static void cmdloop(void)
 
         case 'S':
             if (!strcmp(cmd.s, "Starttls")) {
-                if (!tls_enabled()) {
+                if (!imapd_starttls_allowed) {
                     /* we don't support starttls */
                     goto badcmd;
                 }
@@ -9212,7 +9212,7 @@ static void cmd_starttls(char *tag, int imaps)
     prot_settls(imapd_out, tls_conn);
 
     imapd_starttls_done = 1;
-    imapd_login_disabled = imapd_tls_allowed = imapd_tls_required = 0;
+    imapd_login_disabled = imapd_starttls_allowed = imapd_tls_required = 0;
 
 #if (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
