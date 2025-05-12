@@ -1206,7 +1206,7 @@ void lmtpmode(struct lmtp_func *func,
                                 "250-SIZE %" PRIu64 "\r\n",
                           config_servername, max_msgsize);
 
-              if (tls_enabled() && !cd.starttls_done &&
+              if (tls_starttls_enabled() && !cd.starttls_done &&
                   cd.authenticated == NOAUTH) {
                   prot_printf(pout, "250-STARTTLS\r\n");
               }
@@ -1429,7 +1429,7 @@ void lmtpmode(struct lmtp_func *func,
       case 's':
       case 'S':
 #ifdef HAVE_SSL
-            if (!strcasecmp(buf, "starttls") && tls_enabled() &&
+            if (!strcasecmp(buf, "starttls") && tls_starttls_enabled() &&
                 !func->preauth) { /* don't need TLS for preauth'd connect */
 
                 /* XXX  discard any input pipelined after STARTTLS */
