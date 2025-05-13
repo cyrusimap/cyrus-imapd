@@ -115,6 +115,7 @@ static struct mboxevent event_template =
     /*  4 */ { EVENT_OLD_MAILBOX_ID, "oldMailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
     /*  5 */ { EVENT_OLD_UIDSET, "vnd.cmu.oldUidset", EVENT_PARAM_STRING, { 0 }, 0 },
     /*  6 */ { EVENT_MAILBOX_ID, "mailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
+             { EVENT_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
     /*  7 */ { EVENT_URI, "uri", EVENT_PARAM_STRING, { 0 }, 0 },
     /*  8 */ { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, { 0 }, 0 },
     /*  9 */ { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, { 0 }, 0 },
@@ -573,21 +574,20 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_SESSION_ID:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SESSIONID;
     case EVENT_MAILBOX_ID:
-        return (type & MAILBOX_EVENTS);
+    case EVENT_MAILBOX_UNIQUEID:
     case EVENT_MBTYPE:
-        return (type & MAILBOX_EVENTS);
     case EVENT_MAILBOX_ACL:
-        return (type & MAILBOX_EVENTS);
     case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
+
     case EVENT_QUOTA_MESSAGES:
         return type & QUOTA_EVENTS;
+
     case EVENT_MESSAGE_CONTENT:
-        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_MESSAGECONTENT) &&
-               (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
     case EVENT_MESSAGE_SIZE:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_MESSAGESIZE) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+
     case EVENT_DAV_FILENAME:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_DAVFILENAME) &&
                (type & EVENT_CALENDAR);
@@ -913,12 +913,25 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
         mbentry_t *mbentry = NULL;
         r = mboxlist_lookup(mailboxname, &mbentry, NULL);
         if (!r && mbentry->uniqueid) {
+            struct conversations_state *cstate =
+                conversations_get_mbox(mailboxname);
+            const char *mboxid =
+                mbentry->jmapid && cstate && cstate->version >= 2 ?
+                mbentry->jmapid : mbentry->uniqueid;
+
             /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
              * so make sure to deallocate its previous value */
             if (event->params[EVENT_MAILBOX_ID].filled) {
                 free(event->params[EVENT_MAILBOX_ID].value.s);
             }
-            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mbentry->uniqueid));
+            FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
+
+            /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_UNIQUEID,
+             * so make sure to deallocate its previous value */
+            if (event->params[EVENT_MAILBOX_UNIQUEID].filled) {
+                free(event->params[EVENT_MAILBOX_UNIQUEID].value.s);
+            }
+            FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(mbentry->uniqueid));
         }
         mboxlist_entry_free(&mbentry);
     }
@@ -1755,9 +1768,15 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
     FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
-    /* mailbox related events also require mailboxID */
+    /* mailbox related events also require mailboxID and mailboxUniqueId */
     if (event->type & MAILBOX_EVENTS) {
-        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mailbox_uniqueid(mailbox)));
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        const char *uniqueid = mailbox_uniqueid(mailbox);
+        const char *jmapid = mailbox_jmapid(mailbox);
+        const char *mboxid =
+            jmapid && cstate && cstate->version >=2 ? jmapid : uniqueid;
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
+        FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
     }
 
     if (mboxevent_expected_param(event->type, EVENT_UIDNEXT)) {
