@@ -2083,7 +2083,7 @@ static void setcalendars_create(struct jmap_req *req,
                         calendarrights_to_jmap(jmap_myrights_mbentry(req, mbentry),
                                                !strcmp(req->userid, req->accountid)));
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-        json_object_set(*record, "mailboxUniqueId",
+        json_object_set_new(*record, "mailboxUniqueId",
                         json_string(mbentry->uniqueid));
     }
     jmap_add_id(req, creation_id, uid);
