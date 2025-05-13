@@ -359,6 +359,10 @@ static void lint_callback(const char *key, const char *val, void *rock)
             /* check if it's a known key */
             if (known_regularkey(key+svc->prefixlen)) return;
             if (known_overflowkey(key+svc->prefixlen)) return;
+
+            if (!strncmp(key+svc->prefixlen, "sasl_", 5)) {
+                if (known_saslkey(key+svc->prefixlen+5)) return;
+            }
         }
     }
 
