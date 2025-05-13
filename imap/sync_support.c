@@ -5058,7 +5058,10 @@ static int sync_readcache(struct sync_client_state *sync_cs, const char *mboxnam
     dlist_parsemap(klp, 0, base, len);
 
     // we need the name so the parser can parse it
-    if (*klp) (*klp)->name = xstrdup("MAILBOX");
+    if (*klp) {
+        free((*klp)->name);
+        (*klp)->name = xstrdup("MAILBOX");
+    }
 
     return 0;
 }
