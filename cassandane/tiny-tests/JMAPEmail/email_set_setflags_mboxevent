@@ -29,9 +29,9 @@ sub test_email_set_setflags_mboxevent
             },
         }, "R1"]
     ], $using);
-    my $mboxIdA = $res->[0][1]{created}{A}{uniqueId};
+    my $mboxIdA = $res->[0][1]{created}{A}{id};
     $self->assert_not_null($mboxIdA);
-    my $mboxIdB = $res->[0][1]{created}{B}{uniqueId};
+    my $mboxIdB = $res->[0][1]{created}{B}{id};
     $self->assert_not_null($mboxIdB);
 
     xlog $self, "Create emails";
