@@ -347,16 +347,18 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTo
         max_size_attachments_per_email = 0;
     }
 
-    json_t *email_capabilities = json_pack("{s:i s:i s:i s:o}",
+    json_t *email_capabilities = json_pack("{s:i s:i s:o}",
             "maxMailboxesPerEmail", JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
-            "maxKeywordsPerEmail", JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL,
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
             "emailQuerySortOptions", sortopts);
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
+        json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION,
+                            json_pack("{s:i}",
+                                      "maxKeywordsPerEmail",
+                                      JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL));
     }
 
     jmap_mailbox_capabilities(account_capabilities, mayCreateTopLevel);
