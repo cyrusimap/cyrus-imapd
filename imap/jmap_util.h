@@ -206,6 +206,8 @@ extern void jmap_set_emailid(int cstate_version,
                              uint64_t nanosec, struct timespec *ts,
                              char *emailid);
 
+#define JMAP_MAILBOXID_PREFIX 'P'
+
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(conversation_id_t cid, char *buf);
 
