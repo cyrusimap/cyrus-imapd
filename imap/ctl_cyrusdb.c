@@ -76,6 +76,7 @@
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "global.h"
+#include "jmap_util.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "seen.h"
@@ -120,10 +121,16 @@ static void usage(void)
     exit(-1);
 }
 
+struct fix_rock {
+    struct buf jmapid;
+    struct buf last_userid;
+    uint64_t next_mboxnum;
+};
+
 /* Callback for use by process_mboxlist */
-static int fixmbox(const mbentry_t *mbentry,
-                   void *rock __attribute__((unused)))
+static int fixmbox(const mbentry_t *mbentry, void *rock)
 {
+    struct fix_rock *frock = (struct fix_rock *) rock;
     int r, r2;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
@@ -159,8 +166,9 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
-    /* make sure every local mbentry has a uniqueid!  */
-    if (!mbentry->uniqueid && mbentry_is_local_mailbox(mbentry)) {
+    /* make sure every local mbentry has a uniqueid, jmapid & J record!  */
+    if ((!mbentry->uniqueid || !mbentry->jmapid) &&
+        mbentry_is_local_mailbox(mbentry)) {
         struct mailbox *mailbox = NULL;
         mbentry_t *copy = NULL;
 
@@ -174,6 +182,8 @@ static int fixmbox(const mbentry_t *mbentry,
             goto skip_uniqueid;
         }
 
+        copy = mboxlist_entry_copy(mbentry);
+
         if (!mailbox->h.uniqueid) {
             /* yikes, no uniqueid in header either! */
             mailbox_make_uniqueid(mailbox);
@@ -182,11 +192,38 @@ static int fixmbox(const mbentry_t *mbentry,
                               mbentry->name, mailbox->h.uniqueid);
         }
 
-        copy = mboxlist_entry_copy(mbentry);
-        copy->uniqueid = xstrdup(mailbox->h.uniqueid);
-        xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
-                          "mboxname=<%s> newuniqueid=<%s>",
-                          copy->name, copy->uniqueid);
+        if (!mailbox->h.jmapid) {
+            /* yikes, no jmapid in header either! */
+            char *userid = mboxname_to_userid(mbentry->name);
+            if (strcmpsafe(userid, buf_cstring(&frock->last_userid))) {
+                buf_setcstr(&frock->last_userid, userid);
+                frock->next_mboxnum = 1;
+            }
+            free(userid);
+
+            buf_reset(&frock->jmapid);
+            buf_putc(&frock->jmapid, JMAP_MAILBOXID_PREFIX);
+            MODSEQ_TO_JMAPID(&frock->jmapid, frock->next_mboxnum++);
+            mailbox_set_jmapid(mailbox, buf_cstring(&frock->jmapid));
+            xsyslog(LOG_INFO, "mailbox header had no jmapid, creating one",
+                    "mboxname=<%s> newjmapid=<%s>",
+                    mbentry->name, mailbox_jmapid(mailbox));
+            copy->foldermodseq = mailbox_modseq_dirty(mailbox);
+        }
+
+        if (!mbentry->uniqueid) {
+            copy->uniqueid = xstrdup(mailbox->h.uniqueid);
+            xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
+                    "mboxname=<%s> newuniqueid=<%s>",
+                    copy->name, copy->uniqueid);
+        }
+
+        if (!mbentry->jmapid) {
+            copy->jmapid = xstrdup(mailbox_jmapid(mailbox));
+            xsyslog(LOG_INFO, "mbentry had no jmapid, setting from header",
+                    "mboxname=<%s> newjmapid=<%s>",
+                    copy->name, copy->jmapid);
+        }
 
         r = mboxlist_updatelock(copy, /*localonly*/1);
         if (r) {
@@ -222,7 +259,10 @@ static void process_mboxlist(int *upgraded)
     mboxlist_upgrade(upgraded);
 
     /* run fixmbox across all mboxlist entries */
-    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
+    struct fix_rock frock = { BUF_INITIALIZER, BUF_INITIALIZER, 0 };
+    mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
+    buf_free(&frock.last_userid);
+    buf_free(&frock.jmapid);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
