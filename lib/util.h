@@ -174,6 +174,14 @@ extern const unsigned char convert_to_uppercase[256];
         charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
 }
 
+#define MODSEQ_TO_JMAPID(buf, modseq) {                                 \
+        uint64_t u64 = htonll(modseq);                                  \
+        const char *p = (const char *) &u64;                            \
+        size_t len = sizeof(u64);                                       \
+        for (; *p == 0 && len > 1; p++, len--);                         \
+        charset_encode(buf, p, len, ENCODING_BASE64JMAPID);             \
+}
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
