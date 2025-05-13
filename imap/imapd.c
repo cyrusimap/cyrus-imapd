@@ -84,6 +84,7 @@
 #include "charset.h"
 #include "dlist.h"
 #include "idle.h"
+#include "idlemsg.h"
 #include "global.h"
 #include "times.h"
 #include "proxy.h"
@@ -15721,7 +15722,7 @@ static void push_updates(int idling)
             goto done;
         }
 
-        mboxid = json_string_value(json_object_get(msg, "mailboxID"));
+        mboxid = idle_msg_get_mboxid(msg);
         if (!mboxid) goto done;
 
         event = json_string_value(json_object_get(msg, "event"));
@@ -15820,8 +15821,7 @@ static void push_updates(int idling)
                     mtype = json_string_value(json_object_get(nextmsg, "@type"));
 
                     if (!strcmpnull(mtype, "notify")) {
-                        mboxid = json_string_value(json_object_get(nextmsg,
-                                                                   "mailboxID"));
+                        mboxid = idle_msg_get_mboxid(nextmsg);
                         event = json_string_value(json_object_get(nextmsg,
                                                                   "event"));
                         etype = name_to_mboxevent(event);
