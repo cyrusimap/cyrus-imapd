@@ -424,6 +424,7 @@ magic(TLS => sub {
     my $self = shift;
     $self->config_set(tls_server_cert => '@basedir@/conf/certs/cert.pem');
     $self->config_set(tls_server_key => '@basedir@/conf/certs/key.pem');
+    $self->config_set(tls_session_timeout => 0);
     $self->want('install_certificates');
     $self->want_services('imaps');
 });
