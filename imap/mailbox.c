@@ -848,6 +848,13 @@ EXPORTED void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid
     mailbox->header_dirty = 1;
 }
 
+EXPORTED void mailbox_set_jmapid(struct mailbox *mailbox, const char *jmapid)
+{
+    free(mailbox->h.jmapid);
+    mailbox->h.jmapid = xstrdup(jmapid);
+    mailbox->header_dirty = 1;
+}
+
 EXPORTED void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype)
 {
     mailbox->h.mbtype = mbtype;
@@ -1143,6 +1150,13 @@ EXPORTED const char *mailbox_uniqueid(const struct mailbox *mailbox)
     return mbentry->uniqueid ? mbentry->uniqueid : mailbox->h.uniqueid;
 }
 
+EXPORTED const char *mailbox_jmapid(const struct mailbox *mailbox)
+{
+    mbentry_t *mbentry = mailbox->mbentry;
+
+    return mbentry->jmapid ? mbentry->jmapid : mailbox->h.jmapid;
+}
+
 EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
 {
     return mailbox->mbentry->partition;
@@ -1331,6 +1345,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     mboxlist_entry_free(&mailbox->mbentry);
     xzfree(mailbox->h.name);
     xzfree(mailbox->h.uniqueid);
+    xzfree(mailbox->h.jmapid);
     xzfree(mailbox->h.quotaroot);
     xzfree(mailbox->h.acl);
 
@@ -1404,6 +1419,10 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
                 xzfree(rock->h->uniqueid);
                 rock->h->uniqueid = xstrdupnull(d->data);
             }
+            else if (!strcmp(key, "J")) {
+                xzfree(rock->h->jmapid);
+                rock->h->jmapid = xstrdupnull(d->data);
+            }
             else if (!strcmp(key, "N")) {
                 xzfree(rock->h->name);
                 rock->h->name = xstrdupnull(d->data);
@@ -1427,6 +1446,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  * full dlist format is:
  *  A: _a_cl
  *  I: unique_i_d
+ *  J: _j_mapid
  *  N: _n_ame
  *  Q: _q_uotaroot
  *  T: _t_ype
@@ -1511,6 +1531,7 @@ static int mailbox_read_header(struct mailbox *mailbox, const char *fname)
 
     xzfree(mailbox->h.quotaroot);
     xzfree(mailbox->h.uniqueid);
+    xzfree(mailbox->h.jmapid);
     xzfree(mailbox->h.acl);
 
     /* check for DLIST mboxlist */
@@ -2783,6 +2804,8 @@ static char *mailbox_header_data_cstring(struct mailbox *mailbox)
     dlist_setatom(dl, "N", mailbox->h.name);
 
     dlist_setatom(dl, "I", mailbox->h.uniqueid);
+
+    dlist_setatom(dl, "J", mailbox->h.jmapid);
 
     if (mailbox->h.quotaroot)
         dlist_setatom(dl, "Q", mailbox->h.quotaroot);
@@ -6167,6 +6190,7 @@ EXPORTED int mailbox_create(const char *name,
                    const char *part,
                    const char *acl,
                    const char *uniqueid,
+                   const char *jmapid,
                    int options,
                    unsigned uidvalidity,
                    modseq_t createdmodseq,
@@ -6336,22 +6360,16 @@ EXPORTED int mailbox_create(const char *name,
     if (!createdmodseq || createdmodseq > highestmodseq)
         createdmodseq = highestmodseq;
 
-    if (!minor_version) {
-        minor_version = MAILBOX_MINOR_VERSION;
-
-        // Use the minor version of our parent, if exists
-        mbentry_t *mbentry = NULL;
-        mboxlist_findparent(name, &mbentry);
-        if (mbentry) {
-            struct mailbox *parent = NULL;
-            mailbox_open_from_mbe(mbentry, &parent);
-            if (parent) {
-                minor_version = parent->i.minor_version;
-                mailbox_close(&parent);
-            }
-            mboxlist_entry_free(&mbentry);
-        }
+    /* and jmapid */
+    struct buf buf = BUF_INITIALIZER;
+    if (!jmapid) {
+        buf_putc(&buf, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&buf, createdmodseq);
+        jmapid = buf_cstring(&buf);
     }
+    mailbox->mbentry->jmapid = xstrdup(jmapid);
+    mailbox->h.jmapid = xstrdup(jmapid);
+    buf_free(&buf);
 
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
@@ -7096,6 +7114,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_create(newname, mailbox_mbtype(oldmailbox),
                        oldmailbox->i.minor_version, newpartition,
                        mailbox_acl(oldmailbox), mailbox_uniqueid(oldmailbox),
+                       mailbox_jmapid(oldmailbox),
                        oldmailbox->i.options, uidvalidity,
                        oldmailbox->i.createdmodseq,
                        highestmodseq, &newmailbox);
@@ -7509,7 +7528,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
         mailbox_close(&mailbox);
         r = mailbox_create(name, mbentry->mbtype, 0 /* version */,
                            mbentry->partition, mbentry->acl,
-                           mbentry->uniqueid, options, 0, 0, 0, mbptr);
+                           mbentry->uniqueid, mbentry->jmapid, options, 0, 0, 0, mbptr);
         mboxlist_entry_free(&mbentry);
         return r;
     }
@@ -8944,6 +8963,7 @@ EXPORTED struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_pat
         /* Steal strings from mailbox_header */
         mbentry->name = mailbox.h.name;
         mbentry->uniqueid = mailbox.h.uniqueid;
+        mbentry->jmapid = mailbox.h.jmapid;
         mbentry->acl = mailbox.h.acl;
 
         /* Cleanup remaining mailbox_header */
