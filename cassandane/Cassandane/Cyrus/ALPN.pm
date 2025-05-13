@@ -360,6 +360,7 @@ sub test_https_multi
 
 sub test_https_h2
     :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 
@@ -381,6 +382,7 @@ sub test_https_h2
 
 sub test_https_multi2
     :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 
