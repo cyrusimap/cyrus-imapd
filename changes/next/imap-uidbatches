@@ -1,0 +1,19 @@
+
+Description:
+
+Adds support for IMAP UIDBATCHES (draft-ietf-mailmaint-imap-uidbatches).
+
+
+Config changes:
+
+Added uidbatches_max_messages and uidbatches_min_batch
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

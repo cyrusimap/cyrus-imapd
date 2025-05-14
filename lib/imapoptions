@@ -3211,6 +3211,19 @@ product version in the capabilities
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 
+{ "uidbatches_max_messages", 100000, INT, "UNRELEASED" }
+/* The maximum number of messages that the server will process in a
+   single UIDBATCHES command - either the number of requested batches
+   multiplied by the batch size, or the number of messages in the
+   mailbox if all batches are requested.
+   The default of 100000 is the minimum allowed value per the
+   specification. */
+
+{ "uidbatches_min_batch", 500, INT, "UNRELEASED" }
+/* The minimum batch size allowed by the server for a UIDBATCHES command.
+   The default of 500 is the maximum allowed value per the
+   specification.  The minium allowed value is 10. */
+
 { "uidl_format", "cyrus", ENUM("uidonly", "cyrus", "dovecot", "courier"), "3.0.0" }
 /* Choose the format for UIDLs in pop3.  Possible values are "uidonly",
    "cyrus", "dovecot" and "courier".  "uidonly" forces the old default

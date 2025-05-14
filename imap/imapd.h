@@ -421,6 +421,7 @@ enum {
     CB_REPLACE     =  (1<<14),  /* REPLACE                               */
     CB_SAVEDATE    =  (1<<15),  /* FETCH SAVEDATE                        */
     CB_SEARCHRES   =  (1<<16),  /* SAVE on SEARCH                        */
+    CB_UIDBATCHES  =  (1<<20),  /* UIDBATCHES                            */
     CB_UIDONLY     =  (1<<17),  /* ENABLE UIDONLY                        */
     CB_UNSELECT    =  (1<<18),  /* UNSELECT                              */
     CB_UTF8ACCEPT  =  (1<<19),  /* ENABLE UTF8=ACCEPT                    */
