@@ -138,7 +138,6 @@ EXPORTED int idle_init_sock(const struct sockaddr_un *local)
         return 0;
     }
     umask(oldumask); /* for Linux */
-    chmod(local->sun_path, 0777); /* for DUX */
 
     idle_sock = s;
     idle_local = *local;

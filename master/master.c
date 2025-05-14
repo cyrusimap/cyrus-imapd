@@ -692,12 +692,6 @@ static void service_create(struct service *s, int is_startup)
             continue;
         }
 
-        if (s->listen[0] == '/') { /* unix socket */
-            /* for DUX, where this isn't the default.
-               (harmlessly fails on some systems) */
-            chmod(s->listen, (mode_t) 0777);
-        }
-
         if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
              || !strcmp(s->proto, "tcp6"))
             && listen(s->socket, listen_queue_backlog) < 0) {
