@@ -160,10 +160,19 @@ sub test_get_session
                 maxSizeAttachmentsPerEmail => 1048576,
                 emailQuerySortOptions => superbagof(),
                 mayCreateTopLevelMailbox => JSON::true(),
-                maxKeywordsPerEmail => 100  # Cyrus-specific
             },
             $ac_mail,
             "mail accountCapabilities look right",
+        );
+
+        $ac_mail = $accountCapabilities->{'https://cyrusimap.org/ns/jmap/mail'};
+
+        $self->assert_cmp_deeply(
+            {
+                maxKeywordsPerEmail => 100  # Cyrus-specific
+            },
+            $ac_mail,
+            "extended mail accountCapabilities look right",
         );
     }
 

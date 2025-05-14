@@ -19,7 +19,7 @@ sub test_email_set_update_too_many_keywords
     my $emailId = $res->[0][1]->{ids}[0];
 
     my $accountCapabilities = $self->get_account_capabilities();
-    my $mailCapabilities = $accountCapabilities->{'urn:ietf:params:jmap:mail'};
+    my $mailCapabilities = $accountCapabilities->{'https://cyrusimap.org/ns/jmap/mail'};
     my $maxKeywordsPerEmail = $mailCapabilities->{maxKeywordsPerEmail};
     $self->assert($maxKeywordsPerEmail > 0);
 
