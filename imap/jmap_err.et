@@ -61,4 +61,7 @@ ec JMAP_LIMIT_SIZE,
 ec JMAP_LIMIT_CALLS,
    "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxCallsInRequest"
 
+ec JMAP_LIMIT_CREATEDIDS,
+   "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxCreatedIdsInRequest"
+
 end

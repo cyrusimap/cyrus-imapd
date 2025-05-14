@@ -106,46 +106,49 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     } \
 } while (0)
 
-    _read_bytesize_opt(settings->limits[MAX_SIZE_UPLOAD],
+    int64_t *limits = settings->limits;
+
+    _read_bytesize_opt(limits[MAX_SIZE_UPLOAD],
                        IMAPOPT_JMAP_MAX_SIZE_UPLOAD, 'K');
-    _read_int_opt(settings->limits[MAX_CONCURRENT_UPLOAD],
+    _read_int_opt(limits[MAX_CONCURRENT_UPLOAD],
                   IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_bytesize_opt(settings->limits[MAX_SIZE_REQUEST],
+    _read_bytesize_opt(limits[MAX_SIZE_REQUEST],
                        IMAPOPT_JMAP_MAX_SIZE_REQUEST, 'K');
-    _read_int_opt(settings->limits[MAX_CONCURRENT_REQUESTS],
+    _read_int_opt(limits[MAX_CONCURRENT_REQUESTS],
                   IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
-    _read_int_opt(settings->limits[MAX_CALLS_IN_REQUEST],
+    _read_int_opt(limits[MAX_CALLS_IN_REQUEST],
                   IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
-    _read_int_opt(settings->limits[MAX_OBJECTS_IN_GET],
+    _read_int_opt(limits[MAX_OBJECTS_IN_GET],
                   IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    _read_int_opt(settings->limits[MAX_OBJECTS_IN_SET],
+    _read_int_opt(limits[MAX_OBJECTS_IN_SET],
                   IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
-    _read_bytesize_opt(settings->limits[MAX_SIZE_BLOB_SET],
+    _read_bytesize_opt(limits[MAX_SIZE_BLOB_SET],
                        IMAPOPT_JMAP_MAX_SIZE_BLOB_SET, 'K');
-    _read_int_opt(settings->limits[MAX_CATENATE_ITEMS],
+    _read_int_opt(limits[MAX_CATENATE_ITEMS],
                   IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
 
 #undef _read_int_opt
 #undef _read_bytesize_opt
 
+    limits[MAX_CREATEDIDS_IN_REQUEST] =
+        limits[MAX_CALLS_IN_REQUEST] * limits[MAX_OBJECTS_IN_SET];
+
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CORE,
             json_pack("{s:i s:i s:i s:i s:i s:i s:i s:o}",
-                "maxSizeUpload",
-                settings->limits[MAX_SIZE_UPLOAD],
-                "maxConcurrentUpload",
-                settings->limits[MAX_CONCURRENT_UPLOAD],
-                "maxSizeRequest",
-                settings->limits[MAX_SIZE_REQUEST],
-                "maxConcurrentRequests",
-                settings->limits[MAX_CONCURRENT_REQUESTS],
-                "maxCallsInRequest",
-                settings->limits[MAX_CALLS_IN_REQUEST],
-                "maxObjectsInGet",
-                settings->limits[MAX_OBJECTS_IN_GET],
-                "maxObjectsInSet",
-                settings->limits[MAX_OBJECTS_IN_SET],
-                "collationAlgorithms", json_array()));
+                "maxSizeUpload",          limits[MAX_SIZE_UPLOAD],
+                "maxConcurrentUpload",    limits[MAX_CONCURRENT_UPLOAD],
+                "maxSizeRequest",         limits[MAX_SIZE_REQUEST],
+                "maxConcurrentRequests",  limits[MAX_CONCURRENT_REQUESTS],
+                "maxCallsInRequest",      limits[MAX_CALLS_IN_REQUEST],
+                "maxObjectsInGet",        limits[MAX_OBJECTS_IN_GET],
+                "maxObjectsInSet",        limits[MAX_OBJECTS_IN_SET],
+                "collationAlgorithms",    json_array()));
+
+    json_object_set_new(settings->server_capabilities,
+            JMAP_CORE_EXTENSION,
+            json_pack("{s:i}",
+                "maxCreatedIdsInRequest", limits[MAX_CREATEDIDS_IN_REQUEST]));
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         struct utsname buf;
