@@ -64,6 +64,7 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(tls_server_cert => '@basedir@/conf/certs/cert.pem',
                  tls_server_key => '@basedir@/conf/certs/key.pem',
+                 tls_session_timeout => 0,
                  allowstarttls => 'on',
                  httpmodules => 'caldav');
 
