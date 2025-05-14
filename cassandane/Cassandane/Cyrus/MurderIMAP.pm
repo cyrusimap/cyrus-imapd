@@ -87,7 +87,6 @@ sub test_aaasetup
 }
 
 sub test_frontend_commands
-    :SuppressLSAN(proxy_mlookup)
 {
     my ($self) = @_;
     my $result;
@@ -290,7 +289,6 @@ sub test_xlist
 }
 
 sub test_move_to_backend_nonexistent
-    :SuppressLSAN(proxy_mlookup)
 {
     my ($self) = @_;
 
@@ -340,7 +338,6 @@ sub test_move_to_backend_nonexistent
 }
 
 sub test_move_to_nonexistent
-    :SuppressLSAN(proxy_mlookup)
 {
     my ($self) = @_;
 
@@ -1122,7 +1119,6 @@ sub test_xfer_no_user_intermediates
 
 sub test_copy_across_backends
     :NoAltNamespace
-    :SuppressLSAN(proxy_mlookup)
 {
     my ($self) = @_;
 
@@ -1190,7 +1186,6 @@ sub test_replace_same_backend
 
 sub test_replace_across_backends
     :NoAltNamespace :min_version_3_9
-    :SuppressLSAN(proxy_mlookup)
 {
     # :min_version_3_9 checks backend1 version.  The test below checks frontend
     my ($maj, $min) = Cassandane::Instance->get_version('murder');

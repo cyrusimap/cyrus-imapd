@@ -4292,6 +4292,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
 
         if (!r) {
             int is_active = 1;
+            void *save_context = s->context;
             s->context = (void*) &is_active;
             if (imapd_index) {
                 const char *mboxname = index_mboxname(imapd_index);
@@ -4306,7 +4307,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
             if (!(r = pipe_command(s, 16384))) {
                 pipe_including_tag(s, tag, 0);
             }
-            s->context = NULL;
+            s->context = save_context;
         } else {
             eatline(imapd_in, prot_getc(imapd_in));
         }
@@ -4919,7 +4920,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         if (supports_referrals) {
             imapd_refer(tag, mbentry->server, name);
-            mboxlist_entry_free(&mbentry);
             goto done;
         }
 
@@ -4942,7 +4942,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         if (r) {
             prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-            mboxlist_entry_free(&mbentry);
             goto done;
         }
 
@@ -4977,7 +4976,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
             syslog(LOG_DEBUG, "open: user %s opened %s on %s",
                    imapd_userid, name, mbentry->server);
 
-            backend_current->context = mbentry;
+            mboxlist_entry_free((mbentry_t **) &backend_current->context);
+            backend_current->context = mboxlist_entry_copy(mbentry);
 
             /* add backend_current to the protgroup */
             protgroup_insert(protin, backend_current->in);
@@ -4986,15 +4986,12 @@ static void cmd_select(char *tag, char *cmd, char *name)
             syslog(LOG_DEBUG, "open: user %s failed to open %s", imapd_userid,
                    name);
             /* not successfully selected */
-            mboxlist_entry_free(&mbentry);
             backend_current = NULL;
             break;
         }
 
         goto done;
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* local mailbox */
     if (backend_current) {
@@ -5079,6 +5076,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     return;
 
  done:
+    mboxlist_entry_free(&mbentry);
     strarray_fini(&listargs.pat);
     if (name != origname) free(name);
     free(intname);
@@ -9405,11 +9403,11 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         prot_puts(s->out, ")\r\n");
         pipe_including_tag(s, tag, 0);
 
+        mboxlist_entry_free(&mbentry);
         free(intname);
         return;
 
     }
-    mboxlist_entry_free(&mbentry);
 
     /* local mailbox */
     r = mboxlist_setquotas(intname, newquotas, 0, force);
