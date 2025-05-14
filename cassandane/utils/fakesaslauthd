@@ -40,7 +40,6 @@ my $sock = IO::Socket::UNIX->new(
     Listen => SOMAXCONN,
 );
 die "FAILED to create socket $opts{p}: $!" unless $sock;
-system "chmod 777 $opts{p}";
 syslog LOG_INFO, "listening on $opts{p}";
 
 my $shutdown = 0;
