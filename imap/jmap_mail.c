@@ -13674,8 +13674,11 @@ static void _email_update_bulk(jmap_req_t *req,
 
         /* Validate patched mailbox ids */
         if (update->patch_mailboxids && !json_array_size(parser.invalid)) {
-            json_t *cur = _email_mailboxes(req,
-                                           _guid_from_id(req->cstate, email_id));
+            const char *guidrep = _guid_from_id(req->cstate, email_id);
+            json_t *cur = NULL;
+            if (guidrep) {
+                cur = _email_mailboxes(req, guidrep);
+            }
             if (!json_object_size(cur)) {
                 json_object_set_new(not_updated, email_id,
                         json_pack("{s:s}", "type", "notFound"));
@@ -14459,15 +14462,17 @@ static void _email_copy_bulk(jmap_req_t *req,
         }
 
         /* Check if email already exists in to_account */
-        struct _email_exists_rock data = { req, 0, 0 };
-        conversations_guid_foreach(req->cstate,
-                                   _guid_from_id(req->cstate, update->email_id),
-                                   _email_exists_cb, &data);
-        if (data.exists) {
-            json_object_set_new(copy->not_created, creation_id,
-                                json_pack("{s:s s:s}",
-                                          "type", "alreadyExists",
-                                          "existingId", update->email_id));
+        const char *guidrep = _guid_from_id(req->cstate, update->email_id);
+        if (guidrep) {
+            struct _email_exists_rock data = { req, 0, 0 };
+            conversations_guid_foreach(req->cstate, guidrep,
+                                       _email_exists_cb, &data);
+            if (data.exists) {
+                json_object_set_new(copy->not_created, creation_id,
+                                    json_pack("{s:s s:s}",
+                                              "type", "alreadyExists",
+                                              "existingId", update->email_id));
+            }
         }
 
         /* Add update to batch */
