@@ -177,6 +177,69 @@ sub test_email_copy
         }, 'R1'],
     ]);
 
-   $self->assert_str_equals('alreadyExists', $res->[0][1]->{notCreated}{1}{type});
-   $self->assert_not_null($res->[0][1]->{notCreated}{1}{existingId});
+    $self->assert_str_equals('alreadyExists', $res->[0][1]->{notCreated}{1}{type});
+    $self->assert_not_null($res->[0][1]->{notCreated}{1}{existingId});
+
+    # make sure we can copy another message in even if the mailbox already
+    # has some messages
+    xlog $self, "create another email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                1 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    subject => 'hi',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    my $secondEmailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($secondEmailId);
+
+    xlog $self, "move email";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            create => {
+                1 => {
+                    id => $secondEmailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+            },
+            onSuccessDestroyOriginal => JSON::true,
+        }, 'R1'],
+    ]);
+
+    my $copiedsecondEmailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($copiedsecondEmailId);
+    $self->assert_str_equals('Email/set', $res->[1][0]);
+    $self->assert_str_equals($secondEmailId, $res->[1][1]{destroyed}[0]);
+
+    xlog $self, "get copied email";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'other',
+            ids => [$copiedsecondEmailId],
+            properties => ['subject'],
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('hi', $res->[0][1]{list}[0]{subject});
 }
