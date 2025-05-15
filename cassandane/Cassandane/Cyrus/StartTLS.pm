@@ -106,7 +106,6 @@ sub test_imap_disabled
 
 sub test_imap_enabled
     :TLS :needs_dependency_openssl :NoStartInstances
-    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 
@@ -199,7 +198,6 @@ sub test_http_disabled
 
 sub test_http_enabled
     :TLS :needs_dependency_openssl :NoStartInstances
-    :SuppressLSAN(libcrypto.so libssl.so)
 {
     my ($self) = @_;
 

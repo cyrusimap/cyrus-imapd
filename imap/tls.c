@@ -505,7 +505,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
                idstr, ctime(&expire), ret ? "failed" : "ok");
     }
 
-    return (ret == 0);
+    return 0;
 }
 
 /*
@@ -980,7 +980,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
     SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
                                    SSL_SESS_CACHE_NO_AUTO_CLEAR |
-                                   SSL_SESS_CACHE_NO_INTERNAL_LOOKUP);
+                                   SSL_SESS_CACHE_NO_INTERNAL);
 
     /* Get the session timeout from the config file */
     timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT, 'm');
