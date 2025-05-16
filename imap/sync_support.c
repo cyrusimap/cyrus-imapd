@@ -2116,6 +2116,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         strarray_fini(&groups);
         free(userid);
     }
+    dlist_setnum32(kl, "VERSION", mailbox->i.minor_version);
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
     dlist_setatom(kl, "ACL", mailbox_acl(mailbox));
@@ -2850,6 +2851,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     time_t pop3_last_login;
     time_t pop3_show_after = 0; /* optional */
     uint32_t uidvalidity;
+    uint32_t version = 0;
     modseq_t foldermodseq = 0;
     const char *acl;
     const char *options_str;
@@ -2948,6 +2950,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getlist(kin, "USERFLAGS", &userflags);
     dlist_getatom(kin, "USERGROUPS", &groups);
     dlist_getatom(kin, "JMAPID", &jmapid);
+    dlist_getnum32(kin, "VERSION", &version);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -2998,10 +3001,11 @@ static int sync_apply_mailbox(struct dlist *kin,
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
-            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
-                                       1/*isadmin*/,
-                                       sstate->userid, sstate->authstate,
-                                       flags, &mailbox);
+            r = mboxlist_createmailbox_version(&mbentry, version,
+                                               options, highestmodseq,
+                                               1/*isadmin*/,
+                                               sstate->userid, sstate->authstate,
+                                               flags, &mailbox);
         }
         /* set a highestmodseq of 0 so ALL changes are future
          * changes and get applied */
@@ -3061,10 +3065,11 @@ static int sync_apply_mailbox(struct dlist *kin,
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
-            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
-                                       1/*isadmin*/,
-                                       sstate->userid, sstate->authstate,
-                                       flags, &mailbox);
+            r = mboxlist_createmailbox_version(&mbentry, version,
+                                               options, highestmodseq,
+                                               1/*isadmin*/,
+                                               sstate->userid, sstate->authstate,
+                                               flags, &mailbox);
             /* set a highestmodseq of 0 so ALL changes are future
              * changes and get applied */
             if (!r) mailbox->i.highestmodseq = 0;
@@ -4560,6 +4565,7 @@ static int sync_restore_mailbox(struct dlist *kin,
     const char *jmapid = NULL;
     modseq_t highestmodseq = 0;
     uint32_t uidvalidity = 0;
+    uint32_t version = 0;
     struct dlist *kr = NULL;
     struct dlist *ka = NULL;
     modseq_t xconvmodseq = 0;
@@ -4584,6 +4590,7 @@ static int sync_restore_mailbox(struct dlist *kin,
     }
 
     /* optional */
+    dlist_getnum32(kin, "VERSION", &version);
     dlist_getatom(kin, "JMAPID", &jmapid);
     dlist_getatom(kin, "PARTITION", &partition);
     dlist_getatom(kin, "ACL", &acl);
@@ -4661,10 +4668,11 @@ static int sync_restore_mailbox(struct dlist *kin,
             if (sstate->flags & SYNC_FLAG_LOCALONLY)
                 flags |= MBOXLIST_CREATE_LOCALONLY;
 
-            r = mboxlist_createmailbox(&mbentry, options, highestmodseq,
-                                       1/*isadmin*/,
-                                       sstate->userid, sstate->authstate,
-                                       flags, &mailbox);
+            r = mboxlist_createmailbox_version(&mbentry, version,
+                                               options, highestmodseq,
+                                               1/*isadmin*/,
+                                               sstate->userid, sstate->authstate,
+                                               flags, &mailbox);
             syslog(LOG_DEBUG, "%s: mboxlist_createmailbox %s: %s",
                 __func__, mboxname, error_message(r));
             is_new_mailbox = 1;
