@@ -54,7 +54,7 @@ extern const char *config_getstring(enum imapopt opt);
 extern int config_getint(enum imapopt opt);
 extern int config_getswitch(enum imapopt opt);
 extern enum enum_value config_getenum(enum imapopt opt);
-extern unsigned long config_getbitfield(enum imapopt opt);
+extern uint64_t config_getbitfield(enum imapopt opt);
 extern int config_getduration(enum imapopt opt, int defunit);
 extern int64_t config_getbytesize(enum imapopt opt, int defunit);
 

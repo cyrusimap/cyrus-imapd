@@ -568,7 +568,7 @@ extern char *httpd_extradomain;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 extern const char *httpd_localip, *httpd_remoteip;
-extern unsigned long config_httpmodules;
+extern uint64_t config_httpmodules;
 extern strarray_t *httpd_log_headers;
 extern char *httpd_altsvc;
 

@@ -3098,7 +3098,7 @@ static int savemsg(message_data_t *m, FILE *f)
             }
             if (!r) {
                 const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
-                unsigned long newsaddheaders =
+                uint64_t newsaddheaders =
                     config_getbitfield(IMAPOPT_NEWSADDHEADERS);
                 const char **to = NULL, **replyto = NULL;
 

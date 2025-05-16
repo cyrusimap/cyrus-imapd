@@ -113,8 +113,8 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
     }
 
 #ifdef USE_SIEVE
-    unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
-    unsigned long required =
+    uint64_t config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+    uint64_t required =
         IMAP_ENUM_SIEVE_EXTENSIONS_VACATION   |
         IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL |
         IMAP_ENUM_SIEVE_EXTENSIONS_DATE;

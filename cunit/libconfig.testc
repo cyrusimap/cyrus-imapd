@@ -218,7 +218,7 @@ static void test_enum_invalid(void)
 
 static void test_bitfield_value(void)
 {
-    unsigned long httpmodules = (unsigned long) -1;
+    uint64_t httpmodules = UINT64_MAX;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -234,7 +234,7 @@ static void test_bitfield_value(void)
 
 static void test_bitfield_value_wide(void)
 {
-    unsigned long sieve_extensions = (unsigned long) -1;
+    uint64_t sieve_extensions = UINT64_MAX;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -257,7 +257,7 @@ static void test_bitfield_value_wide(void)
 
 static void test_bitfield_default(void)
 {
-    unsigned long httpmodules = (unsigned long) -1;
+    uint64_t httpmodules = UINT64_MAX;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"

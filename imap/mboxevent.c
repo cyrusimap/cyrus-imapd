@@ -102,7 +102,7 @@ static strarray_t *excluded_specialuse;
 static int enable_subfolder = 1;
 
 static int enabled_events = 0;
-static unsigned long extra_params;
+static uint64_t extra_params;
 
 static struct mboxevent event_template =
 { 0,
@@ -231,7 +231,7 @@ static void init_internal() {
 EXPORTED int mboxevent_init(void)
 {
     const char *options;
-    int groups;
+    uint64_t groups;
 
     if (!(notifier = config_getstring(IMAPOPT_EVENT_NOTIFIER)) && !idle_notifier)
         return 0;

@@ -302,7 +302,7 @@ while (<STDIN>) {
             }
             $e .= "0";
             $def = $use_gcc_extension
-                        ? "U_CFG_V((unsigned long long) $e)"
+                        ? "U_CFG_V((uint64_t) $e)"
                         : "{(void *)($e)}";
 
             # output the enum_options
@@ -324,7 +324,7 @@ while (<STDIN>) {
                 }
 
                 # add the corresponding bit value
-                $e .= " = (1LL<<$bit)";
+                $e .= " = (UINT64_C(1)<<$bit)";
 
                 # add this enum to enum_values
                 push(@enum_values, $e);
@@ -408,7 +408,7 @@ union config_value {
     long i;             /* OPT_INT */
     long b;             /* OPT_SWITCH */
     enum enum_value e;  /* OPT_ENUM */
-    unsigned long long x; /* OPT_BITFIELD */
+    uint64_t x;         /* OPT_BITFIELD */
 };
 
 struct enum_option_s {

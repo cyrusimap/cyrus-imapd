@@ -432,7 +432,7 @@ int https = 0;
 static int httpd_tls_required = 0;
 static int httpd_starttls_enabled = 0;
 static unsigned avail_auth_schemes = 0; /* bitmask of available auth schemes */
-unsigned long config_httpmodules;
+uint64_t config_httpmodules;
 
 static time_t compile_time;
 struct buf serverinfo = BUF_INITIALIZER;
