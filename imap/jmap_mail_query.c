@@ -1323,7 +1323,8 @@ static bool _matchmime_eval_convkeyword(matchmime_query_t *q,
             if (r) {
                 xsyslog(LOG_ERR, "conversation_load_advanced",
                         "cid=<%s> err=<%s>",
-                        conversation_id_encode(cid), error_message(r));
+                        conversation_id_encode(convmatch->cstate->version, cid),
+                        error_message(r));
                 convmatch->in_state = -1;
                 return 0;
             }

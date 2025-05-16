@@ -43,9 +43,10 @@
 #define INCLUDED_CHARSET_H
 
 #define ENCODING_NONE 0
-#define ENCODING_QP 1
-#define ENCODING_BASE64 2
-#define ENCODING_BASE64URL 3
+#define ENCODING_QP 1            // RFC 2045, Section 6.7
+#define ENCODING_BASE64 2        // RFC 4648, Section 4
+#define ENCODING_BASE64URL 3     // RFC 4648, Section 5
+#define ENCODING_BASE64JMAPID 4  // Base 64 using URL alphabet in ASCII order
 #define ENCODING_UNKNOWN 255
 
 #define CHARSET_SKIPDIACRIT (1<<0)

@@ -154,7 +154,7 @@ sub test_auditlog_size
 }
 
 sub test_allowdeleted
-    :AllowDeleted :DelayedExpunge :min_version_3_1
+    :AllowDeleted :DelayedExpunge :Conversations
 {
     my ($self, $folder, %params) = @_;
 
