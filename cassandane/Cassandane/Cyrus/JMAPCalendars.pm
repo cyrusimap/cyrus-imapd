@@ -115,7 +115,7 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
     if ($self->{_want}->{start_instances}) {
-        $self->{jmap}->DefaultUsing([
+        $self->jmap_default_using([
             'urn:ietf:params:jmap:core',
             'urn:ietf:params:jmap:calendars',
             'urn:ietf:params:jmap:principals',
