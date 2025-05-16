@@ -174,7 +174,7 @@ EXPORTED enum enum_value config_getenum(enum imapopt opt)
     return imapopts[opt].val.e;
 }
 
-EXPORTED unsigned long config_getbitfield(enum imapopt opt)
+EXPORTED uint64_t config_getbitfield(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);

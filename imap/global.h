@@ -159,7 +159,7 @@ extern int saslprops_set_tls(struct saslprops_t *saslprops,
 extern volatile sig_atomic_t in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
-extern unsigned long config_metapartition_files;
+extern uint64_t config_metapartition_files;
 extern const char *config_mboxlist_db;
 extern const char *config_quota_db;
 extern const char *config_subscription_db;

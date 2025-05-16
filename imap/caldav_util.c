@@ -1409,7 +1409,7 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
 
 EXPORTED unsigned long config_types_to_caldav_types(void)
 {
-    unsigned long config_types =
+    uint64_t config_types =
         config_getbitfield(IMAPOPT_CALENDAR_COMPONENT_SET);
     unsigned long types = 0;
 
