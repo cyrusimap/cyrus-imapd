@@ -1,0 +1,159 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cache_collapsed_threads
+    :JMAPExtensions :JMAPQueryCacheMaxAge1s
+{
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/quota');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug');
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/performance');
+
+    # Create mailboxes A and B.
+    my $res = $jmap->CallMethods([
+        [
+            'Mailbox/set',
+            {
+                create => {
+                    mboxA => {
+                        name => 'A',
+                    },
+                    mboxB => {
+                        name => 'B',
+                    },
+                }
+            },
+            'R1'
+        ],
+    ]);
+    my $mboxA = $res->[0][1]{created}{mboxA}{id};
+    $self->assert_not_null($mboxA);
+    my $mboxB = $res->[0][1]{created}{mboxB}{id};
+    $self->assert_not_null($mboxB);
+
+    # Create messages in mailbox A.
+    $self->{store}->set_folder('A');
+    for (my $i = 0; $i < 10; $i++) {
+        $self->make_message(
+            "msgA$i",
+            to => Cassandane::Address->new(
+                localpart => "recipientA$i",
+                domain    => 'example.com'
+            ),
+        ) || die;
+    }
+
+    # Create messages in mailbox B.
+    $self->{store}->set_folder('B');
+    for (my $i = 0; $i < 10; $i++) {
+        $self->make_message(
+            "msgB$i",
+            to => Cassandane::Address->new(
+                localpart => "recipientB$i",
+                domain    => 'example.com'
+            ),
+        ) || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    xlog "Mailbox A: seed Email/query cache with collapseThreads=true";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxA,
+                },
+                collapseThreads => JSON::true,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+
+    xlog "Mailbox A: rerun Email/query with collapseThreads=false";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxA,
+                },
+                collapseThreads => JSON::false,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isCached});
+
+    xlog "Mailbox A: rerun Email/query with collapseThreads=true";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxA,
+                },
+                collapseThreads => JSON::true,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isCached});
+
+    xlog "Mailbox B: seed Email/query cache with collapseThreads=false";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxB,
+                },
+                collapseThreads => JSON::false,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isCached});
+
+    xlog "Mailbox B: rerun Email/query with collapseThreads=true";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxB,
+                },
+                collapseThreads => JSON::true,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isCached});
+
+    xlog "Mailbox B: rerun Email/query with collapseThreads=false";
+    $res = $jmap->CallMethods(
+        [ [
+            'Email/query',
+            {
+                filter => {
+                    inMailbox => $mboxB,
+                },
+                collapseThreads => JSON::false,
+            },
+            'R1'
+        ] ]
+    );
+    $self->assert_num_equals(10, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isCached});
+}
