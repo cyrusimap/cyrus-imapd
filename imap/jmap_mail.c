@@ -4221,7 +4221,7 @@ static void emailquery_guidsearch_result_ensure(struct emailquery *q, struct ema
         message_guid_decode(&match->guid, gsqmatch->guidrep);
         match->cid = gsqmatch->cid;
         smallarrayu64_init(&match->partnums);
-        if (q->collapse_threads && hashset_add(qc->seen_threads, &match->cid))
+        if (hashset_add(qc->seen_threads, &match->cid))
             qc->collapsed_matches[qc->collapsed_len++] = *match;
     }
     qc->have_total = 1;
@@ -4358,7 +4358,7 @@ static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emai
         }
 
         // calculate the collapsed version too
-        if (q->collapse_threads && hashset_add(qc->seen_threads, &match->cid))
+        if (hashset_add(qc->seen_threads, &match->cid))
             qc->collapsed_matches[qc->collapsed_len++] = *match;
     }
 
@@ -4559,15 +4559,13 @@ static void emailquery_cache_ensure(struct emailquery *q,
             xmalloc(sizeof(struct emailquery_match) * qc->qr.total_ceiling);
         qc->uncollapsed_len = 0;
     }
-    if (q->collapse_threads) {
-        if (!qc->collapsed_matches) {
-            qc->collapsed_matches =
-                xmalloc(sizeof(struct emailquery_match) * qc->qr.total_ceiling);
-            qc->collapsed_len = 0;
-        }
-        if (!qc->seen_threads)
-            qc->seen_threads = hashset_new(sizeof(conversation_id_t));
+    if (!qc->collapsed_matches) {
+        qc->collapsed_matches =
+            xmalloc(sizeof(struct emailquery_match) * qc->qr.total_ceiling);
+        qc->collapsed_len = 0;
     }
+    if (!qc->seen_threads)
+        qc->seen_threads = hashset_new(sizeof(conversation_id_t));
 
     // fill the caches
     qc->qr.ensure(q, qc, n);
