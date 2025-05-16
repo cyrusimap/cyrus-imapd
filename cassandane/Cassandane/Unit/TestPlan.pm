@@ -457,7 +457,8 @@ sub add_error
     # sorts of stuff we can't thaw.  We have enough information to
     # discover the right TestCase in the parent process.
     $exception->{'-object'} = undef;
-    $witem->{exception} = $exception;
+    $witem->{exceptions} //= [];
+    push @{$witem->{exceptions}}, $exception;
 }
 
 sub add_failure
@@ -486,6 +487,7 @@ use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
 use Cassandane::Util::Log;
+use Scalar::Util qw(blessed);
 
 my @test_roots = (
     'Cassandane/Test',
@@ -934,8 +936,21 @@ sub _run_workitem
         my $ex = $@;
         if ($ex)
         {
+            unless ((blessed($ex) // '') eq 'Error::Simple') {
+                $ex = Error::Simple->new($ex);
+            }
             $result->add_error($test,
                                Test::Unit::Error->make_new_from_error($ex));
+        }
+    }
+
+    if ($test->{stop_errors}) {
+        for my $error (@{$test->{stop_errors}}) {
+            unless ((blessed($error) // '') eq 'Error::Simple') {
+                $error = Error::Simple->new($error);
+            }
+            $result->add_error($test,
+                               Test::Unit::Error->make_new_from_error($error));
         }
     }
 
@@ -984,8 +999,11 @@ sub _finish_workitem
     }
     elsif ($witem->{result} eq 'error')
     {
-        $witem->{exception}->{'-object'} = $test;
-        $result->add_error($test, $witem->{exception});
+        for my $exception (@{$witem->{exceptions}}) {
+            $exception->{'-object'} = $test;
+
+            $result->add_error($test, $exception);
+        }
     }
     $result->end_test($test);
 }
