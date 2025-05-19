@@ -9603,6 +9603,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "createdmodseq")) {    /* Non-standard */
             statusitems |= STATUS_CREATEDMODSEQ;
         }
+        else if (!strcmp(arg.s, "uniqueid")) {         /* Non-standard */
+            statusitems |= STATUS_UNIQUEID;
+        }
         else {
             static char buf[200];
             snprintf(buf, 200, "Invalid Status attributes %s", arg.s);
@@ -9688,6 +9691,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
     if (statusitems & STATUS_CREATEDMODSEQ) {    /* Non-standard */
         prot_printf(imapd_out, "%cCREATEDMODSEQ " MODSEQ_FMT,
                     sepchar, sd->createdmodseq);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_UNIQUEID) {         /* Non-standard */
+        prot_printf(imapd_out, "%cUNIQUEID (%s)", sepchar, sd->uniqueid);
         sepchar = ' ';
     }
 
