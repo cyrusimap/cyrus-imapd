@@ -136,6 +136,7 @@ struct statusdata {
     uint32_t uidnext;
     uint32_t uidvalidity;
     const char *mailboxid;
+    const char *uniqueid;
     uint32_t unseen;
     uint32_t mboptions;
     quota_t size;
@@ -146,7 +147,7 @@ struct statusdata {
     conv_status_t xconv;
 };
 
-#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
+#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
 struct index_record {
     uint32_t uid;

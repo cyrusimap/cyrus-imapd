@@ -21,13 +21,15 @@ sub test_mailbox_legacy_ids
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
 
     xlog $self, "Fetching MAILBOXIDs";
-    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID', 'UNIQUEID' ] ]);
     my $res = $talk->get_response_code('status') || {};
     my $id1 = $res->{INBOX}{mailboxid}[0];
     my $id2 = $res->{'INBOX.foo'}{mailboxid}[0];
 
     $self->assert_matches(qr/^[^P].*/, $id1);
     $self->assert_matches(qr/^[^P].*/, $id2);
+    $self->assert_str_equals($id1, $res->{INBOX}{uniqueid}[0]);
+    $self->assert_str_equals($id2, $res->{'INBOX.foo'}{uniqueid}[0]);
 
     xlog $self, "get mailbox list";
     $res = $jmap->CallMethods([['Mailbox/query', {
