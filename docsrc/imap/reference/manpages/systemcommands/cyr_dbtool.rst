@@ -157,7 +157,8 @@ provides more convenient way to manage *user_deny.db*.
 .. only:: html
 
     Subsequent login attempts by this user would result in authentication
-    failures, and log entries like this::
+    failures, and log entries like this (although log formats may change over
+    time)::
 
         # grep baduser /var/log/mail.log
         Sep 19 14:34:57 cyrushost cyrus/imap[635]: fetching user_deny.db entry for 'baduser'
