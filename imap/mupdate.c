@@ -1500,9 +1500,11 @@ static void cmd_authenticate(struct conn *C,
             if (r != SASL_NOUSER)
                 sasl_getprop(C->saslconn, SASL_USERNAME, (const void **) &userid);
 
-            syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
-                   C->clienthost,
-                   mech, userid, sasl_errdetail(C->saslconn));
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                       lf_s("r.clienthost", C->clienthost),
+                       lf_s("u.username", userid),
+                       lf_s("login.mech", mech),
+                       lf_s("error", sasl_errdetail(C->saslconn)));
 
             prot_printf(C->pout, "%s NO \"%s\"\r\n", tag,
                         sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),
@@ -1522,8 +1524,11 @@ static void cmd_authenticate(struct conn *C,
     }
 
     C->userid = (char *) val;
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", C->clienthost, C->userid,
-           mech, C->tlsconn ? "+TLS" : "", "User logged in");
+    xsyslog_ev(LOG_NOTICE, "login.good",
+               lf_s("r.clienthost", C->clienthost),
+               lf_s("u.username", C->userid),
+               lf_s("login.mech", mech),
+               lf_c("login.tls", C->tlsconn ? 1 : 0));
 
     prot_printf(C->pout, "%s OK \"Authenticated\"\r\n", tag);
 
