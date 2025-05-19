@@ -59,6 +59,7 @@
 
 #include "assert.h"
 #include "libconfig.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -688,8 +689,10 @@ static int cmd_authenticate(struct protstream *sieved_out,
       if (sasl_result!=SASL_OK)
       {
         *errmsg="error base64 decoding string";
-        syslog(LOG_NOTICE, "badlogin: %s %s %s",
-               sieved_clienthost, mech, "error base64 decoding string");
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", sieved_clienthost),
+                   lf_s("login.mech", mech),
+                   lf_s("error", *errmsg));
         goto reset;
       }
   }
@@ -736,8 +739,10 @@ static int cmd_authenticate(struct protstream *sieved_out,
       if (sasl_result!=SASL_OK)
       {
         *errmsg="error base64 decoding string";
-        syslog(LOG_NOTICE, "badlogin: %s %s %s",
-               sieved_clienthost, mech, "error base64 decoding string");
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", sieved_clienthost),
+                   lf_s("login.mech", mech),
+                   lf_s("error", *errmsg));
         goto reset;
       }
 
@@ -757,8 +762,10 @@ static int cmd_authenticate(struct protstream *sieved_out,
                                      &serverout, &serveroutlen);
     } else {
       *errmsg = "expected a STRING followed by an EOL";
-      syslog(LOG_NOTICE, "badlogin: %s %s %s",
-             sieved_clienthost, mech, "expected string");
+      xsyslog_ev(LOG_NOTICE, "login.bad",
+                 lf_s("r.clienthost", sieved_clienthost),
+                 lf_s("login.mech", mech),
+                 lf_s("error", *errmsg));
       goto reset;
     }
 
@@ -770,8 +777,10 @@ static int cmd_authenticate(struct protstream *sieved_out,
       if(sasl_result == SASL_NOUSER)
           sasl_result = SASL_BADAUTH;
       *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
-      syslog(LOG_NOTICE, "badlogin: %s %s %s",
-             sieved_clienthost, mech, *errmsg);
+      xsyslog_ev(LOG_NOTICE, "login.bad",
+                 lf_s("r.clienthost", sieved_clienthost),
+                 lf_s("login.mech", mech),
+                 lf_s("error", *errmsg));
       goto reset;
   }
 
@@ -882,8 +891,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
       prot_printf(sieved_out, "OK\r\n");
   }
 
-  syslog(LOG_NOTICE, "login: %s %s %s%s %s", sieved_clienthost, username,
-         mech, starttls_done ? "+TLS" : "", "User logged in");
+  xsyslog_ev(LOG_NOTICE, "login.good",
+             lf_s("r.clienthost", sieved_clienthost),
+             lf_s("u.username", username),
+             lf_s("login.mech", mech),
+             lf_c("login.tls", starttls_done ? 1 : 0));
 
   authenticated = 1;
 
