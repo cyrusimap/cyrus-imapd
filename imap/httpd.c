@@ -4027,9 +4027,11 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
 
     if (!(config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))) {
         /* Not a backend in a Murder - proxy authz is not allowed */
-        syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
-               txn->conn->clienthost, txn->auth_chal.scheme->name, httpd_authid,
-               "proxy authz attempted on non-Murder backend");
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+            lf_s("r.clienthost", txn->conn->clienthost),
+            lf_s("login.scheme", txn->auth_chal.scheme->name),
+            lf_s("u.username", httpd_authid),
+            lf_s("error", "proxy authz attempted on non-Murder backend"));
         return SASL_NOAUTHZ;
     }
 
@@ -4039,9 +4041,11 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
                                SASL_CU_AUTHZID, NULL,
                                authzbuf, sizeof(authzbuf), &authzlen);
     if (status) {
-        syslog(LOG_NOTICE, "badlogin: %s %s %s invalid user",
-               txn->conn->clienthost, txn->auth_chal.scheme->name,
-               beautify_string(*authzid));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+            lf_s("r.clienthost", txn->conn->clienthost),
+            lf_s("login.scheme", txn->auth_chal.scheme->name),
+            lf_s("u.username", beautify_string(*authzid)),
+            lf_s("error", "invalid user"));
         return status;
     }
 
@@ -4052,9 +4056,11 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
                                  NULL, 0, NULL);
 
     if (status) {
-        syslog(LOG_NOTICE, "badlogin: %s %s %s %s",
-               txn->conn->clienthost, txn->auth_chal.scheme->name, httpd_authid,
-               sasl_errdetail(httpd_saslconn));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+            lf_s("r.clienthost", txn->conn->clienthost),
+            lf_s("login.scheme", txn->auth_chal.scheme->name),
+            lf_s("u.username", httpd_authid),
+            lf_s("error", sasl_errdetail(httpd_saslconn)));
         return status;
     }
 
@@ -4341,9 +4347,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         if (status) {
             if (*user == '\0')  // TB can send "Authorization: Basic Og=="
                 txn->error.desc = "All-whitespace username.";
-            syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-                   txn->conn->clienthost, realuser,
-                   sasl_errdetail(httpd_saslconn));
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                lf_s("r.clienthost", txn->conn->clienthost),
+                lf_s("login.scheme", "Basic"),
+                lf_s("u.username", realuser),
+                lf_s("error", sasl_errdetail(httpd_saslconn)));
             free(realuser);
 
             /* Don't allow user probing */
