@@ -1244,9 +1244,9 @@ static void cmd_apop(char *response)
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-        syslog(LOG_NOTICE, "badlogin: %s APOP (%s) %s",
-               popd_clienthost, popd_apop_chal,
-               sasl_errdetail(popd_saslconn));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", popd_clienthost),
+                   lf_s("error", sasl_errdetail(popd_saslconn)));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -1281,9 +1281,12 @@ static void cmd_apop(char *response)
     }
     popd_userid = xstrdup((const char *) canon_user);
 
-    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s SESSIONID=<%s>", popd_clienthost,
-           popd_userid, popd_subfolder ? popd_subfolder : "",
-           popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
+    xsyslog_ev(LOG_NOTICE, "login.good",
+               lf_s("session_id", session_id()),
+               lf_s("r.clienthost", popd_clienthost),
+               lf_s("u.username", popd_userid),
+               lf_s("pop.folder", popd_subfolder ? popd_subfolder : ""),
+               lf_c("login.tls", popd_starttls_done ? 1 : 0));
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1318,9 +1321,11 @@ static void cmd_user(char *user)
                 (domain = strchr(userbuf, '@')) && (dot > domain))) ||
              strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER) {
         prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
-        syslog(LOG_NOTICE,
-               "badlogin: %s plaintext (%s) invalid user",
-               popd_clienthost, beautify_string(user));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", popd_clienthost),
+                   lf_s("u.username", beautify_string(user)),
+                   lf_s("login.mech", "plaintext"),
+                   lf_s("error", "invalid user"));
     }
     else {
         popd_userid = xstrdup(userbuf);
@@ -1342,12 +1347,16 @@ static void cmd_pass(char *pass)
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
             pass = beautify_string(pass);
             if (strlen(pass) > 500) pass[500] = '\0';
-            syslog(LOG_NOTICE, "login: %s anonymous %s",
-                   popd_clienthost, pass);
+            xsyslog_ev(LOG_NOTICE, "login.good",
+                       lf_s("r.clienthost", popd_clienthost),
+                       lf_s("u.username", ""),
+                       lf_c("login.anonymous", 1),
+                       lf_s("login.password", pass));
         }
         else {
-            syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
-                   popd_clienthost);
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                       lf_s("r.clienthost", popd_clienthost),
+                       lf_s("error", "anonymous login refused"));
             prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
             return;
         }
@@ -1357,8 +1366,11 @@ static void cmd_pass(char *pass)
                             strlen(popd_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) [%s]",
-               popd_clienthost, popd_userid, sasl_errdetail(popd_saslconn));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", popd_clienthost),
+                   lf_s("u.username", popd_userid),
+                   lf_s("login.mech", "plaintext"),
+                   lf_s("error", sasl_errdetail(popd_saslconn)));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
@@ -1394,9 +1406,13 @@ static void cmd_pass(char *pass)
         }
         popd_userid = xstrdup((const char *) val);
 
-        syslog(LOG_NOTICE, "login: %s %s%s plaintext%s %s SESSIONID=<%s>", popd_clienthost,
-               popd_userid, popd_subfolder ? popd_subfolder : "",
-               popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
+        xsyslog_ev(LOG_NOTICE, "login.good",
+                   lf_s("session_id", session_id()),
+                   lf_s("r.clienthost", popd_clienthost),
+                   lf_s("u.username", popd_userid),
+                   lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
+                   lf_s("login.mech", "plaintext"),
+                   lf_c("login.tls", popd_starttls_done ? 1 : 0));
 
         if ((!popd_starttls_done) &&
             (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
@@ -1554,12 +1570,15 @@ static void cmd_auth(char *arg)
                     sasl_getprop(popd_saslconn, SASL_USERNAME,
                                  (const void **) &userid);
 
-                syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
-                       popd_clienthost, authtype, userid,
-                       sasl_errstring(sasl_result, NULL, NULL));
+                xsyslog_ev(LOG_NOTICE, "login.bad",
+                           lf_s("r.clienthost", popd_clienthost),
+                           lf_s("u.username", userid),
+                           lf_s("login.mech", authtype),
+                           lf_s("error", sasl_errstring(sasl_result, NULL, NULL)));
             } else {
-                syslog(LOG_NOTICE, "badlogin: %s %s",
-                       popd_clienthost, authtype);
+                xsyslog_ev(LOG_NOTICE, "login.bad",
+                           lf_s("r.clienthost", popd_clienthost),
+                           lf_s("login.mech", authtype));
             }
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
@@ -1615,9 +1634,14 @@ static void cmd_auth(char *arg)
     } else {
         popd_userid = xstrdup(canon_user);
     }
-    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s SESSIONID=<%s>", popd_clienthost,
-           popd_userid, popd_subfolder ? popd_subfolder : "",
-           authtype, popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
+
+    xsyslog_ev(LOG_NOTICE, "login.good",
+               lf_s("session_id", session_id()),
+               lf_s("r.clienthost", popd_clienthost),
+               lf_s("u.username", popd_userid),
+               lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
+               lf_s("login.mech", authtype),
+               lf_c("login.tls", popd_starttls_done ? 1 : 0));
 
     if (!openinbox()) {
         sasl_getprop(popd_saslconn, SASL_SSF, &val);

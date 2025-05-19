@@ -746,8 +746,11 @@ static void cmd_authenticate(char *mech, char *resp)
             if (r != SASL_NOUSER)
                 sasl_getprop(sync_saslconn, SASL_USERNAME, (const void **) &userid);
 
-            syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
-                   sync_clienthost, mech, userid, sasl_errdetail(sync_saslconn));
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                       lf_s("r.clienthost", sync_clienthost),
+                       lf_s("login.mech", mech),
+                       lf_s("u.username", userid),
+                       lf_s("error", sasl_errdetail(sync_saslconn)));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
@@ -776,6 +779,7 @@ static void cmd_authenticate(char *mech, char *resp)
                     sasl_result);
         syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
                sasl_result);
+
         reset_saslconn(&sync_saslconn);
         return;
     }
@@ -786,8 +790,11 @@ static void cmd_authenticate(char *mech, char *resp)
     if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
-           mech, sync_starttls_done ? "+TLS" : "", "User logged in");
+    xsyslog_ev(LOG_NOTICE, "login.good",
+               lf_s("r.clienthost", sync_clienthost),
+               lf_s("u.username", sync_userid),
+               lf_s("login.mech", mech),
+               lf_c("login.tls", sync_starttls_done ? 1 : 0));
 
     sasl_getprop(sync_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);
