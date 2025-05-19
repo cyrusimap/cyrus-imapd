@@ -388,6 +388,7 @@ HIDDEN void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sda
     assert(sdata);
 
     sdata->uidvalidity = mbentry->uidvalidity;
+    sdata->uniqueid = mbentry->uniqueid;
     // sdata->mailboxid set in imapd_statusdata()
 
     sdata->statusitems |= STATUS_MBENTRYITEMS;
