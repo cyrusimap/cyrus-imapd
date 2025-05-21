@@ -66,10 +66,16 @@ sub test_email_set_create_snooze
             '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
         },
         keywords => { '$draft' => JSON::true },
-        snoozed => { "until" => "$datestr", "moveToMailboxId" => "$draftsId" },
     };
 
+    xlog $self, "Try to create a draft in \\Snoozed mailbox with missing props";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notCreated}{"1"});
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notCreated}{"1"}{type});
+
     xlog $self, "Create a draft";
+    $draft->{snoozed} = { "until" => "$datestr", "moveToMailboxId" => "$draftsId" };
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
