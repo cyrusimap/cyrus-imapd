@@ -2253,8 +2253,9 @@ int cval(const void *a, const void *b, void *prev)
   return 1;
 }
 ],[
-    char *dest;
-    func("abc", 3, 1, cval, &dest);
+    /* the chaos is a pair of quadrigraphs representing square brackets */
+    char *dest, buf@<:@@:>@ = "abc";
+    func(buf, 3, 1, cval, &dest);
 ],cyrus_cv_function_nesting=yes, cyrus_cv_function_nesting=no))
 AC_MSG_RESULT($cyrus_cv_function_nesting)
 if test "$cyrus_cv_function_nesting" = "yes"; then
