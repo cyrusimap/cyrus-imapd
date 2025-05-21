@@ -11326,9 +11326,10 @@ static void _email_create(jmap_req_t *req,
     json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
     _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
 
-    /* Validate snoozed + mailboxIds */
-    if (json_is_object(email.snoozed) && !have_snoozed_mboxid) {
+    /* Validate snoozed + mailboxIds (MUST have both or neither) */
+    if (!json_is_object(email.snoozed) != !have_snoozed_mboxid) {
         jmap_parser_invalid(&parser, "snoozed");
+        jmap_parser_invalid(&parser, "mailboxIds");
     }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -12532,6 +12533,8 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
     for (i = 0; i < ptrarray_size(updates); i++) {
         struct email_update *update = ptrarray_nth(updates, i);
         const char *email_id = update->email_id;
+        json_t *set_snoozed_mboxid =
+            json_object_get(update->mailboxids, snoozed_mboxid);
         int invalid = 0, find_mbox = 0;
 
         if (json_object_get(bulk->set_errors, email_id)) {
@@ -12555,10 +12558,11 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                 update->snoozed_uidrec->mboxrec->mbox_id;
             struct email_updateplan *plan =
                 hash_lookup(current_mboxid, &bulk->plans_by_mbox_id);
+            json_t *set_cur_mboxid =
+                json_object_get(update->mailboxids, current_mboxid);
 
             if (update->snoozed) {
                 /* Updating/removing snoozeDetails */
-                json_t *jval = NULL;
 
                 if (update->patch_snoozed) {
                     const char *current_mboxname =
@@ -12573,18 +12577,35 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                     json_decref(patch);
                 }
 
-                if (update->mailboxids) {
-                    jval = json_object_get(update->mailboxids, current_mboxid);
+                if (json_is_null(update->snoozed)) {
+                    /* If the update clears the snooze annotation
+                     * (sets to null) AND the message is either in the
+                     * Snoozed mailbox and not removed, or is being added
+                     * to the Snoozed mailbox THEN reject the update to
+                     * that message with invalidProperties (you must have
+                     * a snoozed annotation to be in the Snoozed
+                     * mailbox).
+                     */
+                    if (json_is_true(set_snoozed_mboxid) ||
+                        (!json_is_null(set_snoozed_mboxid) &&
+                         !strcmpsafe(current_mboxid, snoozed_mboxid))) {
+                        /* invalidProperties */
+                        invalid = 1;
+                    }
                 }
-                if (!update->mailboxids || jval == json_true() ||
-                     (jval == NULL && update->patch_mailboxids)) {
-                    /* This message is NOT being deleted -
-                       Update/remove snoozed */
+                else if (json_is_null(set_snoozed_mboxid)) {
+                    /* invalidProperties -
+                       can't remove from Snoozed mailbox
+                       w/o removing snoozed property */
+                    invalid = 1;
+                }
+                else if (!set_cur_mboxid || json_is_true(set_cur_mboxid)) {
+                    /* Update snoozed */
                     update->snooze_in_mboxid = xstrdup(current_mboxid);
                     update->snoozed_uidrec->is_snoozed = 0;
                     ptrarray_append(&plan->snooze, update->snoozed_uidrec);
                 }
-                else if (!json_is_null(update->snoozed)) {
+                else {
                     /* Determine which mailbox to use for the snoozed email */
                     find_mbox = 1;
                 }
@@ -12592,11 +12613,7 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
             else if (update->mailboxids) {
                 /* No change to snoozeDetails -
                    Check if this message is being deleted */
-                json_t *jval =
-                    json_object_get(update->mailboxids, current_mboxid);
-
-                if (jval == json_null() ||
-                    (jval == NULL && !update->patch_mailboxids)) {
+                if (json_is_null(set_cur_mboxid)) {
                     /* This message is being deleted - Remove snoozed */
                     update->snooze_in_mboxid = xstrdup(current_mboxid);
                     update->snoozed_uidrec->is_snoozed = 0;
@@ -12606,14 +12623,20 @@ static int  _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
         }
         else if (json_is_object(update->snoozed)) {
             /* Setting snoozeDetails */
-            if (!update->mailboxids) {
-                /* invalidProperties */
+            if (!json_is_true(set_snoozed_mboxid)) {
+                /* invalidProperties -
+                   can't set snoozed property w/o adding to Snoozed mailbox */
                 invalid = 1;
             }
             else {
                 /* Determine which mailbox to use for the snoozed email */
                 find_mbox = 1;
             }
+        }
+        else if (json_is_true(set_snoozed_mboxid)) {
+            /* invalidProperties -
+               can't add to Snoozed mailbox w/o setting snoozed property */
+            invalid = 1;
         }
 
         if (find_mbox) {

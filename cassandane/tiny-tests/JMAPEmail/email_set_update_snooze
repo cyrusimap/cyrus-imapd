@@ -53,11 +53,39 @@ sub test_email_set_update_snooze
     $self->assert_not_null($res->[0][1]{created});
     my $draftsId = $res->[0][1]{created}{"1"}{id};
 
-    xlog $self, "Move message to drafts and snoozed mailbox";
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => 30));
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
 
+    xlog $self, "Attempt to add snoozed info without \\Snoozed mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "snoozed" => { "until" => "$datestr",
+                               "setKeywords" => { '$seen' => $JSON::true } },
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notUpdated}{$emailId}{type});
+
+    xlog $self, "Attempt to move to \\Snoozed mailbox w/o snoozed info";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$inboxId" => undef,
+                "mailboxIds/$snoozedId" => $JSON::true,
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notUpdated}{$emailId}{type});
+
+    xlog $self, "Move message to \\Snoozed mailbox";
     $res = $jmap->CallMethods([
         ['Email/set', {
             update => { $emailId => {
@@ -82,6 +110,34 @@ sub test_email_set_update_snooze
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
     $self->assert_str_equals($datestr, $msg->{addedDates}{$snoozedId});
+
+    xlog $self, "Attempt to remove snoozed info while in \\Snoozed mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "snoozed" => $JSON::null,
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notUpdated}{$emailId}{type});
+
+
+    xlog $self, "Attempt to adjust snoozed and remove from \\Snoozed mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "snoozed/until" => "$datestr",
+                "mailboxIds/$snoozedId" => $JSON::null
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notUpdated}{$emailId}{type});
 
     xlog $self, "Adjust snooze#until";
     $maildate->add(DateTime::Duration->new(seconds => 15));
@@ -201,33 +257,4 @@ sub test_email_set_update_snooze
     $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
     $self->assert_equals(JSON::true, $msg->{keywords}{'$seen'});
     $self->assert_null($msg->{keywords}{'$awakened'});
-
-    xlog $self, "Restore snoozed";
-    $maildate->add(DateTime::Duration->new(seconds => 15));
-    $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
-
-    $res = $jmap->CallMethods([
-        ['Email/set', {
-            update => { $emailId => {
-                "mailboxIds" => { "$inboxId" => $JSON::true },
-                "snoozed" => {
-                    "until" => "$datestr",
-                    "setKeywords" => { '$awakened' => $JSON::true, '$seen' => $JSON::false }
-                },
-            }}
-        }, 'R8']
-    ]);
-    $self->assert_not_null($res->[0][1]{updated});
-    $self->assert_null($res->[0][1]{notUpdated});
-
-    $res = $jmap->CallMethods( [ [ 'Email/get',
-                                   { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds', 'keywords', 'snoozed' ]}, "R9" ] ] );
-    $msg = $res->[0][1]->{list}[0];
-    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
-    $self->assert_not_null($msg->{snoozed});
-    $self->assert_num_equals(2, scalar keys %{$msg->{keywords}});
-    $self->assert_equals(JSON::true, $msg->{keywords}{'$seen'});
-    $self->assert_null($msg->{keywords}{'$awakened'});
-    $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
 }

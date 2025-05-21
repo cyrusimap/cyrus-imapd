@@ -63,6 +63,9 @@ sub test_email_copy_snoozed
                             value => 'world',
                         }
                     },
+                    snoozed => {
+                        'until' => $datestr
+                    }
                 },
             },
         }, 'R1'],
