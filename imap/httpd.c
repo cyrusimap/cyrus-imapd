@@ -439,8 +439,6 @@ struct buf serverinfo = BUF_INITIALIZER;
 static ptrarray_t httpd_pipes = PTRARRAY_INITIALIZER;
 static int http2_enabled = 0;
 
-static int shutdown_signal = 0;
-
 int ignorequota = 0;
 int apns_enabled = 0;
 int ws_enabled = 0;
@@ -487,7 +485,6 @@ static int tls_init(int client_auth, struct buf *serverinfo);
 static void starttls(struct http_connection *conn, int timeout);
 void usage(void) __attribute__((noreturn));
 void shut_down(int code) __attribute__((noreturn));
-void shut_down_via_signal(int code);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
@@ -814,7 +811,7 @@ int service_init(int argc __attribute__((unused)),
     http_conn.pgin = protgroup_new(0);
 
     /* set signal handlers */
-    signals_set_shutdown(&shut_down_via_signal);
+    signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);
 
     /* load the SASL plugins */
@@ -958,9 +955,6 @@ int service_main(int argc __attribute__((unused)),
     session_new_id();
 
     signals_poll();
-    if (shutdown_signal) {
-        shut_down(shutdown_signal);
-    }
 
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
@@ -1212,12 +1206,6 @@ void shut_down(int code)
     cyrus_done();
 
     exit(code);
-}
-
-
-void shut_down_via_signal(int code)
-{
-    shutdown_signal = code;
 }
 
 
@@ -2246,10 +2234,6 @@ static void cmdloop(struct http_connection *conn)
             }
 
             signals_poll();
-            if (shutdown_signal) {
-                transaction_free(&txn);
-                shut_down(shutdown_signal);
-            }
 
             syslog(LOG_DEBUG, "http_proxy_check_input()");
 
@@ -2293,7 +2277,6 @@ static void cmdloop(struct http_connection *conn)
         if (ret == HTTP_SHUTDOWN) {
             syslog(LOG_WARNING,
                    "Shutdown file: \"%s\", closing connection", conn->close_str);
-            transaction_free(&txn);
             shut_down(0);
         }
 
