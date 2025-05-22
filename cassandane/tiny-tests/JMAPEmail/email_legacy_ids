@@ -22,13 +22,14 @@ sub test_email_legacy_ids
 
     xlog $self, "Fetching EMAILIDs";
     $talk->examine('INBOX');
-    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID DIGEST.SHA1)');
     my $id1 = $res->{1}{emailid}[0];
     my $id2 = $res->{2}{emailid}[0];
     my $id3 = $res->{3}{emailid}[0];
     my $id4 = $res->{4}{emailid}[0];
     my $thrid1 = $res->{1}{threadid}[0];
     my $thrid2 = $res->{2}{threadid}[0];
+    my $blobid4 = $res->{4}{'digest.sha1'};
 
     $self->assert_matches(qr/^M/, $id1);
     $self->assert_matches(qr/^M/, $id2);
@@ -158,7 +159,8 @@ sub test_email_legacy_ids
             onSuccessDestroyOriginal => JSON::true,
         }, 'R1'],
     ]);
-    $self->assert_str_equals($id4, $res->[0][1]->{created}{1}{id});
+    $self->assert_matches(qr/^S/, $res->[0][1]->{created}{1}{id});
+    $self->assert_str_equals("G$blobid4", $res->[0][1]->{created}{1}{blobId});
     $self->assert_str_equals($id4, $res->[1][1]{destroyed}[0]);
     $self->assert_matches(qr/^J/, $res->[0][1]->{oldState});
     $self->assert_matches(qr/^J/, $res->[0][1]->{newState});
