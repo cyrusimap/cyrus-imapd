@@ -749,7 +749,6 @@ static void httpd_reset(struct http_connection *conn)
     conn->close = 0;
     conn->close_str = NULL;
     conn->clienthost = "[local]";
-    conn->ws_ctx = NULL;
     buf_reset(&conn->logbuf);
     if (conn->logfd != -1) {
         close(conn->logfd);
@@ -1138,6 +1137,8 @@ void shut_down(int code)
 
     strarray_free(httpd_log_headers);
 
+    if (http_conn.h1_txn) transaction_free(http_conn.h1_txn);
+
     /* Cleanup auxiliary connection contexts */
     conn_shutdown_t shutdown;
     while ((shutdown = ptrarray_pop(&http_conn.shutdown_callbacks))) {
@@ -1230,7 +1231,8 @@ EXPORTED void fatal(const char* s, int code)
     }
     recurse_code = code;
 
-    if (http_conn.sess_ctx || http_conn.ws_ctx) {
+    if (http_conn.sess_ctx ||
+        (http_conn.h1_txn && http_conn.h1_txn->ws_ctx)) {
         /* Pass fatal string to shut_down() */
         http_conn.close_str = s;
     }
@@ -2186,10 +2188,13 @@ static int http1_input(struct transaction_t *txn)
  */
 static void cmdloop(struct http_connection *conn)
 {
-    struct transaction_t txn;
+    struct transaction_t txn = { 0 };
+
+    /* Link the transaction context into the connection so we can
+       properly close/free resources during an abnormal shut_down() */
+    conn->h1_txn = &txn;
 
     /* Start with an empty (clean) transaction */
-    memset(&txn, 0, sizeof(struct transaction_t));
     transaction_reset(&txn);
     txn.conn = conn;
 
@@ -2288,6 +2293,9 @@ static void cmdloop(struct http_connection *conn)
 
     /* Memory cleanup */
     transaction_free(&txn);
+
+    /* Clear reference to transaction */
+    conn->h1_txn = NULL;
 }
 
 /****************************  Parsing Routines  ******************************/
