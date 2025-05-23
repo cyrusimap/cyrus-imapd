@@ -137,8 +137,7 @@ struct notify_rock {
 static int notify_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct notify_rock *nrock = rock;
-    const char *mboxid =
-        json_string_value(json_object_get(nrock->msg, "mailboxID"));
+    const char *mboxid = idle_msg_get_mboxid(nrock->msg);
 
     if (!mboxid) return 0;
 

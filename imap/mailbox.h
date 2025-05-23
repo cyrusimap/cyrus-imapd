@@ -78,7 +78,7 @@
  * If you change MAILBOX_MINOR_VERSION you MUST also make corresponding
  * changes to backend_version() in backend.c.
  */
-#define MAILBOX_MINOR_VERSION       (19) /* read comment above! */
+#define MAILBOX_MINOR_VERSION       (20) /* read comment above! */
 #define MAILBOX_CACHE_MINOR_VERSION (13)
 
 #define FNAME_HEADER "/cyrus.header"
@@ -136,6 +136,7 @@ struct statusdata {
     uint32_t uidnext;
     uint32_t uidvalidity;
     const char *mailboxid;
+    const char *uniqueid;
     uint32_t unseen;
     uint32_t mboptions;
     quota_t size;
@@ -146,33 +147,33 @@ struct statusdata {
     conv_status_t xconv;
 };
 
-#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
+#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
 struct index_record {
     uint32_t uid;
-    time_t internaldate;
-    time_t sentdate;
-    uint32_t size;
+    struct timespec internaldate;
+    struct timespec sentdate;
+    uint64_t size;
     uint32_t header_size;
-    time_t gmtime;
+    struct timespec gmtime;
     size_t cache_offset;
-    time_t last_updated;
+    struct timespec last_updated;
     uint32_t system_flags;
     uint32_t internal_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
-    time_t savedate;
+    struct timespec savedate;
     uint16_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
-    bit64 cid;
     modseq_t createdmodseq;
+    bit64 cid;
+    bit64 basecid;
     bit32 cache_crc;
 
     /* metadata */
     uint32_t recno;
     unsigned silentupdate:1;
     unsigned ignorelimits:1;
-    bit64 basecid;
     struct cacherecord crec;
 };
 
@@ -243,6 +244,7 @@ struct mailbox_header {
     char *name;
     char *acl;
     char *uniqueid;
+    char *jmapid;
     char *quotaroot;
     char *flagname[MAX_USER_FLAGS];
     int mbtype;
@@ -397,24 +399,46 @@ struct mailbox_iter;
  * add new fields to the record, don't forget to add them to the tests
  * too!
  */
-#define OFFSET_UID 0
-#define OFFSET_INTERNALDATE 4
-#define OFFSET_SENTDATE 8
-#define OFFSET_SIZE 12
-#define OFFSET_HEADER_SIZE 16
-#define OFFSET_GMTIME 20
-#define OFFSET_CACHE_OFFSET 24
-#define OFFSET_LAST_UPDATED 28
-#define OFFSET_SYSTEM_FLAGS 32
-#define OFFSET_USER_FLAGS 36
-#define OFFSET_SAVEDATE 52 /* added in v15 */
-#define OFFSET_CACHE_VERSION 56
-#define OFFSET_MESSAGE_GUID 60
-#define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_THRID 88       /* conversation id, added in v13 */
-#define OFFSET_CREATEDMODSEQ 96 /* modseq of creation time, added in v16 */
-#define OFFSET_CACHE_CRC 104 /* CRC32 of cache record */
-#define OFFSET_RECORD_CRC 108
+#define OFFSET_UID              0
+#define OFFSET_CACHE_OFFSET     4
+#define OFFSET_INTERNALDATE     8 /* grew to 64-bit in v20 (nsec since epoch) */
+#define OFFSET_SENTDATE        16 /* grew to 64-bit in v20 */
+#define OFFSET_SIZE            24 /* grew to 64-bit in v20 */
+#define OFFSET_HEADER_SIZE     32
+#define OFFSET_SYSTEM_FLAGS    36
+#define OFFSET_USER_FLAGS      40
+#define OFFSET_CACHE_VERSION   56
+#define OFFSET_MESSAGE_GUID    60
+#define OFFSET_MODSEQ          80 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_CID             88 /* conversation id, added in v13 */
+#define OFFSET_CREATEDMODSEQ   96 /* modseq of creation time, added in v16 */
+#define OFFSET_GMTIME         104 /* grew to 64-bit in v20 */
+#define OFFSET_LAST_UPDATED   112 /* grew to 64-bit in v20 */
+#define OFFSET_SAVEDATE       120 /* added in v15 */
+#define OFFSET_BASECID        128 /* base conversation id, added in v20 */
+#define OFFSET_CACHE_CRC      136 /* CRC32 of cache record */
+#define OFFSET_RECORD_CRC     140
+
+#define PRE20_OFFSET_INTERNALDATE    4
+#define PRE20_OFFSET_SENTDATE        8
+#define PRE20_OFFSET_SIZE           12
+#define PRE20_OFFSET_HEADER_SIZE    16
+#define PRE20_OFFSET_GMTIME         20
+#define PRE20_OFFSET_CACHE_OFFSET   24
+#define PRE20_OFFSET_LAST_UPDATED   28
+#define PRE20_OFFSET_SYSTEM_FLAGS   32
+#define PRE20_OFFSET_USER_FLAGS     36
+#define PRE20_OFFSET_SAVEDATE       52
+#define PRE20_OFFSET_CACHE_CRC     104
+#define PRE20_OFFSET_RECORD_CRC    108
+
+#define PRE16_OFFSET_CACHE_CRC      96
+#define PRE16_OFFSET_RECORD_CRC    100
+
+#define PRE13_OFFSET_CACHE_CRC      88
+#define PRE13_OFFSET_RECORD_CRC     92
+
+#define PRE10_OFFSET_MODSEQ         72
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
@@ -593,6 +617,7 @@ extern int mailbox_delete(struct mailbox **mailboxptr);
 extern const struct mboxlist_entry *mailbox_mbentry(const struct mailbox *mailbox);
 extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
+extern const char *mailbox_jmapid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
 extern const char *mailbox_quotaroot(const struct mailbox *mailbox);
@@ -665,7 +690,8 @@ extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd)
 
 extern int mailbox_create(const char *name, uint32_t mbtype, int minor_version,
                           const char *part, const char *acl,
-                          const char *uniqueid, int options, unsigned uidvalidity,
+                          const char *uniqueid, const char *jmapid,
+                          int options, unsigned uidvalidity,
                           modseq_t createdmodseq, modseq_t highestmodseq,
                           struct mailbox **mailboxptr);
 
@@ -695,6 +721,7 @@ extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mai
 #define mailbox_make_uniqueid(mailbox) mailbox_set_uniqueid(mailbox, makeuuid())
 
 extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
+extern void mailbox_set_jmapid(struct mailbox *mailbox, const char *jmapid);
 extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
 extern int mailbox_setversion(struct mailbox *mailbox, int version);
@@ -780,5 +807,8 @@ extern int mailbox_changequotaroot(struct mailbox *mailbox,
 extern int mailbox_parse_datafilename(const char *name, uint32_t *uidp);
 
 extern struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_path);
+
+extern int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
+                                           struct index_record *record);
 
 #endif /* INCLUDED_MAILBOX_H */

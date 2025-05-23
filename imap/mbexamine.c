@@ -307,29 +307,41 @@ static int do_examine(struct findall_data *data, void *rock)
         }
 
         printf("%06u> UID:%08u"
-               "   INT_DATE:" TIME_T_FMT " SENTDATE:" TIME_T_FMT " SAVEDATE:" TIME_T_FMT " SIZE:%-6u\n",
-               msgno, record->uid, record->internaldate,
-               record->sentdate, record->savedate, record->size);
+               "   INT_DATE:" TIME_T_FMT,
+               msgno, record->uid, record->internaldate.tv_sec);
+        if (mailbox->i.minor_version >= 20 &&
+            record->internaldate.tv_nsec < UTIME_OMIT) {
+            printf(UINT64_NANOSEC_FMT, record->internaldate.tv_nsec);
+        }
+        printf(" SENTDATE:" TIME_T_FMT
+               " SAVEDATE:" TIME_T_FMT " SIZE: " UINT64_LALIGN_FMT "\n",
+               record->sentdate.tv_sec, record->savedate.tv_sec, 6, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
-               record->header_size, record->last_updated,
+               record->header_size, record->last_updated.tv_sec,
                record->system_flags);
 
-        if (mailbox->i.minor_version >= 6)
-            printf("      > CACHEVER:%-2u", record->cache_version);
-
-        if (mailbox->i.minor_version >= 7) {
-            printf(" GUID:%s", message_guid_encode(&record->guid));
-        }
-
-        if (mailbox->i.minor_version >= 8) {
-            printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
-        }
-
-        if (mailbox->i.minor_version >= 13) {
-            printf("  THRID: %llx", record->cid);
-        }
-
         printf("\n");
+
+        if (mailbox->i.minor_version >= 6) {
+            printf("      > CACHEVER:%-5u", record->cache_version);
+
+            if (mailbox->i.minor_version >= 7) {
+                printf(" GUID:%s", message_guid_encode(&record->guid));
+
+                if (mailbox->i.minor_version >= 8) {
+                    printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
+
+                    if (mailbox->i.minor_version >= 13) {
+                        printf("  CID: " CONV_FMT, record->cid);
+
+                        if (mailbox->i.minor_version >= 20)
+                            printf("  BASECID: " CONV_FMT, record->basecid);
+                    }
+                }
+            }
+
+            printf("\n");
+        }
 
         printf("      > INTERNALFLAGS:");
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
@@ -342,6 +354,8 @@ static int do_examine(struct findall_data *data, void *rock)
             printf(" FLAG_INTERNAL_NEEDS_CLEANUP");
         if (record->internal_flags & FLAG_INTERNAL_SNOOZED)
             printf(" FLAG_INTERNAL_SNOOZED");
+
+        printf("\n");
 
         printf("      > SYSTEMFLAGS:");
         if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
@@ -582,18 +596,18 @@ static int do_compare(struct findall_data *data, void *rock)
             printf("\n");
 
             printf("   Size: ");
-            if (record) printf("%-50u", record->size);
+            if (record) printf(UINT64_LALIGN_FMT, 50, record->size);
             else printf("%-50s", "");
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid))
-                printf("\t%-50u", fs_record.size);
+                printf(UINT64_LALIGN_FMT, 50, fs_record.size);
             printf("\n");
 
-            if (record) time_to_rfc5322(record->sentdate, sent, sizeof(sent));
+            if (record) time_to_rfc5322(record->sentdate.tv_sec, sent, sizeof(sent));
             printf("   Date: %-50s", sent);
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
-                time_to_rfc5322(fs_record.sentdate, sent, sizeof(sent));
+                time_to_rfc5322(fs_record.sentdate.tv_sec, sent, sizeof(sent));
                 printf("\t%-50s", sent);
             }
             printf("\n");
