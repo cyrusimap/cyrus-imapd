@@ -155,13 +155,13 @@ static void downgrade_record(const struct index_record *record, char *buf,
 
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
     *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
-    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
+    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate.tv_sec);
     *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
     /* content_offset in previous versions, identical to header_size */
     *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(UP_content_offset);
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(record->cache_offset);
-    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated.tv_sec);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))
         = htonl(record->system_flags & UP_validflags);
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
