@@ -315,9 +315,9 @@ static int do_examine(struct findall_data *data, void *rock)
         }
         printf(" SENTDATE:" TIME_T_FMT
                " SAVEDATE:" TIME_T_FMT " SIZE: " UINT64_LALIGN_FMT "\n",
-               record->sentdate, record->savedate, 6, record->size);
+               record->sentdate.tv_sec, record->savedate.tv_sec, 6, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :" TIME_T_FMT " SYSFLAGS:%08X",
-               record->header_size, record->last_updated,
+               record->header_size, record->last_updated.tv_sec,
                record->system_flags);
 
         printf("\n");
@@ -603,11 +603,11 @@ static int do_compare(struct findall_data *data, void *rock)
                 printf(UINT64_LALIGN_FMT, 50, fs_record.size);
             printf("\n");
 
-            if (record) time_to_rfc5322(record->sentdate, sent, sizeof(sent));
+            if (record) time_to_rfc5322(record->sentdate.tv_sec, sent, sizeof(sent));
             printf("   Date: %-50s", sent);
 
             if (fs_record.uid && !message_guid_isnull(&fs_record.guid)) {
-                time_to_rfc5322(fs_record.sentdate, sent, sizeof(sent));
+                time_to_rfc5322(fs_record.sentdate.tv_sec, sent, sizeof(sent));
                 printf("\t%-50s", sent);
             }
             printf("\n");
