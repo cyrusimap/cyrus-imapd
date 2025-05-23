@@ -326,6 +326,8 @@ struct txn_flags_t {
     unsigned long retry    : 1;         /* Retry-After */
 };
 
+struct transaction_t;
+
 /* HTTP connection context */
 struct http_connection {
     struct protstream *pin;             /* Input protstream */
@@ -339,8 +341,7 @@ struct http_connection {
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */
-    void **ws_ctx;                      /* Reference to WebSocket context
-                                           (HTTP/1.1 only) */
+    struct transaction_t *h1_txn;       /* Reference to HTTP/1.x txn */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
 
