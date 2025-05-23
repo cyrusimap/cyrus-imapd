@@ -1982,10 +1982,10 @@ static int submission_filter_match(void *vf, void *rock)
     if (record->internaldate.tv_sec < f->after) return 0;
 
     /* createdBefore */
-    if (record->savedate >= f->createdBefore) return 0;
+    if (record->savedate.tv_sec >= f->createdBefore) return 0;
 
     /* createdAfter */
-    if (record->savedate < f->createdAfter) return 0;
+    if (record->savedate.tv_sec < f->createdAfter) return 0;
 
     /* undoStatus */
     if (f->undoStatus) {
@@ -2232,7 +2232,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         /* Create id from message UID, using 'S' prefix */
         sprintf(match->id, "S%u", record->uid);
         match->uid = record->uid;
-        match->created = record->savedate;
+        match->created = record->savedate.tv_sec;
         match->sentAt = record->internaldate.tv_sec;
         match->emailId = sfrock.emailId;
         match->threadId = sfrock.threadId;

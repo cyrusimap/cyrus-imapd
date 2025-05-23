@@ -2076,12 +2076,12 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     if (version < 20) {
         record->internaldate.tv_sec  = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
         record->internaldate.tv_nsec = UTIME_OMIT;
-        record->sentdate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
+        record->sentdate.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
         record->size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SIZE)));
         record->header_size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)));
-        record->gmtime = ntohl(*((bit32 *)(buf+PRE20_OFFSET_GMTIME)));
+        record->gmtime.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_GMTIME)));
         cache_offset_field = ntohl(*((bit32 *)(buf+PRE20_OFFSET_CACHE_OFFSET)));
-        record->last_updated = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)));
+        record->last_updated.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)));
         stored_system_flags = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SYSTEM_FLAGS)));
 
         for (n = 0; n < MAX_USER_FLAGS/32; n++) {
@@ -2113,7 +2113,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
 
         record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
         if (version > 14) {
-            record->savedate = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)));
+            record->savedate.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)));
         }
 
         /* createdmodseq was added in version 16, pushing the CRCs down */
@@ -2133,7 +2133,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
     TIMESPEC_FROM_NANOSEC(&record->internaldate,
                           ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE))));
-    record->sentdate = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
+    record->sentdate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
     record->size = ntohll(*((bit64 *)(buf+OFFSET_SIZE)));
     record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
     stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
@@ -2147,9 +2147,9 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
     record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
     record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
-    record->gmtime = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
-    record->last_updated = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
-    record->savedate = ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE)));
+    record->gmtime.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
+    record->last_updated.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
+    record->savedate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE)));
     record->basecid = ntohll(*(bit64 *)(buf+OFFSET_BASECID));
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
@@ -3280,25 +3280,25 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (version < 20) {
         *((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
-        *((bit32 *)(buf+PRE20_OFFSET_SENTDATE)) = htonl(record->sentdate);
+        *((bit32 *)(buf+PRE20_OFFSET_SENTDATE)) = htonl(record->sentdate.tv_sec);
         *((bit32 *)(buf+PRE20_OFFSET_SIZE)) = htonl(record->size);
         *((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)) = htonl(record->header_size);
         if (version >= 12) {
-            *((bit32 *)(buf+PRE20_OFFSET_GMTIME)) = htonl(record->gmtime);
+            *((bit32 *)(buf+PRE20_OFFSET_GMTIME)) = htonl(record->gmtime.tv_sec);
         }
         else {
             /* content_offset was always the same */
             *((bit32 *)(buf+PRE20_OFFSET_GMTIME)) = htonl(record->header_size);
         }
         *((bit32 *)(buf+PRE20_OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
-        *((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+        *((bit32 *)(buf+PRE20_OFFSET_LAST_UPDATED)) = htonl(record->last_updated.tv_sec);
         *((bit32 *)(buf+PRE20_OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
 
         for (n = 0; n < MAX_USER_FLAGS/32; n++) {
             *((bit32 *)(buf+PRE20_OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
         }
         if (version > 14) {
-            *((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)) = htonl(record->savedate);
+            *((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)) = htonl(record->savedate.tv_sec);
         }
         else {
             *((bit32 *)(buf+PRE20_OFFSET_SAVEDATE)) = 0; // blank out old content_lines
@@ -3347,7 +3347,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
     *((bit64 *)(buf+OFFSET_INTERNALDATE)) =
         htonll(TIMESPEC_TO_NANOSEC(&record->internaldate));
-    *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate);
+    *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate.tv_sec);
     *((bit64 *)(buf+OFFSET_SIZE)) = htonll(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
@@ -3361,9 +3361,9 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
     *((bit64 *)(buf+OFFSET_CID)) = htonll(record->cid);
     *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
-    *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime);
-    *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated);
-    *((bit64 *)(buf+OFFSET_SAVEDATE)) = htonll(record->savedate);
+    *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime.tv_sec);
+    *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated.tv_sec);
+    *((bit64 *)(buf+OFFSET_SAVEDATE)) = htonll(record->savedate.tv_sec);
     *((bit64 *)(buf+OFFSET_BASECID)) = htonll(record->basecid);
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
@@ -3484,7 +3484,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
     }
 
     snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " " TIME_T_FMT " (%u) " TIME_T_FMT " %s",
-            record->uid, record->modseq, record->last_updated,
+            record->uid, record->modseq, record->last_updated.tv_sec,
             flagcrc,
             record->internaldate.tv_sec,
             message_guid_encode(&record->guid));
@@ -3589,8 +3589,8 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
         GCC_FALLTHROUGH
 
     case 15:
-        if (record->savedate) {
-            buf_printf(&buf, TIME_T_FMT, record->savedate);
+        if (record->savedate.tv_sec) {
+            buf_printf(&buf, TIME_T_FMT, record->savedate.tv_sec);
             crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
             buf_reset(&buf);
         }
@@ -4785,7 +4785,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     else {
         mailbox_modseq_dirty(mailbox);
         record->modseq = mailbox->i.highestmodseq;
-        record->last_updated = mailbox->last_updated;
+        record->last_updated.tv_sec = mailbox->last_updated;
     }
 
     if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
@@ -4805,8 +4805,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
-        if (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated)
-            mailbox->i.first_expunged = record->last_updated;
+        if (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec)
+            mailbox->i.first_expunged = record->last_updated.tv_sec;
         mailbox_annot_update_counts(mailbox, &oldrecord, 0);
     }
 
@@ -4828,8 +4828,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     }
 
     /* expunged tracking */
-    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
-        mailbox->i.first_expunged = record->last_updated;
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec))
+        mailbox->i.first_expunged = record->last_updated.tv_sec;
 
     return 0;
 }
@@ -4904,15 +4904,15 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (!record->internaldate.tv_sec) {
         clock_gettime(CLOCK_REALTIME, &record->internaldate);
     }
-    if (!record->gmtime)
-        record->gmtime = record->internaldate.tv_sec;
-    if (!record->sentdate) {
+    if (!record->gmtime.tv_sec)
+        record->gmtime.tv_sec = record->internaldate.tv_sec;
+    if (!record->sentdate.tv_sec) {
         struct tm *tm = localtime(&record->internaldate.tv_sec);
         /* truncate to the day */
         tm->tm_sec = 0;
         tm->tm_min = 0;
         tm->tm_hour = 0;
-        record->sentdate = mktime(tm);
+        record->sentdate.tv_sec = mktime(tm);
     }
 
     /* update the highestmodseq if needed */
@@ -4924,10 +4924,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         record->modseq = mailbox->i.highestmodseq;
         if (!record->createdmodseq || record->createdmodseq > record->modseq)
             record->createdmodseq = record->modseq;
-        record->last_updated = mailbox->last_updated;
-        if (!record->savedate) {
+        record->last_updated.tv_sec = mailbox->last_updated;
+        if (!record->savedate.tv_sec) {
             // store the time of actual append if requested
-            record->savedate = mailbox->last_updated;
+            record->savedate.tv_sec = mailbox->last_updated;
         }
     }
 
@@ -4954,8 +4954,8 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     /* expunged tracking */
-    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
-        mailbox->i.first_expunged = record->last_updated;
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec))
+        mailbox->i.first_expunged = record->last_updated.tv_sec;
 
     return 0;
 }
@@ -5535,7 +5535,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             /* track the modseq for QRESYNC purposes */
             if (copyrecord.modseq > repack->newmailbox.i.deletedmodseq) {
                 repack->newmailbox.i.deletedmodseq = copyrecord.modseq;
-                repack->newmailbox.i.changes_epoch = copyrecord.last_updated;
+                repack->newmailbox.i.changes_epoch = copyrecord.last_updated.tv_sec;
             }
             continue;
         }
@@ -5584,16 +5584,16 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 const char *p = buf_cstring(&buf);
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
-                copyrecord.savedate = newval;
+                copyrecord.savedate.tv_sec = newval;
             }
             buf_reset(&buf);
             r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &buf);
             if (r) goto done;
         }
         if (mailbox->i.minor_version >= 15 && repack->newmailbox.i.minor_version < 15) {
-            if (record->savedate) {
+            if (record->savedate.tv_sec) {
                 buf_reset(&buf);
-                buf_printf(&buf, TIME_T_FMT, record->savedate);
+                buf_printf(&buf, TIME_T_FMT, record->savedate.tv_sec);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &buf);
                 if (r) goto done;
             }
@@ -6105,9 +6105,9 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
 
         /* not stale enough yet, skip it - but track the updated time
          * so we know when to run again */
-        if (record->last_updated > expunge_mark) {
-            if (!first_expunged || (first_expunged > record->last_updated))
-                first_expunged = record->last_updated;
+        if (record->last_updated.tv_sec > expunge_mark) {
+            if (!first_expunged || (first_expunged > record->last_updated.tv_sec))
+                first_expunged = record->last_updated.tv_sec;
             continue;
         }
 
@@ -7618,7 +7618,7 @@ static int records_match(const char *mboxname,
                mboxname, new->uid);
         match = 0;
     }
-    if (old->sentdate != new->sentdate) {
+    if (old->sentdate.tv_sec != new->sentdate.tv_sec) {
         printf("%s uid %u mismatch: sentdate\n",
                mboxname, new->uid);
         match = 0;
@@ -7633,12 +7633,12 @@ static int records_match(const char *mboxname,
                mboxname, new->uid);
         match = 0;
     }
-    if (old->gmtime != new->gmtime) {
+    if (old->gmtime.tv_sec != new->gmtime.tv_sec) {
         printf("%s uid %u mismatch: gmtime\n",
                mboxname, new->uid);
         match = 0;
     }
-    if (old->savedate != new->savedate) {
+    if (old->savedate.tv_sec != new->savedate.tv_sec) {
         printf("%s uid %u mismatch: savedate\n",
                mboxname, new->uid);
         match = 0;
@@ -7876,15 +7876,15 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             record->internaldate.tv_nsec = now.tv_nsec;
         }
     }
-    if (!record->gmtime)
-        record->gmtime = record->internaldate.tv_sec;
-    if (!record->sentdate) {
+    if (!record->gmtime.tv_sec)
+        record->gmtime.tv_sec = record->internaldate.tv_sec;
+    if (!record->sentdate.tv_sec) {
         struct tm *tm = localtime(&record->internaldate.tv_sec);
         /* truncate to the day */
         tm->tm_sec = 0;
         tm->tm_min = 0;
         tm->tm_hour = 0;
-        record->sentdate = mktime(tm);
+        record->sentdate.tv_sec = mktime(tm);
     }
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */

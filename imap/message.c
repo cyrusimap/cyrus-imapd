@@ -721,12 +721,12 @@ EXPORTED int message_create_record(struct index_record *record,
                                    const struct body *body)
 {
     /* used for sent time searching, truncated to day with no TZ */
-    if (time_from_rfc5322(body->date, &record->sentdate, DATETIME_DATE_ONLY) < 0)
-        record->sentdate = 0;
+    if (time_from_rfc5322(body->date, &record->sentdate.tv_sec, DATETIME_DATE_ONLY) < 0)
+        record->sentdate.tv_sec = 0;
 
     /* used for sent time sorting, full gmtime of Date: header */
-    if (time_from_rfc5322(body->date, &record->gmtime, DATETIME_FULL) < 0)
-        record->gmtime = 0;
+    if (time_from_rfc5322(body->date, &record->gmtime.tv_sec, DATETIME_FULL) < 0)
+        record->gmtime.tv_sec = 0;
 
     record->size = body->filesize;
     record->header_size = body->header_size;
@@ -5287,7 +5287,7 @@ EXPORTED int message_get_savedate(message_t *m, time_t *datep)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *datep = m->record.savedate;
+    *datep = m->record.savedate.tv_sec;
     if (!*datep) *datep = m->record.internaldate.tv_sec;
     return 0;
 }
@@ -5304,7 +5304,7 @@ EXPORTED int message_get_sentdate(message_t *m, time_t *datep)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *datep = m->record.sentdate;
+    *datep = m->record.sentdate.tv_sec;
     return 0;
 }
 
@@ -5312,7 +5312,7 @@ EXPORTED int message_get_gmtime(message_t *m, time_t *tp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
-    *tp = m->record.gmtime;
+    *tp = m->record.gmtime.tv_sec;
     return 0;
 }
 
