@@ -147,6 +147,7 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
  * Identifiers don't require a digit, really, so that should probably be
  * relaxed, too.
  */
+// clang-format: off
 static char allowedchars[256] = {
  /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
@@ -169,6 +170,7 @@ static char allowedchars[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+// clang-format: on
 
 /*
  * Convert 'identifier' into canonical form.
