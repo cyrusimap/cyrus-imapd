@@ -980,7 +980,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         }
 
         /* Make sure the message is new enough */
-        if (record.gmtime < age_mark) continue;
+        if (record.gmtime.tv_sec < age_mark) continue;
 
         /* Feeding this message, increment counter */
         nitems++;
@@ -999,7 +999,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
                           GUID_URL_SCHEME, message_guid_encode(&record.guid));
 
         /* <updated> - required */
-        time_to_rfc3339(record.gmtime, datestr, sizeof(datestr));
+        time_to_rfc3339(record.gmtime.tv_sec, datestr, sizeof(datestr));
         buf_printf_markup(buf, level, "<updated>%s</updated>", datestr);
 
         /* <published> - optional */
