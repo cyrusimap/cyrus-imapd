@@ -1128,7 +1128,7 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
     if (force || has_alarms(NULL, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
         return update_alarmdb(mailbox_name(mailbox), record->uid,
-                              record->last_updated, atype, num_rcpts, 0, 0, NULL);
+                              record->last_updated.tv_sec, atype, num_rcpts, 0, 0, NULL);
     }
 
     return 0;

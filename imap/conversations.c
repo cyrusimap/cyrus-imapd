@@ -2701,7 +2701,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         conversation_update_sender(conv,
                                    addr.name, addr.route,
                                    addr.mailbox, addr.domain,
-                                   record->gmtime, delta_exists);
+                                   record->gmtime.tv_sec, delta_exists);
         free(env);
     }
 

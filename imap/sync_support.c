@@ -1503,14 +1503,14 @@ static void encode_annotations(struct dlist *parent,
         GCC_FALLTHROUGH
 
     case 15:
-        if (record->savedate) {
+        if (record->savedate.tv_sec) {
             if (!annots)
                 annots = dlist_newlist(parent, "ANNOTATIONS");
             aa = dlist_newkvlist(annots, NULL);
             dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
             dlist_setatom(aa, "USERID", "");
             dlist_setnum64(aa, "MODSEQ", 0);
-            dlist_setnum32(aa, "VALUE", record->savedate);
+            dlist_setnum32(aa, "VALUE", record->savedate.tv_sec);
         }
 
         GCC_FALLTHROUGH
@@ -1601,7 +1601,7 @@ static int decode_annotations(/*const*/struct dlist *annots,
             if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
-                record->savedate = newval;
+                record->savedate.tv_sec = newval;
                 break;
             }
 
@@ -1856,7 +1856,7 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum64(kr, "MODSEQ", &record->modseq))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "LAST_UPDATED", &record->last_updated))
+    if (!dlist_getdate(kr, "LAST_UPDATED", &record->last_updated.tv_sec))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kr, "FLAGS", &fl))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2203,7 +2203,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             struct dlist *il = dlist_newkvlist(rl, "RECORD");
             dlist_setnum32(il, "UID", record->uid);
             dlist_setnum64(il, "MODSEQ", mymodseq);
-            dlist_setdate(il, "LAST_UPDATED", record->last_updated);
+            dlist_setdate(il, "LAST_UPDATED", record->last_updated.tv_sec);
             sync_print_flags(il, mailbox, record);
             dlist_setdate(il, "INTERNALDATE", record->internaldate.tv_sec);
             dlist_setnum32(il, "SIZE", record->size);
@@ -5937,7 +5937,7 @@ static void log_record(const char *name, struct mailbox *mailbox,
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
           "last_updated:" TIME_T_FMT " internaldate:" TIME_T_FMT " flags:(%s) cid:" CONV_FMT,
            name, record->uid, record->modseq,
-           record->last_updated, record->internaldate.tv_sec,
+           record->last_updated.tv_sec, record->internaldate.tv_sec,
            make_flags(mailbox, record), record->cid);
 }
 
@@ -6006,7 +6006,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     /* are there any differences? */
     if (mp->modseq != rp->modseq)
         goto diff;
-    if (mp->last_updated != rp->last_updated)
+    if (mp->last_updated.tv_sec != rp->last_updated.tv_sec)
         goto diff;
     if (mp->internaldate.tv_sec != rp->internaldate.tv_sec)
         goto diff;
@@ -6021,7 +6021,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
         goto diff;
     if (mp->basecid != rp->basecid)
         goto diff;
-    if (mp->savedate != rp->savedate)
+    if (mp->savedate.tv_sec != rp->savedate.tv_sec)
         goto diff;
     if (mp->createdmodseq != rp->createdmodseq)
         goto diff;
@@ -6053,7 +6053,7 @@ static int compare_one_record(struct sync_client_state *sync_cs,
     /* otherwise, is the replica "newer"?  Better grab those flags */
     else {
         if (rp->modseq > mp->modseq &&
-            rp->last_updated >= mp->last_updated) {
+            rp->last_updated.tv_sec >= mp->last_updated.tv_sec) {
             log_mismatch("more recent on replica", mailbox, mp, rp);
             local_wins = 0;
             /* then copy all the flag data over from the replica */

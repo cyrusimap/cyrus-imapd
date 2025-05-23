@@ -3680,7 +3680,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     if (fetchitems & FETCH_LASTUPDATED) {
-        time_t msgdate = record.last_updated;
+        time_t msgdate = record.last_updated.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
@@ -3800,7 +3800,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
-        time_t msgdate = record.savedate;
+        time_t msgdate = record.savedate.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         // handle internaldate
@@ -5567,7 +5567,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->cc = get_localpart_addr(cacheitem_base(&record, CACHE_CC));
                 break;
             case SORT_DATE:
-                cur->sentdate = record.gmtime;
+                cur->sentdate = record.gmtime.tv_sec;
                 /* fall through */
             case SORT_ARRIVAL:
                 cur->internaldate.tv_sec  = record.internaldate.tv_sec;
@@ -5610,7 +5610,7 @@ MsgData **index_msgdata_load(struct index_state *state,
             }
             case SORT_SAVEDATE:
                 if (preload[j]) {
-                    cur->savedate = record.savedate;
+                    cur->savedate = record.savedate.tv_sec;
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
@@ -5622,7 +5622,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 #ifdef WITH_JMAP
                 if (preload[j] && (record.internal_flags & FLAG_INTERNAL_SNOOZED)) {
                     /* SAVEDATE == snoozed#until */
-                    cur->savedate = record.savedate;
+                    cur->savedate = record.savedate.tv_sec;
 
                     if (!cur->savedate) {
                         /* Try fetching snoozed#until directly */
