@@ -99,7 +99,7 @@ EXPORTED volatile sig_atomic_t in_shutdown = 0;
 
 EXPORTED int config_fulldirhash;                                /* 0 */
 EXPORTED int config_implicitrights;                     /* "lkxa" */
-EXPORTED unsigned long config_metapartition_files;      /* 0 */
+EXPORTED uint64_t config_metapartition_files;      /* 0 */
 EXPORTED const char *config_mboxlist_db;
 EXPORTED const char *config_quota_db;
 EXPORTED const char *config_subscription_db;

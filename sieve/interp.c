@@ -81,7 +81,7 @@ EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
 EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
 {
     if (i->extensions == NULL) {
-        unsigned long config_sieve_extensions =
+        uint64_t config_sieve_extensions =
             config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
         struct buf buf = BUF_INITIALIZER;
         int ext_pos;
@@ -594,7 +594,7 @@ unsigned long long lookup_capability(const char *str)
 
 unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 {
-    unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
+    uint64_t config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
     unsigned long long capa = lookup_capability(str);
 
     switch (capa) {

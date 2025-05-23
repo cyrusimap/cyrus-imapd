@@ -828,7 +828,7 @@ static int is_supported_component(icalcomponent *ical)
 {
     icalcomponent *comp = icalcomponent_get_first_real_component(ical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
-    int is_supported = 0;
+    uint64_t is_supported = 0;
 
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
