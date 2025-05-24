@@ -42,6 +42,7 @@
 use strict;
 use warnings;
 use File::Slurp;
+use Scalar::Util qw(blessed);
 
 use lib '.';
 use Cassandane::Util::Setup;
@@ -103,7 +104,7 @@ if ($missing_binaries) {
     $SIG{__DIE__} = sub
     {
         my ($e) = @_;
-        if (!ref($e))
+        if ((blessed($e) || "") ne 'Error::Simple')
         {
             my ($text, $file, $line) = ($e =~ m/^(.*) at (.*\.pm) line (\d+)/);
             if ($line)
@@ -112,7 +113,12 @@ if ($missing_binaries) {
                 Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
             }
         }
-        die @_;
+
+        # We can't die with non-Error::Simple ref()s, otherwise Error gets 
+        # confused and swallows the error
+        die(
+            ((blessed($e) // "") eq 'Error::Simple' ? $e : "$e")
+        );
     };
 
     # Disable the warning about redefining T:U:E:stringify.
