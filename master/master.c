@@ -68,6 +68,7 @@
 #include <arpa/inet.h>
 #include <sysexits.h>
 #include <errno.h>
+#include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <inttypes.h>
@@ -189,6 +190,182 @@ static void child_sighandler_setup(void);
 static sigset_t pselect_sigmask;
 #endif
 
+/* Kahan-Babushka-Neumaier sum
+ * "significantly reduces the numerical error in the total obtained by adding
+ * a sequence of finite-precision floating-point numbers, compared to the
+ * naive approach"
+ */
+static inline void kbn_sum(double *sum, double *error, double addend)
+{
+    double s = *sum, e = *error, t;
+
+    t = s + addend;
+    if (fabs(s) >= fabs(addend))
+        e += (s - t) + addend;
+    else
+        e += (addend - t) + s;
+
+    *sum = t;
+    *error = e;
+}
+
+static int cmp_double(const void *a, const void *b)
+{
+    double aa = *(const double *) a, bb = *(const double *) b;
+    return (aa > bb) - (aa < bb);
+}
+
+static void sample_stats(double *samples, size_t n_samples,
+                         double *pmin, double *pmax,
+                         double *pmedian, double *pmean, double *pstddev)
+{
+    double mean, mean_error;
+    size_t i;
+
+    if (!n_samples) {
+        if (pmin) *pmin = NAN;
+        if (pmax) *pmax = NAN;
+        if (pmedian) *pmedian = NAN;
+        if (pmean) *pmean = NAN;
+        if (pstddev) *pstddev = NAN;
+        return;
+    }
+
+    if (pmin || pmax || pmedian) {
+        qsort(samples, n_samples, sizeof(*samples), &cmp_double);
+
+        if (pmin) *pmin = samples[0];
+        if (pmax) *pmax = samples[n_samples - 1];
+
+        if (pmedian) {
+            if ((n_samples & 1)) {
+                /* odd: median is middle element */
+                *pmedian = samples[n_samples / 2];
+            }
+            else {
+                /* even: median is average of two middle elements */
+                *pmedian = 0.5 * (samples[n_samples / 2 - 1]
+                                  + samples[n_samples / 2]);
+            }
+        }
+    }
+
+    if (pmean || pstddev) {
+        size_t n_infinities = 0;
+
+        mean = mean_error = 0.0;
+        for (i = 0; i < n_samples; i++) {
+            if (isinf(samples[i]))
+                n_infinities++;
+            else
+                kbn_sum(&mean, &mean_error, samples[i]);
+        }
+        mean = (mean + mean_error) / (n_samples - n_infinities);
+
+        if (pmean) *pmean = mean;
+    }
+
+    if (pstddev) {
+        double variance, variance_error;
+        size_t n_infinities = 0;
+
+        variance = variance_error = 0.0;
+        if (n_samples > 1) {
+            for (i = 0; i < n_samples; i++) {
+                if (isinf(samples[i])) {
+                    n_infinities++;
+                }
+                else {
+                    double diff = samples[i] - mean;
+
+                    kbn_sum(&variance, &variance_error, diff * diff);
+                }
+            }
+
+            if (n_infinities == n_samples) {
+                variance = NAN;
+            }
+            else {
+                variance = (variance + variance_error)
+                           / (n_samples - 1 - n_infinities);
+            }
+        }
+
+        *pstddev = sqrt(variance);
+    }
+}
+
+#define MAX_SAMPLES (10000u)
+static struct {
+    unsigned n_samples;
+    unsigned n_timed_out;
+    unsigned n_interrupted;
+    unsigned n_ready;
+    double timeout[MAX_SAMPLES];
+    double timed_out[MAX_SAMPLES];
+    double interrupted[MAX_SAMPLES];
+    double ready[MAX_SAMPLES];
+} myselect_stats = {0};
+
+static void dump_myselect_stats(void)
+{
+    char timeout[256];
+    char timed_out[256];
+    char interrupted[256];
+    char ready[256];
+    double min, max, median, mean, stddev;
+
+    sample_stats(myselect_stats.timeout, myselect_stats.n_samples,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(timeout, sizeof(timeout), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.timed_out, myselect_stats.n_timed_out,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(timed_out, sizeof(timed_out), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.interrupted, myselect_stats.n_interrupted,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(interrupted, sizeof(interrupted), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    sample_stats(myselect_stats.ready, myselect_stats.n_ready,
+                 &min, &max, &median, &mean, &stddev);
+    snprintf(ready, sizeof(ready), "%.*g|%.*g|%.*g|%.*g|%.*g",
+             DBL_DECIMAL_DIG, min,
+             DBL_DECIMAL_DIG, max,
+             DBL_DECIMAL_DIG, median,
+             DBL_DECIMAL_DIG, mean,
+             DBL_DECIMAL_DIG, stddev);
+
+    xsyslog(LOG_INFO, "pselect stats",
+                      "samples=<%u> timeout=<%s>"
+                      " n_timed_out=<%u> timed_out=<%s>"
+                      " n_interrupted=<%u> interrupted=<%s>"
+                      " n_ready=<%u> ready=<%s>",
+                      myselect_stats.n_samples,
+                      timeout,
+                      myselect_stats.n_timed_out,
+                      timed_out,
+                      myselect_stats.n_interrupted,
+                      interrupted,
+                      myselect_stats.n_ready,
+                      ready);
+}
+
 static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
                     fd_set *efds, struct timeval *tout)
 {
@@ -196,13 +373,49 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
     /* pselect() closes the race between SIGCHLD arriving
     * and select() sleeping for up to 10 seconds. */
     struct timespec ts, *tsptr = NULL;
+    struct timeval start, end;
+    double elapsed;
+    int r, pselect_errno;
 
     if (tout) {
         ts.tv_sec = tout->tv_sec;
         ts.tv_nsec = tout->tv_usec * 1000;
         tsptr = &ts;
     }
-    return pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
+
+    gettimeofday(&start, NULL);
+    errno = 0;
+    r = pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
+    pselect_errno = errno;
+    gettimeofday(&end, NULL);
+    elapsed = timesub(&start, &end);
+
+    myselect_stats.timeout[myselect_stats.n_samples] = tout
+                                                     ? timeval_get_double(tout)
+                                                     : INFINITY;
+    myselect_stats.n_samples++;
+
+    if (r > 0) {
+        myselect_stats.ready[myselect_stats.n_ready] = elapsed;
+        myselect_stats.n_ready++;
+    }
+    else if (r < 0) {
+        /* this is either an interrupt, or we're about to call fatal anyway */
+        myselect_stats.interrupted[myselect_stats.n_interrupted] = elapsed;
+        myselect_stats.n_interrupted++;
+    }
+    else {
+        myselect_stats.timed_out[myselect_stats.n_timed_out] = elapsed;
+        myselect_stats.n_timed_out++;
+    }
+
+    if (myselect_stats.n_samples == MAX_SAMPLES) {
+        dump_myselect_stats();
+        memset(&myselect_stats, 0, sizeof(myselect_stats));
+    }
+
+    errno = pselect_errno;
+    return r;
 #else
     return select(nfds, rfds, wfds, efds, tout);
 #endif
@@ -3498,6 +3711,7 @@ finished:
 
     /* XXX paranoia: burn through child table, complain if anything there? */
 
+    dump_myselect_stats();
     syslog(LOG_NOTICE, "All children have exited, closing down");
     return 0;
 }
