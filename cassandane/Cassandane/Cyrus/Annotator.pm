@@ -518,7 +518,7 @@ sub test_no_annotate_sieve
     $self->start_my_instances();
     $self->_setup_http_service_objects();
 
-    $self->{jmap}->DefaultUsing([
+    $self->jmap_default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:sieve',

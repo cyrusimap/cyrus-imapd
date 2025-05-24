@@ -86,7 +86,7 @@ sub new
 sub setup_default_using
 {
     my ($self) = @_;
-    $self->{jmap}->DefaultUsing([
+    $self->jmap_default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
     ]);

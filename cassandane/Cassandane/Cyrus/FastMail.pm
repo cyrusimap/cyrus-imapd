@@ -171,7 +171,7 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    $self->{jmap}->DefaultUsing([
+    $self->jmap_default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',

@@ -172,7 +172,7 @@ sub put_script
     my $script = "# $name\r\nkeep;\r\n";
     $counter ++;
 
-    $self->{jmap}->DefaultUsing([
+    $self->jmap_default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'https://cyrusimap.org/ns/jmap/sieve',
