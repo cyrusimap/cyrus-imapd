@@ -881,12 +881,23 @@ sub test_periodic_event_slow
 
     xlog $self, "periodic events run immediately";
 
-    xlog $self, "waiting 5 mins for events to fire, plus some slop";
-    sleep(5*60 + 5);
+    # xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    # sleep(5*60 + 5);
+    my $until = Time::HiRes::time() + (5 * 61);
+
+    my $got;
+    LOOP: while (Time::HiRes::time() <= $until) {
+        $got = $self->lemming_census;
+        my $got_b = $got->{B};
+        last if $got_b && $got_b->{dead} && $got_b->{dead} == 6;
+        use Data::Dumper;
+        warn Dumper($got);
+        sleep(0.25)
+    }
 
     $self->assert_deep_equals({
                                 B => { live => 0, dead => 6 },
-                              }, $self->lemming_census());
+                              }, $got);
 }
 
 sub test_service_bad_name
