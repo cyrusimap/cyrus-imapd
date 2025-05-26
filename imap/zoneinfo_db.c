@@ -306,7 +306,9 @@ static int find_cb(void *rock,
 }
 
 EXPORTED int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
-                  int (*proc)(), void *rock)
+                         int (*proc)(const char *tzid, int tzidlen,
+                                     struct zoneinfo *zi, void *rock),
+                         void *rock)
 {
     struct findrock frock;
 
