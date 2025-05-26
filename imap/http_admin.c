@@ -536,13 +536,6 @@ static int action_proc(struct transaction_t *txn)
         buf_printf_markup(body, level, "<td>%s</td>", pinfo->mailbox);
         buf_printf_markup(body, level, "<td>%s</td>", pinfo->cmdname);
         buf_printf_markup(body, --level, "</tr>");
-
-        free(pinfo->servicename);
-        free(pinfo->host);
-        free(pinfo->user);
-        free(pinfo->mailbox);
-        free(pinfo->cmdname);
-        free(pinfo);
     }
 
     deinit_piarray(&piarray);
