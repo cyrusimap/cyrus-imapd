@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_import_export_no_declined
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $uid1 = '535b2dc7-f8f4-47e7-9d2f-dc35e4c35458';
+    my $uid2 = '6de280c9-edff-4019-8ebd-cfebc73f8201';
+    my $events = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid1
+DTSTAMP:20250324T112522Z
+DTSTART;TZID=America/New_York:20250404T090000
+DURATION:PT1H
+SUMMARY:Event 1
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:friend\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ORGANIZER;CN=Test User:MAILTO:friend\@example.com
+END:VEVENT
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uid2
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Event 2
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:friend\@example.com
+ATTENDEE;PARTSTAT=DECLINED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ORGANIZER;CN=Test User:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $res = $CalDAV->Request('POST', $CalendarId, $events,
+                               'Content-Type' => 'text/calendar; charset=utf-8');
+    $self->assert_num_equals(2, scalar @{$res->{'{DAV:}response'}});
+    $self->assert_str_equals('HTTP/1.1 200 OK',
+                             $res->{'{DAV:}response'}[0]->{'{DAV:}propstat'}[0]->{'{DAV:}status'}{content});
+    $self->assert_str_equals('HTTP/1.1 200 OK',
+                             $res->{'{DAV:}response'}[1]->{'{DAV:}propstat'}[0]->{'{DAV:}status'}{content});
+
+    my $href = $CalDAV->request_url($CalendarId);
+    my %Headers = (
+      'Authorization' => $CalDAV->auth_header()
+    );
+
+    $res = $CalDAV->ua->request('GET', "$href?noDeclined",
+                                { headers => \%Headers });
+
+    $self->assert_matches(qr/SUMMARY:Event 1/, $res->{content});
+    $self->assert_does_not_match(qr/SUMMARY:Event 2/, $res->{content});
+}

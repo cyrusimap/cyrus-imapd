@@ -1672,6 +1672,8 @@ static int export_calendar(struct transaction_t *txn)
     modseq_t syncmodseq = 0;
     int unbind_flag = -1, unchanged_flag = -1;
     struct caldav_db *caldavdb = NULL;
+    bool no_declined = !!hash_lookup("noDeclined", &txn->req_qparams);
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
     /* Check requested MIME type:
        1st entry in caldav_mime_types array MUST be default MIME type */
@@ -1788,6 +1790,11 @@ static int export_calendar(struct transaction_t *txn)
     if (txn->meth == METH_HEAD) {
         ret = HTTP_OK;
         goto done;
+    }
+
+    if (no_declined) {
+        caldav_get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                      txn->req_tgt.userid, &schedule_addresses);
     }
 
     /* iCalendar data in response should not be transformed */
@@ -1920,6 +1927,34 @@ static int export_calendar(struct transaction_t *txn)
                     /* Set STATUS:DELETED */
                     icalcomponent_set_status(comp, ICAL_STATUS_DELETED);
                 }
+                else if (no_declined) {
+                    icalproperty *prop;
+                    int skip = 0;
+
+                    for (prop =
+                             icalcomponent_get_first_property(comp,
+                                                              ICAL_ATTENDEE_PROPERTY);
+                         prop;
+                         prop =
+                             icalcomponent_get_next_property(comp,
+                                                             ICAL_ATTENDEE_PROPERTY)) {
+                        const char *attendee =
+                            icalproperty_get_decoded_calendaraddress(prop);
+
+                        if (strarray_contains(&schedule_addresses, attendee)) {
+                            icalparameter *param =
+                                icalproperty_get_first_parameter(prop,
+                                                                 ICAL_PARTSTAT_PARAMETER);
+                            if (param &&
+                                icalparameter_get_partstat(param) == ICAL_PARTSTAT_DECLINED) {
+                                skip = 1;
+                            }
+                            break;
+                        }
+                    }
+
+                    if (skip) continue;
+                }
 
                 /* Include this component in our iCalendar */
                 if (n++ && *sep) {
@@ -1938,6 +1973,8 @@ static int export_calendar(struct transaction_t *txn)
     }
 
     mailbox_iter_done(&iter);
+
+    strarray_fini(&schedule_addresses);
 
     caldav_close(caldavdb);
 
