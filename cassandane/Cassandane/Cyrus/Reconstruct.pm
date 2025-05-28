@@ -630,6 +630,17 @@ sub test_downgrade_upgrade
         $self->{store}->_select();
         $self->check_messages(\%msg);
     }
+
+    for my $version (19, 16, 14) {
+        xlog $self, "Set to version $version";
+        $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
+
+        xlog $self, "Reconnect, \\Seen should still be on message A";
+        $self->{store}->disconnect();
+        $self->{store}->connect();
+        $self->{store}->_select();
+        $self->check_messages(\%msg);
+    }
 }
 
 sub test_upgrade_v19_to_v20
