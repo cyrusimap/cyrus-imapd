@@ -2181,7 +2181,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     struct buf annotval = BUF_INITIALIZER;
     if (record->cid && record->basecid && record->basecid != record->cid)
-        buf_printf(&annotval, "%016llx", record->basecid);
+        buf_printf(&annotval, CONV_FMT, record->basecid);
 
     r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "basethrid", "", &annotval);
     buf_free(&annotval);
@@ -2227,7 +2227,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         if (change->flags & CHANGE_ISAPPEND)
             /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s> cid=<%s> messageid=%s size=<%u>",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
@@ -2236,7 +2236,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s> cid=<%s> size=<%u>",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
@@ -2245,7 +2245,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s>",
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
@@ -3431,7 +3431,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
     struct buf buf = BUF_INITIALIZER;
 
     if (record->cid && mailbox->i.minor_version >= 13) {
-        buf_printf(&buf, "%llx", record->cid);
+        buf_printf(&buf, CONV_FMT, record->cid);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
         buf_reset(&buf);
     }
@@ -3443,7 +3443,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
     }
 
     if (record->createdmodseq && mailbox->i.minor_version >= 16) {
-        buf_printf(&buf, "%llu", record->createdmodseq);
+        buf_printf(&buf, MODSEQ_FMT, record->createdmodseq);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
         buf_reset(&buf);
     }
@@ -5355,7 +5355,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         if (mailbox->i.minor_version >= 13 && repack->newmailbox.i.minor_version < 13) {
             if (record->cid) {
                 buf_reset(&buf);
-                buf_printf(&buf, "%llx", record->cid);
+                buf_printf(&buf, CONV_FMT, record->cid);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &buf);
                 if (r) goto done;
             }
@@ -5401,7 +5401,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         if (mailbox->i.minor_version >= 16 && repack->newmailbox.i.minor_version < 16) {
             if (record->createdmodseq) {
                 buf_reset(&buf);
-                buf_printf(&buf, "%llu", record->createdmodseq);
+                buf_printf(&buf, MODSEQ_FMT, record->createdmodseq);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &buf);
                 if (r) goto done;
             }
