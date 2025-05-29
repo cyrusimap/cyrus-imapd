@@ -2093,10 +2093,10 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setnum32(kl, "LAST_UID", mailbox->i.last_uid);
         dlist_setnum64(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
         dlist_setnum32(kl, "RECENTUID", mailbox->i.recentuid);
-        dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime);
-        dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
-        dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
-        dlist_setdate(kl, "POP3_SHOW_AFTER", mailbox->i.pop3_show_after);
+        dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime.tv_sec);
+        dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate.tv_sec);
+        dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login.tv_sec);
+        dlist_setdate(kl, "POP3_SHOW_AFTER", mailbox->i.pop3_show_after.tv_sec);
         if (mailbox_has_conversations(mailbox)) {
             r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
             if (!r && xconvmodseq)
@@ -3309,10 +3309,10 @@ static int sync_apply_mailbox(struct dlist *kin,
     mailbox->i.last_uid = last_uid;
     mailbox->i.recentuid = recentuid;
     mailbox->i.highestmodseq = highestmodseq;
-    mailbox->i.recenttime = recenttime;
-    mailbox->i.last_appenddate = last_appenddate;
-    mailbox->i.pop3_last_login = pop3_last_login;
-    mailbox->i.pop3_show_after = pop3_show_after;
+    mailbox->i.recenttime.tv_sec = recenttime;
+    mailbox->i.last_appenddate.tv_sec = last_appenddate;
+    mailbox->i.pop3_last_login.tv_sec = pop3_last_login;
+    mailbox->i.pop3_show_after.tv_sec = pop3_show_after;
     mailbox->i.createdmodseq = createdmodseq;
     /* only alter the syncable options */
     mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
@@ -4998,9 +4998,9 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox_partition(mailbox), mailbox_acl(mailbox), mailbox->i.options,
                              mailbox->i.uidvalidity, touid,
                              tomodseq, mailbox->i.synccrcs,
-                             mailbox->i.recentuid, mailbox->i.recenttime,
-                             mailbox->i.pop3_last_login,
-                             mailbox->i.pop3_show_after, NULL, xconvmodseq,
+                             mailbox->i.recentuid, mailbox->i.recenttime.tv_sec,
+                             mailbox->i.pop3_last_login.tv_sec,
+                             mailbox->i.pop3_show_after.tv_sec, NULL, xconvmodseq,
                              raclmodseq, mailbox_foldermodseq(mailbox), groups, ispartial);
 
 
@@ -6441,9 +6441,9 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
     if (remote->uidvalidity != mailbox->i.uidvalidity) return 0;
     if (remote->recentuid != mailbox->i.recentuid) return 0;
-    if (remote->recenttime != mailbox->i.recenttime) return 0;
-    if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
-    if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
+    if (remote->recenttime != mailbox->i.recenttime.tv_sec) return 0;
+    if (remote->pop3_last_login != mailbox->i.pop3_last_login.tv_sec) return 0;
+    if (remote->pop3_show_after != mailbox->i.pop3_show_after.tv_sec) return 0;
     if (remote->options != options) return 0;
     if (remote->foldermodseq && remote->foldermodseq != mailbox_foldermodseq(mailbox)) return 0;
     if (strcmp(remote->acl, mailbox_acl(mailbox))) return 0;
