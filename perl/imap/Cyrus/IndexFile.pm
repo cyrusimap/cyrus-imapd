@@ -605,33 +605,33 @@ SKIPPED VERSION 11 - Fastmail internal only
   3: StartOffset           int32  4
   4: RecordSize            int32  4
   5: Exists                int32  4
-  6: LastAppenddate        time_t 4
-  7: LastUid               int32  4
-  8: QuotaUsed             int64  8
-  9: Pop3LastLogin         time_t 4
- 10: UidValidity           int32  4
- 11: Deleted               int32  4
- 12: Answered              int32  4
- 13: Flagged               int32  4
- 14: Exists                int32  4
- 15: Options               bitmap 4
- 16: LeakedCache           int32  4
- 17: HighestModseq         int64  8
- 18: DeletedModseq         int64  8
- 19: FirstExpunged         time_t 4
- 20: LastCleanup           time_t 4
- 21: HeaderFileCRC         int32  4
- 22: SyncCRC               int32  4
- 23: RecentUid             int32  4
- 24: RecentTime            time_t 4
- 25: Pop3ShowAfter         int32  4
- 26: QuotaAnnotUsed        int32  4
- 27: SyncCRCsAnnot         int32  4
- 28: Unseen                int32  4
- 29: CreatedModseq         int64  8
- 30: QuotaDeletedUsed      int64  8
- 31: QuotaExpungedUsed     int64  8
- 32: ChangesEpoch          int32  4
+  6: LastAppenddate        time_t 8
+  7: QuotaUsed             int64  8
+  8: Pop3LastLogin         time_t 8
+  9: Deleted               int32  4
+ 10: Answered              int32  4
+ 11: Flagged               int32  4
+ 12: Exists                int32  4
+ 13: Options               bitmap 4
+ 14: LeakedCache           int32  4
+ 15: HighestModseq         int64  8
+ 16: DeletedModseq         int64  8
+ 17: LastUid               int32  4
+ 18: UidValidity           int32  4
+ 19: HeaderFileCRC         int32  4
+ 20: SyncCRC               int32  4
+ 21: RecentTime            time_t 8
+ 22: Pop3ShowAfter         time_t 8
+ 23: SyncCRCsAnnot         int32  4
+ 24: Unseen                int32  4
+ 25: CreatedModseq         int64  8
+ 26: QuotaDeletedUsed      int64  8
+ 27: QuotaExpungedUsed     int64  8
+ 28: QuotaAnnotUsed        int64  8
+ 29: ChangesEpoch          time_t 8
+ 30: FirstExpunged         time_t 8
+ 31: LastCleanup           time_t 8
+ 32: RecentUid             int32  4
  33: HeaderCRC             int32  4
 
  Record:
@@ -1271,7 +1271,7 @@ RecordCrc             int32  4
 EOF
   },
   20 => {
-    HeaderSize => 160,
+    HeaderSize => 192,
     _make_fields('Header',<<EOF),
 Generation            int32  4
 Format                int32  4
@@ -1279,11 +1279,9 @@ MinorVersion          int32  4
 StartOffset           int32  4
 RecordSize            int32  4
 NumRecords            int32  4
-LastAppenddate        time_t 4
-LastUid               int32  4
+LastAppenddate        time64 8
 QuotaUsed             int64  8
-Pop3LastLogin         time_t 4
-UidValidity           int32  4
+Pop3LastLogin         time64 8
 Deleted               int32  4
 Answered              int32  4
 Flagged               int32  4
@@ -1292,20 +1290,22 @@ Options               bitmap 4
 LeakedCache           int32  4
 HighestModseq         int64  8
 DeletedModseq         int64  8
-FirstExpunged         time_t 4
-LastCleanup           time_t 4
+LastUid               int32  4
+UidValidity           int32  4
 HeaderFileCRC         int32  4
 SyncCRCsBasic         int32  4
-RecentUid             int32  4
-RecentTime            time_t 4
-Pop3ShowAfter         int32  4
-QuotaAnnotUsed        int32  4
+RecentTime            time64 8
+Pop3ShowAfter         time64 8
 SyncCRCsAnnot         int32  4
 Unseen                int32  4
 CreatedModseq         int64  8
 QuotaDeletedUsed      int64  8
 QuotaExpungedUsed     int64  8
-ChangesEpoch          int32  4
+QuotaAnnotUsed        int64  8
+ChangesEpoch          time64 8
+FirstExpunged         time64 8
+LastCleanup           time64 8
+RecentUid             int32  4
 HeaderCrc             int32  4
 EOF
     RecordSize => 144, # defined in file too, check it!

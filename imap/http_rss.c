@@ -812,7 +812,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     struct buf attrib = BUF_INITIALIZER;
 
     /* Check any preconditions */
-    lastmod = mailbox->i.last_appenddate;
+    lastmod = mailbox->i.last_appenddate.tv_sec;
     sprintf(etag, "%u-%u-%u",
             mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
     precond = check_precond(txn, etag, lastmod);
