@@ -54,7 +54,43 @@ sub test_email_copy_state
     my $state = $res->[1][1]->{state};
     $self->assert_not_null($state);
 
-    xlog $self, "move email";
+    xlog $self, "try to copy email with incorrect states";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            ifFromInState => 'foo',
+            ifInState => $state,
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            ifFromInState => $fromState,
+            ifInState => 'foo',
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                },
+            },
+        }, 'R2']
+    ]);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
+    $self->assert_str_equals("error", $res->[1][0]);
+    $self->assert_str_equals("stateMismatch", $res->[1][1]{type});
+
+    xlog $self, "move email with correct states";
     $res = $jmap->CallMethods([
         ['Email/copy', {
             fromAccountId => 'cassandane',

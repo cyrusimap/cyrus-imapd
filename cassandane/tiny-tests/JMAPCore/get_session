@@ -165,11 +165,13 @@ sub test_get_session
             "mail accountCapabilities look right",
         );
 
+        # Cyrus-specific
         $ac_mail = $accountCapabilities->{'https://cyrusimap.org/ns/jmap/mail'};
 
         $self->assert_cmp_deeply(
             {
-                maxKeywordsPerEmail => 100  # Cyrus-specific
+                maxKeywordsPerEmail => 100,
+                hasCompactIds => JSON::true
             },
             $ac_mail,
             "extended mail accountCapabilities look right",

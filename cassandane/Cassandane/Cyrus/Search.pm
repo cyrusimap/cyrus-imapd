@@ -901,4 +901,47 @@ sub test_partial
     $self->assert_str_equals('4:5', $results[0][8][1]);
 }
 
+sub test_threadid
+    :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes('uid', 'cid');
+
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..99) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    for (1..99) {
+      $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $imaptalk->select("INBOX");
+    my $res = $imaptalk->fetch('200', '(cid threadid)');
+    my $cid = $res->{200}{cid};
+    my $thrid = $res->{200}{threadid}[0];
+
+    my $uids1 = $imaptalk->search('cid', $cid);
+    $self->assert_num_equals(100, scalar @{$uids1});
+    $self->assert_num_equals(101, $uids1->[0]);
+    $self->assert_num_equals(200, $uids1->[99]);
+
+    my $uids2 = $imaptalk->search('threadid', $thrid);
+    $self->assert_deep_equals($uids1, $uids2);
+}
+
 1;
