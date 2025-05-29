@@ -109,7 +109,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     size = sbuf.st_size;
     if (size != dl->nval) {
         xsyslog(LOG_ERR, "IOERROR: Size mismatch",
-                         "sval=<%s> len=<%lu> expected=<" MODSEQ_FMT ">",
+                         "sval=<%s> len=<%lu> expected=<" UINT64_FMT ">",
                          dl->sval, size, dl->nval);
         prot_printf(out, "NIL");
         fclose(f);
@@ -673,7 +673,7 @@ EXPORTED void dlist_print(const struct dlist *dl, int printkeys,
         break;
     case DL_NUM:
     case DL_DATE: /* for now, we will format it later */
-        prot_printf(out, "%llu", dl->nval);
+        prot_printf(out, UINT64_FMT, dl->nval);
         break;
     case DL_FILE:
         printfile(out, dl);
@@ -690,7 +690,7 @@ EXPORTED void dlist_print(const struct dlist *dl, int printkeys,
     case DL_HEX:
         {
             char buf[17];
-            snprintf(buf, 17, "%016llx", dl->nval);
+            snprintf(buf, 17, BIT64_FMT, dl->nval);
             prot_printf(out, "%s", buf);
         }
         break;
@@ -1391,12 +1391,12 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
     switch (dl->type) {
     case DL_NUM:
     case DL_DATE:
-        snprintf(tmp, 30, "%llu", dl->nval);
+        snprintf(tmp, 30, UINT64_FMT, dl->nval);
         dlist_makeatom(dl, tmp);
         break;
 
     case DL_HEX:
-        snprintf(tmp, 30, "%016llx", dl->nval);
+        snprintf(tmp, 30, BIT64_FMT, dl->nval);
         dlist_makeatom(dl, tmp);
         break;
 

@@ -3104,11 +3104,14 @@ static int sync_apply_mailbox(struct dlist *kin,
         /* skip out now, it's going to mismatch for sure! */
         if (xconvmodseq < ourxconvmodseq) {
             if (opt_force) {
-                syslog(LOG_NOTICE, "forcesync: higher xconvmodseq on replica %s - %llu < %llu",
+                syslog(LOG_NOTICE,
+                       "forcesync: higher xconvmodseq on replica %s - "
+                       MODSEQ_FMT " < " MODSEQ_FMT,
                        mboxname, xconvmodseq, ourxconvmodseq);
             }
             else {
-                syslog(LOG_ERR, "higher xconvmodseq on replica %s - %llu < %llu",
+                syslog(LOG_ERR, "higher xconvmodseq on replica %s - "
+                       MODSEQ_FMT " < " MODSEQ_FMT,
                        mboxname, xconvmodseq, ourxconvmodseq);
                 r = IMAP_SYNC_CHECKSUM;
                 goto done;
@@ -4876,7 +4879,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
             ispartial = calculate_intermediate_state(mailbox, frommodseq, fromuid,
                                                      batchsize, &touid, &tomodseq);
             if (ispartial) {
-                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) (%llu/%llu/%llu)",
+                syslog(LOG_DEBUG, "doing partial sync: %s (%u/%u/%u) "
+                       "(" MODSEQ_FMT "/" MODSEQ_FMT "/" MODSEQ_FMT ")",
                        mailbox_name(mailbox), fromuid, touid, mailbox->i.last_uid,
                        frommodseq, tomodseq, mailbox->i.highestmodseq);
             }

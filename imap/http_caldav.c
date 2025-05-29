@@ -1750,7 +1750,7 @@ static int export_calendar(struct transaction_t *txn)
             n = sscanf((char *) hdr[0], "\"%u-" MODSEQ_FMT "%1s",
                        &uidvalidity, &syncmodseq, dquote /* trailing DQUOTE */);
 
-            syslog(LOG_DEBUG, "scanned token %s to %d %u %llu",
+            syslog(LOG_DEBUG, "scanned token %s to %d %u " MODSEQ_FMT,
                    hdr[0], n, uidvalidity, syncmodseq);
 
             /* Sanity check the token components */

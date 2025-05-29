@@ -7653,7 +7653,8 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                            &uidvalidity, &syncmodseq, &basemodseq,
                            tokenuri /* test for trailing junk */);
 
-                syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu",
+                syslog(LOG_DEBUG,
+                       "scanned token %s to %d %u " MODSEQ_FMT " " MODSEQ_FMT,
                        str, r, uidvalidity, syncmodseq, basemodseq);
                 /* Sanity check the token components */
                 if (r < 2 || r > 3 ||
