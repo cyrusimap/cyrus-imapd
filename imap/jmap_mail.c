@@ -13464,7 +13464,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 sd.seenuids = seqset_cstring(new_seenseq);
                 if (!sd.seenuids) sd.seenuids = xstrdup("");
                 sd.lastread = time(NULL);
-                sd.lastchange = plan->mbox->i.last_appenddate;
+                sd.lastchange = plan->mbox->i.last_appenddate.tv_sec;
                 sd.lastuid = last_uid;
                 int r = seen_write(bulk->seendb, mailbox_uniqueid(plan->mbox), &sd);
                 if (r) {
