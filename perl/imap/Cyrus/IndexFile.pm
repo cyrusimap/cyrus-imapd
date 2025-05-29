@@ -2173,6 +2173,20 @@ sub _record_h2a {
   return \@array;
 }
 
+=item Cyrus::IndexFile->latest_version()
+
+=item $index->latest_version()
+
+Returns the latest (highest) version supported by Cyrus::IndexFile
+
+=cut
+
+sub latest_version {
+  my ($latest) = reverse sort { $a <=> $b } keys %$VersionFormats;
+
+  return $latest;
+}
+
 =item AUTHOR AND COPYRIGHT
 
 Bron Gondwana <brong@fastmailteam.com> - Copyright 2018 FastMail
