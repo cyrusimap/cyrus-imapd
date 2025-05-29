@@ -11807,9 +11807,9 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 
     mailbox_iter_done(&iter);
 
-    sd.lastread = mailbox->i.recenttime;
+    sd.lastread = mailbox->i.recenttime.tv_sec;
     sd.lastuid = mailbox->i.recentuid;
-    sd.lastchange = mailbox->i.last_appenddate;
+    sd.lastchange = mailbox->i.last_appenddate.tv_sec;
     sd.seenuids = seqset_cstring(outlist);
     if (!sd.seenuids) sd.seenuids = xstrdup("");
 
@@ -12068,9 +12068,9 @@ static int sync_mailbox(struct xfer_header *xfer,
                          mailbox->i.highestmodseq,
                          mailbox->i.synccrcs,
                          mailbox->i.recentuid,
-                         mailbox->i.recenttime,
-                         mailbox->i.pop3_last_login,
-                         mailbox->i.pop3_show_after,
+                         mailbox->i.recenttime.tv_sec,
+                         mailbox->i.pop3_last_login.tv_sec,
+                         mailbox->i.pop3_show_after.tv_sec,
                          annots,
                          xconvmodseq,
                          raclmodseq,
