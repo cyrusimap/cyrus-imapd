@@ -555,7 +555,7 @@ static int index_writeseen(struct index_state *state)
 
     /* already handled! Just update the header fields */
     if (state->internalseen) {
-        mailbox->i.recenttime = time(0);
+        mailbox->i.recenttime.tv_sec = time(0);
         if (mailbox->i.recentuid < state->last_uid)
             mailbox->i.recentuid = state->last_uid;
         return 0;
@@ -588,7 +588,7 @@ static int index_writeseen(struct index_state *state)
     /* only commit if interesting fields have changed */
     if (!seen_compare(&sd, &oldsd)) {
         sd.lastread = time(NULL);
-        sd.lastchange = mailbox->i.last_appenddate;
+        sd.lastchange = mailbox->i.last_appenddate.tv_sec;
         r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     }
 

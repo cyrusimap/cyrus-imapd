@@ -1814,8 +1814,8 @@ static void annotation_get_lastpop(annotate_state_t *state,
 
     assert(mailbox);
 
-    if (mailbox->i.pop3_last_login) {
-        time_to_rfc3501(mailbox->i.pop3_last_login, valuebuf,
+    if (mailbox->i.pop3_last_login.tv_sec) {
+        time_to_rfc3501(mailbox->i.pop3_last_login.tv_sec, valuebuf,
                         sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
@@ -1848,9 +1848,10 @@ static void annotation_get_pop3showafter(annotate_state_t *state,
 
     assert(mailbox);
 
-    if (mailbox->i.pop3_show_after)
+    if (mailbox->i.pop3_show_after.tv_sec)
     {
-        time_to_rfc3501(mailbox->i.pop3_show_after, valuebuf, sizeof(valuebuf));
+        time_to_rfc3501(mailbox->i.pop3_show_after.tv_sec,
+                        valuebuf, sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
 
@@ -3637,11 +3638,11 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
             return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
-    if (date != mailbox->i.pop3_show_after) {
+    if (date != mailbox->i.pop3_show_after.tv_sec) {
         if (!maywrite) return IMAP_PERMISSION_DENIED;
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
-        mailbox->i.pop3_show_after = date;
+        mailbox->i.pop3_show_after.tv_sec = date;
         if (!state->silent)
             mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }

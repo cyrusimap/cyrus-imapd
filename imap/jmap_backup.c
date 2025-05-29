@@ -382,11 +382,11 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if ((rrock->jrestore->mode & UNDO_ALL) &&
-        rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch) {
+        rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch.tv_sec) {
         syslog(log_level,
                "skipping '%s': cutoff (" TIME_T_FMT ") prior to mailbox history (" TIME_T_FMT")",
                mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
-               rrock->mailbox->i.changes_epoch);
+               rrock->mailbox->i.changes_epoch.tv_sec);
 
         mailbox_close(&rrock->mailbox);
         return HTTP_UNPROCESSABLE;

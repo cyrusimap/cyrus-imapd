@@ -262,7 +262,8 @@ static int do_examine(struct findall_data *data, void *rock)
     printf("    Deleted Size: " QUOTA_T_FMT " bytes  Expunged Size: " QUOTA_T_FMT " bytes\n",
            mailbox->i.quota_deleted_used, mailbox->i.quota_expunged_used);
     printf("  Last Append Date: (" TIME_T_FMT ") %s",
-           mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
+           mailbox->i.last_appenddate.tv_sec,
+           ctime(&mailbox->i.last_appenddate.tv_sec));
     printf("  UIDValidity: %u  Last UID: %u\n",
            mailbox->i.uidvalidity, mailbox->i.last_uid);
     printf("  Deleted: %u  Answered: %u  Flagged: %u\n",
@@ -285,8 +286,9 @@ static int do_examine(struct findall_data *data, void *rock)
         }
     }
     printf("\n");
-    printf("  Last POP3 Login: (" TIME_T_FMT ") %s", mailbox->i.pop3_last_login,
-           ctime(&mailbox->i.pop3_last_login));
+    printf("  Last POP3 Login: (" TIME_T_FMT ") %s",
+           mailbox->i.pop3_last_login.tv_sec,
+           ctime(&mailbox->i.pop3_last_login.tv_sec));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
            mailbox->i.highestmodseq);
 

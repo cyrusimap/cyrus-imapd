@@ -266,7 +266,7 @@ EXPORTED int append_commit(struct appendstate *as)
 
     if (as->nummsg) {
         /* Calculate new index header information */
-        as->mailbox->i.last_appenddate = time(0);
+        as->mailbox->i.last_appenddate.tv_sec = time(0);
 
         /* log the append so rolling squatter can index this mailbox */
         sync_log_append(mailbox_name(as->mailbox));

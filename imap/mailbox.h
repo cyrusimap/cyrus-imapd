@@ -193,10 +193,10 @@ struct index_header {
     uint32_t start_offset;
     uint32_t record_size;
     uint32_t num_records;
-    time_t last_appenddate;
+    struct timespec last_appenddate;
     uint32_t last_uid;
     quota_t quota_mailbox_used;
-    time_t pop3_last_login;
+    struct timespec pop3_last_login;
     uint32_t uidvalidity;
 
     uint32_t deleted;
@@ -209,9 +209,9 @@ struct index_header {
     modseq_t highestmodseq;
     modseq_t deletedmodseq;
     uint32_t exists;
-    time_t first_expunged;
-    time_t last_repack_time;
-    time_t changes_epoch;
+    struct timespec first_expunged;
+    struct timespec last_repack_time;
+    struct timespec changes_epoch;
 
     modseq_t createdmodseq;
 
@@ -219,9 +219,9 @@ struct index_header {
     struct synccrcs synccrcs;
 
     uint32_t recentuid;
-    time_t recenttime;
+    struct timespec recenttime;
 
-    time_t pop3_show_after;
+    struct timespec pop3_show_after;
     quota_t quota_annot_used;
     quota_t quota_deleted_used;
     quota_t quota_expunged_used;
@@ -349,52 +349,65 @@ struct mailbox_iter;
  * add new fields to the header, don't forget to add them to the tests
  * too!
  */
-#define OFFSET_GENERATION_NO 0
-#define OFFSET_FORMAT 4
-#define OFFSET_MINOR_VERSION 8
-#define OFFSET_START_OFFSET 12
-#define OFFSET_RECORD_SIZE 16
-#define OFFSET_NUM_RECORDS 20
-#define OFFSET_LAST_APPENDDATE 24
-#define OFFSET_LAST_UID 28
-#define OFFSET_QUOTA_MAILBOX_USED 32  /* offset for 64bit quotas */
-#define OFFSET_POP3_LAST_LOGIN 40
-#define OFFSET_UIDVALIDITY 44
-#define OFFSET_DELETED 48      /* added for ACAP */
-#define OFFSET_ANSWERED 52
-#define OFFSET_FLAGGED 56
-#define OFFSET_EXISTS 60           /* Non-expunged records */
-#define OFFSET_MAILBOX_OPTIONS 64
-#define OFFSET_LEAKED_CACHE 68     /* Number of leaked records in cache file */
-#define OFFSET_HIGHESTMODSEQ 72    /* CONDSTORE (64-bit modseq) */
-#define OFFSET_DELETEDMODSEQ 80    /* CONDSTORE (64-bit modseq) */
-#define OFFSET_FIRST_EXPUNGED 88   /* last_updated of oldest expunged message */
-#define OFFSET_LAST_REPACK_TIME 92 /* time of last expunged cleanup  */
-#define OFFSET_HEADER_FILE_CRC 96  /* CRC32 of the index header file */
-#define OFFSET_SYNCCRCS_BASIC 100  /* XOR of SYNC CRCs of unexpunged records */
-#define OFFSET_RECENTUID 104       /* last UID the owner was told about */
-#define OFFSET_RECENTTIME 108      /* last timestamp for seen data */
-#define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages 
-                                    * to POP3 */
-#define OFFSET_QUOTA_ANNOT_USED 116 /* bytes of per-mailbox and per-message
-                                     * annotations for this mailbox */
-#define OFFSET_SYNCCRCS_ANNOT 120  /* SYNC_CRC of the annotations */
-#define OFFSET_UNSEEN 124          /* total number of UNSEEN messages (owner) */
+#define OFFSET_GENERATION_NO           0
+#define OFFSET_FORMAT                  4
+#define OFFSET_MINOR_VERSION           8
+#define OFFSET_START_OFFSET           12
+#define OFFSET_RECORD_SIZE            16
+#define OFFSET_NUM_RECORDS            20
+#define OFFSET_LAST_APPENDDATE        24 /* grew to 64-bit in v20 */
+#define OFFSET_QUOTA_MAILBOX_USED     32 /* offset for 64bit quotas */
+#define OFFSET_POP3_LAST_LOGIN        40 /* grew to 64-bit in v20 */
+#define OFFSET_DELETED                48 /* added for ACAP */
+#define OFFSET_ANSWERED               52
+#define OFFSET_FLAGGED                56
+#define OFFSET_EXISTS                 60 /* Non-expunged records */
+#define OFFSET_MAILBOX_OPTIONS        64
+#define OFFSET_LEAKED_CACHE           68 /* Number of leaked records in cache file */
+#define OFFSET_HIGHESTMODSEQ          72 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_DELETEDMODSEQ          80 /* CONDSTORE (64-bit modseq) */
+#define OFFSET_LAST_UID               88
+#define OFFSET_UIDVALIDITY            92
+#define OFFSET_HEADER_FILE_CRC        96 /* CRC32 of the index header file */
+#define OFFSET_SYNCCRCS_BASIC        100 /* XOR of SYNC CRCs of unexpunged records */
+#define OFFSET_RECENTTIME            104 /* last timestamp for seen data
+                                          * (grew to 64-bit in v20) */
+#define OFFSET_POP3_SHOW_AFTER       112 /* time after which to show messages 
+                                          * to POP3 (grew to 64-bit in v20) */
+#define OFFSET_SYNCCRCS_ANNOT        120 /* SYNC_CRC of the annotations */
+#define OFFSET_UNSEEN                124 /* total number of UNSEEN messages (owner) */
 #define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
-#define OFFSET_QUOTA_DELETED_USED 136  /* bytes of \Deleted messages
-                                        * for this mailbox (64-bit) */
-#define OFFSET_QUOTA_EXPUNGED_USED 144 /* bytes of \Expunged messages
-                                        * for this mailbox (64-bit) */
-#define OFFSET_CHANGES_EPOCH 152   /* time from which we can calculate changes */
-#define OFFSET_HEADER_CRC 156
+#define OFFSET_QUOTA_DELETED_USED    136 /* bytes of \Deleted messages
+                                           * for this mailbox (64-bit) */
+#define OFFSET_QUOTA_EXPUNGED_USED   144 /* bytes of \Expunged messages
+                                          * for this mailbox (64-bit) */
+#define OFFSET_QUOTA_ANNOT_USED      152 /* bytes of per-mailbox and per-message
+                                          * annotations for this mailbox */
+#define OFFSET_CHANGES_EPOCH         160 /* time from which we can calculate changes
+                                          * (grew to 64-bit in v20) */
+#define OFFSET_FIRST_EXPUNGED        168 /* last_updated of oldest expunged message
+                                          * (grew to 64-bit in v20) */
+#define OFFSET_LAST_REPACK_TIME      176 /* time of last expunged cleanup
+                                          * (grew to 64-bit in v20) */
+#define OFFSET_RECENTUID             184 /* last UID the owner was told about */
+#define OFFSET_HEADER_CRC            188
 
-#define PRE19_OFFSET_MAILBOX_OPTIONS 60
-#define PRE19_OFFSET_LEAKED_CACHE 64
-#define PRE19_OFFSET_HIGHESTMODSEQ 68
-#define PRE19_OFFSET_DELETEDMODSEQ 76
-#define PRE19_OFFSET_EXISTS 84
-#define PRE19_OFFSET_CHANGES_EPOCH 136
-#define PRE19_OFFSET_QUOTA_DELETED_USED 140
+#define PRE20_OFFSET_LAST_UID             28
+#define PRE20_OFFSET_UIDVALIDITY          44
+#define PRE20_OFFSET_FIRST_EXPUNGED       88
+#define PRE20_OFFSET_LAST_REPACK_TIME     92
+#define PRE20_OFFSET_RECENTUID           104
+#define PRE20_OFFSET_RECENTTIME          108
+#define PRE20_OFFSET_QUOTA_ANNOT_USED    116
+#define PRE20_OFFSET_CHANGES_EPOCH       152
+
+#define PRE19_OFFSET_MAILBOX_OPTIONS      60
+#define PRE19_OFFSET_LEAKED_CACHE         64
+#define PRE19_OFFSET_HIGHESTMODSEQ        68
+#define PRE19_OFFSET_DELETEDMODSEQ        76
+#define PRE19_OFFSET_EXISTS               84
+#define PRE19_OFFSET_CHANGES_EPOCH       136
+#define PRE19_OFFSET_QUOTA_DELETED_USED  140
 #define PRE19_OFFSET_QUOTA_EXPUNGED_USED 148
 
 /* Offsets of index_record fields in index/expunge file

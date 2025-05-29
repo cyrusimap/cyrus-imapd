@@ -1824,6 +1824,25 @@ EXPORTED struct entryattlist *mailbox_extract_annots(const struct mailbox *mailb
     return annots;
 }
 
+/* Index header and record sizes by version.
+ * We don't support versions prior to 6 and version 11 was Fastmail internal
+ */
+static const unsigned index_header_size[MAILBOX_MINOR_VERSION+1] = {
+    //   1    2    5    4    5    6    7    8    9   10
+    0,   0,   0,   0,   0,   0,  76,  76,  92,  96,  96,
+
+    //  12   13   14   15   16   17   18   19   20
+    0, 128, 128, 160, 160, 160, 160, 160, 160, 192
+};
+
+static const unsigned index_record_size[MAILBOX_MINOR_VERSION+1] = {
+    //   1    2    5    4    5    6    7    8    9   10
+    0,   0,   0,   0,   0,   0,  60,  72,  80,  80,  88,
+
+    //  12   13   14   15   16   17   18   19   20
+    0,  96, 104, 104, 104, 112, 112, 112, 112, 144
+};
+
 static int mailbox_buf_to_index_header(const char *buf, size_t len,
                                        struct index_header *i)
 {
@@ -1839,65 +1858,82 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     i->generation_no = ntohl(*((bit32 *)(buf+OFFSET_GENERATION_NO)));
     i->format = ntohl(*((bit32 *)(buf+OFFSET_FORMAT)));
     i->minor_version = ntohl(*((bit32 *)(buf+OFFSET_MINOR_VERSION)));
-    switch (i->minor_version) {
-    case 6:
-    case 7:
-        headerlen = 76;
-        break;
-    case 8:
-        headerlen = 92;
-        break;
-    case 9:
-    case 10:
-        headerlen = 96;
-        break;
-    case 12:
-    case 13:
-        headerlen = 128;
-        break;
-    case 14:
-    case 15:
-    case 16:
-    case 17:
-    case 18:
-    case 19:
-    case 20:
-        headerlen = 160;
-        break;
-    default:
+
+    if (i->minor_version < 6 || i->minor_version > MAILBOX_MINOR_VERSION) {
         return IMAP_MAILBOX_BADFORMAT;
     }
-    if (len < headerlen)
+
+    headerlen = index_header_size[i->minor_version];
+    if (!headerlen || len < headerlen) {
         return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    i->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
+    i->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
+    if (i->start_offset != headerlen ||
+        i->record_size != index_record_size[i->minor_version]) {
+        return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    i->num_records = ntohl(*((bit32 *)(buf+OFFSET_NUM_RECORDS)));
+    i->deleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)));
+    i->answered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)));
+    i->flagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)));
+
+    /* v20 grew size of time fields and quota_annot_used to 64-bits
+       and rearranged fields so that these would fall on 8-byte boundaries */
+    if (i->minor_version >= 20) {
+        i->last_appenddate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_APPENDDATE)));
+        i->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
+        i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
+        i->pop3_last_login.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN)));
+        i->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
+        i->options = ntohl(*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)));
+        i->leaked_cache_records = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE)));
+        i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ);
+        i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ);
+        i->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
+        i->first_expunged.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_FIRST_EXPUNGED)));
+        i->last_repack_time.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_REPACK_TIME)));
+        i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
+        i->synccrcs.basic = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)));
+        i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
+        i->recenttime.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_RECENTTIME)));
+        i->pop3_show_after.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+        i->quota_annot_used = align_ntohll(buf+OFFSET_QUOTA_ANNOT_USED);
+        i->synccrcs.annot = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)));
+        i->unseen = ntohl(*((bit32 *)(buf+OFFSET_UNSEEN)));
+        i->createdmodseq = align_ntohll(buf+OFFSET_MAILBOX_CREATEDMODSEQ);
+        i->changes_epoch.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_CHANGES_EPOCH)));
+        i->quota_deleted_used = align_ntohll(buf+OFFSET_QUOTA_DELETED_USED);
+        i->quota_expunged_used = align_ntohll(buf+OFFSET_QUOTA_EXPUNGED_USED);
+
+        goto crc;
+    }
+
+    i->last_appenddate.tv_sec = ntohl(*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)));
+    i->last_uid = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_UID)));
+    i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
+    i->pop3_last_login.tv_sec = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
+    i->uidvalidity = ntohl(*((bit32 *)(buf+PRE20_OFFSET_UIDVALIDITY)));
 
     /* v19 rearranged fields so modseq_t & quota_t fall on 8-byte boundaries */
     if (i->minor_version >= 19) {
-        i->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
-        i->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
-        i->num_records = ntohl(*((bit32 *)(buf+OFFSET_NUM_RECORDS)));
-        i->last_appenddate = ntohl(*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)));
-        i->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
-        i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
-        i->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
-        i->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
-        i->deleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)));
-        i->answered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)));
-        i->flagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)));
         i->options = ntohl(*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)));
         i->leaked_cache_records =
             ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE)));
         i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ);
         i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ);
         i->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
-        i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
-        i->last_repack_time = ntohl(*((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)));
+        i->first_expunged.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_FIRST_EXPUNGED)));
+        i->last_repack_time.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_REPACK_TIME)));
         i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
         i->synccrcs.basic = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)));
-        i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
-        i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
-        i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+        i->recentuid = ntohl(*((bit32 *)(buf+PRE20_OFFSET_RECENTUID)));
+        i->recenttime.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_RECENTTIME)));
+        i->pop3_show_after.tv_sec = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
 
-        qannot = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)));
+        qannot = ntohl(*((bit32 *)(buf+PRE20_OFFSET_QUOTA_ANNOT_USED)));
         /* this field is stored as a 32b unsigned on disk but 64b signed
          * in memory, so we need to be careful about sign extension */
         i->quota_annot_used = (quota_t)((unsigned long long)qannot);
@@ -1905,24 +1941,13 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
         i->synccrcs.annot = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)));
         i->unseen = ntohl(*((bit32 *)(buf+OFFSET_UNSEEN)));
         i->createdmodseq = align_ntohll(buf+OFFSET_MAILBOX_CREATEDMODSEQ);
-        i->changes_epoch = ntohl(*((bit32 *)(buf+OFFSET_CHANGES_EPOCH)));
+        i->changes_epoch.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_CHANGES_EPOCH)));
         i->quota_deleted_used = align_ntohll(buf+OFFSET_QUOTA_DELETED_USED);
         i->quota_expunged_used = align_ntohll(buf+OFFSET_QUOTA_EXPUNGED_USED);
 
         goto crc;
     }
 
-    i->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
-    i->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
-    i->num_records = ntohl(*((bit32 *)(buf+OFFSET_NUM_RECORDS)));
-    i->last_appenddate = ntohl(*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)));
-    i->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
-    i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
-    i->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
-    i->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
-    i->deleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)));
-    i->answered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED)));
-    i->flagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)));
     i->options = ntohl(*((bit32 *)(buf+PRE19_OFFSET_MAILBOX_OPTIONS)));
     i->leaked_cache_records = ntohl(*((bit32 *)(buf+PRE19_OFFSET_LEAKED_CACHE)));
     if (i->minor_version < 8) goto done;
@@ -1932,17 +1957,17 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
 
     i->deletedmodseq = align_ntohll(buf+PRE19_OFFSET_DELETEDMODSEQ);
     i->exists = ntohl(*((bit32 *)(buf+PRE19_OFFSET_EXISTS)));
-    i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
-    i->last_repack_time = ntohl(*((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)));
+    i->first_expunged.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_FIRST_EXPUNGED)));
+    i->last_repack_time.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_LAST_REPACK_TIME)));
     i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
     i->synccrcs.basic = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)));
-    i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
-    i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
+    i->recentuid = ntohl(*((bit32 *)(buf+PRE20_OFFSET_RECENTUID)));
+    i->recenttime.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_RECENTTIME)));
 
     if (i->minor_version < 13) goto crc;
 
-    i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
-    qannot = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)));
+    i->pop3_show_after.tv_sec = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+    qannot = ntohl(*((bit32 *)(buf+PRE20_OFFSET_QUOTA_ANNOT_USED)));
     /* this field is stored as a 32b unsigned on disk but 64b signed
      * in memory, so we need to be careful about sign extension */
     i->quota_annot_used = (quota_t)((unsigned long long)qannot);
@@ -1958,7 +1983,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
 
     if (i->minor_version < 17) goto crc;
 
-    i->changes_epoch = ntohl(*((bit32 *)(buf+PRE19_OFFSET_CHANGES_EPOCH)));
+    i->changes_epoch.tv_sec = ntohl(*((bit32 *)(buf+PRE19_OFFSET_CHANGES_EPOCH)));
 
     if (i->minor_version < 18) goto crc;
 
@@ -1984,7 +2009,8 @@ done:
     }
 
     if (i->minor_version < 17) {
-        i->changes_epoch = i->last_repack_time ? i->last_repack_time : time(0);
+        i->changes_epoch.tv_sec =
+            i->last_repack_time.tv_sec ? i->last_repack_time.tv_sec : time(0);
     }
 
     return 0;
@@ -2927,57 +2953,13 @@ static int mailbox_commit_dirhandles(struct mailbox *mailbox)
 
 static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 {
+    assert(i->minor_version >= 6 && i->minor_version <= MAILBOX_MINOR_VERSION);
+
     bit32 crc;
     bit32 options = i->options & MAILBOX_OPT_VALID;
-    size_t headerlen = INDEX_HEADER_SIZE;
+    size_t headerlen = index_header_size[i->minor_version];
 
-    memset(buf, 0, INDEX_HEADER_SIZE); /* buffer is always this big, and aligned */
-
-    assert (i->minor_version >= 6);
-
-    /* v19 rearranged fields so modseq_t & quota_t fall on 8-byte boundaries */
-    if (i->minor_version >= 19) {
-        *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(i->generation_no);
-        *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(i->format);
-        *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(i->minor_version);
-        *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(i->start_offset);
-        *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(i->record_size);
-        *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(i->num_records);
-        *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
-        *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
-        align_htonll(buf+OFFSET_QUOTA_MAILBOX_USED, i->quota_mailbox_used);
-        *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
-        *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
-        *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
-        *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
-        *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
-        *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
-        *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
-        align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
-        align_htonll(buf+OFFSET_DELETEDMODSEQ, i->deletedmodseq);
-        *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(i->exists);
-        *((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged);
-        *((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time);
-        *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
-        *((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)) = htonl(i->synccrcs.basic);
-        *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
-        *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime); 
-        *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
-
-        /* this field is 64b in memory but 32b on disk - as it counts
-        * bytes stored in dbs and the dbs are 32b anyway there should
-        * be no problem */
-        *((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)) =
-            htonl((bit32)i->quota_annot_used);
-
-        *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
-        *((bit32 *)(buf+OFFSET_UNSEEN)) = htonl(i->unseen);
-        align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
-        *((bit32 *)(buf+OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch);
-        align_htonll(buf+OFFSET_QUOTA_DELETED_USED, i->quota_deleted_used);
-        align_htonll(buf+OFFSET_QUOTA_EXPUNGED_USED, i->quota_expunged_used);
-        goto crc;
-    }
+    memset(buf, 0, headerlen); /* buffer is always this big, and aligned */
 
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(i->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(i->format);
@@ -2989,17 +2971,79 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
      * record - but we always have to write NUM_RECORDS so that expunged
      * handing over repack works */
     *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(i->num_records);
-    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
-    *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
+
+    /* v20 grew size of time fields and quota_annot_used to 64-bits
+       and rearranged fields so that these would fall on 8-byte boundaries */
+    if (i->minor_version >= 20) {
+        *((bit64 *)(buf+OFFSET_LAST_APPENDDATE)) = htonll(i->last_appenddate.tv_sec);
+        *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
+        align_htonll(buf+OFFSET_QUOTA_MAILBOX_USED, i->quota_mailbox_used);
+        *((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonll(i->pop3_last_login.tv_sec);
+        *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
+        *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
+        *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
+        align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
+        align_htonll(buf+OFFSET_DELETEDMODSEQ, i->deletedmodseq);
+        *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(i->exists);
+        *((bit64 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonll(i->first_expunged.tv_sec);
+        *((bit64 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonll(i->last_repack_time.tv_sec);
+        *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
+        *((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)) = htonl(i->synccrcs.basic);
+        *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
+        *((bit64 *)(buf+OFFSET_RECENTTIME)) = htonll(i->recenttime.tv_sec); 
+        *((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonll(i->pop3_show_after.tv_sec);
+        align_htonll(buf+OFFSET_QUOTA_ANNOT_USED, i->quota_annot_used);
+        *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
+        *((bit32 *)(buf+OFFSET_UNSEEN)) = htonl(i->unseen);
+        align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
+        *((bit64 *)(buf+OFFSET_CHANGES_EPOCH)) = htonll(i->changes_epoch.tv_sec);
+        align_htonll(buf+OFFSET_QUOTA_DELETED_USED, i->quota_deleted_used);
+        align_htonll(buf+OFFSET_QUOTA_EXPUNGED_USED, i->quota_expunged_used);
+        goto crc;
+    }
+
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate.tv_sec);
+    *((bit32 *)(buf+PRE20_OFFSET_LAST_UID)) = htonl(i->last_uid);
 
     /* quotas may be 64bit now */
     align_htonll(buf+OFFSET_QUOTA_MAILBOX_USED, i->quota_mailbox_used);
 
-    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
-    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
-    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
-    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login.tv_sec);
+    *((bit32 *)(buf+PRE20_OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
+
+    /* v19 rearranged fields so modseq_t & quota_t fall on 8-byte boundaries */
+    if (i->minor_version >= 19) {
+        *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
+        *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
+        align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
+        align_htonll(buf+OFFSET_DELETEDMODSEQ, i->deletedmodseq);
+        *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(i->exists);
+        *((bit32 *)(buf+PRE20_OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged.tv_sec);
+        *((bit32 *)(buf+PRE20_OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time.tv_sec);
+        *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
+        *((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)) = htonl(i->synccrcs.basic);
+        *((bit32 *)(buf+PRE20_OFFSET_RECENTUID)) = htonl(i->recentuid);
+        *((bit32 *)(buf+PRE20_OFFSET_RECENTTIME)) = htonl(i->recenttime.tv_sec); 
+        *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after.tv_sec);
+
+        /* this field is 64b in memory but 32b on disk - as it counts
+        * bytes stored in dbs and the dbs are 32b anyway there should
+        * be no problem */
+        *((bit32 *)(buf+PRE20_OFFSET_QUOTA_ANNOT_USED)) =
+            htonl((bit32)i->quota_annot_used);
+
+        *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
+        *((bit32 *)(buf+OFFSET_UNSEEN)) = htonl(i->unseen);
+        align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
+        *((bit32 *)(buf+PRE20_OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch.tv_sec);
+        align_htonll(buf+OFFSET_QUOTA_DELETED_USED, i->quota_deleted_used);
+        align_htonll(buf+OFFSET_QUOTA_EXPUNGED_USED, i->quota_expunged_used);
+        goto crc;
+    }
+
     if (i->minor_version < 8) {
         /* this was called OFFSET_POP3_NEW_UIDL and was only zero or one */
         *((bit32 *)(buf+PRE19_OFFSET_MAILBOX_OPTIONS)) = htonl(options&1);
@@ -3019,21 +3063,21 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
 
     align_htonll(buf+PRE19_OFFSET_DELETEDMODSEQ, i->deletedmodseq);
     *((bit32 *)(buf+PRE19_OFFSET_EXISTS)) = htonl(i->exists);
-    *((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged);
-    *((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time);
+    *((bit32 *)(buf+PRE20_OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged.tv_sec);
+    *((bit32 *)(buf+PRE20_OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time.tv_sec);
     *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
     *((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)) = htonl(i->synccrcs.basic);
-    *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
-    *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime);
+    *((bit32 *)(buf+PRE20_OFFSET_RECENTUID)) = htonl(i->recentuid);
+    *((bit32 *)(buf+PRE20_OFFSET_RECENTTIME)) = htonl(i->recenttime.tv_sec);
     if (i->minor_version > 12) {
         /* these were added in version 13, but replaced zero-byte fields in
          * in version 12, so if we don't write them then the CRC will still
          * be correct for version 12, since the header size didn't change */
-        *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
+        *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after.tv_sec);
         /* this field is 64b in memory but 32b on disk - as it counts
         * bytes stored in dbs and the dbs are 32b anyway there should
         * be no problem */
-        *((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)) = htonl((bit32)i->quota_annot_used);
+        *((bit32 *)(buf+PRE20_OFFSET_QUOTA_ANNOT_USED)) = htonl((bit32)i->quota_annot_used);
         *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
     }
 
@@ -3050,7 +3094,7 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
     }
 
     if (i->minor_version > 16) {
-        *((bit32 *)(buf+PRE19_OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch);
+        *((bit32 *)(buf+PRE19_OFFSET_CHANGES_EPOCH)) = htonl(i->changes_epoch.tv_sec);
     }
 
     if (i->minor_version > 17) {
@@ -4805,8 +4849,9 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
-        if (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec)
-            mailbox->i.first_expunged = record->last_updated.tv_sec;
+        if (!mailbox->i.first_expunged.tv_sec ||
+            mailbox->i.first_expunged.tv_sec > record->last_updated.tv_sec)
+            mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
         mailbox_annot_update_counts(mailbox, &oldrecord, 0);
     }
 
@@ -4828,8 +4873,10 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     }
 
     /* expunged tracking */
-    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec))
-        mailbox->i.first_expunged = record->last_updated.tv_sec;
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED &&
+        (!mailbox->i.first_expunged.tv_sec ||
+         mailbox->i.first_expunged.tv_sec > record->last_updated.tv_sec))
+        mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
 
     return 0;
 }
@@ -4954,8 +5001,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     /* expunged tracking */
-    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated.tv_sec))
-        mailbox->i.first_expunged = record->last_updated.tv_sec;
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+        (!mailbox->i.first_expunged.tv_sec ||
+         mailbox->i.first_expunged.tv_sec > record->last_updated.tv_sec))
+        mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
 
     return 0;
 }
@@ -5094,6 +5143,8 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     unsigned char *buf = ibuf.buf;
     int n;
 
+    assert(version >= 6 && version <= MAILBOX_MINOR_VERSION);
+
     /* if we're changing version at all, recalculate counts up-front */
     if (version != mailbox->i.minor_version) {
         /* NOTE: this maps in annot_state in mailbox, which will get copied
@@ -5126,57 +5177,10 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
     /* track the version number */
     repack->newmailbox.i.minor_version = version;
-    switch (version) {
-    case 6:
-        repack->newmailbox.i.start_offset = 76;
-        repack->newmailbox.i.record_size = 60;
-        break;
-    case 7:
-        repack->newmailbox.i.start_offset = 76;
-        repack->newmailbox.i.record_size = 72;
-        break;
-    case 8:
-        repack->newmailbox.i.start_offset = 92;
-        repack->newmailbox.i.record_size = 80;
-        break;
-    case 9:
-        repack->newmailbox.i.start_offset = 96;
-        repack->newmailbox.i.record_size = 80;
-        break;
-    case 10:
-        repack->newmailbox.i.start_offset = 96;
-        repack->newmailbox.i.record_size = 88;
-        break;
-    /* 11 was FastMail internal */
-    case 12:
-        repack->newmailbox.i.start_offset = 128;
-        repack->newmailbox.i.record_size = 96;
-        break;
-    case 13:
-        repack->newmailbox.i.start_offset = 128;
-        repack->newmailbox.i.record_size = 104;
-        break;
-    case 14:
-        /* version 15 just repurposed a field */
-    case 15:
-        repack->newmailbox.i.start_offset = 160;
-        repack->newmailbox.i.record_size = 104;
-        break;
-    case 16:
-    case 17:
-    case 18:
-    case 19:
-        repack->newmailbox.i.start_offset = 160;
-        repack->newmailbox.i.record_size = 112;
-        break;
-    case 20:
-        repack->newmailbox.i.start_offset = 160;
-        /* version 20 grew size and time fields to 64-bits, and added basecid */
-        repack->newmailbox.i.record_size = 144;
-        break;
-    default:
+    repack->newmailbox.i.start_offset = index_header_size[version];
+    repack->newmailbox.i.record_size = index_record_size[version];
+    if (!(repack->newmailbox.i.start_offset && repack->newmailbox.i.record_size))
         fatal("index version not supported", EX_SOFTWARE);
-    }
 
     /* upgrades or downgrades across version 12 boundary?  Sort out seen state */
     if (version >= 12 && mailbox->i.minor_version < 12) {
@@ -5197,7 +5201,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
         if (!r) {
             repack->newmailbox.i.recentuid = sd.lastuid;
-            repack->newmailbox.i.recenttime = sd.lastchange;
+            repack->newmailbox.i.recenttime.tv_sec = sd.lastchange;
             repack->seqset = seqset_parse(sd.seenuids, NULL, sd.lastuid);
             seen_freedata(&sd);
         }
@@ -5342,7 +5346,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         goto fail;
     }
 
-    repack->newmailbox.i.last_repack_time = time(0);
+    repack->newmailbox.i.last_repack_time.tv_sec = time(0);
 
     if (repack->mailbox->i.minor_version >= 12 && repack->newmailbox.i.minor_version < 12
         && repack->seqset && repack->userid) {
@@ -5356,7 +5360,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
             sd.seenuids = seqset_cstring(repack->seqset);
             if (!sd.seenuids) sd.seenuids = xstrdup("");
             sd.lastread = time(NULL);
-            sd.lastchange = repack->newmailbox.i.last_appenddate;
+            sd.lastchange = repack->newmailbox.i.last_appenddate.tv_sec;
             r = seen_write(seendb, mailbox_uniqueid(repack->mailbox), &sd);
             /* XXX - syslog on errors? */
         }
@@ -5535,7 +5539,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             /* track the modseq for QRESYNC purposes */
             if (copyrecord.modseq > repack->newmailbox.i.deletedmodseq) {
                 repack->newmailbox.i.deletedmodseq = copyrecord.modseq;
-                repack->newmailbox.i.changes_epoch = copyrecord.last_updated.tv_sec;
+                repack->newmailbox.i.changes_epoch.tv_sec = copyrecord.last_updated.tv_sec;
             }
             continue;
         }
@@ -6137,7 +6141,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
     if (dirty) {
         mailbox_index_dirty(mailbox);
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
-        mailbox->i.first_expunged = first_expunged;
+        mailbox->i.first_expunged.tv_sec = first_expunged;
     }
 
     if (ndeleted) *ndeleted = numdeleted;
@@ -6394,22 +6398,24 @@ EXPORTED int mailbox_create(const char *name,
         }
     }
 
+    assert(minor_version >= 6 && minor_version <= MAILBOX_MINOR_VERSION);
+
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
     mailbox->i.minor_version = minor_version;
-    mailbox->i.start_offset = INDEX_HEADER_SIZE;
-    mailbox->i.record_size = INDEX_RECORD_SIZE;
+    mailbox->i.start_offset = index_header_size[minor_version];
+    mailbox->i.record_size = index_record_size[minor_version];
     mailbox->i.options = options;
     mailbox->i.uidvalidity = uidvalidity;
     mailbox->i.createdmodseq = createdmodseq;
     mailbox->i.highestmodseq = highestmodseq;
-    mailbox->i.changes_epoch = time(0);
+    mailbox->i.changes_epoch.tv_sec = time(0);
     mailbox->i.synccrcs.basic = CRC_INIT_BASIC;
     mailbox->i.synccrcs.annot = CRC_INIT_ANNOT;
 
     /* initialise header size field so appends calculate the
      * correct map size */
-    mailbox->index_size = INDEX_HEADER_SIZE;
+    mailbox->index_size = index_header_size[minor_version];
 
     mailbox->header_dirty = 1;
 

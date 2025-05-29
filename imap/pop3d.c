@@ -870,13 +870,13 @@ static void cmdloop(void)
                 mailbox_index_dirty(popd_mailbox);
                 if ((minpollsec > 0) && (pollpadding > 1)) {
                     time_t mintime = popd_login_time - (minpollsec*(pollpadding));
-                    if (popd_mailbox->i.pop3_last_login < mintime) {
-                        popd_mailbox->i.pop3_last_login = mintime + minpollsec;
+                    if (popd_mailbox->i.pop3_last_login.tv_sec < mintime) {
+                        popd_mailbox->i.pop3_last_login.tv_sec = mintime + minpollsec;
                     } else {
-                        popd_mailbox->i.pop3_last_login += minpollsec;
+                        popd_mailbox->i.pop3_last_login.tv_sec += minpollsec;
                     }
                 } else {
-                    popd_mailbox->i.pop3_last_login = popd_login_time;
+                    popd_mailbox->i.pop3_last_login.tv_sec = popd_login_time;
                 }
 
                 /* look for deleted messages */
@@ -1786,7 +1786,7 @@ int openinbox(void)
         }
 
         if ((minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm')) &&
-            popd_mailbox->i.pop3_last_login + minpoll > popd_login_time) {
+            popd_mailbox->i.pop3_last_login.tv_sec + minpoll > popd_login_time) {
             syslog(LOG_ERR, "%s: Logins must be at least %d minute%s apart",
                         mbname_intname(mbname),
                         minpoll / 60, minpoll / 60 > 1 ? "s" : "");
@@ -1811,8 +1811,8 @@ int openinbox(void)
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
-            if (popd_mailbox->i.pop3_show_after &&
-                record->internaldate.tv_sec <= popd_mailbox->i.pop3_show_after) {
+            if (popd_mailbox->i.pop3_show_after.tv_sec &&
+                record->internaldate.tv_sec <= popd_mailbox->i.pop3_show_after.tv_sec) {
                 /* Ignore messages older than the "show after" date */
                 continue;
             }

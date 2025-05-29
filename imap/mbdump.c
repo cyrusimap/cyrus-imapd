@@ -120,13 +120,13 @@ static void downgrade_header(struct index_header *i, char *buf, int version,
     *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(record_size);
     /* NUM_RECORDS replaces "exists" in the older headers */
     *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(UP_num_records);
-    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate.tv_sec);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
 
     /* quotas may be 64bit now */
     *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonll(i->quota_mailbox_used);
 
-    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login.tv_sec);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
@@ -799,8 +799,8 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     mailbox_index_dirty(mailbox);
     if (mailbox->i.recentuid < sd.lastuid)
         mailbox->i.recentuid = sd.lastuid;
-    if (mailbox->i.recenttime < sd.lastread)
-        mailbox->i.recenttime = sd.lastread;
+    if (mailbox->i.recenttime.tv_sec < sd.lastread)
+        mailbox->i.recenttime.tv_sec = sd.lastread;
 
  done:
     seqset_free(&seq);
