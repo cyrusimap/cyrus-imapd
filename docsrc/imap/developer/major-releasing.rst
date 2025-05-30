@@ -264,26 +264,22 @@ Tell the website builder about the new branch
 The website is automatically rebuilt by a script, which needs to be updated
 to know about the new series.
 
-1. Clone ``git@github.com:cyrusimap/cyrusimap.org.git``, or ensure the clone
-   you already have is up to date
-2. Update `run-gp.sh` to know about the new version.  You'll need to add code
-   in several places, but it's pretty self-explanatory once you look at it.
-   For the time being, do NOT change which version `$target` and
-   `$target/stable` are rsync'd from.  We'll change these later, once the real
-   release has been published.  In the meantime, we want the top level and
-   stable sections to continue to be built from the existing stable branch.
+1. Clone ``git@github.com:cyrusimap/cyrusimap.github.io.git``, or ensure the
+   clone you already have is up to date
+2. Update ``build-cyrus-site`` to know about the new version.  You do this by
+   adding a ``cyrus_branch()`` call to the ``%sources`` hash.  Do NOT change
+   the line for current stable at this stage.  We'll change that later, once
+   the real release has been published.  In the meantime, we want the top level
+   and stable sections to continue to be built from the existing stable branch,
+   but we want the website for the new branch to be available at ``/x.y``.
 3. You can check your work by comparing your changes to previous commits
-4. Commit and push your changes.  The system that runs this script fetches
-   changes automatically before running it, so the next run to start will
-   use the updated version.  It starts approximately on the hour, and can
-   take ~15 minutes if there are large changes, such as adding a whole new
-   branch...
+4. Commit and push your changes (or submit a PR).  There is a Github Action
+   on this repository that rebuilds the website once per hour, using the
+   current version of this script, so your changes will take effect at the
+   next run after they are merged to master.
 5. You should now be able to access a version of the website built from the
    new branch at `https://www.cyrusimap.org/<version>/`.  Check that in your
    browser, make sure it reports the correct new versions.
-6. You should also see a new "automatic commit" from "cyrusdocgen" on
-   https://github.com/cyrusimap/cyrusimap.github.io -- that's the result of
-   the run-gp.sh script having run.
 
 First beta
 ==========
@@ -363,11 +359,10 @@ For this one, we've got a little more housekeeping to do.
    numbers in the "rst_prolog" section.  Go through the old branches and
    update each's `docsrc/conf.py` to contain the same lie.  Commit and push
    these as you go.
-3. Remember the `run-gp.sh` script from the cyrusimap.org repository?  Go and
-   move the ``rsync ... $target`` and ``rsync ... $target/stable`` lines from
-   the block for what is now the previous stable release, into the block for
-   the new version (don't forget to update the numbers embedded in these lines
-   too).  Once this is pushed, the next website rebuild will make it all true.
+3. Remember the `build-cyrus-site` script from the cyrusimap.github.io
+   repository?  Go and remove the ``[ '/<version>', '/', '/stable ]`` slug from
+   the previous stable version and add it (changing the version!) to the new
+   one.  Once this is pushed, the next website rebuild will make it all true.
 4. Once the website is fully updated, send that announcement email.
 
 Post-release
