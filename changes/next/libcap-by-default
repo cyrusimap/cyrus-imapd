@@ -1,0 +1,27 @@
+Description:
+
+libcap is now used by default if it's available
+
+
+Documentation:
+
+There isn't any, except perhaps the libcap documentation
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+If you want libcap support, make sure you have libcap and the corresponding
+-dev package installed.  On Debian Bookworm, these are `libcap2` and
+`libcap-dev`.
+
+If you do not want libcap support, pass `--without-libcap` to configure.
+
+
+GitHub issue:
+
+None
