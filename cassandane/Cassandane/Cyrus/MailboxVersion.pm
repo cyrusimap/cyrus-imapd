@@ -47,7 +47,7 @@ use Net::CardDAVTalk 0.03;
 use Mail::JMAPTalk 0.15;
 use Data::Dumper;
 use Storable 'dclone';
-use MIME::Base64 qw(encode_base64);
+use MIME::Base64 qw(encode_base64 encode_base64url decode_base64url);
 use Encode qw(decode_utf8);
 use Cwd qw(abs_path getcwd);
 
@@ -203,6 +203,52 @@ sub lookup_email_id
     $self->assert_not_null($new_id);
 
     return $new_id;
+}
+
+sub index_file_for {
+    my ($self, $mailbox) = @_;
+
+    my $dir = $self->{instance}->folder_to_directory($mailbox);
+    my $file = "$dir/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file? ($!)" unless $fh;
+
+    xlog $self, "Reading index of $mailbox ($file)";
+
+    my $index = Cyrus::IndexFile->new($fh, strict_crc => 1);
+
+    # Log the contents to help debug failures later...
+    xlog $self, "Header: " . $index->header_longdump;
+
+    my $i = 0;
+
+    while (my $rec = $index->next_record) {
+        xlog $self, "Record $i: " . $index->record_longdump;
+
+        $i++;
+    }
+
+    $index->reset;
+
+    return $index;
+}
+
+sub index_file_records {
+    my ($self, $index) = @_;
+
+    my @recs;
+
+    while (my $rec = $index->next_record) {
+        $rec->{SystemFlags} = {
+            map {
+                $_ => 1,
+            } keys %{ $index->system_flags }
+        };
+
+        push @recs, $rec;
+    }
+
+    return @recs;
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/MailboxVersion';
