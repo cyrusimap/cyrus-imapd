@@ -5157,8 +5157,8 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         if (r) goto fail;
     }
 
-    if (repack->newmailbox.i.minor_version >= 10 &&
-            repack->mailbox->i.minor_version >= 10 &&
+    if (repack->newmailbox.i.minor_version > 10 &&
+            repack->mailbox->i.minor_version > 10 &&
             !mailbox_crceq(repack->newmailbox.i.synccrcs, repack->crcs)) {
         xsyslog(LOG_ERR, "IOERROR: CRC mismatch on repack commit",
                          "mailbox=<%s> oldbasic=<%u> newbasic=<%u> "
@@ -5179,6 +5179,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         int r = seen_open(repack->userid, SEEN_CREATE, &seendb);
         if (!r) r = seen_lockread(seendb, mailbox_uniqueid(repack->mailbox), &sd);
         if (!r) {
+            seen_freedata(&sd);
             sd.lastuid = repack->newmailbox.i.last_uid;
             sd.seenuids = seqset_cstring(repack->seqset);
             if (!sd.seenuids) sd.seenuids = xstrdup("");
