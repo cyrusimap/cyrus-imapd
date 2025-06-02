@@ -1950,7 +1950,7 @@ int propfind_getlength(const xmlChar *name, xmlNsPtr ns,
     buf_reset(&fctx->buf);
 
     if (fctx->record) {
-        buf_printf(&fctx->buf, "%u",
+        buf_printf(&fctx->buf, UINT64_FMT,
                    fctx->record->size - fctx->record->header_size);
     }
 
@@ -2978,7 +2978,7 @@ EXPORTED int propfind_quota(const xmlChar *name, xmlNsPtr ns,
     }
     else if (fctx->record) {
         /* Bytes used by resource */
-        buf_printf(&fctx->buf, "%u", fctx->record->size);
+        buf_printf(&fctx->buf, UINT64_FMT, fctx->record->size);
     }
     else if (fctx->mailbox) {
         /* Bytes used by calendar collection */
@@ -7653,7 +7653,8 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                            &uidvalidity, &syncmodseq, &basemodseq,
                            tokenuri /* test for trailing junk */);
 
-                syslog(LOG_DEBUG, "scanned token %s to %d %u %llu %llu",
+                syslog(LOG_DEBUG,
+                       "scanned token %s to %d %u " MODSEQ_FMT " " MODSEQ_FMT,
                        str, r, uidvalidity, syncmodseq, basemodseq);
                 /* Sanity check the token components */
                 if (r < 2 || r > 3 ||
