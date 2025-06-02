@@ -1364,7 +1364,7 @@ sub _make_fields {
 
     push @names, $Name;
     push @items, [$Name, $Type, $Size, $Num, $Pos];
-    push @packitems, _make_pack($Type, $Size);
+    push @packitems, _make_pack($Type, $Size, $Name);
 
     $Pos += $Size;
     $Num++;
@@ -1381,11 +1381,12 @@ sub _make_fields {
 sub _make_pack {
   my $format = shift;
   my $size = shift;
+  my $name = shift;
   if ($format eq 'int32' or $format eq 'time_t') {
     return 'N';
   }
-  elsif ($format eq 'int64' or $format eq 'time64') { # ignore start..
-    return 'x[N]N';
+  elsif ($format eq 'int64' or $format eq 'time64') {
+    return 'Q>';
   }
   elsif ($format eq 'bitmap') {
     return 'B' . (8 * $size);
