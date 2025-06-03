@@ -256,4 +256,35 @@ sub test_cyrus_indexfile_19
     $self->assert_num_equals(0, $index->record_offset_for('Uid'));
     $self->assert_num_equals(8, $index->record_offset_for('SentDate'));
     $self->assert_num_equals(108, $index->record_offset_for('RecordCrc'));
+
+    xlog $self, "Check times";
+
+    # A header field, and some special/non-special record fields
+    my %expect = map {
+        (
+            $_         => num(time, 60),
+            $_ . "_ns" => num(0),
+        )
+    } qw(RecentTime InternalDate SaveDate);
+
+    # cyrus clamps to day
+    $expect{SentDate} = num(time - (time % 86400), 60);
+    $expect{SentDate_ns} = 0;
+
+    my @recs = $self->index_file_records($index);
+    $self->assert_num_equals(1, 0+@recs);
+
+    my $rec = $recs[0];
+
+    my %got = (
+        RecentTime    => $index->tv_sec($index->header_copy->{RecentTime}),
+        RecentTime_ns => $index->tv_nsec($index->header_copy->{RecentTime}),
+    );
+
+    for my $rfield (qw(InternalDate SaveDate SentDate)) {
+        $got{$rfield} = $index->tv_sec($rec->{$rfield});
+        $got{$rfield . '_ns'} = $index->tv_nsec($rec->{$rfield});
+    }
+
+    $self->assert_cmp_deeply(\%expect, \%got);
 }
