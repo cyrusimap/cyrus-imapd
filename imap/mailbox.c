@@ -1883,28 +1883,35 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     /* v20 grew size of time fields and quota_annot_used to 64-bits
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (i->minor_version >= 20) {
-        i->last_appenddate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_APPENDDATE)));
+        TIMESPEC_FROM_NANOSEC(&i->last_appenddate,
+                              ntohll(*((bit64 *)(buf+OFFSET_LAST_APPENDDATE))));
         i->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
         i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
-        i->pop3_last_login.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN)));
+        TIMESPEC_FROM_NANOSEC(&i->pop3_last_login,
+                              ntohll(*((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN))));
         i->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
         i->options = ntohl(*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)));
         i->leaked_cache_records = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE)));
         i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ);
         i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ);
         i->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
-        i->first_expunged.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_FIRST_EXPUNGED)));
-        i->last_repack_time.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_REPACK_TIME)));
+        TIMESPEC_FROM_NANOSEC(&i->first_expunged,
+                              ntohll(*((bit64 *)(buf+OFFSET_FIRST_EXPUNGED))));
+        TIMESPEC_FROM_NANOSEC(&i->last_repack_time,
+                              ntohll(*((bit64 *)(buf+OFFSET_LAST_REPACK_TIME))));
         i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
         i->synccrcs.basic = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)));
         i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
-        i->recenttime.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_RECENTTIME)));
-        i->pop3_show_after.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+        TIMESPEC_FROM_NANOSEC(&i->recenttime,
+                              ntohll(*((bit64 *)(buf+OFFSET_RECENTTIME))));
+        TIMESPEC_FROM_NANOSEC(&i->pop3_show_after,
+                              ntohll(*((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER))));
         i->quota_annot_used = align_ntohll(buf+OFFSET_QUOTA_ANNOT_USED);
         i->synccrcs.annot = ntohl(*((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)));
         i->unseen = ntohl(*((bit32 *)(buf+OFFSET_UNSEEN)));
         i->createdmodseq = align_ntohll(buf+OFFSET_MAILBOX_CREATEDMODSEQ);
-        i->changes_epoch.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_CHANGES_EPOCH)));
+        TIMESPEC_FROM_NANOSEC(&i->changes_epoch,
+                              ntohll(*((bit64 *)(buf+OFFSET_CHANGES_EPOCH))));
         i->quota_deleted_used = align_ntohll(buf+OFFSET_QUOTA_DELETED_USED);
         i->quota_expunged_used = align_ntohll(buf+OFFSET_QUOTA_EXPUNGED_USED);
 
@@ -2159,7 +2166,8 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
     TIMESPEC_FROM_NANOSEC(&record->internaldate,
                           ntohll(*((bit64 *)(buf+OFFSET_INTERNALDATE))));
-    record->sentdate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_SENTDATE)));
+    TIMESPEC_FROM_NANOSEC(&record->sentdate,
+                          ntohll(*((bit64 *)(buf+OFFSET_SENTDATE))));
     record->size = ntohll(*((bit64 *)(buf+OFFSET_SIZE)));
     record->header_size = ntohl(*((bit32 *)(buf+OFFSET_HEADER_SIZE)));
     stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
@@ -2173,9 +2181,12 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
     record->cid = ntohll(*(bit64 *)(buf+OFFSET_CID));
     record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
-    record->gmtime.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_GMTIME)));
-    record->last_updated.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED)));
-    record->savedate.tv_sec = ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE)));
+    TIMESPEC_FROM_NANOSEC(&record->gmtime,
+                          ntohll(*((bit64 *)(buf+OFFSET_GMTIME))));
+    TIMESPEC_FROM_NANOSEC(&record->last_updated,
+                          ntohll(*((bit64 *)(buf+OFFSET_LAST_UPDATED))));
+    TIMESPEC_FROM_NANOSEC(&record->savedate,
+                          ntohll(*((bit64 *)(buf+OFFSET_SAVEDATE))));
     record->basecid = ntohll(*(bit64 *)(buf+OFFSET_BASECID));
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
@@ -2978,28 +2989,35 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
     /* v20 grew size of time fields and quota_annot_used to 64-bits
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (i->minor_version >= 20) {
-        *((bit64 *)(buf+OFFSET_LAST_APPENDDATE)) = htonll(i->last_appenddate.tv_sec);
+        *((bit64 *)(buf+OFFSET_LAST_APPENDDATE)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->last_appenddate));
         *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
         align_htonll(buf+OFFSET_QUOTA_MAILBOX_USED, i->quota_mailbox_used);
-        *((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonll(i->pop3_last_login.tv_sec);
+        *((bit64 *)(buf+OFFSET_POP3_LAST_LOGIN)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->pop3_last_login));
         *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
         *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
         *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
         align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
         align_htonll(buf+OFFSET_DELETEDMODSEQ, i->deletedmodseq);
         *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(i->exists);
-        *((bit64 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonll(i->first_expunged.tv_sec);
-        *((bit64 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonll(i->last_repack_time.tv_sec);
+        *((bit64 *)(buf+OFFSET_FIRST_EXPUNGED)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->first_expunged));
+        *((bit64 *)(buf+OFFSET_LAST_REPACK_TIME)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->last_repack_time));
         *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
         *((bit32 *)(buf+OFFSET_SYNCCRCS_BASIC)) = htonl(i->synccrcs.basic);
         *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
-        *((bit64 *)(buf+OFFSET_RECENTTIME)) = htonll(i->recenttime.tv_sec); 
-        *((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonll(i->pop3_show_after.tv_sec);
+        *((bit64 *)(buf+OFFSET_RECENTTIME)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->recenttime)); 
+        *((bit64 *)(buf+OFFSET_POP3_SHOW_AFTER)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->pop3_show_after));
         align_htonll(buf+OFFSET_QUOTA_ANNOT_USED, i->quota_annot_used);
         *((bit32 *)(buf+OFFSET_SYNCCRCS_ANNOT)) = htonl(i->synccrcs.annot);
         *((bit32 *)(buf+OFFSET_UNSEEN)) = htonl(i->unseen);
         align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
-        *((bit64 *)(buf+OFFSET_CHANGES_EPOCH)) = htonll(i->changes_epoch.tv_sec);
+        *((bit64 *)(buf+OFFSET_CHANGES_EPOCH)) =
+            htonll(TIMESPEC_TO_NANOSEC(&i->changes_epoch));
         align_htonll(buf+OFFSET_QUOTA_DELETED_USED, i->quota_deleted_used);
         align_htonll(buf+OFFSET_QUOTA_EXPUNGED_USED, i->quota_expunged_used);
         goto crc;
@@ -3391,7 +3409,8 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
     *((bit64 *)(buf+OFFSET_INTERNALDATE)) =
         htonll(TIMESPEC_TO_NANOSEC(&record->internaldate));
-    *((bit64 *)(buf+OFFSET_SENTDATE)) = htonll(record->sentdate.tv_sec);
+    *((bit64 *)(buf+OFFSET_SENTDATE)) =
+        htonll(TIMESPEC_TO_NANOSEC(&record->sentdate));
     *((bit64 *)(buf+OFFSET_SIZE)) = htonll(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
@@ -3405,9 +3424,12 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
     *((bit64 *)(buf+OFFSET_CID)) = htonll(record->cid);
     *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
-    *((bit64 *)(buf+OFFSET_GMTIME)) = htonll(record->gmtime.tv_sec);
-    *((bit64 *)(buf+OFFSET_LAST_UPDATED)) = htonll(record->last_updated.tv_sec);
-    *((bit64 *)(buf+OFFSET_SAVEDATE)) = htonll(record->savedate.tv_sec);
+    *((bit64 *)(buf+OFFSET_GMTIME)) =
+        htonll(TIMESPEC_TO_NANOSEC(&record->gmtime));
+    *((bit64 *)(buf+OFFSET_LAST_UPDATED)) =
+        htonll(TIMESPEC_TO_NANOSEC(&record->last_updated));
+    *((bit64 *)(buf+OFFSET_SAVEDATE)) =
+        htonll(TIMESPEC_TO_NANOSEC(&record->savedate));
     *((bit64 *)(buf+OFFSET_BASECID)) = htonll(record->basecid);
 
     offset_cache_crc  = OFFSET_CACHE_CRC;
