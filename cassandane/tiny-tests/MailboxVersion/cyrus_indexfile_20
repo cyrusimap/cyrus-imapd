@@ -259,4 +259,18 @@ sub test_cyrus_indexfile_20
 
         $self->assert_cmp_deeply(\%record_expect, $recs[0]);
     }
+
+    xlog $self, "Check offsets";
+
+    my $index = $self->index_file_for('user.cassandane.foo');
+
+    # Some header fields
+    $self->assert_num_equals(0, $index->header_offset_for('Generation'));
+    $self->assert_num_equals(88, $index->header_offset_for('LastUid'));
+    $self->assert_num_equals(188, $index->header_offset_for('HeaderCrc'));
+
+    # Some record fields
+    $self->assert_num_equals(0, $index->record_offset_for('Uid'));
+    $self->assert_num_equals(16, $index->record_offset_for('SentDate'));
+    $self->assert_num_equals(140, $index->record_offset_for('RecordCrc'));
 }
