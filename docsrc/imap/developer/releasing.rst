@@ -37,14 +37,14 @@ Release notes
 
 Write up the release notes, and add them to the appropriate location under
 ``docsrc/imap/download/release-notes/``.  They will not yet be linked up.
+Build the documentation locally with ``make doc-html``, then check the new
+release notes file in your brower to make sure it's correct and complete.
+It will be in ``doc/html/imap/download/release-notes/...``.
 
-Commit and push your changes, and then wait for cyrusimap.org to rebuild
-(happens each hour, and takes a few mins, so check at about 5 past).  The
-new release notes will be available at their direct URL -- easiest way to
-find it is to browse to some earlier version's release notes, then change
-version in the address bar to load up the new one.  Confirm that they are
-correct and complete.
-
+Commit the new release notes with a message like ``docs: release notes for
+cyrus-imapd <version>``, but don't push it yet.  You might want to keep these
+release commits on a separate branch for now, so you can rebase it if the real
+branch changes along the way.
 
 Pre-release testing
 ===================
@@ -73,8 +73,8 @@ Pre-release testing
    vi.   Run the unit tests: ``make -j4 check`` -- they should pass.
    vii.  Install it to your Cassandane prefix: ``make install``
    viii. Then run Cassandane normally -- it should pass.
-   ix.   If any of this fails, fix it, commit it, then restart the pre-release
-         testing.
+   ix.   If any of this fails, fix it, commit it, land it upstream, then
+         restart the pre-release testing.
 
 Linking up release notes
 ========================
@@ -85,19 +85,17 @@ point, but for now the easiest thing to do is look for lines containing the
 previous version and, if it makes sense to do so, update them to contain the
 new version.
 
-After this change is committed and pushed upstream, the cyrusimap.org website
-will start showing the new version as the "current" version at the next hourly
-update.  So ellie likes to do this step at about 5-10 past the hour, which then
-gives her 50 minutes to finish the rest of the release process without the
-website updating before the downloads are available.
+Commit this on your WIP branch with a message like ``docs: cyrus-imapd
+<version> released``.  This is usually the commit you'll end up tagging as the
+release.
 
 
 Version tagging
 ===============
 
-Note: it is absolutely critical that your repository is clean and your local
-commits have been pushed upstream at this point.  If they are not, and if
-anybody else pushes in the meantime, you will end up with a mess.
+Note: it is critical that your local copy of the branch you'll be releasing to
+is clean and up to date, and that your WIP branch (if any) is a direct
+descendant of it, otherwise you may end up with a mess later.
 
 1. Ensure your repository is clean again: ``git clean -dfx``
 2. Create a signed, annotated tag for the new version: ``git tag -s cyrus-imapd-<version>``
@@ -121,7 +119,10 @@ anybody else pushes in the meantime, you will end up with a mess.
 9. Sign the distribution tarball: ``gpg --sign -b cyrus-imapd-<version>.tar.gz``
 10. Ellie also likes to copy the tarball and signature file somewhere safe,
     just in case something happens between now and uploading.
-11. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
+11. If you've been using a WIP branch for the release notes and docsrc/conf.py
+    changes, fast forward your commits onto the real branch and push it
+    upstream.
+12. Push the tag upstream: ``git push ci cyrus-imapd-<version>`` (assuming your
     remote is named "ci").
 
 
@@ -132,20 +133,25 @@ The website is built from an amalgamation of documentation from:
 
 * The current stable cyrus-imapd branch (top level)
 * The current master cyrus-imapd branch (``/dev`` hierarchy)
-* Each of the following cyrus-imapd branches (``/x.y`` hierarchies)
-
-    - cyrus-imapd-2.5
-    - cyrus-imapd-3.0
-    - cyrus-imapd-3.2
-
+* The release-numbered cyrus-imapd branches (``/x.y`` hierarchies)
 * The current master cyrus-sasl branch (``/sasl`` hierarchy)
 
 When making a cyrus-imapd release, you need to add the new release notes
-file to each relevant cyrus-imapd branch.  You also need to check and
-update the contents of ``docsrc/conf.py`` on each branch AND the cyrus-sasl
-repository.
+file to each relevant cyrus-imapd branch, including master and the current
+stable branch.  You also need to check and update the contents of
+``docsrc/conf.py`` on each branch AND the cyrus-sasl repository.
 
-This step often gets forgotten, so if you actually follow it, and notice
+For the cyrus-imapd branches, you can mostly just cherry-pick the two release
+commits around.  The docsrc/conf.py changes may not pick cleanly to the master
+branch but it's not hard to figure out how to massage it.
+
+For cyrus-sasl, manually update its docsrc/conf.py with the correct cyrus-imapd
+version numbers, commit it with a similar message, and push it.  If in doubt,
+have a look at previous commits that modified this file for inspiration.  If
+you don't have push access to the cyrus-sasl repository, check with someone who
+does.
+
+This step sometimes gets forgotten, so if you actually follow it, and notice
 some missing versions, just go ahead and add them while you're there.
 
 Uploading
