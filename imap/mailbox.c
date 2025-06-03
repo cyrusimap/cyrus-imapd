@@ -2071,7 +2071,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
 
     if (version < 10) {
         /* modseq was at 72 before the GUID move */
-        record->modseq = ntohll(*((bit64 *)(buf+72)));
+        record->modseq = align_ntohll(buf+72);
         return 0;
     }
 
