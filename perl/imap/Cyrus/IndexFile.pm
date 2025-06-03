@@ -1357,23 +1357,28 @@ sub _make_fields {
   my @names;
   my @items;
   my @packitems;
+  my %offsets;
   my $Pos = 0;
   my $Num = 0;
+  my $Offset = 0;
   foreach my $line (@lines) {
     my ($Name, $Type, $Size) = split /\s+/, $line;
 
     push @names, $Name;
     push @items, [$Name, $Type, $Size, $Num, $Pos];
     push @packitems, _make_pack($Type, $Size, $Name);
+    $offsets{$Name} = $Offset;
 
     $Pos += $Size;
     $Num++;
+    $Offset += $Size;
   }
 
   return (
     $prefix . 'Names' => { map { $names[$_] => $_ } 0..$#names },
     $prefix . 'Fields' => \@items,
     $prefix . 'Pack' => join("", @packitems),
+    $prefix . 'Offsets' => \%offsets,
   );
 }
 
@@ -2307,6 +2312,32 @@ sub latest_version {
   my ($latest) = reverse sort { $a <=> $b } keys %$VersionFormats;
 
   return $latest;
+}
+
+=item $index->header_offset_for($field)
+
+Return the byte offset for C<$field> in the header at the version of this
+index file.
+
+=item $index->record_offset_for($field)
+
+Return the byte offset for C<$field> in the record at the version of this
+index file.
+
+=cut
+
+sub header_offset_for {
+  my $Self = shift;
+  my $field = shift;
+
+  return $Self->{format}{HeaderOffsets}{$field};
+}
+
+sub record_offset_for {
+  my $Self = shift;
+  my $field = shift;
+
+  return $Self->{format}{RecordOffsets}{$field};
 }
 
 =item AUTHOR AND COPYRIGHT
