@@ -2340,6 +2340,42 @@ sub record_offset_for {
   return $Self->{format}{RecordOffsets}{$field};
 }
 
+=item $index->tv_sec($time)
+
+Return the seconds portion of a time_t or time64 field. (Prior to version 20
+all time fields were time_t and only had seconds).
+
+Must only be called on an instantiated object because the mailbox version is
+required to know the size of time fields.
+
+=item Cyrus::IndexFile->tv_nsec($time)
+
+Return the nanoseconds portion of a time64 field, or 0 for time_t fields.
+(Prior to version 20 all time fields were time_t and only had seconds).
+
+Must only be called on an instantiated object because the mailbox version is
+required to know the size of time fields.
+
+=item $index->tv_nsec($ns)
+
+=cut
+
+sub tv_sec {
+  my $Self = shift;
+  my $time = shift;
+
+  return $Self->{header}{MinorVersion} < 20 ? $time
+                                            : int($time / 1_000_000_000);
+}
+
+sub tv_nsec {
+  my $Self = shift;
+  my $time = shift;
+
+  return $Self->{header}{MinorVersion} < 20 ? 0
+                                            : $time % 1_000_000_000;
+}
+
 =item AUTHOR AND COPYRIGHT
 
 Bron Gondwana <brong@fastmailteam.com> - Copyright 2018 FastMail
