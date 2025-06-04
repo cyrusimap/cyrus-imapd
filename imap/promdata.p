@@ -70,6 +70,12 @@ metric counter cyrus_imap_unsubscribe_total             The total number of IMAP
 metric counter cyrus_imap_unselect_total                The total number of IMAP UNSELECTs
 metric counter cyrus_imap_xbackup_total                 The total number of IMAP XBACKUPs
 
+metric counter cyrus_pop3_connections_total             The total number of POP3 connections
+metric gauge   cyrus_pop3_active_connections            The number of active POP3 connections
+metric gauge   cyrus_pop3_ready_listeners               The number of currently ready POP3 listeners
+metric counter cyrus_pop3_shutdown_total                The number of POP3 process shutdowns
+    label cyrus_pop3_shutdown_total status ok error
+
 metric counter cyrus_lmtp_connections_total             The total number of LMTP connections
 metric gauge   cyrus_lmtp_active_connections            The number of active LMTP connections
 metric gauge   cyrus_lmtp_ready_listeners               The number of currently ready LMTP listeners

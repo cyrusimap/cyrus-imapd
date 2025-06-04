@@ -88,6 +88,7 @@
 #include "sync_support.h"
 #include "seen.h"
 #include "userdeny.h"
+#include "prometheus.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -460,6 +461,8 @@ int service_init(int argc __attribute__((unused)),
         }
     }
 
+    prometheus_increment(CYRUS_POP3_READY_LISTENERS);
+
     return 0;
 }
 
@@ -473,6 +476,10 @@ int service_main(int argc __attribute__((unused)),
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops=NULL;
     struct mboxevent *mboxevent = NULL;
+
+    /* fatal/shut_down will adjust these, so we need to set them early */
+    prometheus_decrement(CYRUS_POP3_READY_LISTENERS);
+    prometheus_increment(CYRUS_POP3_ACTIVE_CONNECTIONS);
 
     if (config_iolog) {
         io_count_start = xmalloc (sizeof (struct io_count));
@@ -490,6 +497,9 @@ int service_main(int argc __attribute__((unused)),
     count_retr = 0;
     count_top = 0;
     count_dele = 0;
+
+    /* count the connection, now that it's established */
+    prometheus_increment(CYRUS_POP3_CONNECTIONS_TOTAL);
 
     /* Find out name of client host */
     popd_clienthost = get_clienthost(0, &localip, &remoteip);
@@ -551,6 +561,8 @@ int service_main(int argc __attribute__((unused)),
 
     /* QUIT executed */
 
+    prometheus_decrement(CYRUS_POP3_ACTIVE_CONNECTIONS);
+
     /* send a Logout event notification */
     if ((mboxevent = mboxevent_new(EVENT_LOGOUT))) {
         mboxevent_set_access(mboxevent,
@@ -578,6 +590,8 @@ int service_main(int argc __attribute__((unused)),
         free(io_count_stop);
     }
 
+    prometheus_increment(CYRUS_POP3_READY_LISTENERS);
+
     return 0;
 }
 
@@ -589,6 +603,9 @@ void service_abort(int error)
 
 static void usage(void)
 {
+    if (kflag) prometheus_decrement(CYRUS_POP3_ACTIVE_CONNECTIONS);
+    prometheus_increment(CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_ERROR);
+
     prot_printf(popd_out, "-ERR usage: pop3d [-C <alt_config>] [-k] [-s]\r\n");
     prot_flush(popd_out);
     exit(EX_USAGE);
@@ -644,6 +661,12 @@ void shut_down(int code)
         prot_flush(popd_out);
         bytes_out = prot_bytes_out(popd_out);
         prot_free(popd_out);
+        /* one less active connection */
+        prometheus_decrement(CYRUS_POP3_ACTIVE_CONNECTIONS);
+    }
+    else {
+        /* one less ready listener */
+        prometheus_decrement(CYRUS_POP3_READY_LISTENERS);
     }
 
     if (config_auditlog)
@@ -654,6 +677,9 @@ void shut_down(int code)
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
 #endif
+
+    prometheus_increment(code ? CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_ERROR
+                              : CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_OK);
 
     saslprops_free(&saslprops);
 
@@ -678,6 +704,16 @@ EXPORTED void fatal(const char* s, int code)
 
     if (recurse_code) {
         /* We were called recursively. Just give up */
+        if (popd_out) {
+            /* one less active connection */
+            prometheus_decrement(CYRUS_POP3_ACTIVE_CONNECTIONS);
+        }
+        else {
+            /* one less ready listener */
+            prometheus_decrement(CYRUS_POP3_READY_LISTENERS);
+        }
+        prometheus_increment(CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_ERROR);
+
         proc_cleanup();
         exit(recurse_code);
     }
