@@ -233,6 +233,9 @@ HIDDEN int http_jwt_init(const char *keydir, int age)
 {
     http_jwt_reset();
 
+#ifndef HAVE_FTS
+    return 0;
+#else
     int r = -1;
 
     char *paths[2] = { (char *) keydir, NULL };
@@ -277,6 +280,7 @@ done:
     if (fts) fts_close(fts);
     if (r) http_jwt_reset();
     return r;
+#endif /* HAVE_FTS */
 }
 
 HIDDEN int http_jwt_is_enabled(void)
