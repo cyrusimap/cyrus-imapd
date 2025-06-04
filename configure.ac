@@ -1081,6 +1081,11 @@ AC_SEARCH_LIBS([clock_gettime], [rt], [], [
     AC_MSG_ERROR([unable to find the clock_gettime() function])
 ])
 
+dnl check for fts_open
+AC_SEARCH_LIBS([fts_open], [fts], [
+    AC_DEFINE(HAVE_FTS,[],[Do we have fts_open()?])
+], [])
+
 dnl check for libuuid (used when generating mailbox uniqueids)
 LIB_UUID=
 AC_CHECK_LIB(uuid, uuid_generate,[
