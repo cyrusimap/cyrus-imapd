@@ -895,7 +895,7 @@ static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linel
     else if (sasl_cmd->cont) {
         str += strlen(sasl_cmd->cont); /* jump past the continuation */
     }
-    else if (sasl_cmd->quote) {
+    else if (*str == '"') {
         /* remove quotes */
         char *src = str, *dst = str;
         while (*src) {
