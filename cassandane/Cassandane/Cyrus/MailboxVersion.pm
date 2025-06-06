@@ -50,6 +50,7 @@ use Storable 'dclone';
 use MIME::Base64 qw(encode_base64 encode_base64url decode_base64url);
 use Encode qw(decode_utf8);
 use Cwd qw(abs_path getcwd);
+use POSIX qw(mktime);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -249,6 +250,19 @@ sub index_file_records {
     }
 
     return @recs;
+}
+
+sub sentdate_ts {
+    my ($self, $seconds) = @_;
+
+    my @lt = localtime($seconds);
+
+    # zero out sec/min/hour to truncate to day
+    $lt[0] = $lt[1] = $lt[2] = 0;
+
+    # Cyrus stores sentdate offset by local timezone, not UTC, so we need
+    # mktime to calculate that for us like cyrus does
+    return mktime(@lt);
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/MailboxVersion';
