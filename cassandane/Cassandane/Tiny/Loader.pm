@@ -1,5 +1,5 @@
 package Cassandane::Tiny::Loader;
-use strict;
+use v5.26.0;
 use warnings;
 
 use Carp ();
@@ -26,7 +26,16 @@ sub import {
   for my $test (sort @tests) {
     local $RELOADED;
 
-    unless (eval "package $into; do qq{$test}; die \$@ if \$@; 1") {
+    open(my $test_fh, '<', $test) or die "can't read test file $test: $!";
+    my $test_code = do { local $/; <$test_fh> };
+
+    $test_code = qq{use warnings FATAL => 'redefine';\n}
+               . qq{package $into;\n}
+               . qq{# line 1 "$test"\n}
+               . $test_code
+               . qq{\n1; # <- magic true value\n};
+
+    unless (evalbytes $test_code) {
       Carp::confess("tried to load $test but it failed: $@");
     }
 
