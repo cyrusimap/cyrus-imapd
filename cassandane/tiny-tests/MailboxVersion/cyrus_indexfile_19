@@ -129,7 +129,10 @@ sub test_cyrus_indexfile_19
         InternalDate  => num(time, 60),
         LastUpdated   => num(time, 60),
         SaveDate      => num(time, 60),
-        SentDate      => num(time - (time % 86400), 60), # cyrus clamps to day
+        SentDate      => any(
+            $self->sentdate_ts(time), # Start of today
+            $self->sentdate_ts(time) - 86400, # Start of yesterday
+        ),
 
         CacheCrc      => ignore(),
         RecordCrc     => ignore(),
@@ -267,8 +270,10 @@ sub test_cyrus_indexfile_19
         )
     } qw(RecentTime InternalDate SaveDate);
 
-    # cyrus clamps to day
-    $expect{SentDate} = num(time - (time % 86400), 60);
+    $expect{SentDate} = any(
+        $self->sentdate_ts(time), # Start of today
+        $self->sentdate_ts(time) - 86400, # Start of yesterday
+    );
     $expect{SentDate_ns} = 0;
 
     my @recs = $self->index_file_records($index);
