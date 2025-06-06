@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <stdbool.h>
 #include <string.h>
 #include <syslog.h>
 #include <errno.h>
