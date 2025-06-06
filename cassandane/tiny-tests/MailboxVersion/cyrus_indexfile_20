@@ -144,8 +144,8 @@ sub test_cyrus_indexfile_20
         #   - account for day wrapping to next by the time we get here by
         #   - allowing SentDate to be start of *yesterday*
         SentDate      => any(
-            num((time - (time % 86400)) * $ns_in_a_sec, $sixty_sec_ns),
-            num((time - (time % 86400) - 86400) * $ns_in_a_sec, $sixty_sec_ns),
+            $self->sentdate_ts(time) * $ns_in_a_sec, # Start of today
+            ($self->sentdate_ts(time) - 86400) * $ns_in_a_sec, # Start of yesterday
         ),
 
         CacheCrc      => ignore(),
@@ -289,7 +289,10 @@ sub test_cyrus_indexfile_20
     $expect{InternalDate_ns} = num(0, 1000000000);
 
     # cyrus clamps to day
-    $expect{SentDate} = num(time - (time % 86400), 60);
+    $expect{SentDate} = any(
+        $self->sentdate_ts(time), # Start of today
+        $self->sentdate_ts(time) - 86400, # Start of yesterday
+    ),
     $expect{SentDate_ns} = 0;
 
     my @recs = $self->index_file_records($index);
