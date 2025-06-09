@@ -591,9 +591,6 @@ static int read_header(struct twom_db *db, struct tm_file *file, struct tm_heade
     assert(db && file);
     const char *base = file->base;
 
-    if (file->size < HEADER_SIZE + DUMMY_SIZE)
-        return TWOM_BADFORMAT;
-
     if (memcmp(base, HEADER_MAGIC, HEADER_MAGIC_SIZE))
         return TWOM_BADFORMAT;
 
@@ -1643,6 +1640,18 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         db->openfile = file;
     }
 
+    // empty file is same as nothing
+    if (!sbuf.st_size) {
+        r = TWOM_NOTFOUND;
+        goto done;
+    }
+
+    // any other tiny file isn't this format
+    if (sbuf.st_size < HEADER_SIZE + DUMMY_SIZE) {
+        r = TWOM_BADFORMAT;
+        goto done;
+    }
+
     // if we haven't mapped enough space, do it now
     if (file->size < (size_t)sbuf.st_size) {
         if (file->size) munmap(file->base, file->size);
@@ -1750,11 +1759,6 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
             goto done;
         }
 
-        if (sbuf.st_size < HEADER_SIZE + DUMMY_SIZE) {
-            r = TWOM_BADFORMAT;
-            goto done;
-        }
-
         // we're not interested in getting the latest file
         if (forcefile) break;
 
@@ -1784,6 +1788,18 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
         file->fd = newfd;
         file->next = db->openfile;
         db->openfile = file;
+    }
+
+    // empty file is same as nothing
+    if (!sbuf.st_size) {
+        r = TWOM_NOTFOUND;
+        goto done;
+    }
+
+    // any other tiny file isn't this format
+    if (sbuf.st_size < HEADER_SIZE + DUMMY_SIZE) {
+        r = TWOM_BADFORMAT;
+        goto done;
     }
 
     // if the existing map it too small, replace it
@@ -1970,11 +1986,19 @@ static int opendb(const char *fname, struct twom_open_data *setup, struct twom_d
     if (db->readonly || !txnp) {
         /* grab a read lock to read the header */
         r = read_lock(db, txnp, NULL, setup->flags);
+        if (r == TWOM_NOTFOUND && !db->readonly) {
+            r = initdb(db, setup->flags);
+            if (!r) r = read_lock(db, txnp, NULL, setup->flags);
+        }
         if (r) goto done;
     }
     else {
         /* go straight for a write lock and hold it */
         r = write_lock(db, txnp, NULL, setup->flags);
+        if (r == TWOM_NOTFOUND) {
+            r = initdb(db, setup->flags);
+            if (!r) r = write_lock(db, txnp, NULL, setup->flags);
+        }
         if (r) goto done;
     }
 
