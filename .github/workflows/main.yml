@@ -18,20 +18,25 @@ env:
 
 jobs:
   build:
-    name: Cassandane
+    name: "${{ matrix.desc }}"
     strategy:
       fail-fast: false
       matrix:
         include:
           - compiler: "--gcc"
+            desc: "gcc w/cass"
           - compiler: "--clang"
+            desc: "clang w/cass"
           - compiler: "--gcc"
+            desc: "gcc+ubsan w/cass"
             san: "--ubsan"
           - compiler: "--gcc"
+            desc: "gcc+asan w/cass"
             san: "--asan"
             skip: "!Cyrus::Sieve.badscript_timsieved !Cyrus::LibCyrus"
           - compiler: "--gcc"
             # -Og finds more errors at compile time
+            desc: "gcc -Og cunit"
             cflags: "-Og"
             cxxflags: "-Og"
             skip-cass: 1
