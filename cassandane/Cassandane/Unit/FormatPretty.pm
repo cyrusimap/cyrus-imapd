@@ -157,15 +157,23 @@ sub print_errors
     $self->_print($msg);
 
     my $i = 0;
+
+    my $annotations;
+
     for my $e (@{$result->errors()}) {
         my ($test, $errors) = split(/\n/, $e->to_string(), 2);
         chomp $errors;
         my $prettytest = _prettytest($test);
         $self->_print("\n") if $i++;
         $self->_print($self->ansi([31], "$i) $prettytest") . "\n$errors\n");
-        $self->_print("\nAnnotations:\n", $e->object->annotations())
-          if $e->object->annotations();
+
+        # These will always be the same since they share the same test object
+        # so we just need one of them...
+        $annotations ||= \$e->object->annotations();
     }
+
+    $self->_print("\nAnnotations:\n", $$annotations)
+        if $$annotations;
 
     if ($saved_output_stream) {
         $self->{fh} = $saved_output_stream;

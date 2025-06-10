@@ -1128,8 +1128,9 @@ sub tear_down
             xlog "errors found during instance shutdown";
         }
         else {
-            # maybe there's multiple errors, but we can only die once...
-            die $stop_errors[0];
+            # We can't die in here or it'll swallow exceptions from the test if
+            # there were any. Ugh.
+            $self->{stop_errors} = \@stop_errors;
         }
     }
 
