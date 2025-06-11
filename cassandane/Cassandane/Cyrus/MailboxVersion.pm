@@ -189,6 +189,40 @@ sub upgrade_19_to_20
     # Replica gets created at version 20 / mailbox version 2 so can't test...
 }
 
+# This currently *only* downgrades the mailbox, it does not downgrade the
+# conversations db!
+sub downgrade_20_to_19
+{
+    my ($self, $user) = @_;
+
+    {
+        $user //= "cassandane";
+
+        xlog $self, "Upgrade master mailbox version 20 -> 19 for $user";
+
+        my $res = $self->{instance}->run_command_capture(
+            { cyrus => 1 },
+            qw(reconstruct -V 19 -u), $user,
+        );
+
+        $self->assert_num_equals(0, $res->status);
+        $self->assert_str_equals("", $res->stderr);
+
+        my @lines = split(/\n/, $res->stdout);
+        $self->assert_num_not_equals(0, 0+@lines);
+
+        my $user_lp = $user =~ s/@.*//r;
+
+        for my $line (@lines) {
+            next if $line =~ /^FAILED TO REPACK DELETED\.user\.$user\./;
+            $self->assert_matches(
+                qr/^Converted user\.$user(\.[^\s]+)? version 20 to 19/,
+                $line
+            );
+        }
+    }
+}
+
 sub lookup_email_id
 {
     my ($self, $oldid) = @_;
