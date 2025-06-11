@@ -40,6 +40,9 @@ jobs:
             cflags: "-Og"
             cxxflags: "-Og"
             skip-cass: 1
+          - compiler: "--gcc"
+            desc: "Non-UTC timezone"
+            pretest: "ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime && sudo dpkg-reconfigure --frontend noninteractive tzdata"
     runs-on: ubuntu-latest
     container:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
@@ -60,6 +63,10 @@ jobs:
         # following".  we're explicitly fetching the tags we want, we do not
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
+    - name: Run pre-test code if any
+      if: ${{ matrix.pretest }}
+      shell: bash
+      run: ${{ matrix.pretest }}
     - name: configure and build
       shell: bash
       run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}" --cflags "${{ matrix.cflags }}" --cxxflags "${{ matrix.cxxflags }}"
