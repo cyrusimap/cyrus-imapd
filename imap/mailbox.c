@@ -1871,7 +1871,9 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     i->start_offset = ntohl(*((bit32 *)(buf+OFFSET_START_OFFSET)));
     i->record_size = ntohl(*((bit32 *)(buf+OFFSET_RECORD_SIZE)));
     if (i->start_offset != headerlen ||
-        i->record_size != index_record_size[i->minor_version]) {
+        (i->record_size != index_record_size[i->minor_version] &&
+         // allow reading "bad" files with v19 header, but v20 record sizes
+         (i->minor_version != 19 || i->record_size != index_record_size[20]))) {
         return IMAP_MAILBOX_BADFORMAT;
     }
 
