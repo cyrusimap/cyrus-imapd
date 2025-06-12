@@ -260,7 +260,7 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
 {
     if (!part) return 0;
 
-    if (!strcmp(part->type, "MULTIPART")) {
+    if (!strcmpsafe(part->type, "MULTIPART")) {
         int i;
         for (i = 0; i < part->numparts; i++) {
             if (jmap_email_hasattachment(part->subpart + i, imagesize_by_partid)) {
@@ -270,7 +270,7 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
         return 0;
     }
 
-    if (!strcmp(part->type, "IMAGE")) {
+    if (!strcmpsafe(part->type, "IMAGE")) {
         if (!strcmpsafe(part->disposition, "ATTACHMENT")) {
             return 1;
         }
@@ -307,35 +307,35 @@ HIDDEN int jmap_email_hasattachment(const struct body *part,
     if (filename) return 1;
 
     /* Signatures are no attachments */
-    if (!strcmp(part->type, "APPLICATION") &&
-            (!strcmp(part->subtype, "PGP-KEYS") ||
-             !strcmp(part->subtype, "PGP-SIGNATURE") ||
-             !strcmp(part->subtype, "PKCS7-SIGNATURE") ||
-             !strcmp(part->subtype, "X-PKCS7-SIGNATURE"))) {
+    if (!strcmpsafe(part->type, "APPLICATION") &&
+            (!strcmpsafe(part->subtype, "PGP-KEYS") ||
+             !strcmpsafe(part->subtype, "PGP-SIGNATURE") ||
+             !strcmpsafe(part->subtype, "PKCS7-SIGNATURE") ||
+             !strcmpsafe(part->subtype, "X-PKCS7-SIGNATURE"))) {
         return 0;
     }
 
     /* Unnamed octet streams are no attachments */
-    if (!strcmp(part->type, "APPLICATION") &&
-            !strcmp(part->subtype, "OCTET-STREAM")) {
+    if (!strcmpsafe(part->type, "APPLICATION") &&
+            !strcmpsafe(part->subtype, "OCTET-STREAM")) {
         return 0;
     }
 
     /* All of the following are attachments */
-    if ((!strcmp(part->type, "APPLICATION") &&
-                !strcmp(part->subtype, "PDF"))) {
+    if ((!strcmpsafe(part->type, "APPLICATION") &&
+                !strcmpsafe(part->subtype, "PDF"))) {
         return 1;
     }
-    else if (!strcmp(part->type, "MESSAGE")) {
+    else if (!strcmpsafe(part->type, "MESSAGE")) {
         // any message/* is an attachment
         return 1;
     }
-    else if ((!strcmp(part->type, "TEXT") &&
-                !strcmp(part->subtype, "RFC822"))) {
+    else if ((!strcmpsafe(part->type, "TEXT") &&
+                !strcmpsafe(part->subtype, "RFC822"))) {
         return 1;
     }
-    else if ((!strcmp(part->type, "TEXT") &&
-                !strcmp(part->subtype, "CALENDAR"))) {
+    else if ((!strcmpsafe(part->type, "TEXT") &&
+                !strcmpsafe(part->subtype, "CALENDAR"))) {
         return 1;
     }
 
@@ -369,17 +369,17 @@ static int _email_extract_bodies_internal(const struct body *parts,
 
         /* Determine part type */
         enum parttype parttype = OTHER;
-        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN"))
+        if (!strcmpsafe(part->type, "TEXT") && !strcmpsafe(part->subtype, "PLAIN"))
             parttype = PLAIN;
-        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "RICHTEXT"))
+        else if (!strcmpsafe(part->type, "TEXT") && !strcmpsafe(part->subtype, "RICHTEXT"))
             parttype = PLAIN; // RFC 1341
-        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "ENRICHED"))
+        else if (!strcmpsafe(part->type, "TEXT") && !strcmpsafe(part->subtype, "ENRICHED"))
             parttype = PLAIN; // RFC 1563
-        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "HTML"))
+        else if (!strcmpsafe(part->type, "TEXT") && !strcmpsafe(part->subtype, "HTML"))
             parttype = HTML;
-        else if (!strcmp(part->type, "MULTIPART"))
+        else if (!strcmpsafe(part->type, "MULTIPART"))
             parttype = MULTIPART;
-        else if (!strcmp(part->type, "IMAGE") || !strcmp(part->type, "AUDIO") || !strcmp(part->type, "VIDEO"))
+        else if (!strcmpsafe(part->type, "IMAGE") || !strcmpsafe(part->type, "AUDIO") || !strcmpsafe(part->type, "VIDEO"))
             parttype = INLINE_MEDIA;
 
         /* Determine disposition name, if any. */
@@ -413,7 +413,7 @@ static int _email_extract_bodies_internal(const struct body *parts,
         if (parttype == MULTIPART) {
             _email_extract_bodies_internal(part->subpart, part->numparts,
                     part->subtype,
-                    in_alternative || !strcmp(part->subtype, "ALTERNATIVE"),
+                    in_alternative || !strcmpsafe(part->subtype, "ALTERNATIVE"),
                     textlist, htmllist, attslist);
         }
         else if (is_inline) {
