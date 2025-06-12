@@ -1106,13 +1106,13 @@ static void display_part(struct transaction_t *txn,
         /* multipart */
         int i = 0;
 
-        if (!strcmp(body->subtype, "ALTERNATIVE") &&
-            !strcmp(body->subpart[0].type, "TEXT")) {
+        if (!strcmpsafe(body->subtype, "ALTERNATIVE") &&
+            !strcmpsafe(body->subpart[0].type, "TEXT")) {
             /* Look for a multipart/ or text/html subpart to display first,
                otherwise start with first subpart */
             for (i = body->numparts; --i;) {
-                if (!strcmp(body->subpart[i].type, "MULTIPART") ||
-                    !strcmp(body->subpart[i].subtype, "HTML")) break;
+                if (!strcmpsafe(body->subpart[i].type, "MULTIPART") ||
+                    !strcmpsafe(body->subpart[i].subtype, "HTML")) break;
             }
         }
 
@@ -1225,10 +1225,10 @@ static void display_part(struct transaction_t *txn,
     else {
         /* Leaf part - display something */
 
-        if (!strcmp(body->type, "TEXT") &&
+        if (!strcmpsafe(body->type, "TEXT") &&
             (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
             /* Display non-attachment text part */
-            int ishtml = !strcmp(body->subtype, "HTML");
+            int ishtml = !strcmpsafe(body->subtype, "HTML");
             charset_t charset = charset_lookupname(body->charset_id);
             int encoding = body->charset_enc;
 
@@ -1248,7 +1248,7 @@ static void display_part(struct transaction_t *txn,
             if (!ishtml) buf_printf_markup(buf, level, "</pre>");
         }
         else {
-            int is_image = !strcmp(body->type, "IMAGE");
+            int is_image = !strcmpsafe(body->type, "IMAGE");
             struct param *param = body->params;
             const char *file_attr = "NAME";
 

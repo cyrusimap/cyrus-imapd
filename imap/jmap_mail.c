@@ -925,7 +925,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
     if (bodies->textlist.count == 1) {
         int is_encoding_problem = 0;
         struct body *part = ptrarray_nth(&bodies->textlist, 0);
-        if (!strcasecmp(part->type, "TEXT") &&
+        if (!strcasecmpsafe(part->type, "TEXT") &&
                 !strcasecmpsafe(part->subtype, "PLAIN")) {
             return decode_to_utf8cstr(part->charset_id,
                     msg_buf->s + part->content_offset,
@@ -944,7 +944,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
 
         if (i && buf_len(&buf)) buf_appendcstr(&buf, "\n");
 
-        if (!strcasecmp(part->type, "TEXT") &&
+        if (!strcasecmpsafe(part->type, "TEXT") &&
                 !strcasecmpsafe(part->subtype, "PLAIN")) {
             int is_encoding_problem = 0;
             char *t = decode_to_utf8cstr(part->charset_id,
@@ -955,7 +955,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
             if (t) buf_appendcstr(&buf, t);
             free(t);
         }
-        else if (!strcmp(part->type, "IMAGE")) {
+        else if (!strcmpsafe(part->type, "IMAGE")) {
             struct param *param;
             const char *fname = NULL;
             for (param = part->disposition_params; param; param = param->next) {
@@ -1025,7 +1025,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
     int i;
     for (i = 0; i < bodies->textlist.count; i++) {
         struct body *part = ptrarray_nth(&bodies->textlist, 0);
-        if (!strcasecmp(part->type, "TEXT") &&
+        if (!strcasecmpsafe(part->type, "TEXT") &&
                 !strcasecmpsafe(part->subtype, "HTML")) {
             has_html = 1;
             break;
@@ -1058,7 +1058,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
          * already be an <img> tag for their Content-Id
          * header value. If this turns out to be not enough,
          * we can insert the <img> tags here. */
-        if (strcasecmp(part->type, "TEXT"))
+        if (strcasecmpsafe(part->type, "TEXT"))
             continue;
 
         if (!i)
@@ -1070,7 +1070,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
                                   part->content_size,
                                   part->encoding,
                                   &is_encoding_problem);
-        if (t && !strcmp(part->subtype, "HTML")) {
+        if (t && !strcmpsafe(part->subtype, "HTML")) {
             _html_concat_div(&buf, t);
         }
         else if (t) {
@@ -6908,7 +6908,7 @@ static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
 {
     if (!body) return;
 
-    if (!strcmp(body->type, "MULTIPART")) {
+    if (!strcmpsafe(body->type, "MULTIPART")) {
         struct buf buf = BUF_INITIALIZER;
         int i;
         for (i = 0; i < body->numparts; i++) {
@@ -6929,9 +6929,9 @@ static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
             body->part_id = buf_release(&buf);
         }
 
-        if (!strcmp(body->type, "MESSAGE") &&
-            (!strcmp(body->subtype, "RFC822") ||
-             !strcmp(body->subtype, "GLOBAL"))) {
+        if (!strcmpsafe(body->type, "MESSAGE") &&
+            (!strcmpsafe(body->subtype, "RFC822") ||
+             !strcmpsafe(body->subtype, "GLOBAL"))) {
             _cyrusmsg_init_partids(body->subpart, body->part_id);
         }
     }
@@ -7619,7 +7619,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     /* partId */
     if (jmap_wantprop(bodyprops, "partId")) {
         json_t *jpart_id = json_null();
-        if (strcasecmp(part->type, "MULTIPART"))
+        if (strcasecmpsafe(part->type, "MULTIPART"))
             jpart_id = json_string(part->part_id);
         json_object_set_new(jbodypart, "partId", jpart_id);
     }
@@ -7638,7 +7638,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     /* size */
     if (jmap_wantprop(bodyprops, "size")) {
         size_t size = 0;
-        if (part->numparts && strcasecmp(part->type, "MESSAGE")) {
+        if (part->numparts && strcasecmpsafe(part->type, "MESSAGE")) {
             /* Multipart */
             size = 0;
         }
@@ -7698,7 +7698,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* type */
-    if (jmap_wantprop(bodyprops, "type")) {
+    if (jmap_wantprop(bodyprops, "type") && part->type) {
         buf_setcstr(&buf, part->type);
         if (part->subtype) {
             buf_appendcstr(&buf, "/");
@@ -7745,7 +7745,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                 free(subtype);
             }
         }
-        if (json_is_null(jcharset) && !strcasecmp(part->type, "TEXT")) {
+        if (json_is_null(jcharset) && !strcasecmpsafe(part->type, "TEXT")) {
             /* Use default text charset */
             jcharset = json_string("us-ascii");
         }
@@ -7808,7 +7808,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* subParts */
-    if (!strcmp(part->type, "MULTIPART")) {
+    if (!strcmpsafe(part->type, "MULTIPART")) {
         json_t *subparts = json_array();
         int i;
         for (i = 0; i < part->numparts; i++) {
@@ -7841,8 +7841,8 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
     if (jmap_wantprop(bodyprops, "isDeleted")) {
         json_object_set_new(jbodypart, "isDeleted",
-                json_boolean(!strcmp(part->type, "TEXT") &&
-                             !strcmp(part->subtype, "X-ME-REMOVED-FILE")));
+                json_boolean(!strcmpsafe(part->type, "TEXT") &&
+                             !strcmpsafe(part->subtype, "X-ME-REMOVED-FILE")));
     }
 
     buf_free(&buf);
@@ -8008,7 +8008,7 @@ static int _email_get_bodies(jmap_req_t *req,
         /* Fetch body values */
         for (i = 0; i < parts.count; i++) {
             struct body *part = ptrarray_nth(&parts, i);
-            if (strcmp("TEXT", part->type)) {
+            if (strcmpsafe(part->type, "TEXT")) {
                 continue;
             }
             /* Ignore duplicate list entries */
@@ -8017,7 +8017,7 @@ static int _email_get_bodies(jmap_req_t *req,
             }
             json_object_set_new(body_values, part->part_id,
                     _email_get_bodyvalue(part, msg->mime, args->max_body_bytes,
-                                         !strcmp("HTML", part->subtype)));
+                                         !strcmpsafe("HTML", part->subtype)));
         }
         ptrarray_fini(&parts);
         json_object_set_new(email, "bodyValues", body_values);
@@ -8072,8 +8072,8 @@ static int _email_get_bodies(jmap_req_t *req,
             int is_icsbody = 0;
 
             /* Process calendar attachments and files ending with .ics */
-            if ((!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "CALENDAR")) ||
-                (!strcmp(part->type, "APPLICATION") && !strcmp(part->subtype, "ICS"))) {
+            if ((!strcmpsafe(part->type, "TEXT") && !strcmpsafe(part->subtype, "CALENDAR")) ||
+                (!strcmpsafe(part->type, "APPLICATION") && !strcmpsafe(part->subtype, "ICS"))) {
                 is_icsbody = 1;
             }
             else {
@@ -8798,7 +8798,7 @@ static int jmap_email_parse(jmap_req_t *req)
             continue;
         }
 
-        if (part && (strcmp(part->type, "MESSAGE") || !strcmpnull(part->encoding, "BASE64"))) {
+        if (part && (strcmpsafe(part->type, "MESSAGE") || !strcmpnull(part->encoding, "BASE64"))) {
             struct buf msg_buf = BUF_INITIALIZER;
             r = msgrecord_get_body(mr, &msg_buf);
             if (!r) {
@@ -9868,7 +9868,7 @@ static void _emailpart_parse_headers(json_t *jpart,
                     param = param->next;
                 }
                 /* Headers for multipart MUST specify a boundary */
-                if (!strcasecmp(part->type, "MULTIPART") && !part->boundary)
+                if (!strcasecmpsafe(part->type, "MULTIPART") && !part->boundary)
                     jmap_parser_invalid(parser, prop);
                 /* Headers for bodyparts with partId MUST NOT specify a charset */
                 if (JNOTNULL(json_object_get(jpart, "partId")) && part->charset)
@@ -10132,7 +10132,7 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
     int i;
     for (i = 0; i < attachments->count; i++) {
         struct emailpart *part = ptrarray_nth(attachments, i);
-        if (part->type && !strcasecmp(part->type, "MESSAGE")) {
+        if (part->type && !strcasecmpsafe(part->type, "MESSAGE")) {
             ptrarray_append(&attached_emails, part);
         }
         else if (part->disposition && !strcasecmp(part->disposition, "INLINE") &&
@@ -10394,12 +10394,12 @@ static void _email_parse_bodies(jmap_req_t *req,
             else if (part->filename) {
                 email->has_attachment = 1;
             }
-            else if (part->type && strcasecmp(part->type, "TEXT") &&
-                     strcasecmp(part->type, "MULTIPART") &&
+            else if (part->type && strcasecmpsafe(part->type, "TEXT") &&
+                     strcasecmpsafe(part->type, "MULTIPART") &&
                      (!part->disposition || strcasecmp(part->disposition, "INLINE"))) {
                 email->has_attachment = 1;
             }
-            else if (part->blob_id && (!part->type || strcasecmp(part->type, "TEXT"))) {
+            else if (part->blob_id && (!part->type || strcasecmpsafe(part->type, "TEXT"))) {
                 email->has_attachment = 1;
             }
             else {
@@ -10806,7 +10806,7 @@ static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
 
     if (part->type && part->subtype &&
         !_headers_have(&part->headers, "Content-Type")) {
-        if (!strcasecmp(part->type, "MULTIPART") && !part->boundary)
+        if (!strcasecmpsafe(part->type, "MULTIPART") && !part->boundary)
             part->boundary = _mime_make_boundary();
 
         buf_setcstr(&buf, "Content-Type: ");
@@ -10829,8 +10829,8 @@ static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
             buf_appendcstr(&buf, part->boundary);
         }
 
-        if (!strcasecmp(part->type, "MULTIPART") &&
-            !strcasecmp(part->subtype, "RELATED")) {
+        if (!strcasecmpsafe(part->type, "MULTIPART") &&
+            !strcasecmpsafe(part->subtype, "RELATED")) {
             /* RFC 2387 mandates a type parameter */
             struct emailpart *subpart = ptrarray_nth(&part->subparts, 0);
             if (subpart) {
