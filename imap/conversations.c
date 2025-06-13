@@ -3241,7 +3241,7 @@ static int zero_g_cb(void *rock,
     return r;
 }
 
-EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe)
+EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe, int do_upgrade)
 {
     int r = 0;
 
@@ -3285,8 +3285,11 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state, int wi
         if (r) return r;
     }
 
+    if (do_upgrade) {
+        state->version = CONVERSATIONS_VERSION;
+    }
+
     /* re-init the counted flags */
-    state->version = CONVERSATIONS_VERSION;
     r = _init_counted(state, NULL, 0);
     if (r) return r;
 
