@@ -640,13 +640,23 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
     int n;
 
     f = fopen(fname, "r");
-    if (!f) return NULL;
+    if (!f) {
+        xsyslog(LOG_ERR, "DBERROR: attempted to detect on missing file",
+                         "fname=<%s>",
+                         fname);
+        return NULL;
+    }
 
     /* empty file? */
     n = fread(buf, 32, 1, f);
     fclose(f);
 
-    if (n != 1) return NULL;
+    if (n != 1) {
+        xsyslog(LOG_ERR, "DBERROR: failed to read 32 bytes to detect type of file",
+                         "fname=<%s>",
+                         fname);
+        return NULL;
+    }
 
     /* only compare first 16 bytes, that's OK */
     if (!strncmp(buf, "\241\002\213\015skiplist file\0\0\0", 16))
@@ -659,6 +669,9 @@ EXPORTED const char *cyrusdb_detect(const char *fname)
         return "twom";
 
     /* unable to detect SQLite databases or flat files explicitly here */
+    xsyslog(LOG_ERR, "DBERROR: unknown magic for file",
+                     "fname=<%s> magic=<%.*s>",
+                     fname, 32, buf);
     return NULL;
 }
 
