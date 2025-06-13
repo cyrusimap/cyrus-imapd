@@ -94,20 +94,27 @@ extern const char CYRUS_VERSION[];
 #endif
 
 #define BIT32_MAX 4294967295U
+#define BIT64_MAX 18446744073709551615UL
 
-#if UINT_MAX == BIT32_MAX
-typedef unsigned int bit32;
-#elif ULONG_MAX == BIT32_MAX
-typedef unsigned long bit32;
-#elif USHRT_MAX == BIT32_MAX
-typedef unsigned short bit32;
+#if ULONG_MAX == BIT64_MAX
+#define BIT64_FMT          "%016lx"
+#define UINT64_FMT         "%lu"
+#define UINT64_LALIGN_FMT  "%-*lu"
+#define UINT64_NANOSEC_FMT ".%.9lu"
+#elif ULLONG_MAX == BIT64_MAX
+#define BIT64_FMT          "%016llx"
+#define UINT64_FMT         "%llu"
+#define UINT64_LALIGN_FMT  "%-*llu"
+#define UINT64_NANOSEC_FMT ".%.9llu"
 #else
-#error dont know what to use for bit32
+#error dont know what to use for bit64
 #endif
 
-typedef unsigned long long int bit64;
-typedef unsigned long long int modseq_t;
-#define MODSEQ_FMT "%llu"
+typedef uint32_t bit32;
+typedef uint64_t bit64;
+typedef uint64_t modseq_t;
+
+#define MODSEQ_FMT UINT64_FMT
 #define atomodseq_t(s) strtoull(s, NULL, 10)
 char *modseqtoa(modseq_t modseq);
 
@@ -147,11 +154,33 @@ extern const unsigned char convert_to_uppercase[256];
 #define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 
 #ifndef TIMESPEC_TO_TIMEVAL
-#define TIMESPEC_TO_TIMEVAL(tv, ts) { \
-        (tv)->tv_sec = (ts)->tv_sec; \
+#define TIMESPEC_TO_TIMEVAL(tv, ts) {         \
+        (tv)->tv_sec  = (ts)->tv_sec;         \
         (tv)->tv_usec = (ts)->tv_nsec / 1000; \
 }
 #endif
+
+#define TIMESPEC_TO_NANOSEC(ts)                                             \
+        ((uint64_t) (ts)->tv_sec * 1000000000 +                             \
+                   ((ts)->tv_nsec == UTIME_OMIT ? 0 : (ts)->tv_nsec))
+
+#define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
+        (ts)->tv_sec  = (nanosec) / 1000000000; \
+        (ts)->tv_nsec = (nanosec) % 1000000000; \
+}
+
+#define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
+        uint64_t u64 = htonll(UINT64_MAX - (nanosec));                      \
+        charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
+}
+
+#define MODSEQ_TO_JMAPID(buf, modseq) {                                 \
+        uint64_t u64 = htonll(modseq);                                  \
+        const char *p = (const char *) &u64;                            \
+        size_t len = sizeof(u64);                                       \
+        for (; *p == 0 && len > 1; p++, len--);                         \
+        charset_encode(buf, p, len, ENCODING_BASE64JMAPID);             \
+}
 
 typedef struct keyvalue {
     char *key, *value;

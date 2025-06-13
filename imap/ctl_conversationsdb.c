@@ -415,14 +415,14 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     return r;
 }
 
-static int do_recalc(const char *userid, int force)
+static int do_recalc(const char *userid, int do_upgrade)
 {
     struct conversations_state *state = NULL;
 
     int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    if (!force && state->version == CONVERSATIONS_VERSION) {
+    if (do_upgrade && state->version == CONVERSATIONS_VERSION) {
         if (verbose)
             printf("%s already version %d, skipping\n", userid, state->version);
         conversations_commit(&state);
@@ -432,7 +432,7 @@ static int do_recalc(const char *userid, int force)
     // wipe if it's currently folders_byname, will recreate with byid
     int wipe = state->folders_byname;
 
-    r = conversations_zero_counts(state, wipe);
+    r = conversations_zero_counts(state, wipe, do_upgrade);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -729,8 +729,9 @@ static int fix_modseqs(struct conversations_state *a,
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_thread(&convb, &threada->guid, threada->internaldate,
-                        threada->createdmodseq, /*delta_exists*/0);
+                conversation_update_thread(&convb, &threada->guid,
+                                           threada->nano_internaldate,
+                                           threada->createdmodseq, /*delta_exists*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip
@@ -860,7 +861,7 @@ static int do_audit(const char *userid)
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp, /*wipe*/0);
+    r = conversations_zero_counts(state_temp, /*wipe*/0, /*do_upgrade*/0);
     if (r) {
         fprintf(stderr, "Failed to zero counts in %s: %s\n",
                 filename_temp, error_message(r));
@@ -987,7 +988,7 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         break;
 
     case RECALC:
-        if (do_recalc(userid, /*force*/1))
+        if (do_recalc(userid, /*do_upgrade*/0))
             r = EX_NOINPUT;
         break;
 
@@ -1002,7 +1003,7 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         break;
 
     case UPGRADE:
-        if (do_recalc(userid, /*force*/0))
+        if (do_recalc(userid, /*do_upgrade*/1))
             r = EX_NOINPUT;
         break;
 
@@ -1201,7 +1202,9 @@ static int usage(const char *name)
     fprintf(stderr, "    -d             dump the conversations database to stdout\n");
     fprintf(stderr, "    -z             zero the conversations DB (make all NULLs)\n");
     fprintf(stderr, "    -b             build conversations entries for any NULL records\n");
-    fprintf(stderr, "    -R             recalculate all counts\n");
+    fprintf(stderr, "    -R             recalculate all counts, do not upgrade version\n");
+    fprintf(stderr, "    -U             upgrade and recalculate all counts. No-op if already at\n"
+                    "                   latest version\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
