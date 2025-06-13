@@ -125,30 +125,22 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
     if (slowio->bytes_since_last_delay / elapsed > max_bytes_per_sec) {
         double delay = (slowio->bytes_since_last_delay / max_bytes_per_sec)
                        - elapsed;
+        double delay_s, delay_ns;
+        struct timespec sleeptime;
+        int r;
 
-        slowio_busywait_for(delay);
+        delay_s = floor(delay);
+        delay_ns = (delay - delay_s) * 1000000000.0;
+
+        sleeptime.tv_sec = (time_t) delay_s;
+        sleeptime.tv_nsec = (int32_t) delay_ns;
+
+        do {
+            errno = 0;
+            r = nanosleep(&sleeptime, &sleeptime);
+        } while (r == -1 && errno == EINTR);
 
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &slowio->last_delay);
         slowio->bytes_since_last_delay = 0;
-    }
-}
-
-EXPORTED void slowio_busywait_for(double howlong)
-{
-    struct timespec start;
-    int64_t max_tries = INT64_MAX;
-
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-
-    for (int64_t i = 0; i < max_tries; i++) {
-        struct timespec now;
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
-
-        double elapsed = (double)(now.tv_sec - start.tv_sec);
-        elapsed += (double)(now.tv_nsec - start.tv_nsec) / 1000000000.0;
-
-        if (elapsed > howlong) {
-            break;
-        }
     }
 }

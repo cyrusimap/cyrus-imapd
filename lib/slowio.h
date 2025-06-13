@@ -68,6 +68,4 @@ extern void slowio_maybe_delay_read_impl(ssize_t n_bytes);
 extern void slowio_maybe_delay_write_impl(ssize_t n_bytes);
 extern void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes);
 
-/* not part of this API, but need to expose it for cunit */
-extern void slowio_busywait_for(double howlong);
 #endif
