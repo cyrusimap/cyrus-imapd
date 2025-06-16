@@ -1115,7 +1115,7 @@ static int auth_sasl(struct sasl_cmd_t *sasl_cmd, const char *mechlist)
         } else if (sendliteral) {
             /* If we had no response, we still need to send the
                empty literal in this case */
-            printf("{0+}\r\nC: ");
+            fputs("C: {0+}", stdout);
             prot_printf(pout, "{0+}\r\n");
         } else if (!initial_response) {
             printf("C: ");
