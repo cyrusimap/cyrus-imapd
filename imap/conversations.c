@@ -97,6 +97,7 @@
 #define FNKEY "$FOLDER_NAMES"
 #define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"
+#define IDKEY "$COMPACT_EMAILIDS"
 #define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
@@ -435,6 +436,10 @@ EXPORTED int conversations_open_path_version(const char *fname,
         }
         open->s.version = version;
     }
+
+    /* are compactids enabled? */
+    cyrusdb_fetch(open->s.db, IDKEY, strlen(IDKEY), &val, &vallen, &open->s.txn);
+    if (vallen) open->s.compact_emailids = 1;
 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
@@ -3065,7 +3070,7 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 }
 
 /* NOTE: this makes an "ATOM" return */
-EXPORTED const char *conversation_id_encode(int cstate_version,
+EXPORTED const char *conversation_id_encode(struct conversations_state *state,
                                             conversation_id_t cid)
 {
     static struct buf buf = BUF_INITIALIZER;
@@ -3074,7 +3079,7 @@ EXPORTED const char *conversation_id_encode(int cstate_version,
 
     if (cid == NULLCONVERSATION) {
         buf_setcstr(&buf, "NIL");
-    } else if (cstate_version >= 2) {
+    } else if (USER_COMPACT_EMAILIDS(state)) {
         uint64_t u64 = htonll(cid);
         charset_encode(&buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
     } else {
@@ -3470,6 +3475,31 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
     } while (++count < 1000000000);
 
     buf_free(&jidrep);
+}
+
+EXPORTED int conversations_enable_compactids(struct conversations_state *state,
+                                             int enable)
+{
+    int r;
+
+    if (enable) {
+        char vbuf[16];
+        snprintf(vbuf, sizeof(vbuf), "%d", enable);
+        r = cyrusdb_store(state->db, IDKEY, strlen(IDKEY),
+                          vbuf, strlen(vbuf), &state->txn);
+        if (r) {
+            syslog(LOG_ERR, "Failed to enable compactids");
+        }
+    }
+    else {
+        r = cyrusdb_delete(state->db, IDKEY, strlen(IDKEY),
+                           &state->txn, /*force*/1);
+        if (r) {
+            syslog(LOG_ERR, "Failed to disable compactids");
+        }
+    }
+
+    return r;
 }
 
 #undef DB

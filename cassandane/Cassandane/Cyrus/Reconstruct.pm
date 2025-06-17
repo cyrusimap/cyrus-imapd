@@ -762,6 +762,10 @@ sub test_upgrade_v19_to_v20
     $self->{instance}->run_command({ cyrus => 1 },
                                    'ctl_conversationsdb', '-U', '-r');
 
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
+
     $self->{instance}->start();
 
     # replicate new version to old version
@@ -779,6 +783,10 @@ sub test_upgrade_v19_to_v20
     xlog $self, "Upgrade replica to conv.db version 2";
     $self->{replica}->run_command({ cyrus => 1 },
                                   'ctl_conversationsdb', '-U', '-r');
+
+    xlog $self, "Enable compactids";
+    $self->{replica}->run_command({ cyrus => 1 },
+                                  'ctl_conversationsdb', '-I', 'on', 'cassandane');
 
     $self->{replica}->start();
 

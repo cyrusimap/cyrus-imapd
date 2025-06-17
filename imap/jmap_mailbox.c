@@ -576,7 +576,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     obj = json_object();
 
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
     json_object_set_new(obj, "id", json_string(mboxid));
 
     if (jmap_wantprop(props, "uniqueId")) {
@@ -594,7 +594,7 @@ static json_t *_mbox_get(jmap_req_t *req,
         if (is_inbox || parent_is_inbox || !parent)
             json_object_set_new(obj, "parentId", json_null());
         else {
-            jmap_set_mailboxid(req->cstate->version, parent, mboxid);
+            jmap_set_mailboxid(req->cstate, parent, mboxid);
             json_object_set_new(obj, "parentId", json_string(mboxid));
         }
     }
@@ -756,10 +756,10 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     /* Do we need to process this mailbox? */
     if (rock->want) {
         static char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-        jmap_set_mailboxid(rock->req->cstate->version, mbentry, mboxid);
+        jmap_set_mailboxid(rock->req->cstate, mbentry, mboxid);
         if (hash_lookup(mboxid, rock->want))
             id = mboxid;
-        else if (rock->req->cstate->version >= 2 && // check for legacy id
+        else if (USER_COMPACT_EMAILIDS(rock->req->cstate) && // check for legacy id
                  hash_lookup(mbentry->uniqueid, rock->want))
             id = mbentry->uniqueid;
         else
@@ -1038,7 +1038,7 @@ typedef struct {
     int include_tombstones;
     int include_hidden;
 
-    int cstate_version;  // to generate proper MAILBOXIDs
+    struct conversations_state *cstate;  // to generate proper MAILBOXIDs
     int need_name;
     int need_sort_order;
     int need_role;
@@ -1226,7 +1226,7 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort
     mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
     q->req = req;
     q->shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
-    q->cstate_version = req->cstate->version;
+    q->cstate = req->cstate;
 
     /* Prepare filter */
     q->filter = _mboxquery_build_filter(q, filter);
@@ -1299,13 +1299,13 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         }
         if (!r) {
             rec->parent_id = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
-            jmap_set_mailboxid(q->cstate_version, mbparent, rec->parent_id);
+            jmap_set_mailboxid(q->cstate, mbparent, rec->parent_id);
         }
         mboxlist_entry_free(&mbparent);
         r = 0;
     }
 
-    jmap_set_mailboxid(q->cstate_version, mbentry, rec->id);
+    jmap_set_mailboxid(q->cstate, mbentry, rec->id);
     rec->mbname = mbname;
     mbname = NULL; // takes ownership
     rec->foldermodseq = mbentry->foldermodseq;
@@ -1671,7 +1671,7 @@ struct mboxquerychanges_rock {
     hash_table *removed;
     modseq_t sincemodseq;
 
-    int cstate_version;  // to generate proper MAILBOXIDs
+    struct conversations_state *cstate;  // to generate proper MAILBOXIDs
 };
 
 static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
@@ -1679,7 +1679,7 @@ static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
     struct mboxquerychanges_rock *rock = vrock;
     if (mbentry->foldermodseq > rock->sincemodseq) {
         char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-        jmap_set_mailboxid(rock->cstate_version, mbentry, mboxid);
+        jmap_set_mailboxid(rock->cstate, mbentry, mboxid);
         hash_insert(mboxid, (void*)1, rock->removed);
     }
     return 0;
@@ -1706,7 +1706,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
 
     modseq_t sincemodseq = 0;
     const char *since_querystate = query.since_querystate;
-    if (req->cstate->version < 2 ||  // check for mandatory prefix
+    if (!USER_COMPACT_EMAILIDS(req->cstate) ||  // check for mandatory prefix
         *since_querystate++ == JMAP_STATE_STRING_PREFIX) {
         sincemodseq = atomodseq_t(since_querystate);
     }
@@ -1739,7 +1739,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
          * until we have a sane way of tracking annotation changes */
 
         struct mboxquerychanges_rock rock = {
-            &removed, sincemodseq, req->cstate->version
+            &removed, sincemodseq, req->cstate
         };
         int r = mboxlist_usermboxtree(req->accountid, req->authstate,
                                       _mboxquerychanges_cb, &rock,
@@ -2386,7 +2386,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
     *mbox = json_pack("{s:s s:o s:i s:i s:i s:i}",
                       "id", mboxid,
                       "myRights", _mbox_get_myrights(req, mbentry),
@@ -3422,7 +3422,7 @@ static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
         char *mboxid = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
-        jmap_set_mailboxid(state->req->cstate->version, mbentry, mboxid);
+        jmap_set_mailboxid(state->req->cstate, mbentry, mboxid);
         hash_insert(mbentry->name, mboxid, state->id_by_imapname);
     }
     return 0;
@@ -3452,7 +3452,7 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
     default:
         assert(_findparent(imapname, &pmbentry) == 0);
         entry->parent_id = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
-        jmap_set_mailboxid(state->req->cstate->version, pmbentry, entry->parent_id);
+        jmap_set_mailboxid(state->req->cstate, pmbentry, entry->parent_id);
         break;
     }
 
@@ -4170,7 +4170,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (set.super.if_in_state) {
         const char *if_in_state = set.super.if_in_state;
-        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
              *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -4259,7 +4259,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     }
 
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-    jmap_set_mailboxid(data->req->cstate->version, mbentry, mboxid);
+    jmap_set_mailboxid(data->req->cstate, mbentry, mboxid);
 
     /* Is this a more recent update for an id that we have already seen?
      * (check all three) */
@@ -4401,7 +4401,7 @@ static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes =
-        { .prefixed_state = req->cstate->version >= 2 };
+        { .prefixed_state = USER_COMPACT_EMAILIDS(req->cstate) };
     json_t *err = NULL;
 
     /* Parse request */

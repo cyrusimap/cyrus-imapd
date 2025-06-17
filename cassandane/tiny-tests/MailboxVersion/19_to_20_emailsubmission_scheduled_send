@@ -264,6 +264,10 @@ sub test_19_to_20_emailsubmission_scheduled_send
 
     $self->upgrade_19_to_20;
 
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
+
     xlog $self, "Trigger delivery of email submission";
     my $now = DateTime->now();
     $self->{instance}->run_command({ cyrus => 1 },

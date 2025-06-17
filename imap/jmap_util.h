@@ -201,7 +201,7 @@ extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
 #define JMAP_MAX_EMAILID_SIZE MAX(JMAP_EMAILID_SIZE, JMAP_LEGACY_EMAILID_SIZE)
 
-extern void jmap_set_emailid(int cstate_version,
+extern void jmap_set_emailid(struct conversations_state *cstate,
                              const struct message_guid *guid,
                              uint64_t nanosec, struct timespec *ts,
                              char *emailid);
@@ -211,13 +211,13 @@ extern void jmap_set_emailid(int cstate_version,
 
 #define JMAP_MAX_MAILBOXID_SIZE MAX(JMAP_MAILBOXID_SIZE, UUID_STR_LEN)
 
-extern void jmap_set_mailboxid(int cstate_version,
+extern void jmap_set_mailboxid(struct conversations_state *cstate,
                                const mbentry_t *mbentry, char *mboxid);
 
 #define JMAP_LEGACY_THREADID_PREFIX 'T'
 #define JMAP_THREADID_PREFIX 'A'
 #define JMAP_THREADID_SIZE 18
-extern void jmap_set_threadid(int cstate_version,
+extern void jmap_set_threadid(struct conversations_state *cstate,
                               conversation_id_t cid, char *thrid);
 
 #ifdef HAVE_ICAL
