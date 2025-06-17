@@ -62,6 +62,7 @@
 #include "libconfig.h"
 #include "map.h"
 #include "times.h"
+#include "user.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -916,7 +917,7 @@ EXPORTED void mboxevent_set_access(struct mboxevent *event,
             struct conversations_state *cstate =
                 conversations_get_mbox(mailboxname);
             const char *mboxid =
-                mbentry->jmapid && cstate && cstate->version >= 2 ?
+                mbentry->jmapid && USER_COMPACT_EMAILIDS(cstate) ?
                 mbentry->jmapid : mbentry->uniqueid;
 
             /* mboxevent_extract_mailbox may already have set EVENT_MAILBOX_ID,
@@ -972,7 +973,7 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     }
 }
 
-static const char *threadid(int cstate_version, bit64 cid)
+static const char *threadid(struct conversations_state *cstate, bit64 cid)
 {
     static char id[JMAP_THREADID_SIZE];
 
@@ -980,24 +981,24 @@ static const char *threadid(int cstate_version, bit64 cid)
         strlcpy(id, "NIL", JMAP_THREADID_SIZE);
     }
     else {
-        jmap_set_threadid(cstate_version, cid, id);
+        jmap_set_threadid(cstate, cid, id);
     }
 
     return id;
 }
 
-static json_t *jmap_email(int cstate_version,
+static json_t *jmap_email(struct conversations_state *cstate,
                           struct message_guid *guid,
                           struct timespec *internaldate,
                           bit64 cid, struct body *body)
 {
     char emailid[JMAP_MAX_EMAILID_SIZE];
 
-    jmap_set_emailid(cstate_version, guid, 0, internaldate, emailid);
+    jmap_set_emailid(cstate, guid, 0, internaldate, emailid);
 
     return json_pack("{ s:s s:s s:o s:o s:o s:o s:o s:o s:o s:o s:o s:o }",
                      "id", emailid,
-                     "threadId", threadid(cstate_version, cid),
+                     "threadId", threadid(cstate, cid),
                      "sentAt", jmap_header_as_date(body->date),
                      "subject", jmap_header_as_text(body->subject),
                      "from",
@@ -1079,7 +1080,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
-                              xstrdup(conversation_id_encode(cstate->version, record->cid)));
+                              xstrdup(conversation_id_encode(cstate, record->cid)));
         }
     }
 
@@ -1088,7 +1089,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             char *emailid = xmalloc(JMAP_MAX_EMAILID_SIZE);
-            jmap_set_emailid(cstate->version, &record->guid,
+            jmap_set_emailid(cstate, &record->guid,
                              0, &record->internaldate, emailid);
             FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
         }
@@ -1099,7 +1100,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
-                              xstrdup(threadid(cstate->version, record->cid)));
+                              xstrdup(threadid(cstate, record->cid)));
         }
     }
 
@@ -1111,7 +1112,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
-            json_t *email = jmap_email(cstate->version, &record->guid,
+            json_t *email = jmap_email(cstate, &record->guid,
                                        &record->internaldate, record->cid, body);
 
             FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
@@ -1276,7 +1277,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
-                              xstrdup(conversation_id_encode(cstate->version, cid)));
+                              xstrdup(conversation_id_encode(cstate, cid)));
         }
     }
 
@@ -1295,7 +1296,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             char *emailid = xmalloc(JMAP_MAX_EMAILID_SIZE);
-            jmap_set_emailid(cstate->version, &guid, 0, &internaldate, emailid);
+            jmap_set_emailid(cstate, &guid, 0, &internaldate, emailid);
             FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, emailid);
         }
     }
@@ -1310,7 +1311,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
             FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID,
-                              xstrdup(threadid(cstate->version, cid)));
+                              xstrdup(threadid(cstate, cid)));
         }
     }
 
@@ -1337,7 +1338,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
         if (!cstate) cstate = mailbox_get_cstate(mailbox);
         if (cstate) {
-            json_t *email = jmap_email(cstate->version, &guid,
+            json_t *email = jmap_email(cstate, &guid,
                                        &internaldate, cid, body);
 
             FILL_JSON_PARAM(event, EVENT_JMAP_EMAIL, email);
@@ -1774,7 +1775,7 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         const char *uniqueid = mailbox_uniqueid(mailbox);
         const char *jmapid = mailbox_jmapid(mailbox);
         const char *mboxid =
-            jmapid && cstate && cstate->version >=2 ? jmapid : uniqueid;
+            jmapid && USER_COMPACT_EMAILIDS(cstate) ? jmapid : uniqueid;
         FILL_STRING_PARAM(event, EVENT_MAILBOX_ID, xstrdup(mboxid));
         FILL_STRING_PARAM(event, EVENT_MAILBOX_UNIQUEID, xstrdup(uniqueid));
     }
