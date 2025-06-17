@@ -135,6 +135,10 @@ sub test_emailsubmission_legacy_ids
     $self->{instance}->run_command({ cyrus => 1 },
                                    'ctl_conversationsdb', '-U', '-r');
 
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
+
     xlog $self, "Get new mailbox ids and email id";
     $res = $jmap->CallMethods([
         ['Mailbox/query', { }, "R1"],

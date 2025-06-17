@@ -792,7 +792,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
 
-    jmap_set_threadid(req->cstate->version, cid, thread_id);
+    jmap_set_threadid(req->cstate, cid, thread_id);
     json_object_set_new(emailsubmission, "threadId", json_string(thread_id));
 
     /* Close the message record and mailbox. There's a race
@@ -969,14 +969,14 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
                          JSON_DISABLE_EOF_CHECK, &jerr);
 
         const char *id = json_string_value(json_object_get(sub, "emailId"));
-        if (req->cstate->version >= 2 &&
+        if (USER_COMPACT_EMAILIDS(req->cstate) &&
             *id == JMAP_LEGACY_EMAILID_PREFIX) {
             /* Rewrite to use nanosecond-based emailId */
             uint64_t internaldate;
             r = jmap_email_find(req, NULL, id, NULL, NULL, &internaldate);
             if (!r) {
                 char emailid[JMAP_MAX_EMAILID_SIZE];
-                jmap_set_emailid(req->cstate->version, NULL,
+                jmap_set_emailid(req->cstate, NULL,
                              internaldate, NULL, emailid);
                 json_object_set_new(sub, "emailId", json_string(emailid));
             }
@@ -991,7 +991,7 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
                 mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
                 if (mbentry) {
                     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-                    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+                    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
                     json_object_set_new(onsend, "moveToMailboxId",
                                         json_string(mboxid));
                     mboxlist_entry_free(&mbentry);
