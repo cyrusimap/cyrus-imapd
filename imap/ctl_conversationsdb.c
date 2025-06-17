@@ -449,6 +449,27 @@ err:
     return r;
 }
 
+static int check_version_cb(const mbentry_t *mbentry,
+                            void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) return r;
+
+    if (mailbox->i.minor_version < 20) {
+        fprintf(stderr,
+                "MUST upgrade mailbox '%s'"
+                " to version 20 or higher before enabling compactids\n",
+                mailbox_name(mailbox));
+        r = IMAP_MAILBOX_BADFORMAT;
+    }
+
+    mailbox_close(&mailbox);
+    return r;
+}
+
 static int do_compactids(const char *userid, int enable)
 {
     struct conversations_state *state = NULL;
@@ -456,6 +477,20 @@ static int do_compactids(const char *userid, int enable)
 
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
+
+    if (enable) {
+        if (state->version < 2) {
+            fprintf(stderr,
+                    "MUST upgrade conversations.db for user '%s'"
+                    " to version 2 or higher before enabling compactids\n",
+                    userid);
+            r = IMAP_MAILBOX_BADFORMAT;
+            goto err;
+        }
+
+        r = mboxlist_usermboxtree(userid, NULL, check_version_cb, NULL, 0);
+        if (r) goto err;
+    }
 
     r = conversations_enable_compactids(state, enable);
     if (r) goto err;
@@ -1060,6 +1095,7 @@ int main(int argc, char **argv)
     int recursive = 0;
     void *rock = NULL;
     int enable_compactids = 0;
+    int r = 0;
 
     /* keep in alphabetical order */
     static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
@@ -1215,10 +1251,10 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (recursive) {
-        mboxlist_alluser(do_user, rock);
+        r = mboxlist_alluser(do_user, rock);
     }
     else {
-        do_user(userid, rock);
+        r = do_user(userid, rock);
     }
 
     if (zerocids) {
@@ -1226,7 +1262,7 @@ int main(int argc, char **argv)
         free(zerocids);
     }
 
-    shut_down(0);
+    shut_down(r);
 }
 
 static int usage(const char *name)

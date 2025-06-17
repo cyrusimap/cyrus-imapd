@@ -755,12 +755,36 @@ sub test_upgrade_v19_to_v20
 
     $self->{instance}->stop();
 
-    xlog $self, "Upgrade master to mailbox version 20";
-    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
+    my %handlers = (
+        exited_abnormally => sub
+        {
+            my (undef, $code) = @_;
+            return $code;
+        },
+    );
+
+    xlog $self, "Try to enable compactids - should fail due to conv.db version";
+    $res = $self->{instance}->run_command_capture({ cyrus => 1,
+                                                    handlers => \%handlers },
+                                                  'ctl_conversationsdb', '-I',
+                                                  'on', 'cassandane');
+    $self->assert_num_not_equals(0, $res->status);
+    $self->assert_matches(qr/^MUST upgrade conversations.db/, $res->stderr);
 
     xlog $self, "Upgrade master to conv.db version 2";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'ctl_conversationsdb', '-U', '-r');
+
+    xlog $self, "Try to enable compactids - should fail due to mailbox version";
+    $res = $self->{instance}->run_command_capture({ cyrus => 1,
+                                                    handlers => \%handlers },
+                                                  'ctl_conversationsdb', '-I',
+                                                  'on', 'cassandane');
+    $self->assert_num_not_equals(0, $res->status);
+    $self->assert_matches(qr/^MUST upgrade mailbox/, $res->stderr);
+
+    xlog $self, "Upgrade master to mailboxes version 20";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
 
     xlog $self, "Enable compactids";
     $self->{instance}->run_command({ cyrus => 1 },
@@ -777,7 +801,7 @@ sub test_upgrade_v19_to_v20
     $self->{replica}->{re_use_dir} = 1;
     $self->{replica}->stop();
 
-    xlog $self, "Upgrade replica to mailbox version 20";
+    xlog $self, "Upgrade replica to mailboxes version 20";
     $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
 
     xlog $self, "Upgrade replica to conv.db version 2";
