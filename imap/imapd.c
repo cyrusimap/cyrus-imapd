@@ -7335,11 +7335,11 @@ localcreate:
 
     /* Close newly created mailbox before writing annotations */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    if (cstate && cstate->version < 2) {
-        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        mailboxid = xstrdup(mailbox_jmapid(mailbox));
     }
     else {
-        mailboxid = xstrdup(mailbox_jmapid(mailbox));
+        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
     }
     mailbox_close(&mailbox);
 
@@ -9730,7 +9730,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
     }
 
     sd->mailboxid =
-        (!state || state->version < 2) ? mbentry->uniqueid : mbentry->jmapid;
+        USER_COMPACT_EMAILIDS(state) ? mbentry->jmapid : mbentry->uniqueid;
 
     r = conversation_getstatus(state,
                                CONV_FOLDER_KEY_MBE(state, mbentry), &sd->xconv);

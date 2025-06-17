@@ -60,9 +60,10 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
-#include "times.h"
 #include "strhash.h"
 #include "syslog.h"
+#include "times.h"
+#include "user.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -1346,7 +1347,7 @@ EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
     // if we were not given a modseq, look it up by mbtype
     if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
 
-    return _state_string(req->cstate->version >= 2, modseq);
+    return _state_string(USER_COMPACT_EMAILIDS(req->cstate), modseq);
 }
 
 HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)

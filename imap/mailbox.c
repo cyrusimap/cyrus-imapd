@@ -2332,7 +2332,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid),
-                   conversation_id_encode(cstate ? cstate->version : 2, record->cid),
+                   conversation_id_encode(cstate, record->cid),
                    change->msgid, record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
@@ -2342,7 +2342,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid),
-                   conversation_id_encode(cstate ? cstate->version : 2, record->cid),
+                   conversation_id_encode(cstate, record->cid),
                    record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
@@ -4892,7 +4892,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
                session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                record->uid, message_guid_encode(&record->guid),
-               conversation_id_encode(cstate ? cstate->version : 2, record->cid),
+               conversation_id_encode(cstate, record->cid),
                record->modseq, oldflags, sysflags);
     }
 
@@ -5981,7 +5981,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                    "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
                    action, session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
-                   conversation_id_encode(cstate ? cstate->version : 2, copyrecord.cid),
+                   conversation_id_encode(cstate, copyrecord.cid),
                    flagstr);
         }
     }

@@ -854,11 +854,11 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     /* RFC 8474 */
     const char *mailboxid;
     struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
-    if (!cstate || cstate->version < 2) {
-        mailboxid = mailbox_uniqueid(state->mailbox);
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        mailboxid = mailbox_jmapid(state->mailbox);
     }
     else {
-        mailboxid = mailbox_jmapid(state->mailbox);
+        mailboxid = mailbox_uniqueid(state->mailbox);
     }
     prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", mailboxid);
 
@@ -3378,15 +3378,14 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
     }
-    else if (!fmb_rock->fetchargs->convstate ||
-             fmb_rock->fetchargs->convstate->version < 2) {
-        mboxval = xstrdup(mbentry->uniqueid);
-    }
-    else {
+    else if (USER_COMPACT_EMAILIDS(fmb_rock->fetchargs->convstate)) {
         struct buf buf = BUF_INITIALIZER;
         buf_putc(&buf, 'P');
         MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
         mboxval = buf_release(&buf);
+    }
+    else {
+        mboxval = xstrdup(mbentry->uniqueid);
     }
 
     if (fmb_rock->sep)
@@ -3750,14 +3749,14 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         }
         else {
             struct buf emailid = BUF_INITIALIZER;
-            if (cstate->version < 2) {
-                buf_putc(&emailid, 'M');
-                buf_appendmap(&emailid, message_guid_encode(&record.guid), 24);
-            }
-            else {
+            if (USER_COMPACT_EMAILIDS(cstate)) {
                 buf_putc(&emailid, 'S');
                 NANOSEC_TO_JMAPID(&emailid,
                                   TIMESPEC_TO_NANOSEC(&record.internaldate));
+            }
+            else {
+                buf_putc(&emailid, 'M');
+                buf_appendmap(&emailid, message_guid_encode(&record.guid), 24);
             }
             prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
             buf_free(&emailid);
@@ -3791,8 +3790,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             }
             else {
                 snprintf(threadid, sizeof(threadid), "%c%s",
-                         cstate->version < 2 ? 'T' : 'A', 
-                         conversation_id_encode(cstate->version, record.cid));
+                         USER_COMPACT_EMAILIDS(cstate) ? 'A' : 'T', 
+                         conversation_id_encode(cstate, record.cid));
             }
         }
 
