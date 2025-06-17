@@ -89,6 +89,7 @@
 #include "statuscache.h"
 #include "sync_log.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 #include "xapian_wrap.h"
 #include "xmalloc.h"
@@ -367,7 +368,7 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
         bool compactids = 0;
         struct conversations_state *cstate;
         if (!conversations_open_user(accountid, 0, &cstate)) {
-            compactids = (cstate->version >= 2);
+            compactids = USER_COMPACT_EMAILIDS(cstate);
             conversations_commit(&cstate);
         }
 
@@ -873,7 +874,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-    jmap_set_mailboxid(data->req->cstate->version, mbentry, mboxid);
+    jmap_set_mailboxid(data->req->cstate, mbentry, mboxid);
 
     r = mailbox_open_irl(mbentry->name, &mbox);
     mboxlist_entry_free(&mbentry);
@@ -3129,7 +3130,8 @@ static void emailsearch_init(struct emailsearch *search,
         return;
     }
 
-    unsigned id_sort_key = (req->cstate->version < 2) ? SORT_GUID : SORT_EMAILID;
+    unsigned id_sort_key =
+        USER_COMPACT_EMAILIDS(req->cstate) ? SORT_EMAILID : SORT_GUID;
 
     if (json_array_size(jsort)) {
         search->sort = _email_buildsort(req, jsort, id_sort_key, &search->sort_savedate);
@@ -3244,7 +3246,7 @@ struct emailquery {
     int want_partids;
     int disable_guidsearch;
     int findallinthread;
-    int cstate_version;  // to generate proper EMAILIDs
+    struct conversations_state *cstate;  // to generate proper EMAILIDs
     // response fields
     json_t *partids;
     json_t *thread_emailids;
@@ -3299,7 +3301,7 @@ static char *_email_make_querystate(jmap_req_t *req,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (req->cstate->version >= 2) {
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
         // add mandatory prefix
         buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
     }
@@ -3317,7 +3319,8 @@ static int _email_read_querystate(jmap_req_t *req, const char *s,
     char sentinel = 0;
 
     /* Check for mandatory prefix */
-    if (req->cstate->version >= 2 && *s++ != JMAP_STATE_STRING_PREFIX) return 0;
+    if (USER_COMPACT_EMAILIDS(req->cstate) && *s++ != JMAP_STATE_STRING_PREFIX)
+        return 0;
 
     /* Parse mailbox modseq and uid */
     int n = sscanf(s, MODSEQ_FMT ":%u%c", modseq, uid, &sentinel);
@@ -4770,7 +4773,7 @@ static void emailquery_cache_slice(struct emailquery *q,
             }
             struct emailquery_match *match = matches + i;
             char emailid[JMAP_MAX_EMAILID_SIZE];
-            jmap_set_emailid(q->cstate_version, &match->guid,
+            jmap_set_emailid(q->cstate, &match->guid,
                              match->nano_internaldate, NULL, emailid);
             if (!strcmp(emailid, q->super.anchor)) {
                 /* Found anchor */
@@ -4846,7 +4849,7 @@ static void emailquery_buildresult(struct emailquery *q,
         struct emailquery_match *match = &matches[i];
         /* Set email id */
         char emailid[JMAP_MAX_EMAILID_SIZE];
-        jmap_set_emailid(q->cstate_version, &match->guid,
+        jmap_set_emailid(q->cstate, &match->guid,
                          match->nano_internaldate, NULL, emailid);
         json_array_append_new(q->super.ids, json_string(emailid));
         /* Set email-part ids */
@@ -4869,14 +4872,14 @@ static void emailquery_buildresult(struct emailquery *q,
         /* Set thread id by email id */
         if (q->findallinthread) {
             char threadid[JMAP_THREADID_SIZE];
-            jmap_set_threadid(q->cstate_version, match->cid, threadid);
+            jmap_set_threadid(q->cstate, match->cid, threadid);
             if (!json_object_get(q->thread_emailids, threadid)) {
                 /* First time we see this thread in the result */
                 json_t *emailids = json_array();
                 size_t tpos = (size_t) hashu64_lookup(match->cid, &qc->firstinthread);
                 do {
                     char emailid[JMAP_MAX_EMAILID_SIZE];
-                    jmap_set_emailid(q->cstate_version,
+                    jmap_set_emailid(q->cstate,
                                      &qc->uncollapsed_matches[tpos].guid,
                                      qc->uncollapsed_matches[tpos].nano_internaldate,
                                      NULL, emailid);
@@ -5012,7 +5015,7 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     }
 
     /* Build response */
-    q->cstate_version = req->cstate->version;
+    q->cstate = req->cstate;
     emailquery_buildresult(q, &emailquery_cache, errp);
     if (*errp) goto done;
     q->super.can_calculate_changes = emailquery_cache.qr.is_mutable;
@@ -5256,7 +5259,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
             continue;
         }
 
-        jmap_set_emailid(req->cstate->version, &md->guid,
+        jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
@@ -5267,7 +5270,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
-        jmap_set_emailid(req->cstate->version, &md->guid,
+        jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
@@ -5454,7 +5457,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq) continue;
 
-        jmap_set_emailid(req->cstate->version, &md->guid,
+        jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
@@ -5464,7 +5467,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
-        jmap_set_emailid(req->cstate->version, &md->guid,
+        jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
@@ -5640,7 +5643,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         MsgData *md = ptrarray_nth(msgdata, i);
         const char *guidrep = message_guid_encode(&md->guid);
 
-        jmap_set_emailid(req->cstate->version, &md->guid,
+        jmap_set_emailid(req->cstate, &md->guid,
                          0, &md->internaldate, email_id);
 
         /* Skip already seen messages */
@@ -5712,7 +5715,7 @@ static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes =
-        { .prefixed_state = req->cstate->version >= 2 };
+        { .prefixed_state = USER_COMPACT_EMAILIDS(req->cstate) };
 
     /* Parse request */
     json_t *err = NULL;
@@ -5792,7 +5795,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             continue;
 
         /* Report thread */
-        jmap_set_threadid(req->cstate->version, md->cid, thread_id);
+        jmap_set_threadid(req->cstate, md->cid, thread_id);
         if (conv.exists) {
             if (conv.createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
@@ -5831,7 +5834,7 @@ static int jmap_thread_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes =
-        { .prefixed_state = req->cstate->version >= 2 };
+        { .prefixed_state = USER_COMPACT_EMAILIDS(req->cstate) };
 
     /* Parse request */
     json_t *err = NULL;
@@ -6478,7 +6481,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
             if ((r && r != IMAP_OK_COMPLETED) || !rock.is_visible) {
                 continue;
             }
-            jmap_set_emailid(req->cstate->version, &thread->guid,
+            jmap_set_emailid(req->cstate, &thread->guid,
                              thread->nano_internaldate, NULL, email_id);
             json_array_append_new(ids, json_string(email_id));
         }
@@ -7414,7 +7417,7 @@ static int _email_get_meta(jmap_req_t *req,
 
     const char *guidrep = message_guid_encode(&guid);
 
-    jmap_set_emailid(req->cstate->version, &guid, 0, &internaldate, email_id);
+    jmap_set_emailid(req->cstate, &guid, 0, &internaldate, email_id);
 
     /* id */
     if (jmap_wantprop(props, "id")) {
@@ -7432,7 +7435,7 @@ static int _email_get_meta(jmap_req_t *req,
         r = msgrecord_get_cid(msg->mr, &cid);
         if (r) goto done;
         char thread_id[JMAP_THREADID_SIZE];
-        jmap_set_threadid(req->cstate->version, cid, thread_id);
+        jmap_set_threadid(req->cstate, cid, thread_id);
         json_object_set_new(email, "threadId", json_string(thread_id));
     }
 
@@ -8452,7 +8455,7 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
         int r = _email_get_cid(req, id, &cid);
         if (!r && cid) {
             char thread_id[JMAP_THREADID_SIZE];
-            jmap_set_threadid(req->cstate->version, cid, thread_id);
+            jmap_set_threadid(req->cstate, cid, thread_id);
             json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thread_id);
             json_array_append_new(get->list, msg);
         }
@@ -9255,7 +9258,7 @@ static void _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        jmap_set_emailid(req->cstate->version, &guid,
+        jmap_set_emailid(req->cstate, &guid,
                          0, internaldate, detail->email_id);
         jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
@@ -9355,7 +9358,7 @@ static void _email_append(jmap_req_t *req,
     bit64 cid;
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
-    jmap_set_threadid(req->cstate->version, cid, detail->thread_id);
+    jmap_set_threadid(req->cstate, cid, detail->thread_id);
 
     /* Complete message creation */
     if (stage) {
@@ -13831,7 +13834,7 @@ static int jmap_email_set(jmap_req_t *req)
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (set.if_in_state) {
         const char *if_in_state = set.if_in_state;
-        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
              *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -14186,7 +14189,7 @@ static int jmap_email_import(jmap_req_t *req)
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (if_in_state) {
-        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
              *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -14471,7 +14474,7 @@ static void _email_copy_bulk(jmap_req_t *req,
                 struct message_guid guid;
 
                 message_guid_decode(&guid, guidrep);
-                jmap_set_emailid(req->cstate->version, &guid,
+                jmap_set_emailid(req->cstate, &guid,
                                  data.nano_internaldate, NULL, email_id);
                 json_object_set_new(copy->not_created, creation_id,
                                     json_pack("{s:s s:s}",
@@ -14526,9 +14529,9 @@ static void _email_copy_bulk(jmap_req_t *req,
                     char email_id[JMAP_MAX_EMAILID_SIZE];
                     char thread_id[JMAP_THREADID_SIZE];
 
-                    jmap_set_emailid(req->cstate->version, &update->guid,
+                    jmap_set_emailid(req->cstate, &update->guid,
                                      data.nano_internaldate, NULL, email_id);
-                    jmap_set_threadid(req->cstate->version, data.cid, thread_id);
+                    jmap_set_threadid(req->cstate, data.cid, thread_id);
                     jmap_set_blobid(&update->guid, blob_id);
 
                     json_object_set_new(copy->created, update->creation_id,
@@ -14605,7 +14608,7 @@ static int jmap_email_copy(jmap_req_t *req)
         assert (!mboxname_read_counters(srcinbox, &counters));
 
         const char *if_from_in_state = copy.if_from_in_state;
-        if ((from_cstate->version >= 2 &&  // check for mandatory prefix
+        if ((USER_COMPACT_EMAILIDS(from_cstate) &&  // check for mandatory prefix
              *if_from_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_from_in_state) != counters.mailmodseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -14625,7 +14628,7 @@ static int jmap_email_copy(jmap_req_t *req)
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     if (copy.if_in_state) {
         const char *if_in_state = copy.if_in_state;
-        if ((req->cstate->version >= 2 &&  // check for mandatory prefix
+        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
              *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_in_state) != old_modseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -14714,12 +14717,12 @@ static int jmap_email_lookup(jmap_req_t *req)
             if (oldid) {
                 if (!jmap_email_find(req, NULL, oldid,
                                      NULL, NULL, &internaldate)) {
-                    if (req->cstate->version < 2 ||
+                    if (!USER_COMPACT_EMAILIDS(req->cstate) ||
                         *oldid == JMAP_EMAILID_PREFIX) {
                         emailid = oldid;
                     }
                     else {
-                        jmap_set_emailid(req->cstate->version,
+                        jmap_set_emailid(req->cstate,
                                          NULL, internaldate, NULL, newid);
                         emailid = newid;
                     }
