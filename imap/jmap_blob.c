@@ -845,21 +845,21 @@ static int jmap_blob_lookup(jmap_req_t *req)
                 switch (item->typenum) {
                 case DATATYPE_MAILBOX: {
                     char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-                    jmap_set_mailboxid(req->cstate->version, mbentry, mboxid);
+                    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
                     strarray_add(ids, mboxid);
                     break;
                 }
 
                 case DATATYPE_THREAD: {
                     char threadid[JMAP_THREADID_SIZE];
-                    jmap_set_threadid(req->cstate->version, cid, threadid);
+                    jmap_set_threadid(req->cstate, cid, threadid);
                     strarray_add(ids, threadid);
                     break;
                     }
 
                 case DATATYPE_EMAIL: {
                     char emailid[JMAP_MAX_EMAILID_SIZE];
-                    jmap_set_emailid(req->cstate->version, &guid,
+                    jmap_set_emailid(req->cstate, &guid,
                                      0, &internaldate, emailid);
                     strarray_add(ids, emailid);
                     break;

@@ -99,6 +99,10 @@ sub test_email_legacy_ids
     my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
     $self->assert_not_null($dstInboxId);
 
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'other');
+
     # GET session
     my $RawRequest = {
         headers => {

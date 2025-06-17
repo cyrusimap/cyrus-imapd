@@ -111,6 +111,7 @@ struct conversations_state {
     unsigned quota_loaded:1;
     unsigned quota_dirty:1;
     unsigned is_shared:1;
+    unsigned compact_emailids:1;
 };
 
 typedef struct conversation conversation_t;
@@ -385,7 +386,7 @@ extern int conversations_undump(struct conversations_state *, FILE *);
 
 extern int conversations_truncate(struct conversations_state *);
 
-extern const char *conversation_id_encode(int cstate_version,
+extern const char *conversation_id_encode(struct conversations_state *state,
                                           conversation_id_t cid);
 extern int conversation_id_decode(conversation_id_t *cid, const char *text);
 
@@ -401,5 +402,8 @@ extern int conversations_rename_folder(struct conversations_state *state,
 extern int conversations_check_msgid(const char *msgid, size_t len);
 
 extern int conversations_read_quota(struct conversations_state *state, struct conv_quota *q);
+
+extern int conversations_enable_compactids(struct conversations_state *cstate,
+                                           int enable);
 
 #endif /* __CYRUS_CONVERSATIONS_H_ */
