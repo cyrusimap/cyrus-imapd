@@ -101,7 +101,7 @@ jobs:
     - name: make check with valgrind
       shell: bash
       run: |
-        make VG=1 check
+        make VG=1 check-discrete
     - name: report version information
       shell: bash
       run: |
