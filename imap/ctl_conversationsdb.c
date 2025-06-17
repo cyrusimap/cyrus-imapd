@@ -70,7 +70,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE, ENABLE_COMPACTIDS };
 
 static int verbose = 0;
 
@@ -445,6 +445,25 @@ static int do_recalc(const char *userid, int do_upgrade)
     return 0;
 
 err:
+    conversations_abort(&state);
+    return r;
+}
+
+static int do_compactids(const char *userid, int enable)
+{
+    struct conversations_state *state = NULL;
+    int r;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    r = conversations_enable_compactids(state, enable);
+    if (r) goto err;
+
+    conversations_commit(&state);
+    return 0;
+
+ err:
     conversations_abort(&state);
     return r;
 }
@@ -945,7 +964,7 @@ out:
 static int usage(const char *name)
     __attribute__((noreturn));
 
-static int do_user(const char *userid, void *rock __attribute__((unused)))
+static int do_user(const char *userid, void *rock)
 {
     char *fname;
     int r = 0;
@@ -1007,6 +1026,11 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
             r = EX_NOINPUT;
         break;
 
+    case ENABLE_COMPACTIDS:
+        if (do_compactids(userid, *((int *) rock)))
+            r = EX_NOINPUT;
+        break;
+
     case UNKNOWN:
         fatal("UNKNOWN MODE", EX_SOFTWARE);
     }
@@ -1034,9 +1058,11 @@ int main(int argc, char **argv)
     const char *alt_config = NULL;
     const char *userid = NULL;
     int recursive = 0;
+    void *rock = NULL;
+    int enable_compactids = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FMRST:bdruUvzZ:";
+    static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -1054,6 +1080,7 @@ int main(int argc, char **argv)
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
         { "clearcid", required_argument, NULL, 'Z' },
+        { "enable-compact-emailids", required_argument, NULL, 'I' },
         { 0, 0, 0, 0 },
     };
 
@@ -1139,6 +1166,17 @@ int main(int argc, char **argv)
             mode = UPGRADE;
             break;
 
+        case 'I':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            if (!strcmp(optarg, "1") ||
+                !strcasecmp(optarg, "on") || !strcasecmp(optarg, "yes")) {
+                enable_compactids = 1;
+            }
+            mode = ENABLE_COMPACTIDS;
+            rock = (void *) &enable_compactids;
+            break;
+
         case 'v':
             verbose++;
             break;
@@ -1177,10 +1215,10 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (recursive) {
-        mboxlist_alluser(do_user, NULL);
+        mboxlist_alluser(do_user, rock);
     }
     else {
-        do_user(userid, NULL);
+        do_user(userid, rock);
     }
 
     if (zerocids) {
@@ -1207,6 +1245,7 @@ static int usage(const char *name)
                     "                   latest version\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
+    fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -r             recursive mode: username is a prefix\n");
