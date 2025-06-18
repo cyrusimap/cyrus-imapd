@@ -43,22 +43,6 @@
     # The libconfig:*_invalid tests all fatal out from in libconfig, which
     # is fine in reality, but under CUnit we're trapping the fatal and not
     # actually exiting.  Which means we detect some leaks that aren't real.
-    config_read_string_fname_leak
-    Memcheck:Leak
-    match-leak-kinds: definite
-    fun:malloc
-    fun:xmalloc
-    fun:xstrdup
-    fun:config_read_string
-    fun:test_*_invalid
-    ...
-    obj:*/libcunit*
-    ...
-}
-{
-    # The libconfig:*_invalid tests all fatal out from in libconfig, which
-    # is fine in reality, but under CUnit we're trapping the fatal and not
-    # actually exiting.  Which means we detect some leaks that aren't real.
     config_read_file_buf_leak
     Memcheck:Leak
     match-leak-kinds: definite
