@@ -304,13 +304,13 @@ CU_BOOL CU_assertFormatImplementation(
 
 EXPORTED void config_read_string(const char *s)
 {
-    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    char fname[] = "/tmp/cyrus-cunit-configXXXXXX";
     int fd = mkstemp(fname);
+
     retry_write(fd, s, strlen(s));
     config_reset();
     config_read(fname, 0);
     unlink(fname);
-    free(fname);
     close(fd);
 }
 
