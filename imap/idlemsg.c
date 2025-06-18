@@ -252,3 +252,14 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
     return msg;
 }
 
+EXPORTED const char *idle_msg_get_mboxid(json_t *msg)
+{
+    const char *mboxid =
+        json_string_value(json_object_get(msg, "mailboxUniqueId"));
+
+    if (!mboxid)
+        mboxid = json_string_value(json_object_get(msg, "mailboxID"));
+
+    return mboxid;
+}
+
