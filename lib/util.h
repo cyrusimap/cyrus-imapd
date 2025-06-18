@@ -49,6 +49,7 @@
 #include <config.h>
 #include <ctype.h>
 #include <sys/types.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -96,19 +97,10 @@ extern const char CYRUS_VERSION[];
 #define BIT32_MAX 4294967295U
 #define BIT64_MAX 18446744073709551615UL
 
-#if ULONG_MAX == BIT64_MAX
-#define BIT64_FMT          "%016lx"
-#define UINT64_FMT         "%lu"
-#define UINT64_LALIGN_FMT  "%-*lu"
-#define UINT64_NANOSEC_FMT ".%.9lu"
-#elif ULLONG_MAX == BIT64_MAX
-#define BIT64_FMT          "%016llx"
-#define UINT64_FMT         "%llu"
-#define UINT64_LALIGN_FMT  "%-*llu"
-#define UINT64_NANOSEC_FMT ".%.9llu"
-#else
-#error dont know what to use for bit64
-#endif
+#define BIT64_FMT          "%016" PRIx64
+#define UINT64_FMT         "%" PRIu64
+#define UINT64_LALIGN_FMT  "%-*" PRIu64
+#define UINT64_NANOSEC_FMT ".%.9" PRIu64
 
 typedef uint32_t bit32;
 typedef uint64_t bit64;
