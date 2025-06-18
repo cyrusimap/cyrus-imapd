@@ -943,6 +943,7 @@ static void config_read_file(const char *filename)
         snprintf(errbuf, sizeof(errbuf),
                  "can't open configuration file %s: %s",
                  filename, strerror(errno));
+        free(buf);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -951,6 +952,7 @@ static void config_read_file(const char *filename)
         snprintf(errbuf, sizeof(errbuf),
                  "configuration file %s included twice",
                  filename);
+        free(buf);
         fatal(errbuf, EX_CONFIG);
     }
     else {
@@ -1000,6 +1002,7 @@ static void config_read_file(const char *filename)
             snprintf(errbuf, sizeof(errbuf),
                      "invalid option name on line %d of configuration file %s",
                      lineno, filename);
+            free(buf);
             fatal(errbuf, EX_CONFIG);
         }
         *p++ = '\0';
@@ -1016,6 +1019,7 @@ static void config_read_file(const char *filename)
             snprintf(errbuf, sizeof(errbuf),
                      "empty option value on line %d of configuration file",
                      lineno);
+            free(buf);
             fatal(errbuf, EX_CONFIG);
         }
 
@@ -1031,6 +1035,7 @@ static void config_read_file(const char *filename)
                 snprintf(errbuf, sizeof(errbuf),
                          "invalid directive on line %d of configuration file %s",
                          lineno, filename);
+                free(buf);
                 fatal(errbuf, EX_CONFIG);
             }
         }
@@ -1084,6 +1089,7 @@ static void config_read_file(const char *filename)
                          "option '%s' was specified twice in config file"
                          " (second occurrence on line %d)",
                          fullkey, lineno);
+                free(buf);
                 fatal(errbuf, EX_CONFIG);
 
             } else if (imapopts[opt].seen == 2 && !service_specific) {
@@ -1133,6 +1139,7 @@ static void config_read_file(const char *filename)
                     snprintf(errbuf, sizeof(errbuf),
                              "non-integer value for %s in line %d",
                              imapopts[opt].optname, lineno);
+                    free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1147,6 +1154,7 @@ static void config_read_file(const char *filename)
                     snprintf(errbuf, sizeof(errbuf),
                              "non-switch value for %s in line %d",
                              imapopts[opt].optname, lineno);
+                    free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
                 imapopts[opt].val.b = b;
@@ -1198,6 +1206,7 @@ static void config_read_file(const char *filename)
                         snprintf(errbuf, sizeof(errbuf),
                                  "invalid value '%s' for %s in line %d",
                                  p, imapopts[opt].optname, lineno);
+                        free(buf);
                         fatal(errbuf, EX_CONFIG);
                     }
                     else if (imapopts[opt].t == OPT_STRINGLIST)
@@ -1233,6 +1242,7 @@ static void config_read_file(const char *filename)
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
                              p, imapopts[opt].optname, lineno);
+                    free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1250,6 +1260,7 @@ static void config_read_file(const char *filename)
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable byte size '%s' for %s in line %d",
                              p, imapopts[opt].optname, lineno);
+                    free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1277,6 +1288,7 @@ static void config_read_file(const char *filename)
                 snprintf(errbuf, sizeof(errbuf),
                          "option '%s' is unknown on line %d of config file",
                          fullkey, lineno);
+                free(buf);
                 fatal(errbuf, EX_CONFIG);
             }
 */
