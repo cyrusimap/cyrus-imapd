@@ -66,6 +66,8 @@ my %notbefore = (
     't:Email:get:header-header-field-name' => '3.5',
     't:Email:import:good-imports' => '3.8',
     't:Email:import:one-fails-another-succeeds' => '3.8',
+    't:core:jmap-session-resource' => '3.13',
+    't:core:jmap-session-resource' => '3.13',
 );
 
 sub cyrus_version_supports_jmap
