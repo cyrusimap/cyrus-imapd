@@ -940,16 +940,18 @@ static void config_read_file(const char *filename)
         infile = fopen(filename, "r");
 
     if (!infile) {
-        snprintf(buf, bufsize, "can't open configuration file %s: %s",
+        snprintf(errbuf, sizeof(errbuf),
+                 "can't open configuration file %s: %s",
                  filename, strerror(errno));
-        fatal(buf, EX_CONFIG);
+        fatal(errbuf, EX_CONFIG);
     }
 
     /* check to see if we've already read this file */
     if (hash_lookup(filename, &includehash)) {
-        snprintf(buf, bufsize, "configuration file %s included twice",
+        snprintf(errbuf, sizeof(errbuf),
+                 "configuration file %s included twice",
                  filename);
-        fatal(buf, EX_CONFIG);
+        fatal(errbuf, EX_CONFIG);
     }
     else {
         hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
@@ -996,8 +998,8 @@ static void config_read_file(const char *filename)
         }
         if (*p != ':') {
             snprintf(errbuf, sizeof(errbuf),
-                    "invalid option name on line %d of configuration file %s",
-                    lineno, filename);
+                     "invalid option name on line %d of configuration file %s",
+                     lineno, filename);
             fatal(errbuf, EX_CONFIG);
         }
         *p++ = '\0';
@@ -1012,8 +1014,8 @@ static void config_read_file(const char *filename)
 
         if (!*p) {
             snprintf(errbuf, sizeof(errbuf),
-                    "empty option value on line %d of configuration file",
-                    lineno);
+                     "empty option value on line %d of configuration file",
+                     lineno);
             fatal(errbuf, EX_CONFIG);
         }
 
@@ -1078,9 +1080,10 @@ static void config_read_file(const char *filename)
                     (imapopts[opt].seen == 2 && service_specific)
                 ) {
 
-                sprintf(errbuf,
-                        "option '%s' was specified twice in config file (second occurrence on line %d)",
-                        fullkey, lineno);
+                snprintf(errbuf, sizeof(errbuf),
+                         "option '%s' was specified twice in config file"
+                         " (second occurrence on line %d)",
+                         fullkey, lineno);
                 fatal(errbuf, EX_CONFIG);
 
             } else if (imapopts[opt].seen == 2 && !service_specific) {
@@ -1127,8 +1130,9 @@ static void config_read_file(const char *filename)
                 val = strtol(p, &ptr, 0);
                 if (!ptr || *ptr != '\0') {
                     /* error during conversion */
-                    sprintf(errbuf, "non-integer value for %s in line %d",
-                            imapopts[opt].optname, lineno);
+                    snprintf(errbuf, sizeof(errbuf),
+                             "non-integer value for %s in line %d",
+                             imapopts[opt].optname, lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
 
@@ -1140,8 +1144,9 @@ static void config_read_file(const char *filename)
                 int b = config_parse_switch(p);
                 if (b < 0) {
                     /* error during conversion */
-                    sprintf(errbuf, "non-switch value for %s in line %d",
-                            imapopts[opt].optname, lineno);
+                    snprintf(errbuf, sizeof(errbuf),
+                             "non-switch value for %s in line %d",
+                             imapopts[opt].optname, lineno);
                     fatal(errbuf, EX_CONFIG);
                 }
                 imapopts[opt].val.b = b;
@@ -1190,8 +1195,9 @@ static void config_read_file(const char *filename)
 
                     if (!e->name) {
                         /* error during conversion */
-                        sprintf(errbuf, "invalid value '%s' for %s in line %d",
-                                p, imapopts[opt].optname, lineno);
+                        snprintf(errbuf, sizeof(errbuf),
+                                 "invalid value '%s' for %s in line %d",
+                                 p, imapopts[opt].optname, lineno);
                         fatal(errbuf, EX_CONFIG);
                     }
                     else if (imapopts[opt].t == OPT_STRINGLIST)
@@ -1266,10 +1272,11 @@ static void config_read_file(const char *filename)
       sharing this config file and whose names we cannot predict
 
             if (strncasecmp(key,"sasl_",5)
-            && strncasecmp(key,"partition-",10)) {
-                sprintf(errbuf,
-                        "option '%s' is unknown on line %d of config file",
-                        fullkey, lineno);
+                && strncasecmp(key,"partition-",10))
+            {
+                snprintf(errbuf, sizeof(errbuf),
+                         "option '%s' is unknown on line %d of config file",
+                         fullkey, lineno);
                 fatal(errbuf, EX_CONFIG);
             }
 */
