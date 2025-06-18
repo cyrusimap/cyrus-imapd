@@ -5065,13 +5065,8 @@ EXPORTED int message_get_bcc(message_t *m, struct buf *buf)
 
 EXPORTED int message_get_deliveredto(message_t *m, struct buf *buf)
 {
-    int r = message_get_field(m, "X-Original-Delivered-To",
-                              MESSAGE_RAW|MESSAGE_FIRST, buf);
-    if (!r && buf_len(buf) == 0) {
-        r = message_get_field(m, "X-Delivered-To",
-                              MESSAGE_RAW|MESSAGE_FIRST, buf);
-    }
-    return r;
+    return message_get_field(m, "X-Delivered-To",
+                             MESSAGE_RAW|MESSAGE_FIRST, buf);
 }
 
 EXPORTED int message_get_inreplyto(message_t *m, struct buf *buf)

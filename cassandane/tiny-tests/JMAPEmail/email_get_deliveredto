@@ -88,7 +88,7 @@ EOF
         $res->[1][1]{list}[0]{deliveredTo});
 
     $self->assert_str_equals('msg2', $res->[1][1]{list}[1]{subject});
-    $self->assert_str_equals('x-original-delivered-to@local',
+    $self->assert_str_equals('x-delivered-to@local',
         $res->[1][1]{list}[1]{deliveredTo});
 
     $self->assert_str_equals('msg3', $res->[1][1]{list}[2]{subject});

@@ -53,8 +53,8 @@ EOF
     xlog $self, "Deliver a matching message";
     my $msg1 = $self->{gen}->generate(
         subject => "Message 1",
-        extra_headers => [['X-Original-Delivered-To', 'xxx@yyy.zzz'],
-                          ['X-Original-Delivered-To', 'foo@yyy.zzz']],
+        extra_headers => [['X-Delivered-To', 'xxx@yyy.zzz'],
+                          ['X-Delivered-To', 'foo@yyy.zzz']],
         mime_type => "multipart/mixed",
         mime_boundary => "047d7b33dd729737fe04d3bde348",
         body => $body,
@@ -70,8 +70,8 @@ EOF
     xlog $self, "Deliver a non-matching message";
     my $msg2 = $self->{gen}->generate(
         subject => "Message 2",
-        extra_headers => [['X-Original-Delivered-To', 'foo@yyy.zzz'],
-                          ['X-Original-Delivered-To', 'xxx@yyy.zzz']
+        extra_headers => [['X-Delivered-To', 'foo@yyy.zzz'],
+                          ['X-Delivered-To', 'xxx@yyy.zzz']
                           ],
         mime_type => "multipart/mixed",
         mime_boundary => "047d7b33dd729737fe04d3bde348",
