@@ -69,7 +69,7 @@ sub tear_down
 }
 
 sub test_replace_same_mailbox
-    :min_version_3_9
+    :min_version_3_9 :Conversations
 {
     my ($self) = @_;
 
@@ -97,6 +97,31 @@ sub test_replace_same_mailbox
                      "(\\flagged)", " 7-Feb-1994 22:43:04 -0800",
                      { Literal => $exp{C}->as_string() });
     $self->check_messages(\%exp);
+
+    my $res = $talk->fetch('1', '(UID INTERNALDATE)');
+    $self->assert_matches(qr/1994/, $res->{1}{internaldate});
+
+    # REPLACE same content with different INTERNALDATE - should change
+    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
+                     "()", " 7-Feb-2004 22:43:04 -0800",
+                     { Literal => $exp{C}->as_string() });
+    $res = $talk->fetch('1:*', '(UID INTERNALDATE)');
+    $self->assert_matches(qr/2004/, $res->{1}{internaldate});
+
+    # APPEND same content with different INTERNALDATE - should use existing
+    $talk->append("INBOX", "()", " 7-Feb-2014 22:43:04 -0800",
+                     { Literal => $exp{C}->as_string() });
+    $res = $talk->fetch('1:*', '(UID INTERNALDATE)');
+    $self->assert_matches(qr/2004/, $res->{1}{internaldate});
+    $self->assert_matches(qr/2004/, $res->{2}{internaldate});
+
+    # REPLACE same content with different INTERNALDATE - should use existing
+    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX",
+                     "()", " 7-Feb-2014 22:43:04 -0800",
+                     { Literal => $exp{C}->as_string() });
+    $res = $talk->fetch('1:*', '(UID INTERNALDATE)');
+    $self->assert_matches(qr/2004/, $res->{1}{internaldate});
+    $self->assert_matches(qr/2004/, $res->{2}{internaldate});
 }
 
 sub test_replace_different_mailbox
