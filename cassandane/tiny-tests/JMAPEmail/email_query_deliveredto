@@ -89,19 +89,19 @@ EOF
             }],
         }, 'R1'],
     ], $using);
-    $self->assert_deep_equals([$match1Id,$match2Id], $res->[0][1]{ids});
+    $self->assert_deep_equals([$match1Id], $res->[0][1]{ids});
 
     xlog "Query with IMAP search";
     $imap->select('INBOX');
     my $uids = $imap->search(
         'deliveredto', { Quote => 'deliveredto@local' },
     ) || die;
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_deep_equals([1], $uids);
 
     xlog "Query with fuzzy IMAP search";
     $imap->select('INBOX');
     $uids = $imap->search(
         'fuzzy', 'deliveredto', { Quote => 'deliveredto@local' },
     ) || die;
-    $self->assert_deep_equals([1,2], $uids);
+    $self->assert_deep_equals([1], $uids);
 }
