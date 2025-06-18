@@ -5654,6 +5654,16 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                     // if we found a matching message, use its internaldate
                     if (existing_internaldate.tv_nsec != UTIME_OMIT) {
                         copyrecord.internaldate = existing_internaldate;
+
+                        // "remove" existing record crc from existing synccrc
+                        repack->crcs.basic ^= crc_basic(mailbox, record);
+
+                        // update existing record with new internaldate
+                        // and "add" new record crc to existing synccrc
+                        // update the existing synccrc with new internaldate
+                        struct index_record newcrcrec = *record;
+                        newcrcrec.internaldate = existing_internaldate;
+                        repack->crcs.basic ^= crc_basic(mailbox, &newcrcrec);
                     }
                     else {
                         // make sure we don't have a JMAP ID (internaldate) clash
