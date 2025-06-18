@@ -693,12 +693,6 @@ static void service_create(struct service *s, int is_startup)
             continue;
         }
 
-        if (s->listen[0] == '/') { /* unix socket */
-            /* for DUX, where this isn't the default.
-               (harmlessly fails on some systems) */
-            chmod(s->listen, (mode_t) 0777);
-        }
-
         if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
              || !strcmp(s->proto, "tcp6"))
             && listen(s->socket, listen_queue_backlog) < 0) {
@@ -2927,6 +2921,21 @@ static void master_ready(const char *ready_file, int ready)
     }
 }
 
+static void chdir_cores(void)
+{
+    /* Set the current working directory where cores can go to die. */
+    const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
+
+    /* configdirectory is required, so it should never be NULL... */
+    assert(path != NULL);
+
+    if (chdir(path))
+        fatalf(2, "couldn't chdir to %s: %m", path);
+    chdir("cores");
+    /* XXX ignoring error when "cores" subdirectory missing */
+    errno = 0;
+}
+
 int main(int argc, char **argv)
 {
     static const char lock_suffix[] = ".lock";
@@ -3020,10 +3029,10 @@ int main(int argc, char **argv)
         for (fd = 0; fd < 3; fd++) {
             const char *file = (error_log && fd > 0 ?
                                 error_log : "/dev/null");
-            int mode = (fd > 0 ? O_WRONLY : O_RDWR) |
-                       (error_log && fd > 0 ? O_CREAT|O_APPEND : 0);
+            int flags = (fd > 0 ? O_WRONLY : O_RDWR)
+                        | (error_log && fd > 0 ? O_CREAT|O_APPEND|O_NOFOLLOW : 0);
             close(fd);
-            if (open(file, mode, 0666) != fd)
+            if (open(file, flags, 0666) != fd)
                 fatalf(2, "couldn't open %s: %m", file);
         }
     }
@@ -3052,7 +3061,7 @@ int main(int argc, char **argv)
 
         pidfile_lock = strconcat(pidfile, lock_suffix, (char *)NULL);
 
-        pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR, 0644);
+        pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR|O_NOFOLLOW, 0644);
         if (pidlock_fd == -1) {
             syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
             exit(EX_OSERR);
@@ -3068,17 +3077,6 @@ int main(int argc, char **argv)
             syslog(LOG_ERR, "can't create startup pipe (%m)");
             exit(EX_OSERR);
         }
-
-        /* Set the current working directory where cores can go to die. */
-        const char *path = config_getstring(IMAPOPT_CONFIGDIRECTORY);
-        if (path == NULL) {
-                path = getenv("TMPDIR");
-                if (path == NULL)
-                        path = "/tmp";
-        }
-        if (chdir(path))
-            fatalf(2, "couldn't chdir to %s: %m", path);
-        r = chdir("cores");
 
         do {
             pid = fork();
@@ -3127,7 +3125,7 @@ int main(int argc, char **argv)
     }
 
     /* Write out the pidfile */
-    pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
+    pidfd = open(pidfile, O_CREAT|O_RDWR|O_NOFOLLOW, 0644);
     if (pidfd == -1) {
         int exit_result = EX_OSERR;
 
@@ -3210,6 +3208,7 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+    if (daemon_mode) chdir_cores();
 #endif
 
     masterconf_getsection("START", &add_start, NULL);
@@ -3235,6 +3234,7 @@ int main(int argc, char **argv)
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
+    if (daemon_mode) chdir_cores();
 #endif
 
     /* init ctable janitor */

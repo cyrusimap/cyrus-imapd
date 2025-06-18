@@ -95,7 +95,6 @@ static int open_kick_socket(void)
     oldumask = umask((mode_t) 0); /* for Linux */
     r = bind(s, (struct sockaddr *)&srvaddr, len);
     umask(oldumask); /* for Linux */
-    chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
         syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
         fatal("bind failed", EX_OSERR);
