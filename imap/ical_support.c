@@ -2401,6 +2401,7 @@ EXPORTED const char *icaltimezone_get_location_tzid(const icaltimezone *zone)
 {
     const char *v = icaltimezone_get_location((icaltimezone*) zone);
     if (!v) v = icaltimezone_get_tzid((icaltimezone*) zone);
+    if (!strcmpsafe(v, "UTC")) v = "Etc/UTC";
     return v;
 }
 
