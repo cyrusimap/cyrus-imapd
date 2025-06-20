@@ -1,0 +1,50 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.10.2 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.2/cyrus-imapd-3.10.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.10.2/cyrus-imapd-3.10.2.tar.gz.sig
+
+.. _relnotes-3.10.2-changes:
+
+Changes since 3.10.1
+====================
+
+STARTTLS changes
+----------------
+
+The industry is deprecating STARTTLS (aka opportunistic TLS) in favor of
+implicit TLS over a dedicated port.  STARTTLS is now disabled by default.
+
+Installations that need to service clients that use opportunistic TLS
+should enable the `allowstarttls` :cyrusman:`imapd.conf(5)` option for
+the services that need it.  For example, for a service configured with
+the name `imap` in :cyrusman:`cyrus.conf(5)`, set `imap_allowstarttls: on`
+to enable STARTTLS.
+
+Security changes
+----------------
+
+* Fixed :issue:`5477`: master: tighten up pidfile/etc handling
+
+Build changes
+-------------
+
+* Fixed :issue:`5450`: fix zoneinfo_db code for GCC 15 (thanks Yadd)
+
+Bug fixes
+---------
+
+* Fixed :issue:`5309`: deadlock on shutdown (thanks Mark Cammidge)
+* Fixed :issue:`5424`: recognise service-specific SASL options in
+  ``cyr_info conf-lint``
+* Fixed :issue:`5423`: charset.c needs stdbool.h
+* Fixed :issue:`5420`: fix double-free in http_admin (thanks Wolfgang Breyha)
+* Fixed :issue:`5460`: pop3d: add basic prometheus support (thanks Wolfgang
+  Breyha)
+* Fixed :issue:`5481`: imapd: typo in SASL-IR capability
+* Fixed :issue:`5454`: httpd fails to parse OpenSSL version for status string
