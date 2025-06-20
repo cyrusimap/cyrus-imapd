@@ -185,7 +185,7 @@ are listed with ``<none>''.
 /* Defaults to enabled.  If disabled, disallows the use of the SETACL
    command at all via IMAP. */
 
-{ "allowstarttls", 0, SWITCH, "UNRELEASED" }
+{ "allowstarttls", 0, SWITCH, "3.10.2" }
 /* If enabled, allows upgrading a plaintext connection to use TLS
    (a.k.a opportunistic TLS) via a protocol specific
    command/mechanism.  IMAP, LMTP, NNTP, and ManageSieve use the
