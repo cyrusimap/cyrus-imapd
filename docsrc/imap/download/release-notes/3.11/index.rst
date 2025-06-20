@@ -15,5 +15,3 @@ Cyrus IMAP 3.11 Tags
 .. toctree::
     :maxdepth: 1
     :glob:
-
-    x/*-alpha*
