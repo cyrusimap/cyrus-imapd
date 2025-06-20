@@ -292,7 +292,7 @@ EXPORTED void appendstrlist(struct strlist **l, char *s)
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
+    *tail = xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
     (*tail)->next = 0;
 }
@@ -356,7 +356,7 @@ EXPORTED void appendentryatt(struct entryattlist **l, const char *entry,
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct entryattlist *)xmalloc(sizeof(struct entryattlist));
+    *tail = xmalloc(sizeof(struct entryattlist));
     (*tail)->entry = xstrdup(entry);
     (*tail)->attvalues = attvalues;
     (*tail)->next = NULL;
@@ -457,9 +457,11 @@ EXPORTED size_t sizeentryatts(const struct entryattlist *l)
     size_t sz = 0;
     struct attvaluelist *av;
 
-    for ( ; l ; l = l->next)
-        for (av = l->attvalues ; av ; av = av->next)
+    for ( ; l ; l = l->next) {
+        for (av = l->attvalues ; av ; av = av->next) {
             sz += av->value.len;
+        }
+    }
     return sz;
 }
 
@@ -499,10 +501,8 @@ static void init_internal()
 }
 
 /* must be called after cyrus_init */
-EXPORTED void annotate_init(int (*fetch_func)(const char *, const char *,
-                                     const strarray_t *, const strarray_t *),
-                            int (*store_func)(const char *, const char *,
-                                     struct entryattlist *))
+EXPORTED void annotate_init(annotate_fetch_func *fetch_func,
+                            annotate_store_func *store_func)
 {
     if (fetch_func) {
         proxy_fetch_func = fetch_func;
@@ -1259,7 +1259,7 @@ EXPORTED int annotatemore_findall_mboxname(const char *mboxname,
     return r;
 }
 
-/***************************  Annotate State Management  ***************************/
+/************************  Annotate State Management  ************************/
 
 EXPORTED annotate_state_t *annotate_state_new(void)
 {
@@ -2037,6 +2037,7 @@ static void annotation_get_fromdb(annotate_state_t *state,
 }
 
 /* TODO: need to handle /<section-part>/ somehow */
+// clang-format: off
 static const annotate_entrydesc_t message_builtin_entries[] =
 {
     {
@@ -2136,6 +2137,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
     },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t message_db_entry =
     {
@@ -2150,6 +2152,7 @@ static const annotate_entrydesc_t message_db_entry =
         NULL
     };
 
+// clang-format: off
 static const annotate_entrydesc_t mailbox_builtin_entries[] =
 {
     {
@@ -2486,6 +2489,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t mailbox_db_entry =
     {
@@ -2500,6 +2504,7 @@ static const annotate_entrydesc_t mailbox_db_entry =
         NULL
     };
 
+// clang-format: off
 static const annotate_entrydesc_t server_builtin_entries[] =
 {
     {
@@ -2627,6 +2632,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID,
         0, 0, NULL, NULL, NULL, NULL }
 };
+// clang-format: on
 
 static const annotate_entrydesc_t server_db_entry =
     {
@@ -3378,12 +3384,12 @@ static int annotate_canon_value(struct buf *value, int type)
         errno = 0;
         buf_cstring(value);
         uwhatever = strtoul(value->s, &p, 10);
-        if ((p == value->s)             /* no value */
-            || (*p != '\0')             /* illegal char */
-            || (unsigned)(p - value->s) != value->len
-                                        /* embedded NUL */
-            || errno                    /* overflow */
-            || strchr(value->s, '-')) { /* negative number */
+        if ((p == value->s)                           /* no value */
+            || (*p != '\0')                           /* illegal char */
+            || (unsigned)(p - value->s) != value->len /* embedded NUL */
+            || errno                                  /* overflow */
+            || strchr(value->s, '-')                  /* negative number */)
+        {
             return IMAP_ANNOTATION_BADVALUE;
         }
         break;
@@ -3393,11 +3399,11 @@ static int annotate_canon_value(struct buf *value, int type)
         errno = 0;
         buf_cstring(value);
         whatever = strtol(value->s, &p, 10);
-        if ((p == value->s)             /* no value */
-            || (*p != '\0')             /* illegal char */
-            || (unsigned)(p - value->s) != value->len
-                                        /* embedded NUL */
-            || errno) {                 /* underflow/overflow */
+        if ((p == value->s)                           /* no value */
+            || (*p != '\0')                           /* illegal char */
+            || (unsigned)(p - value->s) != value->len /* embedded NUL */
+            || errno                                  /* underflow/overflow */)
+        {
             return IMAP_ANNOTATION_BADVALUE;
         }
         break;
