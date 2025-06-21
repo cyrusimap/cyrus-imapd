@@ -153,6 +153,25 @@ endif # COM_ERR
 
 bin_PROGRAMS = imtest/imtest
 
+if SIEVE
+
+if PERL
+SUBDIRS += perl/sieve/managesieve
+noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
+endif # PERL
+
+BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
+noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
+lib_LTLIBRARIES += sieve/libcyrus_sieve.la
+check_PROGRAMS += sieve/test sieve/test_mailbox
+sbin_PROGRAMS += sieve/sievec sieve/sieved
+
+if SERVER
+libexec_PROGRAMS += timsieved/timsieved
+endif # SERVER
+
+endif # SIEVE
+
 if SERVER
 BUILT_SOURCES += \
     imap/http_err.c \
@@ -295,25 +314,6 @@ if PERL
 SUBDIRS += perl/annotator perl/imap
 noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
 endif # PERL
-
-if SIEVE
-
-if PERL
-SUBDIRS += perl/sieve/managesieve
-noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
-endif # PERL
-
-BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
-noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
-lib_LTLIBRARIES += sieve/libcyrus_sieve.la
-check_PROGRAMS += sieve/test sieve/test_mailbox
-sbin_PROGRAMS += sieve/sievec sieve/sieved
-
-if SERVER
-libexec_PROGRAMS += timsieved/timsieved
-endif # SERVER
-
-endif # SIEVE
 
 EXTRA_DIST = \
     COPYING \
@@ -1083,6 +1083,8 @@ if SIEVE
 imap_libcyrus_imap_la_SOURCES += \
     imap/sieve_db.c \
     imap/sieve_db.h
+imap_libcyrus_imap_la_LIBADD += \
+    sieve/libcyrus_sieve.la
 endif # SIEVE
 
 if OBJECTSTORE
