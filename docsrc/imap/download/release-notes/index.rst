@@ -97,6 +97,7 @@ Development snapshots
 .. toctree::
     :maxdepth: 1
 
+    3.9/index
     3.7/index
     3.5/index
     3.3/index
