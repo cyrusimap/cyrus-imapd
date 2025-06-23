@@ -124,15 +124,14 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val,
-                                        json_t *patch,
-                                        json_t *invalid,
-                                        unsigned flags)
+EXPORTED void jmap_patchobject_applym(json_t *dst,
+                                      json_t *patch,
+                                      json_t *invalid,
+                                      unsigned flags)
 {
     const char *path;
-    json_t *newval, *dst;
+    json_t *newval;
 
-    dst = json_deep_copy(val);
     json_object_foreach(patch, path, newval) {
         /* Start traversal at root object */
         json_t *it = dst;
@@ -185,10 +184,25 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
 
         if (r != 0) {
             if (invalid) json_array_append_new(invalid, json_string(path));
-            json_decref(dst);
-            return NULL;
         }
     }
+}
+
+EXPORTED json_t* jmap_patchobject_apply(json_t *val,
+                                        json_t *patch,
+                                        json_t *invalid,
+                                        unsigned flags)
+{
+    json_t *dst = json_deep_copy(val);
+
+    invalid = invalid ? json_incref(invalid) : json_array();
+    size_t prev_invalid_size = json_array_size(invalid);
+    jmap_patchobject_applym(dst, patch, invalid, flags);
+    if (json_array_size(invalid) > prev_invalid_size) {
+        json_decref(dst);
+        dst = NULL;
+    }
+    json_decref(invalid);
 
     return dst;
 }
