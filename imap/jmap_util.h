@@ -37,6 +37,11 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
                                       json_t *invalid, unsigned flags);
 
+/* Apply patch to object val. If invalid is a JSON array, then
+ * any erroneous path in patch is appended as JSON string */
+extern void jmap_patchobject_applym(json_t *dst, json_t *patch,
+                                    json_t *invalid, unsigned flags);
+
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
 
