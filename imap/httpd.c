@@ -1264,18 +1264,7 @@ static void _shutdown_tls(struct http_connection *conn __attribute__((unused)))
 
 static int tls_init(int client_auth, struct buf *serverinfo)
 {
-    unsigned long version = OPENSSL_VERSION_NUMBER;
-    unsigned int status   = version & 0x0f; version >>= 4;
-    unsigned int patch    = version & 0xff; version >>= 8;
-    unsigned int fix      = version & 0xff; version >>= 8;
-    unsigned int minor    = version & 0xff; version >>= 8;
-    unsigned int major    = version & 0xff;
-    
-    buf_printf(serverinfo, " OpenSSL/%u.%u.%u", major, minor, fix);
-
-    if (status == 0) buf_appendcstr(serverinfo, "-dev");
-    else if (status < 15) buf_printf(serverinfo, "-beta%u", status);
-    else if (patch) buf_putc(serverinfo, patch + 'a' - 1);
+    buf_printf(serverinfo, " OpenSSL/%s", OPENSSL_FULL_VERSION_STR);
 
     if (!tls_enabled()) return HTTP_UNAVAILABLE;
 
