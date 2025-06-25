@@ -461,7 +461,7 @@ static struct capa_struct base_capabilities[] = {
     { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "REPLACE",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8508 */
     { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
-    { "SASL_IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
+    { "SASL-IR",               CAPA_PREAUTH,            { 0 } }, /* RFC 4959 */
     { "SAVEDATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8514 */
     { "SAVELIMIT=",            0, /* not implemented */ { 0 } }, /* RFC 9738 */
     { "SEARCH=FUZZY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 6203 */
