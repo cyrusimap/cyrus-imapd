@@ -517,10 +517,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
         if (setversion != mailbox->i.minor_version) {
             int oldversion = mailbox->i.minor_version;
             /* need to re-set the version! */
-            int r = mailbox_setversion(mailbox, setversion);
+            int r = mailbox_setversion(mailbox, setversion, !make_changes);
             char *extname = mboxname_to_external(name, &recon_namespace, NULL);
             if (r) {
                 printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
+            }
+            else if (!make_changes){
+                printf("Test conversion %s version %d to %d succeeded\n",
+                       extname, oldversion, setversion);
             }
             else {
                 printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
