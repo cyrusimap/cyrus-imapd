@@ -308,7 +308,7 @@ static void vacation_get(jmap_req_t *req, struct mailbox *mailbox,
 static int jmap_vacation_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct sieve_db *db = NULL;
     struct mailbox *mailbox = NULL;
@@ -551,7 +551,7 @@ static void vacation_update(struct jmap_req *req,
 static int jmap_vacation_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *jerr = NULL;
     struct sieve_db *db = NULL;
     struct mailbox *mailbox = NULL;

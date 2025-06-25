@@ -917,7 +917,7 @@ static const jmap_property_t mailbox_props[] = {
 static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */
@@ -1611,7 +1611,7 @@ static int _mboxquery_parse_args(jmap_req_t *req __attribute__((unused)),
 static int jmap_mailbox_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     mboxquery_args_t args = { 0, 0 };
 
     /* Parse request */
@@ -1659,7 +1659,7 @@ static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
 static int jmap_mailbox_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
     mboxquery_args_t args = { 0, 0 };
     int r = 0;
 
@@ -4109,7 +4109,7 @@ static void _mboxset_fini(struct mboxset *set)
 static int jmap_mailbox_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct mboxset set;
+    struct mboxset set = JMAP_SET_INITIALIZER;
 
     /* Parse arguments */
     json_t *arg_err = NULL;

@@ -293,7 +293,7 @@ static int getscript(void *rock, struct sieve_data *sdata)
 static int jmap_sieve_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
@@ -794,7 +794,7 @@ static int _sieve_setargs_parse(jmap_req_t *req __attribute__((unused)),
 static int jmap_sieve_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     struct sieve_set_args sub_args = { NULL, 0 };
     json_t *jerr = NULL;
     struct mailbox *mailbox = NULL;
@@ -1113,7 +1113,7 @@ static int sieve_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb, void *r
 static int jmap_sieve_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     jmap_filter *parsed_filter = NULL;
     arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
     struct mailbox *mailbox = NULL;

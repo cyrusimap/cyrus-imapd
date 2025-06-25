@@ -756,7 +756,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     }
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct carddav_db *db = NULL;
     mbentry_t *mbentry = NULL;
@@ -1101,7 +1101,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
                                              jmap_contact_errors_t *errors))
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 
@@ -3021,7 +3021,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     }
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct carddav_db *db;
     jmap_filter *parsed_filter = NULL;
     int r = 0;
@@ -4732,7 +4732,7 @@ static int _contacts_copy(struct jmap_req *req,
                                              jmap_contact_errors_t *errors))
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_copy copy;
+    struct jmap_copy copy = JMAP_COPY_INITIALIZER;
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
     json_t *destroy_cards = json_array();
@@ -5070,7 +5070,7 @@ static const jmap_property_t addressbook_props[] = {
 static int jmap_addressbook_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 
@@ -5709,7 +5709,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     int on_destroy_remove_contents = 0;
     json_t *err = NULL;
     int r = 0;
@@ -11943,7 +11943,7 @@ static int jmap_card_query(struct jmap_req *req)
 static int jmap_card_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
 
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser, NULL, NULL,
@@ -12018,7 +12018,7 @@ static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
 static int jmap_card_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_parse parse;
+    struct jmap_parse parse = JMAP_QUERYCHANGES_INITIALIZER;
     struct card_parseargs args = {0};
     struct carddav_db *db = NULL;
     json_t *err = NULL;

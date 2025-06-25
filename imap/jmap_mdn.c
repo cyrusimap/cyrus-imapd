@@ -603,7 +603,7 @@ done:
 static int jmap_mdn_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_parse parse;
+    struct jmap_parse parse = JMAP_QUERYCHANGES_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */

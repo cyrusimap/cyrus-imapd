@@ -462,7 +462,7 @@ static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
 static int jmap_usercounters_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */
