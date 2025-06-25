@@ -4237,14 +4237,6 @@ static void repair_broken_ical(icalcomponent **icalp)
                                 icalproperty_new_version("2.0"), (void *)0);
         icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
     }
-    else if (icalcomponent_isa(original_ical) == ICAL_XROOT_COMPONENT) {
-        // Ignore all but the first iCalendar object.
-        icalcomponent *comp = icalcomponent_get_first_component(
-            original_ical, ICAL_VCALENDAR_COMPONENT);
-        if (comp) {
-            myical = icalcomponent_clone(comp);
-        }
-    }
     else myical = original_ical;
 
     if (icalcomponent_isa(myical) != ICAL_VCALENDAR_COMPONENT ||
@@ -4345,9 +4337,9 @@ static void repair_broken_ical(icalcomponent **icalp)
     *icalp = myical;
 }
 
-EXPORTED json_t*
-jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
-                    struct jmapical_ctx *jmapctx)
+static json_t *jmapical_tojmap_all_icalobj(icalcomponent *ical,
+                                           hash_table *props,
+                                           struct jmapical_ctx *jmapctx)
 {
     json_t *jsevents = json_array();
     icalcomponent *myical = ical;
@@ -4462,6 +4454,34 @@ done:
     }
     buf_free(&buf);
     return jsevents;
+}
+
+EXPORTED json_t*
+jmapical_tojmap_all(icalcomponent *ical, hash_table *props,
+                    struct jmapical_ctx *jmapctx)
+{
+
+    if (icalcomponent_isa(ical) == ICAL_XROOT_COMPONENT)
+    {
+        // Process as an iCalendar object stream
+        json_t *jsevents = json_array();
+
+        for (icalcomponent *iobj = icalcomponent_get_first_component(
+                 ical, ICAL_VCALENDAR_COMPONENT);
+             iobj;
+             iobj = icalcomponent_get_next_component(ical,
+                                                     ICAL_VCALENDAR_COMPONENT))
+        {
+            json_t *tmp = jmapical_tojmap_all_icalobj(iobj, props, jmapctx);
+            json_array_extend(jsevents, tmp);
+            json_decref(tmp);
+        }
+
+        return jsevents;
+    }
+
+    // Process as a regular single iCalendar object.
+    return jmapical_tojmap_all_icalobj(ical, props, jmapctx);
 }
 
 EXPORTED json_t*

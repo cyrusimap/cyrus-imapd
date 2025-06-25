@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_parse_multi_icalobj {
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Parse iCalendar stream with two iCalendar objects
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:1a968fa5-3afd-4736-8fac-21958ef3db90
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test1
+END:VEVENT
+END:VCALENDAR
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ABC Corporation//NONSGML My Product//EN
+BEGIN:VEVENT
+UID:b876f7a3-3e71-46e1-a350-84be804aa486
+DTSTART:20160928T160000Z
+DURATION:PT1H
+SUMMARY:test2
+END:VEVENT
+END:VCALENDAR
+EOF
+    $ical =~ s/\r?\n/\r\n/gs;
+
+    my $res = $jmap->CallMethods(
+        [
+            [
+                'Blob/upload',
+                {
+                    create => {
+                        ical => {
+                            data => [ {
+                                'data:asText' => $ical,
+                            } ],
+                        },
+                    },
+                },
+                'R0'
+            ],
+            [
+                'CalendarEvent/parse',
+                {
+                    blobIds          => ["#ical"],
+                    repairBrokenIcal => JSON::true,
+                    properties       => [ 'uid', 'title' ],
+                },
+                'R1'
+            ]
+        ],
+        [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/blob',
+        ]
+    );
+
+    $self->assert_deep_equals(
+        {
+            '@type' => "Group",
+            entries => [
+                {
+                    '@type' => "Event",
+                    uid     => "1a968fa5-3afd-4736-8fac-21958ef3db90",
+                    title   => "test1"
+                },
+                {
+                    '@type' => "Event",
+                    uid     => "b876f7a3-3e71-46e1-a350-84be804aa486",
+                    title   => "test2"
+                }
+            ]
+        },
+        $res->[1][1]{parsed}{'#ical'}
+    );
+}
