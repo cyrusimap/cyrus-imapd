@@ -222,10 +222,11 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 if (c == EOF || isspace(c) || c == '(' ||
                           c == ')' || c == '\"') {
                     /* gotta handle NIL here too */
-                    if ((flags & GXS_NIL) && buf->len == 3 && !memcmp(buf->s, "NIL", 3))
+                    const char *atom = buf_cstring(buf);
+                    if ((flags & GXS_NIL) && !strcmp(atom, "NIL")) {
+                        /* indicate NIL with a NULL buf.s pointer */
                         buf_free(buf);
-                    else
-                        buf_cstring(buf);
+                    }
                     return c;
                 }
                 buf_putc(buf, c);
@@ -248,7 +249,6 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 if (matched == strlen("IL") + 1) {
                     if (isspace(sep) || sep == '(' || sep == ')' || sep == '\"') {
                         /* found NIL and a separator, consume it */
-                        prot_ungetc(c, pin);
                         c = getword(pin, buf);
                         /* indicate NIL with a NULL buf.s pointer */
                         buf_free(buf);
@@ -258,10 +258,9 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                 else if (matched > 0) {
                     /* partially matched NIL, but not enough buffer to be sure:
                      * fall back to old behaviour */
-                    prot_ungetc(c, pin);
                     c = getword(pin, buf);
-                    if (buf->len == 3 && !memcmp(buf->s, "NIL", 3)) {
-                        /* indicated NIL with a NULL buf.s pointer */
+                    if (!strcmp(buf_cstring(buf), "IL")) {
+                        /* indicate NIL with a NULL buf.s pointer */
                         buf_free(buf);
                         return c;
                     }
