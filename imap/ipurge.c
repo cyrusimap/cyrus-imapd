@@ -319,7 +319,8 @@ static unsigned purge_check(struct mailbox *mailbox,
     mbox_stats_t *stats = (mbox_stats_t *) deciderock;
 
     my_time = time(0);
-    senttime = use_sentdate ? record->sentdate : record->internaldate;
+    senttime =
+        use_sentdate ? record->sentdate.tv_sec : record->internaldate.tv_sec;
 
     stats->total++;
     stats->total_bytes += record->size;
@@ -387,9 +388,9 @@ static void print_record(struct mailbox *mailbox,
                          const struct index_record *record)
 {
     printf("UID: %u\n", record->uid);
-    printf("\tSize: %u\n", record->size);
-    printf("\tSent: %s", ctime(&record->sentdate));
-    printf("\tRecv: %s", ctime(&record->internaldate));
+    printf("\tSize: " UINT64_FMT "\n", record->size);
+    printf("\tSent: %s", ctime(&record->sentdate.tv_sec));
+    printf("\tRecv: %s", ctime(&record->internaldate.tv_sec));
 
     if (mailbox_cacherecord(mailbox, record)) {
         printf("\tERROR: cache record missing or corrupt, "

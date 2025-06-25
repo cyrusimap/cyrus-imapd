@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test non-empty mailbox causes replication to abort
 #
 sub test_splitbrain_different_uniqueid_nonempty
-    :min_version_3_5 :NoReplicaonly
+    :min_version_3_5 :NoReplicaonly :Conversations
 {
     my ($self) = @_;
 
@@ -16,8 +16,13 @@ sub test_splitbrain_different_uniqueid_nonempty
     my $rtalk = $replica_store->get_client();
 
     $mtalk->create('INBOX.subfolder');
+    $mtalk->create('INBOX.subfolder2');
     my $mres = $mtalk->status("INBOX.subfolder", ['mailboxid']);
     my $mid = $mres->{mailboxid}[0];
+
+    # We create the same two folders in reverse order so that they get
+    # different mailboxids (via different createdmodseqs) than the master
+    $rtalk->create('INBOX.subfolder2');
     $rtalk->create('INBOX.subfolder');
     my $rres = $rtalk->status("INBOX.subfolder", ['mailboxid']);
     my $rid = $rres->{mailboxid}[0];
