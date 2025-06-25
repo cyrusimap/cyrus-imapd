@@ -121,6 +121,7 @@ sub connect
                       PreserveINBOX => 1,
                       Uid => 0,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
+                      UseCompress => delete $params{UseCompress} || 0,
                   )
             or die "Cannot connect to '$self->{host}:$self->{port}': $@";
     }
@@ -136,6 +137,7 @@ sub connect
                       PreserveINBOX => 1,
                       Uid => 0,
                       NoLiteralPlus => delete $params{NoLiteralPlus} || 0,
+                      UseCompress => delete $params{UseCompress} || 0,
                   )
             or die "Cannot connect to server: $@";
     }
