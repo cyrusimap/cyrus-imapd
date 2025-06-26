@@ -368,6 +368,8 @@ struct jmap_get {
     json_t *not_found;
 };
 
+#define JMAP_GET_INITIALIZER {0}
+
 typedef int jmap_args_parse_cb(jmap_req_t *, struct jmap_parser *,
                                const char *arg, json_t *val, void *);
 
@@ -401,6 +403,8 @@ struct jmap_set {
     json_t *not_updated;
     json_t *not_destroyed;
 };
+
+#define JMAP_SET_INITIALIZER {0}
 
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_t valid_props[],
@@ -454,6 +458,8 @@ struct jmap_copy {
     json_t *not_created;
 };
 
+#define JMAP_COPY_INITIALIZER {0}
+
 extern void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
                             jmap_args_parse_cb args_parse, void *args_rock,
                             struct jmap_copy *copy, json_t **err);
@@ -484,6 +490,8 @@ struct jmap_query {
     int have_total; /* for calculateTotal: false partial */
     json_t *ids;
 };
+
+#define JMAP_QUERY_INITIALIZER {0}
 
 enum jmap_filter_op   {
     JMAP_FILTER_OP_NONE = 0,
@@ -558,6 +566,8 @@ struct jmap_querychanges {
     json_t *added;
 };
 
+#define JMAP_QUERYCHANGES_INITIALIZER {0}
+
 extern void jmap_querychanges_parse(jmap_req_t *req,
                                     struct jmap_parser *parser,
                                     jmap_args_parse_cb args_parse, void *args_rock,
@@ -582,6 +592,8 @@ struct jmap_parse {
     json_t *not_parsable;
     json_t *not_found;
 };
+
+#define JMAP_PARSE_INITIALIZER {0}
 
 extern void jmap_parse_parse(jmap_req_t *req, struct jmap_parser *parser,
                                  jmap_args_parse_cb args_parse, void *args_rock,

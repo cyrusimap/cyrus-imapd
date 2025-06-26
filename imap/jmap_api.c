@@ -1538,8 +1538,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
     json_t *arg, *val;
     size_t i;
 
-    memset(get, 0, sizeof(struct jmap_get));
-
+    // assume that we are given an initialized jmap_get struct
     get->list = json_array();
     get->not_found = json_array();
 
@@ -1763,7 +1762,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            struct jmap_set *set, json_t **err)
 {
     json_t *jargs = req->args;
-    memset(set, 0, sizeof(struct jmap_set));
+
+    // assume that we are given an initialized jmap_set struct
     set->create = json_object();
     set->update = json_object();
     set->destroy = json_array();
@@ -1976,7 +1976,7 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
     json_t *arg;
     int have_sincemodseq = 0;
 
-    memset(changes, 0, sizeof(struct jmap_changes));
+    // assume that we are given an initialized jmap_changes struct
     changes->created = json_array();
     changes->updated = json_array();
     changes->destroyed = json_array();
@@ -2056,7 +2056,7 @@ HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
 {
     json_t *jargs = req->args;
 
-    memset(copy, 0, sizeof(struct jmap_copy));
+    // assume that we are given an initialized jmap_copy struct
     copy->blob_copy = !strcmp(req->method, "Blob/copy");
     copy->create = copy->blob_copy ? json_array() : json_object();
     copy->created = json_object();
@@ -2376,7 +2376,7 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
     json_t *arg, *val;
     size_t i;
 
-    memset(query, 0, sizeof(struct jmap_query));
+    // assume that we are given an initialized jmap_query struct
     query->ids = json_array();
     query->have_total = 1; /* assume we know the total, we turn it off it not */
 
@@ -2545,7 +2545,7 @@ HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
     json_t *arg, *val;
     size_t i;
 
-    memset(query, 0, sizeof(struct jmap_querychanges));
+    // assume that we are given an initialized jmap_querychanges struct
     query->removed = json_array();
     query->added = json_array();
 
@@ -2693,8 +2693,7 @@ HIDDEN void jmap_parse_parse(jmap_req_t *req,
     const char *key;
     json_t *arg;
 
-    memset(parse, 0, sizeof(struct jmap_parse));
-
+    // assume that we are given an initialized jmap_parse struct
     parse->parsed = json_object();
     parse->not_parsable = json_array();
     parse->not_found = json_array();

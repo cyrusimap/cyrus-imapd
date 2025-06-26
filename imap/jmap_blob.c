@@ -270,7 +270,7 @@ done:
 static int jmap_blob_copy(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_copy copy;
+    struct jmap_copy copy = JMAP_COPY_INITIALIZER;
     json_t *val, *err = NULL;
     size_t i = 0;
     int r = 0;
@@ -465,7 +465,7 @@ static int _parse_range(jmap_req_t *req __attribute__((unused)),
 static int jmap_blob_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     json_t *jval;
     size_t i;
@@ -704,7 +704,7 @@ static int caleventid_cb(void *vrock, struct caldav_jscal *jscal)
 static int jmap_blob_lookup(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     int32_t datatypes = 0;
     json_t *err = NULL;
     struct buf buf = BUF_INITIALIZER;
@@ -1099,7 +1099,7 @@ static int _upload_arg_to_buf(struct jmap_req *req, struct buf *buf, json_t *arg
 static int jmap_blob_upload(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *jerr = NULL;
     int r = 0;
     time_t now = time(NULL);

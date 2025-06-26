@@ -1305,7 +1305,7 @@ static const jmap_property_t submission_props[] = {
 static int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     mbentry_t *mbentry = NULL;
     int created = 0;
@@ -1433,7 +1433,7 @@ static int _submission_setargs_parse(jmap_req_t *req,
 static int jmap_emailsubmission_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     struct submission_set_args sub_args = { NULL, NULL };
     json_t *err = NULL;
     struct mailbox *submbox = NULL;
@@ -1656,7 +1656,7 @@ done:
 static int jmap_emailsubmission_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
 
@@ -2111,7 +2111,7 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
 static int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
     int created = 0;
@@ -2263,7 +2263,7 @@ done:
 static int jmap_emailsubmission_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
 
     /* Parse arguments */
     json_t *err = NULL;
@@ -2409,7 +2409,7 @@ static const jmap_property_t identity_props[] = {
 static int jmap_identity_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */

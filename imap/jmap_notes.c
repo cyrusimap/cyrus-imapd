@@ -448,7 +448,7 @@ static const jmap_property_t notes_props[] = {
 static int jmap_note_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     mbentry_t *mbentry = NULL;
     struct mailbox *mbox = NULL;
@@ -835,7 +835,7 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
 static int jmap_note_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
     struct buf buf = BUF_INITIALIZER;

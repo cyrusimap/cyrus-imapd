@@ -1005,7 +1005,7 @@ static int has_calendars(jmap_req_t *req)
 static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 
@@ -2203,7 +2203,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     int on_destroy_remove_events = 0;
     json_t *err = NULL;
     int r = 0;
@@ -3992,7 +3992,7 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     struct caldav_db *db = NULL;
     json_t *err = NULL;
     int r = 0;
@@ -6167,7 +6167,7 @@ static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
 static int jmap_calendarevent_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     struct caldav_db *db = NULL;
     struct jmap_caleventid *eid = NULL;
@@ -7514,7 +7514,7 @@ static int calendarevent_validatecomparator(jmap_req_t *req __attribute__((unuse
 static int jmap_calendarevent_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct eventquery_args args = JMAPICAL_EVENTQUERY_ARGS_INITIALIZER;
 
     /* Parse request */
@@ -7702,7 +7702,7 @@ done:
 static int jmap_calendarevent_copy(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_copy copy;
+    struct jmap_copy copy = JMAP_COPY_INITIALIZER;
     json_t *err = NULL;
     struct caldav_db *src_db = NULL;
     struct caldav_db *dst_db = NULL;
@@ -7884,7 +7884,7 @@ static int _calendareventparse_args_parse(jmap_req_t *req,
 static int jmap_calendarevent_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_parse parse;
+    struct jmap_parse parse = JMAP_QUERYCHANGES_INITIALIZER;
     struct calendareventparse_args args = { 0 };
     json_t *err = NULL;
 
@@ -8622,7 +8622,7 @@ static int principal_get_cb(jmap_req_t *req, const char *accountid,
 static int jmap_principal_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
     jmap_get_parse(req, &parser, calendarprincipal_props, 0, NULL, NULL, &get, &err);
@@ -9108,7 +9108,7 @@ done:
 static int jmap_principal_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
 
     /* Parse request */
     json_t *err = NULL;
@@ -9165,7 +9165,7 @@ static int jmap_principal_changes(struct jmap_req *req)
 static int jmap_principal_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
 
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser, NULL, NULL,
@@ -9187,7 +9187,7 @@ done:
 static int jmap_principal_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
 
     jmap_set_parse(req, &argparser, calendarprincipal_props, NULL, NULL, &set, &err);
@@ -10610,7 +10610,7 @@ done:
 static int jmap_sharenotification_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     mbentry_t *notifymb = NULL;
 
@@ -10662,7 +10662,7 @@ static int jmap_sharenotification_set(struct jmap_req *req)
 {
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     mbentry_t *notifmb = NULL;
 
@@ -10851,7 +10851,7 @@ static int sharenotif_match(message_t *msg, struct notifsearch_entry *entry, voi
 static int jmap_sharenotification_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct mailbox *notifmbox = NULL;
     mbentry_t *notifmb = NULL;
 
@@ -10969,7 +10969,7 @@ done:
 static int jmap_sharenotification_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
 
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser, NULL, NULL,
@@ -11124,7 +11124,7 @@ done:
 static int jmap_calendareventnotification_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     char *notifmboxname = jmap_notifmboxname(req->accountid);
     char *notfrom = jmap_caleventnotif_format_fromheader(req->userid);
@@ -11308,7 +11308,7 @@ static int eventnotif_match(message_t *msg, struct notifsearch_entry *entry, voi
 static int jmap_calendareventnotification_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct mailbox *notifmbox = NULL;
     hash_table eventids = HASH_TABLE_INITIALIZER;
 
@@ -11440,7 +11440,7 @@ static int jmap_calendareventnotification_set(struct jmap_req *req)
     struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *notifmboxname = jmap_notifmboxname(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     mbentry_t *notifmb = NULL;
 
@@ -11528,7 +11528,7 @@ static int jmap_calendareventnotification_changes(struct jmap_req *req)
 static int jmap_calendareventnotification_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
 
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser, NULL, NULL,
@@ -11581,7 +11581,7 @@ static void encode_participantidentity_id(struct buf *buf, const char *addr)
 static int jmap_participantidentity_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
     struct buf buf = BUF_INITIALIZER;
@@ -11676,7 +11676,7 @@ done:
 static int jmap_participantidentity_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 
@@ -11868,7 +11868,7 @@ static const jmap_property_t calendarpreferences_props[] = {
 static int jmap_calendarpreferences_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct buf buf = BUF_INITIALIZER;
     char *calhomename = NULL;
@@ -12119,7 +12119,7 @@ done:
 static int jmap_calendarpreferences_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
     int r = 0;
 

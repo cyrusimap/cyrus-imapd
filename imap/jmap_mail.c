@@ -5011,7 +5011,7 @@ static int emailquery_args_parse(jmap_req_t *req,
 static int jmap_email_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct emailquery query;
+    struct emailquery query = JMAP_QUERY_INITIALIZER;
     struct email_contactfilter contactfilter;
     int r = 0;
 
@@ -5437,7 +5437,7 @@ done:
 static int jmap_email_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_querychanges query;
+    struct jmap_querychanges query = JMAP_QUERYCHANGES_INITIALIZER;
     struct emailquery emailquery;
     struct email_contactfilter contactfilter;
 
@@ -6399,7 +6399,7 @@ static const jmap_property_t thread_props[] = {
 static int jmap_thread_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */
@@ -8635,7 +8635,7 @@ static const jmap_property_t email_props[] = {
 static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
     json_t *err = NULL;
 
@@ -8733,7 +8733,7 @@ static int _email_parseargs_parse(jmap_req_t *req,
 static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_parse parse;
+    struct jmap_parse parse = JMAP_QUERYCHANGES_INITIALIZER;
     struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
     struct email_parseargs parseargs = { NULL, &getargs };
     json_t *err = NULL;
@@ -13681,7 +13681,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
 static int jmap_email_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
 
     json_t *err = NULL;
     jmap_set_parse(req, &parser, email_props, NULL, NULL, &set, &err);
@@ -14404,7 +14404,7 @@ static void _email_copy_bulk(jmap_req_t *req,
 static int jmap_email_copy(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_copy copy;
+    struct jmap_copy copy = JMAP_COPY_INITIALIZER;
     json_t *err = NULL;
     json_t *destroy_emails = json_array();
     char *srcinbox = NULL;

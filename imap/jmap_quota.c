@@ -147,7 +147,7 @@ static const jmap_property_t legacy_quota_props[] = {
 static int jmap_legacy_quota_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
 
@@ -578,7 +578,7 @@ static void getquota(const char *id, void *val, void *rock)
 static int jmap_quota_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
 
@@ -649,7 +649,7 @@ static void changes_cb(const char *id, void *val, void *rock)
 static int jmap_quota_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_changes changes;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
 
     json_t *err = NULL;
@@ -867,7 +867,7 @@ static int quota_cmp QSORT_R_COMPAR_ARGS(const void *va, const void *vb,
 static int jmap_quota_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_query query;
+    struct jmap_query query = JMAP_QUERY_INITIALIZER;
     jmap_filter *parsed_filter = NULL;
     arrayu64_t sortcrit = ARRAYU64_INITIALIZER;
     struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
