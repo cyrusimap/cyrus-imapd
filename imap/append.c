@@ -1195,6 +1195,14 @@ out:
     }
 
     /* finish filling the event notification */
+    destfile = fopen(fname, "r");
+    if (!destfile) {
+      syslog(LOG_ERR, "IOERROR: opening message file %s: %m", fname);
+    } else {
+      /* Extract messageContent for MessageNew notifications */
+      mboxevent_extract_content_msgrec(mboxevent, msgrec, destfile);
+      fclose(destfile);
+    }
     /* XXX avoid to parse ENVELOPE record since Message-Id is already
      * present in body structure ? */
     mboxevent_extract_msgrecord(mboxevent, msgrec);
