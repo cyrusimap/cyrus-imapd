@@ -697,7 +697,7 @@ extern int mailbox_reconstruct(const char *name, int flags, struct mailbox **mai
 extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
 extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
-extern int mailbox_setversion(struct mailbox *mailbox, int version);
+extern int mailbox_setversion(struct mailbox *mailbox, int version, int dryrun);
 
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 

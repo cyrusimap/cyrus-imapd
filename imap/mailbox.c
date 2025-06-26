@@ -183,6 +183,8 @@ static struct MsgFlagMap msgflagmap[] = {
 #define FLAGMAPSTR_MAXLEN (1 + 3 *(sizeof(msgflagmap) / sizeof(struct MsgFlagMap)))
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
+static int _mailbox_index_repack(struct mailbox *mailbox,
+                                 int version, int dryrun);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);
 static void mailbox_repack_abort(struct mailbox_repack **repackptr);
 static int mailbox_lock_index_internal(struct mailbox *mailbox,
@@ -1255,9 +1257,9 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
     return mailbox->i.highestmodseq;
 }
 
-EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
+EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version, int dryrun)
 {
-    return mailbox_index_repack(mailbox, version);
+    return _mailbox_index_repack(mailbox, version, dryrun);
 }
 
 static void _delayed_cleanup(void *rock)
@@ -5263,8 +5265,14 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     return r;
 }
 
-/* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox, int version)
+{
+    return _mailbox_index_repack(mailbox, version, 0);
+}
+
+/* need a mailbox exclusive lock, we're rewriting files */
+static int _mailbox_index_repack(struct mailbox *mailbox,
+                                 int version, int dryrun)
 {
     struct mailbox_repack *repack = NULL;
     const message_t *msg;
@@ -5272,7 +5280,8 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
     struct buf buf = BUF_INITIALIZER;
     int r = IMAP_IOERROR;
 
-    syslog(LOG_INFO, "Repacking mailbox %s version %d", mailbox_name(mailbox), version);
+    syslog(LOG_INFO, "Repacking mailbox %s version %d dryrun %d",
+           mailbox_name(mailbox), version, dryrun);
 
     r = mailbox_repack_setup(mailbox, version, &repack);
     if (r) goto done;
@@ -5422,7 +5431,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 done:
     mailbox_iter_done(&iter);
     buf_free(&buf);
-    if (r) mailbox_repack_abort(&repack);
+    if (r || dryrun) mailbox_repack_abort(&repack);
     else {
         modseq_t deletedmodseq = repack->newmailbox.i.deletedmodseq;
 
