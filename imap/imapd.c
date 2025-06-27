@@ -880,6 +880,7 @@ static const struct client_behavior {
     const char *name;
 } client_behavior_registry[] = {
     { CB_ANNOTATE,    "annotate"    },
+    { CB_ANNOTATEMBOX,"annotatembox"},
     { CB_BINARY,      "binary"      },
     { CB_CATENATE,    "catenate"    },
     { CB_COMPRESS,    "compress"    },
@@ -10623,7 +10624,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_state_t *astate = NULL;
 
-    client_behavior_mask |= CB_ANNOTATE;
+    client_behavior_mask |= CB_ANNOTATEMBOX;
 
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c <= EOF) {
@@ -11021,7 +11022,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
 
-    client_behavior_mask |= CB_ANNOTATE;
+    client_behavior_mask |= CB_ANNOTATEMBOX;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c <= EOF) {
