@@ -3764,6 +3764,9 @@ static int _blob_to_card(struct jmap_req *req,
         goto done;
     }
 
+    /* (Re)write vCard property */
+    vparse_delete_entries(card, NULL, prop);
+
     base = buf_base(&ctx.blob);
     len = buf_len(&ctx.blob);
 
@@ -3771,23 +3774,38 @@ static int _blob_to_card(struct jmap_req *req,
     size_t len64 = 0;
     charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
 
-    /* Now encode the blob */
-    encbuf = xzmalloc(len64+1);
-    charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
-    base = encbuf;
-
-    /* (Re)write vCard property */
-    vparse_delete_entries(card, NULL, prop);
-
-    struct vparse_entry *entry = vparse_add_entry(card, NULL, prop, base);
-
-    vparse_add_param(entry, "ENCODING", "b");
-
-    if (buf_len(&ctx.content_type)) {
-        char *subtype = xstrdupnull(strchr(buf_cstring(&ctx.content_type), '/'));
-        vparse_add_param(entry, "TYPE", ucase(subtype+1));
-        free(subtype);
+    /* Now create the property */
+    char *version = vparse_get_value(vparse_get_entry(card, NULL, "VERSION"));
+    if (!strcmpsafe("4.0", version)) {
+        // Create version 4.0 data: URI property
+        buf_setcstr(&buf, "data:");
+        if (buf_len(&ctx.content_type)) {
+            buf_append(&buf, &ctx.content_type);
+        }
+        buf_appendcstr(&buf, ";base64,");
+        encbuf = xzmalloc(buf_len(&buf) + len64 + 1);
+        memcpy(encbuf, buf_base(&buf), buf_len(&buf));
+        charset_encode_mimebody(
+            base, len, encbuf + buf_len(&buf), &len64, NULL, 0 /* no wrap */);
+        vparse_add_entry(card, NULL, prop, encbuf);
     }
+    else {
+        // Create version 3.0 binary property
+        encbuf = xzmalloc(len64 + 1);
+        charset_encode_mimebody(
+            base, len, encbuf, &len64, NULL, 0 /* no wrap */);
+
+        struct vparse_entry *entry = vparse_add_entry(card, NULL, prop, encbuf);
+        vparse_add_param(entry, "ENCODING", "b");
+
+        if (buf_len(&ctx.content_type)) {
+            char *subtype =
+                xstrdupnull(strchr(buf_cstring(&ctx.content_type), '/'));
+            vparse_add_param(entry, "TYPE", ucase(subtype + 1));
+            free(subtype);
+        }
+    }
+    xzfree(version);
 
     /* Add this blob to our list */
     property_blob_t *blob = property_blob_new(key, prop,

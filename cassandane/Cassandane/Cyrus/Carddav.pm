@@ -310,6 +310,78 @@ EOF
     $self->assert_not_null($res->{"{DAV:}response"});
 }
 
+sub test_filter
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CardDAV = $self->{carddav};
+
+    my $xml = <<EOF;
+<C:addressbook-query xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+      <D:getetag/>
+      <C:address-data content-type="text/vcard" version="3.0"/>
+    </D:prop>
+     <C:filter>
+       <C:prop-filter name="NICKNAME">
+         <C:text-match collation="i;unicode-casemap" match-type="equals"
+           >eric</C:text-match>
+       </C:prop-filter>
+     </C:filter>
+</C:addressbook-query>
+EOF
+
+    my $homeset = "/dav/addressbooks/user/cassandane";
+    my $bookId = "Default";
+
+    my $uid1 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $uid2 = "addr1\@example.com";
+    my $uid3 = "addr2\@example.com";
+
+    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid1
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:4.0
+NICKNAME:me
+UID:$uid2
+FN:Cyrus Daboo
+EMAIL:cdaboo\@example.com
+END:VCARD
+EOF
+
+    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+BEGIN:VCARD
+VERSION:4.0
+NICKNAME:eric
+UID:$uid3
+FN:Eric York
+END:VCARD
+EOF
+
+    my $href1 = $CardDAV->NewContact($bookId, $vcard1);
+    my $href2 = $CardDAV->NewContact($bookId, $vcard2);
+    my $href3 = $CardDAV->NewContact($bookId, $vcard3);
+
+    my $res = $CardDAV->Request('REPORT', "$homeset/$bookId",
+                                $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_str_equals("$homeset/$href3",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+}
+
 sub test_multiget
     :needs_component_httpd :min_version_3_7
 {

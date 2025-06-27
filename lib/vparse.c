@@ -930,6 +930,34 @@ static const struct prop_encode {
     { NULL,            1 }
 };
 
+static void _entry_value_to_tgt(const struct vparse_entry *entry,
+                                struct vparse_target *tgt, int is_uri)
+{
+    if (entry->multivaluesep) {
+        int i;
+        for (i = 0; i < entry->v.values->count; i++) {
+            if (i) buf_putc(tgt->buf, entry->multivaluesep);
+            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
+        }
+    }
+    else if (is_uri == 1) {
+        _value_to_tgt(entry->v.value, tgt, 0);
+    }
+    else {
+        const struct prop_encode *prop;
+        int encode = 1;  /* default to encoding */
+
+        for (prop = prop_encode_map; prop->name; prop++) {
+            if (!strcasecmp(prop->name, entry->name)) {
+                encode = (prop->encode == -1) ? !is_uri : prop->encode;
+                break;
+            }
+        }
+
+        _value_to_tgt(entry->v.value, tgt, encode);
+    }
+}
+
 static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target *tgt)
 {
     struct vparse_param *param;
@@ -963,29 +991,7 @@ static void _entry_to_tgt(const struct vparse_entry *entry, struct vparse_target
 
     buf_putc(tgt->buf, ':');
 
-    if (entry->multivaluesep) {
-        int i;
-        for (i = 0; i < entry->v.values->count; i++) {
-            if (i) buf_putc(tgt->buf, entry->multivaluesep);
-            _value_to_tgt(strarray_nth(entry->v.values, i), tgt, 1);
-        }
-    }
-    else if (is_uri == 1) {
-        _value_to_tgt(entry->v.value, tgt, 0);
-    }
-    else {
-        const struct prop_encode *prop;
-        int encode = 1;  /* default to encoding */
-
-        for (prop = prop_encode_map; prop->name; prop++) {
-            if (!strcasecmp(prop->name, entry->name)) {
-                encode = (prop->encode == -1) ? !is_uri : prop->encode;
-                break;
-            }
-        }
-
-        _value_to_tgt(entry->v.value, tgt, encode);
-    }
+    _entry_value_to_tgt(entry, tgt, is_uri);
 
     _endline(tgt);
 }
@@ -1081,6 +1087,28 @@ EXPORTED void vparse_set_value(struct vparse_entry *entry, const char *value)
     }
     entry->v.value = xstrdupnull(value);
     entry->multivaluesep = '\0';
+}
+
+EXPORTED char *vparse_get_value(struct vparse_entry *entry)
+{
+    if (!entry) return NULL;
+
+    struct vparse_param *param;
+    int is_uri = -1;
+
+    for (param = entry->params; param; param = param->next) {
+        if (!strcasecmp(param->name, "VALUE")) {
+            is_uri = !strcasecmp(param->value, "uri");
+            break;
+        }
+    }
+
+    struct buf buf = BUF_INITIALIZER;
+    struct vparse_target tgt = { &buf, 0 };
+
+    _entry_value_to_tgt(entry, &tgt, is_uri);
+
+    return buf_release(&buf);
 }
 
 EXPORTED void vparse_delete_entries(struct vparse_card *card, const char *group, const char *name)
