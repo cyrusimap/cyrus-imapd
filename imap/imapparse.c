@@ -698,6 +698,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
         }
         else if (!strcmp(opt.s, "save")) {      /* RFC 5182 */
             searchargs->returnopts |= SEARCH_RETURN_SAVE;
+            searchargs->client_behavior_mask |= CB_SEARCHRES;
         }
         else if (!strcmp(opt.s, "relevancy")) { /* RFC 6203 */
             searchargs->returnopts |= SEARCH_RETURN_RELEVANCY;
@@ -716,6 +717,7 @@ EXPORTED int get_search_return_opts(struct protstream *pin,
             }
 
             searchargs->returnopts |= SEARCH_RETURN_PARTIAL;
+            searchargs->client_behavior_mask |= CB_PARTIAL;
         }
         else {
             prot_printf(pout,
@@ -1135,7 +1137,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
 
-            base->did_objectid = 1;
+            base->client_behavior_mask |= CB_OBJECTID;
         }
         else goto badcri;
         break;
@@ -1424,7 +1426,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c <= EOF) goto missingarg;
             bytestring_match(parent, arg.s, criteria.s, base);
 
-            base->did_objectid = 1;
+            base->client_behavior_mask |= CB_OBJECTID;
         }
         else goto badcri;
         break;

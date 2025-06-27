@@ -4423,6 +4423,8 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                 }
                 qdiffs[QUOTA_ANNOTSTORAGE] += sizeentryatts(curstage->annotations);
                 c = getword(imapd_in, &arg);
+
+                client_behavior_mask |= CB_ANNOTATE;
             }
             else
                 break;  /* not a known extension keyword */
@@ -4850,7 +4852,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  * ANNOTATION responses in this session, but we don't
                  * actually have to do anything with it, so we won't.
                  */
-                ;
+                client_behavior_mask |= CB_ANNOTATE;
             }
             else if (allowdeleted && !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
@@ -6022,6 +6024,8 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
         storeargs.isadmin = imapd_userisadmin;
         storeargs.userid = imapd_userid;
         storeargs.authstate = imapd_authstate;
+
+        client_behavior_mask |= CB_ANNOTATE;
         goto notflagsdammit;
     }
     else {
@@ -6313,14 +6317,7 @@ static void cmd_search(const char *tag, const char *cmd)
         goto done;
     }
 
-    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
-        client_behavior_mask |= CB_SEARCHRES;
-
-    if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
-        client_behavior_mask |= CB_PARTIAL;
-
-    if (searchargs->did_objectid)
-        client_behavior_mask |= CB_OBJECTID;
+    client_behavior_mask |= searchargs->client_behavior_mask;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
