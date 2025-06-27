@@ -197,7 +197,7 @@ are listed with ``<none>''.
   This was implemented to prevent clients renaming Sent to Trash/Sent, 
   which would confused other clients. */
 
-{ "allowstarttls", 0, SWITCH, "UNRELEASED" }
+{ "allowstarttls", 0, SWITCH, "3.12.1" }
 /* If enabled, allows upgrading a plaintext connection to use TLS
    (a.k.a opportunistic TLS) via a protocol specific
    command/mechanism.  IMAP, LMTP, NNTP, and ManageSieve use the
