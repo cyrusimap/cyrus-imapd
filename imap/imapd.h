@@ -239,7 +239,7 @@ struct searchargs {
     /* used only during parsing */
     int fuzzy_depth;
     uint64_t maxargssize_mark;
-    unsigned did_objectid : 1;
+    uint32_t client_behavior_mask;
 
     /* For ESEARCH */
     const char *tag;
@@ -401,6 +401,9 @@ extern struct protstream *imapd_out, *imapd_in;
 
 /* Bitmask for exhibited client behaviors */
 enum {
+    CB_ANNOTATE    =  (1<<21),  /* ANNOTATE on SELECT/EXAMINE,
+                                   ANNOTATION on APPEND, or
+                                   FETCH/STORE/SEARCH/SORT ANNOTATION    */
     CB_BINARY      =  (1<<0),   /* FETCH BINARY or APPEND literal8       */
     CB_CATENATE    =  (1<<1),   /* CATENATE on APPEND                    */
     CB_COMPRESS    =  (1<<2),   /* COMPRESS                              */
@@ -427,7 +430,7 @@ enum {
     CB_UTF8ACCEPT  =  (1<<19),  /* ENABLE UTF8=ACCEPT                    */
 
     /* non-standard - track for possible deprecation                     */
-    CB_ANNOTATE    =  (1<<30),  /* GET/SETANNOTATION or FETCH ANNOTATION */
+    CB_ANNOTATEMBOX=  (1<<30),  /* GET/SETANNOTATION (old ANNOTATEMORE)  */
     CB_XLIST       =  (1U<<31), /* XLIST                                 */
 };
 

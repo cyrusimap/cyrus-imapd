@@ -880,6 +880,7 @@ static const struct client_behavior {
     const char *name;
 } client_behavior_registry[] = {
     { CB_ANNOTATE,    "annotate"    },
+    { CB_ANNOTATEMBOX,"annotatembox"},
     { CB_BINARY,      "binary"      },
     { CB_CATENATE,    "catenate"    },
     { CB_COMPRESS,    "compress"    },
@@ -4422,6 +4423,8 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                 }
                 qdiffs[QUOTA_ANNOTSTORAGE] += sizeentryatts(curstage->annotations);
                 c = getword(imapd_in, &arg);
+
+                client_behavior_mask |= CB_ANNOTATE;
             }
             else
                 break;  /* not a known extension keyword */
@@ -4849,7 +4852,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  * ANNOTATION responses in this session, but we don't
                  * actually have to do anything with it, so we won't.
                  */
-                ;
+                client_behavior_mask |= CB_ANNOTATE;
             }
             else if (allowdeleted && !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
@@ -6021,6 +6024,8 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
         storeargs.isadmin = imapd_userisadmin;
         storeargs.userid = imapd_userid;
         storeargs.authstate = imapd_authstate;
+
+        client_behavior_mask |= CB_ANNOTATE;
         goto notflagsdammit;
     }
     else {
@@ -6312,14 +6317,7 @@ static void cmd_search(const char *tag, const char *cmd)
         goto done;
     }
 
-    if (searchargs->returnopts & SEARCH_RETURN_SAVE)
-        client_behavior_mask |= CB_SEARCHRES;
-
-    if (searchargs->returnopts & SEARCH_RETURN_PARTIAL)
-        client_behavior_mask |= CB_PARTIAL;
-
-    if (searchargs->did_objectid)
-        client_behavior_mask |= CB_OBJECTID;
+    client_behavior_mask |= searchargs->client_behavior_mask;
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
@@ -10623,7 +10621,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_state_t *astate = NULL;
 
-    client_behavior_mask |= CB_ANNOTATE;
+    client_behavior_mask |= CB_ANNOTATEMBOX;
 
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c <= EOF) {
@@ -11021,7 +11019,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     struct entryattlist *entryatts = NULL;
     annotate_state_t *astate = NULL;
 
-    client_behavior_mask |= CB_ANNOTATE;
+    client_behavior_mask |= CB_ANNOTATEMBOX;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c <= EOF) {
