@@ -301,6 +301,12 @@ while (my $a = shift)
     {
         $want_rerun = 2;
     }
+    elsif ($a eq '--no-ok')
+    {
+        # suppress success reports in formatters that support that
+        # (i.e. only report errors and failures)
+        $format_params{no_ok} = 1;
+    }
     elsif ($a =~ m/^-/)
     {
         usage;

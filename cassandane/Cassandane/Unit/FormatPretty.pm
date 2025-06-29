@@ -60,6 +60,10 @@ sub new
         $self->{_quiet_report_fh} = IO::File->new($quiet_report_file, 'w');
         # if we can't write there, just don't do it
     }
+    if ($params->{no_ok}) {
+        # don't print success outputs to terminal, only error/failure
+        $self->{_no_ok} = 1;
+    }
     return $self;
 }
 
@@ -81,6 +85,8 @@ sub add_pass
 {
     my $self = shift;
     my $test = shift;
+
+    return if $self->{_no_ok};
 
     my $line = sprintf "%s %s\n",
                        $self->ansi([32], '[  OK  ]'),
