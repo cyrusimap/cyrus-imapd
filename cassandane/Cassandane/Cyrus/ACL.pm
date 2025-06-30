@@ -364,6 +364,18 @@ sub test_virtdomains_noinherit2
     $self->make_message("message from $cass_dom", store => $dom_store);
 }
 
+sub test_always_fails
+{
+    my ($self) = @_;
+
+    $self->fail("always fails");
+}
+
+sub test_always_errors
+{
+    die "always errors";
+}
+
 # see also LDAP.pm for groupid tests
 
 1;

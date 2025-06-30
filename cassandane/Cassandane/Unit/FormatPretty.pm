@@ -60,6 +60,10 @@ sub new
         $self->{_quiet_report_fh} = IO::File->new($quiet_report_file, 'w');
         # if we can't write there, just don't do it
     }
+    if ($params->{no_ok}) {
+        # don't print success outputs to terminal, only error/failure
+        $self->{_no_ok} = 1;
+    }
     return $self;
 }
 
@@ -81,6 +85,8 @@ sub add_pass
 {
     my $self = shift;
     my $test = shift;
+
+    return if $self->{_no_ok};
 
     my $line = sprintf "%s %s\n",
                        $self->ansi([32], '[  OK  ]'),
@@ -227,9 +233,14 @@ sub print_header {
                         ? $self->ansi([31], $result->error_count)
                         : "0";
 
+        my $x = $result->run_count() - ($result->failure_count()
+                                        + $result->error_count());
+        my $success_count = $x ? $self->ansi([32], $x) : "0";
+
         $self->_print("\n", $self->ansi([31], "!!!FAILURES!!!"), "\n",
                       "Test Results:\n",
                       "Run: ", $result->run_count(),
+                      ", Successes: $success_count",
                       ", Failures: $failure_count",
                       ", Errors: $error_count",
                       "\n");
