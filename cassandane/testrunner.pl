@@ -205,7 +205,7 @@ my $cassini_filename;
 my @cassini_overrides;
 my $want_rerun;
 
-while (my $a = shift)
+while (defined(my $a = shift))
 {
     if ($a eq '--config')
     {
