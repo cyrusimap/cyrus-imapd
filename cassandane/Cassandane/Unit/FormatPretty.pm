@@ -233,9 +233,14 @@ sub print_header {
                         ? $self->ansi([31], $result->error_count)
                         : "0";
 
+        my $x = $result->run_count() - ($result->failure_count()
+                                        + $result->error_count());
+        my $success_count = $x ? $self->ansi([32], $x) : "0";
+
         $self->_print("\n", $self->ansi([31], "!!!FAILURES!!!"), "\n",
                       "Test Results:\n",
                       "Run: ", $result->run_count(),
+                      ", Successes: $success_count",
                       ", Failures: $failure_count",
                       ", Errors: $error_count",
                       "\n");
