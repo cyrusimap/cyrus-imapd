@@ -2175,6 +2175,11 @@ static int _guid_cb(void *rock,
         }
     }
 
+    if (version < 4) {
+        /* convert seconds to nanoseconds */
+        internaldate *= 1000000000;
+    }
+
     buf_setmap(&frock->partbuf, key+42, keylen-42);
     r = _guid_one(frock, key, cid, basecid, system_flags, internal_flags,
                   internaldate, version);
