@@ -61,6 +61,45 @@ sub test_email_legacy_ids
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{'state'});
 
+    xlog $self, "Append an old email from gmail.com";
+    # This will create a v4 G record in conv.db
+    # (nanoseconds-based internaldate), but should still sort BEFORE
+    # the existing v3 G records (seconds-based internaldate)
+    my $email = <<EOF;
+Subject: foo
+Date: bar
+From: <foobar\@gmail.com>
+
+Body
+EOF
+
+    $email =~ s/\r?\n/\r\n/gs;
+
+    $talk->append("INBOX", "()", " 7-Feb-1994 22:43:04 -0800",
+                  { Literal => "$email" });
+    $res = $talk->fetch('5', '(UID EMAILID THREADID DIGEST.SHA1)');
+    my $id5 = $res->{5}{emailid}[0];
+    $self->assert_matches(qr/^M/, $id5);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "query emails from gmail.com";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            from => 'gmail.com',
+        },
+        sort => [{
+            property => 'receivedAt',
+        }],
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($id5, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($id3, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($id4, $res->[0][1]->{ids}[2]);
+    $state = $res->[0][1]->{queryState};
+    $self->assert_matches(qr/^[0-9].*/, $state);
+
     xlog $self, "Update $id2";
     $res = $jmap->CallMethods([['Email/set', {
         update => {
@@ -82,7 +121,7 @@ sub test_email_legacy_ids
             property => 'receivedAt',
         }],
     }, "R1"]]);
-    $self->assert_num_equals(4, $res->[0][1]->{total});
+    $self->assert_num_equals(5, $res->[0][1]->{total});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldQueryState});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newQueryState});
 
@@ -143,8 +182,8 @@ sub test_email_legacy_ids
             },
         }, 'R1'],
     ]);
-    my $id5 = $res->[0][1]->{created}{1}{id};
-    $self->assert_matches(qr/^M/, $id5);
+    my $id6 = $res->[0][1]->{created}{1}{id};
+    $self->assert_matches(qr/^M/, $id6);
     $state = $res->[0][1]->{newState};
 
     xlog $self, "Move $id4";
