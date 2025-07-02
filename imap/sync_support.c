@@ -2101,6 +2101,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
             if (!r && xconvmodseq)
                 dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
+            if (USER_COMPACT_EMAILIDS(mailbox_get_cstate(mailbox)))
+                dlist_setnum32(kl, "COMPACT_EMAILIDS", 1);
+
         }
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
         if (raclmodseq)
@@ -2860,6 +2863,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     uint32_t options;
 
     /* optional fields */
+    uint32_t compact_emailids = 0;
     modseq_t xconvmodseq = 0;
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
@@ -2945,6 +2949,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
+    dlist_getnum32(kin, "COMPACT_EMAILIDS", &compact_emailids);
     dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
     dlist_getnum64(kin, "FOLDERMODSEQ", &foldermodseq);
     dlist_getlist(kin, "USERFLAGS", &userflags);
@@ -3188,6 +3193,10 @@ static int sync_apply_mailbox(struct dlist *kin,
                    mboxname, error_message(r));
             goto done;
         }
+
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        r = conversations_enable_compactids(cstate, compact_emailids);
+        if (r) goto done;
 
         /* skip out now, it's going to mismatch for sure! */
         if (xconvmodseq < ourxconvmodseq) {
