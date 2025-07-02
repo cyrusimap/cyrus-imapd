@@ -1557,8 +1557,16 @@ static void reap_child(void)
 
 static void init_janitor(struct timeval now)
 {
+    struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
+
     janitor_mark = now;
     janitor_position = 0;
+
+    evt->name = xstrdup("janitor periodic wakeup call");
+    evt->period = 10;
+    evt->periodic = 1;
+    evt->mark = janitor_mark;
+    schedule_event(evt);
 }
 
 static void child_janitor(struct timeval now)
@@ -2488,6 +2496,7 @@ static void limit_fds(rlim_t x)
 static void init_prom_report(struct timeval now)
 {
     struct buf buf = BUF_INITIALIZER;
+    struct event *evt;
     const char *tmp;
 
     prom_enabled = config_getswitch(IMAPOPT_PROMETHEUS_ENABLED);
@@ -2498,7 +2507,6 @@ static void init_prom_report(struct timeval now)
     if (prom_frequency < 1) prom_enabled = 0;
     if (!prom_enabled) return;
 
-    /* XXX minimum reliable resolution is 10 seconds */
     prom_prev_report.tv_sec = now.tv_sec - prom_frequency; /* next report asap */
     prom_prev_report.tv_usec = 0;
 
@@ -2528,6 +2536,13 @@ static void init_prom_report(struct timeval now)
     if (prom_report_fname) free(prom_report_fname);
     prom_report_fname = buf_release(&buf);
     cyrus_mkdir(prom_report_fname, 0755);
+
+    evt = xzmalloc(sizeof(*evt));
+    evt->name = xstrdup("master prometheus report periodic wakeup call");
+    evt->period = prom_frequency;
+    evt->periodic = 1;
+    evt->mark = now;
+    schedule_event(evt);
 
     syslog(LOG_DEBUG, "updating %s every %d seconds", prom_report_fname, prom_frequency);
 }
@@ -3239,6 +3254,7 @@ int main(int argc, char **argv)
 
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
+        struct timeval tv, *tvptr;
         struct notify_message msg;
 
 #if HAVE_PSELECT
@@ -3329,34 +3345,24 @@ int main(int argc, char **argv)
 
         int interrupted = 0;
         do {
-            struct timeval tvbuf = {0}, *select_timeout = NULL;
-
-            gettimeofday(&now, NULL);
-            if (!in_shutdown) {
-                if (!interrupted) {
-                    /* XXX this doesn't work, there might be scheduled events
-                     * XXX that want to wake up sooner than the next 10s
-                     * XXX boundary (e.g. forkrate limiter), so we MUST check
-                     * XXX schedule here after all
-                     */
-                    /* force a wakeup on 10s boundaries */
-                    /* XXX get this math into libcyrus so it can be tested */
-                    tvbuf.tv_sec = 9 - now.tv_sec % 10;
-                    tvbuf.tv_usec = 1000000 - now.tv_usec;
-                    while (tvbuf.tv_usec >= 1000000) {
-                        tvbuf.tv_usec -= 1000000;
-                        tvbuf.tv_sec ++;
-                    }
-
-                    syslog(LOG_DEBUG, "XXX select timeout: " TIME_T_FMT ".%06ld",
-                                      tvbuf.tv_sec, tvbuf.tv_usec);
+            /* how long to wait? - do now so that any scheduled wakeup
+            * calls get accounted for*/
+            gettimeofday(&now, 0);
+            tvptr = NULL;
+            if (schedule && !in_shutdown) {
+                double delay = timesub(&now, &schedule->mark);
+                if (!interrupted && delay > 0.0) {
+                    timeval_set_double(&tv, delay);
                 }
-                select_timeout = &tvbuf;
+                else {
+                    tv.tv_sec = 0;
+                    tv.tv_usec = 0;
+                }
+                tvptr = &tv;
             }
 
             errno = 0;
-            ready_fds = myselect(maxfd, &rfds, NULL, NULL, select_timeout);
-            syslog(LOG_DEBUG, "XXX myselect returned %d", ready_fds);
+            ready_fds = myselect(maxfd, &rfds, NULL, NULL, tvptr);
 
             if (ready_fds < 0) {
                 switch (errno) {
@@ -3416,7 +3422,6 @@ int main(int argc, char **argv)
         child_janitor(now);
         do_prom_report(now);
     }
-    syslog(LOG_DEBUG, "XXX main loop finished");
 
 finished:
     /* shut down wait daemons, sequentially, in reverse order */
