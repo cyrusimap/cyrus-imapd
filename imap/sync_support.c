@@ -6908,10 +6908,14 @@ static int do_folders(struct sync_client_state *sync_cs,
             }
         }
         else {
+            if (!mboxname_isdeletedmailbox(rfolder->name, NULL)) {
+                syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
+                       rfolder->name, error_message(r));
+                /* XXX copy the missing local mailbox back from the replica? */
+            }
+
             mboxlist_entry_free(&tombstone);
-            syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
-                               rfolder->name, error_message(r));
-            /* XXX copy the missing local mailbox back from the replica? */
+            r = 0;
         }
     }
 
