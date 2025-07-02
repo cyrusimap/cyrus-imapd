@@ -18,10 +18,6 @@ sub test_cyrus_indexfile_20
     my $ns_in_a_sec = 1_000_000_000;
     my $sixty_sec_ns = 60 * $ns_in_a_sec;
 
-    xlog $self, "Enable compactids";
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
-
     my $res = $jmap->CallMethods([[
         'Mailbox/set' => {
             create => {

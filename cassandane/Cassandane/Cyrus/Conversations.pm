@@ -213,10 +213,6 @@ sub test_move_200
     my ($self) = @_;
     my %exp;
 
-    xlog $self, "Enable compactids";
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
-
     xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());

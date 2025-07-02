@@ -41,10 +41,6 @@ sub test_get_session
     $admintalk->setacl("user.account2", "cassandane", "lrswipkxtecdn") or die;
     # Account 3: no access
 
-    xlog $self, "Enable compactids";
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
-
     # GET session
     my $RawRequest = {
         headers => {

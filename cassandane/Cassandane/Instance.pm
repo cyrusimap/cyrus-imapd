@@ -159,6 +159,8 @@ sub new
         if defined $params{lsan_suppressions};
     $self->{mailbox_version} = $params{mailbox_version}
         if defined $params{mailbox_version};
+    $self->{old_jmap_ids} = $params{old_jmap_ids}
+        if defined $params{old_jmap_ids};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -1097,11 +1099,16 @@ sub create_user
     }
 
     my @mb_version;
+    my $old_jmap_ids;
 
     if (my $version = $params{mailbox_version} // $self->{mailbox_version}) {
         unless ($version =~ /\A[0-9]+\z/) {
             require Carp;
             Carp::confess("Invalid mailbox_version '$version'");
+        }
+
+        if ($version <= 19) {
+            $old_jmap_ids = 1;
         }
 
         push @mb_version, [ 'VERSION', $version ];
@@ -1117,6 +1124,23 @@ sub create_user
             or die "Cannot setacl for $mb: $@";
         $adminclient->setacl($mb, anyone => 'p')
             or die "Cannot setacl for $mb: $@";
+    }
+
+    if ($old_jmap_ids || $params{old_jmap_ids} || $self->{old_jmap_ids}) {
+        xlog $self, "Disable compactids";
+
+        $self->run_command(
+            { cyrus => 1 },
+            'ctl_conversationsdb', '-I', 'off', $user
+        );
+    } else {
+        # XXX: This should be removed when "on" is the default...
+        xlog $self, "Enable compactids";
+
+        $self->run_command(
+            { cyrus => 1 },
+            'ctl_conversationsdb', '-I', 'on', $user
+        );
     }
 }
 

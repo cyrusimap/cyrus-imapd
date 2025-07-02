@@ -13,14 +13,6 @@ sub test_email_copy
     $self->{instance}->create_user("other");
     $admintalk->setacl("user.other", "cassandane", "lrs") or die;
 
-    xlog $self, "Enable compactids";
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
-
-    xlog $self, "Enable compactids";
-    $self->{instance}->run_command({ cyrus => 1 },
-                                   'ctl_conversationsdb', '-I', 'on', 'other');
-
     my $srcInboxId = $self->getinbox()->{id};
     $self->assert_not_null($srcInboxId);
 
