@@ -1197,11 +1197,11 @@ out:
     /* finish filling the event notification */
     FILE *msgfile = fopen(fname, "r");
     if (!msgfile) {
-      syslog(LOG_ERR, "IOERROR: opening message file %s: %m", fname);
+        syslog(LOG_ERR, "IOERROR: opening message file %s: %m", fname);
     } else {
-      /* Extract messageContent for MessageNew notifications */
-      mboxevent_extract_content_msgrec(mboxevent, msgrec, msgfile);
-      fclose(msgfile);
+        /* Extract messageContent for MessageNew notifications */
+        mboxevent_extract_content_msgrec(mboxevent, msgrec, msgfile);
+        fclose(msgfile);
     }
     /* XXX avoid to parse ENVELOPE record since Message-Id is already
      * present in body structure ? */
