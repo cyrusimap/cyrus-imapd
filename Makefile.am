@@ -633,6 +633,7 @@ cunit_TESTS = \
     cunit/imparse.testc \
     cunit/libconfig.testc \
     cunit/mailbox.testc \
+    cunit/master-event.testc \
     cunit/mboxname.testc \
     cunit/md5.testc \
     cunit/message.testc \
@@ -674,7 +675,7 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-    imap/mutex_fake.c imap/spool.c imap/search_expr.c
+    imap/mutex_fake.c imap/spool.c imap/search_expr.c master/event.c
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
@@ -1696,6 +1697,8 @@ master_master_SOURCES = \
     master/master.h \
     master/masterconf.c \
     master/masterconf.h \
+    master/event.c \
+    master/event.h \
     master/service.h
 master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
 

@@ -91,6 +91,7 @@
 #include "masterconf.h"
 
 #include "master.h"
+#include "event.h"
 #include "service.h"
 
 #include "assert.h"
@@ -134,18 +135,6 @@ static int allocwaitdaemons = 0;
 static int nwaitdaemons = 0;
 static pid_t waitdaemon_pgid = -1;
 
-struct event {
-    char *name;
-    struct timeval mark;
-    time_t period;
-    int hour;
-    int min;
-    int periodic;
-    strarray_t *exec;
-    struct event *next;
-};
-static struct event *schedule = NULL;
-
 enum sstate {
     SERVICE_STATE_UNKNOWN = 0,  /* duh */
     SERVICE_STATE_INIT    = 1,  /* Service forked - UNUSED */
@@ -182,7 +171,6 @@ static char *prom_report_fname = NULL;
 #ifdef HAVE_SETRLIMIT
 static void limit_fds(rlim_t);
 #endif
-static void schedule_event(struct event *a);
 static void child_sighandler_setup(void);
 
 #if HAVE_PSELECT
@@ -214,16 +202,6 @@ EXPORTED void fatal(const char *msg, int code)
     syslog(LOG_NOTICE, "exiting");
     if (code != EX_PROTOCOL && config_fatals_abort) abort();
     exit(code);
-}
-
-static void event_free(struct event *a)
-{
-    if (a->exec) {
-        strarray_free(a->exec);
-        a->exec = NULL;
-    }
-    free(a->name);
-    free(a);
 }
 
 static void get_daemon(char *path, size_t size, const strarray_t *cmd)
@@ -857,9 +835,7 @@ static int service_is_fork_limited(struct service *s)
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
     if ((unsigned int)s->forkrate >= s->maxforkrate) {
-        struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
-
-        evt->name = xstrdup("forkrate wakeup call");
+        struct event *evt = event_new("forkrate wakeup call");
         evt->mark = now;
         timeval_add_double(&evt->mark, FORKRATE_INTERVAL);
 
@@ -1220,61 +1196,26 @@ static void spawn_service(struct service *s, int si, int wdi)
     }
 }
 
-static void schedule_event(struct event *a)
-{
-    struct event *ptr;
-
-    if (! a->name)
-        fatal("Serious software bug found: schedule_event() called on unnamed event!",
-                EX_SOFTWARE);
-
-    if (!schedule || timesub(&schedule->mark, &a->mark) < 0.0) {
-        a->next = schedule;
-        schedule = a;
-
-        return;
-    }
-    for (ptr = schedule;
-         ptr->next && timesub(&a->mark, &ptr->next->mark) <= 0.0;
-         ptr = ptr->next) ;
-
-    /* insert a */
-    a->next = ptr->next;
-    ptr->next = a;
-}
-
 static void spawn_schedule(struct timeval now)
 {
-    struct event *a, *b;
+    struct event *due, *next;
     int i, r;
     char path[PATH_MAX];
     pid_t p;
     struct centry *c;
 
-    a = NULL;
-    /* update schedule accordingly */
-    while (schedule && timesub(&now, &schedule->mark) <= 0.0) {
-        /* delete from schedule, insert into a */
-        struct event *ptr = schedule;
-
-        /* delete */
-        schedule = schedule->next;
-
-        /* insert */
-        ptr->next = a;
-        a = ptr;
-    }
+    due = schedule_splice_due(now);
 
     /* run all events */
-    while (a && a != schedule) {
+    while (due) {
         /* if a->exec is NULL, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
-        if (a->exec) {
-            get_executable(path, sizeof(path), a->exec);
+        if (due->exec) {
+            get_executable(path, sizeof(path), due->exec);
             switch (p = fork()) {
             case -1:
                 syslog(LOG_CRIT,
-                       "can't fork process to run event %s", a->name);
+                       "can't fork process to run event %s", due->name);
                 break;
 
             case 0:
@@ -1296,7 +1237,7 @@ static void spawn_schedule(struct timeval now)
                 }
 
                 syslog(LOG_DEBUG, "about to exec %s", path);
-                execv(path, a->exec->data);
+                execv(path, due->exec->data);
                 syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
                 exit(EX_OSERR);
                 break;
@@ -1306,55 +1247,31 @@ static void spawn_schedule(struct timeval now)
 
                 /* add to child table */
                 c = centry_alloc();
-                centry_set_name(c, "EVENT", a->name, path);
+                centry_set_name(c, "EVENT", due->name, path);
                 centry_set_state(c, SERVICE_STATE_READY);
                 r = proc_register(&c->proc_handle, p,
-                                  a->name, NULL, NULL, NULL, NULL);
+                                  due->name, NULL, NULL, NULL, NULL);
                 if (r) {
                     syslog(LOG_ERR, "ERROR: unable to register process %u"
                                     " for event %s",
-                                    p, a->name);
+                                    p, due->name);
                 }
                 centry_add(c, p);
                 break;
             }
-        } /* a->exec */
+        } /* due->exec */
 
         /* reschedule as needed */
-        b = a->next;
-        if (a->period) {
-            if (a->periodic) {
-                a->mark = now;
-                a->mark.tv_sec += a->period;
-            } else {
-                struct tm *tm;
-                int delta;
-                /* Daily Event */
-                while (timesub(&now, &a->mark) <= 0.0)
-                    a->mark.tv_sec += a->period;
-                /* check for daylight savings fuzz... */
-                tm = localtime(&a->mark.tv_sec);
-                if (tm->tm_hour != a->hour || tm->tm_min != a->min) {
-                    /* calculate the same time on the new day */
-                    tm->tm_hour = a->hour;
-                    tm->tm_min = a->min;
-                    delta = mktime(tm) - a->mark.tv_sec;
-                    /* bring it within half a period either way */
-                    while (delta > (a->period/2)) delta -= a->period;
-                    while (delta < -(a->period/2)) delta += a->period;
-                    /* update the time */
-                    a->mark.tv_sec += delta;
-                    /* and let us know about the change */
-                    syslog(LOG_NOTICE, "timezone shift for %s - altering schedule by %d seconds", a->name, delta);
-                }
-            }
-            /* reschedule a */
-            schedule_event(a);
-        } else {
-            event_free(a);
+        next = due->next;
+        if (due->period) {
+            reschedule_event(due, now);
         }
+        else {
+            event_free(due);
+        }
+
         /* examine next event */
-        a = b;
+        due = next;
     }
 }
 
@@ -1557,12 +1474,12 @@ static void reap_child(void)
 
 static void init_janitor(struct timeval now)
 {
-    struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
+    struct event *evt;
 
     janitor_mark = now;
     janitor_position = 0;
 
-    evt->name = xstrdup("janitor periodic wakeup call");
+    evt = event_new("janitor periodic wakeup call");
     evt->period = 10;
     evt->periodic = 1;
     evt->mark = janitor_mark;
@@ -2420,8 +2337,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
         fatal(buf, EX_CONFIG);
     }
 
-    evt = (struct event *) xzmalloc(sizeof(struct event));
-    evt->name = xstrdup(name);
+    evt = event_new(name);
 
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
         struct tm *tm = localtime(&now.tv_sec);
@@ -2537,14 +2453,14 @@ static void init_prom_report(struct timeval now)
     prom_report_fname = buf_release(&buf);
     cyrus_mkdir(prom_report_fname, 0755);
 
-    evt = xzmalloc(sizeof(*evt));
-    evt->name = xstrdup("master prometheus report periodic wakeup call");
+    evt = event_new("master prometheus report periodic wakeup call");
     evt->period = prom_frequency;
     evt->periodic = 1;
     evt->mark = now;
     schedule_event(evt);
 
-    syslog(LOG_DEBUG, "updating %s every %d seconds", prom_report_fname, prom_frequency);
+    syslog(LOG_DEBUG, "updating %s every %d seconds",
+                      prom_report_fname, prom_frequency);
 }
 
 static void do_prom_report(struct timeval now)
@@ -2787,7 +2703,6 @@ static void send_sighup(struct service *s, int si, int wdi)
 static void reread_conf(struct timeval now)
 {
     int i;
-    struct event *ptr;
 
     /* disable all services -
        they will be re-enabled if they appear in config file */
@@ -2806,12 +2721,7 @@ static void reread_conf(struct timeval now)
     }
 
     /* remove existing events */
-    while (schedule) {
-        ptr = schedule;
-        schedule = schedule->next;
-        event_free(ptr);
-    }
-    schedule = NULL;
+    schedule_clear();
 
     /* read events */
     masterconf_getsection("EVENTS", &add_event, (void*) 1);
@@ -3345,12 +3255,15 @@ int main(int argc, char **argv)
 
         int interrupted = 0;
         do {
+            struct event *next_evt;
+
             /* how long to wait? - do now so that any scheduled wakeup
-            * calls get accounted for*/
+             * calls get accounted for*/
             gettimeofday(&now, 0);
             tvptr = NULL;
-            if (schedule && !in_shutdown) {
-                double delay = timesub(&now, &schedule->mark);
+            next_evt = schedule_peek();
+            if (next_evt && !in_shutdown) {
+                double delay = timesub(&now, &next_evt->mark);
                 if (!interrupted && delay > 0.0) {
                     timeval_set_double(&tv, delay);
                 }
@@ -3492,6 +3405,8 @@ finished:
             }
         }
     }
+
+    schedule_clear();
 
     /* tell caller we're done */
     master_ready(ready_file, 0);
