@@ -842,7 +842,8 @@ noinst_HEADERS += \
     lib/vparse.h \
     lib/xstrlcat.h \
     lib/xstrlcpy.h \
-    lib/xstrnchr.h
+    lib/xstrnchr.h \
+    master/event.h
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
@@ -1566,7 +1567,8 @@ lib_libcyrus_min_la_SOURCES = \
     lib/xstrlcat.c \
     lib/xstrlcpy.c \
     lib/xstrnchr.c \
-    lib/xunlink.c
+    lib/xunlink.c \
+    master/event.c
 if IPV6_noGETADDRINFO
 lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
