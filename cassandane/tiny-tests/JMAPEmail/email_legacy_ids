@@ -47,7 +47,8 @@ sub test_email_legacy_ids
         }],
     }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($id2, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($id1, $res->[0][1]->{ids}[1]);
     my $state = $res->[0][1]->{queryState};
     $self->assert_matches(qr/^[0-9].*/, $state);
 
@@ -56,7 +57,7 @@ sub test_email_legacy_ids
     $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{list}});
     my $msg = $res->[0][1]->{list}[0];
-    $self->assert_str_equals($id1, $msg->{id});
+    $self->assert_str_equals($id2, $msg->{id});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{'state'});
 
