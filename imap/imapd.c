@@ -15863,7 +15863,7 @@ static void cmd_uidbatches(char *tag, uint32_t size, uint32_t low, uint32_t high
     client_behavior_mask |= CB_UIDBATCHES;
 
     if (size < (uint32_t) min_size) {
-        prot_printf(imapd_out, "%s NO [TOOSMALL] Minimum batch size is %d\r\n",
+        prot_printf(imapd_out, "%s NO [TOOFEW] Minimum batch size is %d\r\n",
                     tag, min_size);
         return;
     }
@@ -15872,7 +15872,7 @@ static void cmd_uidbatches(char *tag, uint32_t size, uint32_t low, uint32_t high
         (high == UINT32_MAX) ? imapd_index->exists : size * (high - low + 1);
     if (num_msg > max_msgs) {
         prot_printf(imapd_out,
-                    "%s NO [LIMIT] UID ranges span more than %d messages\r\n",
+                    "%s NO [TOOMANY] UID ranges span more than %d messages\r\n",
                     tag, max_msgs);
         return;
     }
