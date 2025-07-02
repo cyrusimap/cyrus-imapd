@@ -495,6 +495,17 @@ static int do_compactids(const char *userid, int enable)
     r = conversations_enable_compactids(state, enable);
     if (r) goto err;
 
+    /* bump modseq on INBOX so that compactids setting gets replicated */
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    struct mailbox *mailbox = NULL;
+
+    r = mailbox_open_iwl(inbox, &mailbox);
+    free(inbox);
+    if (r) goto err;
+
+    mailbox_modseq_dirty(mailbox);
+    mailbox_close(&mailbox);
+
     conversations_commit(&state);
     return 0;
 

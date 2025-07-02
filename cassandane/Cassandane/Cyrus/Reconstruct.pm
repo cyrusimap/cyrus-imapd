@@ -792,7 +792,7 @@ sub test_upgrade_v19_to_v20
 
     $self->{instance}->start();
 
-    # replicate new version to old version
+    # replicate new version to old version (including compactids setting)
     $self->run_replication();
 
     # check_replication() will fail here due to the internaldate.nsec annotation
@@ -807,10 +807,6 @@ sub test_upgrade_v19_to_v20
     xlog $self, "Upgrade replica to conv.db version 2";
     $self->{replica}->run_command({ cyrus => 1 },
                                   'ctl_conversationsdb', '-U', '-r');
-
-    xlog $self, "Enable compactids";
-    $self->{replica}->run_command({ cyrus => 1 },
-                                  'ctl_conversationsdb', '-I', 'on', 'cassandane');
 
     $self->{replica}->start();
 
@@ -849,7 +845,7 @@ sub test_upgrade_v19_to_v20
     $self->assert_matches(qr/^P.*/, $mid1);
     $self->assert_matches(qr/^P.*/, $mid2);
 
-    # EMAILIDs on the replca should be identical to those on the master
+    # EMAILIDs on the replica should be identical to those on the master
     # since they are the encoded nanoseconds since epoch
     $talk = $self->{replica_store}->get_client();
     $talk->examine('INBOX');
@@ -865,7 +861,62 @@ sub test_upgrade_v19_to_v20
     $res = $talk->fetch('1:*', '(UID EMAILID)');
     $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
 
-    # MAILBOXIDs on the replca should be identical to those on the master
+    # MAILBOXIDs on the replica should be identical to those on the master
+    # since they are the encoded createdmodseq
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $self->assert_str_equals($mid1, $res->{INBOX}{mailboxid}[0]);
+    $self->assert_str_equals($mid2, $res->{'INBOX.foo'}{mailboxid}[0]);
+
+    xlog $self, "Disable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'off', 'cassandane');
+
+    xlog $self, "Fetching EMAILIDs";
+    $talk = $self->{master_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $id1 = $res->{1}{emailid}[0];
+    $id2 = $res->{2}{emailid}[0];
+    $id3 = $res->{3}{emailid}[0];
+    $id4 = $res->{4}{emailid}[0];
+    $thrid1 = $res->{1}{threadid}[0];
+    $thrid2 = $res->{2}{threadid}[0];
+    $self->assert_matches(qr/^M/, $id1);
+    $self->assert_matches(qr/^M/, $id2);
+    $self->assert_matches(qr/^M/, $id3);
+    $self->assert_matches(qr/^M/, $id4);
+    $self->assert_matches(qr/^T/, $thrid1);
+    $self->assert_matches(qr/^T/, $thrid2);
+
+    xlog $self, "Fetching MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $mid1 = $res->{INBOX}{mailboxid}[0];
+    $mid2 = $res->{'INBOX.foo'}{mailboxid}[0];
+    $self->assert_matches(qr/^[^P].*/, $mid1);
+    $self->assert_matches(qr/^[^P].*/, $mid2);
+
+    # replicate new version to new version (including compactids setting)
+    $self->run_replication();
+
+    # EMAILIDs on the replica should be identical to those on the master
+    # since they are the encoded nanoseconds since epoch
+    $talk = $self->{replica_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+    $self->assert_str_equals($id2, $res->{2}{emailid}[0]);
+    $self->assert_str_equals($id3, $res->{3}{emailid}[0]);
+    $self->assert_str_equals($id4, $res->{4}{emailid}[0]);
+    $self->assert_str_equals($thrid1, $res->{1}{threadid}[0]);
+    $self->assert_str_equals($thrid2, $res->{2}{threadid}[0]);
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+
+    # MAILBOXIDs on the replica should be identical to those on the master
     # since they are the encoded createdmodseq
     $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
     $res = $talk->get_response_code('status') || {};
