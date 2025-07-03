@@ -186,6 +186,19 @@ sub upgrade_19_to_20
         }
     }
 
+    {
+        xlog $self, "Turn on compact ids for $user";
+
+        my $res = $self->{instance}->run_command_capture(
+            { cyrus => 1 },
+            qw(ctl_conversationsdb -v -I on), $user,
+        );
+
+        $self->assert_num_equals(0, $res->status);
+        $self->assert_str_equals("", $res->stdout);
+        $self->assert_str_equals("", $res->stderr);
+    }
+
     # Replica gets created at version 20 / mailbox version 2 so can't test...
 }
 
