@@ -95,6 +95,7 @@ enum mboxop { DUMP,
               M_POPULATE,
               UNDUMP,
               VERIFY,
+              FIX_KEYS,
               NONE };
 
 struct dumprock {
@@ -1243,6 +1244,50 @@ static void do_verify(void)
     verify_mboxes(mboxes, found, &idx);
 }
 
+static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
+{
+    mbentry_t *copy = NULL;
+
+    if (mbentry->uniqueid &&
+        mboxlist_lookup_by_uniqueid(mbentry->uniqueid, NULL, NULL)) {
+        xsyslog(LOG_NOTICE, "adding missing I record to mboxlist",
+                "mboxname=<%s> uniqueid=<%s>",
+                mbentry->name, mbentry->uniqueid);
+        copy = mboxlist_entry_copy(mbentry);
+    }
+    else if (mbentry->jmapid) {
+        char *userid = mboxname_to_userid(mbentry->name);
+
+        if (mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL)) {
+            xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
+                    "mboxname=<%s> jmapid=<%s>",
+                    mbentry->name, mbentry->jmapid);
+            copy = mboxlist_entry_copy(mbentry);
+        }
+        free(userid);
+    }
+
+    if (copy) {
+        int r = mboxlist_updatelock(copy, /*localonly*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to update mboxlist",
+                    "mboxname=<%s> error=<%s>",
+                    mbentry->name, error_message(r));
+        }
+        mboxlist_entry_free(&copy);
+    }
+
+    return 0;
+}
+
+static void do_fix_keys(int intermediary)
+{
+    int flags = MBOXTREE_TOMBSTONES;
+    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+
+    mboxlist_allmbox("", &fix_cb, NULL, flags);
+}
+
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
@@ -1255,6 +1300,8 @@ static void usage(void)
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
     fprintf(stderr, "VERIFY:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -v [-f filename]\n");
+    fprintf(stderr, "FIX I/J keys:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -k [-f filename]\n");
     exit(1);
 }
 
@@ -1270,7 +1317,7 @@ int main(int argc, char *argv[])
     int undump_legacy = 0;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:Ladf:imp:uvwxy";
+    static const char short_options[] = "C:Ladf:ikmp:uvwxy";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -1279,6 +1326,7 @@ int main(int argc, char *argv[])
         { "dump", no_argument, NULL, 'd' },
         { "filename", required_argument, NULL, 'f' },
         { "interactive", no_argument, NULL, 'i' },
+        { "fix-keys", no_argument, NULL, 'k' },
         { "sync-mupdate", no_argument, NULL, 'm' },
         { "partition", required_argument, NULL, 'p' },
         { "undump", no_argument, NULL, 'u' },
@@ -1317,6 +1365,11 @@ int main(int argc, char *argv[])
 
         case 'u':
             if (op == NONE) op = UNDUMP;
+            else usage();
+            break;
+
+        case 'k':
+            if (op == NONE) op = FIX_KEYS;
             else usage();
             break;
 
@@ -1414,6 +1467,17 @@ int main(int argc, char *argv[])
         mboxlist_open(mboxdb_fname);
 
         do_verify();
+
+        mboxlist_close();
+        mboxlist_done();
+        break;
+
+
+    case FIX_KEYS:
+        mboxlist_init();
+        mboxlist_open(mboxdb_fname);
+
+        do_fix_keys(dointermediary);
 
         mboxlist_close();
         mboxlist_done();
