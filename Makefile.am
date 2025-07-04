@@ -262,11 +262,17 @@ BUILT_SOURCES += \
     imap/tz_err.h
 
 libexec_PROGRAMS += imap/httpd
-check_PROGRAMS += imap/ical_apply_patch
+check_PROGRAMS += \
+    imap/ical_apply_patch \
+    imap/http_cal_abook_admin_js_null
 sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
 
+imap_http_cal_abook_admin_js_null_SOURCES = \
+    imap/http_cal_abook_admin_js.h \
+    imap/http_cal_abook_admin_js_null.c
+TESTS = imap/http_cal_abook_admin_js_null
 endif # HTTPD
 
 if REPLICATION
