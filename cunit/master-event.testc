@@ -1,0 +1,97 @@
+#include "cunit/cyrunit.h"
+#include "master/event.h"
+
+#include "lib/strarray.h"
+#include "lib/util.h"
+
+static int set_up(void)
+{
+    return 0;
+}
+
+static int tear_down(void)
+{
+    schedule_clear();
+    return 0;
+}
+
+static void assert_event_invariants(const struct event *evt)
+{
+    /* must have a name */
+    CU_ASSERT_PTR_NOT_NULL(evt->name);
+    CU_ASSERT_STRING_NOT_EQUAL(evt->name, "");
+
+    /* must have a mark */
+    CU_ASSERT_NOT_EQUAL(evt->mark.tv_sec, 0);
+
+    /* if there's an exec it must have a command */
+    if (evt->exec) {
+        CU_ASSERT_NOT_EQUAL(strarray_size(evt->exec), 0);
+    }
+
+    /* periodic events must have a period */
+    if (evt->periodic) {
+        CU_ASSERT_NOT_EQUAL(evt->period, 0);
+    }
+
+    /* "at hh:mm" times must be within range */
+    CU_ASSERT(evt->hour >= 0 && evt->hour <= 23);
+    CU_ASSERT(evt->min >= 0 && evt->min <= 59);
+}
+
+static void assert_schedule_invariants(const struct event *schedule)
+{
+    while (schedule) {
+        assert_event_invariants(schedule);
+
+        if (schedule->next) {
+            /* not later than next event */
+            double diff = timesub(&schedule->mark, &schedule->next->mark);
+            CU_ASSERT(diff <= 0.0);
+        }
+
+        schedule = schedule->next;
+    }
+}
+
+static void test_foo(void)
+{
+    assert_schedule_invariants(schedule_peek());
+}
+
+static void test_event_new(void)
+{
+    const struct {
+        const char *name;
+    } tests[] = {
+        { "hello" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct event *evt;
+
+        evt = event_new(tests[i].name);
+        CU_ASSERT_PTR_NOT_NULL(evt);
+        assert_event_invariants(evt);
+
+        /* expect the name to have been set */
+        CU_ASSERT_PTR_NOT_NULL(evt->name);
+        CU_ASSERT_STRING_EQUAL(evt->name, tests[i].name);
+
+        /* expect other fields to be zeroed */
+        CU_ASSERT_EQUAL(evt->mark.tv_sec, 0);
+        CU_ASSERT_EQUAL(evt->mark.tv_usec, 0);
+        CU_ASSERT_EQUAL(evt->period, 0);
+        CU_ASSERT_EQUAL(evt->hour, 0);
+        CU_ASSERT_EQUAL(evt->min, 0);
+        CU_ASSERT_EQUAL(evt->periodic, 0);
+        CU_ASSERT_PTR_NULL(evt->exec);
+        CU_ASSERT_PTR_NULL(evt->next);
+
+        event_free(evt);
+    }
+}
+
+/* vim: set ft=c: */
