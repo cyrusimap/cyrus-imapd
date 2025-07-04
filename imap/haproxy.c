@@ -19,7 +19,7 @@
 /* returns 0 on success, <0 upon error */
 EXPORTED int haproxy_read_hdr(int s, struct sockaddr *to, struct sockaddr *from)
 {
-    const char v2sig[12] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
+    static const char v2sig[] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
 
     union {
         struct {
