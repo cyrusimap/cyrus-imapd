@@ -3,6 +3,7 @@
 #endif
 #include "cunit/cyrunit.h"
 
+#include "imap/http_cal_abook_admin_js.h"
 #include "imap/ical_support.h"
 
 // caldav_db.h defines these
@@ -10,10 +11,16 @@
 extern time_t caldav_epoch;
 extern time_t caldav_eternity;
 
-static void init_caldav()
+static void init_caldav(void)
 {
     if (caldav_epoch == -1) caldav_epoch = INT_MIN;
     if (caldav_eternity == -1) caldav_eternity = INT_MAX;
+}
+
+static void test_http_cal_abook_admin_js_null(void)
+{
+    // Verifies that the last byte of imap/http_cal_abook_admin.js is \0 .
+    CU_ASSERT_EQUAL(http_cal_abook_admin_js[http_cal_abook_admin_js_len - 1], 0);
 }
 
 static void test_icalrecurrenceset_get_utc_timespan(void)
