@@ -1,0 +1,8 @@
+#include "cunit/cyrunit.h"
+#include "master/event.h"
+
+static void test_foo(void)
+{
+}
+
+/* vim: set ft=c: */
