@@ -5463,11 +5463,21 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     return r;
 }
 
+struct find_dup_rock {
+    int foldernum;
+    uint32_t uid;
+    struct timespec internaldate;
+};
+
+/* find a non-expunged  message with the given GUID
+   but NOT being frock->uid in frock->foldernum */
 static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 {
+    struct find_dup_rock *frock = (struct find_dup_rock *) rock;
     int ret = 0;
 
     if (rec->version == 4 && !rec->part &&
+        !(rec->foldernum == frock->foldernum && rec->uid == frock->uid) &&
         !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         mbentry_t *mbentry = NULL;
 
@@ -5475,9 +5485,7 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 
         if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
             // found a non-expunged duplicate email; use its internaldate
-            struct timespec *internaldate = (struct timespec *) rock;
-
-            TIMESPEC_FROM_NANOSEC(internaldate, rec->nano_internaldate);
+            TIMESPEC_FROM_NANOSEC(&frock->internaldate, rec->nano_internaldate);
             ret = CYRUSDB_DONE;
         }
 
@@ -5499,6 +5507,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
 {
     struct mailbox_repack *repack = NULL;
     struct conversations_state *cstate = NULL;
+    int foldernum = -1;
     uint32_t mbtype = mbtype_isa(mailbox_mbtype(mailbox));
     const message_t *msg;
     struct mailbox_iter *iter = NULL;
@@ -5513,10 +5522,15 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
 
     if (mbtype == MBTYPE_EMAIL &&
         mailbox->i.minor_version < 20 &&
-        repack->newmailbox.i.minor_version >= 20 &&
-        !(cstate = mailbox_get_cstate_full(mailbox, 1/*allow_deleted*/))) {
-        r = IMAP_IOERROR;
-        goto done;
+        repack->newmailbox.i.minor_version >= 20) {
+        if (!(cstate = mailbox_get_cstate_full(mailbox, 1/*allow_deleted*/))) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
+
+        foldernum =
+            conversation_folder_number(cstate,
+                                       CONV_FOLDER_KEY_MBOX(cstate, mailbox), 0);
     }
 
     iter = mailbox_iter_init(mailbox, 0, 0);
@@ -5671,18 +5685,20 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 if (mbtype == MBTYPE_EMAIL) {
                     // attempt to find an existing message with the same guid
                     // and use its internaldate instead
-                    struct timespec existing_internaldate = { 0, UTIME_OMIT };
+                    struct find_dup_rock frock = {
+                        foldernum, record->uid, { 0, UTIME_OMIT }
+                    };
                     char guid[2*MESSAGE_GUID_SIZE+1];
 
                     strcpy(guid, message_guid_encode(&record->guid));
 
                     // ignore errors, it's OK for this to fail
-                    conversations_guid_foreach(cstate, guid, find_dup_msg,
-                                               &existing_internaldate);
+                    conversations_guid_foreach(cstate, guid,
+                                               find_dup_msg, &frock);
 
                     // if we found a matching message, use its internaldate
-                    if (existing_internaldate.tv_nsec != UTIME_OMIT) {
-                        copyrecord.internaldate = existing_internaldate;
+                    if (frock.internaldate.tv_nsec != UTIME_OMIT) {
+                        copyrecord.internaldate = frock.internaldate;
 
                         // "remove" existing record crc from existing synccrc
                         repack->crcs.basic ^= crc_basic(mailbox, record);
@@ -5690,7 +5706,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                         // update existing record with new internaldate
                         // and "add" new record crc to existing synccrc
                         struct index_record newcrcrec = *record;
-                        newcrcrec.internaldate = existing_internaldate;
+                        newcrcrec.internaldate = frock.internaldate;
                         repack->crcs.basic ^= crc_basic(mailbox, &newcrcrec);
                     }
                     else {
