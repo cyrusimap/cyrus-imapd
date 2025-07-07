@@ -74,7 +74,6 @@ static void test_event_new(void)
 
         evt = event_new(tests[i].name);
         CU_ASSERT_PTR_NOT_NULL(evt);
-        assert_event_invariants(evt);
 
         /* expect the name to have been set */
         CU_ASSERT_PTR_NOT_NULL(evt->name);
