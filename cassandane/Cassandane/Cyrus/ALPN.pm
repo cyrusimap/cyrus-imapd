@@ -55,6 +55,7 @@ use Cassandane::Util::Log;
 # https://github.com/openssl/openssl/issues/24300
 my $alpn_fail_pattern = qr{(?: tlsv1\salert\sno\sapplication\sprotocol
                             |  ssl3_read_bytes:reason\(1120\)
+                            |  SSL\sroutines::reason\(1120\)
                             )}x;
 
 sub new
