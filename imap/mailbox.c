@@ -5485,8 +5485,12 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 
         if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
             // found a non-expunged duplicate email; use its internaldate
-            TIMESPEC_FROM_NANOSEC(&frock->internaldate, rec->nano_internaldate);
-            ret = CYRUSDB_DONE;
+            struct timespec internaldate;
+            TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
+            if (internaldate.tv_nsec < UTIME_OMIT) {
+                frock->internaldate = internaldate;
+                ret = CYRUSDB_DONE;
+            }
         }
 
         mboxlist_entry_free(&mbentry);
