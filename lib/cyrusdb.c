@@ -40,6 +40,7 @@
  */
 
 #include <config.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -491,9 +492,26 @@ static int print_cb(void *rock,
                     const char *data, size_t datalen)
 {
     FILE *f = (FILE *)rock;
+    bool is_binary = false;
+    size_t i;
 
-    /* XXX: improve binary safety */
-    fprintf(f, "%.*s\t%.*s\n", (int)keylen, key, (int)datalen, data);
+    for (i = 0; i < datalen; i++) {
+        if (!isprint(data[i])) {
+            is_binary = true;
+            break;
+        }
+    }
+
+    fprintf(f, "%.*s\t", (int)keylen, key);
+    if (is_binary) {
+        for (i = 0; i < datalen; i++) {
+            fprintf(f, "%02x ", (u_char) data[i]);
+        }
+    }
+    else {
+        fprintf(f, "%.*s", (int)datalen, data);
+    }
+    fputc('\n', f);
 
     return 0;
 }
