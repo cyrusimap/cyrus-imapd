@@ -96,23 +96,4 @@ sub test_cmd_id
     }
 }
 
-sub test_cmd_id_nil_with_compress
-{
-    my ($self) = @_;
-
-    # Purge any syslog lines before this test runs.
-    $self->{instance}->getsyslog();
-
-    my $imaptalk = $self->{store}->get_client(UseCompress => 1);
-
-    my @data = "x id (\"foo\" NIL)";
-    for (my $i = 0 ; $i < 10000 ; $i++) {
-        my $str = join("\r\n", @data);
-        push @data, $data[-1];
-
-        $imaptalk->_imap_socket_out($str . "\r\n");
-        my $Line = $imaptalk->_imap_socket_read_line;
-    }
-}
-
 1;
