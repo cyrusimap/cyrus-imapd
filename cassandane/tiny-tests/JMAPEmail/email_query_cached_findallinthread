@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cached_findallinthread
+    :JMAPQueryCacheMaxAge1s :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    $self->make_message("foo") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::false, $res->[0][1]->{performance}{details}{isCached});
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                text => 'foo',
+            },
+            findAllInThread => JSON::true,
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{performance}{details}{isCached});
+}

@@ -4581,20 +4581,18 @@ static void emailquery_cache_ensure(struct emailquery *q,
                     sizeof(struct emailquery_match) * qc->collapsed_len);
         }
 
-        if (q->findallinthread) {
-            /* For each match, store the position of the next match
-             * in the same conversation. Keep an index of the first
-             * match for each conversation id. */
-            qc->nextinthread = xmalloc(sizeof(size_t) * qc->uncollapsed_len);
-            construct_hashu64_table(&qc->firstinthread, (qc->uncollapsed_len/2)+1, 0);
-            size_t i = qc->uncollapsed_len - 1;
-            do {
-                conversation_id_t cid = qc->uncollapsed_matches[i].cid;
-                size_t j = (size_t) hashu64_lookup(cid, &qc->firstinthread);
-                qc->nextinthread[i] = j ? j : qc->uncollapsed_len;
-                hashu64_insert(cid, (void*) i, &qc->firstinthread);
-            } while (i-- > 0);
-        }
+        /* For each match, store the position of the next match
+         * in the same conversation. Keep an index of the first
+         * match for each conversation id. */
+        qc->nextinthread = xmalloc(sizeof(size_t) * qc->uncollapsed_len);
+        construct_hashu64_table(&qc->firstinthread, (qc->uncollapsed_len/2)+1, 0);
+        size_t i = qc->uncollapsed_len - 1;
+        do {
+            conversation_id_t cid = qc->uncollapsed_matches[i].cid;
+            size_t j = (size_t) hashu64_lookup(cid, &qc->firstinthread);
+            qc->nextinthread[i] = j ? j : qc->uncollapsed_len;
+            hashu64_insert(cid, (void*) i, &qc->firstinthread);
+        } while (i-- > 0);
     }
 }
 
