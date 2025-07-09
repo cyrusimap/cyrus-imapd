@@ -122,8 +122,11 @@ static void usage(void)
 }
 
 struct fix_rock {
+    hash_table next_mboxnum_by_userid;
     struct buf jmapid;
     struct buf last_userid;
+    struct buf last_mboxname;
+    modseq_t highestmodseq;
     uint64_t next_mboxnum;
     int is_replica;
 };
@@ -200,12 +203,35 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 
         if (!mailbox->h.jmapid) {
             /* yikes, no jmapid in header either! */
-            char *userid = mboxname_to_userid(mbentry->name);
-            if (strcmpsafe(userid, buf_cstring(&frock->last_userid))) {
+            mbname_t *mbname = mbname_from_intname(mbentry->name);
+            const char *userid = mbname_userid(mbname);
+
+            if (!userid) userid = "";
+
+            if (strcmpnull(userid, buf_cstringnull(&frock->last_userid))) {
+                if (frock->next_mboxnum - 1 > frock->highestmodseq) {
+                    /* last userid's mailbox count exceeded their highestmodseq.
+                       bump highestmodseq to avoid JMAP ID conflicts */
+                    mboxname_setmodseq(buf_cstring(&frock->last_mboxname),
+                                       frock->next_mboxnum - 1,
+                                       0, MBOXMODSEQ_ISFOLDER);
+                }
+
+                /* get new userid's highestmodseq */
+                struct mboxname_counters counters;
+                if (!mboxname_read_counters(mbentry->name, &counters))
+                    frock->highestmodseq = counters.highestmodseq;
+                else
+                    frock->highestmodseq = UINT64_MAX;
+
+                /* get start mboxnum from deleted hash, if exists */
+                uint64_t next_mboxnum =
+                    (uint64_t) hash_lookup(userid, &frock->next_mboxnum_by_userid);
+                frock->next_mboxnum = next_mboxnum ? next_mboxnum : 1;
+
                 buf_setcstr(&frock->last_userid, userid);
-                frock->next_mboxnum = 1;
+                buf_setcstr(&frock->last_mboxname, mbentry->name);
             }
-            free(userid);
 
             buf_reset(&frock->jmapid);
             buf_putc(&frock->jmapid, JMAP_MAILBOXID_PREFIX);
@@ -215,6 +241,14 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                     "mboxname=<%s> newjmapid=<%s>",
                     mbentry->name, mailbox_jmapid(mailbox));
             copy->foldermodseq = mailbox_modseq_dirty(mailbox);
+
+            if (mbname_isdeleted(mbname)) {
+                /* mark start mboxnum of first active mailbox for user */
+                hash_insert(userid, (void *) frock->next_mboxnum,
+                            &frock->next_mboxnum_by_userid);
+            }
+
+            mbname_free(&mbname);
         }
 
         if (!mbentry->uniqueid) {
@@ -265,9 +299,13 @@ static void process_mboxlist(int *upgraded)
     mboxlist_upgrade(upgraded);
 
     /* run fixmbox across all mboxlist entries */
-    struct fix_rock frock = { BUF_INITIALIZER, BUF_INITIALIZER, 0,
+    struct fix_rock frock = { HASH_TABLE_INITIALIZER, BUF_INITIALIZER,
+                              BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1,
                               config_getswitch(IMAPOPT_REPLICAONLY) };
+    construct_hash_table(&frock.next_mboxnum_by_userid, 4096, 0);
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
+    free_hash_table(&frock.next_mboxnum_by_userid, NULL);
+    buf_free(&frock.last_mboxname);
     buf_free(&frock.last_userid);
     buf_free(&frock.jmapid);
 
