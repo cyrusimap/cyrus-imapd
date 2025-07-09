@@ -3495,12 +3495,18 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
         if (r) {
             syslog(LOG_ERR, "Failed to enable compactids");
         }
+        else {
+            state->compact_emailids = 1;
+        }
     }
     else {
         r = cyrusdb_delete(state->db, IDKEY, strlen(IDKEY),
                            &state->txn, /*force*/1);
         if (r) {
             syslog(LOG_ERR, "Failed to disable compactids");
+        }
+        else {
+            state->compact_emailids = 0;
         }
     }
 

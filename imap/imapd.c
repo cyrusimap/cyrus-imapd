@@ -6933,12 +6933,14 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 {
     int r = 0;
     int mbtype = MBTYPE_EMAIL;
+    int is_inbox = 0;
     int options = 0;
     unsigned flags = MBOXLIST_CREATE_NOTIFY;
     const char *partition = NULL;
     const char *server = NULL;
     const char *uniqueid = NULL;
     uint32_t minor_version = 0;
+    uint32_t compactids = 0;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
@@ -6964,6 +6966,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
+    if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname)))
+        is_inbox = 1;
+
     struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     const char *type = NULL;
@@ -6972,6 +6977,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "SERVER", &server);
     dlist_getatom(extargs, "MAILBOXID", &uniqueid);
     dlist_getnum32(extargs, "VERSION", &minor_version);
+    dlist_getnum32(extargs, "COMPACTIDS", &compactids);
     if (dlist_getatom(extargs, "TYPE", &type)) {
         if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
         else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
@@ -7335,6 +7341,14 @@ localcreate:
 
     /* Close newly created mailbox before writing annotations */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (is_inbox && compactids && (!minor_version || minor_version >= 20)) {
+        r = conversations_enable_compactids(cstate, 1);
+        if (r) {
+            syslog(LOG_NOTICE,
+                   "IOERROR: failed to enable compactid for %s (%s:%d)",
+                   imapd_userid, __FILE__, __LINE__);
+        }
+    }
     if (USER_COMPACT_EMAILIDS(cstate)) {
         mailboxid = xstrdup(mailbox_jmapid(mailbox));
     }
@@ -9969,6 +9983,12 @@ static int parsecreateargs(struct dlist **extargs)
                 fatal(error_message(IMAP_ARGS_TOO_LARGE), EX_PROTOCOL);
 
             name = ucase(arg.s);
+            if (!strcmp(name, "COMPACTIDS")) {
+                /* does not take a value but dlist requires a one */
+                dlist_setnum32(res, name, 1);
+                continue;
+            }
+
             if (c != ' ') goto fail;
             c = prot_getc(imapd_in);
             if (c == '(') {
