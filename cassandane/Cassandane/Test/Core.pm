@@ -77,6 +77,8 @@ sub _test_core_files_with_size
     my $signaled = 0; #n.b. spelling
     my $pid;
 
+    my %initial_cores = map { $_ => 1 } $instance->find_cores();
+
     $instance->run_command(
         { cyrus => 0,
           handlers => {
@@ -93,24 +95,41 @@ sub _test_core_files_with_size
 
     my @cores = $instance->find_cores();
 
-    # expect there's exactly one core
-    $self->assert_num_equals(1, scalar @cores);
+    # expect there's at least one new core
+    $self->assert_num_gt(scalar keys %initial_cores, scalar @cores);
 
     my $cassini = Cassandane::Cassini->instance();
     my $core_pattern = $cassini->get_core_pattern();
+    my $found;
+    my $size;
 
-    my $core = shift @cores;
-    if ($core =~ m/$core_pattern/ && $1) {
-        # if there's a pid in the filename, check it
-        $self->assert_num_equals($pid, $1);
+    foreach my $core (@cores) {
+        # ignore cores that already existed
+        next if exists $initial_cores{$core};
+
+        if ($core =~ m/$core_pattern/) {
+            if ($1) {
+                if ($1 eq $pid) {
+                    # found the core we expected...
+                    $found ++;
+                    # can only check the size if it's readable and uncompressed
+                    $self->assert_file_test($core, '-r');
+                    $self->assert_does_not_match(qr{compressed}, qx(file $core));
+                    $size = -s $core;
+                    # clean it up if we can, so we don't barf on it existing!
+                    unlink $core;
+                }
+            }
+            else {
+                # core file names don't contain a pid field, can't identify our
+                # own, nothing else to do
+                return;
+            }
+        }
     }
-    my $size = -s $core;
 
-    # clean up the core we expected, so we don't barf on it existing!
-    unlink $core or die "unlink $core: $!";
-    # but don't clean up any other unexpected cores!
-
-    $self->assert($size > $alloc);
+    $self->assert_num_equals(1, $found);
+    $self->assert_num_gt($alloc, $size) if $size;
 }
 
 sub test_core_files_1KB
