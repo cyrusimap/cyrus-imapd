@@ -1575,6 +1575,9 @@ sub _detect_core_program
     my $lines = 0;
     my $prog;
 
+    # can't do anything if it's not readable
+    return if not -r $core;
+
     my $bindir_pattern = qr{
         \/
         (?:bin|sbin|libexec)
@@ -1602,13 +1605,16 @@ sub _detect_core_program
 sub find_cores
 {
     my ($self) = @_;
-    my $coredir = $self->{basedir} . '/conf/cores';
 
     my $cassini = Cassandane::Cassini->instance();
+    my $coredir = $cassini->val('cassandane', 'core_directory',
+                                $self->{basedir} . '/conf/cores');
     my $core_pattern = $cassini->get_core_pattern();
 
     my @cores;
 
+    # XXX can we detect systemd-coredump and use coredumpctl to pick up only
+    # XXX our core files?
     return unless -d $coredir;
     opendir CORES, $coredir
         or return "Cannot open directory $coredir for reading: $!";
@@ -1638,8 +1644,15 @@ sub find_cores
 sub _check_cores
 {
     my ($self) = @_;
-    my $coredir = $self->{basedir} . '/conf/cores';
 
+    my $cassini = Cassandane::Cassini->instance();
+    my $coredir = $cassini->val('cassandane', 'core_directory', undef);
+
+    # core_directory with absolute path may include unrelated systemwide core
+    # files, so for now we can't error on unexpected core files existing
+    return if $coredir && substr($coredir, 0, 1) eq '/';
+
+    $coredir ||= $self->{basedir} . '/conf/cores';
     return "Core files found in $coredir" if scalar $self->find_cores();
 }
 

@@ -102,6 +102,13 @@
 # capture group (if present) will be used to identify the pid the
 # core file came from.
 ##core_pattern = ^core.*?(?:\.(\d+))?$
+# Directory that that core files are placed in.  If your
+# kernel.core_pattern contains an absolute path, or if it pipes the
+# core to a handler like apport or systemd-coredump, then core files
+# from tests won't be in the usual {configdirectory}/cores location.
+# In this case, set core_directory to the directory they're written
+# to, and core_pattern to match the filename portion
+##core_directory = {basedir}/conf/cores
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
