@@ -157,6 +157,9 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 
 EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
 {
+      if (!table->size)
+          return NULL;
+
       unsigned val = key % table->size;
       bucketu64 *ptr;
 
