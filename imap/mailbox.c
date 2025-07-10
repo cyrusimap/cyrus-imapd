@@ -2711,7 +2711,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         }
     }
 
-    if (mailbox->cstate_flag == 3) {
+    if (mailbox->cstate_flag == CSTATE_FLAG_LOCAL) {
         int r = conversations_commit(&mailbox->cstate_value);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: Error committing to conversations database",
@@ -2719,8 +2719,8 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
                     mailbox_name(mailbox), error_message(r));
         }
     }
+    mailbox->cstate_flag = CSTATE_FLAG_UNSET;
     mailbox->cstate_value = NULL;
-    mailbox->cstate_flag = 0;
 
     /* release caches */
     int i;
@@ -3065,10 +3065,10 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 
     annotate_state_abort(&mailbox->annot_state);
 
-    if (mailbox->cstate_flag == 3)
+    if (mailbox->cstate_flag == CSTATE_FLAG_LOCAL)
         conversations_abort(&mailbox->cstate_value);
+    mailbox->cstate_flag = CSTATE_FLAG_UNSET;
     mailbox->cstate_value = NULL;
-    mailbox->cstate_flag = 0;
 
     if (!mailbox->i.dirty)
         return 0;
@@ -4409,18 +4409,18 @@ EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
 //  3: we opened the state and are responsible for closing it
 EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mailbox, int allow_deleted)
 {
-    if (mailbox->cstate_flag)
+    if (mailbox->cstate_flag != CSTATE_FLAG_UNSET)
         return mailbox->cstate_value;
 
     if (!mailbox_has_conversations_full(mailbox, allow_deleted)) {
-        mailbox->cstate_flag = 1;
+        mailbox->cstate_flag = CSTATE_FLAG_NOCONV;
         return NULL;
     }
 
     /* already exists, use that one */
     struct conversations_state *cstate = conversations_get_mbox(mailbox_name(mailbox));
     if (cstate) {
-        mailbox->cstate_flag = 2;
+        mailbox->cstate_flag = CSTATE_FLAG_EXTERN;
         mailbox->cstate_value = cstate;
         return cstate;
     }
@@ -4434,7 +4434,7 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
                 is_readonly ? "yes" : "no", error_message(r));
         abort();
     }
-    mailbox->cstate_flag = 3;
+    mailbox->cstate_flag = CSTATE_FLAG_LOCAL;
     return mailbox->cstate_value;
 }
 
@@ -6139,7 +6139,7 @@ EXPORTED int mailbox_create(const char *name,
                     is_readonly ? "yes" : "no", error_message(r));
             goto done;
         }
-        mailbox->cstate_flag = 3;
+        mailbox->cstate_flag = CSTATE_FLAG_LOCAL;
     }
 
     r = seen_create_mailbox(NULL, mailbox);

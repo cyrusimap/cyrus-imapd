@@ -248,6 +248,13 @@ struct mailbox_header {
     int mbtype;
 };
 
+enum cstate_flags_val {
+    CSTATE_FLAG_UNSET = 0,
+    CSTATE_FLAG_NOCONV = 1,
+    CSTATE_FLAG_EXTERN = 2,
+    CSTATE_FLAG_LOCAL = 3
+};
+
 struct mailbox {
     int index_fd;
     int header_fd;
