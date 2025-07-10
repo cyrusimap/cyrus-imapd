@@ -281,7 +281,8 @@ struct mailbox {
     struct annotate_state *annot_state;
 
     /* conversations */
-    struct conversations_state *local_cstate;
+    unsigned cstate_flag;
+    struct conversations_state *cstate_value;
 
     /* namespace lock */
     struct mboxlock *local_namespacelock;
