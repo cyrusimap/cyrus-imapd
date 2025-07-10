@@ -5742,11 +5742,11 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                                                           &copyrecord.internaldate);
                     }
                 }
-
+#if 0 // disabling this because its slow.  will write a separate tool to do this
                 // make the file timestamp correct
                 r = mailbox_set_datafile_timestamps(mailbox, &copyrecord);
                 if (r) goto done;
-
+#endif
                 // update G & J records
                 r = mailbox_update_conversations(mailbox, record, &copyrecord);
                 if (r) goto done;
