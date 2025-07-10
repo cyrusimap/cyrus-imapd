@@ -184,7 +184,7 @@ static struct MsgFlagMap msgflagmap[] = {
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int _mailbox_index_repack(struct mailbox *mailbox,
-                                 int version, int dryrun);
+                                 int version, unsigned flags);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);
 static void mailbox_repack_abort(struct mailbox_repack **repackptr);
 static int mailbox_lock_index_internal(struct mailbox *mailbox,
@@ -1271,9 +1271,10 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
     return mailbox->i.highestmodseq;
 }
 
-EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version, int dryrun)
+EXPORTED int mailbox_setversion(struct mailbox *mailbox,
+                                int version, unsigned flags)
 {
-    return _mailbox_index_repack(mailbox, version, dryrun);
+    return _mailbox_index_repack(mailbox, version, flags);
 }
 
 static void _delayed_cleanup(void *rock)
@@ -5502,30 +5503,34 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 /* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox, int version)
 {
-    return _mailbox_index_repack(mailbox, version, 0);
+    return _mailbox_index_repack(mailbox, version, RECONSTRUCT_MAKE_CHANGES);
 }
 
 /* need a mailbox exclusive lock, we're rewriting files */
 static int _mailbox_index_repack(struct mailbox *mailbox,
-                                 int version, int dryrun)
+                                 int version, unsigned flags)
 {
     struct mailbox_repack *repack = NULL;
     struct conversations_state *cstate = NULL;
+    unsigned dryrun = !(flags & RECONSTRUCT_MAKE_CHANGES);
+    unsigned recalc_nanosec = !!(flags & RECONSTRUCT_RECALC_NANOSEC);
     int foldernum = -1;
+    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
     uint32_t mbtype = mbtype_isa(mailbox_mbtype(mailbox));
     const message_t *msg;
     struct mailbox_iter *iter = NULL;
     struct buf buf = BUF_INITIALIZER;
     int r = IMAP_IOERROR;
 
-    syslog(LOG_INFO, "Repacking mailbox %s version %d dryrun %d",
-           mailbox_name(mailbox), version, dryrun);
+    syslog(LOG_INFO, "Repacking mailbox %s version %d"
+           " dryrun %u recalc_nanosec %u",
+           mailbox_name(mailbox), version, dryrun, recalc_nanosec);
 
     r = mailbox_repack_setup(mailbox, version, &repack);
     if (r) goto done;
 
-    if (mbtype == MBTYPE_EMAIL &&
-        mailbox->i.minor_version < 20 &&
+    if (mbtype == MBTYPE_EMAIL && !mbname_isdeleted(mbname) &&
+        (mailbox->i.minor_version < 20 || recalc_nanosec) &&
         repack->newmailbox.i.minor_version >= 20) {
         if (!(cstate = mailbox_get_cstate_full(mailbox, 1/*allow_deleted*/))) {
             r = IMAP_IOERROR;
@@ -5668,25 +5673,43 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             }
         }
 
+        /* calculate nanoseconds for internaldate
+           (non-expunged messages in non-DELETED mailboxes */
         if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
-            mailbox->i.minor_version < 20 && repack->newmailbox.i.minor_version >= 20) {
+            (mailbox->i.minor_version < 20 || recalc_nanosec) &&
+            repack->newmailbox.i.minor_version >= 20) {
+            if (recalc_nanosec) {
+                copyrecord.internaldate.tv_nsec = UTIME_OMIT;
+            }
+
             /* extract internaldate.nsec */
             buf_reset(&buf);
             mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
             if (buf.len) {
                 const char *p = buf_cstring(&buf);
-                bit64 newval;
-                parsenum(p, &p, 0, &newval);
-                copyrecord.internaldate.tv_nsec = newval;
+                bit64 nsec;
+                parsenum(p, &p, 0, &nsec);
+
+                if (recalc_nanosec) {
+                    // remove virtual annotation from old crc
+                    buf_reset(&buf);
+                    buf_printf(&buf, UINT64_FMT, nsec);
+                    repack->crcs.annot ^=
+                        crc_annot(record->uid,
+                                  IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+                }
+                else {
+                    copyrecord.internaldate.tv_nsec = nsec;
+                }
             }
-            else {
+            if (copyrecord.internaldate.tv_nsec == UTIME_OMIT) {
                 // assign internaldate.nsec in a deterministic manner -
                 // use the first 29 bits of GUID
                 // (0x1FFFFFFF < 999999999 nanoseconds)
                 copyrecord.internaldate.tv_nsec =
                     *((uint32_t *) record->guid.value) >> 3;
 
-                if (mbtype == MBTYPE_EMAIL) {
+                if (mbtype == MBTYPE_EMAIL && !mbname_isdeleted(mbname)) {
                     // attempt to find an existing message with the same guid
                     // and use its internaldate instead
                     struct find_dup_rock frock = {
@@ -5728,12 +5751,14 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 r = mailbox_update_conversations(mailbox, record, &copyrecord);
                 if (r) goto done;
 
-                // add virtual annotation to old crc
-                buf_reset(&buf);
-                buf_printf(&buf, UINT64_FMT, copyrecord.internaldate.tv_nsec);
-                repack->crcs.annot ^=
-                    crc_annot(record->uid,
-                              IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+                if (mailbox->i.minor_version < 20) {
+                    // add virtual annotation to old crc
+                    buf_reset(&buf);
+                    buf_printf(&buf, UINT64_FMT, copyrecord.internaldate.tv_nsec);
+                    repack->crcs.annot ^=
+                        crc_annot(record->uid,
+                                  IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+                }
             }
             buf_reset(&buf);
             r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
@@ -5779,6 +5804,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
 
 done:
     mailbox_iter_done(&iter);
+    mbname_free(&mbname);
     buf_free(&buf);
     if (r || dryrun) mailbox_repack_abort(&repack);
     else {

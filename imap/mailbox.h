@@ -525,6 +525,7 @@ typedef enum _MsgInternalFlags {
 #define RECONSTRUCT_REMOVE_ODDFILES (1<<7)
 #define RECONSTRUCT_IGNORE_ODDFILES (1<<8)
 #define RECONSTRUCT_PREFER_MBOXLIST (1<<9)
+#define RECONSTRUCT_RECALC_NANOSEC  (1<<10)
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 
@@ -745,7 +746,8 @@ extern void mailbox_set_uniqueid(struct mailbox *mailbox, const char *uniqueid);
 extern void mailbox_set_jmapid(struct mailbox *mailbox, const char *jmapid);
 extern void mailbox_set_mbtype(struct mailbox *mailbox, uint32_t mbtype);
 
-extern int mailbox_setversion(struct mailbox *mailbox, int version, int dryrun);
+extern int mailbox_setversion(struct mailbox *mailbox,
+                              int version, unsigned flags);
 
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
