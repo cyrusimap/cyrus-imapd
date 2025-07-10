@@ -96,23 +96,27 @@ sub test_cmd_id
     }
 }
 
-sub test_cmd_id_nil_with_compress
+sub test_cmd_id_nil_cant_unget
 {
     my ($self) = @_;
 
     # Purge any syslog lines before this test runs.
     $self->{instance}->getsyslog();
 
-    my $imaptalk = $self->{store}->get_client(UseCompress => 1);
+    my $imaptalk = $self->{store}->get_client();
 
-    my @data = "x id (\"foo\" NIL)";
-    for (my $i = 0 ; $i < 10000 ; $i++) {
-        my $str = join("\r\n", @data);
-        push @data, $data[-1];
-
-        $imaptalk->_imap_socket_out($str . "\r\n");
-        my $Line = $imaptalk->_imap_socket_read_line;
-    }
+    # Construct an ID command where the 'N' in NULL is the 4096'th character
+    # in the prot buffer.
+    # This will require a new read to get the rest of the command,
+    # but will also prohibit calling prot_ungetc('N').
+    # Successful execution of the command will verify that we have fixed the
+    # parsing issue.
+    # If the previous bug returns, imapd will fatal() attempting to prot_unget()
+    my $x = 'x' x 1014;
+    $imaptalk->{CmdId} = 'XX';
+    $imaptalk->_imap_cmd('ID', 0, {},
+                         qq{("a" "$x" "b" "$x" "c" "$x" "d" "$x" "e" NIL)});
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }
 
 1;
