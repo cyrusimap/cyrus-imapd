@@ -159,9 +159,8 @@ sub upgrade_19_to_20
         my $user_lp = $user =~ s/@.*//r;
 
         for my $line (@lines) {
-            next if $line =~ /^FAILED TO REPACK DELETED\.user\.$user\./;
             $self->assert_matches(
-                qr/^Converted user\.$user(\.[^\s]+)? version 19 to 20/,
+                qr/^Converted (DELETED\.)?user\.$user(\.[^\s]+)? version 19 to 20/,
                 $line
             );
         }
