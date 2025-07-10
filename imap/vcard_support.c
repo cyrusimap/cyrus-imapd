@@ -799,22 +799,4 @@ EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
     return NULL;
 }
 
-EXPORTED void vcardproperty_add_type_parameter(vcardproperty *prop,
-                                               vcardenumarray_element *type)
-{
-    vcardenumarray *types;
-    vcardparameter *param =
-        vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
-
-    if (param) {
-        types = vcardparameter_get_type(param);
-    }
-    else {
-        types = vcardenumarray_new(1);
-        param = vcardparameter_new_type(types);
-        vcardproperty_add_parameter(prop, param);
-    }
-    vcardenumarray_append(types, type);
-}
-
 #endif /* HAVE_LIBVCARDVCARD */

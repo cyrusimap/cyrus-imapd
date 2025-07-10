@@ -6658,7 +6658,9 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
                 /* Skip values that appear in other fields */
                 if (ckind->flags & FIELD_EXT) {
                     vcardstrarray *alt_sa = st->field[ckind->alt_idx];
-                    if (alt_sa && vcardstrarray_find(alt_sa, val) >= 0)
+                    if (alt_sa
+                        && vcardstrarray_find(alt_sa, val)
+                               < vcardstrarray_size(alt_sa))
                         continue;
                 }
 
@@ -9725,7 +9727,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
             }
 
             /* Add SORT-AS parameter */
-            vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+            vcardproperty_add_parameter(prop, vcardparameter_new_sortas_list(sortas));
 
             jmap_parser_pop(parser);
         }
@@ -9895,7 +9897,7 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
 
         prop =  vcardproperty_new_org(units);
         if (sortas) {
-            vcardproperty_add_parameter(prop, vcardparameter_new_sortas(sortas));
+            vcardproperty_add_parameter(prop, vcardparameter_new_sortas_list(sortas));
         }
 
         if (!props) {

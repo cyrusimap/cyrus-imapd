@@ -1826,20 +1826,14 @@ static void apply_patch_parameter(struct path_segment_t *path_seg,
         case ICAL_MEMBER_PARAMETER:
             /* Multi-valued parameter */
             if (path_seg->data) {
-                /* Check if entire parameter value == single value */
-                const char *single = (const char *) path_seg->data;
-                const char *param_val = icalparameter_get_value_as_string(param);
-
-                if (strcmp(param_val, single)) {
-                    /* Not an exact match, try to remove single value */
-                    char *newval = remove_single_value(param_val, single);
-                    if (newval) {
-                        *num_changes += 1;
-                        icalparameter_set_member(param, newval);
-                        free(newval);
-                    }
-                    continue;
-                }
+                icalstrarray *member = icalparameter_get_member(param);
+                size_t old_size = icalstrarray_size(member);
+                icalstrarray_remove(member, path_seg->data);
+                size_t new_size = icalstrarray_size(member);
+                if (old_size != new_size) *num_changes += 1;
+                if (!icalstrarray_size(member))
+                    icalproperty_remove_parameter_by_ref(parent, param);
+                continue;
             }
             break;
 
