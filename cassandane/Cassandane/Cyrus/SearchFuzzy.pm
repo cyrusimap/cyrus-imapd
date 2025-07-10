@@ -85,22 +85,9 @@ sub set_up
 
     xlog $self, "Xapian CJK tokeniser '$self->{xapian_cjk_tokens}' detected.\n";
 
-    use experimental 'smartmatch';
-    my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
-    if (not defined $skipdiacrit) {
-        $skipdiacrit = 1;
-    }
-    if ($skipdiacrit ~~ ['no', 'off', 'f', 'false', '0']) {
-        $skipdiacrit = 0;
-    }
-    $self->{skipdiacrit} = $skipdiacrit;
-
-    my $fuzzyalways = $self->{instance}->{config}->get('search_fuzzy_always');
-    if ($fuzzyalways ~~ ['yes', 'on', 't', 'true', '1']) {
-        $self->{fuzzyalways} = 1;
-    } else {
-        $self->{fuzzyalways} = 0 ;
-    }
+    my $config = $self->{instance}->{config};
+    $self->{skipdiacrit} = $config->get_bool('search_skipdiacrit', 'on');
+    $self->{fuzzyalways} = $config->get_bool('search_fuzzy_always', 'off');
 }
 
 sub tear_down
