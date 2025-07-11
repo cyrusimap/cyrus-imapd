@@ -2711,14 +2711,16 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
         }
     }
 
-    if (mailbox->local_cstate) {
-        int r = conversations_commit(&mailbox->local_cstate);
+    if (mailbox->cstate_flag == CSTATE_FLAG_LOCAL) {
+        int r = conversations_commit(&mailbox->cstate_value);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: Error committing to conversations database",
                     "mailbox=<%s> error=<%s>",
                     mailbox_name(mailbox), error_message(r));
         }
     }
+    mailbox->cstate_flag = CSTATE_FLAG_UNSET;
+    mailbox->cstate_value = NULL;
 
     /* release caches */
     int i;
@@ -3063,8 +3065,10 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 
     annotate_state_abort(&mailbox->annot_state);
 
-    if (mailbox->local_cstate)
-        conversations_abort(&mailbox->local_cstate);
+    if (mailbox->cstate_flag == CSTATE_FLAG_LOCAL)
+        conversations_abort(&mailbox->cstate_value);
+    mailbox->cstate_flag = CSTATE_FLAG_UNSET;
+    mailbox->cstate_value = NULL;
 
     if (!mailbox->i.dirty)
         return 0;
@@ -4394,29 +4398,44 @@ EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
 }
 #endif // USE_SIEVE
 
+// because we use mailbox names in conversations_get_mbox and mailbox_has_conversations_full,
+// those require mailboxes.db lookups - but we want this particular function to be usable
+// in tight inner loops iterating over the mailbox, so we cache.
+//
+// We have 4 possible values for the flag:
+//  0: we haven't looked up converstaions
+//  1: we looked, this mailbox doesn't have conversations
+//  2: we looked, someone else already opened the state, we cached a copy
+//  3: we opened the state and are responsible for closing it
 EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mailbox, int allow_deleted)
 {
-    if (!mailbox_has_conversations_full(mailbox, allow_deleted))
-        return NULL;
+    if (mailbox->cstate_flag != CSTATE_FLAG_UNSET)
+        return mailbox->cstate_value;
 
-    /* we already own it? */
-    if (mailbox->local_cstate)
-        return mailbox->local_cstate;
+    if (!mailbox_has_conversations_full(mailbox, allow_deleted)) {
+        mailbox->cstate_flag = CSTATE_FLAG_NOCONV;
+        return NULL;
+    }
 
     /* already exists, use that one */
     struct conversations_state *cstate = conversations_get_mbox(mailbox_name(mailbox));
-    if (cstate) return cstate;
+    if (cstate) {
+        mailbox->cstate_flag = CSTATE_FLAG_EXTERN;
+        mailbox->cstate_value = cstate;
+        return cstate;
+    }
 
     /* open the conversations DB - abort if this fails */
     int is_readonly = mailbox->is_readonly || mailbox->index_locktype == LOCK_SHARED;
-    int r = conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->local_cstate);
+    int r = conversations_open_mbox(mailbox_name(mailbox), is_readonly, &mailbox->cstate_value);
     if (r) {
         xsyslog(LOG_ERR, "DBERROR: failed to open conversations",
                 "mboxname=<%s> ro=<%s> error=<%s>", mailbox_name(mailbox),
                 is_readonly ? "yes" : "no", error_message(r));
         abort();
     }
-    return mailbox->local_cstate;
+    mailbox->cstate_flag = CSTATE_FLAG_LOCAL;
+    return mailbox->cstate_value;
 }
 
 static int mailbox_update_conversations(struct mailbox *mailbox,
@@ -6113,13 +6132,14 @@ EXPORTED int mailbox_create(const char *name,
         int is_readonly = mailbox->is_readonly ||
             mailbox->index_locktype == LOCK_SHARED;
         r = conversations_open_user_version(mbname_userid(mbname), is_readonly,
-                                            &mailbox->local_cstate, 1);
+                                            &mailbox->cstate_value, 1);
         if (r) {
             xsyslog(LOG_ERR, "DBERROR: failed to open conversations",
                     "mboxname=<%s> ro=<%s> error=<%s>", mailbox_name(mailbox),
                     is_readonly ? "yes" : "no", error_message(r));
             goto done;
         }
+        mailbox->cstate_flag = CSTATE_FLAG_LOCAL;
     }
 
     r = seen_create_mailbox(NULL, mailbox);
@@ -6772,13 +6792,13 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
         if (!r && newcstate) {
             // sub in the values for the new location so we write to the
             // correct location in the new database!
-            struct conversations_state *tempcs = oldmailbox->local_cstate;
+            struct conversations_state *tempcs = oldmailbox->cstate_value;
             mbentry_t *tempmb = oldmailbox->mbentry;
-            oldmailbox->local_cstate = newcstate;
+            oldmailbox->cstate_value = newcstate;
             oldmailbox->mbentry = newmbentry;
             r = mailbox_add_conversations(oldmailbox, oldmailbox->silentchanges);
             oldmailbox->mbentry = tempmb;
-            oldmailbox->local_cstate = tempcs;
+            oldmailbox->cstate_value = tempcs;
         }
     }
     if (r) goto done;

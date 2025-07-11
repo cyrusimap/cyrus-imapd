@@ -1422,6 +1422,10 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     syslog(LOG_DEBUG, "moving message %s:%u to mailboxid %s",
            mailbox_name(srcmbox), record->uid, destmboxid);
 
+    // make sure we pre-load the conversation state into the source
+    // mailbox first!
+    mailbox_get_cstate(srcmbox);
+
     mr = msgrecord_from_index_record(srcmbox, record);
     if (!mr) goto done;
 

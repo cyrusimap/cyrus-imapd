@@ -248,6 +248,13 @@ struct mailbox_header {
     int mbtype;
 };
 
+enum cstate_flags_val {
+    CSTATE_FLAG_UNSET = 0,
+    CSTATE_FLAG_NOCONV = 1,
+    CSTATE_FLAG_EXTERN = 2,
+    CSTATE_FLAG_LOCAL = 3
+};
+
 struct mailbox {
     int index_fd;
     int header_fd;
@@ -281,7 +288,8 @@ struct mailbox {
     struct annotate_state *annot_state;
 
     /* conversations */
-    struct conversations_state *local_cstate;
+    unsigned cstate_flag;
+    struct conversations_state *cstate_value;
 
     /* namespace lock */
     struct mboxlock *local_namespacelock;

@@ -2931,9 +2931,9 @@ static void chdir_cores(void)
 
     if (chdir(path))
         fatalf(2, "couldn't chdir to %s: %m", path);
-    chdir("cores");
     /* XXX ignoring error when "cores" subdirectory missing */
-    errno = 0;
+    if (chdir("cores"))
+        errno = 0;
 }
 
 int main(int argc, char **argv)
