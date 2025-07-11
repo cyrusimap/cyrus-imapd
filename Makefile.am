@@ -695,7 +695,9 @@ endif
 
 .testc.o:
 	$(AM_V_at)$(CUNIT_PL) --generate-wrapper $<
-	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
+	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $<-cunit.c &&\
+	$(am__mv) $$depbase.Tpo $$depbase.Po
 	$(AM_V_at)$(CUNIT_RM) $<-cunit.c
 
 $(CUNIT_PROJECT):
