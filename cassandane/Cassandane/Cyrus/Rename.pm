@@ -999,4 +999,48 @@ sub test_rename_user_sharee
     $self->assert_mailbox_structure($list, '.', $structure);
 }
 
+sub test_rename_intermediate_noperms
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->setup_mailbox_structure($admintalk, [
+        [ 'create' => [qw( shared shared.intermed.child)] ],
+    ]);
+    $admintalk->setacl('shared', cassandane => 'lrs');
+    # no 'x' permission
+    $admintalk->setacl('shared.intermed', cassandane => 'lrs');
+    # must have permission to rename first child, otherwise we don't even get
+    # as far as mboxlist_renamemailbox!
+    $admintalk->setacl('shared.intermed.child', cassandane => 'lrsx');
+
+    my $uniqueid_key = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my $res = $admintalk->getmetadata('shared.intermed', $uniqueid_key);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    my $uniqueid = $res->{'shared.intermed'}{$uniqueid_key};
+    $self->assert_not_null($uniqueid);
+
+    # instance will be stopped and restarted, drop connection first
+    $admintalk->logout();
+    undef $admintalk;
+
+    # n.b. stops the instance, fiddles around, restarts it!
+    $self->{instance}->make_folder_intermediate($uniqueid);
+
+    # okay we're back, make sure it's an intermediate now
+    $admintalk = $self->{adminstore}->get_client();
+    my $data = $admintalk->list('', 'shared.intermed');
+    $self->assert_mailbox_structure($data, '.', {
+        'shared.intermed' => [ '\\NoSelect', '\\HasChildren' ],
+    });
+
+    # try to rename it as non-admin, expect NO Permission denied
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->rename('shared.intermed', 'INBOX.shared_renamed');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{Permission denied}, $imaptalk->get_last_error());
+}
+
 1;
