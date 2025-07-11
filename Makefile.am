@@ -77,6 +77,7 @@ endif
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
+    --enable-unit-tests \
     --enable-http \
     --enable-calalarmd \
     --enable-replication \
