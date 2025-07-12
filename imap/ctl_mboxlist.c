@@ -78,6 +78,7 @@
 #include "dlist.h"
 #include "global.h"
 #include "json_support.h"
+#include "jmap_util.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"
@@ -95,6 +96,7 @@ enum mboxop { DUMP,
               M_POPULATE,
               UNDUMP,
               VERIFY,
+              FIX_KEYS,
               NONE };
 
 struct dumprock {
@@ -696,7 +698,8 @@ static void do_undump_legacy(void)
         line++;
 
         sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
-               " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+               " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+               &newmbentry->name, &newmbentry->mbtype,
                &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
                &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
@@ -713,7 +716,8 @@ static void do_undump_legacy(void)
             mboxlist_entry_free(&newmbentry);
             newmbentry = mboxlist_entry_create();
             sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                   " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+                   " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+                   &newmbentry->name, &newmbentry->mbtype,
                    &newmbentry->partition, &newmbentry->uniqueid,
                    &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                    &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
@@ -1241,6 +1245,146 @@ static void do_verify(void)
     verify_mboxes(mboxes, found, &idx);
 }
 
+struct fix_rock {
+    hash_table deleted_mbentry_by_jmapid;
+    ptrarray_t deleted_mbentry_to_fix;
+};
+
+static int fix_cb(const mbentry_t *mbentry, void *rockp)
+{
+    struct fix_rock *frock = (struct fix_rock *) rockp;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    mbentry_t *copy = NULL;
+
+    if (mbentry->jmapid) {
+        const char *userid = mbname_userid(mbname);
+        mbentry_t *deleted_mbentry = NULL;
+
+        if (!userid) userid = "";
+
+        if (mbname_isdeleted(mbname)) {
+            /* track DELETED mailboxes because they may have duplicate JMAP IDs
+               of active mailboxes and will will have to fix them */
+            hash_insert(mbentry->jmapid, mboxlist_entry_copy(mbentry),
+                        &frock->deleted_mbentry_by_jmapid);
+        }
+        else {
+            deleted_mbentry =
+                hash_del(mbentry->jmapid, &frock->deleted_mbentry_by_jmapid);
+            if (deleted_mbentry) {
+                ptrarray_add(&frock->deleted_mbentry_to_fix, deleted_mbentry);
+            }
+        }
+
+        if (deleted_mbentry ||
+            mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL)) {
+            xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
+                    "mboxname=<%s> jmapid=<%s>",
+                    mbentry->name, mbentry->jmapid);
+            copy = mboxlist_entry_copy(mbentry);
+        }
+    }
+
+    if (!copy && mbentry->uniqueid &&
+        mboxlist_lookup_by_uniqueid(mbentry->uniqueid, NULL, NULL)) {
+        xsyslog(LOG_NOTICE, "adding missing I record to mboxlist",
+                "mboxname=<%s> uniqueid=<%s>",
+                mbentry->name, mbentry->uniqueid);
+        copy = mboxlist_entry_copy(mbentry);
+    }
+
+    if (copy) {
+        int r = mboxlist_updatelock(copy, /*localonly*/1);
+        if (r) {
+            xsyslog(LOG_ERR, "failed to update mboxlist",
+                    "mboxname=<%s> error=<%s>",
+                    mbentry->name, error_message(r));
+        }
+        mboxlist_entry_free(&copy);
+    }
+
+    mbname_free(&mbname);
+
+    return 0;
+}
+
+static void hash_free_mbentry(const char *key __attribute__((unused)),
+                              void *data,
+                              void *rockp __attribute__((unused)))
+{
+    mbentry_t *mbentry = (mbentry_t *) data;
+
+    mboxlist_entry_free(&mbentry);
+}
+
+static void do_fix_keys(int intermediary)
+{
+    struct fix_rock frock = { HASH_TABLE_INITIALIZER, PTRARRAY_INITIALIZER };
+    struct buf jmapid = BUF_INITIALIZER;
+    mbentry_t *mbentry;
+    int flags = MBOXTREE_TOMBSTONES;
+    int r, r2;
+
+    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+
+    construct_hash_table(&frock.deleted_mbentry_by_jmapid, 4096, 0);
+
+    mboxlist_allmbox("", &fix_cb, &frock, flags);
+
+    while ((mbentry = ptrarray_shift(&frock.deleted_mbentry_to_fix))) {
+        struct mailbox *mailbox = NULL;
+
+        r = mailbox_open_from_mbe(mbentry, &mailbox);
+        if (r) {
+            /* XXX what does it mean if there's an mbentry, but the mailbox
+             * XXX was not openable?
+             */
+            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
+                              __func__, mbentry->name, error_message(r));
+        }
+        else {
+            mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
+
+            buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
+            MODSEQ_TO_JMAPID(&jmapid, mbentry->foldermodseq);
+            mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
+
+            free(mbentry->jmapid);
+            mbentry->jmapid = buf_release(&jmapid);
+
+            xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
+                    "mboxname=<%s> jmapid=<%s>",
+                    mbentry->name, mbentry->jmapid);
+            r = mboxlist_updatelock(mbentry, /*localonly*/1);
+            if (r) {
+                xsyslog(LOG_ERR, "failed to update mboxlist",
+                        "mboxname=<%s> error=<%s>",
+                        mbentry->name, error_message(r));
+                r2 = mailbox_abort(mailbox);
+                if (r2) {
+                    xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                            "error=<%s>", cyrusdb_strerror(r2));
+                }
+            }
+            else {
+                r2 = mailbox_commit(mailbox);
+                if (r2) {
+                    xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                            "error=<%s>", cyrusdb_strerror(r2));
+                }
+            }
+            mailbox_close(&mailbox);
+        }
+        mboxlist_entry_free(&mbentry);
+    }
+    ptrarray_fini(&frock.deleted_mbentry_to_fix);
+
+    hash_enumerate(&frock.deleted_mbentry_by_jmapid, &hash_free_mbentry, NULL);
+    free_hash_table(&frock.deleted_mbentry_by_jmapid, NULL);
+
+    buf_free(&jmapid);
+}
+
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
@@ -1253,6 +1397,8 @@ static void usage(void)
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
     fprintf(stderr, "VERIFY:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -v [-f filename]\n");
+    fprintf(stderr, "FIX I/J keys:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -k [-f filename]\n");
     exit(1);
 }
 
@@ -1268,7 +1414,7 @@ int main(int argc, char *argv[])
     int undump_legacy = 0;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:Ladf:imp:uvwxy";
+    static const char short_options[] = "C:Ladf:ikmp:uvwxy";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -1277,6 +1423,7 @@ int main(int argc, char *argv[])
         { "dump", no_argument, NULL, 'd' },
         { "filename", required_argument, NULL, 'f' },
         { "interactive", no_argument, NULL, 'i' },
+        { "fix-keys", no_argument, NULL, 'k' },
         { "sync-mupdate", no_argument, NULL, 'm' },
         { "partition", required_argument, NULL, 'p' },
         { "undump", no_argument, NULL, 'u' },
@@ -1315,6 +1462,11 @@ int main(int argc, char *argv[])
 
         case 'u':
             if (op == NONE) op = UNDUMP;
+            else usage();
+            break;
+
+        case 'k':
+            if (op == NONE) op = FIX_KEYS;
             else usage();
             break;
 
@@ -1412,6 +1564,17 @@ int main(int argc, char *argv[])
         mboxlist_open(mboxdb_fname);
 
         do_verify();
+
+        mboxlist_close();
+        mboxlist_done();
+        break;
+
+
+    case FIX_KEYS:
+        mboxlist_init();
+        mboxlist_open(mboxdb_fname);
+
+        do_fix_keys(dointermediary);
 
         mboxlist_close();
         mboxlist_done();

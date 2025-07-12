@@ -44,6 +44,7 @@ use Data::Dumper;
 use File::Copy;
 use IO::File;
 use JSON;
+use Cwd qw(abs_path);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -670,7 +671,7 @@ sub test_downgrade_upgrade
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    for my $version (18, 17, 16, 15, 14, 13, 12, 10, 9, 8, 7, 6) {
+    for my $version (19, 18, 17, 16, 15, 14, 13, 12, 10, 9, 8, 7, 6) {
         xlog $self, "Set to version $version";
         $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
 
@@ -681,7 +682,7 @@ sub test_downgrade_upgrade
         $self->check_messages(\%msg);
     }
 
-    for my $version (6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 'max') {
+    for my $version (6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 'max') {
         xlog $self, "Set to version $version";
         $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', $version);
 
@@ -691,6 +692,236 @@ sub test_downgrade_upgrade
         $self->{store}->_select();
         $self->check_messages(\%msg);
     }
+}
+
+sub test_upgrade_v19_to_v20
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations :Replication
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('INBOX.foo');
+
+    # replicate and check initial state
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $data_file = abs_path("data/old-mailboxes/version19.tar.gz");
+    die "Old mailbox data does not exist: $data_file" if not -f $data_file;
+
+    $self->{instance}->{re_use_dir} = 1;
+    $self->{instance}->stop();
+
+    xlog "installing version 19 mailboxes";
+    $self->{instance}->unpackfile($data_file, $self->{instance}->get_basedir());
+    $self->{instance}->unpackfile($data_file, $self->{replica}->get_basedir());
+
+    xlog "reconstructing indexes at v19 to get predictable senddate";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+    $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-G', '-q');
+
+    $self->{instance}->start();
+
+    # replicate old version to old version
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "Fetching EMAILIDs";
+    $talk = $self->{master_store}->get_client();
+    $talk->examine('INBOX');
+    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    my $id1 = $res->{1}{emailid}[0];
+    my $id2 = $res->{2}{emailid}[0];
+    my $id3 = $res->{3}{emailid}[0];
+    my $id4 = $res->{4}{emailid}[0];
+    my $thrid1 = $res->{1}{threadid}[0];
+    my $thrid2 = $res->{2}{threadid}[0];
+    $self->assert_matches(qr/^M/, $id1);
+    $self->assert_matches(qr/^M/, $id2);
+    $self->assert_matches(qr/^M/, $id3);
+    $self->assert_matches(qr/^M/, $id4);
+    $self->assert_matches(qr/^T/, $thrid1);
+    $self->assert_matches(qr/^T/, $thrid2);
+    $self->assert_equals($thrid1, $res->{3}{threadid}[0]);
+    $self->assert_equals($thrid1, $res->{4}{threadid}[0]);
+
+    xlog $self, "Fetching MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    my $mid1 = $res->{INBOX}{mailboxid}[0];
+    my $mid2 = $res->{'INBOX.foo'}{mailboxid}[0];
+    $self->assert_matches(qr/^[^P].*/, $mid1);
+    $self->assert_matches(qr/^[^P].*/, $mid2);
+
+    $self->{instance}->stop();
+
+    my %handlers = (
+        exited_abnormally => sub
+        {
+            my (undef, $code) = @_;
+            return $code;
+        },
+    );
+
+    xlog $self, "Try to enable compactids - should fail due to conv.db version";
+    $res = $self->{instance}->run_command_capture({ cyrus => 1,
+                                                    handlers => \%handlers },
+                                                  'ctl_conversationsdb', '-I',
+                                                  'on', 'cassandane');
+    $self->assert_num_not_equals(0, $res->status);
+    $self->assert_matches(qr/^MUST upgrade conversations.db/, $res->stderr);
+
+    xlog $self, "Upgrade master to conv.db version 2";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-U', '-r');
+
+    xlog $self, "Try to enable compactids - should fail due to mailbox version";
+    $res = $self->{instance}->run_command_capture({ cyrus => 1,
+                                                    handlers => \%handlers },
+                                                  'ctl_conversationsdb', '-I',
+                                                  'on', 'cassandane');
+    $self->assert_num_not_equals(0, $res->status);
+    $self->assert_matches(qr/^MUST upgrade mailbox/, $res->stderr);
+
+    xlog $self, "Upgrade master to mailboxes version 20";
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
+
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'cassandane');
+
+    $self->{instance}->start();
+
+    # replicate new version to old version (including compactids setting)
+    $self->run_replication();
+
+    # check_replication() will fail here due to the internaldate.nsec annotation
+    # being present on the replica but NOT on the master
+
+    $self->{replica}->{re_use_dir} = 1;
+    $self->{replica}->stop();
+
+    xlog $self, "Upgrade replica to mailboxes version 20";
+    $self->{replica}->run_command({ cyrus => 1 }, 'reconstruct', '-V', '20');
+
+    xlog $self, "Upgrade replica to conv.db version 2";
+    $self->{replica}->run_command({ cyrus => 1 },
+                                  'ctl_conversationsdb', '-U', '-r');
+
+    $self->{replica}->start();
+
+    # replicate new version to new version
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "Fetching EMAILIDs";
+    $talk = $self->{master_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $id1 = $res->{1}{emailid}[0];
+    $id2 = $res->{2}{emailid}[0];
+    $id3 = $res->{3}{emailid}[0];
+    $id4 = $res->{4}{emailid}[0];
+    $thrid1 = $res->{1}{threadid}[0];
+    $thrid2 = $res->{2}{threadid}[0];
+    $self->assert_matches(qr/^S/, $id1);
+    $self->assert_matches(qr/^S/, $id2);
+    $self->assert_matches(qr/^S/, $id3);
+    $self->assert_matches(qr/^S/, $id4);
+    $self->assert_matches(qr/^A/, $thrid1);
+    $self->assert_matches(qr/^A/, $thrid2);
+    $self->assert_equals($thrid1, $res->{3}{threadid}[0]);
+    $self->assert_equals($thrid1, $res->{4}{threadid}[0]);
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+
+    xlog $self, "Fetching MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $mid1 = $res->{INBOX}{mailboxid}[0];
+    $mid2 = $res->{'INBOX.foo'}{mailboxid}[0];
+    $self->assert_matches(qr/^P.*/, $mid1);
+    $self->assert_matches(qr/^P.*/, $mid2);
+
+    # EMAILIDs on the replica should be identical to those on the master
+    # since they are the encoded nanoseconds since epoch
+    $talk = $self->{replica_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+    $self->assert_str_equals($id2, $res->{2}{emailid}[0]);
+    $self->assert_str_equals($id3, $res->{3}{emailid}[0]);
+    $self->assert_str_equals($id4, $res->{4}{emailid}[0]);
+    $self->assert_str_equals($thrid1, $res->{1}{threadid}[0]);
+    $self->assert_str_equals($thrid2, $res->{2}{threadid}[0]);
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+
+    # MAILBOXIDs on the replica should be identical to those on the master
+    # since they are the encoded createdmodseq
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $self->assert_str_equals($mid1, $res->{INBOX}{mailboxid}[0]);
+    $self->assert_str_equals($mid2, $res->{'INBOX.foo'}{mailboxid}[0]);
+
+    xlog $self, "Disable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'off', 'cassandane');
+
+    xlog $self, "Fetching EMAILIDs";
+    $talk = $self->{master_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $id1 = $res->{1}{emailid}[0];
+    $id2 = $res->{2}{emailid}[0];
+    $id3 = $res->{3}{emailid}[0];
+    $id4 = $res->{4}{emailid}[0];
+    $thrid1 = $res->{1}{threadid}[0];
+    $thrid2 = $res->{2}{threadid}[0];
+    $self->assert_matches(qr/^M/, $id1);
+    $self->assert_matches(qr/^M/, $id2);
+    $self->assert_matches(qr/^M/, $id3);
+    $self->assert_matches(qr/^M/, $id4);
+    $self->assert_matches(qr/^T/, $thrid1);
+    $self->assert_matches(qr/^T/, $thrid2);
+
+    xlog $self, "Fetching MAILBOXIDs";
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $mid1 = $res->{INBOX}{mailboxid}[0];
+    $mid2 = $res->{'INBOX.foo'}{mailboxid}[0];
+    $self->assert_matches(qr/^[^P].*/, $mid1);
+    $self->assert_matches(qr/^[^P].*/, $mid2);
+
+    # replicate new version to new version (including compactids setting)
+    $self->run_replication();
+
+    # EMAILIDs on the replica should be identical to those on the master
+    # since they are the encoded nanoseconds since epoch
+    $talk = $self->{replica_store}->get_client();
+    $talk->examine('INBOX');
+    $res = $talk->fetch('1:*', '(UID EMAILID THREADID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+    $self->assert_str_equals($id2, $res->{2}{emailid}[0]);
+    $self->assert_str_equals($id3, $res->{3}{emailid}[0]);
+    $self->assert_str_equals($id4, $res->{4}{emailid}[0]);
+    $self->assert_str_equals($thrid1, $res->{1}{threadid}[0]);
+    $self->assert_str_equals($thrid2, $res->{2}{threadid}[0]);
+
+    $talk->examine('INBOX.foo');
+    $res = $talk->fetch('1:*', '(UID EMAILID)');
+    $self->assert_str_equals($id1, $res->{1}{emailid}[0]);
+
+    # MAILBOXIDs on the replica should be identical to those on the master
+    # since they are the encoded createdmodseq
+    $talk->list("", "INBOX*", 'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    $res = $talk->get_response_code('status') || {};
+    $self->assert_str_equals($mid1, $res->{INBOX}{mailboxid}[0]);
+    $self->assert_str_equals($mid2, $res->{'INBOX.foo'}{mailboxid}[0]);
 }
 
 1;

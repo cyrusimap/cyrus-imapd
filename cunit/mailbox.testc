@@ -10,16 +10,6 @@
 #include "cunit/cyrunit.h"
 #include "imap/mailbox.h"
 
-/* XXX Time fields are time_t in memory, but are read from and written to
- * XXX disk in mailbox.c as bit32!  Don't fail for now, but we really ought
- * XXX to move to 64 bit time fields...
- * XXX Remove this kludge when the in memory and on disk types match.
- */
-typedef bit32 XXX_TIME32_TYPE;
-
-/* XXX quota_annot_used is quota_t (int64_t) in memory, but bit32 on disk */
-typedef bit32 XXX_QUOTA32_TYPE;
-
 /* XXX record cache_offset is 64b in memory but 32b on disk, and cache_version
  * XXX is 16b in memory but 32b on disk.
  */
@@ -63,32 +53,32 @@ static void test_aligned_header_offsets(void)
      * alphabetically by the OFFSET_... name, for ease of maintenance.
      */
     CU_ASSERT_EQUAL(0, OFFSET_ANSWERED          % alignof(h.answered));
-    CU_ASSERT_EQUAL(0, OFFSET_CHANGES_EPOCH     % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_CHANGES_EPOCH     % alignof(h.changes_epoch.tv_sec));
     CU_ASSERT_EQUAL(0, OFFSET_DELETED           % alignof(h.deleted));
     CU_ASSERT_EQUAL(0, OFFSET_DELETEDMODSEQ     % alignof(h.deletedmodseq));
     CU_ASSERT_EQUAL(0, OFFSET_EXISTS            % alignof(h.exists));
-    CU_ASSERT_EQUAL(0, OFFSET_FIRST_EXPUNGED    % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_FIRST_EXPUNGED    % alignof(h.first_expunged.tv_sec));
     CU_ASSERT_EQUAL(0, OFFSET_FLAGGED           % alignof(h.flagged));
     CU_ASSERT_EQUAL(0, OFFSET_FORMAT            % alignof(h.format));
     CU_ASSERT_EQUAL(0, OFFSET_GENERATION_NO     % alignof(h.generation_no));
     CU_ASSERT_EQUAL(0, OFFSET_HEADER_CRC        % alignof(uint32_t)); /* not in struct */
     CU_ASSERT_EQUAL(0, OFFSET_HEADER_FILE_CRC   % alignof(h.header_file_crc));
     CU_ASSERT_EQUAL(0, OFFSET_HIGHESTMODSEQ     % alignof(h.highestmodseq));
-    CU_ASSERT_EQUAL(0, OFFSET_LAST_APPENDDATE   % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_LAST_REPACK_TIME  % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_LAST_APPENDDATE   % alignof(h.last_appenddate.tv_sec));
+    CU_ASSERT_EQUAL(0, OFFSET_LAST_REPACK_TIME  % alignof(h.last_repack_time.tv_sec));
     CU_ASSERT_EQUAL(0, OFFSET_LAST_UID          % alignof(h.last_uid));
     CU_ASSERT_EQUAL(0, OFFSET_LEAKED_CACHE      % alignof(h.leaked_cache_records));
     CU_ASSERT_EQUAL(0, OFFSET_MAILBOX_CREATEDMODSEQ % alignof(h.createdmodseq));
     CU_ASSERT_EQUAL(0, OFFSET_MAILBOX_OPTIONS   % alignof(h.options));
     CU_ASSERT_EQUAL(0, OFFSET_MINOR_VERSION     % alignof(h.minor_version));
     CU_ASSERT_EQUAL(0, OFFSET_NUM_RECORDS       % alignof(h.num_records));
-    CU_ASSERT_EQUAL(0, OFFSET_POP3_LAST_LOGIN   % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_POP3_SHOW_AFTER   % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_QUOTA_ANNOT_USED  % alignof(XXX_QUOTA32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_POP3_LAST_LOGIN   % alignof(h.pop3_last_login.tv_sec));
+    CU_ASSERT_EQUAL(0, OFFSET_POP3_SHOW_AFTER   % alignof(h.pop3_show_after.tv_sec));
+    CU_ASSERT_EQUAL(0, OFFSET_QUOTA_ANNOT_USED  % alignof(h.quota_annot_used));
     CU_ASSERT_EQUAL(0, OFFSET_QUOTA_DELETED_USED % alignof(h.quota_deleted_used));
     CU_ASSERT_EQUAL(0, OFFSET_QUOTA_EXPUNGED_USED % alignof(h.quota_expunged_used));
     CU_ASSERT_EQUAL(0, OFFSET_QUOTA_MAILBOX_USED % alignof(h.quota_mailbox_used));
-    CU_ASSERT_EQUAL(0, OFFSET_RECENTTIME        % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_RECENTTIME        % alignof(h.recenttime.tv_sec));
     CU_ASSERT_EQUAL(0, OFFSET_RECENTUID         % alignof(h.recentuid));
     CU_ASSERT_EQUAL(0, OFFSET_RECORD_SIZE       % alignof(h.record_size));
     CU_ASSERT_EQUAL(0, OFFSET_START_OFFSET      % alignof(h.start_offset));
@@ -119,22 +109,23 @@ static void test_aligned_record_offsets(void)
      * not need to care about that.  Instead, keep this list sorted
      * alphabetically by the OFFSET_... name, for ease of maintenance.
      */
+    CU_ASSERT_EQUAL(0, OFFSET_BASECID       % alignof(r.basecid));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_CRC     % alignof(r.cache_crc));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_OFFSET  % alignof(XXX_CACHE32_TYPE));
     CU_ASSERT_EQUAL(0, OFFSET_CACHE_VERSION % alignof(XXX_CACHE32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_CID           % alignof(r.cid));
     CU_ASSERT_EQUAL(0, OFFSET_CREATEDMODSEQ % alignof(r.createdmodseq));
-    CU_ASSERT_EQUAL(0, OFFSET_GMTIME        % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_GMTIME        % alignof(r.gmtime));
     CU_ASSERT_EQUAL(0, OFFSET_HEADER_SIZE   % alignof(r.header_size));
-    CU_ASSERT_EQUAL(0, OFFSET_INTERNALDATE  % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_LAST_UPDATED  % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_INTERNALDATE  % alignof(r.internaldate));
+    CU_ASSERT_EQUAL(0, OFFSET_LAST_UPDATED  % alignof(r.last_updated));
     CU_ASSERT_EQUAL(0, OFFSET_MESSAGE_GUID  % alignof(char)); /* r/w uses memcpy */
     CU_ASSERT_EQUAL(0, OFFSET_MODSEQ        % alignof(r.modseq));
     CU_ASSERT_EQUAL(0, OFFSET_RECORD_CRC    % alignof(uint32_t)); /* not in struct */
-    CU_ASSERT_EQUAL(0, OFFSET_SAVEDATE      % alignof(XXX_TIME32_TYPE));
-    CU_ASSERT_EQUAL(0, OFFSET_SENTDATE      % alignof(XXX_TIME32_TYPE));
+    CU_ASSERT_EQUAL(0, OFFSET_SAVEDATE      % alignof(r.savedate));
+    CU_ASSERT_EQUAL(0, OFFSET_SENTDATE      % alignof(r.sentdate));
     CU_ASSERT_EQUAL(0, OFFSET_SIZE          % alignof(r.size));
     CU_ASSERT_EQUAL(0, OFFSET_SYSTEM_FLAGS  % alignof(r.system_flags));
-    CU_ASSERT_EQUAL(0, OFFSET_THRID         % alignof(r.cid));
     CU_ASSERT_EQUAL(0, OFFSET_UID           % alignof(r.uid));
     CU_ASSERT_EQUAL(0, OFFSET_USER_FLAGS    % alignof(r.user_flags));
     /* this list is sorted alphabetically, don't just append */
@@ -176,32 +167,32 @@ static void test_unique_header_offsets(void)
          * maintenance.  We'll qsort it into the order the test needs shortly.
          */
         OFFSET(OFFSET_ANSWERED,          sizeof(h.answered)),
-        OFFSET(OFFSET_CHANGES_EPOCH,     sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_CHANGES_EPOCH,     sizeof(h.changes_epoch.tv_sec)),
         OFFSET(OFFSET_DELETED,           sizeof(h.deleted)),
         OFFSET(OFFSET_DELETEDMODSEQ,     sizeof(h.deletedmodseq)),
         OFFSET(OFFSET_EXISTS,            sizeof(h.exists)),
-        OFFSET(OFFSET_FIRST_EXPUNGED,    sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_FIRST_EXPUNGED,    sizeof(h.first_expunged.tv_sec)),
         OFFSET(OFFSET_FLAGGED,           sizeof(h.flagged)),
         OFFSET(OFFSET_FORMAT,            sizeof(h.format)),
         OFFSET(OFFSET_GENERATION_NO,     sizeof(h.generation_no)),
         OFFSET(OFFSET_HEADER_CRC,        sizeof(uint32_t) /* not in struct */),
         OFFSET(OFFSET_HEADER_FILE_CRC,   sizeof(h.header_file_crc)),
         OFFSET(OFFSET_HIGHESTMODSEQ,     sizeof(h.highestmodseq)),
-        OFFSET(OFFSET_LAST_APPENDDATE,   sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_LAST_REPACK_TIME,  sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_LAST_APPENDDATE,   sizeof(h.last_appenddate.tv_sec)),
+        OFFSET(OFFSET_LAST_REPACK_TIME,  sizeof(h.last_repack_time.tv_sec)),
         OFFSET(OFFSET_LAST_UID,          sizeof(h.last_uid)),
         OFFSET(OFFSET_LEAKED_CACHE,      sizeof(h.leaked_cache_records)),
         OFFSET(OFFSET_MAILBOX_CREATEDMODSEQ, sizeof(h.createdmodseq)),
         OFFSET(OFFSET_MAILBOX_OPTIONS,   sizeof(h.options)),
         OFFSET(OFFSET_MINOR_VERSION,     sizeof(h.minor_version)),
         OFFSET(OFFSET_NUM_RECORDS,       sizeof(h.num_records)),
-        OFFSET(OFFSET_POP3_LAST_LOGIN,   sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_POP3_SHOW_AFTER,   sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_QUOTA_ANNOT_USED,  sizeof(XXX_QUOTA32_TYPE)),
+        OFFSET(OFFSET_POP3_LAST_LOGIN,   sizeof(h.pop3_last_login.tv_sec)),
+        OFFSET(OFFSET_POP3_SHOW_AFTER,   sizeof(h.pop3_show_after.tv_sec)),
+        OFFSET(OFFSET_QUOTA_ANNOT_USED,  sizeof(h.quota_annot_used)),
         OFFSET(OFFSET_QUOTA_DELETED_USED, sizeof(h.quota_deleted_used)),
         OFFSET(OFFSET_QUOTA_EXPUNGED_USED, sizeof(h.quota_expunged_used)),
         OFFSET(OFFSET_QUOTA_MAILBOX_USED, sizeof(h.quota_mailbox_used)),
-        OFFSET(OFFSET_RECENTTIME,        sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_RECENTTIME,        sizeof(h.recenttime.tv_sec)),
         OFFSET(OFFSET_RECENTUID,         sizeof(h.recentuid)),
         OFFSET(OFFSET_RECORD_SIZE,       sizeof(h.record_size)),
         OFFSET(OFFSET_START_OFFSET,      sizeof(h.start_offset)),
@@ -243,22 +234,23 @@ static void test_unique_record_offsets(void)
         /* Keep this sorted alphabetically by the OFFSET_... name, for ease of
          * maintenance.  We'll qsort it into the order the test needs shortly.
          */
+        OFFSET(OFFSET_BASECID,          sizeof(r.basecid)),
         OFFSET(OFFSET_CACHE_CRC,        sizeof(r.cache_crc)),
         OFFSET(OFFSET_CACHE_OFFSET,     sizeof(XXX_CACHE32_TYPE)),
         OFFSET(OFFSET_CACHE_VERSION,    sizeof(XXX_CACHE32_TYPE)),
+        OFFSET(OFFSET_CID,              sizeof(r.cid)),
         OFFSET(OFFSET_CREATEDMODSEQ,    sizeof(r.createdmodseq)),
-        OFFSET(OFFSET_GMTIME,           sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_GMTIME,           sizeof(r.gmtime.tv_sec)),
         OFFSET(OFFSET_HEADER_SIZE,      sizeof(r.header_size)),
-        OFFSET(OFFSET_INTERNALDATE,     sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_LAST_UPDATED,     sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_INTERNALDATE,     sizeof(r.internaldate.tv_sec)),
+        OFFSET(OFFSET_LAST_UPDATED,     sizeof(r.last_updated.tv_sec)),
         OFFSET(OFFSET_MESSAGE_GUID,     MESSAGE_GUID_SIZE),
         OFFSET(OFFSET_MODSEQ,           sizeof(r.modseq)),
         OFFSET(OFFSET_RECORD_CRC,       sizeof(uint32_t)), /* not in struct */
-        OFFSET(OFFSET_SAVEDATE,         sizeof(XXX_TIME32_TYPE)),
-        OFFSET(OFFSET_SENTDATE,         sizeof(XXX_TIME32_TYPE)),
+        OFFSET(OFFSET_SAVEDATE,         sizeof(r.savedate.tv_sec)),
+        OFFSET(OFFSET_SENTDATE,         sizeof(r.sentdate.tv_sec)),
         OFFSET(OFFSET_SIZE,             sizeof(r.size)),
         OFFSET(OFFSET_SYSTEM_FLAGS,     sizeof(r.system_flags)),
-        OFFSET(OFFSET_THRID,            sizeof(r.cid)),
         OFFSET(OFFSET_UID,              sizeof(r.uid)),
         OFFSET(OFFSET_USER_FLAGS,       sizeof(r.user_flags)),
         /* this list is sorted alphabetically, don't just append */

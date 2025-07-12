@@ -191,7 +191,9 @@ static int getmailboxidexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;
     const char *userid = mbname_userid(sd->mbname);
-    char *intname = mboxlist_find_uniqueid(extname, userid, sd->authstate);
+    char *intname = (*extname == JMAP_MAILBOXID_PREFIX) ?
+        mboxlist_find_jmapid(extname, userid, sd->authstate) :
+        mboxlist_find_uniqueid(extname, userid, sd->authstate);
     int exists = 0;
 
     if (intname && !mboxname_isnondeliverymailbox(intname, 0)) {
@@ -1108,7 +1110,9 @@ static int sieve_fileinto(void *ac,
     }
     else {
         if (fc->mailboxid) {
-            intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
+            intname = (*fc->mailboxid == JMAP_MAILBOXID_PREFIX) ?
+                mboxlist_find_jmapid(fc->mailboxid, userid, sd->authstate) :
+                mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
             if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
                 free(intname);
                 intname = NULL;
@@ -1330,8 +1334,11 @@ static int sieve_snooze(void *ac,
         mbentry_t *mbentry = NULL;
 
         if (sn->awaken_mboxid) {
-            awaken = mboxlist_find_uniqueid(sn->awaken_mboxid,
-                                            userid, sd->authstate);
+            awaken = (*sn->awaken_mboxid == JMAP_MAILBOXID_PREFIX) ?
+                mboxlist_find_jmapid(sn->awaken_mboxid,
+                                     userid, sd->authstate) :
+                mboxlist_find_uniqueid(sn->awaken_mboxid,
+                                       userid, sd->authstate);
             if (awaken) awakenid = sn->awaken_mboxid;
         }
         if (!awakenid && sn->awaken_spluse) {
@@ -1948,8 +1955,9 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     userid = mbname_userid(sdata->mbname);
 
     if (fcc->mailboxid) {
-        intname = mboxlist_find_uniqueid(fcc->mailboxid, userid,
-                                         sdata->authstate);
+        intname = (*fcc->mailboxid == JMAP_MAILBOXID_PREFIX) ?
+            mboxlist_find_jmapid(fcc->mailboxid, userid, sdata->authstate) :
+            mboxlist_find_uniqueid(fcc->mailboxid, userid, sdata->authstate);
         if (intname && mboxname_isnondeliverymailbox(intname, 0)) {
             free(intname);
             intname = NULL;
@@ -1986,10 +1994,13 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     }
     if (!r) {
         struct stagemsg *stage;
+        struct timespec internaldate;
+
+        clock_gettime(CLOCK_REALTIME, &internaldate);
         /* post-date by 1 sec in an effort to have
            the FCC threaded AFTER the incoming message */
-        time_t internaldate = time(NULL) + 1;
-        FILE *f = append_newstage(intname, internaldate,
+        internaldate.tv_sec += 1;
+        FILE *f = append_newstage(intname, internaldate.tv_sec,
                                   strhash(intname) /* unique msgnum for reply */,
                                   &stage);
         if (f) {
@@ -1999,7 +2010,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
             fclose(f);
 
             r = append_fromstage(&as, &body, stage,
-                                 internaldate, /* createdmodseq */ 0,
+                                 &internaldate, /* createdmodseq */ 0,
                                  fcc->imapflags, 0, /* annotations */ NULL);
             if (!r) r = append_commit(&as);
 
