@@ -681,9 +681,7 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 nodist_cunit_unit_SOURCES = cunit/registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
-CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
-
-
+CUNIT_PL = $(top_srcdir)/cunit/cunit.pl
 
 # don't discard the temporary source file if building with coverage
 if HAVE_COVERAGE
@@ -693,16 +691,16 @@ else
 endif
 
 .testc.o:
-	$(AM_V_at)$(CUNIT_PL) --generate-wrapper $<
+	$(AM_V_at)$(CUNIT_PL) --project $(CUNIT_PROJECT) --generate-wrapper $<
 	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
 	$(AM_V_at)$(CUNIT_RM) $<-cunit.c
 
 $(CUNIT_PROJECT):
 	$(AM_V_at)$(RM) $@
-	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
+	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
 cunit/registry.c: $(CUNIT_PROJECT)
-	$(AM_V_GEN)$(CUNIT_PL) --generate-registry $@
+	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --generate-registry $@
 
 # To run under Valgrind, do: make VG=1 check
 VALGRIND = libtool --mode=execute valgrind \
