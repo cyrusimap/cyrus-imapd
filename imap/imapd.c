@@ -84,6 +84,7 @@
 #include "charset.h"
 #include "dlist.h"
 #include "idle.h"
+#include "idlemsg.h"
 #include "global.h"
 #include "times.h"
 #include "proxy.h"
@@ -255,7 +256,7 @@ struct appendstage {
     struct stagemsg *stage;
     FILE *f;
     strarray_t flags;
-    time_t internaldate;
+    struct timespec internaldate;
     int binary;
     struct entryattlist *annotations;
 };
@@ -526,7 +527,8 @@ static void cmd_unauthenticate(char *tag);
 static void cmd_noop(char *tag, char *cmd);
 static void capa_response(int flags);
 static void cmd_capability(char *tag);
-static int  cmd_append(char *tag, char *name, const char *cur_name, int isreplace);
+static int  cmd_append(char *tag, char *name, const char *cur_name,
+                       uint32_t replace_uid);
 static void cmd_select(char *tag, char *cmd, char *name);
 static void cmd_close(char *tag, char *cmd);
 static int parse_fetch_args(const char *tag, const char *cmd,
@@ -1719,7 +1721,7 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg1);
                 if (c != ' ') goto missingargs;
 
-                cmd_append(tag.s, arg1.s, NULL, 0/*isreplace*/);
+                cmd_append(tag.s, arg1.s, NULL, 0 /*replace_uid*/);
 
                 prometheus_increment(CYRUS_IMAP_APPEND_TOTAL);
             }
@@ -2067,7 +2069,8 @@ static void cmdloop(void)
                 c = getastring(imapd_in, imapd_out, &arg2);
                 if (c != ' ') goto missingargs;
 
-                cmd_append(tag.s, arg1.s, *arg2.s ? arg2.s : NULL, 0/*isreplace*/);
+                cmd_append(tag.s, arg1.s,
+                           *arg2.s ? arg2.s : NULL, 0/*replace_uid*/);
 
                 prometheus_increment(CYRUS_IMAP_APPEND_TOTAL);
             }
@@ -4234,7 +4237,8 @@ static char *normalize_mboxname(char *name, struct listargs *listargs)
  * 'cur_name' is the name of the currently selected mailbox (if any)
  * in case we have to resolve relative URLs
  */
-static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace)
+static int cmd_append(char *tag, char *name, const char *cur_name,
+                      uint32_t replace_uid)
 {
     int c;
     static struct buf arg;
@@ -4358,6 +4362,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         curstage = xzmalloc(sizeof(*curstage));
         ptrarray_push(&stages, curstage);
 
+        /* Initialize the internaldate to "now" */
+        clock_gettime(CLOCK_REALTIME, &curstage->internaldate);
+
         /* Set limit on the total number of bytes allowed for mailbox+append-opts */
         maxargssize_mark = prot_bytes_in(imapd_in) + (maxargssize - strlen(name));
 
@@ -4397,7 +4404,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         /* Parse internaldate */
         if (c == '\"' && !arg.s[0]) {
             prot_ungetc(c, imapd_in);
-            c = getdatetime(&(curstage->internaldate));
+            c = getdatetime(&(curstage->internaldate.tv_sec));
             if (c != ' ') {
                 parseerr = "Invalid date-time in Append command";
                 r = IMAP_PROTOCOL_ERROR;
@@ -4509,7 +4516,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         c = prot_getc(imapd_in);
 
         /* REPLACE doesn't support MULTIAPPEND */
-        if (isreplace) break;
+        if (replace_uid) break;
     }
 
  done:
@@ -4566,10 +4573,13 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                 body = NULL;
             }
             if (!r) {
-                r = append_fromstage(&appendstate, &body, curstage->stage,
-                                     curstage->internaldate, /*createdmodseq*/0,
-                                     &curstage->flags, 0,
-                                     &curstage->annotations);
+                struct append_metadata meta = {
+                    &curstage->internaldate, /*savedate*/ 0, /*cmodseq*/ 0,
+                    &curstage->flags, &curstage->annotations, /*nolink*/ 0,
+                    { replace_uid, replace_uid ? cur_name : NULL }
+                };
+                r = append_fromstage_full(&appendstate, &body,
+                                          curstage->stage, &meta);
             }
             if (body) {
                 message_free_body(body);
@@ -4584,7 +4594,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
         append_abort(&appendstate);
     }
 
-    if (isreplace && doappenduid && !r) {
+    if (replace_uid && doappenduid && !r) {
         prot_printf(imapd_out, "* OK [APPENDUID %lu %u] %s\r\n",
                     uidvalidity, appendstate.baseuid,
                     error_message(IMAP_OK_COMPLETED));
@@ -4639,7 +4649,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name, int isreplace
                         appendstate.baseuid + appendstate.nummsg - 1);
         }
         prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
-    } else if (!isreplace) {
+    } else if (!replace_uid) {
         index_release(imapd_index);
         sync_checkpoint(imapd_in);
 
@@ -7324,7 +7334,13 @@ localcreate:
     }
 
     /* Close newly created mailbox before writing annotations */
-    mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        mailboxid = xstrdup(mailbox_jmapid(mailbox));
+    }
+    else {
+        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
+    }
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -8168,8 +8184,8 @@ submboxes:
     }
 
     /* take care of intermediaries */
-    mboxlist_update_intermediaries(oldmailboxname, mbtype, 0);
-    mboxlist_update_intermediaries(newmailboxname, mbtype, 0);
+    mboxlist_update_intermediaries(oldmailboxname, mbtype);
+    mboxlist_update_intermediaries(newmailboxname, mbtype);
 
 respond:
 
@@ -9587,6 +9603,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "createdmodseq")) {    /* Non-standard */
             statusitems |= STATUS_CREATEDMODSEQ;
         }
+        else if (!strcmp(arg.s, "uniqueid")) {         /* Non-standard */
+            statusitems |= STATUS_UNIQUEID;
+        }
         else {
             static char buf[200];
             snprintf(buf, 200, "Invalid Status attributes %s", arg.s);
@@ -9674,6 +9693,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
                     sepchar, sd->createdmodseq);
         sepchar = ' ';
     }
+    if (statusitems & STATUS_UNIQUEID) {         /* Non-standard */
+        prot_printf(imapd_out, "%cUNIQUEID (%s)", sepchar, sd->uniqueid);
+        sepchar = ' ';
+    }
 
     prot_printf(imapd_out, ")\r\n");
 
@@ -9683,6 +9706,37 @@ static int print_statusline(const char *extname, unsigned statusitems,
 static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
                             struct statusdata *sd)
 {
+    int r;
+    struct conversations_state *state = NULL;
+
+    if (!(statusitems & STATUS_MAILBOXID)) goto nonconv;
+
+    /* use the existing state if possible */
+    state = conversations_get_mbox(mbentry->name);
+
+    /* otherwise fetch a new one! */
+    if (!state) {
+        if (global_conversations) {
+            conversations_abort(&global_conversations);
+            global_conversations = NULL;
+        }
+        // we never write anything in STATUS calls, so shared is fine
+        r = conversations_open_mbox(mbentry->name, 1/*shared*/, &state);
+        if (r) {
+            /* maybe the mailbox doesn't even have conversations - just ignore */
+            goto nonconv;
+        }
+        global_conversations = state;
+    }
+
+    sd->mailboxid =
+        USER_COMPACT_EMAILIDS(state) ? mbentry->jmapid : mbentry->uniqueid;
+
+    r = conversation_getstatus(state,
+                               CONV_FOLDER_KEY_MBE(state, mbentry), &sd->xconv);
+    if (r) return r;
+
+nonconv:
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)
         return index_status(imapd_index, sd);
@@ -11753,9 +11807,9 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 
     mailbox_iter_done(&iter);
 
-    sd.lastread = mailbox->i.recenttime;
+    sd.lastread = mailbox->i.recenttime.tv_sec;
     sd.lastuid = mailbox->i.recentuid;
-    sd.lastchange = mailbox->i.last_appenddate;
+    sd.lastchange = mailbox->i.last_appenddate.tv_sec;
     sd.seenuids = seqset_cstring(outlist);
     if (!sd.seenuids) sd.seenuids = xstrdup("");
 
@@ -12014,9 +12068,9 @@ static int sync_mailbox(struct xfer_header *xfer,
                          mailbox->i.highestmodseq,
                          mailbox->i.synccrcs,
                          mailbox->i.recentuid,
-                         mailbox->i.recenttime,
-                         mailbox->i.pop3_last_login,
-                         mailbox->i.pop3_show_after,
+                         mailbox->i.recenttime.tv_sec,
+                         mailbox->i.pop3_last_login.tv_sec,
+                         mailbox->i.pop3_show_after.tv_sec,
                          annots,
                          xconvmodseq,
                          raclmodseq,
@@ -15123,7 +15177,8 @@ static void cmd_replace(char *tag, char *seqno, char *name, int usinguid)
     }
     else {
         /* Append the new message to local destination mailbox */
-        r = cmd_append(tag, name, index_mboxname(imapd_index), 1/*isreplace*/);
+        r = cmd_append(tag, name, index_mboxname(imapd_index),
+                       atoi(uidseq) /*replace_uid*/);
         if (r) goto cleanup;  // APPEND-specific error responses already sent
     }
 
@@ -15672,7 +15727,7 @@ static void push_updates(int idling)
             goto done;
         }
 
-        mboxid = json_string_value(json_object_get(msg, "mailboxID"));
+        mboxid = idle_msg_get_mboxid(msg);
         if (!mboxid) goto done;
 
         event = json_string_value(json_object_get(msg, "event"));
@@ -15771,8 +15826,7 @@ static void push_updates(int idling)
                     mtype = json_string_value(json_object_get(nextmsg, "@type"));
 
                     if (!strcmpnull(mtype, "notify")) {
-                        mboxid = json_string_value(json_object_get(nextmsg,
-                                                                   "mailboxID"));
+                        mboxid = idle_msg_get_mboxid(nextmsg);
                         event = json_string_value(json_object_get(nextmsg,
                                                                   "event"));
                         etype = name_to_mboxevent(event);

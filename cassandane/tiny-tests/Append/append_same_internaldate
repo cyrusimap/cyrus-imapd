@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test is used to verify that our JMAPID conflict detection/resolution works
+# but it takes a very long time to run and may not even generate a conflict
+sub bogus_test_append_same_internaldate
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "Append messages with same internaldates";
+    for (1..100000) {
+        my $mimeMessage = << "EOF";
+From: <from\@local>
+To: to\@local
+Subject: test $_
+
+test
+EOF
+        $mimeMessage =~ s/\r?\n/\r\n/gs;
+
+        $imaptalk->append('INBOX',
+                          '26-Jan-2025 15:13:54 -0500', $mimeMessage) || die $@;
+    }
+
+    xlog $self, "Verify that all messages have the same internaldates";
+    $imaptalk->examine('INBOX');
+    my $res = $imaptalk->fetch('1:*', 'INTERNALDATE');
+
+    # Did we log any conflicts?
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: JMAPID conflict during append/);
+}
+
+1;
