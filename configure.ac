@@ -1457,20 +1457,23 @@ dnl
 dnl Test for libcap (POSIX.1e - security API) on Linux systems
 dnl
 AC_ARG_WITH([libcap],
-        AS_HELP_STRING([--with-libcap], [Enable libcap system capabilities handling (Linux systems only)]),
+        AS_HELP_STRING([--without-libcap], [ignore presence of libcap library and disable it]),
         with_libcap="${withval}")
 
 have_libcap=no
 LIBCAP_LIBS=""
 case $host_os in
 linux*)
-        if test "x$with_libcap" = "xyes"; then
+        if test "x$with_libcap" != "xno"; then
                 AC_CHECK_LIB([cap], [cap_get_proc], have_libcap=yes, have_libcap=no)
                 AC_CHECK_HEADERS([sys/capability.h sys/prctl.h], , have_libcap=no)
                 if test "$have_libcap" = "yes"; then
                         AC_DEFINE(HAVE_LIBCAP, [], [Do we have libcap system capabilities handling (Linux systems only)?])
                         LIBCAP_LIBS="-lcap"
                 fi
+        fi
+        if test "x$with_libcap" = "xyes" -a "x$have_libcap" != "xyes"; then
+            AC_MSG_ERROR([libcap requested but unavailable])
         fi
         ;;
 *)
@@ -2613,6 +2616,7 @@ External dependencies:
    pcre:               $cyrus_cv_pcre_utf8
    pcre2:              $cyrus_cv_pcre2_utf8
    clamav:             $with_clamav
+   libcap:             $have_libcap
    -----------------------
    caringo:            $with_caringo
    openio:             $with_openio
