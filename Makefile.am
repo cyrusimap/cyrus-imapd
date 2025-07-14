@@ -593,13 +593,6 @@ AM_CPPFLAGS += $(GUESSTZ_CFLAGS)
 LD_SERVER_ADD += $(GUESSTZ_LIBS)
 endif
 
-if CUNIT
-
-CUNIT_PROJECT = cunit/default.cunit
-BUILT_SOURCES += cunit/registry.c $(CUNIT_PROJECT)
-CLEANFILES += cunit/registry.c $(CUNIT_PROJECT)
-check_PROGRAMS += cunit/unit
-
 cunit_FRAMEWORK = \
     cunit/unit.c \
     cunit/cyrunit.h \
@@ -704,6 +697,13 @@ $(CUNIT_PROJECT):
 
 cunit/registry.c: $(CUNIT_PROJECT)
 	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --generate-registry $@
+
+if CUNIT
+
+CUNIT_PROJECT = cunit/default.cunit
+BUILT_SOURCES += cunit/registry.c $(CUNIT_PROJECT)
+CLEANFILES += cunit/registry.c $(CUNIT_PROJECT)
+check_PROGRAMS += cunit/unit
 
 # To run under Valgrind, do: make VG=1 check
 VALGRIND = ${abs_top_srcdir}/libtool --mode=execute valgrind \
