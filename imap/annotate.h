@@ -135,11 +135,12 @@ char *dumpentryatt(const struct entryattlist *l);
 void freeentryatts(struct entryattlist *l);
 
 /* initialize database structures */
-void annotate_init(
-                       int (*fetch_func)(const char *, const char *,
-                                         const strarray_t *, const strarray_t *),
-                       int (*store_func)(const char *, const char *,
-                                         struct entryattlist *));
+typedef int (annotate_fetch_func)(const char *, const char *,
+                                  const strarray_t *, const strarray_t *);
+typedef int (annotate_store_func)(const char *, const char *,
+                                  struct entryattlist *);
+void annotate_init(annotate_fetch_func *fetch_func,
+                   annotate_store_func *store_func);
 
 /* open the annotation db */
 void annotatemore_open(void);
