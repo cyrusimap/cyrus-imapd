@@ -51,7 +51,7 @@ coverage.xml
 cscope.out
 cunit/CUnitAutomated-Results.xml
 cunit/default.cunit
-cunit/registers.h
+cunit/registry.c
 cunit/reports
 cunit/unit
 debian/

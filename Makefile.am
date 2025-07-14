@@ -596,13 +596,14 @@ endif
 if CUNIT
 
 CUNIT_PROJECT = cunit/default.cunit
-BUILT_SOURCES += cunit/registers.h $(CUNIT_PROJECT)
-CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
+BUILT_SOURCES += cunit/registry.c $(CUNIT_PROJECT)
+CLEANFILES += cunit/registry.c $(CUNIT_PROJECT)
 check_PROGRAMS += cunit/unit
 
 cunit_FRAMEWORK = \
     cunit/unit.c \
     cunit/cyrunit.h \
+    cunit/registry.h \
     cunit/syslog.c \
     cunit/cunit-syslog.h \
     cunit/timeout.c \
@@ -680,6 +681,7 @@ endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/mutex_fake.c imap/spool.c imap/search_expr.c
+nodist_cunit_unit_SOURCES = cunit/registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
@@ -702,8 +704,8 @@ $(CUNIT_PROJECT):
 	$(AM_V_at)$(RM) $@
 	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
-cunit/registers.h: $(CUNIT_PROJECT)
-	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
+cunit/registry.c: $(CUNIT_PROJECT)
+	$(AM_V_GEN)$(CUNIT_PL) --generate-registry $@
 
 # To run under Valgrind, do: make VG=1 check
 VALGRIND = ${abs_top_srcdir}/libtool --mode=execute valgrind \
