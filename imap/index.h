@@ -269,7 +269,7 @@ extern int index_store(struct index_state *state,
 extern int index_run_annotator(struct index_state *state,
                                const char *sequence, int usinguid,
                                struct namespace *namespace, int isadmin);
-extern int index_warmup(struct mboxlist_entry *, unsigned int warmup_flags,
+extern int index_warmup(const struct mboxlist_entry *, unsigned int warmup_flags,
                         seqset_t *uids);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
                       struct searchargs *searchargs, int usinguid,

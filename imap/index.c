@@ -1631,7 +1631,7 @@ out:
     return r;
 }
 
-EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
+EXPORTED int index_warmup(const struct mboxlist_entry *mbentry,
                           unsigned int warmup_flags,
                           seqset_t *uids)
 {
