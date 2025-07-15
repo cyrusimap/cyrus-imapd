@@ -51,6 +51,10 @@ Cassandane::Cyrus::TestCase::magic(PopSubFolders => sub {
     shift->config_set(popsubfolders => 1);
 });
 
+Cassandane::Cyrus::TestCase::magic(PopUseImapFlags => sub {
+    shift->config_set('popuseimapflags' => 'yes');
+});
+
 sub new
 {
     my ($class, @args) = @_;
@@ -187,6 +191,67 @@ sub test_subfolder_login
     $subactual{'Message B'} = Cassandane::Message->new(lines => $sublines,
                                                        attrs => { uid => 1 });
     $self->check_messages(\%subexp, actual => \%subactual);
+}
+
+sub test_seen
+    :PopUseImapFlags
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing whether the RETR command marks messages as sent";
+
+    xlog $self, "Ensure a messages exist, before logging in to POP";
+    my %exp;
+    $exp{A} = $self->make_message('Message A');
+    $exp{B} = $self->make_message('Message B');
+    $exp{C} = $self->make_message('Message C');
+
+    my $talk = $self->{store}->get_client();
+    my $client = $self->{pop_store}->get_client();
+
+    my $prestat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(3, $prestat->{unseen});
+    $self->assert_num_equals(3, $prestat->{messages});
+
+    my $r = $client->command('RETR', 2)->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
+    $self->assert_equals($client->code(), 200);
+    my $lines = $client->read_until_dot();
+    $client->command('QUIT');
+
+    my $poststat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(2, $poststat->{unseen});
+    $self->assert_num_equals(3, $poststat->{messages});
+    $self->assert_num_gt($prestat->{highestmodseq}, $poststat->{highestmodseq});
+}
+
+sub test_dele
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing whether the DELE command removes messages";
+
+    xlog $self, "Ensure a messages exist, before logging in to POP";
+    my %exp;
+    $exp{A} = $self->make_message('Message A');
+    $exp{B} = $self->make_message('Message B');
+    $exp{C} = $self->make_message('Message C');
+
+    my $talk = $self->{store}->get_client();
+    my $client = $self->{pop_store}->get_client();
+
+    my $prestat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(3, $prestat->{unseen});
+    $self->assert_num_equals(3, $prestat->{messages});
+
+    my $r = $client->command('DELE', 2)->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
+    $client->command('QUIT');
+
+    my $poststat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(2, $poststat->{unseen});
+    $self->assert_num_equals(2, $poststat->{messages});
+    $self->assert_num_gt($prestat->{highestmodseq}, $poststat->{highestmodseq});
 }
 
 1;
