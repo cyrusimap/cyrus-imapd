@@ -2058,8 +2058,10 @@ EXPORTED int warmup_file(const char *filename,
     int fd;
     int r;
 
+    if (!filename) return 0;
+
     fd = open(filename, O_RDONLY, 0);
-    if (fd < 0) return errno;
+    if (fd < 0) return 0;
 
     /* Note, posix_fadvise() returns its error code rather than
      * setting errno.  Unlike every other system call including
