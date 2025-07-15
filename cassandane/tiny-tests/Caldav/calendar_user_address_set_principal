@@ -1,0 +1,151 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_user_address_set_principal
+    : VirtDomains
+{
+    my ($self) = @_;
+
+    xlog $self, "Assert default value";
+    $self->assert_address_set([
+        { href => 'mailto:cassandane@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Set multiple addresses, no preferred";
+    $self->write_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com' },
+    ]);
+    $self->assert_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Set multiple addresses, preferred at start";
+    $self->write_address_set([
+        { href => 'mailto:foo@example.com', preferred => 1 },
+        { href => 'mailto:bar@example.com' },
+    ]);
+    # quirk: preferred attribute is ignored, last entry wins
+    $self->assert_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Set multiple addresses, multiple preferred";
+    $self->write_address_set([
+        { href => 'mailto:foo@example.com', preferred => 1 },
+        { href => 'mailto:bar@example.com', preferred => 1 },
+        { href => 'mailto:baz@example.com' },
+    ]);
+    # quirk: preferred attribute is ignored, last entry wins
+    $self->assert_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com' },
+        { href => 'mailto:baz@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Set duplicate addresses, no preferred";
+    $self->write_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com' },
+        { href => 'mailto:baz@example.com' },
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:baz@example.com' },
+    ]);
+    # quirk: duplicates are preserved
+    $self->assert_address_set([
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:bar@example.com' },
+        { href => 'mailto:baz@example.com' },
+        { href => 'mailto:foo@example.com' },
+        { href => 'mailto:baz@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Set empty address list, default is returned";
+    $self->write_address_set([]);
+    # quirk: no 'preferred' attribute is returned
+    $self->assert_address_set([
+        { href => 'mailto:cassandane@example.com' },
+    ]);
+
+    xlog $self, "Set single address, no preferred";
+    $self->write_address_set([
+        { href => 'mailto:foo@example.com' },
+    ]);
+    $self->assert_address_set([
+        { href => 'mailto:foo@example.com', preferred => 1 },
+    ]);
+
+    xlog $self, "Remove DAV property, default is returned";
+    $self->write_address_set(undef);
+    # quirk: no 'preferred' attribute is returned
+    $self->assert_address_set([
+        { href => 'mailto:cassandane@example.com' },
+    ]);
+}
+
+sub assert_address_set {
+    my ($self, $want_addrs) = @_;
+    # Fetch calendar-user-address-set DAV property.
+    my $res = $self->{caldav}->Request(
+        'PROPFIND',
+        '/dav/principals/user/cassandane',
+        x('D:propfind', $self->{caldav}->NS(),
+            x('D:prop', x('C:calendar-user-address-set')),
+        ),
+        Depth => 0,
+    );
+    # Extract href property list.
+    my $hrefs = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}
+      {'{urn:ietf:params:xml:ns:caldav}calendar-user-address-set'}{'{DAV:}href'};
+    $hrefs = [$hrefs] unless ref($hrefs) eq 'ARRAY';
+    # Convert href list to internal representation.
+    my @got_addrs = map {
+        my $addr = { href => $_->{content} };
+        if (defined ($_->{'@preferred'})) {
+            $addr->{preferred} = 1;
+        }
+        $addr
+    } @$hrefs;
+    # Compare addresses.
+    $self->assert_deep_equals($want_addrs, \@got_addrs);
+}
+
+
+sub write_address_set {
+    my ($self, $addrs) = @_;
+    if (defined $addrs) {
+        my @hrefs = map {
+            if ($_->{preferred}) {
+                x('D:href', $_->{href}, {preferred => '1'})
+            } else {
+                x('D:href', $_->{href})
+            }
+        } @$addrs;
+        $self->{caldav}->Request(
+            'PROPPATCH',
+            '/dav/principals/user/cassandane',
+            x('D:propertyupdate', $self->{caldav}->NS(),
+                x('D:set',
+                    x('D:prop',
+                        x('C:calendar-user-address-set', @hrefs),
+                    )
+                )
+            )
+        );
+    } else {
+        $self->{caldav}->Request(
+            'PROPPATCH',
+            '/dav/principals/user/cassandane',
+            x('D:propertyupdate', $self->{caldav}->NS(),
+                x('D:remove',
+                    x('D:prop',
+                        x('C:calendar-user-address-set'),
+                    )
+                )
+            )
+        );
+    }
+}
+
