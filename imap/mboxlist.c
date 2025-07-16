@@ -100,6 +100,8 @@
 #define DB_HIERSEP_CHAR     DB_HIERSEP_STR[0]
 #define DB_USER_PREFIX      "user" DB_HIERSEP_STR
 
+#define DB_RECORDSEP_CHAR   '\x1E'  /* record separator (RS) */
+
 /* n.b. mailboxes.db isn't versioned (yet) */
 
 #define SUBDB_VERSION_KEY      DB_HIERSEP_STR "VER" DB_HIERSEP_STR
@@ -446,7 +448,7 @@ static void mboxlist_jmapid_to_key(const char *userid,
     buf_reset(key);
     buf_putc(key, KEY_TYPE_JID);
     buf_appendcstr(key, userid ? userid : "");
-    buf_putc(key, '.');
+    buf_putc(key, DB_RECORDSEP_CHAR);
     buf_appendcstr(key, jid);
 }
 
@@ -1136,18 +1138,16 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
-#define ACL_RECORDSEP_CHAR      '\x1E'  /* record separator (RS) */
-
 static void mboxlist_racl_key(int isuser, const char *keyuser,
                               const char *dbname, struct buf *buf)
 {
     buf_reset(buf);
     buf_putc(buf, KEY_TYPE_ACL);
     buf_putc(buf, isuser ? 'U' : 'S');
-    buf_putc(buf, ACL_RECORDSEP_CHAR);
+    buf_putc(buf, DB_RECORDSEP_CHAR);
     if (keyuser) {
         buf_appendcstr(buf, keyuser);
-        buf_putc(buf, ACL_RECORDSEP_CHAR);
+        buf_putc(buf, DB_RECORDSEP_CHAR);
     }
     if (dbname) {
         buf_appendcstr(buf, dbname);
@@ -3329,11 +3329,11 @@ EXPORTED int mboxlist_set_usergroup(const char *userid, const char *group, int v
 
     buf_setcstr(&fwd, "UG");
     buf_appendcstr(&fwd, userid);
-    buf_putc(&fwd, ACL_RECORDSEP_CHAR);
+    buf_putc(&fwd, DB_RECORDSEP_CHAR);
     buf_appendcstr(&fwd, group);
     buf_setcstr(&rev, "UG");
     buf_appendcstr(&rev, group);
-    buf_putc(&rev, ACL_RECORDSEP_CHAR);
+    buf_putc(&rev, DB_RECORDSEP_CHAR);
     buf_appendcstr(&rev, userid);
     if (val) {
         if (!r) r = cyrusdb_store(mbdb, buf_base(&fwd), buf_len(&fwd), "", 0, &tid);
@@ -3383,7 +3383,7 @@ EXPORTED int mboxlist_lookup_usergroups(const char *item, strarray_t *dest)
     struct buf prefix = BUF_INITIALIZER;
     buf_setcstr(&prefix, "UG");
     buf_appendcstr(&prefix, item);
-    buf_putc(&prefix, ACL_RECORDSEP_CHAR);
+    buf_putc(&prefix, DB_RECORDSEP_CHAR);
     struct _usergroup_rock urock = { buf_len(&prefix), dest };
     int r = cyrusdb_foreach(mbdb, buf_base(&prefix), buf_len(&prefix),
                     NULL, _usergroup_add, &urock, 0);
