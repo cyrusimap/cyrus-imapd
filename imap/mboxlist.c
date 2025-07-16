@@ -4056,6 +4056,38 @@ static int racls_add_cb(const mbentry_t *mbentry, void *rock)
     return r;
 }
 
+struct jfix_dat {
+    struct txn **txn;
+    int *modified;
+};
+
+static int jkey_fix_cb(void *rock,
+                  const char *key, size_t keylen,
+                  const char *data, size_t datalen)
+{
+    struct jfix_dat *dat = (struct jfix_dat *)rock;
+
+    // bonus, it's all good!
+    if (memchr(key, DB_HIERSEP_CHAR, keylen)) return 0;
+
+    // cyrusdb interface isn't good about old links after a write, so copy everything
+    char *val = xstrndup(data, datalen);
+    char *orig = xstrndup(key, keylen);
+    char *new = xstrndup(key, keylen);
+    char *p = strrchr(new, '.');
+    *p = DB_HIERSEP_CHAR;
+
+    int r = cyrusdb_delete(mbdb, orig, keylen, dat->txn, /*force*/0);
+    if (r) return r;
+
+    r = cyrusdb_store(mbdb, new, keylen, val, datalen, dat->txn);
+    if (r) return r;
+
+    (*(dat->modified))++;
+
+    return 0;
+}
+
 EXPORTED int mboxlist_set_racls(int enabled)
 {
     struct buf key = BUF_INITIALIZER;
@@ -4066,6 +4098,14 @@ EXPORTED int mboxlist_set_racls(int enabled)
     mboxlist_racl_key(0, NULL, NULL, &key);
 
     init_internal();
+
+    // XXX: temporary fixer for messed up J keys
+    struct jfix_dat dat = { &tid, &modified_mbdb };
+    r = cyrusdb_foreach(mbdb, "J", 1, NULL, jkey_fix_cb, &dat, &tid);
+    if (r) goto out;
+
+    if (modified_mbdb)
+        syslog(LOG_NOTICE, "Rewrote J key separator %d times", modified_mbdb);
 
     if (have_racl && !enabled) {
         syslog(LOG_NOTICE, "removing reverse acl support");
@@ -4091,6 +4131,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
     }
     buf_free(&key);
 
+out:
     if (!modified_mbdb || !tid) return r;
 
     if (r)
