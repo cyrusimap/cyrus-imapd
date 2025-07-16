@@ -40,6 +40,7 @@
 package Cassandane::Util::Words;
 use strict;
 use warnings;
+use List::Util qw(uniq);
 
 use Exporter ();
 our @ISA = qw(Exporter);
@@ -75,6 +76,8 @@ sub _read_words
         last if scalar @words == MAX_WORDS;
     }
     close DICT;
+
+    @words = uniq @words;
 }
 
 sub random_word
