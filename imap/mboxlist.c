@@ -4078,14 +4078,19 @@ static int jkey_fix_cb(void *rock,
     *p = DB_HIERSEP_CHAR;
 
     int r = cyrusdb_delete(mbdb, orig, keylen, dat->txn, /*force*/0);
-    if (r) return r;
+    if (r) goto done;
 
     r = cyrusdb_store(mbdb, new, keylen, val, datalen, dat->txn);
-    if (r) return r;
+    if (r) goto done;
 
     (*(dat->modified))++;
 
-    return 0;
+done:
+    free(val);
+    free(orig);
+    free(new);
+
+    return r;
 }
 
 EXPORTED int mboxlist_set_racls(int enabled)
