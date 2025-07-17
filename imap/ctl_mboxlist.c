@@ -1250,7 +1250,12 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
     mbentry_t *byunqid = NULL;
 
     int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
-    if (r) goto done;
+    if (r) {
+        xsyslog(LOG_NOTICE, "missing uniqueid record, skipping",
+               "mboxname=<%s> uniqueid=<%s>",
+               mbentry->name, mbentry->uniqueid);
+        return 0;
+    }
 
     // we are not the current record?  We don't need to process this.
     if (strcmp(mbentry->name, byunqid->name))
