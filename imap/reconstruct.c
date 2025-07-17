@@ -505,6 +505,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
 
+    /* make sure data is loaded in memory to limit lock time */
+    index_warmup(data->mbentry, WARMUP_ALL, /*uids*/NULL);
+
     struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     if (setversion) {

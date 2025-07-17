@@ -1631,14 +1631,13 @@ out:
     return r;
 }
 
-EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
+EXPORTED int index_warmup(const struct mboxlist_entry *mbentry,
                           unsigned int warmup_flags,
                           seqset_t *uids)
 {
     const char *fname = NULL;
     char *userid = NULL;
-    char *tofree1 = NULL;
-    char *tofree2 = NULL;
+    char *tofree = NULL;
     unsigned int uid;
     strarray_t files = STRARRAY_INITIALIZER;
     int i;
@@ -1649,17 +1648,24 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
-    if (warmup_flags & WARMUP_CONVERSATIONS) {
-        if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
-            fname = tofree1 = conversations_getmboxpath(mbentry->name);
-            r = warmup_file(fname, 0, 0);
-            if (r) goto out;
-        }
+    if (warmup_flags & WARMUP_CACHE) {
+        fname = mbentry_metapath(mbentry, META_CACHE, 0);
+        r = warmup_file(fname, 0, 0);
+        if (r) goto out;
     }
     if (warmup_flags & WARMUP_ANNOTATIONS) {
         fname = mbentry_metapath(mbentry, META_ANNOTATIONS, 0);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
+    }
+    if (warmup_flags & WARMUP_CONVERSATIONS) {
+        if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+            fname = tofree = conversations_getmboxpath(mbentry->name);
+            r = warmup_file(fname, 0, 0);
+            if (r) goto out;
+            free(tofree);
+            tofree = NULL;
+        }
     }
     if (warmup_flags & WARMUP_SEARCH) {
         userid = mboxname_to_userid(mbentry->name);
@@ -1684,8 +1690,7 @@ out:
         syslog(LOG_ERR, "IOERROR: unable to warmup file %s: %s",
                 fname, error_message(r));
     free(userid);
-    free(tofree1);
-    free(tofree2);
+    free(tofree);
     strarray_fini(&files);
     return r;
 }
