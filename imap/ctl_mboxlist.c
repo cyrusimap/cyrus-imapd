@@ -1245,144 +1245,80 @@ static void do_verify(void)
     verify_mboxes(mboxes, found, &idx);
 }
 
-struct fix_rock {
-    hash_table deleted_mbentry_by_jmapid;
-    ptrarray_t deleted_mbentry_to_fix;
-};
-
-static int fix_cb(const mbentry_t *mbentry, void *rockp)
+static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
 {
-    struct fix_rock *frock = (struct fix_rock *) rockp;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    mbentry_t *copy = NULL;
+    mbentry_t *byunqid = NULL;
+
+    int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
+    if (r) goto done;
+
+    // we are not the current record?  We don't need to process this.
+    if (strcmp(mbentry->name, byunqid->name))
+        goto done;
 
     if (mbentry->jmapid) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
         const char *userid = mbname_userid(mbname);
-        mbentry_t *deleted_mbentry = NULL;
 
         if (!userid) userid = "";
 
-        if (mbname_isdeleted(mbname)) {
-            /* track DELETED mailboxes because they may have duplicate JMAP IDs
-               of active mailboxes and will will have to fix them */
-            hash_insert(mbentry->jmapid, mboxlist_entry_copy(mbentry),
-                        &frock->deleted_mbentry_by_jmapid);
-        }
-        else {
-            deleted_mbentry =
-                hash_del(mbentry->jmapid, &frock->deleted_mbentry_by_jmapid);
-            if (deleted_mbentry) {
-                ptrarray_add(&frock->deleted_mbentry_to_fix, deleted_mbentry);
-            }
-        }
+        // already got a record, we're good!
+        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
+        mbname_free(&mbname);
+        if (!res) return 0;
 
-        if (deleted_mbentry ||
-            mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL)) {
-            xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
-                    "mboxname=<%s> jmapid=<%s>",
-                    mbentry->name, mbentry->jmapid);
-            copy = mboxlist_entry_copy(mbentry);
-        }
+        xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                mbentry->name, mbentry->jmapid);
     }
+    else {
+        struct mailbox *mailbox = NULL;
+        r = mailbox_open_from_mbe(byunqid, &mailbox);
+        if (r) goto done;
+        struct buf jmapid = BUF_INITIALIZER;
 
-    if (!copy && mbentry->uniqueid &&
-        mboxlist_lookup_by_uniqueid(mbentry->uniqueid, NULL, NULL)) {
-        xsyslog(LOG_NOTICE, "adding missing I record to mboxlist",
-                "mboxname=<%s> uniqueid=<%s>",
-                mbentry->name, mbentry->uniqueid);
-        copy = mboxlist_entry_copy(mbentry);
-    }
+        byunqid->foldermodseq = mailbox_modseq_dirty(mailbox);
 
-    if (copy) {
-        int r = mboxlist_updatelock(copy, /*localonly*/1);
+        buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&jmapid, byunqid->foldermodseq);
+        mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
+
+        free(byunqid->jmapid);
+        byunqid->jmapid = buf_release(&jmapid);
+        buf_free(&jmapid);
+
+        xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                byunqid->name, byunqid->jmapid);
+
+        r = mailbox_commit(mailbox);
         if (r) {
-            xsyslog(LOG_ERR, "failed to update mboxlist",
-                    "mboxname=<%s> error=<%s>",
-                    mbentry->name, error_message(r));
+            xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                    "error=<%s>", cyrusdb_strerror(r));
+            goto done;
         }
-        mboxlist_entry_free(&copy);
     }
 
-    mbname_free(&mbname);
+    r = mboxlist_updatelock(byunqid, /*localonly*/1);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to update mboxlist",
+                "mboxname=<%s> error=<%s>",
+                mbentry->name, error_message(r));
+    }
 
-    return 0;
-}
+done:
+    mboxlist_entry_free(&byunqid);
 
-static void hash_free_mbentry(const char *key __attribute__((unused)),
-                              void *data,
-                              void *rockp __attribute__((unused)))
-{
-    mbentry_t *mbentry = (mbentry_t *) data;
-
-    mboxlist_entry_free(&mbentry);
+    return r;
 }
 
 static void do_fix_keys(int intermediary)
 {
-    struct fix_rock frock = { HASH_TABLE_INITIALIZER, PTRARRAY_INITIALIZER };
-    struct buf jmapid = BUF_INITIALIZER;
-    mbentry_t *mbentry;
     int flags = MBOXTREE_TOMBSTONES;
-    int r, r2;
 
     if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
 
-    construct_hash_table(&frock.deleted_mbentry_by_jmapid, 4096, 0);
-
-    mboxlist_allmbox("", &fix_cb, &frock, flags);
-
-    while ((mbentry = ptrarray_shift(&frock.deleted_mbentry_to_fix))) {
-        struct mailbox *mailbox = NULL;
-
-        r = mailbox_open_from_mbe(mbentry, &mailbox);
-        if (r) {
-            /* XXX what does it mean if there's an mbentry, but the mailbox
-             * XXX was not openable?
-             */
-            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
-                              __func__, mbentry->name, error_message(r));
-        }
-        else {
-            mbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
-
-            buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
-            MODSEQ_TO_JMAPID(&jmapid, mbentry->foldermodseq);
-            mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
-
-            free(mbentry->jmapid);
-            mbentry->jmapid = buf_release(&jmapid);
-
-            xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
-                    "mboxname=<%s> jmapid=<%s>",
-                    mbentry->name, mbentry->jmapid);
-            r = mboxlist_updatelock(mbentry, /*localonly*/1);
-            if (r) {
-                xsyslog(LOG_ERR, "failed to update mboxlist",
-                        "mboxname=<%s> error=<%s>",
-                        mbentry->name, error_message(r));
-                r2 = mailbox_abort(mailbox);
-                if (r2) {
-                    xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
-                            "error=<%s>", cyrusdb_strerror(r2));
-                }
-            }
-            else {
-                r2 = mailbox_commit(mailbox);
-                if (r2) {
-                    xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                            "error=<%s>", cyrusdb_strerror(r2));
-                }
-            }
-            mailbox_close(&mailbox);
-        }
-        mboxlist_entry_free(&mbentry);
-    }
-    ptrarray_fini(&frock.deleted_mbentry_to_fix);
-
-    hash_enumerate(&frock.deleted_mbentry_by_jmapid, &hash_free_mbentry, NULL);
-    free_hash_table(&frock.deleted_mbentry_by_jmapid, NULL);
-
-    buf_free(&jmapid);
+    mboxlist_allmbox("", &fix_cb, NULL, flags);
 }
 
 static void usage(void)
