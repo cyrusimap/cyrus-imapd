@@ -722,62 +722,23 @@ EXPORTED void fatal(const char* s, int code)
     shut_down(code);
 }
 
-static int expunge_deleted(void)
+static unsigned expunge_cb(struct mailbox *mailbox __attribute__((unused)),
+                           const struct index_record *record, void *rock)
 {
-    struct index_record record;
-    uint32_t msgno;
-    int r = 0;
-    int numexpunged = 0;
-    struct mboxevent *mboxevent;
+    unsigned *msgnop = (unsigned *)rock;
 
-    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-
-    /* loop over all known messages looking for deletes */
-    for (msgno = 1; msgno <= popd_exists; msgno++) {
-        /* not deleted? skip */
-        if (!popd_map[msgno-1].deleted)
-            continue;
-
-        /* error reading? abort */
-        memset(&record, 0, sizeof(struct index_record));
-        record.recno = popd_map[msgno-1].recno;
-        r = mailbox_reload_index_record(popd_mailbox, &record);
-        if (r) break;
-
-        /* already expunged? skip */
-        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
-            continue;
-
-        /* mark expunged */
-        record.system_flags |= FLAG_DELETED;
-        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-        numexpunged++;
-
-        /* store back to the mailbox */
-        r = mailbox_rewrite_index_record(popd_mailbox, &record);
-        if (r) break;
-
-        mboxevent_extract_record(mboxevent, popd_mailbox, &record);
+    while (*msgnop <= popd_exists) {
+        struct msg *m = &popd_map[*msgnop-1];
+        // record is in a gap, definitely not deleted
+        if (m->uid > record->uid) return 0;
+        (*msgnop)++;
+        // no record for this msgno, ignore
+        if (m->uid < record->uid) continue;
+        // UID matches, are we deleted?
+        return m->deleted;
     }
 
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
-               mailbox_name(popd_mailbox), msgno, popd_map[msgno-1].uid);
-    }
-
-    if (!r && (numexpunged > 0)) {
-        syslog(LOG_NOTICE, "Expunged %d messages from %s",
-               numexpunged, mailbox_name(popd_mailbox));
-    }
-
-    /* send the MessageExpunge event notification */
-    mboxevent_extract_mailbox(mboxevent, popd_mailbox);
-    mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
-    mboxevent_set_access(mboxevent, NULL, NULL, popd_userid, NULL, 0);
-    mboxevent_notify(&mboxevent);
-    mboxevent_free(&mboxevent);
-
-    return r;
+    return 0; // we've exhausted our map, these are new messages
 }
 
 /*
@@ -892,14 +853,17 @@ static void cmdloop(void)
 
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {
-                int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);
+                int pollpadding = config_getint(IMAPOPT_POPPOLLPADDING);
                 int minpollsec = config_getduration(IMAPOPT_POPMINPOLL, 'm');
 
                 /* check preconditions! */
                 if (!popd_mailbox)
                     goto done;
-                if (mailbox_lock_index(popd_mailbox, LOCK_EXCLUSIVE))
-                    goto done;
+                char *name = xstrdup(mailbox_name(popd_mailbox));
+                mailbox_close(&popd_mailbox);
+                int r = mailbox_open_iwl(name, &popd_mailbox);
+                free(name);
+                if (r) goto done; // failed to open, doh
 
                 /* mark dirty in case everything else misses it - we're updating
                  * at least the last login */
@@ -916,13 +880,12 @@ static void cmdloop(void)
                 }
 
                 /* look for deleted messages */
-                expunge_deleted();
+                unsigned msgno = 1;
+                mailbox_expunge(popd_mailbox, /*iter*/NULL, expunge_cb, &msgno,
+                                /*numexpunged*/NULL, EVENT_MESSAGE_EXPUNGE, /*limit*/0);
 
                 /* update seen data */
                 update_seen();
-
-                /* unlock will commit changes */
-                mailbox_unlock_index(popd_mailbox, NULL);
 
 done:
                 mailbox_close(&popd_mailbox);
@@ -1795,7 +1758,7 @@ int openinbox(void)
 
         popd_login_time = time(0);
 
-        r = mailbox_open_iwl(mbname_intname(mbname), &popd_mailbox);
+        r = mailbox_open_irl(mbname_intname(mbname), &popd_mailbox);
         if (r) {
             sleep(3);
             syslog(log_level, "Unable to open maildrop %s: %s",
@@ -2060,9 +2023,8 @@ static void bitpipe(void)
 /* Merge our read messages with the existing \Seen database */
 static int update_seen(void)
 {
-    unsigned msgno;
-    struct index_record record;
     int r = 0;
+    unsigned numseen = 0;
 
     if (!config_popuseimapflags)
         return 0;
@@ -2070,23 +2032,40 @@ static int update_seen(void)
     if (config_popuseacl && !(popd_myrights & ACL_SETSEEN))
         return 0;
 
-    /* we know this mailbox must be owned by the user, because
-     * all POP mailboxes are */
-    for (msgno = 1; msgno <= popd_exists; msgno++) {
-        if (!popd_map[msgno-1].seen)
-            continue; /* don't even need to check */
-        memset(&record, 0, sizeof(struct index_record));
-        record.recno = popd_map[msgno-1].recno;
-        if (mailbox_reload_index_record(popd_mailbox, &record))
-            continue;
-        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
-            continue; /* already expunged */
-        if (record.system_flags & FLAG_SEEN)
-            continue; /* already seen */
-        record.system_flags |= FLAG_SEEN;
-        r = mailbox_rewrite_index_record(popd_mailbox, &record);
-        if (r) break;
+    struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_READ);
+
+    unsigned msgno = 1;
+    const message_t *msg;
+    struct mailbox_iter *iter = mailbox_iter_init(popd_mailbox, 0, ITER_SKIP_EXPUNGED);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        while (msgno <= popd_exists && popd_map[msgno-1].uid < record->uid)
+            msgno++;
+        if (msgno > popd_exists) break;
+        if (popd_map[msgno-1].uid > record->uid) continue;
+        // same UID
+        if (!popd_map[msgno-1].seen) continue; // nothing to change
+        if (record->system_flags & FLAG_SEEN) continue; // already Seen
+        numseen++;
+        struct index_record copyrecord = *record;
+        copyrecord.system_flags |= FLAG_SEEN;
+        r = mailbox_rewrite_index_record(popd_mailbox, &copyrecord);
+        if (r) {
+            mboxevent_free(&mboxevent);
+            mailbox_iter_done(&iter);
+            return IMAP_IOERROR;
+        }
     }
+    mailbox_iter_done(&iter);
+
+    if (numseen > 0) {
+        /* send the MessageRead event notification */
+        mboxevent_extract_mailbox(mboxevent, popd_mailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox_name(popd_mailbox), 0);
+        mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
+        mboxevent_notify(&mboxevent);
+    }
+    mboxevent_free(&mboxevent);
 
     return r;
 }
