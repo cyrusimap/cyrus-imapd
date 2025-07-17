@@ -4068,14 +4068,14 @@ static int jkey_fix_cb(void *rock,
     struct jfix_dat *dat = (struct jfix_dat *)rock;
 
     // bonus, it's all good!
-    if (memchr(key, DB_HIERSEP_CHAR, keylen)) return 0;
+    if (memchr(key, DB_RECORDSEP_CHAR, keylen)) return 0;
 
     // cyrusdb interface isn't good about old links after a write, so copy everything
     char *val = xstrndup(data, datalen);
     char *orig = xstrndup(key, keylen);
     char *new = xstrndup(key, keylen);
     char *p = strrchr(new, '.');
-    *p = DB_HIERSEP_CHAR;
+    if (p) *p = DB_RECORDSEP_CHAR;
 
     int r = cyrusdb_delete(mbdb, orig, keylen, dat->txn, /*force*/0);
     if (r) goto done;
