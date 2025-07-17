@@ -4137,7 +4137,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
     buf_free(&key);
 
 out:
-    if (!modified_mbdb || !tid) return r;
+    if (!tid) return r;
 
     if (r)
         cyrusdb_abort(mbdb, tid);
