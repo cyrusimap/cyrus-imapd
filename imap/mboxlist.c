@@ -1439,6 +1439,16 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
                         item->mbtype = oldi->mbtype;
                         item->partition = xstrdupnull(oldi->partition);
                         ptrarray_append(&newi->name_history, item);
+
+                        // and delete the J key for the old item
+                        if (oldi->jmapid) {
+                            mbname_t *oldmbname = mbname_from_intname(oldi->name);
+                            const char *olduserid = mbname_userid(oldmbname);
+                            mboxlist_jmapid_to_key(olduserid, oldi->jmapid, &key);
+                            mbname_free(&oldmbname);
+                            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+                            if (r) goto done;
+                        }
                     }
                     // copy the remaining items
                     while (ptrarray_size(&oldi->name_history)) {
@@ -1480,13 +1490,6 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
         if (r) goto done;
 
-        /* Delete the existing J record value */
-        if (old->jmapid) {
-            mboxlist_jmapid_to_key(userid, old->jmapid, &key);
-            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
-            if (r) goto done;
-        }
-
         if (old->uniqueid) {
             /* Get the existing I key if any */
             r = mboxlist_lookup_by_uniqueid(old->uniqueid, &oldi, txn);
@@ -1499,6 +1502,13 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
                 mboxlist_id_to_key(old->uniqueid, &key);
                 r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
                 if (r) goto done;
+
+                /* Delete the existing J record value */
+                if (old->jmapid) {
+                    mboxlist_jmapid_to_key(userid, old->jmapid, &key);
+                    r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+                    if (r) goto done;
+                }
             }
         }
     }
