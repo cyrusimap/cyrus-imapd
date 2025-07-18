@@ -6907,6 +6907,17 @@ static int do_folders(struct sync_client_state *sync_cs,
                 mboxlist_entry_free(&tombstone);
             }
         }
+        else if (sync_cs->flags & SYNC_FLAG_NO_COPYBACK) {
+            /* we're forcing a delete */
+            syslog(LOG_NOTICE, "SYNCNOTICE: forcing delete of remote folder despite no tombstone %s",
+                   rfolder->name);
+            r = sync_do_folder_delete(sync_cs, rfolder->name);
+            if (r) {
+                syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
+                                rfolder->name, error_message(r));
+                goto bail;
+            }
+        }
         else {
             if (!mboxname_isdeletedmailbox(rfolder->name, NULL)) {
                 syslog(LOG_NOTICE, "SYNCNOTICE: no tombstone for deleted mailbox %s (%s)",
