@@ -74,6 +74,14 @@ else
     SPHINX_FAIL_ON_WARNINGS=
 endif
 
+# GNU Make usually discards intermediate source files (that is: those produced
+# from a chain of implicit rules, e.g. the x.c in x.y -> x.c -> x.o) at exit.
+# A .SECONDARY: target with no prerequisites or recipe makes it not discard
+# them, so they're available for coverage analysis.
+if HAVE_COVERAGE
+.SECONDARY:
+endif
+
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
@@ -676,17 +684,8 @@ cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
-# don't discard the temporary source file if building with coverage
-if HAVE_COVERAGE
-    CUNIT_RM = true
-else
-    CUNIT_RM = $(RM)
-endif
-
-.testc.o:
-	$(AM_V_at)$(CUNIT_PL) --project $(CUNIT_PROJECT) --generate-wrapper $<
-	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
-	$(AM_V_at)$(CUNIT_RM) $<-cunit.c
+.testc.c:
+	$(AM_V_GEN)$(CUNIT_PL) --generate-wrapper $@ $<
 
 $(CUNIT_PROJECT):
 	$(AM_V_at)$(RM) $@
