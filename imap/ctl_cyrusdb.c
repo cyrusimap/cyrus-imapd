@@ -186,7 +186,7 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             /* XXX what does it mean if there's an mbentry, but the mailbox
              * XXX was not openable?
              */
-            syslog(LOG_DEBUG, "%s: mailbox_open_from_mbe %s returned %s",
+            syslog(LOG_INFO, "%s: mailbox_open_from_mbe %s returned %s",
                               __func__, mbentry->name, error_message(r));
             goto skip_uniqueid;
         }
