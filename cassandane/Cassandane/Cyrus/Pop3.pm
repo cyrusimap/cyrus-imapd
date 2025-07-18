@@ -218,6 +218,8 @@ sub test_seen
     $self->assert_equals($client->code(), 200);
     my $lines = $client->read_until_dot();
     $client->command('QUIT');
+    $r = $client->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
 
     my $poststat = $talk->status('INBOX', '(highestmodseq unseen messages)');
     $self->assert_num_equals(2, $poststat->{unseen});
@@ -247,6 +249,8 @@ sub test_dele
     my $r = $client->command('DELE', 2)->response();
     $self->assert_equals($r, Net::Cmd::CMD_OK);
     $client->command('QUIT');
+    $r = $client->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
 
     my $poststat = $talk->status('INBOX', '(highestmodseq unseen messages)');
     $self->assert_num_equals(2, $poststat->{unseen});
