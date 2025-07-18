@@ -40,6 +40,7 @@
 package Cassandane::Util::Words;
 use strict;
 use warnings;
+use List::Util qw(shuffle uniq);
 
 use Exporter ();
 our @ISA = qw(Exporter);
@@ -75,14 +76,15 @@ sub _read_words
         last if scalar @words == MAX_WORDS;
     }
     close DICT;
+
+    @words = uniq @words;
 }
 
 sub random_word
 {
-    _read_words()
-        if (!scalar @words);
-    @remaining = @words unless scalar @remaining;
-    return $remaining[int(rand(scalar @remaining))];
+    _read_words() unless scalar @words;
+    @remaining = shuffle @words unless scalar @remaining;
+    return shift @remaining;
 }
 
 sub random_words
