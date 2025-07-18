@@ -677,7 +677,7 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 nodist_cunit_unit_SOURCES = cunit/registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
-CUNIT_PL = $(top_srcdir)/cunit/cunit.pl
+CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
 # don't discard the temporary source file if building with coverage
 if HAVE_COVERAGE
