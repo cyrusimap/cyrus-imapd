@@ -1,6 +1,6 @@
 #include <stdint.h>
 #
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "charset.h"
 #include "util.h"
 #include "xsha1.h"
