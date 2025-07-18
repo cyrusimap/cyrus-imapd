@@ -50,6 +50,7 @@ cscope.out
 cunit/CUnitAutomated-Results.xml
 cunit/unit-registry.c
 cunit/reports
+cunit/test-dbdir
 cunit/unit
 debian/
 depcomp
