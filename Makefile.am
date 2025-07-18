@@ -687,18 +687,13 @@ CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 .testc.c:
 	$(AM_V_GEN)$(CUNIT_PL) --generate-wrapper $@ $<
 
-$(CUNIT_PROJECT):
-	$(AM_V_at)$(RM) $@
-	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
-
 cunit/unit-registry.c: $(cunit_TESTS)
 	$(AM_V_GEN)$(CUNIT_PL) --generate-registry $@ $^
 
 if CUNIT
 
-CUNIT_PROJECT = cunit/default.cunit
-BUILT_SOURCES += cunit/unit-registry.c $(CUNIT_PROJECT)
-CLEANFILES += cunit/unit-registry.c $(CUNIT_PROJECT)
+BUILT_SOURCES += cunit/unit-registry.c
+CLEANFILES += cunit/unit-registry.c
 check_PROGRAMS += cunit/unit
 
 # To run under Valgrind, do: make VG=1 check
