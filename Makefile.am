@@ -692,8 +692,8 @@ $(CUNIT_PROJECT):
 	$(AM_V_at)$(RM) $@
 	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
 
-cunit/registry.c: $(CUNIT_PROJECT)
-	$(AM_V_GEN)$(CUNIT_PL) --project $(CUNIT_PROJECT) --generate-registry $@
+cunit/registry.c: $(cunit_TESTS)
+	$(AM_V_GEN)$(CUNIT_PL) --generate-registry $@ $^
 
 if CUNIT
 
