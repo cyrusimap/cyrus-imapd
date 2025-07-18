@@ -1,7 +1,7 @@
 #if HAVE_CONFIG_H
 #include <config.h>
 #endif
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "assert.h"
 #include "xmalloc.h"
 #include "retry.h"

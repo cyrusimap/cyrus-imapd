@@ -1,7 +1,7 @@
 /* unit test for lib/procinfo.c */
 #include <unistd.h> /* for getpid() */
 #include "config.h"
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "lib/procinfo.h"
 
 static void test_init_piarray(void)

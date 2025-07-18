@@ -2,7 +2,7 @@
 #include <config.h>
 #endif
 #include <assert.h>
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "lib/libconfig.h"
 #include "lib/libcyr_cfg.h"
 #include "lib/xunlink.h"

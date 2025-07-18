@@ -43,7 +43,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 
 #include "lib/libconfig.h"
 #include "lib/retry.h"

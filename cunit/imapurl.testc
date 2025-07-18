@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <time.h>
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "imapurl.h"
 
 static void test_fromurl_cclient(void)

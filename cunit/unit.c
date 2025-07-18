@@ -51,9 +51,10 @@
 #include <valgrind/valgrind.h>
 #endif
 #include <setjmp.h>
-#include "cunit/cyrunit.h"
-#include "cunit/registry.h"
-#include "cunit/timeout.h"
+
+#include "cunit/unit.h"
+#include "cunit/unit-registry.h"
+#include "cunit/unit-timeout.h"
 
 #include "lib/libconfig.h"
 #include "lib/retry.h"

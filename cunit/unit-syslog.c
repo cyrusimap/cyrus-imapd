@@ -48,7 +48,8 @@
 #include <regex.h>
 #include <memory.h>
 #include <CUnit/CUnit.h>
-#include "cunit-syslog.h"
+
+#include "cunit/unit-syslog.h"
 
 extern int verbose;
 

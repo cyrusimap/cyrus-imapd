@@ -1,4 +1,4 @@
-/* timeofday.c - time of day warping utilities for unit tests
+/* unit-timeofday.h - time of day warping utilities for unit tests
  *
  * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,8 +40,8 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __CYRUS_CUNIT_TIMEOFDAY_H__
-#define __CYRUS_CUNIT_TIMEOFDAY_H__
+#ifndef CUNIT_UNIT_TIMEOFDAY_H
+#define CUNIT_UNIT_TIMEOFDAY_H
 
 #include <sys/types.h>
 
@@ -51,4 +51,4 @@ extern void time_push_fixed(time_t fixed);
 extern void time_pop(void);
 extern void time_restore(void);
 
-#endif /* __CYRUS_CUNIT_TIMEOFDAY_H__ */
+#endif /* CUNIT_UNIT_TIMEOFDAY_H */

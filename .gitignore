@@ -49,7 +49,7 @@ coverage.xml
 cscope.out
 cunit/CUnitAutomated-Results.xml
 cunit/default.cunit
-cunit/registry.c
+cunit/unit-registry.c
 cunit/reports
 cunit/unit
 debian/
