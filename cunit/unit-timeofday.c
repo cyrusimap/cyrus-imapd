@@ -45,7 +45,8 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
-#include "timeofday.h"
+
+#include "cunit/unit-timeofday.h"
 
 extern int verbose;
 

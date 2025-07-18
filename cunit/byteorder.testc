@@ -1,4 +1,4 @@
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "byteorder.h"
 
 static void test_byteorder(void)

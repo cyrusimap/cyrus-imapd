@@ -1,4 +1,5 @@
-/*
+/* unit-syslog.h - declarations for CUnit syslog functions
+ *
  * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,12 +40,16 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __CUNIT_TIMEOUT_H__
-#define __CUNIT_TIMEOUT_H__ 1
+#ifndef CUNIT_UNIT_SYSLOG_H
+#define CUNIT_UNIT_SYSLOG_H
 
-extern int timeout_init(void (*cb)(void));
-extern int timeout_begin(int millisec);
-extern int timeout_end(void);
-extern void timeout_fini(void);
+/* returns an active match number from 1 up */
+extern unsigned int CU_syslogMatchBegin(const char *re, const char *filename,
+                                        unsigned int lineno, int issubstr);
+/* returns count of given match (or 0 for sum of all matches), and remove the match */
+extern unsigned int CU_syslogMatchEnd(unsigned int match, const char **s);
+/* reset all matches, call before each test */
+#define CU_syslogMatchReset() \
+    CU_syslogMatchEnd(0, NULL)
 
-#endif /* __CUNIT_TIMEOUT_H__ */
+#endif /* CUNIT_UNIT_SYSLOG_H */
