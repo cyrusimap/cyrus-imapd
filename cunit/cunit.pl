@@ -780,11 +780,22 @@ sub generate_wrapper(@)
 # Generate a file containing a C function register_cunit_suites()
 # which registers all the CUnit suites in the project.
 #
-sub generate_registry(@)
+sub generate_registry($@)
 {
-    my ($cfile) = @_;
+    my ($cfile, @args) = @_;
+    my @suites;
 
-    project_load();
+    # There should not be any order dependency, so we can disregard the order
+    # the tests were listed in, and instead force them into alphabetic order
+    # for better readability of the test suite output.
+    foreach my $testfile (sort @args)
+    {
+        die "$testfile: not a C source file"
+            unless (-f $testfile && $testfile =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
+
+        $testfile = path_sanitise("$builddir/$testfile");
+        push @suites, suite_new($testfile, $srcdir);
+    }
 
     my $file = atomic_rewrite_begin($cfile);
 
@@ -823,7 +834,7 @@ sub usage()
 {
     print STDERR "Usage: cunit.pl [flags] --add-sources file.c ...\n";
     print STDERR "       cunit.pl [flags] --generate-wrapper testfoo.c\n";
-    print STDERR "       cunit.pl [flags] --emit-register-function foo.c\n";
+    print STDERR "       cunit.pl [flags] --generate-registry registry.c TESTFILES\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
     print STDERR "    --project PROJ, -p PROJ   specify the project file (default is \"$DEFAULT_PROJECT\")\n";
@@ -856,6 +867,7 @@ while (my $a = shift)
     elsif ($a eq '--generate-registry' || $a eq '-r')
     {
         $modefn = \&generate_registry;
+        $want_args = 1;
         my $cfile = shift;
         usage() unless defined $cfile;
         push(@args, $cfile);
