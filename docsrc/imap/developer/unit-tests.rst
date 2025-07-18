@@ -350,8 +350,8 @@ The file should contain something like this.
 ::
 
     /* Unit test for lib/crc32.c */
-    #include "cunit/cyrunit.h"  (a)
-    #include "crc32.h"  (b)
+    #include "cunit/unit.h"  (a)
+    #include "lib/crc32.h"  (b)
 
     static void test_map(void)  (c)
     {
@@ -366,15 +366,12 @@ The file should contain something like this.
 Here's an explanation of what all these bits are for.
 
 (a)
-    You need to include the header ``"cunit/cyrunit.h"``, which is a thin
+    You need to include the header ``"cunit/unit.h"``, which is a thin
     Cyrus wrapper around the CUnit's library's header,
     ``<CUnit/CUnit.h>`` with some extra conveniences.
 (b)
     You should also include any headers you need for declarations of the
-    functions which you'll be testing. Note that the Cyrus ``lib/`` and
-    ``imap/`` directories are already in the include path, so any header
-    in there can be included without the directory prefix, e.g.
-    ``"crc32.h"`` for ``lib/crc32.h``.
+    functions which you'll be testing.
 (c)
     You need to have at least one function which looks like this: it
     takes no arguments, returns void, and is named ``test_whatever``. It
@@ -434,10 +431,6 @@ You need to add the filename of your new test to the definition of the
 At this point you should be able to just rebuild and rerun using **make
 check**. You can also just rebuild without rerunning by using the
 command **make cunit/unit**.
-
-Note that sometimes this doesn't quite work right, and you may be able
-to work around this problem using the command **rm
-cunit/default.cunit**.
 
 ::
 
@@ -623,6 +616,6 @@ taken from ``cunit/mboxname.testc``) this:
 
 
 The functions should return 0 on success, and non-zero on error. They
-must not call and ``CU_*`` functions or macros.
+must not call any ``CU_*`` functions or macros.
 
 Good luck and good testing!
