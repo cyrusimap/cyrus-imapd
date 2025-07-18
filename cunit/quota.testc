@@ -1,7 +1,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "config.h"
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "imap/quota.h"
 #include "xmalloc.h"
 #include "retry.h"

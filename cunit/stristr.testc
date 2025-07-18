@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "util.h"
 
 #include "stristr.h"

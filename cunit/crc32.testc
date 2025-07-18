@@ -1,6 +1,6 @@
 /* Unit test for lib/crc32.c */
 #include <config.h>
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "crc32.h"
 
 static void test_map(void)

@@ -9,7 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "lib/util.h"
 #include "lib/strhash.h"
 

@@ -1,6 +1,5 @@
-/* timezones.h - timezone utilities for unit tests
- *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+/*
+ * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,18 +39,12 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __CYRUS_CUNIT_TIMEZONES_H__
-#define __CYRUS_CUNIT_TIMEZONES_H__
+#ifndef CUNIT_UNIT_TIMEOUT_H
+#define CUNIT_UNIT_TIMEOUT_H
 
-#include <stdio.h>
-#include <stdarg.h>
+extern int timeout_init(void (*cb)(void));
+extern int timeout_begin(int millisec);
+extern int timeout_end(void);
+extern void timeout_fini(void);
 
-#define TZ_UTC          "UTC+00"
-#define TZ_NEWYORK      "EST+05"
-#define TZ_MELBOURNE    "AEST-11"
-
-extern void push_tz(const char *tz);
-extern void pop_tz(void);
-extern void restore_tz(void);
-
-#endif /* __CYRUS_CUNIT_TIMEZONES_H__ */
+#endif /* CUNIT_UNIT_TIMEOUT_H */

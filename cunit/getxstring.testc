@@ -1,6 +1,6 @@
 /* Test the getxstring() function */
 #include "config.h"
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "prot.h"
 #include "lib/libcyr_cfg.h"
 #include "imap/global.h"
