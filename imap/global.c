@@ -259,11 +259,11 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
     }
 
-    /* allow toggleable debug logging */
-    config_toggle_debug_cb = &debug_toggled;
-
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
+
+    /* allow toggleable debug logging */
+    config_toggle_debug_cb = &debug_toggled;
 
     /* changed user if needed */
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
