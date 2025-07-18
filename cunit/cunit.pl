@@ -227,20 +227,6 @@ sub suite_path_to_name($)
 }
 
 #
-# Given a pathname (relative or absolute, doesn't matter)
-# of the C source file of a suite, return the relative
-# path of the wrapper C source file.  This is always in
-# the basedir.
-# Args: pathname
-# Returns: pathname
-#
-sub suite_path_to_wrapper($)
-{
-    my ($path) = @_;
-    return $path . "-cunit.c";
-}
-
-#
 # Given a suite name return the name of a C variable which will
 # be used to name the CU_SuiteInfo object.  Only needed because
 # we allow test names to contain characters which are not legal
@@ -288,7 +274,6 @@ sub suite_new($$)
         relpath => $relpath,
         abspath => $abspath,
         name => suite_path_to_name($relpath),
-        wrap => suite_path_to_wrapper($relpath),
         setupfn => undef,
         teardownfn => undef,
         params => [],
@@ -561,10 +546,10 @@ sub atomic_rewrite_end($)
 # Args: ref to suite hash
 # Returns: void
 #
-sub suite_generate_wrap($)
+sub suite_generate_wrap($$)
 {
-    my ($suite) = @_;
-    my $file = atomic_rewrite_begin($suite->{wrap});
+    my ($suite, $wrapfile) = @_;
+    my $file = atomic_rewrite_begin($wrapfile);
     my $cfile = $suite->{abspath};
 
     open WRAP,'>',$file
@@ -633,7 +618,7 @@ sub suite_generate_wrap($)
 
     close WRAP;
 
-    atomic_rewrite_end($suite->{wrap});
+    atomic_rewrite_end($wrapfile);
 }
 
 #
@@ -738,42 +723,19 @@ sub add_sources(@)
 }
 
 #
-# Generate a wrapper C source file for each of the suites
-# specified by their C source files on the commandline.
+# Generate a wrapper C source file for a test suite
 #
-sub generate_wrapper(@)
+sub generate_wrapper($$)
 {
-    my @args = @_;
-    my $nfails = 0;
+    my ($wrapfile, $testfile) = @_;
 
-    project_load();
+    $testfile = path_sanitise("$builddir/$testfile");
 
-    foreach my $a (@args)
-    {
-        my $suite = suite_find($a);
-        if (!defined $suite)
-        {
-            print STDERR "$a: unknown suite, did you use --add-sources?\n";
-            $nfails++;
-            next;
-        }
-        my $ntests = suite_scan_for_tests($suite);
-        if ($ntests == 0)
-        {
-            vmsg("No tests in $suite->{relpath}");
-            if ( -f $suite->{wrap})
-            {
-                vmsg("Removing stale $suite->{wrap}");
-                unlink($suite->wrap)
-                    or die "Cannot unlink $suite->{wrap}: $!";
-            }
-            next;
-        }
-        suite_generate_wrap($suite);
-    }
+    my $suite = suite_new($testfile, $srcdir);
+    my $ntests = suite_scan_for_tests($suite);
+    die "No tests in $testfile" if $ntests == 0;
 
-    exit 1
-        if ($nfails > 0);
+    suite_generate_wrap($suite, $wrapfile);
 }
 
 #
@@ -833,7 +795,7 @@ sub generate_registry($@)
 sub usage()
 {
     print STDERR "Usage: cunit.pl [flags] --add-sources file.c ...\n";
-    print STDERR "       cunit.pl [flags] --generate-wrapper testfoo.c\n";
+    print STDERR "                        --generate-wrapper foo.c foo.testc\n";
     print STDERR "       cunit.pl [flags] --generate-registry registry.c TESTFILES\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
@@ -863,6 +825,9 @@ while (my $a = shift)
     {
         $modefn = \&generate_wrapper;
         $want_args = 1;
+        my $wrapfile = shift;
+        usage() unless defined $wrapfile;
+        push(@args, $wrapfile);
     }
     elsif ($a eq '--generate-registry' || $a eq '-r')
     {
