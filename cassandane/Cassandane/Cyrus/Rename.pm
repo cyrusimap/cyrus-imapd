@@ -1043,4 +1043,38 @@ sub test_rename_intermediate_noperms
     $self->assert_matches(qr{Permission denied}, $imaptalk->get_last_error());
 }
 
+sub test_rename_jmapid
+    :AllowMoves :Conversations :min_version_3_12
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename";
+
+    $admintalk->create("user.cassandane.foo") || die;
+    $admintalk->create("user.cassandane.bar") || die;
+    $admintalk->create("user.cassandane.bar.sub folder") || die;
+
+    # get the J keys
+    my $mailboxes_db = "$self->{instance}->{basedir}/conf/mailboxes.db";
+    my $format = $self->{instance}->{config}->get('mboxlist_db');
+    my $pre = { $self->{instance}->run_dbcommand($mailboxes_db, $format, ['SHOW', 'J']) };
+
+    $self->assert_num_equals(4, scalar keys %$pre);
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user.newuser.bar.sub folder");
+    $self->assert(not $admintalk->get_last_error());
+
+    my $post = { $self->{instance}->run_dbcommand($mailboxes_db, $format, ['SHOW', 'J']) };
+
+    $self->assert_num_equals(4, scalar grep { m/newuser/ } keys %$post);
+    $self->assert_num_equals(0, scalar grep { m/cassandane/ } keys %$post);
+}
+
 1;
