@@ -13,10 +13,8 @@
 *.sig
 *.tar.gz
 *.tar.bz2
-*.*-cunit.c
 *~
 .clang-format
-.cunit-*.c
 .deps
 .dirstamp
 .libs
