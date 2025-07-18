@@ -52,7 +52,8 @@ my $unitdir = dirname($0);
 my $project;
 my $DEFAULT_PROJECT = "default.cunit";
 my @suites;
-my $here = getcwd();
+my $srcdir = getcwd();
+my $builddir = getcwd();
 my $verbose = 0;
 
 #
@@ -207,22 +208,16 @@ sub path_absrel($$)
 #
 # Given a pathname of the C source file of a suite, return
 # the name by which the suite will be known to CUnit.
-# Args: absolute pathname
+# Args: relative pathname
 # Returns: name
 #
 sub suite_path_to_name($)
 {
     my ($path) = @_;
 
-    # Generate a path from the "top" directory down to this
-    # C source file.  The "top" directory should be something
-    # like @top_srcdir@ in autoconf speak, but we have to
-    # infer it from the location of the project file.
-    my ($projdir, $whatever) = path_absrel($project, $here);
-    my $topdir = path_common($path, $projdir);
-    vmsg("inferred top_srcdir is \"$topdir\"");
-    my $name = path_relativise($path, $topdir);
+    my $name = $path;
 
+    $name =~ s/^cunit\///g;
     $name =~ s/\.(testc|c)$//;
     $name =~ s/\/test_?/\//g;
     $name =~ s/_?test\//\//g;
@@ -292,7 +287,7 @@ sub suite_new($$)
         basedir => $basedir,
         relpath => $relpath,
         abspath => $abspath,
-        name => suite_path_to_name($abspath),
+        name => suite_path_to_name($relpath),
         wrap => suite_path_to_wrapper($relpath),
         setupfn => undef,
         teardownfn => undef,
@@ -736,7 +731,7 @@ sub add_sources(@)
     {
         die "$path: not a C source file"
             unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
-        project_add_suite(suite_new($path, $here));
+        project_add_suite(suite_new($path, $srcdir));
     }
 
     project_save();
@@ -831,8 +826,10 @@ sub usage()
     print STDERR "       cunit.pl [flags] --emit-register-function foo.c\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
-    print STDERR "    --project PROJ, -p PROJ       specify the project file (default is \"$DEFAULT_PROJECT\")\n";
-    print STDERR "    --verbose, -v                 be more verbose\n";
+    print STDERR "    --project PROJ, -p PROJ   specify the project file (default is \"$DEFAULT_PROJECT\")\n";
+    print STDERR "    --srcdir SRCDIR, -s SRCDIR\n"
+               . "                              the project source directory\n";
+    print STDERR "    --verbose, -v             be more verbose\n";
     exit 1;
 }
 
@@ -862,6 +859,11 @@ while (my $a = shift)
         my $cfile = shift;
         usage() unless defined $cfile;
         push(@args, $cfile);
+    }
+    elsif ($a eq '--srcdir' || $a eq '-s')
+    {
+        $srcdir = path_sanitise(shift);
+        usage() unless -d $srcdir;
     }
     elsif ($a eq '--verbose' || $a eq '-v')
     {
