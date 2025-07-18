@@ -1,4 +1,4 @@
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "xmalloc.h"
 #include "bsearch.h"
 #include "arrayu64.h"

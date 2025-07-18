@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "util.h"
 
 static void test_null(void)

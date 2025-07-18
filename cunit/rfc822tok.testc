@@ -1,5 +1,5 @@
 #include "config.h"
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "rfc822tok.h"
 
 #define WORD0   "lorem"
