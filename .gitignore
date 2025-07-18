@@ -48,10 +48,15 @@ com_err/et/compile_et
 coverage.xml
 cscope.out
 cunit/CUnitAutomated-Results.xml
-cunit/unit-registry.c
 cunit/reports
 cunit/test-dbdir
 cunit/unit
+### ignore intermediate c files from foo.testc
+cunit/*.c
+### but not the framework files
+!cunit/unit*.c
+### but do ignore the generated registry file
+cunit/unit-registry.c
 debian/
 depcomp
 doc/examples/imapd_conf/imapd.conf.sample

@@ -74,14 +74,6 @@ else
     SPHINX_FAIL_ON_WARNINGS=
 endif
 
-# GNU Make usually discards intermediate source files (that is: those produced
-# from a chain of implicit rules, e.g. the x.c in x.y -> x.c -> x.o) at exit.
-# A .SECONDARY: target with no prerequisites or recipe makes it not discard
-# them, so they're available for coverage analysis.
-if HAVE_COVERAGE
-.SECONDARY:
-endif
-
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
@@ -682,6 +674,17 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
+# n.b. $(patsubst ...) is a GNU Make function, not an automake thing.
+# It's passed through to Makefile verbatim, not interpreted in any way.
+CUNIT_INTERMEDIATES = $(patsubst %.testc,%.c,$(cunit_TESTS))
+
+# GNU Make usually discards intermediate source files (that is: those produced
+# from a chain of implicit rules, e.g. the x.c in x.y -> x.c -> x.o) at exit.
+# Making them prerequisites to the .SECONDARY target marks them to be kept,
+# so they're available for coverage analysis, and don't need to be regenerated
+# if something depending on them is being rebuilt.
+.SECONDARY: $(CUNIT_INTERMEDIATES)
+
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
 .testc.c:
@@ -693,7 +696,7 @@ cunit/unit-registry.c: $(cunit_TESTS)
 if CUNIT
 
 BUILT_SOURCES += cunit/unit-registry.c
-CLEANFILES += cunit/unit-registry.c
+CLEANFILES += cunit/unit-registry.c $(CUNIT_INTERMEDIATES)
 check_PROGRAMS += cunit/unit
 
 # To run under Valgrind, do: make VG=1 check
