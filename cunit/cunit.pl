@@ -48,10 +48,6 @@ use Cwd;
 use File::Basename;
 use File::Compare;
 
-my $unitdir = dirname($0);
-my $project;
-my $DEFAULT_PROJECT = "default.cunit";
-my @suites;
 my $srcdir = getcwd();
 my $builddir = getcwd();
 my $verbose = 0;
@@ -270,7 +266,6 @@ sub suite_new($$)
 
     my $suite =
     {
-        basedir => $basedir,
         relpath => $relpath,
         abspath => $abspath,
         name => suite_path_to_name($relpath),
@@ -281,17 +276,6 @@ sub suite_new($$)
     };
     $suite->{suitevar} = suite_name_to_var($suite->{name});
     return $suite;
-}
-
-#
-# Compare two suite hashes; suitable for use as a sort function.
-# Args: ref to suite hash, ref to suite hash
-# Returns: 0 if the same, <0 or >0 if not the same.
-#
-sub suite_cmp($$)
-{
-    my ($s1, $s2) = @_;
-    return ($s1->{abspath} cmp $s2->{abspath});
 }
 
 # Any of these (case insensitive) names can be used as the setup function
@@ -459,26 +443,6 @@ sub suite_scan_for_tests($)
 }
 
 #
-# Return the suite which corresponds to the given C source file.
-# Args: C source file name
-# Returns: ref to suite hash, or undef if not found
-#
-sub suite_find($)
-{
-    my ($path) = @_;
-
-    foreach my $suite (@suites)
-    {
-        # canonicalise path before comparison
-        my ($abs, $rel) = path_absrel($path, $suite->{basedir});
-
-        return $suite
-            if ($suite->{relpath} eq $rel);
-    }
-    return undef;
-}
-
-#
 # Atomic rewrite: atomic update of file contents.
 #
 # We use the standard trick for POSIX filesystems of writing all
@@ -622,107 +586,6 @@ sub suite_generate_wrap($$)
 }
 
 #
-# Load the $project file into the array @suites.
-# Args: void
-# Returns: void
-#
-sub project_load()
-{
-    open PROJ,'<',$project
-        or return;      # TODO: should be silent on ENOENT only
-
-    # TODO: should check file version header
-
-    while (<PROJ>)
-    {
-        chomp;
-        next if (m/^#/);    # skip comments
-        my @a = split;
-
-        if ($a[0] eq 'suite')
-        {
-            die "Invalid format"
-                unless scalar(@a) == 3;
-            push(@suites, suite_new($a[1], $a[2]));
-        }
-    }
-    close PROJ;
-
-    vmsg("loaded project $project");
-}
-
-#
-# Add a suite to @suites, if it's not already present.
-# Args: ref to a suite hash
-# Returns: void
-#
-sub project_add_suite($)
-{
-    my ($suite) = @_;
-
-    return if grep { !suite_cmp($_,$suite) } @suites;
-    #
-    # Note: appending is an important semantic.  It ensures
-    # that the order of suites in the CUnit run matches the
-    # order in which they were added (alphabetic)
-    #
-    vmsg("adding suite $suite->{relpath} $suite->{basedir}");
-    push(@suites, $suite);
-}
-
-#
-#
-# Save the @suites array to the $project file
-# Uses atomic rewrite.
-# Args: void
-# Returns: void
-#
-sub project_save()
-{
-    my $file = atomic_rewrite_begin($project);
-
-    open PROJ,'>',$file
-        or die "Failed to open $file for writing: $!";
-
-    print PROJ "#CUnitProject-1.0\n";
-
-    foreach my $suite (@suites)
-    {
-        print PROJ "suite $suite->{relpath} $suite->{basedir}\n";
-    }
-    close PROJ;
-
-    atomic_rewrite_end($project);
-}
-
-#
-# Add the named test sources (which are C source files) to the
-# project, and rewrite the project file.  Re-adding is deliberately
-# a harmless no-op; in particular the project file is not written
-# if it's contents would not change.
-#
-sub add_sources(@)
-{
-    my (@args) = @_;
-
-    project_load();
-
-    # Test sources are listed mostly alphabetically in Makefile.am, but
-    # there are exceptions for uninteresting reasons.
-    # There should not be any order dependency, so we can disregard the
-    # order they were listed in, and instead force them into alphabetic
-    # order for better readability of the test suite output.
-    foreach my $path (sort @args)
-    {
-        die "$path: not a C source file"
-            unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
-        project_add_suite(suite_new($path, $srcdir));
-    }
-
-    project_save();
-}
-
-#
 # Generate a wrapper C source file for a test suite
 #
 sub generate_wrapper($$)
@@ -794,12 +657,10 @@ sub generate_registry($@)
 
 sub usage()
 {
-    print STDERR "Usage: cunit.pl [flags] --add-sources file.c ...\n";
-    print STDERR "                        --generate-wrapper foo.c foo.testc\n";
+    print STDERR "Usage: cunit.pl [flags] --generate-wrapper foo.c foo.testc\n";
     print STDERR "       cunit.pl [flags] --generate-registry registry.c TESTFILES\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
-    print STDERR "    --project PROJ, -p PROJ   specify the project file (default is \"$DEFAULT_PROJECT\")\n";
     print STDERR "    --srcdir SRCDIR, -s SRCDIR\n"
                . "                              the project source directory\n";
     print STDERR "    --verbose, -v             be more verbose\n";
@@ -811,17 +672,7 @@ my @args;
 my $want_args = 0;
 while (my $a = shift)
 {
-    if ($a eq '--project' || $a eq '-p')
-    {
-        $project = shift;
-        usage() unless defined $project;
-    }
-    elsif ($a eq '--add-sources' || $a eq '-a')
-    {
-        $modefn = \&add_sources;
-        $want_args = 1;
-    }
-    elsif ($a eq '--generate-wrapper' || $a eq '-w')
+    if ($a eq '--generate-wrapper' || $a eq '-w')
     {
         $modefn = \&generate_wrapper;
         $want_args = 1;
@@ -864,16 +715,6 @@ while (my $a = shift)
     }
 }
 
-if (!defined $project)
-{
-    $project = $DEFAULT_PROJECT;
-}
-elsif ( -d $project)
-{
-    $project = "$project/$DEFAULT_PROJECT";
-}
-
 # Actually run the selected mode
 usage() unless defined $modefn;
 $modefn->(@args);
-
