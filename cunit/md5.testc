@@ -1,4 +1,4 @@
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "md5.h"
 
 static const char *asciify(unsigned char mac[16])

@@ -1,7 +1,7 @@
 #include <config.h>
 #include "lib/cyr_qsort_r.h"
 
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 
 static int mysort QSORT_R_COMPAR_ARGS(const void *pa,
                                       const void *pb,
