@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "bitvector.h"
 #include "util.h"
 
