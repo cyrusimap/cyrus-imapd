@@ -999,4 +999,26 @@ sub test_rename_user_sharee
     $self->assert_mailbox_structure($list, '.', $structure);
 }
 
+sub test_rename_intermediate_noperms
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->setup_mailbox_structure($admintalk, [
+        [ 'create' => [qw( shared shared.intermed.child )] ],
+    ]);
+    $admintalk->setacl('shared', cassandane => 'lrs');
+    $admintalk->setacl('shared.intermed', cassandane => 'lrs');
+    $admintalk->setacl('shared.intermed.child', cassandane => 'lrs');
+
+    my $list = $admintalk->list('', '*');
+    xlog "XXX " . Dumper $list;
+
+    $admintalk->delete('shared.intermed');
+    $list = $admintalk->list('', '*');
+    xlog "XXX " . Dumper $list;
+}
+
 1;
