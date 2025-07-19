@@ -49,22 +49,13 @@
 #include "mailbox.h"
 #include "strarray.h"
 
-#define CALDAV_CALUSERADDR_INITIALIZER { STRARRAY_INITIALIZER, 0 }
-
-struct caldav_caluseraddr {
-    strarray_t uris;
-    int pref;
-};
-
 extern int caldav_caluseraddr_read(const char *mboxname,
                                    const char *userid,
-                                   struct caldav_caluseraddr *addrs);
+                                   strarray_t *addresses);
 
 extern int caldav_caluseraddr_write(struct mailbox *mbox,
                                     const char *userid,
-                                    const struct caldav_caluseraddr *addrs);
-
-extern void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr);
+                                    strarray_t *addresses);
 
 extern void get_schedule_addresses(const char *mboxname,
                                    const char *userid, strarray_t *addresses);

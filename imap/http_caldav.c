@@ -6074,19 +6074,19 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
         node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                             name, ns, NULL, 0);
 
-        struct caldav_caluseraddr addr = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t addr = STRARRAY_INITIALIZER;
 
         char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
 
         r = caldav_caluseraddr_read(mailboxname, fctx->req_tgt->userid, &addr);
-        if (!r && strarray_size(&addr.uris)) {
+        if (!r && strarray_size(&addr)) {
             if (isemail) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr.uris, 0));
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr, 0));
             }
             else {
                 int i;
-                for (i = strarray_size(&addr.uris); i; i--) {
-                    const char *uri = strarray_nth(&addr.uris, i - 1);
+                for (i = strarray_size(&addr); i; i--) {
+                    const char *uri = strarray_nth(&addr, i - 1);
                     xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], uri);
                     /* apple will use the alphabetically first href, and Thunderbird will use the
                      * last one in order, so we set preferred for Apple, and put the preferred one
@@ -6122,27 +6122,27 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
             }
         }
 
-        caldav_caluseraddr_fini(&addr);
+        strarray_fini(&addr);
         free(mailboxname);
         ret = 0;
     }
     else {
-        struct caldav_caluseraddr addr = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t addr = STRARRAY_INITIALIZER;
 
         buf_reset(&fctx->buf);
 
         r = caldav_caluseraddr_read(fctx->mbentry->name, fctx->req_tgt->userid, &addr);
-        if (!r && strarray_size(&addr.uris)) {
+        if (!r && strarray_size(&addr)) {
             node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
             int i;
-            for (i = strarray_size(&addr.uris); i; i--) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr.uris, i-1));
+            for (i = strarray_size(&addr); i; i--) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr, i-1));
             }
             ret = 0;
         }
 
-        caldav_caluseraddr_fini(&addr);
+        strarray_fini(&addr);
     }
 
     return ret;
@@ -6212,10 +6212,10 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
     else {
         buf_reset(&pctx->buf);
 
-        struct caldav_caluseraddr old = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t old = STRARRAY_INITIALIZER;
         caldav_caluseraddr_read(mailbox_name(pctx->mailbox), httpd_userid, &old);
 
-        struct caldav_caluseraddr new = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t new = STRARRAY_INITIALIZER;
 
         if (set) {
             xmlNodePtr node = xmlFirstElementChild(prop);
@@ -6225,7 +6225,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                 /* single text value */
                 char *value = (char *) xmlNodeGetContent(prop);
                 if (value)
-                    strarray_appendm(&new.uris, value);
+                    strarray_appendm(&new, value);
             }
             else {
                 /* href(s) */
@@ -6236,7 +6236,7 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                          * but we want it first in the internal data structure because that
                          * makes iterating to look for matches more sensible, so reverse it
                          * right here! */
-                        strarray_unshiftm(&new.uris, (char *) xmlNodeGetContent(node));
+                        strarray_unshiftm(&new, (char *) xmlNodeGetContent(node));
                     }
                     else {
                         /* Unknown value */
@@ -6249,17 +6249,6 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                         return 0;
                     }
                 }
-            }
-        }
-
-        // Preserve old preferred address, if still available
-        new.pref = strarray_size(&new.uris);
-        if (strarray_size(&old.uris)) {
-            const char *olduri = strarray_nth(&old.uris, old.pref);
-            if (olduri) {
-                new.pref = strarray_find(&new.uris, olduri, 0);
-                if (new.pref < 0)
-                    new.pref = strarray_size(&new.uris);
             }
         }
 
@@ -6276,8 +6265,8 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                     "err=<%s>", error_message(r));
         }
 
-        caldav_caluseraddr_fini(&new);
-        caldav_caluseraddr_fini(&old);
+        strarray_fini(&new);
+        strarray_fini(&old);
     }
 
     if (calhomeset) {

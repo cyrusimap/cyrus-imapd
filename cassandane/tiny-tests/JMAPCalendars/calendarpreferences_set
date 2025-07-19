@@ -47,7 +47,7 @@ sub test_calendarpreferences_set
     $self->assert_deep_equals([{
         id => 'singleton',
         defaultCalendarId => undef,
-        defaultParticipantIdentityId => undef,
+        defaultParticipantIdentityId => $participantId,
     }], $res->[0][1]{list});
     my $state = $res->[0][1]{state};
 
@@ -93,10 +93,16 @@ sub test_calendarpreferences_set
         }, 'R2'],
     ], $using);
     xlog "Setting defaultCalendarId to null assigns a new default calendar";
-    $self->assert_not_null($res->[0][1]{updated}{singleton}{defaultCalendarId});
+    my $newDefaultCalendarId = $res->[0][1]{updated}{singleton}{defaultCalendarId};
+    $self->assert_not_null($newDefaultCalendarId);
+    xlog "Deleting defaultParticipantIdentityId is a noop, there's always one set.";
+    my $newDefaultParticipantIdentityId =
+        $res->[0][1]{updated}{singleton}{defaultParticipantIdentityId};
+    $self->assert_not_null($newDefaultParticipantIdentityId);
+
     $self->assert_deep_equals([{
         id => 'singleton',
-        defaultCalendarId => $res->[0][1]{updated}{singleton}{defaultCalendarId},
-        defaultParticipantIdentityId => undef,
+        defaultCalendarId => $newDefaultCalendarId,
+        defaultParticipantIdentityId => $newDefaultParticipantIdentityId,
     }], $res->[1][1]{list});
 }

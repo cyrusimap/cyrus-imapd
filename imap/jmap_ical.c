@@ -261,13 +261,13 @@ static void calendarevent_to_ical(icalcomponent *comp,
 
 static char *_emailalert_recipient(const char *userid)
 {
-    struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+    strarray_t caluseraddr = STRARRAY_INITIALIZER;
     char *mboxname = caldav_mboxname(userid, NULL);
     char *recipient = NULL;
 
     if (!caldav_caluseraddr_read(mboxname, userid, &caluseraddr)) {
-        if (strarray_size(&caluseraddr.uris)) {
-            const char *item = strarray_nth(&caluseraddr.uris, 0);
+        if (strarray_size(&caluseraddr)) {
+            const char *item = strarray_nth(&caluseraddr, 0);
             if (!strncasecmp(item, "mailto:", 7)) item += 7;
             recipient = strconcat("mailto:", item, NULL);
         }
@@ -280,7 +280,7 @@ static char *_emailalert_recipient(const char *userid)
     }
 
     free(mboxname);
-    caldav_caluseraddr_fini(&caluseraddr);
+    strarray_fini(&caluseraddr);
     return recipient;
 }
 
