@@ -4845,6 +4845,16 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         record->last_updated.tv_sec = mailbox->last_updated;
     }
 
+    r = mailbox_update_indexes(mailbox, &oldrecord, record);
+    if (r) return r;
+
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
+        if (!mailbox->i.first_expunged.tv_sec ||
+            mailbox->i.first_expunged.tv_sec > record->last_updated.tv_sec)
+            mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
+        mailbox_annot_update_counts(mailbox, &oldrecord, 0);
+    }
+
     if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* mark required actions */
         if (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE
@@ -4860,16 +4870,6 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         /* rewrite the cache record if required anyway */
         r = mailbox_append_cache(mailbox, record);
         if (r) return r;
-    }
-
-    r = mailbox_update_indexes(mailbox, &oldrecord, record);
-    if (r) return r;
-
-    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
-        if (!mailbox->i.first_expunged.tv_sec ||
-            mailbox->i.first_expunged.tv_sec > record->last_updated.tv_sec)
-            mailbox->i.first_expunged.tv_sec = record->last_updated.tv_sec;
-        mailbox_annot_update_counts(mailbox, &oldrecord, 0);
     }
 
     r = _store_change(mailbox, record, changeflags);
