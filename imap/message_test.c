@@ -127,16 +127,11 @@ static int dump_one_section(int partno, charset_t charset, int encoding,
 #undef MAX_TEXT
 }
 
-static int dump_text_sections(message_t *message)
-{
-    return message_foreach_section(message, dump_one_section, NULL);
-}
-
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static int dump_message(message_t *message)
 {
-    return dump_text_sections(message);
+    return message_foreach_section(message, dump_one_section, NULL);
 }
 
 int main(int argc, char **argv)
@@ -206,7 +201,6 @@ int main(int argc, char **argv)
     if (mboxname && record_flag) {
         struct mailbox *mailbox = NULL;
         struct index_record record;
-        message_t *message = NULL;
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
@@ -224,20 +218,18 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        message = message_new_from_record(mailbox, &record);
+        message_t *message = message_new_from_record(mailbox, &record);
         r = dump_message(message);
+        message_unref(&message);
+        mailbox_close(&mailbox);
         if (r) {
             fprintf(stderr, "Error dumping message: %s\n",
                     error_message(r));
             return 1;
         }
-
-        message_unref(&message);
-        mailbox_close(&mailbox);
     }
     else if (mboxname) {
         struct mailbox *mailbox = NULL;
-        message_t *message = NULL;
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
@@ -246,16 +238,15 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        message = message_new_from_mailbox(mailbox, recno);
+        message_t *message = message_new_from_mailbox(mailbox, recno);
         r = dump_message(message);
+        message_unref(&message);
+        mailbox_close(&mailbox);
         if (r) {
             fprintf(stderr, "Error dumping message: %s\n",
                     error_message(r));
             return 1;
         }
-
-        message_unref(&message);
-        mailbox_close(&mailbox);
     }
     else if (filename) {
         message_t *message = message_new_from_filename(filename);
@@ -269,22 +260,20 @@ int main(int argc, char **argv)
         }
     }
     else {
-        message_t *message = NULL;
-        int c;
+        int ch;
         struct buf buf = BUF_INITIALIZER;
 
-        while ((c = fgetc(stdin)) != EOF)
-            buf_putc(&buf, c);
-        message = message_new_from_data(buf.s, buf.len);
-        dump_message(message);
-        if (r) {
-            fprintf(stderr, "Error dumping message: %s\n",
-                    error_message(r));
-            return 1;
-        }
-
+        while ((ch = fgetc(stdin)) != EOF)
+            buf_putc(&buf, ch);
+        message_t *message = message_new_from_data(buf.s, buf.len);
+        int t = dump_message(message);
         message_unref(&message);
         buf_free(&buf);
+        if (t) {
+            fprintf(stderr, "Error dumping message: %s\n",
+                    error_message(t));
+            return 1;
+        }
     }
 
     cyrus_done();
