@@ -728,6 +728,9 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
     bit32 crc = 0;
     int r = IMAP_IOERROR;
 
+    if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
+        return 0;
+
     /* we do something nasty here to work around lazy loading while still
      * giving const protection to records which are only used for read */
     struct index_record *backdoor = (struct index_record *)record;
@@ -2262,7 +2265,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
     change->record = *record;
     change->flags = flags;
 
-    if (mailbox_cacherecord(mailbox, record)) {
+    if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) || mailbox_cacherecord(mailbox, record)) {
         /* failed to load cache record */
         free(change->msgid);
         change->msgid = xstrdup("unknown");
