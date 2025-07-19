@@ -160,6 +160,7 @@ struct mailbox_repack {
     struct synccrcs crcs;
     char *userid;
     ptrarray_t caches;
+    int doing_cache;
 };
 
 static struct MsgFlagMap msgflagmap[] = {
@@ -5160,13 +5161,15 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
 
 
 static int mailbox_repack_setup(struct mailbox *mailbox, int version,
-                                struct mailbox_repack **repackptr)
+                                struct mailbox_repack **repackptr, int flags)
 {
     struct mailbox_repack *repack = xzmalloc(sizeof(struct mailbox_repack));
     const char *fname;
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     int n;
+
+    repack->doing_cache = !(flags & RECONSTRUCT_KEEP_CACHE);
 
     assert(version >= 6 && version <= MAILBOX_MINOR_VERSION);
 
@@ -5197,8 +5200,12 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         goto fail;
     }
 
-    /* update the generation number */
-    repack->newmailbox.i.generation_no++;
+    if (repack->doing_cache) {
+        /* we're recreating caches, so there'll be nothing leaked */
+        repack->newmailbox.i.leaked_cache_records = 0;
+        /* update the generation number */
+        repack->newmailbox.i.generation_no++;
+    }
 
     /* track the version number */
     repack->newmailbox.i.minor_version = version;
@@ -5244,8 +5251,6 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
     /* we'll count the records as they get added */
     repack->newmailbox.i.num_records = 0;
-    /* we're recreating caches, so there'll be nothing leaked */
-    repack->newmailbox.i.leaked_cache_records = 0;
 
     /* prepare initial header buffer */
     mailbox_index_header_to_buf(&repack->newmailbox.i, buf);
@@ -5281,13 +5286,15 @@ static int mailbox_repack_add(struct mailbox_repack *repack,
     int r;
     int n;
 
-    cachefile = repack_cachefile(repack, record);
+    if (repack->doing_cache) {
+        cachefile = repack_cachefile(repack, record);
 
-    /* write out the new cache record - need to clear the cache_offset
-     * so it gets reset in the new record */
-    record->cache_offset = 0;
-    r = cache_append_record(cachefile, record);
-    if (r) return r;
+        /* write out the new cache record - need to clear the cache_offset
+        * so it gets reset in the new record */
+        record->cache_offset = 0;
+        r = cache_append_record(cachefile, record);
+        if (r) return r;
+    }
 
     /* write the index record out */
     mailbox_index_record_to_buf(record, repack->newmailbox.i.minor_version, buf);
@@ -5420,9 +5427,11 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     r = mailbox_meta_rename(repack->mailbox, META_INDEX);
     if (r) goto fail;
 
-    /* which cache files might currently exist? */
-    strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_CACHE));
-    strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_ARCHIVECACHE));
+    if (repack->doing_cache) {
+        /* which cache files might currently exist? */
+        strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_CACHE));
+        strarray_add(&cachefiles, mailbox_meta_fname(repack->mailbox, META_ARCHIVECACHE));
+    }
 
     /* now the cache files can be renamed */
     for (i = 0; i < repack->caches.count; i++) {
@@ -5526,7 +5535,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
            " dryrun %u recalc_nanosec %u",
            mailbox_name(mailbox), version, dryrun, recalc_nanosec);
 
-    r = mailbox_repack_setup(mailbox, version, &repack);
+    r = mailbox_repack_setup(mailbox, version, &repack, flags);
     if (r) goto done;
 
     if (mbtype == MBTYPE_EMAIL && !mbname_isdeleted(mbname) &&
