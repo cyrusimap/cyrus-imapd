@@ -257,7 +257,8 @@ extern void jmap_admin_init(jmap_settings_t *settings);
 extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_blob_capabilities(json_t *account_capabilities);
 extern void jmap_quota_capabilities(json_t *account_capabilities);
-extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
+extern void jmap_mail_capabilities(json_t *account_capabilities,
+                                   const char *accountid, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
@@ -323,6 +324,10 @@ extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
 #define JMAP_MODSEQ_RELOAD (1<<0)
 #define JMAP_MODSEQ_FOLDER (1<<1)
 extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
+
+#define JMAP_STATE_STRING_PREFIX 'J'
+extern char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
+                               int mbtype, int flags);
 
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);
@@ -420,6 +425,9 @@ struct jmap_changes {
     /* Request arguments */
     modseq_t since_modseq;
     size_t max_changes;
+
+    /* Behavior control flags */
+    int prefixed_state;
 
     /* Response fields */
     modseq_t new_modseq;
@@ -615,6 +623,8 @@ extern void jmap_mbentry_cache_free(jmap_req_t *req);
 extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
 extern const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
+extern const mbentry_t *jmap_mbentry_by_mboxid(jmap_req_t *req, const char *id);
+extern mbentry_t *jmap_mbentry_by_mboxid_copy(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 
 extern int jmap_findmbox_role(jmap_req_t *req, const char *role,

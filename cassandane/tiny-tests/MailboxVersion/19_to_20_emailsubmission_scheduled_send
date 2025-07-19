@@ -1,0 +1,311 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_19_to_20_emailsubmission_scheduled_send
+    :min_version_3_7 :needs_component_calalarmd :MailboxVersion(19)
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # created and onSend properties
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
+    my $res = $jmap->CallMethods([
+        [ 'Identity/get', {}, "R0" ],
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "Drafts",
+                    role => "drafts"
+                },
+                "2" => {
+                    name => "Scheduled",
+                    role => "scheduled"
+                },
+                "3" => {
+                    name => "Sent",
+                    role => "sent"
+                }
+            }
+         }, "R1"],
+    ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $draftsid = $res->[1][1]{created}{"1"}{id};
+    my $schedid = $res->[1][1]{created}{"2"}{id};
+    my $sentid = $res->[1][1]{created}{"3"}{id};
+
+    xlog $self, "Verify Scheduled mailbox rights";
+    my $myRights = $res->[1][1]{created}{"2"}{myRights};
+    $self->assert_deep_equals({
+        mayReadItems => JSON::true,
+        mayAddItems => JSON::false,
+        mayRemoveItems => JSON::false,
+        mayCreateChild => JSON::false,
+        mayDelete => JSON::false,
+        maySubmit => JSON::false,
+        maySetSeen => JSON::true,
+        maySetKeywords => JSON::true,
+        mayAdmin => JSON::false,
+        mayRename => JSON::false
+    }, $myRights);
+
+    xlog $self, "Try to create a child of Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    parentId => "$schedid"
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notCreated}{1});
+
+    xlog $self, "Try to destroy Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Mailbox/set', {
+            destroy => [ "$schedid" ]
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notDestroyed}{$schedid});
+
+    xlog $self, "Create 2 draft emails and one in the Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'm1' => {
+                    mailboxIds => {
+                        $draftsid => JSON::true,
+                    },
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'cassandane@local'
+                    }],
+                    to => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    subject => 'foo',
+                },
+                'm2' => {
+                    mailboxIds => {
+                        $draftsid => JSON::true,
+                    },
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'cassandane@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'bar',
+                },
+                'm3' => {
+                    mailboxIds => {
+                        $schedid => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'cassandane@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'fail',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailid1 = $res->[0][1]->{created}{m1}{id};
+    my $emailid2 = $res->[0][1]->{created}{m2}{id};
+    $self->assert_not_null($res->[0][1]->{notCreated}{m3});
+
+    xlog $self, "Create 2 email submissions";
+    $res = $jmap->CallMethods( [
+        [ 'EmailSubmission/set', {
+            create => {
+                '1' => {
+                    identityId => $identityid,
+                    emailId  => $emailid1,
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => {
+                                "holdfor" => "30",
+                            }
+                        },
+                        rcptTo => [
+                            {
+                                email => 'rcpt1@localhost',
+                            }],
+                    },
+                    onSend => {
+                        moveToMailboxId => $sentid,
+                        setKeywords => { '$Sent' => $JSON::true },
+                    }
+                },
+                '2' => {
+                    identityId => $identityid,
+                    emailId  => $emailid2,
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => {
+                                "holdfor" => "30",
+                            }
+                        },
+                        rcptTo => [
+                            {
+                                email => 'rcpt2@localhost',
+                            }],
+                    },
+                    onSend => {
+                        moveToMailboxId => $sentid,
+                        setKeywords => { '$Sent' => $JSON::true },
+                    }
+                }
+            },
+            onSuccessUpdateEmail => {
+                '#1' => {
+                    "mailboxIds/$draftsid" => JSON::null,
+                    "mailboxIds/$schedid" => $JSON::true,
+                    'keywords/$Draft' =>  JSON::null
+                },
+                '#2' => {
+                    "mailboxIds/$draftsid" => JSON::null,
+                    "mailboxIds/$schedid" => $JSON::true,
+                    'keywords/$Draft' =>  JSON::null
+                }
+            }
+        }, "R1" ],
+        [ "Email/get", {
+            ids => ["$emailid1"],
+            properties => ["mailboxIds", "keywords"],
+        }, "R2"],
+    ] );
+
+    xlog $self, "Check create and onSuccessUpdateEmail results";
+    my $msgsubid1 = $res->[0][1]->{created}{1}{id};
+    my $msgsubid2 = $res->[0][1]->{created}{2}{id};
+    $self->assert_str_equals('pending', $res->[0][1]->{created}{1}{undoStatus});
+
+    $self->assert_equals(JSON::null, $res->[1][1]->{updated}{emailid1});
+
+    $self->assert_equals(JSON::true,
+                         $res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
+    $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
+
+    xlog $self, "Verify 2 events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(2, scalar @$alarmdata);
+
+    xlog $self, "Try to destroy email in Scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            destroy => [ "$emailid1" ]
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]->{notDestroyed}{$emailid1});
+
+    xlog $self, "Cancel email submission 2";
+    $res = $jmap->CallMethods( [
+        [ 'EmailSubmission/set', {
+            update => {
+                $msgsubid2 => {
+                    undoStatus => 'canceled',
+                }
+            },
+            onSuccessUpdateEmail => {
+                $msgsubid2 => {
+                    mailboxIds => {
+                        "$draftsid" => JSON::true
+                    },
+                    keywords => {
+                        '$Draft' =>  JSON::true
+                    }
+                }
+            }
+         }, "R1" ],
+        [ "Email/get", {
+            ids => ["$emailid2"],
+            properties => ["mailboxIds", "keywords"],
+        }, "R2"],
+    ] );
+
+    xlog $self, "Check update and onSuccessUpdateEmail results";
+    $self->assert_not_null($res->[0][1]->{updated}{$msgsubid2});
+
+    $self->assert_equals(JSON::null, $res->[1][1]->{updated}{emailid2});
+
+    $self->assert_equals(JSON::true,
+                         $res->[2][1]->{list}[0]->{keywords}{'$draft'});
+    $self->assert_equals(JSON::true,
+                         $res->[2][1]->{list}[0]->{mailboxIds}{$draftsid});
+    $self->assert_null($res->[2][1]->{list}[0]->{mailboxIds}{$schedid});
+
+    
+    xlog $self, "Destroy canceled email submission 2 (now in Drafts) ";
+    $res = $jmap->CallMethods( [ [ 'Email/set', {
+        destroy => [ $emailid2 ],
+    }, "R1" ] ] );
+    $self->assert_str_equals($emailid2, $res->[0][1]->{destroyed}[0]);
+
+
+    xlog $self, "Verify an event was removed from the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+    $self->upgrade_19_to_20;
+
+    xlog $self, "Trigger delivery of email submission";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    xlog $self, "Check onSend results";
+    $res = $jmap->CallMethods( [
+        [ 'EmailSubmission/get', {
+            ids => [ $msgsubid1 ]
+        }, "R1"],
+        [ "Email/get", {
+            ids => ["$emailid1"],
+            properties => ["mailboxIds", "keywords"],
+        }, "R2"],
+        [ "Mailbox/get", {
+            ids => ["$sentid", "$schedid"],
+        }, "R3"],
+    ] );
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_str_equals('final', $res->[0][1]->{list}[0]->{undoStatus});
+
+    # Need to get our new sent mailbox
+    my ($sent) = grep { $_->{name} eq 'Sent' } @{$res->[2][1]->{list}};
+    $self->assert_not_null($sent);
+    $self->assert_not_equals($sent->{id}, $sentid);
+
+    # Need to get our new sched mailbox
+    my ($sched) = grep { $_->{name} eq 'Scheduled' } @{$res->[2][1]->{list}};
+    $self->assert_not_null($sched);
+    $self->assert_not_equals($sched->{id}, $sentid);
+
+    $self->assert_equals(JSON::true,
+                         $res->[1][1]->{list}[0]->{mailboxIds}{$sent->{id}});
+
+    $self->assert_null($res->[1][1]->{list}[0]->{mailboxIds}{$sched->{id}});
+
+    $self->assert_equals(JSON::true,
+                         $res->[1][1]->{list}[0]->{keywords}{'$sent'});
+    $self->assert_equals(JSON::null,
+                         $res->[1][1]->{list}[0]->{keywords}{'$draft'});
+
+    xlog $self, "Verify no events left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}

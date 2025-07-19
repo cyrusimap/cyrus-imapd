@@ -1109,7 +1109,8 @@ HIDDEN int caldav_alarm_add_record(struct mailbox *mailbox,
 
     if (has_alarms(data, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
-        update_alarmdb(mailbox_name(mailbox), record->uid, record->internaldate,
+        update_alarmdb(mailbox_name(mailbox), record->uid,
+                       record->internaldate.tv_sec,
                        atype, num_rcpts, 0, 0, NULL);
     }
 
@@ -1127,7 +1128,7 @@ EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
     if (force || has_alarms(NULL, mailbox, record->uid, &num_rcpts)) {
         enum alarm_type atype = mbtype_to_alarm_type(mailbox_mbtype(mailbox));
         return update_alarmdb(mailbox_name(mailbox), record->uid,
-                              record->last_updated, atype, num_rcpts, 0, 0, NULL);
+                              record->last_updated.tv_sec, atype, num_rcpts, 0, 0, NULL);
     }
 
     return 0;
@@ -1346,7 +1347,7 @@ static int process_valarms(struct mailbox *mailbox,
 
     struct lastalarm_data data;
     if (read_lastalarm(mailbox, record, &data))
-        data.lastrun = record->internaldate;
+        data.lastrun = record->internaldate.tv_sec;
 
     /* Process VALARMs in iCalendar resource */
     char *userid = mboxname_to_userid(mboxname);
@@ -1468,7 +1469,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     /* Determine destination mailbox of moved email */
     if (destmboxid) {
         mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
+        r = (*destmboxid == JMAP_MAILBOXID_PREFIX) ?
+            mboxlist_lookup_by_jmapid(userid, destmboxid, &mbentry, NULL) :
+            mboxlist_lookup_by_uniqueid(destmboxid, &mbentry, NULL);
         if (!r && mbentry &&
             // MUST be an email mailbox
             (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) &&
@@ -1525,8 +1528,11 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
     if (r) goto done;
 
     /* Append the message to the mailbox */
-    r = append_fromstage_full(&as, &body, stage, record->internaldate,
-                              savedate, 0, flags, 0, &annots);
+    struct append_metadata meta = {
+        &record->internaldate, savedate, /*cmodseq*/ 0,
+        flags, &annots, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+    };
+    r = append_fromstage_full(&as, &body, stage, &meta);
     if (r) {
         append_abort(&as);
         goto done;
@@ -1605,10 +1611,6 @@ static int find_scheduled_email(const char *emailid,
     struct conversations_state *cstate = NULL;
     int r;
 
-    if (emailid[0] != 'M' || strlen(emailid) != 25) {
-        return IMAP_NOTFOUND;
-    }
-
     r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
@@ -1616,7 +1618,20 @@ static int find_scheduled_email(const char *emailid,
         return r;
     }
 
-    const char *guid = emailid + 1;
+    const char *guid = NULL;
+    if (emailid[0] == JMAP_EMAILID_PREFIX) {
+        static char guidrep[2*MESSAGE_GUID_SIZE+1];
+
+        if (strlen(emailid) == JMAP_EMAILID_SIZE - 1 &&
+            !conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep))
+            guid = guidrep;
+    }
+    else if (emailid[0] == JMAP_LEGACY_EMAILID_PREFIX) {
+        if (strlen(emailid) == JMAP_LEGACY_EMAILID_SIZE - 1)
+            guid = emailid + 1;
+    }
+    if (!guid) return IMAP_NOTFOUND;
+
     r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
     conversations_commit(&cstate);
 
@@ -2067,8 +2082,8 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
     }
 #ifdef WITH_JMAP
     case ALARM_SEND:
-        if (record.internaldate > runtime || dryrun) {
-            caldav_alarm_bump_nextcheck(data, record.internaldate, 0, NULL);
+        if (record.internaldate.tv_sec > runtime || dryrun) {
+            caldav_alarm_bump_nextcheck(data, record.internaldate.tv_sec, 0, NULL);
             goto done;
         }
         r = process_futurerelease(data, mailbox, &record, runtime);

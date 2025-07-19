@@ -555,7 +555,7 @@ static int index_writeseen(struct index_state *state)
 
     /* already handled! Just update the header fields */
     if (state->internalseen) {
-        mailbox->i.recenttime = time(0);
+        mailbox->i.recenttime.tv_sec = time(0);
         if (mailbox->i.recentuid < state->last_uid)
             mailbox->i.recentuid = state->last_uid;
         return 0;
@@ -588,7 +588,7 @@ static int index_writeseen(struct index_state *state)
     /* only commit if interesting fields have changed */
     if (!seen_compare(&sd, &oldsd)) {
         sd.lastread = time(NULL);
-        sd.lastchange = mailbox->i.last_appenddate;
+        sd.lastchange = mailbox->i.last_appenddate.tv_sec;
         r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
     }
 
@@ -852,8 +852,15 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n",
-                mailbox_uniqueid(state->mailbox));
+    const char *mailboxid;
+    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        mailboxid = mailbox_jmapid(state->mailbox);
+    }
+    else {
+        mailboxid = mailbox_uniqueid(state->mailbox);
+    }
+    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", mailboxid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -2517,7 +2524,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     }
 
     /* add internal date */
-    time_to_rfc3501(record.internaldate, datebuf, sizeof(datebuf));
+    time_to_rfc3501(record.internaldate.tv_sec, datebuf, sizeof(datebuf));
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
@@ -3325,7 +3332,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     int myrights = 0;
     struct mailbox *mailbox = NULL;
     msgrecord_t *msgrecord = NULL;
-    char *extname = NULL;
+    char *mboxval = NULL;
     int r = 0;
 
     assert(fmb_rock->state != NULL);
@@ -3367,19 +3374,27 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     if (fmb_rock->wantname) {
-        extname = mboxname_to_external(mbentry->name,
+        mboxval = mboxname_to_external(mbentry->name,
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
+    }
+    else if (USER_COMPACT_EMAILIDS(fmb_rock->fetchargs->convstate)) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_putc(&buf, 'P');
+        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
+        mboxval = buf_release(&buf);
+    }
+    else {
+        mboxval = xstrdup(mbentry->uniqueid);
     }
 
     if (fmb_rock->sep)
         prot_putc(fmb_rock->sep, fmb_rock->state->out);
-    prot_printf(fmb_rock->state->out, "%s",
-                fmb_rock->wantname ? extname : mbentry->uniqueid);
+    prot_printf(fmb_rock->state->out, "%s", mboxval);
     fmb_rock->sep = ' ';
 
 done:
-    if (extname) free(extname);
+    if (mboxval) free(mboxval);
     if (msgrecord) msgrecord_unref(&msgrecord);
     if (mailbox) mailbox_close(&mailbox);
     if (mbentry) mboxlist_entry_free(&mbentry);
@@ -3567,6 +3582,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
+    struct conversations_state *cstate = NULL;
     int fetchitems = fetchargs->fetchitems;
     struct buf buf = BUF_INITIALIZER;
     struct octetinfo *oi = NULL;
@@ -3652,7 +3668,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     if (fetchitems & FETCH_INTERNALDATE) {
-        time_t msgdate = record.internaldate;
+        time_t msgdate = record.internaldate.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
@@ -3663,7 +3679,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     if (fetchitems & FETCH_LASTUPDATED) {
-        time_t msgdate = record.last_updated;
+        time_t msgdate = record.last_updated.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
@@ -3679,7 +3695,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-        prot_printf(state->out, "%cRFC822.SIZE %u",
+        prot_printf(state->out, "%cRFC822.SIZE " UINT64_FMT,
                     sepchar, record.size);
         sepchar = ' ';
     }
@@ -3726,12 +3742,26 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        char emailid[26];
-        emailid[0] = 'M';
-        memcpy(emailid+1, message_guid_encode(&record.guid), 24);
-        emailid[25] = '\0';
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
-        sepchar = ' ';
+        if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
+        if (!cstate) {
+            xsyslog(LOG_ERR, "could not read conversations state",
+                    "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+        }
+        else {
+            struct buf emailid = BUF_INITIALIZER;
+            if (USER_COMPACT_EMAILIDS(cstate)) {
+                buf_putc(&emailid, 'S');
+                NANOSEC_TO_JMAPID(&emailid,
+                                  TIMESPEC_TO_NANOSEC(&record.internaldate));
+            }
+            else {
+                buf_putc(&emailid, 'M');
+                buf_appendmap(&emailid, message_guid_encode(&record.guid), 24);
+            }
+            prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
+            buf_free(&emailid);
+            sepchar = ' ';
+        }
     }
     if ((fetchitems & FETCH_CID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
@@ -3753,20 +3783,27 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             threadid[3] = '\0';
         }
         else {
-            threadid[0] = 'T';
-            memcpy(threadid+1, conversation_id_encode(record.cid), 16);
-            threadid[17] = '\0';
+            if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
+            if (!cstate) {
+                xsyslog(LOG_ERR, "could not read conversations state",
+                        "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+            }
+            else {
+                snprintf(threadid, sizeof(threadid), "%c%s",
+                         USER_COMPACT_EMAILIDS(cstate) ? 'A' : 'T', 
+                         conversation_id_encode(cstate, record.cid));
+            }
         }
 
         prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
-        time_t msgdate = record.savedate;
+        time_t msgdate = record.savedate.tv_sec;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
         // handle internaldate
-        if (!msgdate) msgdate = record.internaldate;
+        if (!msgdate) msgdate = record.internaldate.tv_sec;
 
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
@@ -5529,10 +5566,11 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->cc = get_localpart_addr(cacheitem_base(&record, CACHE_CC));
                 break;
             case SORT_DATE:
-                cur->sentdate = record.gmtime;
+                cur->sentdate = record.gmtime.tv_sec;
                 /* fall through */
             case SORT_ARRIVAL:
-                cur->internaldate = record.internaldate;
+                cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 break;
             case SORT_FROM:
                 cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
@@ -5571,18 +5609,19 @@ MsgData **index_msgdata_load(struct index_state *state,
             }
             case SORT_SAVEDATE:
                 if (preload[j]) {
-                    cur->savedate = record.savedate;
+                    cur->savedate = record.savedate.tv_sec;
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
 #ifdef WITH_JMAP
                 if (preload[j] && (record.internal_flags & FLAG_INTERNAL_SNOOZED)) {
                     /* SAVEDATE == snoozed#until */
-                    cur->savedate = record.savedate;
+                    cur->savedate = record.savedate.tv_sec;
 
                     if (!cur->savedate) {
                         /* Try fetching snoozed#until directly */
@@ -5601,7 +5640,8 @@ MsgData **index_msgdata_load(struct index_state *state,
 #endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
-                    cur->internaldate = record.internaldate;
+                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
+                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
                 }
                 break;
             case LOAD_IDS:
@@ -5967,21 +6007,21 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(md1->msgno, md2->msgno);
             break;
         case SORT_ARRIVAL:
-            ret = numcmp(md1->internaldate, md2->internaldate);
+            ret = numcmp(md1->internaldate.tv_sec, md2->internaldate.tv_sec);
             break;
         case SORT_CC:
             ret = strcmpsafe(md1->cc, md2->cc);
             break;
         case SORT_DATE: {
-            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
-            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
+            time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate.tv_sec;
+            time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
         case SORT_SNOOZEDUNTIL:
         case SORT_SAVEDATE: {
-            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate;
-            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate;
+            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate.tv_sec;
+            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate.tv_sec;
             ret = numcmp(d1, d2);
             break;
         }
@@ -6043,6 +6083,12 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             break;
         case SORT_GUID:
             ret = message_guid_cmp(&md1->guid, &md2->guid);
+            break;
+        case SORT_EMAILID:
+            // EMAILIDs are an ASCII-order encoding of
+            // (UINT64_MAX - nano_internaldate)
+            ret = numcmp(UINT64_MAX - TIMESPEC_TO_NANOSEC(&md1->internaldate),
+                         UINT64_MAX - TIMESPEC_TO_NANOSEC(&md2->internaldate));
             break;
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
@@ -6181,7 +6227,7 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md1->internaldate - md2->internaldate;
+    ret = md1->internaldate.tv_sec - md2->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md1->createdmodseq - md2->createdmodseq;
@@ -6203,7 +6249,7 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -6228,7 +6274,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     ret = md2->hasflag - md1->hasflag;
     if (ret) return ret;
 
-    ret = md2->internaldate - md1->internaldate;
+    ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
     if (ret) return ret;
 
     ret = md2->createdmodseq - md1->createdmodseq;
@@ -7137,8 +7183,8 @@ static void find_most_recent(Thread *thread, MsgData *recent)
     Thread *child;
 
     /* test the head node */
-    if (thread->msgdata->internaldate > recent->internaldate)
-        recent->internaldate = thread->msgdata->internaldate;
+    if (thread->msgdata->internaldate.tv_sec > recent->internaldate.tv_sec)
+        recent->internaldate.tv_sec = thread->msgdata->internaldate.tv_sec;
 
     /* test the children recursively */
     child = thread->child;

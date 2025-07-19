@@ -120,6 +120,7 @@ struct mboxlist_entry {
     char *acl;
     /* extra fields */
     char *uniqueid;
+    char *jmapid;
     /* legacy upgrade support */
     char *legacy_specialuse;
     /* replication support */
@@ -127,7 +128,7 @@ struct mboxlist_entry {
 };
 
 #define MBENTRY_INITIALIZER  { NULL, NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, \
-                               NULL, NULL, PTRARRAY_INITIALIZER }
+                               NULL, NULL, NULL, PTRARRAY_INITIALIZER }
 
 typedef struct mboxlist_entry mbentry_t;
 
@@ -172,10 +173,14 @@ int mboxlist_lookup_allow_all(const char *name,
 int mboxlist_lookup_by_uniqueid(const char *uniqueid,
                                 mbentry_t **entryptr, struct txn **tid);
 
+int mboxlist_lookup_by_jmapid(const char *userid, const char *jmapid,
+                              mbentry_t **entryptr, struct txn **tid);
+
 char *mboxlist_find_specialuse(const char *use, const char *userid);
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
-
+char *mboxlist_find_jmapid(const char *jmapid, const char *userid,
+                           const struct auth_state *auth_state);
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(mbentry_t *mbentry, struct txn **rettid);
@@ -408,7 +413,7 @@ int mboxlist_setquotas(const char *root,
 int mboxlist_unsetquota(const char *root, int silent);
 
 /* handle interemediates */
-int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);
+int mboxlist_update_intermediaries(const char *mboxname, int mbtype);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
