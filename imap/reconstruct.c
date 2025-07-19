@@ -583,7 +583,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
              (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC))) {
             int oldversion = mailbox->i.minor_version;
             /* need to re-set the version! */
-            int r = mailbox_setversion(mailbox, setversion, reconstruct_flags);
+            int r = mailbox_setversion(mailbox, setversion, reconstruct_flags|RECONSTRUCT_KEEP_CACHE);
             char *extname = mboxname_to_external(name, &recon_namespace, NULL);
             if (r) {
                 printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
