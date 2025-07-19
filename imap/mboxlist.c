@@ -1440,13 +1440,15 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
                         item->partition = xstrdupnull(oldi->partition);
                         ptrarray_append(&newi->name_history, item);
 
-                        // and delete the J key for the old item
+                        // and delete the J key for the old item if it's changed
                         if (oldi->jmapid) {
                             mbname_t *oldmbname = mbname_from_intname(oldi->name);
                             const char *olduserid = mbname_userid(oldmbname);
-                            mboxlist_jmapid_to_key(olduserid, oldi->jmapid, &key);
+                            if (strcmpsafe(olduserid, userid) || strcmpsafe(oldi->jmapid, mbentry->jmapid)) {
+                                mboxlist_jmapid_to_key(olduserid, oldi->jmapid, &key);
+                                r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+                            }
                             mbname_free(&oldmbname);
-                            r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
                             if (r) goto done;
                         }
                     }
