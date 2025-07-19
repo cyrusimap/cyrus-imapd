@@ -778,6 +778,9 @@ err:
     if (rewrite == MBCACHE_NOPARSE)
         return r;
 
+    if (record->cache_offset)
+        mailbox->i.leaked_cache_records++;
+
     /* parse the file again */
 
     /* parse directly into the cache for this record */
@@ -4845,6 +4848,10 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
             || mailbox->i.minor_version < 12)
             mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+        if (record->cache_offset) {
+            record->cache_offset = 0;
+            mailbox->i.leaked_cache_records++;
+        }
     }
     else {
         /* rewrite the cache record if required anyway */
@@ -5493,7 +5500,11 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 /* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox, int version)
 {
-    return _mailbox_index_repack(mailbox, version, RECONSTRUCT_MAKE_CHANGES);
+    int flags = RECONSTRUCT_MAKE_CHANGES;
+    // less than 10% dirty, keep the existing cache files!
+    if (mailbox->i.leaked_cache_records < (mailbox->i.num_records/10))
+        flags |= RECONSTRUCT_KEEP_CACHE;
+    return _mailbox_index_repack(mailbox, version, flags);
 }
 
 /* need a mailbox exclusive lock, we're rewriting files */
@@ -6009,6 +6020,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             copyrecord.cache_offset = 0;
             if (mailbox_append_cache(mailbox, &copyrecord))
                 continue;
+            // there's a record in the old cache file no longer used
+            mailbox->i.leaked_cache_records++;
         }
 
         /* rewrite the index record */
@@ -8016,6 +8029,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         int32_t newcrc = record->cache_crc;
         size_t oldoff = record->cache_offset;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+        if (record->cache_offset)
+            mailbox->i.leaked_cache_records++;
         record->cache_offset = 0;
         r = mailbox_append_cache(mailbox, record);
         if (r) goto out ;
