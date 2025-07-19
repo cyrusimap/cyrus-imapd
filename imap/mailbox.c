@@ -728,9 +728,6 @@ static int mailbox_cacherecord_internal(struct mailbox *mailbox,
     bit32 crc = 0;
     int r = IMAP_IOERROR;
 
-    if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
-        return 0;
-
     /* we do something nasty here to work around lazy loading while still
      * giving const protection to records which are only used for read */
     struct index_record *backdoor = (struct index_record *)record;
