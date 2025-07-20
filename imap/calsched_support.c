@@ -93,7 +93,7 @@ EXPORTED int caldav_caluseraddr_read(const char *mboxname,
 
 EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
                                       const char *userid,
-                                      strarray_t *addr)
+                                      strarray_t *addrs)
 {
     static const char *annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
@@ -104,11 +104,38 @@ EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
     int r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) goto done;
 
+    hash_table addrset = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&addrset, strarray_size(addrs) + 1, 0);
+    struct buf normaddr = BUF_INITIALIZER;
+
     int i;
-    for (i = 0; i < strarray_size(addr); i++) {
+    for (i = 0; i < strarray_size(addrs); i++) {
+        // Normalize URI scheme to lowercase.
+        const char *addr = strarray_nth(addrs, i);
+        const char *col = strchr(addr, ':');
+        if (col && col > addr) {
+            buf_reset(&normaddr);
+            buf_appendmap(&normaddr, addr, col - addr);
+            buf_lcase(&normaddr);
+            buf_appendcstr(&normaddr, col);
+        }
+        else {
+            buf_setcstr(&normaddr, addr);
+        }
+
+        // Deduplicate normalized URIs.
+        if (hash_lookup(buf_cstring(&normaddr), &addrset))
+            continue;
+
+        hash_insert(buf_cstring(&normaddr), (void*)1, &addrset);
+
+        // Append original URI to annotation value.
         if (i) buf_putc(&buf, ',');
-        buf_appendcstr(&buf, strarray_nth(addr, i));
+        buf_appendcstr(&buf, addr);
     }
+
+    buf_free(&normaddr);
+    free_hash_table(&addrset, NULL);
 
     r = annotate_state_writemask(astate, annot, userid, &buf);
 

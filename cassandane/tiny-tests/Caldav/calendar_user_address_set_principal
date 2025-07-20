@@ -53,11 +53,9 @@ sub test_calendar_user_address_set_principal
         { href => 'mailto:foo@example.com' },
         { href => 'mailto:baz@example.com' },
     ]);
-    # quirk: duplicates are preserved
+    # Duplicates are removed, last entry is preserved.
     $self->assert_address_set([
-        { href => 'mailto:foo@example.com' },
         { href => 'mailto:bar@example.com' },
-        { href => 'mailto:baz@example.com' },
         { href => 'mailto:foo@example.com' },
         { href => 'mailto:baz@example.com', preferred => 1 },
     ]);
