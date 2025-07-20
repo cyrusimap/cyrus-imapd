@@ -6084,13 +6084,28 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
                 xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(&addr, 0));
             }
             else {
+                // Clients interpret the value of calendar-user-address-set
+                // differently: Most clients pick the last href in the list,
+                // including older Thunderbird versions. Apple clients pick
+                // the alphabetically first URI, unless the preferred href
+                // XML node has the "preferred" attribute set. Thunderbird
+                // since version 136 or so picks the first entry in the list.
+                // To interoperate with all of them we put the href of the
+                // preferred calendar user address last in the list and mark
+                // it with the "preferred" attribute. If the calendar user
+                // address set contains more than one entry, then we put the
+                // preferred calendar user address also at the *start* of
+                // the list, presuming that clients ignore any entry but the
+                // one they are hard-coded to pick.
+                if (strarray_size(&addr) > 1) {
+                    const char *uri = strarray_nth(&addr, 0);
+                    xml_add_href(node, fctx->ns[NS_DAV], uri);
+                }
                 int i;
                 for (i = strarray_size(&addr); i; i--) {
                     const char *uri = strarray_nth(&addr, i - 1);
                     xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], uri);
-                    /* apple will use the alphabetically first href, and Thunderbird will use the
-                     * last one in order, so we set preferred for Apple, and put the preferred one
-                     * last for Thunderbird (and maybe others) */
+                    // Mark last entry as preferred calendar user address.
                     if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
                 }
             }
