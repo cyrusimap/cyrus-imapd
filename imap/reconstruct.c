@@ -188,6 +188,7 @@ int main(int argc, char **argv)
         { "recursive", no_argument, NULL, 'r' },
         { "no-stat", no_argument, NULL, 's' },
         { "userids", no_argument, NULL, 'u' },
+        { "keep-cache", no_argument, NULL, 'c' },
         { "ignore-disk-metadata", no_argument, NULL, 'x' },
 
         { 0, 0, 0, 0 },
@@ -274,6 +275,10 @@ int main(int argc, char **argv)
 
         case 'T':
             reconstruct_flags |= RECONSTRUCT_RECALC_NANOSEC;
+            break;
+
+        case 'c':
+            reconstruct_flags |= RECONSTRUCT_KEEP_CACHE;
             break;
 
         default:
@@ -583,7 +588,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
              (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC))) {
             int oldversion = mailbox->i.minor_version;
             /* need to re-set the version! */
-            int r = mailbox_setversion(mailbox, setversion, reconstruct_flags|RECONSTRUCT_KEEP_CACHE);
+            int r = mailbox_setversion(mailbox, setversion, reconstruct_flags);
             char *extname = mboxname_to_external(name, &recon_namespace, NULL);
             if (r) {
                 printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
