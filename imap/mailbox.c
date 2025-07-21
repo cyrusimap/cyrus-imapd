@@ -185,7 +185,8 @@ static struct MsgFlagMap msgflagmap[] = {
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int _mailbox_index_repack(struct mailbox *mailbox,
-                                 int version, unsigned flags);
+                                 int version, unsigned flags,
+                                 ptrarray_t *records);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);
 static void mailbox_repack_abort(struct mailbox_repack **repackptr);
 static int mailbox_lock_index_internal(struct mailbox *mailbox,
@@ -1273,9 +1274,10 @@ EXPORTED modseq_t mailbox_modseq_dirty(struct mailbox *mailbox)
 }
 
 EXPORTED int mailbox_setversion(struct mailbox *mailbox,
-                                int version, unsigned flags)
+                                int version, unsigned flags,
+                                ptrarray_t *records)
 {
-    return _mailbox_index_repack(mailbox, version, flags);
+    return _mailbox_index_repack(mailbox, version, flags, records);
 }
 
 static void _delayed_cleanup(void *rock)
@@ -5512,12 +5514,14 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 /* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox, int version)
 {
-    return _mailbox_index_repack(mailbox, version, RECONSTRUCT_MAKE_CHANGES);
+    return _mailbox_index_repack(mailbox, version,
+                                 RECONSTRUCT_MAKE_CHANGES, NULL);
 }
 
 /* need a mailbox exclusive lock, we're rewriting files */
 static int _mailbox_index_repack(struct mailbox *mailbox,
-                                 int version, unsigned flags)
+                                 int version, unsigned flags,
+                                 ptrarray_t *records)
 {
     struct mailbox_repack *repack = NULL;
     struct conversations_state *cstate = NULL;
@@ -5751,11 +5755,19 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                                                           &copyrecord.internaldate);
                     }
                 }
-#if 0 // disabling this because its slow.  will write a separate tool to do this
-                // make the file timestamp correct
-                r = mailbox_set_datafile_timestamps(mailbox, &copyrecord);
-                if (r) goto done;
-#endif
+
+                if (!dryrun) {
+                    // track this record so we can set the file timestamps later
+                    // we only need UID, internaldate, and internal_flags
+                    struct index_record *trecord =
+                        xzmalloc(sizeof(struct index_record));
+
+                    trecord->uid = copyrecord.uid;
+                    trecord->internaldate = copyrecord.internaldate;
+                    trecord->internal_flags = copyrecord.internal_flags;
+                    ptrarray_append(records, trecord);
+                }
+
                 // update G & J records
                 r = mailbox_update_conversations(mailbox, record, &copyrecord);
                 if (r) goto done;
