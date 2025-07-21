@@ -587,8 +587,10 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             (mailbox->i.minor_version >= 20 &&
              (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC))) {
             int oldversion = mailbox->i.minor_version;
+            ptrarray_t records = PTRARRAY_INITIALIZER;
             /* need to re-set the version! */
-            int r = mailbox_setversion(mailbox, setversion, reconstruct_flags);
+            int r = mailbox_setversion(mailbox, setversion,
+                                       reconstruct_flags, &records);
             char *extname = mboxname_to_external(name, &recon_namespace, NULL);
             if (r) {
                 printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
@@ -600,6 +602,35 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             else {
                 printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
             }
+
+            if (ptrarray_size(&records)) {
+                // make the file timestamps correct and/or cleanup ptrarray
+                int i, n = ptrarray_size(&records);
+
+                mailbox_close(&mailbox);
+                mboxname_release(&namespacelock);
+
+                if (!r) {
+                    r = mailbox_open_irl(name, &mailbox);
+                    if (r) {
+                        syslog(LOG_ERR,
+                               "Failed to open mailbox '%s' to set file timestamps: %s",
+                               extname, error_message(r));
+                    }
+                    else {
+                        mailbox_unlock_index(mailbox, NULL);
+                    }
+                }
+
+                for (i = 0; i < n; i++) {
+                    struct index_record *record = ptrarray_nth(&records, i);
+                    if (mailbox)
+                        mailbox_set_datafile_timestamps(mailbox, record);
+                    free(record);
+                }
+                ptrarray_fini(&records);
+            }
+
             free(extname);
         }
         mailbox_close(&mailbox);
