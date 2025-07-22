@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_changes_inbox_inbox
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $state;
+    my $res;
+    my %m;
+    my $inbox;
+
+    xlog $self, "get mailbox list";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $inbox = $m{"Inbox"}->{id};
+    $self->assert_not_null($inbox);
+
+    xlog $self, "create INBOX.INBOX via IMAP";
+    $imaptalk->create("INBOX.INBOX")
+        or die "Cannot create mailbox INBOX.INBOX: $@";
+
+    # INBOX.INBOX should be NOT be listed
+    xlog $self, "get mailbox list (expect just one mailbox)";
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($inbox, $res->[0][1]->{list}[0]->{id});
+
+    # INBOX.INBOX should be NOT be listed
+    xlog $self, "get mailbox updates (expect no changes other than state)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "add a message to INBOX.INBOX";
+    $self->{store}->set_folder("INBOX.INBOX");
+    $self->make_message("Email abcd xyz hello 1") or die;
+
+    # INBOX.INBOX should be NOT be listed
+    xlog $self, "get mailbox updates (expect no changes other than state)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+
+    xlog $self, "delete INBOX.INBOX via IMAP";
+    $imaptalk->delete("INBOX.INBOX")
+        or die "Cannot delete mailbox INBOX.INBOX: $@";
+
+    # INBOX.INBOX should be NOT be listed
+    xlog $self, "get mailbox updates (expect no changes other than state)";
+    $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{updatedProperties});
+    $state = $res->[0][1]->{newState};
+}
