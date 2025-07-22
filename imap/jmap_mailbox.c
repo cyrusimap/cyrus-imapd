@@ -4155,7 +4155,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
+    if (!is_jmap_mailbox(data->req, mbentry, 1/*tombstones*/)) {
         return 0;
     }
 
