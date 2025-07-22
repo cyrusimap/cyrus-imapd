@@ -49,9 +49,11 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
-#include "cunit/cyrunit.h"
-#include "times.h"
-#include "cunit/timezones.h"
+
+#include "cunit/unit.h"
+#include "cunit/unit-timezones.h"
+
+#include "lib/times.h"
 
 #define UNINIT_TIMET ((time_t)0xdeadbeef)
 

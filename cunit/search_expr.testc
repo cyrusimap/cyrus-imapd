@@ -1,17 +1,18 @@
 #include "config.h"
 
+#include "cunit/unit.h"
+#include "cunit/unit-timezones.h"
+#include "cunit/unit-timeofday.h"
+
 #include "lib/libconfig.h"
 #include "lib/libcyr_cfg.h"
+#include "lib/prot.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
 
-#include "cunit/cyrunit.h"
-#include "prot.h"
-#include "xmalloc.h"
 #include "imap/imapd.h"
 #include "imap/index.h"
 #include "imap/imapparse.h"
-#include "util.h"
-#include "cunit/timezones.h"
-#include "cunit/timeofday.h"
 
 static struct namespace ns;
 static const char *userid = "fred";

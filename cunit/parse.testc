@@ -1,7 +1,7 @@
 #include <sysexits.h>
 
 #include "config.h"
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "xmalloc.h"
 #include "prot.h"
 #include "imap/global.h"

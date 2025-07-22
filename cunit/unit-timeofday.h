@@ -1,6 +1,6 @@
-/* cunit-syslog.h - declarations for CUnit syslog functions
+/* unit-timeofday.h - time of day warping utilities for unit tests
  *
- * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,17 +40,15 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __CUNIT_SYSLOG_H__
-#define __CUNIT_SYSLOG_H__
+#ifndef CUNIT_UNIT_TIMEOFDAY_H
+#define CUNIT_UNIT_TIMEOFDAY_H
 
-/* returns an active match number from 1 up */
-extern unsigned int CU_syslogMatchBegin(const char *re, const char *filename,
-                                        unsigned int lineno, int issubstr);
-/* returns count of given match (or 0 for sum of all matches), and remove the match */
-extern unsigned int CU_syslogMatchEnd(unsigned int match, const char **s);
-/* reset all matches, call before each test */
-#define CU_syslogMatchReset() \
-    CU_syslogMatchEnd(0, NULL)
+#include <sys/types.h>
 
-#endif /* __CUNIT_SYSLOG_H__ */
+extern void time_push_rate(long n, long d);
+extern void time_push_stop(void);
+extern void time_push_fixed(time_t fixed);
+extern void time_pop(void);
+extern void time_restore(void);
 
+#endif /* CUNIT_UNIT_TIMEOFDAY_H */
