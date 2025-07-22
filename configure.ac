@@ -769,8 +769,8 @@ if test "$enable_pcre" != "no"; then
                       [ AC_MSG_CHECKING(for utf8 enabled pcre)
                         saved_CFLAGS="$CFLAGS"
                         saved_LIBS="$LIBS"
-                        CFLAGS="$CFLAGS PCRE_CFLAGS"
-                        LIBS="$LIBS PCRE_LIBS"
+                        CFLAGS="$CFLAGS $PCRE_CFLAGS"
+                        LIBS="$LIBS $PCRE_LIBS"
                         AC_CACHE_VAL(cyrus_cv_pcre_utf8,
                                      AC_TRY_CPP([   #include <pcreposix.h>
                                                     #ifndef REG_UTF8
@@ -792,8 +792,8 @@ if test "$enable_pcre2" != "no"; then
                       [ AC_MSG_CHECKING(for utf8 enabled pcre2)
                         saved_CFLAGS="$CFLAGS"
                         saved_LIBS="$LIBS"
-                        CFLAGS="$CFLAGS PCRE2_CFLAGS"
-                        LIBS="$LIBS PCRE2_LIBS"
+                        CFLAGS="$CFLAGS $PCRE2_CFLAGS"
+                        LIBS="$LIBS $PCRE2_LIBS"
                         AC_CACHE_VAL(cyrus_cv_pcre2_utf8,
                                      AC_TRY_CPP([   #include <pcre2posix.h>
                                                     #ifndef REG_UTF
