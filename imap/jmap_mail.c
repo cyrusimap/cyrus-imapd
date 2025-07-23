@@ -12103,7 +12103,7 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
                 json_t *keep = json_object_get(mailboxids, mboxrec->mbox_id);
 
-                if (keep) {
+                if (keep || bulk->copy_from_accountid) {
                     /* Keep message in mailbox */
                     json_object_del(mailboxids, mboxrec->mbox_id);
                 }
