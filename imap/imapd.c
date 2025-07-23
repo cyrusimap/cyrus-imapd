@@ -6823,11 +6823,30 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (!r) {
         struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
+        // make sure we get locks in order!
+        struct mboxlock *oldnamespacelock = NULL;
+        struct mboxlock *newnamespacelock = NULL;
+
+        const char *oldmailboxname = index_mboxname(imapd_index);
+        const char *newmailboxname = intname;
+
+        if (strcmpsafe(oldmailboxname, newmailboxname) < 0) {
+            oldnamespacelock = mboxname_usernamespacelock(oldmailboxname);
+            newnamespacelock = mboxname_usernamespacelock(newmailboxname);
+        }
+        else {
+            newnamespacelock = mboxname_usernamespacelock(newmailboxname);
+            oldnamespacelock = mboxname_usernamespacelock(oldmailboxname);
+        }
+
         r = index_copy(imapd_index, sequence, usinguid, intname,
                        &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
                        &imapd_namespace,
                        (imapd_userisadmin || imapd_userisproxyadmin), ismove,
                        ignorequota, &prock);
+
+        mboxname_release(&oldnamespacelock);
+        mboxname_release(&newnamespacelock);
     }
 
     if (ismove && copyuid && !r) {
