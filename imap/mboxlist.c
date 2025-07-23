@@ -2735,6 +2735,17 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     assert_namespacelocked(mbentry->name);
     assert_namespacelocked(newname);
 
+    myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
+
+    /* 0. check the ACLs up-front */
+    if (!isadmin) {
+        if (!(myrights & ACL_DELETEMBOX)) {
+            r = (myrights & ACL_LOOKUP) ?
+                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+            return r;
+        }
+    }
+
     /* special-case: intermediate mailbox */
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         r = mboxlist_create_namecheck(newname, userid, auth_state,
@@ -2750,17 +2761,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
         /* skip ahead to the database update */
         goto dbupdate;
-    }
-
-    myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
-
-    /* check the ACLs up-front */
-    if (!isadmin) {
-        if (!(myrights & ACL_DELETEMBOX)) {
-            r = (myrights & ACL_LOOKUP) ?
-                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-            return r;
-        }
     }
 
     /* 1. open mailbox */
