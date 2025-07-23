@@ -9720,43 +9720,14 @@ static int print_statusline(const char *extname, unsigned statusitems,
 static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
                             struct statusdata *sd)
 {
-    int r;
-    struct conversations_state *state = NULL;
-
-    if (!(statusitems & STATUS_MAILBOXID)) goto nonconv;
-
-    /* use the existing state if possible */
-    state = conversations_get_mbox(mbentry->name);
-
-    /* otherwise fetch a new one! */
-    if (!state) {
-        if (global_conversations) {
-            conversations_abort(&global_conversations);
-            global_conversations = NULL;
-        }
-        // we never write anything in STATUS calls, so shared is fine
-        r = conversations_open_mbox(mbentry->name, 1/*shared*/, &state);
-        if (r) {
-            /* maybe the mailbox doesn't even have conversations - just ignore */
-            goto nonconv;
-        }
-        global_conversations = state;
-    }
-
-    sd->mailboxid =
-        USER_COMPACT_EMAILIDS(state) ? mbentry->jmapid : mbentry->uniqueid;
-
-    r = conversation_getstatus(state,
-                               CONV_FOLDER_KEY_MBE(state, mbentry), &sd->xconv);
+    int r = status_lookup_mbentry(mbentry, imapd_userid, statusitems, sd);
     if (r) return r;
 
-nonconv:
     /* use the index status if we can so we get the 'alive' Recent count */
-    if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)
-        return index_status(imapd_index, sd);
+    if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
+        r = index_status(imapd_index, sd);
 
-    /* fall back to generic lookup */
-    return status_lookup_mbentry(mbentry, imapd_userid, statusitems, sd);
+    return r;
 }
 
 /*
@@ -9850,6 +9821,8 @@ static void cmd_status(char *tag, char *name)
     // status of selected mailbox, we need to refresh
     if (!r && !strcmpsafe(mbentry->name, index_mboxname(imapd_index)))
         imapd_check(NULL, TELL_EXPUNGED);
+
+    index_release(imapd_index);
 
     if (!r) r = imapd_statusdata(mbentry, statusitems, &sdata);
 
