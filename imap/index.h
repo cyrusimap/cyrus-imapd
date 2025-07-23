@@ -89,6 +89,7 @@ struct index_init {
     int want_dav;
     uint32_t want_mbtype;
     int want_expunged;
+    int stay_locked;
     struct vanished_params vanished;
     seqset_t *vanishedlist;
 };
@@ -304,6 +305,7 @@ extern int index_refresh(struct index_state *state);
 extern void index_checkflags(struct index_state *state, int print, int dirty);
 extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
+extern void index_unlock(struct index_state *state);
 extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
 

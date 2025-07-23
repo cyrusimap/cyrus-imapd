@@ -106,7 +106,6 @@ EXPORTED unsigned client_capa;
 static void index_refresh_locked(struct index_state *state);
 static void index_tellexists(struct index_state *state);
 static int index_lock(struct index_state *state, int readonly);
-static void index_unlock(struct index_state *state);
 
 struct index_modified_flags {
     int added_flags;
@@ -366,7 +365,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     if (init && init->select)
         init->vanishedlist = index_vanished(state, &init->vanished);
 
-    index_unlock(state);
+    if (!init->stay_locked) index_unlock(state);
 
     *stateptr = state;
 
@@ -1784,7 +1783,7 @@ EXPORTED int index_refresh(struct index_state *state)
     return 0;
 }
 
-static void index_unlock(struct index_state *state)
+EXPORTED void index_unlock(struct index_state *state)
 {
     // only update seen if we've got a writelocked mailbox
     if (mailbox_index_islocked(state->mailbox, 1))

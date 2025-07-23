@@ -5027,6 +5027,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.out = imapd_out;
     init.examine_mode = (cmd[0] == 'E') || config_getswitch(IMAPOPT_READONLY);
     init.select = 1;
+    init.stay_locked = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
     if (!imapd_userisadmin && !allowdeleted && mboxname_isdeletedmailbox(intname, NULL))
@@ -5049,6 +5050,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (index_hasrights(imapd_index, ACL_EXPUNGE))
         warn_about_quota(mailbox_quotaroot(imapd_index->mailbox));
+
+    index_unlock(imapd_index);
 
     index_select(imapd_index, &init);
 
@@ -6245,6 +6248,7 @@ static void cmd_search(const char *tag, const char *cmd)
     char mytime[100];
     int usinguid = 0, n = 0;
     int state = GETSEARCH_RETURN;
+    struct mboxlock *namespacelock = NULL;
 
     if (backend_current) {
         /* remote mailbox */
@@ -6328,6 +6332,11 @@ static void cmd_search(const char *tag, const char *cmd)
     }
 
     client_behavior_mask |= searchargs->client_behavior_mask;
+
+    // hold a lock across potentially multiple mailboxes
+    // NOTE: we have to exclusively lock, because index_check will
+    // write RECENT data, *sigh*
+    if (imapd_index) namespacelock = mboxname_usernamespacelock(index_mboxname(imapd_index));
 
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
@@ -6477,6 +6486,9 @@ static void cmd_search(const char *tag, const char *cmd)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SEARCH MODSEQ");
 
+    // release before responding
+    mboxname_release(&namespacelock);
+
     int r = cmd_cancelled(/*insearch*/1);
     if (!r) {
         snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -6490,6 +6502,7 @@ static void cmd_search(const char *tag, const char *cmd)
 
   done:
     freesearchargs(searchargs);
+    mboxname_release(&namespacelock);
 }
 
 /*
@@ -15594,6 +15607,7 @@ static void cmd_notify(char *tag, int set)
             idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
 
             imapd_check(NULL, TELL_EXPUNGED | TELL_UID);
+            index_release(imapd_index);
 
             if (srock.mboxnames) {
                 hash_insert(index_mboxname(imapd_index),
