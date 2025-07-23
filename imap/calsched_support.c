@@ -59,7 +59,7 @@
 
 EXPORTED int caldav_caluseraddr_read(const char *mboxname,
                                      const char *userid,
-                                     struct caldav_caluseraddr *addr)
+                                     strarray_t *addr)
 {
     static const char *annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
@@ -72,35 +72,28 @@ EXPORTED int caldav_caluseraddr_read(const char *mboxname,
         return r ? r : IMAP_NOTFOUND;
     }
 
-    size_t len = buf_len(&buf);
-    char *val = buf_release(&buf);
-    char *sep = val;
-    long lpref = strtol(val, &sep, 10);
-    if (sep != val && *sep == ';') {
-        // splitm frees the buffer, so make the string
-        // value start without the 'pref' field
-        size_t i, j;
-        for (i = sep + 1 - val, j = 0; i < len; i++, j++) {
-            val[j] = val[i];
-        }
-        val[j] = '\0';
-    }
-    else lpref = INT_MAX;
-
-    strarray_fini(&addr->uris);
-    strarray_splitm(&addr->uris, val, ",", STRARRAY_TRIM);
-
-    if (lpref < 0 || lpref > strarray_size(&addr->uris))
-        addr->pref = strarray_size(&addr->uris);
-    else
-        addr->pref = (int)lpref;
-
+    // In a previous JMAP for Calendars implementation, the annotation
+    // value was of format:
+    //
+    //     (<pref>";")?addrs[0](","addrs[1..n-1])*
+    //
+    // where <pref> was an optional numeric index in the list of
+    // addrs, indicating which of them is the preferred address.
+    // The 'defaultParticipantIdentity' property that made use of
+    // this <pref> field does not exist in the latest draft version,
+    // and so we got rid of the <pref> field, too.
+    const char *sep = strchr(buf_cstring(&buf), ';');
+    // Just ignore the <pref> field in the annotation value.
+    if (sep) buf_remove(&buf, 0, sep + 1 - buf_base(&buf));
+    // Reset and split address list.
+    strarray_truncate(addr, 0);
+    strarray_splitm(addr, buf_release(&buf), ",", STRARRAY_TRIM);
     return 0;
 }
 
 EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
                                       const char *userid,
-                                      const struct caldav_caluseraddr *addr)
+                                      strarray_t *addrs)
 {
     static const char *annot =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
@@ -111,15 +104,38 @@ EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
     int r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) goto done;
 
-    if (strarray_size(&addr->uris)) {
-        // format: (<pref>";")?addrs[0](","addrs[1..n-1])*
-        buf_printf(&buf, "%d;", addr->pref);
-        int i;
-        for (i = 0; i < strarray_size(&addr->uris); i++) {
-            if (i) buf_putc(&buf, ',');
-            buf_appendcstr(&buf, strarray_nth(&addr->uris, i));
+    hash_table addrset = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&addrset, strarray_size(addrs) + 1, 0);
+    struct buf normaddr = BUF_INITIALIZER;
+
+    int i;
+    for (i = 0; i < strarray_size(addrs); i++) {
+        // Normalize URI scheme to lowercase.
+        const char *addr = strarray_nth(addrs, i);
+        const char *col = strchr(addr, ':');
+        if (col && col > addr) {
+            buf_reset(&normaddr);
+            buf_appendmap(&normaddr, addr, col - addr);
+            buf_lcase(&normaddr);
+            buf_appendcstr(&normaddr, col);
         }
+        else {
+            buf_setcstr(&normaddr, addr);
+        }
+
+        // Deduplicate normalized URIs.
+        if (hash_lookup(buf_cstring(&normaddr), &addrset))
+            continue;
+
+        hash_insert(buf_cstring(&normaddr), (void*)1, &addrset);
+
+        // Append original URI to annotation value.
+        if (i) buf_putc(&buf, ',');
+        buf_appendcstr(&buf, addr);
     }
+
+    buf_free(&normaddr);
+    free_hash_table(&addrset, NULL);
 
     r = annotate_state_writemask(astate, annot, userid, &buf);
 
@@ -128,38 +144,27 @@ done:
     return r;
 }
 
-EXPORTED void caldav_caluseraddr_fini(struct caldav_caluseraddr *addr)
-{
-    if (addr) {
-        strarray_fini(&addr->uris);
-        addr->pref = 0;
-    }
-}
-
 EXPORTED void get_schedule_addresses(const char *mboxname,
                                      const char *userid, strarray_t *addresses)
 {
     struct buf buf = BUF_INITIALIZER;
 
-    /* find schedule address based on the destination calendar's user */
-    struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
-
     /* check calendar-user-address-set for target user's mailbox */
-    int r = caldav_caluseraddr_read(mboxname, userid, &caluseraddr);
+    int r = caldav_caluseraddr_read(mboxname, userid, addresses);
     if (r) {
         char *calhome = caldav_mboxname(userid, NULL);
-        r = caldav_caluseraddr_read(calhome, userid, &caluseraddr);
+        r = caldav_caluseraddr_read(calhome, userid, addresses);
         free(calhome);
     }
 
-    if (!r && strarray_size(&caluseraddr.uris)) {
+    if (!r && strarray_size(addresses)) {
         int i;
-        for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
-            const char *item = strarray_nth(&caluseraddr.uris, i);
+        for (i = 0; i < strarray_size(addresses); i++) {
+            const char *item = strarray_nth(addresses, i);
             if (!strncasecmp(item, "mailto:", 7)) item += 7;
 
             char *addr = xmlURIUnescapeString(item, strlen(item), NULL);
-            strarray_addm(addresses, addr);
+            strarray_setm(addresses, i, addr);
         }
     }
     else if (strchr(userid, '@')) {
@@ -179,8 +184,6 @@ EXPORTED void get_schedule_addresses(const char *mboxname,
             strarray_add(addresses, buf_cstring(&buf));
         }
     }
-
-    caldav_caluseraddr_fini(&caluseraddr);
 
     buf_free(&buf);
 }

@@ -1625,9 +1625,9 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
     /* participantIdentities */
     if (!r && json_is_array(props->participant_identities)) {
-        struct caldav_caluseraddr new = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t new = STRARRAY_INITIALIZER;
 
-        struct caldav_caluseraddr old = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t old = STRARRAY_INITIALIZER;
         caldav_caluseraddr_read(mailbox_name(mbox), req->userid, &old);
 
         size_t i;
@@ -1635,18 +1635,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
         json_array_foreach(props->participant_identities, i, jpid) {
             const char *uri = json_string_value(json_object_get(jpid, "uri"));
             if (!uri) continue;
-            strarray_append(&new.uris, uri);
-        }
-
-        // Preserve old preferred address, if still available
-        new.pref = strarray_size(&new.uris);
-        if (strarray_size(&old.uris)) {
-            const char *olduri = strarray_nth(&old.uris, old.pref);
-            if (olduri) {
-                new.pref = strarray_find(&new.uris, olduri, 0);
-                if (new.pref < 0)
-                    new.pref = strarray_size(&new.uris);
-            }
+            strarray_append(&new, uri);
         }
 
         r = caldav_caluseraddr_write(mbox, req->userid, &new);
@@ -1655,8 +1644,8 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     "err=<%s>", error_message(r));
         }
 
-        caldav_caluseraddr_fini(&new);
-        caldav_caluseraddr_fini(&old);
+        strarray_fini(&new);
+        strarray_fini(&old);
     }
 
     /* isSubscribed */
@@ -11933,16 +11922,17 @@ static int jmap_calendarpreferences_get(struct jmap_req *req)
         if (jmap_wantprop(get.props, "defaultParticipantIdentityId")) {
             json_t *jpartid = json_null();
 
-            struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+            strarray_t caluseraddr = STRARRAY_INITIALIZER;
             if (!caldav_caluseraddr_read(mbcalhome->name, req->accountid, &caluseraddr)) {
-                const char *addr = strarray_nth(&caluseraddr.uris, caluseraddr.pref);
+                const char *addr = strarray_nth(&caluseraddr, 0);
                 if (addr) {
                     if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
                     encode_participantidentity_id(&buf, addr);
                     jpartid = json_string(buf_cstring(&buf));
+                    buf_reset(&buf);
                 }
             }
-            caldav_caluseraddr_fini(&caluseraddr);
+            strarray_fini(&caluseraddr);
 
             json_object_set_new(jprefs, "defaultParticipantIdentityId", jpartid);
         }
@@ -12066,26 +12056,25 @@ static void calendarpreferences_set(struct jmap_req *req,
     if (jpartid) {
         const char *partid = json_string_value(jpartid);
 
-        struct caldav_caluseraddr caluseraddr = CALDAV_CALUSERADDR_INITIALIZER;
+        strarray_t caluseraddr = STRARRAY_INITIALIZER;
         r = caldav_caluseraddr_read(mbcalhome->name, req->userid, &caluseraddr);
         if (!r) {
             if (partid) {
                 int i;
-                for (i = 0; i < strarray_size(&caluseraddr.uris); i++) {
-                    const char *addr = strarray_nth(&caluseraddr.uris, i);
+                for (i = 0; i < strarray_size(&caluseraddr); i++) {
+                    const char *addr = strarray_nth(&caluseraddr, i);
                     if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
                     encode_participantidentity_id(&buf, addr);
                     if (!strcmp(partid, buf_cstring(&buf))) {
                         break;
                     }
                 }
-                if (i < strarray_size(&caluseraddr.uris)) {
+                if (i < strarray_size(&caluseraddr)) {
                     // move preferred address to first position, as Apple
                     // and Mozilla CalDAV clients expect it there
-                    caluseraddr.pref = 0;
                     if (i > 0) {
-                        char *val = strarray_remove(&caluseraddr.uris, i);
-                        strarray_unshiftm(&caluseraddr.uris, val);
+                        char *val = strarray_remove(&caluseraddr, i);
+                        strarray_unshiftm(&caluseraddr, val);
                     }
                     r = caldav_caluseraddr_write(calhomembox, req->userid, &caluseraddr);
                 }
@@ -12094,11 +12083,21 @@ static void calendarpreferences_set(struct jmap_req *req,
                 }
             }
             else {
-                caluseraddr.pref = strarray_size(&caluseraddr.uris);
-                r = caldav_caluseraddr_write(calhomembox, req->userid, &caluseraddr);
+                // The defaultParticipantIdentity setting can't be removed,
+                // there always needs to be one set. Just tell the client
+                // we set a new one which matches the one we already had.
+                const char *addr = strarray_nth(&caluseraddr, 0);
+                if (addr) {
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    json_t *jpartid = json_string(buf_cstring(&buf));
+                    buf_reset(&buf);
+                    json_object_set_new(
+                        server_set, "defaultParticipantIdentityId", jpartid);
+                }
             }
         }
-        caldav_caluseraddr_fini(&caluseraddr);
+        strarray_fini(&caluseraddr);
 
         if (r) {
             xsyslog(LOG_ERR, "can not set schedule addresses",
