@@ -412,13 +412,19 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;
-    strncpy(static_uniqueid, mailbox_uniqueid(mailbox), 100);
-    sdata->uniqueid = static_uniqueid;
+    const char *uniqueid = mailbox_uniqueid(mailbox);
+    if (uniqueid) {
+        strncpy(static_uniqueid, uniqueid, 100);
+        sdata->uniqueid = static_uniqueid;
+    }
 
     // need the cstate to get the right mailboxid
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    strncpy(static_mailboxid, USER_COMPACT_EMAILIDS(cstate) ? mailbox_jmapid(mailbox) : mailbox_uniqueid(mailbox), 100);
-    sdata->mailboxid = static_mailboxid;
+    const char *mailboxid = USER_COMPACT_EMAILIDS(cstate) ? mailbox_jmapid(mailbox) : mailbox_uniqueid(mailbox);
+    if (mailboxid) {
+        strncpy(static_mailboxid, mailboxid, 100);
+        sdata->mailboxid = static_mailboxid;
+    }
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
