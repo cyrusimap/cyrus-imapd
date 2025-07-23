@@ -714,6 +714,8 @@ static const char *_namelock_name_from_userid(const char *userid)
 EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int locktype)
 {
     struct mboxlock *namelock;
+    if (!user_isnamespacelocked(userid))
+        assert(!open_mailboxes_namelocked(userid));
     const char *name = _namelock_name_from_userid(userid);
     int r = mboxname_lock(name, &namelock, locktype);
     if (r) return NULL;

@@ -607,6 +607,7 @@ extern unsigned mailbox_should_archive(struct mailbox *mailbox,
                                        void *rock);
 
 extern int open_mailboxes_exist();
+extern int open_mailboxes_namelocked(const char *userid);
 
 /* map individual messages in */
 extern int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf);
