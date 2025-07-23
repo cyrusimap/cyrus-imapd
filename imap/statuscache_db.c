@@ -139,6 +139,7 @@ static void statuscache_buildkey(const char *mboxname, const char *userid,
 static void statuscache_read_index(const char *mboxname, struct statusdata *sdata)
 {
     struct buf keybuf = BUF_INITIALIZER;
+    static char static_mailboxid[101];
     const char *data = NULL;
     size_t datalen = 0;
 
@@ -181,6 +182,13 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (p < dend) sdata->deleted_storage = strtoull(p, &p, 10);
 
     if (*p++ != ')') return;
+    if (*p++ == ' ') {
+        int len = dend - p;
+        if (len > 100) return;
+        memcpy(static_mailboxid, p, len);
+        static_mailboxid[len] = '\0';
+        sdata->mailboxid = static_mailboxid;
+    }
 
     /* Sanity check the data */
     if (!sdata->highestmodseq)
@@ -295,12 +303,12 @@ static int statuscache_store(const char *mboxname,
 
 
     buf_printf(&databuf,
-                       "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT " %u " QUOTA_T_FMT")",
+                       "I %u (%u %u %u %u " QUOTA_T_FMT " " MODSEQ_FMT " " MODSEQ_FMT " %u " QUOTA_T_FMT") %s",
                        STATUSCACHE_VERSION,
                        sdata->messages, sdata->uidnext,
                        sdata->uidvalidity, sdata->mboptions, sdata->size,
                        sdata->createdmodseq, sdata->highestmodseq,
-                       sdata->deleted, sdata->deleted_storage);
+                       sdata->deleted, sdata->deleted_storage, sdata->mailboxid);
 
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 

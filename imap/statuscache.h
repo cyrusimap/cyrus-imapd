@@ -48,7 +48,7 @@
 
 /* name of the statuscache database */
 #define FNAME_STATUSCACHEDB "/statuscache.db"
-#define STATUSCACHE_VERSION 9
+#define STATUSCACHE_VERSION 10
 
 /* fill a statuscache entry */
 extern void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sdata);
