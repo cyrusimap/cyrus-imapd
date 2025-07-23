@@ -61,6 +61,7 @@
 #include "mboxlist.h"
 #include "mailbox.h"
 #include "seen.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -389,7 +390,6 @@ HIDDEN void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sda
 
     sdata->uidvalidity = mbentry->uidvalidity;
     sdata->uniqueid = mbentry->uniqueid;
-    // sdata->mailboxid set in imapd_statusdata()
 
     sdata->statusitems |= STATUS_MBENTRYITEMS;
 }
@@ -398,6 +398,8 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 {
     assert(mailbox);
     assert(sdata);
+    static char static_uniqueid[101];
+    static char static_mailboxid[101];
 
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
@@ -410,7 +412,13 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 
     // mbentry items are also available from an open mailbox
     sdata->uidvalidity = mailbox->i.uidvalidity;
-    // sdata->mailboxid set in imapd_statusdata()
+    strncpy(static_uniqueid, mailbox_uniqueid(mailbox), 100);
+    sdata->uniqueid = static_uniqueid;
+
+    // need the cstate to get the right mailboxid
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    strncpy(static_mailboxid, USER_COMPACT_EMAILIDS(cstate) ? mailbox_jmapid(mailbox) : mailbox_uniqueid(mailbox), 100);
+    sdata->mailboxid = static_mailboxid;
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
@@ -540,16 +548,6 @@ EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry, const char *userid,
 EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
                                     unsigned statusitems, struct statusdata *sdata)
 {
-    // we want an mbentry first, just in case we can get everything from there
-    if (statusitems & STATUS_MAILBOXID) {
-        mbentry_t *mbentry = NULL;
-        int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        if (r) return r;
-        r = status_lookup_mbentry(mbentry, userid, statusitems, sdata);
-        mboxlist_entry_free(&mbentry);
-        return r;
-    }
-
     return status_lookup_internal(mboxname, userid, statusitems, sdata);
 }
 
