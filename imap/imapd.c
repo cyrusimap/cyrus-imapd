@@ -3703,7 +3703,7 @@ static void cmd_idle(char *tag)
     else if (!notify_event_groups && imapd_index && idle_sock != PROT_NO_FD) {
         /* If NOTIFY has NOT already been enabled,
            tell idled to start sending message updates */
-        const char *mboxid = index_mboxid(imapd_index);
+        const char *mboxid = index_uniqueid(imapd_index);
         strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
 
         idle_start(IMAP_NOTIFY_MESSAGE, time(NULL) + idle_timeout,
@@ -5061,7 +5061,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (notify_event_groups && notify_event_groups->selected.events) {
         /* Tell idled to start sending message updates */
-        const char *mboxid = index_mboxid(imapd_index);
+        const char *mboxid = index_uniqueid(imapd_index);
         strarray_t key = { 1, 0, (char **) &mboxid }; // avoid memory alloc
 
         idle_start(notify_event_groups->selected.events, 0, FILTER_SELECTED, &key);
@@ -15569,7 +15569,7 @@ static void cmd_notify(char *tag, int set)
         }
 
         if (new_egroups->selected.events && imapd_index) {
-            const char *mboxid = index_mboxid(imapd_index);
+            const char *mboxid = index_uniqueid(imapd_index);
 
             key.data = (char **) &mboxid;
             idle_start(new_egroups->selected.events, 0, FILTER_SELECTED, &key);
@@ -15728,7 +15728,7 @@ static void push_updates(int idling)
 
         if (!etype || !mboxid) goto done;
 
-        if (imapd_index && !strcmp(mboxid, index_mboxid(imapd_index))) {
+        if (imapd_index && !strcmp(mboxid, index_uniqueid(imapd_index))) {
             /* Notification for currently selected mailbox */
             if ((etype & IMAP_NOTIFY_MESSAGE_NEW) &&
                 notify_event_groups &&
