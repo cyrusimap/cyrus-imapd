@@ -136,7 +136,8 @@ int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                   int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
 int mboxname_islocked(const char *mboxname);
-struct mboxlock *mboxname_usernamespacelock(const char *mboxname);
+#define mboxname_usernamespacelock(m) mboxname_usernamespacelock_full(m, LOCK_EXCLUSIVE)
+struct mboxlock *mboxname_usernamespacelock_full(const char *mboxname, int locktype);
 int mboxname_run_with_lock(int (*cb)(void *), void *rock);
 
 /* Create namespace based on config options. */
