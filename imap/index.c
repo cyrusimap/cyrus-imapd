@@ -291,7 +291,8 @@ EXPORTED void index_close(struct index_state **stateptr)
 
     free(state->map);
     free(state->mboxname);
-    free(state->mboxid);
+    free(state->uniqueid);
+    free(state->jmapid);
     free(state->userid);
     seqset_free(&state->searchres);
     free(state->last_partial.expr);
@@ -311,10 +312,13 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
+    state->has_compactids = USER_COMPACT_EMAILIDS(cstate);
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
-    state->mboxid = xstrdup(mailbox_uniqueid(mailbox));
+    state->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
+    state->jmapid = xstrdupnull(mailbox_jmapid(state->mailbox));
 
     if (init) {
         state->authstate = init->authstate;
@@ -370,7 +374,8 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 
 fail:
     free(state->mboxname);
-    free(state->mboxid);
+    free(state->uniqueid);
+    free(state->jmapid);
     free(state->userid);
     free(state);
     return r;
@@ -852,15 +857,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 */
-    const char *mailboxid;
-    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
-    if (USER_COMPACT_EMAILIDS(cstate)) {
-        mailboxid = mailbox_jmapid(state->mailbox);
-    }
-    else {
-        mailboxid = mailbox_uniqueid(state->mailbox);
-    }
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", mailboxid);
+    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->has_compactids ? state->jmapid : state->uniqueid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -3581,7 +3578,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                             const struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct conversations_state *cstate = NULL;
     int fetchitems = fetchargs->fetchitems;
     struct buf buf = BUF_INITIALIZER;
     struct octetinfo *oi = NULL;
@@ -3741,26 +3737,19 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
-        if (!cstate) {
-            xsyslog(LOG_ERR, "could not read conversations state",
-                    "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
+        struct buf buf = BUF_INITIALIZER;
+        if (state->has_compactids) {
+            buf_putc(&buf, 'S');
+            NANOSEC_TO_JMAPID(&buf,
+                              TIMESPEC_TO_NANOSEC(&record.internaldate));
         }
         else {
-            struct buf emailid = BUF_INITIALIZER;
-            if (USER_COMPACT_EMAILIDS(cstate)) {
-                buf_putc(&emailid, 'S');
-                NANOSEC_TO_JMAPID(&emailid,
-                                  TIMESPEC_TO_NANOSEC(&record.internaldate));
-            }
-            else {
-                buf_putc(&emailid, 'M');
-                buf_appendmap(&emailid, message_guid_encode(&record.guid), 24);
-            }
-            prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&emailid));
-            buf_free(&emailid);
-            sepchar = ' ';
+            buf_putc(&buf, 'M');
+            buf_appendmap(&buf, message_guid_encode(&record.guid), 24);
         }
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&buf));
+        buf_free(&buf);
+        sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
@@ -3774,27 +3763,21 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_THREADID)) {
-        char threadid[18];
         if (!record.cid) {
-            threadid[0] = 'N';
-            threadid[1] = 'I';
-            threadid[2] = 'L';
-            threadid[3] = '\0';
+            buf_appendcstr(&buf, "NIL");
+        }
+        else if (state->has_compactids) {
+            buf_putc(&buf, 'A');
+            uint64_t u64 = htonll(record.cid);
+            charset_encode(&buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
         }
         else {
-            if (!cstate) cstate = mailbox_get_cstate(state->mailbox);
-            if (!cstate) {
-                xsyslog(LOG_ERR, "could not read conversations state",
-                        "mboxid=<%s>", mailbox_uniqueid(state->mailbox));
-            }
-            else {
-                snprintf(threadid, sizeof(threadid), "%c%s",
-                         USER_COMPACT_EMAILIDS(cstate) ? 'A' : 'T', 
-                         conversation_id_encode(cstate, record.cid));
-            }
+            buf_putc(&buf, 'T');
+            buf_printf(&buf, CONV_FMT, record.cid);
         }
 
-        prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
+        prot_printf(state->out, "%cTHREADID (%s)", sepchar, buf_cstring(&buf));
+        buf_free(&buf);
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
@@ -7465,10 +7448,16 @@ EXPORTED const char *index_mboxname(const struct index_state *state)
     return state->mboxname;
 }
 
-EXPORTED const char *index_mboxid(const struct index_state *state)
+EXPORTED const char *index_uniqueid(const struct index_state *state)
 {
     if (!state) return NULL;
-    return state->mboxid;
+    return state->uniqueid;
+}
+
+EXPORTED const char *index_jmapid(const struct index_state *state)
+{
+    if (!state) return NULL;
+    return state->jmapid;
 }
 
 EXPORTED int index_hasrights(const struct index_state *state, int rights)
