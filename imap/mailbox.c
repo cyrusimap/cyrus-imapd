@@ -243,6 +243,22 @@ EXPORTED int open_mailboxes_exist()
     return open_mailboxes ? 1 : 0;
 }
 
+EXPORTED int open_mailboxes_namelocked(const char *userid)
+{
+    struct mailbox *item;
+
+    for (item = open_mailboxes; item; item = item->next) {
+        if (item->namelock) {
+            char *this = mboxname_to_userid(mailbox_name(item));
+            int ret = !strcmpsafe(this, userid);
+            free(this);
+            if (ret) return 1;
+        }
+    }
+
+    return 0;
+}
+
 static struct mailbox *create_listitem(const char *lockname)
 {
     struct mailbox *item = xzmalloc(sizeof(struct mailbox));
