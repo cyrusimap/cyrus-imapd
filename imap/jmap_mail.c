@@ -11839,8 +11839,8 @@ struct email_bulkupdate {
     struct seen *seendb;            /* Seen database for shared mailboxes, or NULL */
     ptrarray_t *cur_mboxrecs;       /* List of current mbox and UI recs, including expunged */
     ptrarray_t *new_mboxrecs;       /* New mbox and UID records allocated by planner */
-    const char *copy_from_accountid;/* JMAP Email/copy fromAccountId.
-                                       NULL for Email/set{update} */
+    struct conversations_state *from_cstate; /* Email/copy fromAccountId cstate.
+                                                NULL for Email/set{update} */
 };
 
 #define _EMAIL_BULKUPDATE_INITIALIZER {\
@@ -12242,7 +12242,7 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
                 struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
                 json_t *keep = json_object_get(mailboxids, mboxrec->mbox_id);
 
-                if (keep || bulk->copy_from_accountid) {
+                if (keep || bulk->from_cstate) {
                     /* Keep message in mailbox */
                     json_object_del(mailboxids, mboxrec->mbox_id);
                 }
@@ -12490,7 +12490,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
     int i;
 
     /* Open seen.db, if required */
-    if (bulk->copy_from_accountid ||  // always need seen.db for Email/copy
+    if (bulk->from_cstate ||  // always need seen.db for Email/copy
         strcmp(bulk->req->accountid, bulk->req->userid)) {
         int r = seen_open(bulk->req->userid, SEEN_CREATE, &bulk->seendb);
         if (r) {
@@ -13027,20 +13027,13 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
     }
 
     const mbentry_t *(*_mbentry_by_uniqueid)(jmap_req_t *, const char *);
-    struct conversations_state *cstate, *mycstate = NULL;
-    if (bulk->copy_from_accountid) {
+    struct conversations_state *cstate;
+    if (bulk->from_cstate) {
         /* Need to fetch /copy source mailboxes using cstate of from_accountid */
-        int r = conversations_open_user(bulk->copy_from_accountid, 0, &mycstate);
-        if (r) {
-            syslog(LOG_ERR,
-                   "jmap_email_copy: can't open source conversations: %s",
-                   error_message(r));
-            return r;
-        }
+        cstate = bulk->from_cstate;
 
         /* DO NOT scope the mailbox to req->accountid for Email/copy */
         _mbentry_by_uniqueid = &jmap_mbentry_by_uniqueid_all;
-        cstate = mycstate;
     }
     else {
         _mbentry_by_uniqueid = &jmap_mbentry_by_uniqueid;
@@ -13048,7 +13041,6 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
     }
 
     _email_mboxrecs_read(req, cstate, &email_ids, bulk->set_errors, &bulk->cur_mboxrecs);
-    conversations_commit(&mycstate);
 
     /* Open current mailboxes */
     size_t mboxhash_size = ptrarray_size(updates) * JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL + 1;
@@ -13295,7 +13287,7 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 msgrecord_t *mrw = msgrecord_from_uid(src_mbox, src_uidrec->uid);
                 ptrarray_append(&src_msgrecs, mrw);
 
-                if (bulk->copy_from_accountid) {
+                if (bulk->from_cstate) {
                     /* Fetch fixed metadata of message to be created */
                     struct email_update *update =
                         hash_lookup(src_uidrec->email_id,
@@ -14307,6 +14299,7 @@ done:
 struct _email_exists_rock {
     jmap_req_t *req;
     conversation_id_t cid;
+    uint64_t nano_internaldate;
     int exists;
 };
 
@@ -14339,6 +14332,7 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     if (!(internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         data->exists = 1;
         data->cid = rec->cid;
+        data->nano_internaldate = rec->nano_internaldate;
         r = CYRUSDB_DONE;
     }
 
@@ -14435,6 +14429,7 @@ static void _email_copy_parse(json_t *jemail,
    Uses the same methodology as _email_update_bulk() */
 static void _email_copy_bulk(jmap_req_t *req,
                              struct jmap_copy *copy,
+                             struct conversations_state *from_cstate,
                              json_t *destroy_emails,
                              json_t *debug)
 {
@@ -14445,7 +14440,6 @@ static void _email_copy_bulk(jmap_req_t *req,
     /* Parse creates and add valid updates to todo list. */
     const char *creation_id;
     json_t *jval;
-    bulkupdate.req = req;
     json_object_foreach(copy->create, creation_id, jval) {
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
@@ -14461,17 +14455,28 @@ static void _email_copy_bulk(jmap_req_t *req,
                                           "properties", parser.invalid));
         }
 
-        /* Check if email already exists in to_account */
-        const char *guidrep = _guid_from_id(req->cstate, update->email_id);
-        if (guidrep) {
-            struct _email_exists_rock data = { req, 0, 0 };
+        /* Lookup email in from_account */
+        const char *guidrep = _guid_from_id(from_cstate, update->email_id);
+        if (!guidrep) {
+            json_object_set_new(copy->not_created, creation_id,
+                                json_pack("{s:s}", "type", "notFound"));
+        }
+        else {
+            /* Check if email already exists in to_account */
+            struct _email_exists_rock data = { req, 0, 0, 0 };
             conversations_guid_foreach(req->cstate, guidrep,
                                        _email_exists_cb, &data);
             if (data.exists) {
+                char email_id[JMAP_MAX_EMAILID_SIZE];
+                struct message_guid guid;
+
+                message_guid_decode(&guid, guidrep);
+                jmap_set_emailid(req->cstate->version, &guid,
+                                 data.nano_internaldate, NULL, email_id);
                 json_object_set_new(copy->not_created, creation_id,
                                     json_pack("{s:s s:s}",
                                               "type", "alreadyExists",
-                                              "existingId", update->email_id));
+                                              "existingId", email_id));
             }
         }
 
@@ -14487,7 +14492,8 @@ static void _email_copy_bulk(jmap_req_t *req,
 
     if (ptrarray_size(&updates)) {
         /* Build and execute bulk update */
-        bulkupdate.copy_from_accountid = copy->from_account_id;
+        bulkupdate.req = req;
+        bulkupdate.from_cstate = from_cstate;
         int r = _email_bulkupdate_open(req, &bulkupdate, &updates);
         if (!r) {
             /*  Execute plans */
@@ -14509,26 +14515,29 @@ static void _email_copy_bulk(jmap_req_t *req,
                     json_array_append_new(destroy_emails,
                                           json_string(update->email_id));
 
-                    /* Report the message as created */
-                    char blob_id[JMAP_BLOBID_SIZE];
-                    char thread_id[JMAP_THREADID_SIZE];
-
-                    struct _email_exists_rock data = { req, 0, 0 };
+                    /* Lookup new email in to_account */
+                    struct _email_exists_rock data = { req, 0, 0, 0 };
                     conversations_guid_foreach(req->cstate,
-                                               _guid_from_id(req->cstate,
-                                                             update->email_id),
+                                               message_guid_encode(&update->guid),
                                                _email_exists_cb, &data);
 
+                    /* Report the message as created */
+                    char blob_id[JMAP_BLOBID_SIZE];
+                    char email_id[JMAP_MAX_EMAILID_SIZE];
+                    char thread_id[JMAP_THREADID_SIZE];
+
+                    jmap_set_emailid(req->cstate->version, &update->guid,
+                                     data.nano_internaldate, NULL, email_id);
                     jmap_set_threadid(req->cstate->version, data.cid, thread_id);
                     jmap_set_blobid(&update->guid, blob_id);
 
                     json_object_set_new(copy->created, update->creation_id,
                                         json_pack("{s:s, s:s, s:s, s:i}",
-                                                  "id", update->email_id,
+                                                  "id", email_id,
                                                   "blobId", blob_id,
                                                   "threadId", thread_id,
                                                   "size", update->size));
-                    jmap_add_id(req, update->creation_id, update->email_id);
+                    jmap_add_id(req, update->creation_id, email_id);
                 }
             }
             hash_iter_free(&iter);
@@ -14566,6 +14575,7 @@ static int jmap_email_copy(jmap_req_t *req)
     json_t *destroy_emails = json_array();
     char *srcinbox = NULL;
     char *dstinbox = NULL;
+    struct conversations_state *from_cstate = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
@@ -14581,25 +14591,21 @@ static int jmap_email_copy(jmap_req_t *req)
     srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
     dstinbox = mboxname_user_mbox(req->accountid, NULL);
 
+    int r = conversations_open_user(copy.from_account_id, 0, &from_cstate);
+    if (r) {
+        xsyslog(LOG_ERR, "can't open conversations",
+                "fromAccountId=<%s> error=<%s>",
+                copy.from_account_id, error_message(r));
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
+
     if (copy.if_from_in_state) {
         struct mboxname_counters counters;
         assert (!mboxname_read_counters(srcinbox, &counters));
-        
-        struct conversations_state *from_cstate;
-        int r = conversations_open_user(copy.from_account_id, 0, &from_cstate);
-        if (r) {
-            syslog(LOG_ERR,
-                   "jmap_email_copy: can't open source conversations: %s",
-                   error_message(r));
-            jmap_error(req, jmap_server_error(r));
-            goto done;
-        }
-
-        int from_cstate_version = from_cstate->version;
-        conversations_commit(&from_cstate);
 
         const char *if_from_in_state = copy.if_from_in_state;
-        if ((from_cstate_version >= 2 &&  // check for mandatory prefix
+        if ((from_cstate->version >= 2 &&  // check for mandatory prefix
              *if_from_in_state++ != JMAP_STATE_STRING_PREFIX) ||
             atomodseq_t(if_from_in_state) != counters.mailmodseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
@@ -14607,11 +14613,11 @@ static int jmap_email_copy(jmap_req_t *req)
         }
     }
 
-    int r = conversations_open_user(req->accountid, 0, &req->cstate);
+    r = conversations_open_user(req->accountid, 0, &req->cstate);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_email_copy: can't open destination conversations: %s",
-               error_message(r));
+        xsyslog(LOG_ERR, "can't open conversations",
+                "accountId=<%s> error=<%s>",
+                req->accountid, error_message(r));
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
@@ -14633,7 +14639,8 @@ static int jmap_email_copy(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
     }
-    _email_copy_bulk(req, &copy, destroy_emails, debug_bulkupdate);
+
+    _email_copy_bulk(req, &copy, from_cstate, destroy_emails, debug_bulkupdate);
 
     /* Build response */
     copy.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
@@ -14658,6 +14665,7 @@ static int jmap_email_copy(jmap_req_t *req)
     }
 
 done:
+    conversations_commit(&from_cstate);
     json_decref(destroy_emails);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);

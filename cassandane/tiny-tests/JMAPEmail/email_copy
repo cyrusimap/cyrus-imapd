@@ -106,7 +106,7 @@ sub test_email_copy
     ]);
 
     my $copiedEmailId = $res->[0][1]->{created}{1}{id};
-    $self->assert_not_null($copiedEmailId);
+    $self->assert_str_equals($emailId, $copiedEmailId);
     $self->assert_str_equals('Email/set', $res->[1][0]);
     $self->assert_str_equals($emailId, $res->[1][1]{destroyed}[0]);
 
@@ -143,13 +143,15 @@ sub test_email_copy
         }, 'R1'],
     ]);
 
-    $self->assert_str_equals($copiedEmailId, $res->[0][1]->{created}{1}{id});
+    my $copiedEmailId2 = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($copiedEmailId2);
+    $self->assert_str_not_equals($copiedEmailId, $copiedEmailId2);
 
     xlog $self, "get copied email";
     $res = $jmap->CallMethods([
         ['Email/get', {
             accountId => 'cassandane',
-            ids => [$copiedEmailId],
+            ids => [$copiedEmailId2],
             properties => ['keywords', 'receivedAt'],
         }, 'R1']
     ]);
@@ -178,12 +180,12 @@ sub test_email_copy
     ]);
 
     $self->assert_str_equals('alreadyExists', $res->[0][1]->{notCreated}{1}{type});
-    $self->assert_not_null($res->[0][1]->{notCreated}{1}{existingId});
+    $self->assert_str_equals($copiedEmailId2, $res->[0][1]->{notCreated}{1}{existingId});
 
     xlog $self, "delete email from cassandane account";
     $res = $jmap->CallMethods([
         ['Email/set', {
-            destroy => [ $copiedEmailId ]
+            destroy => [ $copiedEmailId2 ]
          }, 'R1'],
     ]);
 
