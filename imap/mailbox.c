@@ -960,20 +960,19 @@ static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_lockt
     mailbox_release_resources(mailbox);
     mboxname_release(&mailbox->namelock);
     mboxname_release(&mailbox->local_namespacelock);
-    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
-    if (r) return r;
-    r = mailbox_open_index(mailbox, index_locktype);
-    if (r) return r;
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
     int haslock = user_isnamespacelocked(userid);
     if (haslock) {
         if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
-            r = IMAP_MAILBOX_LOCKED;
+            return IMAP_MAILBOX_LOCKED;
     }
     else {
         mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
     }
     free(userid);
+    r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
+    if (r) return r;
+    r = mailbox_open_index(mailbox, index_locktype);
     if (r) return r;
     r = mailbox_lock_index_internal(mailbox, index_locktype);
     return r;
