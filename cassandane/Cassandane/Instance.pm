@@ -44,7 +44,7 @@ use Config;
 use Data::Dumper;
 use Errno qw(ENOENT);
 use File::Copy;
-use File::Path qw(mkpath rmtree);
+use File::Path qw(mkpath rmtree remove_tree);
 use File::Find qw(find);
 use File::Basename;
 use File::stat;
@@ -3023,6 +3023,54 @@ sub run_cyr_info
     }
 
     return @res;
+}
+
+sub make_folder_intermediate
+{
+    my ($self, $uniqueid) = @_;
+    my $value;
+
+    # stop service while tinkering
+    $self->stop();
+    $self->{re_use_dir} = 1;
+
+    my $basedir = $self->get_basedir();
+    my $mailboxes_db = "$basedir/conf/mailboxes.db";
+    my $format = $self->{config}->get('mboxlist_db');
+
+    my $I_key = "I$uniqueid";
+    (undef, $value) = $self->run_dbcommand($mailboxes_db, $format,
+                                           [ 'SHOW', $I_key ]);
+    my $I = Cyrus::DList->parse_string($value)->as_perl;
+
+    my $N_key = 'N' . $I->{N};
+    (undef, $value) = $self->run_dbcommand($mailboxes_db, $format,
+                                           [ 'SHOW', $N_key ]);
+    my $N = Cyrus::DList->parse_string($value)->as_perl;
+
+    # make sure it's something we can convert
+    die "must be MBTYPE_EMAIL" if $I->{T} ne 'e';
+    die "must be MBTYPE_EMAIL" if $N->{T} ne 'e';
+
+    # fiddle mailboxes.db records to say its intermediate
+    $I->{T} = q{i};
+    my $new_I = Cyrus::DList->new_perl('', $I);
+    $self->run_dbcommand($mailboxes_db, $format,
+                         [ 'SET', $I_key, $new_I->as_string() ]);
+    $N->{T} = q{i};
+    my $new_N = Cyrus::DList->new_perl('', $N);
+    $self->run_dbcommand($mailboxes_db, $format,
+                         [ 'SET', $N_key, $new_N->as_string() ]);
+
+    # fiddle filesystem stuff
+    my ($a, $b) = (substr($uniqueid, 0, 1), substr($uniqueid, 1, 1));
+    my $data = "$basedir/data/uuid/$a/$b/$uniqueid";
+    my $lock = "$basedir/conf/lock/$uniqueid.lock";
+    remove_tree($data, $lock, { safe => 1 });
+
+    # bring service back up
+    $self->getsyslog();
+    $self->start();
 }
 
 1;
