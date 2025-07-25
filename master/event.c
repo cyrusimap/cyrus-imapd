@@ -112,12 +112,21 @@ EXPORTED struct event *event_new_hourmin(const char *name, int hour, int min)
     return evt;
 }
 
+EXPORTED void event_set_exec(struct event *evt, const char *cmd)
+{
+    strarray_truncate(&evt->exec, 0);
+
+    if (cmd) {
+        /* The xstrdup here looks weird, but strarray_splitm specifically wants
+         * a heap-allocated string it can take ownership of.  It's not leaked.
+         */
+        strarray_splitm(&evt->exec, xstrdup(cmd), NULL, 0);
+    }
+}
+
 EXPORTED void event_free(struct event *evt)
 {
-    if (evt->exec) {
-        strarray_free(evt->exec);
-        evt->exec = NULL;
-    }
+    strarray_fini(&evt->exec);
     free(evt->name);
     free(evt);
 }
