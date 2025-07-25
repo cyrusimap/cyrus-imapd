@@ -72,6 +72,7 @@
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "statuscache.h"
 #include "strhash.h"
 #include "sync_log.h"
 #include "syslog.h"
@@ -390,6 +391,7 @@ EXPORTED int conversations_open_path_version(const char *fname,
     open = xzmalloc(sizeof(struct conversations_open));
     open->s.is_shared = shared;
     open->s.path = xstrdup(fname);
+    open->s.userid = xstrdupnull(userid);
     open->next = open_conversations;
     open_conversations = open;
 
@@ -565,6 +567,7 @@ static void _conv_remove(struct conversations_state *state)
             *prevp = cur->next;
             free(cur->s.annotmboxname);
             free(cur->s.path);
+            free(cur->s.userid);
             free(cur->s.trashmboxname);
             free(cur->s.trashmboxid);
             if (cur->s.counted_flags)
@@ -3509,6 +3512,13 @@ EXPORTED int conversations_enable_compactids(struct conversations_state *state,
             state->compact_emailids = 0;
         }
     }
+
+    // either way, statuscache could be bogus!
+    // NOTE: this could wipe slightly more than just this user, but
+    // statuscache is always safe to wipe, so that's OK.
+    char *inbox = mboxname_user_mbox(state->userid, NULL);
+    statuscache_wipe_prefix(inbox);
+    free(inbox);
 
     return r;
 }
