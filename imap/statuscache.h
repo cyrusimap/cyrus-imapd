@@ -71,4 +71,6 @@ extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 extern int statuscache_invalidate(const char *mboxname,
                                   struct statusdata *sdata);
 
+/* wipe all statuscache records for a prefix */
+extern int statuscache_wipe_prefix(const char *prefix);
 #endif /* STATUSCACHE_H */
