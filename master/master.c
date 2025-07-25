@@ -835,9 +835,12 @@ static int service_is_fork_limited(struct service *s)
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
     if ((unsigned int)s->forkrate >= s->maxforkrate) {
-        struct event *evt = event_new("forkrate wakeup call");
-        evt->mark = now;
-        timeval_add_double(&evt->mark, FORKRATE_INTERVAL);
+        struct timeval mark;
+        struct event *evt;
+
+        mark = now;
+        timeval_add_double(&mark, FORKRATE_INTERVAL);
+        evt = event_new_oneshot("forkrate wakeup call", mark);
 
         schedule_event(evt);
 
@@ -1479,10 +1482,7 @@ static void init_janitor(struct timeval now)
     janitor_mark = now;
     janitor_position = 0;
 
-    evt = event_new("janitor periodic wakeup call");
-    evt->period = 10;
-    evt->periodic = 1;
-    evt->mark = janitor_mark;
+    evt = event_new_periodic("janitor periodic wakeup call", janitor_mark, 10);
     schedule_event(evt);
 }
 
@@ -2337,30 +2337,12 @@ static void add_event(const char *name, struct entry *e, void *rock)
         fatal(buf, EX_CONFIG);
     }
 
-    evt = event_new(name);
-
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
-        struct tm *tm = localtime(&now.tv_sec);
-
-        period = 86400; /* 24 hours */
-        evt->periodic = 0;
-        evt->hour = hour;
-        evt->min = min;
-        tm->tm_hour = hour;
-        tm->tm_min = min;
-        tm->tm_sec = 0;
-        evt->mark.tv_sec = mktime(tm);
-        evt->mark.tv_usec = 0;
-        if (timesub(&now, &evt->mark) < 0.0) {
-            /* already missed it, so schedule for next day */
-            evt->mark.tv_sec += period;
-        }
+        evt = event_new_hourmin(name, hour, min);
     }
     else {
-        evt->periodic = 1;
-        evt->mark = now;
+        evt = event_new_periodic(name, now, period);
     }
-    evt->period = period;
 
     evt->exec = strarray_splitm(NULL, cmd, NULL, 0);
 
@@ -2453,10 +2435,8 @@ static void init_prom_report(struct timeval now)
     prom_report_fname = buf_release(&buf);
     cyrus_mkdir(prom_report_fname, 0755);
 
-    evt = event_new("master prometheus report periodic wakeup call");
-    evt->period = prom_frequency;
-    evt->periodic = 1;
-    evt->mark = now;
+    evt = event_new_periodic("master prometheus report periodic wakeup call",
+                             now, prom_frequency);
     schedule_event(evt);
 
     syslog(LOG_DEBUG, "updating %s every %d seconds",

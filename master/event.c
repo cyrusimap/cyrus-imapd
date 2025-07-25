@@ -51,11 +51,64 @@
 
 static struct event *schedule = NULL;
 
-EXPORTED struct event *event_new(const char *name)
+static inline struct event *event_new(const char *name)
 {
     struct event *evt = xzmalloc(sizeof(*evt));
 
     evt->name = xstrdup(name);
+    return evt;
+}
+
+EXPORTED struct event *event_new_oneshot(const char *name, struct timeval mark)
+{
+    struct event *evt = event_new(name);
+
+    evt->mark = mark;
+
+    return evt;
+}
+
+EXPORTED struct event *event_new_periodic(const char *name,
+                                          struct timeval mark,
+                                          time_t period)
+{
+    struct event *evt = event_new(name);
+
+    assert(period > 0);
+
+    evt->mark = mark;
+    evt->periodic = 1;
+    evt->period = period;
+
+    return evt;
+}
+
+EXPORTED struct event *event_new_hourmin(const char *name, int hour, int min)
+{
+    struct event *evt = event_new(name);
+    struct tm *tm;
+    struct timeval now;
+
+    assert(hour >= 0 && hour <= 23);
+    assert(min >= 0 && min <= 59);
+
+    gettimeofday(&now, NULL);
+    tm = localtime(&now.tv_sec);
+    tm->tm_hour = hour;
+    tm->tm_min = min;
+    tm->tm_sec = 0;
+
+    evt->periodic = 0;
+    evt->period = 86400; /* 24 hours */
+    evt->hour = hour;
+    evt->min = min;
+    evt->mark.tv_sec = mktime(tm);
+
+    if (timesub(&now, &evt->mark) < 0.0) {
+        /* already missed it, so schedule for next day */
+        evt->mark.tv_sec += evt->period;
+    }
+
     return evt;
 }
 
