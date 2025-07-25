@@ -1211,10 +1211,10 @@ static void spawn_schedule(struct timeval now)
 
     /* run all events */
     while (due) {
-        /* if a->exec is NULL, we just used the event to wake up,
+        /* if due->exec is empty, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
-        if (due->exec) {
-            get_executable(path, sizeof(path), due->exec);
+        if (strarray_size(&due->exec)) {
+            get_executable(path, sizeof(path), &due->exec);
             switch (p = fork()) {
             case -1:
                 syslog(LOG_CRIT,
@@ -1240,7 +1240,7 @@ static void spawn_schedule(struct timeval now)
                 }
 
                 syslog(LOG_DEBUG, "about to exec %s", path);
-                execv(path, due->exec->data);
+                execv(path, due->exec.data);
                 syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
                 exit(EX_OSERR);
                 break;
@@ -2344,7 +2344,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
         evt = event_new_periodic(name, now, period);
     }
 
-    evt->exec = strarray_splitm(NULL, cmd, NULL, 0);
+    event_set_exec(evt, cmd);
 
     schedule_event(evt);
 }
