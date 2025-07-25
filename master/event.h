@@ -53,7 +53,7 @@ struct event {
     int hour;
     int min;
     int periodic;
-    strarray_t *exec;
+    strarray_t exec;
     struct event *next;
 };
 
@@ -63,6 +63,8 @@ extern struct event *event_new_periodic(const char *name,
                                         time_t period);
 extern struct event *event_new_hourmin(const char *name, int hour, int min);
 extern void event_free(struct event *evt);
+
+extern void event_set_exec(struct event *evt, const char *cmd);
 
 extern void schedule_event(struct event *evt);
 extern void reschedule_event(struct event *evt, struct timeval now);
