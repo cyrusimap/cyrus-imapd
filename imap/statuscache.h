@@ -48,7 +48,7 @@
 
 /* name of the statuscache database */
 #define FNAME_STATUSCACHEDB "/statuscache.db"
-#define STATUSCACHE_VERSION 9
+#define STATUSCACHE_VERSION 10
 
 /* fill a statuscache entry */
 extern void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sdata);
@@ -71,4 +71,6 @@ extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 extern int statuscache_invalidate(const char *mboxname,
                                   struct statusdata *sdata);
 
+/* wipe all statuscache records for a prefix */
+extern int statuscache_wipe_prefix(const char *prefix);
 #endif /* STATUSCACHE_H */

@@ -89,6 +89,7 @@ struct index_init {
     int want_dav;
     uint32_t want_mbtype;
     int want_expunged;
+    int stay_locked;
     struct vanished_params vanished;
     seqset_t *vanishedlist;
 };
@@ -119,6 +120,7 @@ struct index_state {
     modseq_t delayed_modseq;
     struct index_map *map;
     unsigned mapsize;
+    int has_compactids;
     int internalseen;
     int skipped_expunge;
     int seen_dirty;
@@ -130,7 +132,8 @@ struct index_state {
     char *flagname[MAX_USER_FLAGS];
     char *userid;
     char *mboxname;
-    char *mboxid;
+    char *uniqueid;
+    char *jmapid;
     struct protstream *out;
     struct auth_state *authstate;
     int want_dav;
@@ -163,7 +166,7 @@ typedef struct msgdata {
     strarray_t ref;             /* array of references */
     time_t sentdate;            /* sent date & time of message
                                    from Date: header (adjusted by time zone) */
-    time_t internaldate;        /* internaldate */
+    struct timespec internaldate;/* internaldate */
     time_t savedate;            /* savedate */
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
@@ -302,6 +305,7 @@ extern int index_refresh(struct index_state *state);
 extern void index_checkflags(struct index_state *state, int print, int dirty);
 extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
+extern void index_unlock(struct index_state *state);
 extern void index_release(struct index_state *state);
 extern void index_close(struct index_state **stateptr);
 
@@ -373,7 +377,8 @@ extern int index_getuidsequence(struct index_state *state,
                                 unsigned **uid_list);
 
 extern const char *index_mboxname(const struct index_state *state);
-extern const char *index_mboxid(const struct index_state *state);
+extern const char *index_uniqueid(const struct index_state *state);
+extern const char *index_jmapid(const struct index_state *state);
 extern int index_hasrights(const struct index_state *state, int rights);
 
 extern int index_reload_record(struct index_state *state,

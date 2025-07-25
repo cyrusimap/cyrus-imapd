@@ -1,0 +1,321 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Base64JMAP;
+use Cyrus::IndexFile;
+use Test::Deep ':v1';
+
+# Ensure v20 index files are right. Note that we don't set an explicit
+# :MailboxVersion(20) here (yet) because this test is testing the *latest*
+# known Mailbox version. When that version changes, this test *should* start
+# failing. When that happens, we should explicitly set :MailboxVersion(20)
+# here, and create a new test (probably copied mostly from this one) for the
+# new version. Repeat to infinity.
+sub test_cyrus_indexfile_20
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $ns_in_a_sec = 1_000_000_000;
+    my $sixty_sec_ns = 60 * $ns_in_a_sec;
+
+    my $res = $jmap->CallMethods([[
+        'Mailbox/set' => {
+            create => {
+                "1" => {
+                    name     => "foo",
+                },
+            },
+        }, "a",
+    ]]);
+
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+
+    my $mailbox_id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($mailbox_id);
+
+    my $created_modseq = $res->[0][1]{newState};
+    $self->assert_not_null($created_modseq);
+
+    $created_modseq =~ s/^J//;
+
+    # Our base assumptions. Will be overridden below as things change
+    my %header_expect = (
+        Answered          => 0,
+        Deleted           => 0,
+        DeletedModseq     => 0,
+        Exists            => 0,
+        FirstExpunged     => 0,
+        Flagged           => 0,
+        Format            => 0,
+        Generation        => 0,
+        LastAppenddate    => 0,
+        LastCleanup       => 0,
+        LastUid           => 0,
+        LeakedCache       => 0,
+        MinorVersion      => 20,
+        NumRecords        => 0,
+        Options           => '00000000000000000000000000000001',
+        Pop3LastLogin     => 0,
+        Pop3ShowAfter     => 0,
+        QuotaAnnotUsed    => 0,
+        QuotaDeletedUsed  => 0,
+        QuotaExpungedUsed => 0,
+        QuotaUsed         => 0,
+        RecentTime        => 0,
+        RecentUid         => 0,
+        Unseen            => 0,
+
+        CreatedModseq     => $created_modseq,
+        HighestModseq     => $created_modseq,
+        UidValidity       => re('\A[1-9][0-9]+\z'),
+        ChangesEpoch      => num(time * $ns_in_a_sec, $sixty_sec_ns),
+
+        HeaderCrc         => ignore(),
+        HeaderFileCRC     => ignore(),
+        SyncCRCsAnnot     => ignore(),
+        SyncCRCsBasic     => ignore(),
+
+        RecordSize        => 144,
+        StartOffset       => 192,
+    );
+
+    xlog $self, "Checking index for newly created folder";
+    {
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(0, 0+@recs);
+    }
+
+    xlog $self, "Appending a message then checking again";
+    $self->{store}->set_folder('foo');
+
+    my $msg = $self->make_message('A message');
+
+    $res = $jmap->CallMethods([
+        [
+            'Email/query' => {
+                filter => {
+                    inMailbox => $mailbox_id,
+                },
+            }, 'a',
+        ], [
+            'Email/get' => {
+                '#ids' => {
+                    resultOf => 'a',
+                    name     => 'Email/query',
+                    path     => '/ids',
+                },
+            }, 'b',
+        ],
+    ]);
+
+    my $email_id = $res->[0][1]{ids}[0];
+    $self->assert_not_null($email_id);
+
+    my $cid = $res->[1][1]{list}[0]{threadId} =~ s/^T//r;
+    $self->assert_not_null($cid);
+
+    $cid =~ s/^A//;
+    $cid = unpack('H*', decode_base64jmap($cid));
+
+    my $guid = $res->[1][1]{list}[0]{blobId} =~ s/^G//r;
+    $self->assert_not_null($guid);
+
+    my %record_expect = (
+        BaseCID       => '0' x 16,
+        CID           => $cid,
+        CreatedModseq => $created_modseq + 1,
+        MessageGuid   => $guid,
+        Modseq        => $created_modseq + 1,
+        Size          => length $msg->as_string,
+        SystemFlags   => {},
+        Uid           => 1,
+        UserFlags     => '0' x 128,
+
+        GmTime        => num(time * $ns_in_a_sec, $sixty_sec_ns),
+        InternalDate  => num(time * $ns_in_a_sec, $sixty_sec_ns),
+        LastUpdated   => num(time * $ns_in_a_sec, $sixty_sec_ns),
+        SaveDate      => num(time * $ns_in_a_sec, $sixty_sec_ns),
+
+        # cyrus clamps to day so we need to do two different things here:
+        #   - test that our SentDate is nanoseconds for *start of day*
+        #   - account for day wrapping to next by the time we get here by
+        #   - allowing SentDate to be start of *yesterday*
+        SentDate      => any(
+            $self->sentdate_ts(time) * $ns_in_a_sec, # Start of today
+            ($self->sentdate_ts(time) - 86400) * $ns_in_a_sec, # Start of yesterday
+        ),
+
+        CacheCrc      => ignore(),
+        RecordCrc     => ignore(),
+        CacheOffset   => ignore(),
+        HeaderSize    => ignore(),
+        CacheVersion  => ignore(),
+    );
+
+    xlog $self, "Checking index for newly created message";
+    {
+        %header_expect = (
+            %header_expect,
+
+            HighestModseq  => $created_modseq + 1,
+            LastAppenddate => num(time * $ns_in_a_sec, $sixty_sec_ns),
+            LastUid        => 1,
+            RecentTime     => num(time * $ns_in_a_sec, $sixty_sec_ns),
+            RecentUid      => 1,
+            Exists         => 1,
+            NumRecords     => 1,
+            Unseen         => 1,
+            QuotaUsed      => length $msg->as_string,
+        );
+
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(1, 0+@recs);
+
+        $self->assert_cmp_deeply(\%record_expect, $recs[0]);
+    }
+
+    xlog $self, "Marking a message answered then checking again";
+    $res = $jmap->CallMethods([[
+        "Email/set" => {
+            update => {
+                $email_id => {
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                },
+            },
+        }, 'a',
+    ]]);
+
+    $self->assert_not_null($res->[0][1]{updated});
+
+    {
+        %header_expect = (
+            %header_expect,
+
+            HighestModseq => $created_modseq + 2,
+            Unseen        => 0,
+        );
+
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(1, 0+@recs);
+
+        %record_expect = (
+            %record_expect,
+
+            Modseq        => $created_modseq + 2,
+            SystemFlags   => { '\\Seen' => 1 },
+        );
+
+        $self->assert_cmp_deeply(\%record_expect, $recs[0]);
+    }
+
+    xlog $self, "Deleting a message then checking again";
+    $res = $jmap->CallMethods([[
+        'Email/set' => {
+            destroy => [ $email_id ]
+        }, 'a',
+    ]]);
+
+    $self->assert_str_equals($email_id, $res->[0][1]{destroyed}[0]);
+
+    {
+        %header_expect = (
+            %header_expect,
+
+            HighestModseq     => $created_modseq + 3,
+            QuotaUsed         => 0,
+            FirstExpunged     => num(time * $ns_in_a_sec, $sixty_sec_ns),
+            Exists            => 0,
+            QuotaExpungedUsed => length $msg->as_string,
+
+        );
+
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(1, 0+@recs);
+
+        %record_expect = (
+            %record_expect,
+
+            Modseq        => $created_modseq + 3,
+            SystemFlags   => {
+                '\\Seen'     => 1,
+                '\\Deleted'  => 1, # new
+                '[EXPUNGED]' => 1, # new
+            },
+        );
+
+        $self->assert_cmp_deeply(\%record_expect, $recs[0]);
+    }
+
+    xlog $self, "Check offsets";
+
+    my $index = $self->index_file_for('user.cassandane.foo');
+
+    # Some header fields
+    $self->assert_num_equals(0, $index->header_offset_for('Generation'));
+    $self->assert_num_equals(88, $index->header_offset_for('LastUid'));
+    $self->assert_num_equals(188, $index->header_offset_for('HeaderCrc'));
+
+    # Some record fields
+    $self->assert_num_equals(0, $index->record_offset_for('Uid'));
+    $self->assert_num_equals(16, $index->record_offset_for('SentDate'));
+    $self->assert_num_equals(140, $index->record_offset_for('RecordCrc'));
+
+    xlog $self, "Check times";
+
+    # A header field, and some special/non-special record fields
+    my %expect = map {
+        (
+            $_         => num(time, 60),
+            $_ . "_ns" => num(0),
+        )
+    } qw(RecentTime SaveDate);
+
+    # InternalDate actually gets tv_nsec
+    $expect{InternalDate} = num(time, 60);
+    $expect{InternalDate_ns} = num(0, 1000000000);
+
+    # cyrus clamps to day
+    $expect{SentDate} = any(
+        $self->sentdate_ts(time), # Start of today
+        $self->sentdate_ts(time) - 86400, # Start of yesterday
+    ),
+    $expect{SentDate_ns} = 0;
+
+    my @recs = $self->index_file_records($index);
+    $self->assert_num_equals(1, 0+@recs);
+
+    my $rec = $recs[0];
+
+    my %got = (
+        RecentTime    => $index->tv_sec($index->header_copy->{RecentTime}),
+        RecentTime_ns => $index->tv_nsec($index->header_copy->{RecentTime}),
+    );
+
+    for my $rfield (qw(InternalDate SaveDate SentDate)) {
+        $got{$rfield} = $index->tv_sec($rec->{$rfield});
+        $got{$rfield . '_ns'} = $index->tv_nsec($rec->{$rfield});
+    }
+
+    $self->assert_cmp_deeply(\%expect, \%got);
+
+    # Really ensure we get expected times
+    my $time = time + 1234;
+
+    my $fake_ns = ($time * $ns_in_a_sec) + 5555;
+    $self->assert_num_equals($time, $index->tv_sec($fake_ns));
+    $self->assert_num_equals(5555, $index->tv_nsec($fake_ns));
+}

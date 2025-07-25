@@ -285,13 +285,14 @@ EXPORTED int msgrecord_hasflag(msgrecord_t *mr, const char *flag, int *has)
     return 0;
 }
 
-EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t)
+EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, struct timespec *t)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    *t = mr->record.internaldate;
+    t->tv_sec  = mr->record.internaldate.tv_sec;
+    t->tv_nsec = mr->record.internaldate.tv_nsec;
     return 0;
 }
 
@@ -301,10 +302,10 @@ EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    if (mr->record.savedate)
-        *t = mr->record.savedate;
+    if (mr->record.savedate.tv_sec)
+        *t = mr->record.savedate.tv_sec;
     else
-        *t = mr->record.internaldate;
+        *t = mr->record.internaldate.tv_sec;
     return 0;
 }
 
@@ -314,7 +315,7 @@ EXPORTED int msgrecord_get_lastupdated(msgrecord_t *mr, time_t *t)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    *t = mr->record.last_updated;
+    *t = mr->record.last_updated.tv_sec;
     return 0;
 }
 
@@ -677,13 +678,14 @@ EXPORTED int msgrecord_set_cache_offset(msgrecord_t *mr, size_t offset)
     return 0;
 }
 
-EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, time_t internaldate)
+EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, struct timespec *internaldate)
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    mr->record.internaldate = internaldate;
+    mr->record.internaldate.tv_sec  = internaldate->tv_sec;
+    mr->record.internaldate.tv_nsec = internaldate->tv_nsec;
     return 0;
 }
 
@@ -693,7 +695,7 @@ EXPORTED int msgrecord_set_savedate(msgrecord_t *mr, time_t savedate)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    mr->record.savedate = savedate;
+    mr->record.savedate.tv_sec = savedate;
     return 0;
 }
 
