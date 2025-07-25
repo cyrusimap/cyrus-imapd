@@ -706,8 +706,11 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
                            ((double)ctx->args.expunge_seconds/SECS_IN_A_DAY));
         }
 
-        /* XXX _ a control for this too? */
-        ctx->erock.tombstone_mark = time(0) - SECS_IN_A_DAY*7;
+        if (ctx->args.delete_seconds < 0) {
+            ctx->erock.tombstone_mark = 0;
+        } else {
+            ctx->erock.tombstone_mark = time(0) - ctx->args.delete_seconds;
+        }
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, expire,
