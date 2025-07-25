@@ -294,7 +294,11 @@ static int wipe_cb(void *rock,
 
 EXPORTED int statuscache_wipe_prefix(const char *prefix)
 {
+    if (!config_getswitch(IMAPOPT_STATUSCACHE))
+        return 0;
     init_internal();
+    if (!statuscachedb)
+        return 0;
     struct txn *tid = NULL;
     int r = cyrusdb_foreach(statuscachedb, prefix, strlen(prefix), NULL, wipe_cb, &tid, &tid);
     if (r) {
