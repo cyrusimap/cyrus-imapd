@@ -104,6 +104,7 @@ struct conversations_state {
     struct conv_quota quota;
     int trashfolder;
     int version;
+    char *userid;
     char *trashmboxname;
     char *trashmboxid;
     char *path;
