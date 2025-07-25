@@ -281,6 +281,29 @@ static int statuscache_lookup(const char *mboxname, const char *userid,
     return 0;
 }
 
+static int wipe_cb(void *rock,
+                   const char *key,
+                   size_t keylen,
+                   const char *val __attribute__((unused)),
+                   size_t vallen __attribute__((unused)))
+{
+    struct txn **tidptr = (struct txn **)rock;
+    int r = cyrusdb_delete(statuscachedb, key, keylen, tidptr, /*force*/1);
+    return r;
+}
+
+EXPORTED int statuscache_wipe_prefix(const char *prefix)
+{
+    init_internal();
+    struct txn *tid = NULL;
+    int r = cyrusdb_foreach(statuscachedb, prefix, strlen(prefix), NULL, wipe_cb, &tid, &tid);
+    if (r) {
+        int r2 = cyrusdb_abort(statuscachedb, tid);
+        return (r2 ? r2 : r);
+    }
+    return cyrusdb_commit(statuscachedb, tid);
+}
+
 static int statuscache_store(const char *mboxname,
                              struct statusdata *sdata,
                              struct txn **tidptr)
