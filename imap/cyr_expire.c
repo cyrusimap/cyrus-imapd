@@ -135,6 +135,7 @@ struct expire_rock {
     bit32 userflags[MAX_USER_FLAGS/32];
     bool do_userflags;
     bool skip_annotate;
+    strarray_t to_cleanup;
 };
 
 struct conversations_rock {
@@ -185,6 +186,7 @@ static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
 
     construct_hash_table(&ctx->erock.table, 10000, 1);
     strarray_init(&ctx->drock.to_delete);
+    strarray_init(&ctx->erock.to_cleanup);
     construct_hash_table(&ctx->crock.seen, 100, 1);
 
     cyrus_init(ctx->args.altconfig, progname, 0, 0);
@@ -207,6 +209,7 @@ static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
     free_hash_table(&ctx->erock.table, free);
     free_hash_table(&ctx->crock.seen, NULL);
     strarray_fini(&ctx->drock.to_delete);
+    strarray_fini(&ctx->erock.to_cleanup);
 
     duplicate_done();
     sasl_done();
@@ -494,7 +497,10 @@ static int expire(const mbentry_t *mbentry, void *rock)
         if (mbentry->mtime < erock->tombstone_mark) {
             verbosep("Removing stale tombstone for %s", mbentry->name);
             syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
-            mboxlist_deletelock(mbentry);
+            /* track the deletion so we know we can't calculate Mailbox/changes
+             * over this modseq.  Don't do inboxes, because when we delete them
+             * we have removed the counters */
+            strarray_append(&erock->to_cleanup, mbentry->name);
         }
         goto done;
     }
@@ -739,6 +745,33 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
                            ctx->erock.userflags_expunged);
         }
 
+        int i;
+        int n = strarray_size(&ctx->erock.to_cleanup);
+        for (i = n; i > 0; i--) {
+            const char *name = strarray_nth(&ctx->erock.to_cleanup, i-1);
+            mbentry_t *mbentry = NULL;
+            if (mboxlist_lookup_allow_all(name, &mbentry, NULL))
+                continue;
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+            if (!mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+                mboxname_setmodseq(mbentry->name, mbentry->foldermodseq,
+                                   mbentry->mbtype & ~MBTYPE_DELETED,
+                                   MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
+            }
+            mboxlist_delete(mbentry);
+            if (mboxname_isusermailbox(mbentry->name, 1)) {
+                // clean up again, counters probably got re-created
+                user_deletedata(mbentry, 1);
+            }
+            mboxname_release(&namespacelock);
+            mboxlist_entry_free(&mbentry);
+        }
+
+        if (n) {
+            syslog(LOG_NOTICE, "Cleaned up %d expired mboxlist tombstones", n);
+            verbosep("Cleaned up %d expired mboxlist tombstones", n);
+        }
+
     }
 
     return 0;
@@ -798,8 +831,8 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         else
             mboxlist_allmbox(ctx->args.mbox_prefix, delete, &ctx->drock, MBOXTREE_INTERMEDIATES);
 
-        for (i = 0 ; i < ctx->drock.to_delete.count ; i++) {
-            char *name = ctx->drock.to_delete.data[i];
+        for (i = strarray_size(&ctx->drock.to_delete); i > 0; i--) {
+            const char *name = strarray_nth(&ctx->drock.to_delete, i-1);
 
             signals_poll();
 
