@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_changes_tombstones
+    :DelayedDelete :NoAltNamespace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    $imap->create('INBOX.foo');
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { }, 'R1'],
+    ]);
+    my $fooId;
+    if ($res->[0][1]{list}[0]{name} eq 'foo') {
+        $fooId = $res->[0][1]{list}[0]{id};
+    }
+    else {
+        $fooId = $res->[0][1]{list}[1]{id};
+    }
+    $self->assert_not_null($fooId);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    $imap->delete('INBOX.foo');
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+    my $destId = $res->[0][1]{destroyed}[0];
+    $self->assert_str_equals($fooId, $destId);
+    my $newstate = $res->[0][1]{newState};
+    $self->assert_str_not_equals($state, $newstate);
+
+    $imap->create('INBOX.bar');
+
+    # run cyr_expire to nuke all the changes
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0', '-X' => '0', '-E' => '0' );
+
+    # we can't calculate changes any more
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R1'],
+    ]);
+
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}

@@ -152,9 +152,10 @@ static int reset_single(const char *userid)
     free(inbox);
     if (r) goto fail;
 
-    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_INTERMEDIATES|MBOXTREE_DELETED);
     if (r) goto fail;
 
+    // delete in reverse order so we delete the INBOX last
     for (i = mblist->count; i; i--) {
         const char *name = strarray_nth(mblist, i-1);
         int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT |

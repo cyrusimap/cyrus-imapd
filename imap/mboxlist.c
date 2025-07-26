@@ -2527,7 +2527,15 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             r = IMAP_IOERROR;
             if (!force) goto done;
         }
-        if (r && !force) goto done;
+        /* bump the folder deletedmodseq so we know we can't calculate
+         * Mailbox/changes from before this.  Don't bump for the inbox
+         * because when that's being deleted it's the last entry for
+         * the user */
+        if (!mboxname_isusermailbox(mbentry->name, 1) && !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+            mboxname_setmodseq(mbentry->name, mbentry->foldermodseq,
+                               mbentry->mbtype & ~MBTYPE_DELETED,
+                               MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
+        }
     }
 
  done:
