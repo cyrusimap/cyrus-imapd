@@ -414,7 +414,7 @@ static int archive(const mbentry_t *mbentry, void *rock)
         get_duration_annotation(mbentry->name, IMAP_ANNOT_NS "archive",
                              &archive_seconds, false)) {
         arock->archive_mark = archive_seconds ?
-            time(0) - archive_seconds : 0;
+            time(0) - archive_seconds + 1 : 0;
     }
 
     /* The default callback for mailbox_archive() is mailbox_should_archive()
@@ -523,7 +523,7 @@ restart:
                              &expire_seconds, true)) {
         /* add mailbox to table */
         erock->expire_mark = expire_seconds ?
-            time(0) - expire_seconds : 0 /* never */ ;
+            time(0) - expire_seconds + 1 : 0 /* never */ ;
         hash_insert(mbentry->name,
                     xmemdup(&erock->expire_mark, sizeof(erock->expire_mark)),
                     &erock->table);
@@ -609,7 +609,7 @@ static int delete(const mbentry_t *mbentry, void *rock)
         get_duration_annotation(mbentry->name, IMAP_ANNOT_NS "delete",
                              &delete_seconds, false)) {
         drock->delete_mark = delete_seconds ?
-            time(0) - delete_seconds: 0;
+            time(0) - delete_seconds + 1 : 0;
     }
 
     if ((timestamp == 0) || (timestamp > drock->delete_mark))
@@ -674,7 +674,7 @@ static int do_archive(struct cyr_expire_ctx *ctx)
     if (ctx->args.archive_seconds >= 0) {
         syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0",
                ctx->args.archive_seconds);
-        ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds;
+        ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds + 1;
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, archive,
@@ -700,7 +700,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         if (ctx->args.expunge_seconds < 0) {
             ctx->erock.expunge_mark = 0;
         } else {
-            ctx->erock.expunge_mark = time(0) - ctx->args.expunge_seconds;
+            ctx->erock.expunge_mark = time(0) - ctx->args.expunge_seconds + 1;
 
             verbosep("Expunging deleted messages in mailboxes older than %0.2f days",
                            ((double)ctx->args.expunge_seconds/SECS_IN_A_DAY));
@@ -709,7 +709,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         if (ctx->args.delete_seconds < 0) {
             ctx->erock.tombstone_mark = 0;
         } else {
-            ctx->erock.tombstone_mark = time(0) - ctx->args.delete_seconds;
+            ctx->erock.tombstone_mark = time(0) - ctx->args.delete_seconds + 1;
         }
 
         if (ctx->args.userid)
@@ -750,7 +750,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
         int cid_expire_seconds;
 
         cid_expire_seconds = config_getduration(IMAPOPT_CONVERSATIONS_EXPIRE_AFTER, 'd');
-        ctx->crock.expire_mark = time(0) - cid_expire_seconds;
+        ctx->crock.expire_mark = time(0) - cid_expire_seconds + 1;
 
         verbosep("Removing conversation entries older than %0.2f days",
                        (double)(cid_expire_seconds/SECS_IN_A_DAY));
@@ -790,7 +790,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         verbosep("Removing deleted mailboxes older than %0.2f days",
                  ((double)ctx->args.delete_seconds/SECS_IN_A_DAY));
 
-        ctx->drock.delete_mark = time(0) - ctx->args.delete_seconds;
+        ctx->drock.delete_mark = time(0) - ctx->args.delete_seconds + 1;
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, delete,
