@@ -2313,9 +2313,7 @@ done:
 static void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
-    /* Note: masterconf_getstring() shares a static buffer with
-     * masterconf_getint() so we *must* strdup here */
-    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
+    const char *cmd = masterconf_getstring(e, "cmd", "");
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
     struct timeval now;
@@ -2324,13 +2322,12 @@ static void add_event(const char *name, struct entry *e, void *rock)
     gettimeofday(&now, 0);
 
     if (!strcmp(cmd,"")) {
-        char buf[256];
+        char buf[4096];
         snprintf(buf, sizeof(buf),
                  "unable to find command or port for event '%s'", name);
 
         if (ignore_err) {
             syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
-            free(cmd);
             return;
         }
 
