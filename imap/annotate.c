@@ -1814,8 +1814,8 @@ static void annotation_get_lastpop(annotate_state_t *state,
 
     assert(mailbox);
 
-    if (mailbox->i.pop3_last_login) {
-        time_to_rfc3501(mailbox->i.pop3_last_login, valuebuf,
+    if (mailbox->i.pop3_last_login.tv_sec) {
+        time_to_rfc3501(mailbox->i.pop3_last_login.tv_sec, valuebuf,
                         sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
@@ -1848,9 +1848,10 @@ static void annotation_get_pop3showafter(annotate_state_t *state,
 
     assert(mailbox);
 
-    if (mailbox->i.pop3_show_after)
+    if (mailbox->i.pop3_show_after.tv_sec)
     {
-        time_to_rfc3501(mailbox->i.pop3_show_after, valuebuf, sizeof(valuebuf));
+        time_to_rfc3501(mailbox->i.pop3_show_after.tv_sec,
+                        valuebuf, sizeof(valuebuf));
         buf_appendcstr(&value, valuebuf);
     }
 
@@ -1882,7 +1883,7 @@ static void annotation_get_foldermodseq(annotate_state_t *state,
     annotate_state_need_mbentry(state);
     assert(state->mbentry);
 
-    buf_printf(&value, "%llu", state->mbentry->foldermodseq);
+    buf_printf(&value, MODSEQ_FMT, state->mbentry->foldermodseq);
     output_entryatt(state, entry->name, "", &value);
 
     buf_free(&value);
@@ -1903,7 +1904,7 @@ static void annotation_get_usermodseq(annotate_state_t *state,
     mboxname = mboxname_user_mbox(state->userid, NULL);
     mboxname_read_counters(mboxname, &counters);
 
-    buf_printf(&value, "%llu", counters.highestmodseq);
+    buf_printf(&value, MODSEQ_FMT, counters.highestmodseq);
 
     output_entryatt(state, entry->name, state->userid, &value);
     free(mboxname);
@@ -1923,7 +1924,13 @@ static void annotation_get_usercounters(annotate_state_t *state,
     mboxname = mboxname_user_mbox(state->userid, NULL);
     int r = mboxname_read_counters(mboxname, &counters);
 
-    if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
+    if (!r) buf_printf(&value, "%u "  MODSEQ_FMT " "
+                       MODSEQ_FMT " " MODSEQ_FMT " "
+                       MODSEQ_FMT " " MODSEQ_FMT " "
+                       MODSEQ_FMT " " MODSEQ_FMT " "
+                       MODSEQ_FMT " " MODSEQ_FMT " "
+                       MODSEQ_FMT " " MODSEQ_FMT " "
+                       "%u",
                        counters.version, counters.highestmodseq,
                        counters.mailmodseq, counters.caldavmodseq,
                        counters.carddavmodseq, counters.notesmodseq,
@@ -2065,6 +2072,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
     },
     {
         /* we use 'basethrid' to support split threads */
+        /* prior to version 20, there was no storage for basethrid, so it became an annotation */
         IMAP_ANNOT_NS "basethrid",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -3630,11 +3638,11 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
             return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
-    if (date != mailbox->i.pop3_show_after) {
+    if (date != mailbox->i.pop3_show_after.tv_sec) {
         if (!maywrite) return IMAP_PERMISSION_DENIED;
         mailbox_index_dirty(mailbox);
         mailbox_modseq_dirty(mailbox);
-        mailbox->i.pop3_show_after = date;
+        mailbox->i.pop3_show_after.tv_sec = date;
         if (!state->silent)
             mboxlist_update_foldermodseq(mailbox_name(mailbox), mailbox->i.highestmodseq);
     }

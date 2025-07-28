@@ -140,6 +140,17 @@ static void shut_down(int code)
     exit(code);
 }
 
+static int delete_cb(void *rock,
+                     const char *key,
+                     size_t keylen,
+                     const char *val __attribute__((unused)),
+                     size_t vallen __attribute__((unused)))
+{
+    struct conversations_state *state = (struct conversations_state *)rock;
+    int r = cyrusdb_delete(state->db, key, keylen, &state->txn, /*force*/1);
+    return r;
+}
+
 int main(int argc, char **argv)
 {
     int opt, i, r;
@@ -156,7 +167,7 @@ int main(int argc, char **argv)
     progname = basename(argv[0]);
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:GIMOPRUV:fnop:qrsux";
+    static const char short_options[] = "C:GIMOPRUV:Tfnop:qrsux";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -168,6 +179,7 @@ int main(int argc, char **argv)
         { "guid-mismatch-keep", no_argument, NULL, 'R' },
         { "guid-mismatch-discard", no_argument, NULL, 'U' },
         { "set-version", required_argument, NULL, 'V' },
+        { "recalc-nanosec", no_argument, NULL, 'T' },
         { "scan-filesystem", no_argument, NULL, 'f' },
         { "dry-run", no_argument, NULL, 'n' },
         { "ignore-odd-files", no_argument, NULL, 'o' },
@@ -176,6 +188,7 @@ int main(int argc, char **argv)
         { "recursive", no_argument, NULL, 'r' },
         { "no-stat", no_argument, NULL, 's' },
         { "userids", no_argument, NULL, 'u' },
+        { "keep-cache", no_argument, NULL, 'c' },
         { "ignore-disk-metadata", no_argument, NULL, 'x' },
 
         { 0, 0, 0, 0 },
@@ -260,6 +273,14 @@ int main(int argc, char **argv)
                 setversion = atoi(optarg);
             break;
 
+        case 'T':
+            reconstruct_flags |= RECONSTRUCT_RECALC_NANOSEC;
+            break;
+
+        case 'c':
+            reconstruct_flags |= RECONSTRUCT_KEEP_CACHE;
+            break;
+
         default:
             usage();
         }
@@ -278,6 +299,12 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (dousers && dopaths) {
+        cyrus_done();
+        usage();
+    }
+
+    if ((reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC) &&
+        !(dousers && setversion)) {
         cyrus_done();
         usage();
     }
@@ -358,6 +385,43 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         if (dousers) {
+            if (setversion &&
+                (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC) &&
+                (reconstruct_flags & RECONSTRUCT_MAKE_CHANGES)) {
+                /* delete G & J keys in conversations db */
+                struct conversations_state *state = NULL;
+
+                r = conversations_open_user(argv[i], 0/*shared*/, &state);
+                if (r) {
+                    fprintf(stderr,
+                            "failed opening conversations db for user '%s'\n",
+                            argv[i]);
+                    continue;
+                }
+
+                r = cyrusdb_foreach(state->db, "G", 1, NULL, delete_cb,
+                                    state, &state->txn);
+                if (r) {
+                    fprintf(stderr,
+                            "failed deleting conv G records for user '%s'\n",
+                            argv[i]);
+                }
+                else {
+                    r = cyrusdb_foreach(state->db, "J", 1, NULL, delete_cb,
+                                        state, &state->txn);
+                    if (r) {
+                        fprintf(stderr,
+                                "failed deleting conv J records for user '%s'\n",
+                                argv[i]);
+                    }
+                }
+                if (r) {
+                    conversations_abort(&state);
+                    continue;
+                }
+
+                conversations_commit(&state);
+            }
             mboxlist_usermboxtree(argv[i], NULL, do_reconstruct_p, &rrock,
                                   MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
             continue;
@@ -451,6 +515,8 @@ static void usage(void)
     fprintf(stderr, "-O                 delete odd files (unlike -o)\n");
     fprintf(stderr, "-M                 prefer mailboxes.db over cyrus.header\n");
     fprintf(stderr, "-V <version>       Change the cyrus.index minor version to the version specified\n");
+    fprintf(stderr, "-T                 recalculate nanosecond internaldates\n");
+    fprintf(stderr, "                   (this option ONLY used with -V and -u)\n");
     fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");
     fprintf(stderr, "-P                 give paths to cyrus.header files instead of mailbox prefixes\n");
     fprintf(stderr, "                   (this option ONLY repairs/creates mailboxes.db records)\n");
@@ -517,10 +583,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             mboxname_release(&namespacelock);
             return 0;
         }
-        if (setversion != mailbox->i.minor_version) {
+        if ((setversion != mailbox->i.minor_version) ||
+            (mailbox->i.minor_version >= 20 &&
+             (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC))) {
             int oldversion = mailbox->i.minor_version;
+            ptrarray_t records = PTRARRAY_INITIALIZER;
             /* need to re-set the version! */
-            int r = mailbox_setversion(mailbox, setversion, !make_changes);
+            int r = mailbox_setversion(mailbox, setversion,
+                                       reconstruct_flags, &records);
             char *extname = mboxname_to_external(name, &recon_namespace, NULL);
             if (r) {
                 printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
@@ -532,6 +602,35 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             else {
                 printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
             }
+
+            if (ptrarray_size(&records)) {
+                // make the file timestamps correct and/or cleanup ptrarray
+                int i, n = ptrarray_size(&records);
+
+                mailbox_close(&mailbox);
+                mboxname_release(&namespacelock);
+
+                if (!r) {
+                    r = mailbox_open_irl(name, &mailbox);
+                    if (r) {
+                        syslog(LOG_ERR,
+                               "Failed to open mailbox '%s' to set file timestamps: %s",
+                               extname, error_message(r));
+                    }
+                    else {
+                        mailbox_unlock_index(mailbox, NULL);
+                    }
+                }
+
+                for (i = 0; i < n; i++) {
+                    struct index_record *record = ptrarray_nth(&records, i);
+                    if (mailbox)
+                        mailbox_set_datafile_timestamps(mailbox, record);
+                    free(record);
+                }
+                ptrarray_fini(&records);
+            }
+
             free(extname);
         }
         mailbox_close(&mailbox);

@@ -70,7 +70,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE, ENABLE_COMPACTIDS };
 
 static int verbose = 0;
 
@@ -415,14 +415,14 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     return r;
 }
 
-static int do_recalc(const char *userid, int force)
+static int do_recalc(const char *userid, int do_upgrade)
 {
     struct conversations_state *state = NULL;
 
     int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    if (!force && state->version == CONVERSATIONS_VERSION) {
+    if (do_upgrade && state->version == CONVERSATIONS_VERSION) {
         if (verbose)
             printf("%s already version %d, skipping\n", userid, state->version);
         conversations_commit(&state);
@@ -432,7 +432,7 @@ static int do_recalc(const char *userid, int force)
     // wipe if it's currently folders_byname, will recreate with byid
     int wipe = state->folders_byname;
 
-    r = conversations_zero_counts(state, wipe);
+    r = conversations_zero_counts(state, wipe, do_upgrade);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -445,6 +445,71 @@ static int do_recalc(const char *userid, int force)
     return 0;
 
 err:
+    conversations_abort(&state);
+    return r;
+}
+
+static int check_version_cb(const mbentry_t *mbentry,
+                            void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_irl(mbentry->name, &mailbox);
+    if (r) return r;
+
+    if (mailbox->i.minor_version < 20) {
+        fprintf(stderr,
+                "MUST upgrade mailbox '%s'"
+                " to version 20 or higher before enabling compactids\n",
+                mailbox_name(mailbox));
+        r = IMAP_MAILBOX_BADFORMAT;
+    }
+
+    mailbox_close(&mailbox);
+    return r;
+}
+
+static int do_compactids(const char *userid, int enable)
+{
+    struct conversations_state *state = NULL;
+    int r;
+
+    r = conversations_open_user(userid, 0/*shared*/, &state);
+    if (r) return r;
+
+    if (enable) {
+        if (state->version < 2) {
+            fprintf(stderr,
+                    "MUST upgrade conversations.db for user '%s'"
+                    " to version 2 or higher before enabling compactids\n",
+                    userid);
+            r = IMAP_MAILBOX_BADFORMAT;
+            goto err;
+        }
+
+        r = mboxlist_usermboxtree(userid, NULL, check_version_cb, NULL, 0);
+        if (r) goto err;
+    }
+
+    r = conversations_enable_compactids(state, enable);
+    if (r) goto err;
+
+    /* bump modseq on INBOX so that compactids setting gets replicated */
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    struct mailbox *mailbox = NULL;
+
+    r = mailbox_open_iwl(inbox, &mailbox);
+    free(inbox);
+    if (r) goto err;
+
+    mailbox_modseq_dirty(mailbox);
+    mailbox_close(&mailbox);
+
+    conversations_commit(&state);
+    return 0;
+
+ err:
     conversations_abort(&state);
     return r;
 }
@@ -729,8 +794,9 @@ static int fix_modseqs(struct conversations_state *a,
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_thread(&convb, &threada->guid, threada->internaldate,
-                        threada->createdmodseq, /*delta_exists*/0);
+                conversation_update_thread(&convb, &threada->guid,
+                                           threada->nano_internaldate,
+                                           threada->createdmodseq, /*delta_exists*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip
@@ -860,7 +926,7 @@ static int do_audit(const char *userid)
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp, /*wipe*/0);
+    r = conversations_zero_counts(state_temp, /*wipe*/0, /*do_upgrade*/0);
     if (r) {
         fprintf(stderr, "Failed to zero counts in %s: %s\n",
                 filename_temp, error_message(r));
@@ -944,7 +1010,7 @@ out:
 static int usage(const char *name)
     __attribute__((noreturn));
 
-static int do_user(const char *userid, void *rock __attribute__((unused)))
+static int do_user(const char *userid, void *rock)
 {
     char *fname;
     int r = 0;
@@ -987,7 +1053,7 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         break;
 
     case RECALC:
-        if (do_recalc(userid, /*force*/1))
+        if (do_recalc(userid, /*do_upgrade*/0))
             r = EX_NOINPUT;
         break;
 
@@ -1002,7 +1068,12 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         break;
 
     case UPGRADE:
-        if (do_recalc(userid, /*force*/0))
+        if (do_recalc(userid, /*do_upgrade*/1))
+            r = EX_NOINPUT;
+        break;
+
+    case ENABLE_COMPACTIDS:
+        if (do_compactids(userid, *((int *) rock)))
             r = EX_NOINPUT;
         break;
 
@@ -1033,9 +1104,12 @@ int main(int argc, char **argv)
     const char *alt_config = NULL;
     const char *userid = NULL;
     int recursive = 0;
+    void *rock = NULL;
+    int enable_compactids = 0;
+    int r = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FMRST:bdruUvzZ:";
+    static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
@@ -1053,6 +1127,7 @@ int main(int argc, char **argv)
         { "verbose", no_argument, NULL, 'v' },
         { "clear", no_argument, NULL, 'z' },
         { "clearcid", required_argument, NULL, 'Z' },
+        { "enable-compact-emailids", required_argument, NULL, 'I' },
         { 0, 0, 0, 0 },
     };
 
@@ -1138,6 +1213,17 @@ int main(int argc, char **argv)
             mode = UPGRADE;
             break;
 
+        case 'I':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            if (!strcmp(optarg, "1") ||
+                !strcasecmp(optarg, "on") || !strcasecmp(optarg, "yes")) {
+                enable_compactids = 1;
+            }
+            mode = ENABLE_COMPACTIDS;
+            rock = (void *) &enable_compactids;
+            break;
+
         case 'v':
             verbose++;
             break;
@@ -1176,10 +1262,10 @@ int main(int argc, char **argv)
     signals_add_handlers(0);
 
     if (recursive) {
-        mboxlist_alluser(do_user, NULL);
+        r = mboxlist_alluser(do_user, rock);
     }
     else {
-        do_user(userid, NULL);
+        r = do_user(userid, rock);
     }
 
     if (zerocids) {
@@ -1187,7 +1273,7 @@ int main(int argc, char **argv)
         free(zerocids);
     }
 
-    shut_down(0);
+    shut_down(r);
 }
 
 static int usage(const char *name)
@@ -1201,9 +1287,12 @@ static int usage(const char *name)
     fprintf(stderr, "    -d             dump the conversations database to stdout\n");
     fprintf(stderr, "    -z             zero the conversations DB (make all NULLs)\n");
     fprintf(stderr, "    -b             build conversations entries for any NULL records\n");
-    fprintf(stderr, "    -R             recalculate all counts\n");
+    fprintf(stderr, "    -R             recalculate all counts, do not upgrade version\n");
+    fprintf(stderr, "    -U             upgrade and recalculate all counts. No-op if already at\n"
+                    "                   latest version\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
+    fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "    -r             recursive mode: username is a prefix\n");

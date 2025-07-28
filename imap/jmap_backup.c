@@ -382,11 +382,11 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     }
 
     if ((rrock->jrestore->mode & UNDO_ALL) &&
-        rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch) {
+        rrock->jrestore->cutoff < rrock->mailbox->i.changes_epoch.tv_sec) {
         syslog(log_level,
                "skipping '%s': cutoff (" TIME_T_FMT ") prior to mailbox history (" TIME_T_FMT")",
                mailbox_name(rrock->mailbox), rrock->jrestore->cutoff,
-               rrock->mailbox->i.changes_epoch);
+               rrock->mailbox->i.changes_epoch.tv_sec);
 
         mailbox_close(&rrock->mailbox);
         return HTTP_UNPROCESSABLE;
@@ -405,7 +405,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                "UID %u: expunged: %x, savedate: " TIME_T_FMT ","
                " updated: " TIME_T_FMT ", name: %s",
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
-               record->savedate, record->last_updated,
+               record->savedate.tv_sec, record->last_updated.tv_sec,
                resource ? resource : "NULL");
 
         if (!resource) {
@@ -427,7 +427,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                 continue;
             }
 
-            if (record->savedate > rrock->jrestore->cutoff &&
+            if (record->savedate.tv_sec > rrock->jrestore->cutoff &&
                 (rrock->jrestore->mode & UNDO_ALL)) {
                 syslog(log_level, "skipping UID %u: created AND deleted",
                        record->uid);
@@ -439,7 +439,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Most recent version of the resource before cutoff */
 
             if (!restore &&
-                record->last_updated > rrock->jrestore->cutoff) {
+                record->last_updated.tv_sec > rrock->jrestore->cutoff) {
                 /* Resource has been destroyed after cutoff */
                 restore = xzmalloc(sizeof(struct restore_info));
                 hash_insert(resource, restore, &resources);
@@ -468,7 +468,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
                        record->uid);
             }
         }
-        else if (record->savedate > rrock->jrestore->cutoff) {
+        else if (record->savedate.tv_sec > rrock->jrestore->cutoff) {
             /* Resource has been created or updated after cutoff - 
                assume its a create unless we find a tombstone before cutoff.
                Either way, we need to destroy this version of the resource */
@@ -566,7 +566,8 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         strarray_add(flags, "$restored");
 
         /* append the message to the mailbox. */
-        r = append_fromstage(&as, &body, stage, record->internaldate,
+        r = append_fromstage(&as, &body, stage,
+                             (struct timespec *) &record->internaldate,
                              is_update ? record->createdmodseq : 0,
                              flags, /*nolink*/0, &annots);
 
@@ -1646,7 +1647,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                " intdate: " TIME_T_FMT ", updated: " TIME_T_FMT,
                record->uid, (record->internal_flags & FLAG_INTERNAL_EXPUNGED),
                (record->system_flags & FLAG_DRAFT),
-               record->internaldate, record->last_updated);
+               record->internaldate.tv_sec, record->last_updated.tv_sec);
 
         /* Suppress fetching of Message-ID if not restoring drafts */
         if (rrock->jrestore->mode & UNDO_DRAFTS) {
@@ -1693,7 +1694,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
             (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             /* Destroyed message */
 
-            if (record->last_updated <= rrock->jrestore->cutoff) {
+            if (record->last_updated.tv_sec <= rrock->jrestore->cutoff) {
                 /* Message has been destroyed before cutoff - ignore */
                 syslog(log_level, "skipping UID %u: destroyed before cutoff",
                        record->uid);
@@ -1750,7 +1751,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 rmail->guid = 
                     (record->system_flags & FLAG_DRAFT) ? xstrdup(guid) : NULL;
                 rmail->removed =
-                    isdestroyed_mbox ? timestamp : record->last_updated;
+                    isdestroyed_mbox ? timestamp : record->last_updated.tv_sec;
                 rmail->uid = record->uid;
                 rmail->size = record->size;
                 ptrarray_append(&message->deleted, rmail);

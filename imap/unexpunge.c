@@ -153,10 +153,10 @@ static void list_expunged(const char *mboxname,
     for (i = 0; i < num; i++) {
         const struct index_record *record = &records[i];
         printf("UID: %u\n", record->uid);
-        printf("\tSize: %u\n", record->size);
-        printf("\tSent: %s", ctime(&record->sentdate));
-        printf("\tRecv: %s", ctime(&record->internaldate));
-        printf("\tExpg: %s", ctime(&record->last_updated));
+        printf("\tSize: " UINT64_FMT "\n", record->size);
+        printf("\tSent: %s", ctime(&record->sentdate.tv_sec));
+        printf("\tRecv: %s", ctime(&record->internaldate.tv_sec));
+        printf("\tExpg: %s", ctime(&record->last_updated.tv_sec));
 
         if (mailbox_cacherecord(mailbox, record)) {
             printf("\tERROR: cache record missing or corrupt, "
@@ -212,7 +212,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
             /* otherwise we want this one */
         }
         else if (mode == MODE_TIME) {
-            if (record->last_updated < time_since)
+            if (record->last_updated.tv_sec < time_since)
                 continue;
             /* otherwise we want this one */
         }

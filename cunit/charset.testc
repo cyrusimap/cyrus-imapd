@@ -1382,6 +1382,14 @@ static void test_charset_decode(void)
     TESTCASE("vu_A3g", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
     TESTCASE("vu_A3g==", 6, "\xbe\xef\xc0\xde", 4, ENCODING_BASE64URL);
 
+    /* Base64 JMAPID encoding */
+    TESTCASE("-----------", 11,
+             "\x00\x00\x00\x00\x00\x00\x00\x00", 8, ENCODING_BASE64JMAPID);
+    TESTCASE("zzzzzzzzzzw", 11,
+             "\xff\xff\xff\xff\xff\xff\xff\xff", 8, ENCODING_BASE64JMAPID);
+    TESTCASE("012-abc_TUV", 11,
+             "\x04\x20\xc0\x9a\x7a\x25\x79\xf8", 8, ENCODING_BASE64JMAPID);
+
 #undef TESTCASE
 
     struct buf buf = BUF_INITIALIZER;
@@ -1401,6 +1409,11 @@ static void test_charset_decode(void)
 
     /* Base64url with invalid characters */
     r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64URL);
+    CU_ASSERT_EQUAL(-1, r);
+    buf_reset(&buf);
+
+    /* Base64jmapid with invalid characters */
+    r = charset_decode(&buf, "Zm9v@@@YmFy", 11, ENCODING_BASE64JMAPID);
     CU_ASSERT_EQUAL(-1, r);
     buf_reset(&buf);
 

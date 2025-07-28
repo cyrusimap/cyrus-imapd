@@ -521,6 +521,21 @@ magic(HttpAllowCorsFooExampleCom => sub {
     my $self = shift;
     $self->config_set(httpallowcors => 'https://foo.example.com');
 });
+magic(MailboxVersion => sub {
+    my ($self, $version) = @_;
+
+    unless ($version =~ /\A[0-9]+\z/) {
+        require Carp;
+        Carp::confess("Bad test spec, unknown mailbox version '$version'");
+    }
+
+    $self->{mailbox_version} = $version;
+});
+magic(OldJMAPIds => sub {
+    my ($self) = @_;
+
+    $self->{old_jmap_ids} = 1;
+});
 
 
 # Run any magic handlers indicated by the test name or attributes
@@ -646,6 +661,12 @@ sub _create_instances
         $instance_params{config} = $conf;
         $instance_params{install_certificates} = $want->{install_certificates};
         $instance_params{smtpdaemon} = $want->{smtpdaemon};
+
+        $instance_params{mailbox_version} = $self->{mailbox_version}
+            if exists $self->{mailbox_version};
+
+        $instance_params{old_jmap_ids} = $self->{old_jmap_ids}
+            if exists $self->{old_jmap_ids};
 
         $instance_params{description} = "main instance for test $self->{_name}";
         $self->{instance} = Cassandane::Instance->new(%instance_params);

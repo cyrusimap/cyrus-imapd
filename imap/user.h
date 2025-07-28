@@ -50,6 +50,9 @@
 #define FNAME_SUBSSUFFIX     "sub"
 #define FNAME_COUNTERSSUFFIX "counters"
 
+#define USER_COMPACT_EMAILIDS(cstate) \
+    (cstate && cstate->version >= 2 && cstate->compact_emailids)
+
 /* check if this user should be treated as being on a replica (for user moves,
  * or for actual replicas */
 int user_isreplicaonly(const char *userid);

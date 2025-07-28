@@ -525,11 +525,11 @@ sub assert_not_file_test
 
 sub assert_cmp_deeply
 {
-    my ($self, $have, $want, $desc) = @_;
+    my ($self, $expected, $actual, $desc) = @_;
     $desc ||= "deep comparison matched";
 
     require Test::Deep;
-    my ($ok, $stack) = Test::Deep::cmp_details($want, $have);
+    my ($ok, $stack) = Test::Deep::cmp_details($actual, $expected);
 
     if ($ok) {
         return $self->assert(1, $desc);

@@ -54,7 +54,8 @@
 
 extern int jmap_email_find(jmap_req_t *req, const char *email_id,
                            const char *from_accountid,
-                           char **mboxnameptr, uint32_t *uidptr);
+                           char **mboxnameptr, uint32_t *uidptr,
+                           uint64_t *idateptr);
 extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
                                      msgrecord_t *mr, json_t **msgp);
 

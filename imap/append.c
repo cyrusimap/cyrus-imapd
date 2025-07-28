@@ -266,7 +266,7 @@ EXPORTED int append_commit(struct appendstate *as)
 
     if (as->nummsg) {
         /* Calculate new index header information */
-        as->mailbox->i.last_appenddate = time(0);
+        as->mailbox->i.last_appenddate.tv_sec = time(0);
 
         /* log the append so rolling squatter can index this mailbox */
         sync_log_append(mailbox_name(as->mailbox));
@@ -887,19 +887,51 @@ struct findstage_cb_rock {
     const char *partition;
     const char *guid;
     char *fname;
+    struct {
+        struct timespec *internaldate;
+        struct {
+            uint32_t uid;
+            const char *mboxname;
+        } ignoremsg;
+    } dupcheck;
 };
 
 static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 {
     struct findstage_cb_rock *rock = vrock;
     mbentry_t *mbentry = NULL;
+    int r, ret = 0;
 
     if (rec->part) return 0;
-    // no point copying from archive, spool is on data
-    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
 
-    int r = conv_guidrec_mbentry(rec, &mbentry);
-    if (r) return 0;
+    if (rock->dupcheck.internaldate && rec->version == 4 &&
+        !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        r = conv_guidrec_mbentry(rec, &mbentry);
+        if (r) return 0;
+
+        if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
+            (rec->uid != rock->dupcheck.ignoremsg.uid ||
+             strcmpnull(mbentry->name, rock->dupcheck.ignoremsg.mboxname))) {
+            // found a non-expunged duplicate email; use its internaldate
+            TIMESPEC_FROM_NANOSEC(rock->dupcheck.internaldate,
+                                  rec->nano_internaldate);
+            if (!rock->partition) {
+                // not looking also looking for a existing stage - done
+                ret = CYRUSDB_DONE;
+                goto done;
+            }
+        }
+    }
+
+    // no point copying from archive, spool is on data
+    if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) goto done;
+
+    if (rock->fname) goto done;
+
+    if (!mbentry) {
+        r = conv_guidrec_mbentry(rec, &mbentry);
+        if (r) return 0;
+    }
 
     if (!strcmp(rock->partition, mbentry->partition)) {
         struct stat sbuf;
@@ -910,8 +942,14 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
             if (file) {
                 struct body *body = NULL;
                 r = message_parse_file(file, NULL, NULL, &body, msgpath);
-                if (!r && !strcmp(rock->guid, message_guid_encode(&body->guid)))
+                if (!r && !strcmp(rock->guid, message_guid_encode(&body->guid))) {
                     rock->fname = xstrdup(msgpath);
+                    if (!rock->dupcheck.internaldate ||
+                        rock->dupcheck.internaldate->tv_nsec != UTIME_OMIT) {
+                        // found an existing internaldate or don't care - done
+                        ret = CYRUSDB_DONE;
+                    }
+                }
                 if (body) {
                     message_free_body(body);
                     free(body);
@@ -921,9 +959,10 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
         }
     }
 
+  done:
     mboxlist_entry_free(&mbentry);
 
-    return rock->fname ? CYRUSDB_DONE : 0;
+    return ret;
 }
 
 /*
@@ -935,11 +974,14 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
  */
 EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
                                    struct stagemsg *stage,
-                                   time_t internaldate, time_t savedate,
-                                   modseq_t createdmodseq,
-                                   const strarray_t *flags, int nolink,
-                                   struct entryattlist **user_annotsp)
+                                   struct append_metadata *meta)
 {
+    struct timespec *internaldate = meta->internaldate;
+    time_t savedate = meta->savedate;
+    modseq_t createdmodseq = meta->createdmodseq;
+    const strarray_t *flags = meta->flags;
+    struct entryattlist **user_annotsp = meta->annotations;
+    int nolink = meta->nolink;
     struct mailbox *mailbox = as->mailbox;
     msgrecord_t *msgrec = NULL;
     const char *fname;
@@ -974,29 +1016,50 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
-    if (!nolink) {
+    uint32_t mbtype = mbtype_isa(mailbox_mbtype(mailbox));
+    struct timespec existing_internaldate = { 0, UTIME_OMIT };
+    if (!nolink || mbtype == MBTYPE_EMAIL) {
         /* attempt to find an existing message with the same guid
-           and use it as the stagefile */
+           and use it as the stagefile and/or use its internaldate */
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
         if (cstate) {
-            char *guid = xstrdup(message_guid_encode(&(*body)->guid));
-            struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
+            char guid[2*MESSAGE_GUID_SIZE+1];
+            struct findstage_cb_rock rock = {
+                nolink ? NULL : mailbox_partition(mailbox),
+                strcpy(guid, message_guid_encode(&(*body)->guid)),
+                NULL /*fname*/, { 0 } /*dupcheck*/
+            };
+
+            if (mbtype == MBTYPE_EMAIL) {
+                rock.dupcheck.internaldate = &existing_internaldate;
+                if (meta->replacing.uid) {
+                    rock.dupcheck.ignoremsg.uid      = meta->replacing.uid;
+                    rock.dupcheck.ignoremsg.mboxname = meta->replacing.mboxname;
+                }
+            }
 
             // ignore errors, it's OK for this to fail
             conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
 
-            // if we found a file, remember it
-            if (rock.fname) {
-                syslog(LOG_NOTICE, "found existing file %s for %s; linking", guid, rock.fname);
-                linkfile = rock.fname;
+            // if we found a matching message, use its internaldate
+            if (existing_internaldate.tv_nsec != UTIME_OMIT)
+                internaldate = &existing_internaldate;
+
+            else if (internaldate) {
+                // make sure we don't have a JMAP ID (internaldate) clash
+                conversations_adjust_internaldate(cstate, guid, internaldate);
             }
 
-            free(guid);
+            // if we found a file, use it
+            if (rock.fname) {
+                syslog(LOG_NOTICE, "found existing file %s for %s; linking",
+                       guid, rock.fname);
+                linkfile = rock.fname;
+                goto havefile;
+            }
         }
     }
-
-    if (linkfile) goto havefile;
 
     for (i = 0 ; i < stage->parts.count ; i++) {
         /* ok, we've successfully created the file */
@@ -1057,8 +1120,6 @@ havefile:
     msgrec = msgrecord_new(mailbox);
     r = msgrecord_set_uid(msgrec, uid);
     if (r) goto out;
-    r = msgrecord_set_internaldate(msgrec, internaldate);
-    if (r) goto out;
     r = msgrecord_set_createdmodseq(msgrec, createdmodseq);
     if (r) goto out;
     r = msgrecord_set_bodystructure(msgrec, *body);
@@ -1069,9 +1130,15 @@ havefile:
     }
 
     /* And make sure it has a timestamp */
-    r = msgrecord_get_internaldate(msgrec, &internaldate);
-    if (!r && !internaldate)
-        r = msgrecord_set_internaldate(msgrec, time(NULL));
+    struct timespec now;
+    if (!internaldate || internaldate->tv_nsec >= UTIME_OMIT) {
+        clock_gettime(CLOCK_REALTIME, &now);
+        if (!internaldate)
+            internaldate = &now;
+        else
+            internaldate->tv_nsec = now.tv_nsec;
+    }
+    r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 
     /* should we archive it straight away? */
@@ -1206,6 +1273,21 @@ out:
     return r;
 }
 
+EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
+                                   struct stagemsg *stage,
+                                   struct timespec *internaldate,
+                                   modseq_t createdmodseq,
+                                   const strarray_t *flags, int nolink,
+                                   struct entryattlist **user_annotsp)
+{
+    struct append_metadata meta = {
+        internaldate, /*savedate*/ 0, createdmodseq,
+        flags, user_annotsp, !!nolink, /*replacing*/ { 0, NULL }
+    };
+
+    return append_fromstage_full(as, body, stage, &meta);
+}
+
 EXPORTED int append_removestage(struct stagemsg *stage)
 {
     char *p;
@@ -1240,7 +1322,7 @@ EXPORTED int append_removestage(struct stagemsg *stage)
 EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
                       struct protstream *messagefile,
                       unsigned long size,
-                      time_t internaldate,
+                      struct timespec *internaldate,
                       const strarray_t *flags)
 {
     struct mailbox *mailbox = as->mailbox;
@@ -1256,6 +1338,13 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     msgrec = msgrecord_new(mailbox);
     r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
     if (r) goto out;
+
+    /* And make sure it has a timestamp */
+    struct timespec now;
+    if (!internaldate) {
+        clock_gettime(CLOCK_REALTIME, &now);
+        internaldate = &now;
+    }
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 

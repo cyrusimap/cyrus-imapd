@@ -1146,7 +1146,6 @@ static void test_msg_copy(void)
     buf_printf(&path2, "%s/data/uuid/%c/%c/%s/cyrus.annotations", DBDIR,
                u2[0], u2[1], u2);
     CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
-    CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
     mailbox_close(&mailbox1);
 
     /* copy MBOXNAME1,1 -> MBOXNAME2,1 */
@@ -2002,12 +2001,14 @@ static int create_messages(struct mailbox *mailbox, int count)
         struct appendstate as;
         quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
         FILE *fp;
-        time_t internaldate = time(NULL);
+        struct timespec internaldate;
         struct body *body = NULL;
         struct buf buf = BUF_INITIALIZER;
 
+        clock_gettime(CLOCK_REALTIME, &internaldate);
+
         /* Write the message to the filesystem */
-        if (!(fp = append_newstage(mailbox_name(mailbox), internaldate, 0, &stage))) {
+        if (!(fp = append_newstage(mailbox_name(mailbox), internaldate.tv_sec, 0, &stage))) {
             fprintf(stderr, "append_newstage(%s) failed", mailbox_name(mailbox));
             return IMAP_IOERROR;
         }
@@ -2028,7 +2029,7 @@ static int create_messages(struct mailbox *mailbox, int count)
                     strerror(errno));
             return r;
         }
-        r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
+        r = append_fromstage(&as, &body, stage, &internaldate, 0, NULL, 0, NULL);
         if (r) {
             fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox_name(mailbox),
                     error_message(r));
@@ -2216,7 +2217,7 @@ static int set_up(void)
     /* XXX API abuse? perhaps this should just call mboxlist_create,
      * XXX rather than the low level APIs. */
     r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
-                       makeuuid(),
+                       makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
@@ -2243,7 +2244,7 @@ static int set_up(void)
     namespacelock = mboxname_usernamespacelock(MBOXNAME2_INT);
 
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
-                       makeuuid(),
+                       makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
@@ -2270,7 +2271,7 @@ static int set_up(void)
     namespacelock = mboxname_usernamespacelock(MBOXNAME3_INT);
 
     r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
-                       makeuuid(),
+                       makeuuid(), /*jmapid*/0,
                        /*options*/0, /*uidvalidity*/0,
                        /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);

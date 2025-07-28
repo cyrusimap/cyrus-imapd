@@ -331,10 +331,10 @@ static void test_cid_encode(void)
     static const char STR2[] = "NIL";
     const char *r;
 
-    r = conversation_id_encode(CID1);
+    r = conversation_id_encode(0/*hex encoding*/, CID1);
     CU_ASSERT_STRING_EQUAL(r, STR1);
 
-    r = conversation_id_encode(CID2);
+    r = conversation_id_encode(0/*hex encoding*/, CID2);
     CU_ASSERT_STRING_EQUAL(r, STR2);
 }
 

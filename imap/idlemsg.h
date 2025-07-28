@@ -60,5 +60,6 @@ void idle_done_sock(void);
 int idle_get_sock(void);
 int idle_send(const struct sockaddr_un *remote, json_t *msg);
 json_t *idle_recv(struct sockaddr_un *remote);
+const char *idle_msg_get_mboxid(json_t *msg);
 
 #endif /* IDLEMSG_H */

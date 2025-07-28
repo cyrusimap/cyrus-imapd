@@ -1,0 +1,204 @@
+#!perl
+use Cassandane::Tiny;
+use Cyrus::IndexFile;
+use Test::Deep ':v1';
+
+# Cyrus should handle an incorrect record size v19 record (144 instead of 112)
+# from an earlier attempt at deploying v20 mailboxes
+sub test_19_wrong_record_size
+    :MailboxVersion(19)
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([[
+        'Mailbox/set' => {
+            create => {
+                "1" => {
+                    name     => "foo",
+                },
+            },
+        }, "a",
+    ]]);
+
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+
+    my $mailbox_id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($mailbox_id);
+
+    my $created_modseq = $res->[0][1]{newState};
+    $self->assert_not_null($created_modseq);
+
+    $created_modseq =~ s/^J//;
+
+    # Our base assumptions. Will be overridden below as things change
+    my %v19_header_expect = (
+        Answered          => 0,
+        Deleted           => 0,
+        DeletedModseq     => 0,
+        Exists            => 0,
+        FirstExpunged     => 0,
+        Flagged           => 0,
+        Format            => 0,
+        Generation        => 0,
+        LastAppenddate    => 0,
+        LastCleanup       => 0,
+        LastUid           => 0,
+        LeakedCache       => 0,
+        MinorVersion      => 19,
+        NumRecords        => 0,
+        Options           => '00000000000000000000000000000001',
+        Pop3LastLogin     => 0,
+        Pop3ShowAfter     => 0,
+        QuotaAnnotUsed    => 0,
+        QuotaDeletedUsed  => 0,
+        QuotaExpungedUsed => 0,
+        QuotaUsed         => 0,
+        RecentTime        => 0,
+        RecentUid         => 0,
+        Unseen            => 0,
+
+        CreatedModseq     => $created_modseq,
+        HighestModseq     => $created_modseq,
+        UidValidity       => re('\A[1-9][0-9]+\z'),
+        ChangesEpoch      => num(time, 60),
+
+        HeaderCrc         => ignore(),
+        HeaderFileCRC     => ignore(),
+        SyncCRCsAnnot     => ignore(),
+        SyncCRCsBasic     => ignore(),
+
+        RecordSize        => 112,
+        StartOffset       => 160,
+    );
+
+    xlog $self, "Checking index for newly created folder";
+    {
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%v19_header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(0, 0+@recs);
+    }
+
+    xlog $self, "Appending a message then checking again";
+    $self->{store}->set_folder('foo');
+
+    my $msg = $self->make_message('A message');
+
+    $res = $jmap->CallMethods([
+        [
+            'Email/query' => {
+                filter => {
+                    inMailbox => $mailbox_id,
+                },
+            }, 'a',
+        ], [
+            'Email/get' => {
+                '#ids' => {
+                    resultOf => 'a',
+                    name     => 'Email/query',
+                    path     => '/ids',
+                },
+            }, 'b',
+        ],
+    ]);
+
+    my $email_id = $res->[0][1]{ids}[0];
+    $self->assert_not_null($email_id);
+
+    my $cid = $res->[1][1]{list}[0]{threadId} =~ s/^T//r;
+    $self->assert_not_null($cid);
+
+    my $guid = $res->[1][1]{list}[0]{blobId} =~ s/^G//r;
+    $self->assert_not_null($guid);
+
+    # Okay, let's change recordsize to 144 and rewrite the record to fill
+    # that space like cyrus would have
+    {
+        my $index = $self->index_file_for('user.cassandane.foo');
+        my @recs;
+        while (my $rec = $index->next_record) {
+            push @recs, $rec;
+        }
+        $self->assert_num_equals(1, 0+@recs);
+
+        $self->assert_num_equals(112, $index->{format}{RecordSize});
+
+        $index->{format}{RecordSize} = 144;
+        $index->{header}{RecordSize} = 144;
+        $index->rewrite_header();
+
+        $recs[0]->{RecordSize} = 144;
+        $index->write_record($index->{handle}, $recs[0]);
+
+        # 144 - 112 -> 32 bytes of null padding
+        syswrite($index->{handle}, "\0" x 32);
+    }
+
+    my $v19_email = $res->[1][1]{list}[0];
+
+    my %v19_record_expect = (
+        CID           => $cid,
+        CreatedModseq => $created_modseq + 1,
+        MessageGuid   => $guid,
+        Modseq        => $created_modseq + 1,
+        Size          => length $msg->as_string,
+        SystemFlags   => {},
+        Uid           => 1,
+        UserFlags     => '0' x 128,
+
+        GmTime        => num(time, 60),
+        InternalDate  => num(time, 60),
+        LastUpdated   => num(time, 60),
+        SaveDate      => num(time, 60),
+        SentDate      => any(
+            $self->sentdate_ts(time), # Start of today
+            $self->sentdate_ts(time) - 86400, # Start of yesterday
+        ),
+
+        CacheCrc      => ignore(),
+        RecordCrc     => ignore(),
+        CacheOffset   => ignore(),
+        HeaderSize    => ignore(),
+        CacheVersion  => ignore(),
+    );
+
+    xlog $self, "Checking index for newly created message";
+    {
+        %v19_header_expect = (
+            %v19_header_expect,
+
+            HighestModseq  => $created_modseq + 1,
+            LastAppenddate => num(time, 60),
+            LastUid        => 1,
+            RecentTime     => num(time, 60),
+            RecentUid      => 1,
+            Exists         => 1,
+            NumRecords     => 1,
+            Unseen         => 1,
+            QuotaUsed      => length $msg->as_string,
+
+            # We broke this intentionally
+            RecordSize     => 144,
+        );
+
+        my $index = $self->index_file_for('user.cassandane.foo');
+        $self->assert_cmp_deeply(\%v19_header_expect, $index->header_copy);
+
+        my @recs = $self->index_file_records($index);
+        $self->assert_num_equals(1, 0+@recs);
+
+        $self->assert_cmp_deeply(\%v19_record_expect, $recs[0]);
+    }
+
+    xlog $self, "checking Email/get for correctness";
+
+    $res = $jmap->CallMethods([[
+        'Email/get' => {
+            'ids' => [ $email_id ],
+        }, 'a',
+    ]]);
+
+    $self->assert_cmp_deeply($v19_email, $res->[0][1]{list}[0]);
+}

@@ -120,13 +120,13 @@ static void downgrade_header(struct index_header *i, char *buf, int version,
     *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(record_size);
     /* NUM_RECORDS replaces "exists" in the older headers */
     *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(UP_num_records);
-    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate.tv_sec);
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
 
     /* quotas may be 64bit now */
     *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonll(i->quota_mailbox_used);
 
-    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login.tv_sec);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
@@ -154,14 +154,14 @@ static void downgrade_record(const struct index_record *record, char *buf,
         UP_modseqbase = OFFSET_MESSAGE_GUID+12;
 
     *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
-    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
-    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
+    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate.tv_sec);
+    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate.tv_sec);
     *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
     *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
     /* content_offset in previous versions, identical to header_size */
     *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(UP_content_offset);
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(record->cache_offset);
-    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated.tv_sec);
     *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))
         = htonl(record->system_flags & UP_validflags);
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
@@ -799,8 +799,8 @@ static int cleanup_seen_cb(const mbentry_t *mbentry, void *rock)
     mailbox_index_dirty(mailbox);
     if (mailbox->i.recentuid < sd.lastuid)
         mailbox->i.recentuid = sd.lastuid;
-    if (mailbox->i.recenttime < sd.lastread)
-        mailbox->i.recenttime = sd.lastread;
+    if (mailbox->i.recenttime.tv_sec < sd.lastread)
+        mailbox->i.recenttime.tv_sec = sd.lastread;
 
  done:
     seqset_free(&seq);
@@ -909,7 +909,8 @@ EXPORTED int undump_mailbox(const char *mbname,
         r = mboxlist_lookup(mbname, &mbentry, NULL);
         if (!r) r = mailbox_create(mbname, mbentry->mbtype, /*version*/0,
                                    mbentry->partition, mbentry->acl,
-                                   mbentry->uniqueid, 0, 0, 0, 0, &mailbox);
+                                   mbentry->uniqueid, mbentry->jmapid,
+                                   0, 0, 0, 0, &mailbox);
         mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;
@@ -1312,7 +1313,7 @@ EXPORTED int undump_mailbox(const char *mbname,
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             fname = mailbox_record_fname(mailbox, record);
-            settime.actime = settime.modtime = record->internaldate;
+            settime.actime = settime.modtime = record->internaldate.tv_sec;
             if (utime(fname, &settime) == -1) {
                 r = IMAP_IOERROR;
                 mailbox_iter_done(&iter);

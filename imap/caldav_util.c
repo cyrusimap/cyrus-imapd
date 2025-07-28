@@ -196,7 +196,7 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
             dlist_getdate(dl, "LASTMOD", &user_lastmod);
 
             /* Per-user Last-Modified is latest mod time */
-            *lastmod = MAX(record->internaldate, user_lastmod);
+            *lastmod = MAX(record->internaldate.tv_sec, user_lastmod);
         }
 
         dlist_free(&dl);
@@ -1635,7 +1635,7 @@ static int caldav_bump_defaultalarms_mailbox(struct mailbox *mailbox)
         }
         if (dl) {
             /* Update modseq in the per-user data */
-            dlist_updatedate(dl, "LASTMOD", copyrecord.last_updated);
+            dlist_updatedate(dl, "LASTMOD", copyrecord.last_updated.tv_sec);
             dlist_updatenum64(dl, "MODSEQ", copyrecord.modseq);
             buf_reset(&userdata);
             dlist_printbuf(dl, 1, &userdata);

@@ -48,6 +48,7 @@ use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
 use Cassandane::Util::SHA;
+use Cassandane::Util::Base64JMAP;
 
 our @EXPORT = qw(base_subject);
 
@@ -455,6 +456,20 @@ sub make_cid
     $cid ^= Math::Int64::string_to_uint64("0x91f3d9e10b690b12", 16); # chosen by fair dice roll
     my $res = lc Math::Int64::uint64_to_string($cid, 16);
     return sprintf("%016s", $res);
+}
+
+sub make_thrid
+{
+    my ($self, $legacy) = @_;
+
+    my $hex_cid = $self->make_cid();
+    if ($legacy) {
+        return sprintf("T%s", $hex_cid);
+    }
+
+    my $cid = Math::Int64::string_to_uint64($hex_cid, 16);
+    my $res = encode_base64jmap(Math::Int64::int64_to_net($cid));
+    return sprintf("A%s", $res);
 }
 
 # Handy accessors

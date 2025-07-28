@@ -64,6 +64,7 @@
 #include "times.h"
 #include "user.h"
 #include "xapian_wrap.h"
+#include "xstrlcpy.h"
 
 #ifdef HAVE_LIBCHARDET
 #include <chardet/chardet.h>
@@ -1306,18 +1307,43 @@ EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
     buf[JMAP_BLOBID_SIZE-1] = '\0';
 }
 
-EXPORTED void jmap_set_emailid(const struct message_guid *guid, char *buf)
+EXPORTED void jmap_set_emailid(struct conversations_state *cstate,
+                               const struct message_guid *guid,
+                               uint64_t nanosec, struct timespec *ts,
+                               char *emailid)
 {
-    buf[0] = 'M';
-    memcpy(buf+1, message_guid_encode(guid), JMAP_EMAILID_SIZE-2);
-    buf[JMAP_EMAILID_SIZE-1] = '\0';
+    // initialize a struct buf with char emailid[JMAP_MAX_EMAILID_SIZE]
+    struct buf buf = { emailid, 0, JMAP_MAX_EMAILID_SIZE, 0 };
+
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        buf_putc(&buf, JMAP_EMAILID_PREFIX);
+        NANOSEC_TO_JMAPID(&buf, ts ? TIMESPEC_TO_NANOSEC(ts) : nanosec);
+    }
+    else {
+        buf_putc(&buf, JMAP_LEGACY_EMAILID_PREFIX);
+        buf_appendmap(&buf,
+                      message_guid_encode(guid), JMAP_LEGACY_EMAILID_SIZE-2);
+    }
+
+    buf_cstring(&buf);
 }
 
-EXPORTED void jmap_set_threadid(conversation_id_t cid, char *buf)
+EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
+                                 const mbentry_t *mbentry, char *mboxid)
 {
-    buf[0] = 'T';
-    memcpy(buf+1, conversation_id_encode(cid), JMAP_THREADID_SIZE-2);
-    buf[JMAP_THREADID_SIZE-1] = 0;
+    strlcpy(mboxid,
+            USER_COMPACT_EMAILIDS(cstate) ? mbentry->jmapid : mbentry->uniqueid,
+            JMAP_MAX_MAILBOXID_SIZE);
+}
+
+EXPORTED void jmap_set_threadid(struct conversations_state *cstate,
+                                conversation_id_t cid, char *thrid)
+{
+    char prefix = USER_COMPACT_EMAILIDS(cstate) ?
+        JMAP_THREADID_PREFIX : JMAP_LEGACY_THREADID_PREFIX;
+
+    snprintf(thrid, JMAP_THREADID_SIZE, "%c%s",
+             prefix, conversation_id_encode(cstate, cid));
 }
 
 EXPORTED char *jmap_role_to_specialuse(const char *role)

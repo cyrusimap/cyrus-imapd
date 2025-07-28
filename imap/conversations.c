@@ -72,6 +72,7 @@
 #include "parseaddr.h"
 #include "search_engines.h"
 #include "seen.h"
+#include "statuscache.h"
 #include "strhash.h"
 #include "sync_log.h"
 #include "syslog.h"
@@ -97,6 +98,7 @@
 #define FNKEY "$FOLDER_NAMES"
 #define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"
+#define IDKEY "$COMPACT_EMAILIDS"
 #define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
@@ -194,7 +196,7 @@ static int _init_counted(struct conversations_state *state,
             char vbuf[16];
             snprintf(vbuf, sizeof(vbuf), "%d", state->version);
             r = cyrusdb_store(state->db, VERSIONKEY, strlen(VERSIONKEY),
-                    vbuf, strlen(vbuf), &state->txn);
+                              vbuf, strlen(vbuf), &state->txn);
             if (r) {
                 syslog(LOG_ERR, "Failed to write version");
                 return r;
@@ -389,6 +391,7 @@ EXPORTED int conversations_open_path_version(const char *fname,
     open = xzmalloc(sizeof(struct conversations_open));
     open->s.is_shared = shared;
     open->s.path = xstrdup(fname);
+    open->s.userid = xstrdupnull(userid);
     open->next = open_conversations;
     open_conversations = open;
 
@@ -435,6 +438,10 @@ EXPORTED int conversations_open_path_version(const char *fname,
         }
         open->s.version = version;
     }
+
+    /* are compactids enabled? */
+    cyrusdb_fetch(open->s.db, IDKEY, strlen(IDKEY), &val, &vallen, &open->s.txn);
+    if (vallen) open->s.compact_emailids = 1;
 
     /* load or initialize counted flags */
     cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
@@ -560,6 +567,7 @@ static void _conv_remove(struct conversations_state *state)
             *prevp = cur->next;
             free(cur->s.annotmboxname);
             free(cur->s.path);
+            free(cur->s.userid);
             free(cur->s.trashmboxname);
             free(cur->s.trashmboxid);
             if (cur->s.counted_flags)
@@ -1004,8 +1012,8 @@ static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
         nn = dlist_newlist(n, "THREAD");
         dlist_setguid(nn, "GUID", &thread->guid);
         dlist_setnum32(nn, "EXISTS", thread->exists);
-        dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
-        dlist_setnum32(nn, "CREATEDMODSEQ", thread->createdmodseq);
+        dlist_setnum64(nn, "INTERNALDATE", thread->nano_internaldate);
+        dlist_setnum64(nn, "CREATEDMODSEQ", thread->createdmodseq);
     }
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
@@ -1532,7 +1540,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             return 0;
 
         case 2:
-            rock->thread->internaldate = atol(d->data);
+            rock->thread->nano_internaldate = atoll(d->data);
             rock->substate = 3;
             return 0;
 
@@ -1818,16 +1826,9 @@ static int _thread_datesort(const void **a, const void **b)
     const conv_thread_t *ta = (const conv_thread_t *)*a;
     const conv_thread_t *tb = (const conv_thread_t *)*b;
 
-    int r = (ta->internaldate - tb->internaldate);
-    if (r < 0) return -1;
-    if (r > 0) return 1;
-
-    // if same internaldate, use createdmodseq for a stable sort
-    int64_t r2 = (ta->createdmodseq - tb->createdmodseq);
-    if (r2 < 0) return -1;
-    if (r2 > 0) return 1;
-
-    return message_guid_cmp(&ta->guid, &tb->guid);
+    if (ta->nano_internaldate < tb->nano_internaldate) return -1;
+    if (ta->nano_internaldate > tb->nano_internaldate) return 1;
+    return 0;  // should never happen
 }
 
 static void conversations_thread_sort(conversation_t *conv)
@@ -1859,7 +1860,7 @@ static void conversations_thread_sort(conversation_t *conv)
 
 EXPORTED void conversation_update_thread(conversation_t *conv,
                                          const struct message_guid *guid,
-                                         time_t internaldate,
+                                         uint64_t nano_internaldate,
                                          modseq_t createdmodseq,
                                          int delta_exists)
 {
@@ -1888,8 +1889,9 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
     message_guid_copy(&thread->guid, guid);
     // these should always be the same for all copies of an email!
     // but if not (e.g. IMAP append) we want the earliest non-zero value
-    if (!thread->internaldate || thread->internaldate > internaldate)
-        thread->internaldate = internaldate;
+    if (!thread->nano_internaldate ||
+        thread->nano_internaldate > nano_internaldate)
+        thread->nano_internaldate = nano_internaldate;
     // the same email may exist multiple times in a folder or in multiple
     // folders with different createdmodseq.  We want to track the earliest
     // one
@@ -2005,7 +2007,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
                      conversation_id_t basecid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
-                     time_t internaldate,
+                     uint64_t nano_internaldate,
                      char version)
 {
     const char *p, *err;
@@ -2019,7 +2021,7 @@ static int _guid_one(struct guid_foreach_rock *frock,
     rec.basecid = basecid;
     rec.system_flags = system_flags;
     rec.internal_flags = internal_flags;
-    rec.internaldate = internaldate;
+    rec.nano_internaldate = nano_internaldate;
     rec.version = version;
 
     /* ensure a NULL terminated key string */
@@ -2119,7 +2121,7 @@ static int _guid_cb(void *rock,
     conversation_id_t basecid = 0;
     uint32_t system_flags = 0;
     uint32_t internal_flags = 0;
-    time_t internaldate = 0;
+    uint64_t internaldate = 0;
     char version = 0;
     union cdata_u scratch;
     if (datalen >= 16) {
@@ -2167,13 +2169,18 @@ static int _guid_cb(void *rock,
             internal_flags = ntohl(*((bit32*)p));
             p += 4;
             /* internaldate*/
-            internaldate = (time_t) ntohll(*((bit64*)p));
+            internaldate = ntohll(*((bit64*)p));
             p += 8;
             /* basecid */
             basecid = ntohll(*((bit64*)p));
             p += 8;
             break;
         }
+    }
+
+    if (version < 4) {
+        /* convert seconds to nanoseconds */
+        internaldate *= 1000000000;
     }
 
     buf_setmap(&frock->partbuf, key+42, keylen-42);
@@ -2281,7 +2288,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
                                       conversation_id_t basecid,
                                       uint32_t system_flags,
                                       uint32_t internal_flags,
-                                      time_t internaldate,
+                                      uint64_t nano_internaldate,
                                       int add)
 {
     struct buf key = BUF_INITIALIZER;
@@ -2324,7 +2331,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
-            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, nano_internaldate);
         }
         /* When bumping the G value version, make sure to update _guid_cb */
         else {
@@ -2332,7 +2339,7 @@ static int conversations_guid_setitem(struct conversations_state *state,
             buf_appendbit64(&val, cid);
             buf_appendbit32(&val, system_flags);
             buf_appendbit32(&val, internal_flags);
-            buf_appendbit64(&val, (bit64)internaldate);
+            buf_appendbit64(&val, nano_internaldate);
             buf_appendbit64(&val, basecid == cid ? 0 : basecid);
         }
 
@@ -2355,7 +2362,7 @@ static int _guid_addbody(struct conversations_state *state,
                          conversation_id_t cid,
                          conversation_id_t basecid,
                          uint32_t system_flags, uint32_t internal_flags,
-                         time_t internaldate,
+                         uint64_t nano_internaldate,
                          struct body *body,
                          const char *base, int add)
 {
@@ -2370,19 +2377,22 @@ static int _guid_addbody(struct conversations_state *state,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid, basecid,
-                                       system_flags, internal_flags, internaldate,
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf),
+                                       cid, basecid, system_flags,
+                                       internal_flags, nano_internaldate,
                                        add);
         buf_free(&buf);
 
         if (r) return r;
     }
 
-    r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart, base, add);
+    r = _guid_addbody(state, cid, basecid, system_flags, internal_flags,
+                      nano_internaldate, body->subpart, base, add);
     if (r) return r;
 
     for (i = 1; i < body->numparts; i++) {
-        r = _guid_addbody(state, cid, basecid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
+        r = _guid_addbody(state, cid, basecid, system_flags, internal_flags,
+                          nano_internaldate, body->subpart + i, base, add);
         if (r) return r;
     }
 
@@ -2410,15 +2420,38 @@ static int conversations_set_guid(struct conversations_state *state,
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
+    const char *guidrep = message_guid_encode(&record->guid);
+    uint64_t nano_internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
+    r = conversations_guid_setitem(state, guidrep,
                                    base, record->cid, record->basecid,
                                    record->system_flags,
                                    record->internal_flags,
-                                   record->internaldate,
+                                   nano_internaldate,
                                    add);
+    if (!r) {
+        struct buf key = BUF_INITIALIZER;
+
+        /* Build J key */
+        buf_setcstr(&key, "J");
+        NANOSEC_TO_JMAPID(&key, nano_internaldate);
+
+        /* Do we have an existing toplevel G record? */
+        if (!conversations_guid_cid_lookup(state, guidrep, NULL)) {
+            /* Remove J record */
+            r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
+                               &state->txn, /*force*/1);
+        }
+        else {
+            /* Add J record */
+            r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
+                              guidrep, strlen(guidrep), &state->txn);
+        }
+
+        buf_free(&key);
+    }
     if (!r) r = _guid_addbody(state, record->cid, record->basecid,
                               record->system_flags, record->internal_flags,
-                              record->internaldate, body, base, add);
+                              nano_internaldate, body, base, add);
 
     message_free_body(body);
     free(body);
@@ -2571,7 +2604,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     if (new) {
         if (!old || old->system_flags != new->system_flags ||
                     old->internal_flags != new->internal_flags ||
-                    old->internaldate != new->internaldate) {
+                    old->internaldate.tv_nsec != new->internaldate.tv_nsec  ||
+                    old->internaldate.tv_sec != new->internaldate.tv_sec) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
             if (r) goto done;
         }
@@ -2680,14 +2714,14 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         conversation_update_sender(conv,
                                    addr.name, addr.route,
                                    addr.mailbox, addr.domain,
-                                   record->gmtime, delta_exists);
+                                   record->gmtime.tv_sec, delta_exists);
         free(env);
     }
 
 
     conversation_update_thread(conv,
                                &record->guid,
-                               record->internaldate,
+                               TIMESPEC_TO_NANOSEC(&record->internaldate),
                                record->createdmodseq,
                                delta_exists);
 
@@ -3044,23 +3078,33 @@ EXPORTED int conversations_prune(struct conversations_state *state,
 }
 
 /* NOTE: this makes an "ATOM" return */
-EXPORTED const char *conversation_id_encode(conversation_id_t cid)
+EXPORTED const char *conversation_id_encode(struct conversations_state *state,
+                                            conversation_id_t cid)
 {
-    static char text[2*sizeof(cid)+1];
+    static struct buf buf = BUF_INITIALIZER;
 
-    if (cid != NULLCONVERSATION) {
-        snprintf(text, sizeof(text), CONV_FMT, cid);
+    buf_reset(&buf);
+
+    if (cid == NULLCONVERSATION) {
+        buf_setcstr(&buf, "NIL");
+    } else if (USER_COMPACT_EMAILIDS(state)) {
+        uint64_t u64 = htonll(cid);
+        charset_encode(&buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
     } else {
-        strncpy(text, "NIL", sizeof(text));
+        buf_printf(&buf, CONV_FMT, cid);
     }
 
-    return text;
+    return buf_cstring(&buf);
 }
 
 EXPORTED int conversation_id_decode(conversation_id_t *cid, const char *text)
 {
     if (!strcmp(text, "NIL")) {
         *cid = NULLCONVERSATION;
+    } else if (strlen(text) == 11) {
+        static struct buf buf = BUF_INITIALIZER;
+        charset_decode(&buf, text, 11, ENCODING_BASE64JMAPID);
+        *cid = ntohll(*((uint64_t *) buf_base(&buf)));
     } else {
         if (strlen(text) != 16) return 0;
         *cid = strtoull(text, 0, 16);
@@ -3210,7 +3254,7 @@ static int zero_g_cb(void *rock,
     return r;
 }
 
-EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe)
+EXPORTED int conversations_zero_counts(struct conversations_state *state, int wipe, int do_upgrade)
 {
     int r = 0;
 
@@ -3243,14 +3287,22 @@ EXPORTED int conversations_zero_counts(struct conversations_state *state, int wi
                             state, &state->txn);
         if (r) return r;
 
+        /* wipe J keys */
+        r = cyrusdb_foreach(state->db, "J", 1, NULL, zero_g_cb,
+                            state, &state->txn);
+        if (r) return r;
+
         /* wipe quota (it's actually just one key) */
         r = cyrusdb_foreach(state->db, "Q", 1, NULL, zero_g_cb,
                             state, &state->txn);
         if (r) return r;
     }
 
+    if (do_upgrade) {
+        state->version = CONVERSATIONS_VERSION;
+    }
+
     /* re-init the counted flags */
-    state->version = CONVERSATIONS_VERSION;
     r = _init_counted(state, NULL, 0);
     if (r) return r;
 
@@ -3356,6 +3408,118 @@ EXPORTED int conversations_zero_modseq(struct conversations_state *state)
     if (r) return r;
     r = cyrusdb_foreach(state->db, "F", 1, NULL, zeromodseq_f_cb,
                         state, &state->txn);
+    return r;
+}
+
+EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *state,
+                                                 const char *jidrep,
+                                                 char guidrep[2*MESSAGE_GUID_SIZE+1])
+{
+    static const char jmapid_alphabet[] =
+        "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+    char key[CONV_JMAPID_SIZE+2] = "J";
+    size_t idlen, datalen = 0;
+    const char *data;
+    int r;
+
+    /* sanity check the ID:
+       - to prevent strcat() from overrunning a fixed-length buffer
+       - to short-circuit an ill-fated DB fetch
+    */
+    idlen = strspn(jidrep, jmapid_alphabet);
+    if (idlen != CONV_JMAPID_SIZE || jidrep[idlen] != '\0') {
+        /* we know this J key can't exist */
+        return CYRUSDB_NOTFOUND;
+    }
+
+    strcat(key, jidrep);
+
+    r = cyrusdb_fetch(state->db, key, CONV_JMAPID_SIZE+1,
+                      &data, &datalen, &state->txn);
+    if (r) return r;
+
+    if (datalen < 2*MESSAGE_GUID_SIZE) {
+        xsyslog(LOG_NOTICE, "IOERROR: malformed data value in J record",
+                "key=<%s>", key);
+        return CYRUSDB_NOTFOUND;
+    }
+
+    strncpy(guidrep, data, 2*MESSAGE_GUID_SIZE);
+    guidrep[datalen] = '\0';
+
+    return 0;
+}
+
+EXPORTED void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                                const char *my_guid,
+                                                struct timespec *internaldate)
+{
+    struct buf jidrep = BUF_INITIALIZER;
+    uint64_t count = 0;
+
+    // check for a JMAPID (internaldate) clash, and adjust nanosec as needed
+    do {
+        char existing_guid[2*MESSAGE_GUID_SIZE+1];
+
+        buf_reset(&jidrep);
+        NANOSEC_TO_JMAPID(&jidrep, TIMESPEC_TO_NANOSEC(internaldate));
+        int r = conversations_jmapid_guidrep_lookup(cstate,
+                                                    buf_cstring(&jidrep),
+                                                    existing_guid);
+        if (r || !strcmp(my_guid, existing_guid)) {
+            // JMAP ID doesn't exist or it references our GUID
+            break;
+        }
+
+        xsyslog(LOG_INFO, "IOERROR: JMAPID conflict during append,"
+                " incrementing internaldate.tv_nsec",
+                "JMAPID=<%s> GUID=<%s> existing_GUID=<%s>",
+                buf_cstring(&jidrep), my_guid, existing_guid);
+
+        // try the next nanosecond */
+        internaldate->tv_nsec = (internaldate->tv_nsec + 1) % 1000000000;
+
+        // in the unlikely event that we reach the limit below, we're screwed
+    } while (++count < 1000000000);
+
+    buf_free(&jidrep);
+}
+
+EXPORTED int conversations_enable_compactids(struct conversations_state *state,
+                                             int enable)
+{
+    int r;
+
+    if (enable) {
+        char vbuf[16];
+        snprintf(vbuf, sizeof(vbuf), "%d", enable);
+        r = cyrusdb_store(state->db, IDKEY, strlen(IDKEY),
+                          vbuf, strlen(vbuf), &state->txn);
+        if (r) {
+            syslog(LOG_ERR, "Failed to enable compactids");
+        }
+        else {
+            state->compact_emailids = 1;
+        }
+    }
+    else {
+        r = cyrusdb_delete(state->db, IDKEY, strlen(IDKEY),
+                           &state->txn, /*force*/1);
+        if (r) {
+            syslog(LOG_ERR, "Failed to disable compactids");
+        }
+        else {
+            state->compact_emailids = 0;
+        }
+    }
+
+    // either way, statuscache could be bogus!
+    // NOTE: this could wipe slightly more than just this user, but
+    // statuscache is always safe to wipe, so that's OK.
+    char *inbox = mboxname_user_mbox(state->userid, NULL);
+    statuscache_wipe_prefix(inbox);
+    free(inbox);
+
     return r;
 }
 

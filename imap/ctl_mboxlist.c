@@ -78,6 +78,7 @@
 #include "dlist.h"
 #include "global.h"
 #include "json_support.h"
+#include "jmap_util.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"
@@ -95,6 +96,7 @@ enum mboxop { DUMP,
               M_POPULATE,
               UNDUMP,
               VERIFY,
+              FIX_KEYS,
               NONE };
 
 struct dumprock {
@@ -696,7 +698,8 @@ static void do_undump_legacy(void)
         line++;
 
         sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
-               " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+               " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+               &newmbentry->name, &newmbentry->mbtype,
                &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
                &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
@@ -713,7 +716,8 @@ static void do_undump_legacy(void)
             mboxlist_entry_free(&newmbentry);
             newmbentry = mboxlist_entry_create();
             sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                   " %llu %llu %m[^\n]\n", &newmbentry->name, &newmbentry->mbtype,
+                   " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
+                   &newmbentry->name, &newmbentry->mbtype,
                    &newmbentry->partition, &newmbentry->uniqueid,
                    &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
                    &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
@@ -1241,6 +1245,87 @@ static void do_verify(void)
     verify_mboxes(mboxes, found, &idx);
 }
 
+static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
+{
+    mbentry_t *byunqid = NULL;
+
+    int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
+    if (r) {
+        xsyslog(LOG_NOTICE, "missing uniqueid record, skipping",
+               "mboxname=<%s> uniqueid=<%s>",
+               mbentry->name, mbentry->uniqueid);
+        return 0;
+    }
+
+    // we are not the current record?  We don't need to process this.
+    if (strcmp(mbentry->name, byunqid->name))
+        goto done;
+
+    if (mbentry->jmapid) {
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        const char *userid = mbname_userid(mbname);
+
+        if (!userid) userid = "";
+
+        // already got a record, we're good!
+        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
+        mbname_free(&mbname);
+        if (!res) return 0;
+
+        xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                mbentry->name, mbentry->jmapid);
+    }
+    else {
+        struct mailbox *mailbox = NULL;
+        r = mailbox_open_from_mbe(byunqid, &mailbox);
+        if (r) goto done;
+        struct buf jmapid = BUF_INITIALIZER;
+
+        byunqid->foldermodseq = mailbox_modseq_dirty(mailbox);
+
+        buf_putc(&jmapid, JMAP_MAILBOXID_PREFIX);
+        MODSEQ_TO_JMAPID(&jmapid, byunqid->foldermodseq);
+        mailbox_set_jmapid(mailbox, buf_cstring(&jmapid));
+
+        free(byunqid->jmapid);
+        byunqid->jmapid = buf_release(&jmapid);
+        buf_free(&jmapid);
+
+        xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
+                "mboxname=<%s> jmapid=<%s>",
+                byunqid->name, byunqid->jmapid);
+
+        r = mailbox_commit(mailbox);
+        if (r) {
+            xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                    "error=<%s>", cyrusdb_strerror(r));
+            goto done;
+        }
+    }
+
+    r = mboxlist_updatelock(byunqid, /*localonly*/1);
+    if (r) {
+        xsyslog(LOG_ERR, "failed to update mboxlist",
+                "mboxname=<%s> error=<%s>",
+                mbentry->name, error_message(r));
+    }
+
+done:
+    mboxlist_entry_free(&byunqid);
+
+    return r;
+}
+
+static void do_fix_keys(int intermediary)
+{
+    int flags = MBOXTREE_TOMBSTONES;
+
+    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+
+    mboxlist_allmbox("", &fix_cb, NULL, flags);
+}
+
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
@@ -1253,6 +1338,8 @@ static void usage(void)
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
     fprintf(stderr, "VERIFY:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -v [-f filename]\n");
+    fprintf(stderr, "FIX I/J keys:\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -k [-f filename]\n");
     exit(1);
 }
 
@@ -1268,7 +1355,7 @@ int main(int argc, char *argv[])
     int undump_legacy = 0;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:Ladf:imp:uvwxy";
+    static const char short_options[] = "C:Ladf:ikmp:uvwxy";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -1277,6 +1364,7 @@ int main(int argc, char *argv[])
         { "dump", no_argument, NULL, 'd' },
         { "filename", required_argument, NULL, 'f' },
         { "interactive", no_argument, NULL, 'i' },
+        { "fix-keys", no_argument, NULL, 'k' },
         { "sync-mupdate", no_argument, NULL, 'm' },
         { "partition", required_argument, NULL, 'p' },
         { "undump", no_argument, NULL, 'u' },
@@ -1315,6 +1403,11 @@ int main(int argc, char *argv[])
 
         case 'u':
             if (op == NONE) op = UNDUMP;
+            else usage();
+            break;
+
+        case 'k':
+            if (op == NONE) op = FIX_KEYS;
             else usage();
             break;
 
@@ -1412,6 +1505,17 @@ int main(int argc, char *argv[])
         mboxlist_open(mboxdb_fname);
 
         do_verify();
+
+        mboxlist_close();
+        mboxlist_done();
+        break;
+
+
+    case FIX_KEYS:
+        mboxlist_init();
+        mboxlist_open(mboxdb_fname);
+
+        do_fix_keys(dointermediary);
 
         mboxlist_close();
         mboxlist_done();

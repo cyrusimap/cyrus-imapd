@@ -21,6 +21,7 @@ has mtime => (isa => Int, is => 'rw');
 has partition => (isa => Value, is => 'rw');
 has type => (isa => Value, is => 'rw');
 has uniqueid => (isa => Value, is => 'rw');
+has jmapid => (isa => Value, is => 'rw');
 has uidvalidity => (isa => Int, is => 'rw');
 
 sub _parse_dlist {
@@ -32,6 +33,10 @@ sub _parse_dlist {
   }
   if ($name =~ m/^I/) {
     $self->{uniqueid} = substr($name, 1);
+    $self->{is_uuid} = 1;
+  }
+  if ($name =~ m/^J/) {
+    (undef, $self->{jmapid}) = split /\x1e/, $name;
     $self->{is_uuid} = 1;
   }
   $self->{intname} = $name;
@@ -78,6 +83,9 @@ sub _parse_dlist {
     }
     if ($item->{key} eq 'I') {
       $self->{uniqueid} = $item->{data};
+    }
+    if ($item->{key} eq 'J') {
+      $self->{jmapid} = $item->{data};
     }
     if ($item->{key} eq 'V') {
       $self->{uidvalidity} = $item->{data};

@@ -413,7 +413,7 @@ static int handle_request(const char *who, const char *name,
 
     internalseen = mailbox_internal_seen(mailbox, who);
     if (internalseen) {
-        lastread = mailbox->i.recenttime;
+        lastread = mailbox->i.recenttime.tv_sec;
         recentuid = mailbox->i.recentuid;
     } else {
         struct seen *seendb = NULL;
@@ -434,7 +434,7 @@ static int handle_request(const char *who, const char *name,
         }
     }
 
-    lastarrived = mailbox->i.last_appenddate;
+    lastarrived = mailbox->i.last_appenddate.tv_sec;
     {
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
