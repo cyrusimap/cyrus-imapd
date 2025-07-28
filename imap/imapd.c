@@ -7485,6 +7485,16 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         goto done;
     }
 
+    /* was it a top-level user mailbox? delete all the child mailboxes first */
+    /* localonly deletes are only per-mailbox */
+    delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
+    if (!r && !localonly && delete_user) {
+        const char *userid = mbname_userid(mbname);
+        if (userid) {
+            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, MBOXTREE_INTERMEDIATES|MBOXTREE_SKIP_ROOT);
+        }
+    }
+
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
     /* local mailbox */
@@ -7501,7 +7511,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
             r = IMAP_PERMISSION_DENIED;
         }
         else {
-            delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
             int delflags = (1-force) ? MBOXLIST_DELETE_CHECKACL : 0;
 
             if (!delete_user && mboxlist_haschildren(mbname_intname(mbname))) {
@@ -7519,6 +7528,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
                                                    imapd_authstate, mboxevent,
                                                    delflags);
             }
+            if (!r && !localonly && delete_user) {
+                r = user_deletedata(mbentry, 1);
+            }
         }
     }
 
@@ -7526,16 +7538,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r)
         mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
-
-    /* was it a top-level user mailbox? */
-    /* localonly deletes are only per-mailbox */
-    if (!r && !localonly && delete_user) {
-        const char *userid = mbname_userid(mbname);
-        if (userid) {
-            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, MBOXTREE_INTERMEDIATES);
-            if (!r) r = user_deletedata(mbentry, 1);
-        }
-    }
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbname_intname(mbname), imapd_userid, imapd_authstate,
