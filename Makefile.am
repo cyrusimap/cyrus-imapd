@@ -1542,6 +1542,7 @@ lib_libcyrus_min_la_SOURCES = \
     lib/assert.c \
     lib/bufarray.c \
     lib/byteorder.c \
+    lib/cron.c \
     lib/cron-lex.l \
     lib/cron-parse.y \
     lib/dynarray.c \

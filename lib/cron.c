@@ -1,4 +1,4 @@
-/* cron.h -- parsing Cron-style date-time specifications
+/* cron.c -- parsing Cron-style date-time specifications
  *
  * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,30 +39,55 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#ifndef INCLUDED_CRON_H
-#define INCLUDED_CRON_H
 #include <config.h>
 
-#include <stdint.h>
+#include "lib/cron.h"
+#include "lib/xmalloc.h"
 
-#define CRON_ALL_MINUTES       UINT64_C(0x0FFFFFFFFFFFFFFF)
-#define CRON_ALL_HOURS         UINT64_C(0x00FFFFFF)
-#define CRON_ALL_DAYS_OF_MONTH UINT64_C(0x7FFFFFFF)
-#define CRON_ALL_MONTHS        UINT64_C(0x0FFF)
-#define CRON_ALL_DAYS_OF_WEEK  UINT64_C(0x7F)
+#include <sysexits.h>
+#include <syslog.h>
+#include <time.h>
 
-struct cron_spec {
-    uint64_t minutes;       /* bits 0-59 represent minutes */
-    uint32_t hours;         /* bits 0-23 represent hours */
-    uint32_t days_of_month; /* bits 0-30 represent days 1-31 */
-    uint16_t months;        /* bits 0-11 represent months 1-12 */
-    uint8_t  days_of_week;  /* bits 0-6 represent days sun-sat */
-};
+EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
+                                     time_t *run_time,
+                                     const struct timeval *timeval)
+{
+    struct tm *tm = localtime(&timeval->tv_sec);
 
-extern int cron_parse_spec(const char *spec,
-                           struct cron_spec *result,
-                           const char **err);
-extern void cron_spec_from_timeval(struct cron_spec *result,
-                                   time_t *run_time,
-                                   const struct timeval *timeval);
-#endif
+    if (tm->tm_mday == 0) {
+        /* quoth localtime(3):
+         *   In many implementations, including glibc, a 0 in tm_mday is
+         *   interpreted as meaning the last day of the preceding month.
+         */
+        /* XXX month days logic duplicated from private impl in lib/times */
+        static const int monthdays[12] = {
+            31, 28, 31, 30, 31, 30,
+            31, 31, 30, 31, 30, 31
+        };
+        const int year = tm->tm_year;
+        const int leapday = (tm->tm_mon == 1 &&
+                             (!(year % 4) && ((year % 100) || !(year % 400))));
+
+        syslog(LOG_DEBUG, "%s: compensating for tm_mon=%d tm_mday=%d!\n",
+                          __func__, tm->tm_mon, tm->tm_mday);
+        tm->tm_mday = monthdays[result->months] + leapday;
+        tm->tm_mon = (tm->tm_mon + 12 - 1) % 12;
+        syslog(LOG_DEBUG, "%s: computed tm_mon=%d tm_mday=%d!\n",
+                          __func__, tm->tm_mon, tm->tm_mday);
+    }
+
+    if (result) {
+        *result = (struct cron_spec) {
+            .minutes = UINT64_C(1) << tm->tm_min,
+            .hours = UINT32_C(1) << tm->tm_hour,
+            .days_of_month = UINT32_C(1) << (tm->tm_mday - 1),
+            .months = UINT16_C(1) << tm->tm_mon,
+            .days_of_week = UINT8_C(1) << tm->tm_wday,
+        };
+    }
+
+    if (run_time) {
+        tm->tm_sec = 0;
+        *run_time = mktime(tm);
+    }
+}
