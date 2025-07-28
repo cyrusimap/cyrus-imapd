@@ -153,11 +153,11 @@ static char *dump(struct dynarray *da)
     return buf_release(&buf);
 }
 
-EXPORTED void dynarray_append(struct dynarray *da, void *memb)
+EXPORTED int dynarray_append(struct dynarray *da, void *memb)
 {
     ensure_alloc(da, da->count+1);
     memcpy(da->data + da->count * da->membsize, memb, da->membsize);
-    da->count++;
+    return da->count++;
 }
 
 EXPORTED void dynarray_set(struct dynarray *da, int idx, void *memb)
