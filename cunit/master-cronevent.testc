@@ -1,0 +1,15 @@
+#include "cunit/unit.h"
+#include "master/cronevent.h"
+
+static int tear_down(void)
+{
+    cronevent_clear();
+    return 0;
+}
+
+static void test_foo(void)
+{
+
+}
+
+/* vim: set ft=c: */
