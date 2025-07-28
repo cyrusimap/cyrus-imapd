@@ -1,6 +1,7 @@
-/* Unit test for lib/cron-parse.c */
+/* Unit test for lib/cron.c and lib/cron-parse.y */
 #include <config.h>
 #include "cunit/unit.h"
+#include "cunit/unit-timezones.h"
 
 #include "lib/cron.h"
 
@@ -47,6 +48,12 @@
                         arg_expect_result->days_of_week);                   \
     }                                                                       \
 } while (0)
+
+static int tear_down(void)
+{
+    restore_tz();
+    return 0;
+}
 
 static void test_cron_parse_spec_asterisk(void)
 {
@@ -338,6 +345,64 @@ static void test_cron_parse_spec_days_of_week(void)
                            tests[i].expect_r,
                            &expect_result,
                            tests[i].expect_err);
+    }
+}
+
+#define TV_INIT(s, u) (struct timeval){ .tv_sec = (s), .tv_usec = (u) }
+
+#define CS_MOMENT(min, hr, dm, mon, dw) (struct cron_spec) {                \
+    .minutes = UINT64_C(1) << (min),                                        \
+    .hours = UINT32_C(1) << (hr),                                           \
+    .days_of_month = UINT32_C(1) << ((dm) - 1),                             \
+    .months = UINT16_C(1) << ((mon) - 1),                                   \
+    .days_of_week = UINT8_C(1) << (dw),                                     \
+}
+
+#define TIME_T_NOSEC(t) ({ __auto_type t_ = (t); t_ - (t_ % 60); })
+
+static void test_cron_spec_from_timeval(void)
+{
+    const struct {
+        const char *tz;
+        struct timeval tv;
+        struct cron_spec expect_spec;
+        time_t expect_run_time;
+    } tests[] = {
+        { TZ_MELBOURNE,
+          TV_INIT(1753837286, 0),   /* UTC: 2025-07-30 01:01 */
+          /* just a normal time */
+          CS_MOMENT(1, 12, 30, 7, 3),
+          TIME_T_NOSEC(1753837286) },
+        { TZ_NEWYORK,
+          TV_INIT(1754020800, 0),   /* UTC: 2025-08-01 04:00 */
+          /* trying to exercise tm_mday==0 behaviour... */
+          CS_MOMENT(0, 23, 31, 7, 4),
+          TIME_T_NOSEC(1754020800) },
+        { TZ_MELBOURNE,
+          TV_INIT(1709179200, 0),   /* UTC: 2024-02-29 04:00 */
+          /* better try february 29... */
+          CS_MOMENT(0, 15, 29, 2, 4),
+          TIME_T_NOSEC(1709179200) },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec actual_spec = SENTINEL;
+        time_t actual_run_time = -1;
+
+        push_tz(tests[i].tz);
+        cron_spec_from_timeval(&actual_spec, &actual_run_time, &tests[i].tv);
+        pop_tz();
+
+        CU_ASSERT_EQUAL(actual_spec.hours, tests[i].expect_spec.hours);
+        CU_ASSERT_EQUAL(actual_spec.days_of_month,
+                        tests[i].expect_spec.days_of_month);
+        CU_ASSERT_EQUAL(actual_spec.months, tests[i].expect_spec.months);
+        CU_ASSERT_EQUAL(actual_spec.days_of_week,
+                        tests[i].expect_spec.days_of_week);
+
+        CU_ASSERT_EQUAL(actual_run_time, tests[i].expect_run_time);
     }
 }
 
