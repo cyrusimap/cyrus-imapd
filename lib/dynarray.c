@@ -160,6 +160,17 @@ EXPORTED int dynarray_append(struct dynarray *da, void *memb)
     return da->count++;
 }
 
+EXPORTED int dynarray_append_empty(struct dynarray *da, void **out_memb)
+{
+    void *memb;
+
+    ensure_alloc(da, da->count+1);
+    memb = da->data + da->count * da->membsize;
+    memset(memb, 0, da->membsize);
+    if (out_memb) *out_memb = memb;
+    return da->count++;
+}
+
 EXPORTED void dynarray_set(struct dynarray *da, int idx, void *memb)
 {
     if ((idx = adjust_index_rw(da, idx, 0)) < 0)

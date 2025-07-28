@@ -41,6 +41,37 @@ static void test_basic(void)
     CU_ASSERT_PTR_NULL(da);
 }
 
+static void test_append_empty(void)
+{
+    struct dynarray *da = dynarray_new(sizeof(uint32_t));
+    uint32_t *valp1, *valp2;
+    int index;
+
+    CU_ASSERT_EQUAL(dynarray_size(da), 0);
+    CU_ASSERT_PTR_NULL(dynarray_nth(da, 0));
+    CU_ASSERT_PTR_NULL(dynarray_nth(da, -1));
+
+    index = dynarray_append_empty(da, (void **) &valp1);
+
+    CU_ASSERT_EQUAL(index, 0);
+    CU_ASSERT_EQUAL(dynarray_size(da), 1);
+    CU_ASSERT_EQUAL(*valp1, 0);
+    CU_ASSERT_PTR_EQUAL(dynarray_nth(da, index), valp1);
+    CU_ASSERT_PTR_EQUAL(dynarray_nth(da, -1), valp1);
+
+    index = dynarray_append_empty(da, (void **) &valp2);
+
+    CU_ASSERT_EQUAL(index, 1);
+    CU_ASSERT_EQUAL(dynarray_size(da), 2);
+    CU_ASSERT_EQUAL(*valp2, 0);
+    CU_ASSERT_PTR_EQUAL(dynarray_nth(da, index), valp2);
+    CU_ASSERT_PTR_EQUAL(dynarray_nth(da, -1), valp2);
+
+    CU_ASSERT_PTR_NOT_EQUAL(valp1, valp2);
+
+    dynarray_free(&da);
+    CU_ASSERT_PTR_NULL(da);
+}
 
 static void test_set(void)
 {
