@@ -59,7 +59,8 @@ extern void dynarray_fini(struct dynarray *da);
 extern struct dynarray *dynarray_new(size_t membsize);
 extern void dynarray_free(struct dynarray **dap);
 
-extern void dynarray_append(struct dynarray *da, void *memb);
+extern int dynarray_append(struct dynarray *da, void *memb);
+extern int dynarray_append_empty(struct dynarray *da, void **out_memb);
 extern void dynarray_set(struct dynarray *, int idx, void *memb);
 extern void *dynarray_nth(const struct dynarray *da, int idx);
 extern int dynarray_size(struct dynarray *da);
