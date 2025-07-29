@@ -874,6 +874,23 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
 
     /* step 3 is eliminating whitespace. */
     buf_replace_all_re(s, &whitespace_re, NULL);
+
+    /* step 4 is to NFC-normalize any non-ASCII codepoints */
+    bool is_ascii = true;
+    for (const uint8_t *c = (const uint8_t *) buf_cstring(s); *c; c++) {
+        if (*c > 0x7f) {
+            is_ascii = false;
+            break;
+        }
+    }
+
+    if (!is_ascii) {
+        char *tmp = charset_utf8_normalize(buf_cstring(s));
+        if (tmp) {
+            buf_free(s);
+            buf_initmcstr(s, tmp);
+        }
+    }
 }
 
 static int folder_number_rename(struct conversations_state *state,

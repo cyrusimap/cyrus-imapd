@@ -75,7 +75,11 @@ struct mailbox;
 #define CONVERSATIONS_VERSION 1
 #define CONVERSATIONS_KEY_VERSION 0
 #define CONVERSATIONS_STATUS_VERSION 0
-#define CONVERSATIONS_RECORD_VERSION 1
+// RECORD_VERSION history:
+// 0: original version - no version field in record
+// 1: counts messages per folder and GUID, not UID
+// 2: NFC-normalizes conversation subject
+#define CONVERSATIONS_RECORD_VERSION 2
 
 #define CONV_ISDIRTY     (1<<0)
 #define CONV_WITHFOLDERS (1<<1)

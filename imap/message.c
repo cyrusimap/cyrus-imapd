@@ -48,6 +48,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
@@ -3595,47 +3596,11 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
 }
 
 /*
- * This is the legacy code version to generate conversation subjects.
+ * This is the legacy code version 0 to generate conversation subjects.
  * We keep it here to allow matching messages to conversations that
  * already got that oldstyle subject set.
  */
-/*
- * Normalise a subject string, to a form which can be used for deciding
- * whether a message belongs in the same conversation as it's antecedent
- * messages.  What we're doing here is the same idea as the "base
- * subject" algorithm described in RFC 5256 but slightly adapted from
- * experience.  Differences are:
- *
- *  - We eliminate all whitespace; RFC 5256 normalises any sequence
- *    of whitespace characters to a single SP.  We do this because
- *    we have observed combinations of buggy client software both
- *    add and remove whitespace around folding points.
- *
- *  - We include the Unicode U+00A0 (non-breaking space) codepoint in our
- *    determination of whitespace (as the UTF-8 sequence \xC2\xA0) because
- *    we have seen it in the wild, but do not currently generalise this to
- *    other Unicode "whitespace" codepoints. (XXX)
- *
- *  - Because we eliminate whitespace entirely, and whitespace helps
- *    delimit some of our other replacements, we do that whitespace
- *    step last instead of first.
- *
- *  - We eliminate leading tokens like Re: and Fwd: using a simpler
- *    and more generic rule than RFC 5256's; this rule catches a number
- *    of semantically identical prefixes in other human languages, but
- *    unfortunately also catches lots of other things.  We think we can
- *    get away with this because the normalised subject is never directly
- *    seen by human eyes, so some information loss is acceptable as long
- *    as the subjects in different messages match correctly.
- *
- *  - We eliminate trailing tokens like [SEC=UNCLASSIFIED],
- *    [DLM=Sensitive], etc which are automatically added by Australian
- *    Government department email systems.  In theory there should be no
- *    more than one of these on an email subject but in practice multiple
- *    have been seen.
- *    http://www.finance.gov.au/files/2012/04/EPMS2012.3.pdf
- */
-static void oldstyle_normalise_subject(struct buf *s)
+static void normalise_subject_v0(struct buf *s)
 {
     static int initialised_res = 0;
     static regex_t whitespace_re;
@@ -3670,6 +3635,42 @@ static void oldstyle_normalise_subject(struct buf *s)
     buf_replace_all_re(s, &whitespace_re, NULL);
 }
 
+/*
+ * This is the legacy code version 1 to generate conversation subjects.
+ * We keep it here to allow matching messages to conversations that
+ * already got that oldstyle subject set.
+ */
+static void normalise_subject_v1(struct buf *s)
+{
+    static int initialised_res = 0;
+    static regex_t whitespace_re;
+    static regex_t bracket_re;
+    static regex_t relike_token_re;
+    int r;
+
+    if (!initialised_res) {
+        r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&bracket_re, "(\\[[^]\\[]*])|(^[^\\[]*])|(\\[[^]]*$)", REG_EXTENDED);
+        assert(r == 0);
+        r = regcomp(&relike_token_re, "^[ \t]*[^ \t\r\n\f]+:", REG_EXTENDED);
+        assert(r == 0);
+        initialised_res = 1;
+    }
+
+    /* step 1 is to remove anything within (maybe unmatched) square brackets */
+    while (buf_replace_one_re(s, &bracket_re, NULL))
+        ;
+
+    /* step 2 is to eliminate all "Re:"-like tokens */
+    while (buf_replace_one_re(s, &relike_token_re, NULL))
+        ;
+
+    /* step 3 is eliminating whitespace. */
+    buf_replace_all_re(s, &whitespace_re, NULL);
+}
+
+
 static void extract_convsubject(const struct index_record *record,
                                 struct buf *msubject,
                                 void (*normalise)(struct buf*))
@@ -3690,6 +3691,52 @@ EXPORTED char *message_extract_convsubject(const struct index_record *record)
     return NULL;
 }
 
+struct message_subject {
+    char *normalized;
+    char *normalized_v1;
+    char *normalized_v0;
+};
+
+static struct message_subject message_subject_init(const char *subject)
+{
+    struct message_subject subj = { 0 };
+    if (!subject) return subj;
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, subject);
+    conversation_normalise_subject(&buf);
+    subj.normalized = buf_release(&buf);
+
+    buf_setcstr(&buf, subject);
+    normalise_subject_v0(&buf);
+    subj.normalized_v0 = buf_release(&buf);
+
+    buf_setcstr(&buf, subject);
+    normalise_subject_v1(&buf);
+    subj.normalized_v1 = buf_release(&buf);
+
+    return subj;
+}
+
+static void message_subject_fini(struct message_subject *subj)
+{
+    free(subj->normalized);
+    free(subj->normalized_v1);
+    free(subj->normalized_v0);
+}
+
+static bool message_subject_matchconv(struct message_subject *subj,
+                                      conversation_t *conv)
+{
+    if (conv->version > 1) {
+        return !strcmpsafe(subj->normalized, conv->subject);
+    }
+    else {
+        return !strcmpsafe(subj->normalized_v1, conv->subject) ||
+               !strcmpsafe(subj->normalized_v0, conv->subject);
+    }
+}
+
 static int extract_convdata(struct conversations_state *state,
                             message_t *msg,
                             strarray_t *msgidlist,
@@ -3701,10 +3748,9 @@ static int extract_convdata(struct conversations_state *state,
     char *c_inreplyto = NULL, *c_msgid = NULL;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
     conversation_t *conv = NULL;
-    char *msubj = NULL;
-    char *msubj_oldstyle = NULL;
     strarray_t want = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
+    struct message_subject subj = { 0 };
     int i;
     size_t j;
     int r = 0;
@@ -3798,28 +3844,20 @@ static int extract_convdata(struct conversations_state *state,
     /* Note that a NULL subject, e.g. due to a missing Subject: header
      * field in the original message, is normalised to "" not NULL */
     if (msg->have & M_CACHE) {
-        struct buf msubject = BUF_INITIALIZER;
-        extract_convsubject(&msg->record, &msubject, conversation_normalise_subject);
-        msubj = xstrdup(buf_cstring(&msubject));
-        buf_reset(&msubject);
-        extract_convsubject(&msg->record, &msubject, oldstyle_normalise_subject);
-        msubj_oldstyle = buf_release(&msubject);
+        if (cacheitem_base(&msg->record, CACHE_HEADERS)) {
+            buf_reset(&buf);
+            message1_get_subject(&msg->record, &buf);
+            subj = message_subject_init(buf_cstring(&buf));
+        }
     }
     else {
         message_get_field(msg, "subject", MESSAGE_SNIPPET, &buf);
         buf_trim(&buf);
         if (buf_len(&buf)) {
-            struct buf tmp = BUF_INITIALIZER;
-            buf_copy(&tmp, &buf);
-            conversation_normalise_subject(&tmp);
-            msubj = buf_release(&tmp);
-
-            buf_copy(&tmp, &buf);
-            oldstyle_normalise_subject(&tmp);
-            msubj_oldstyle = buf_release(&tmp);
+            subj = message_subject_init(buf_cstring(&buf));
         }
     }
-    *msubjp = msubj;
+    *msubjp = xstrdupnull(subj.normalized);
 
     /* work around stupid message_guid API */
     message_guid_isnull(&msg->record.guid);
@@ -3881,9 +3919,9 @@ static int extract_convdata(struct conversations_state *state,
                 if (r) goto out;
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
-                if (!conv || i == 3 || !conv->subject ||
-                        !strcmpsafe(conv->subject, msubj) ||
-                        !strcmpsafe(conv->subject, msubj_oldstyle)) {
+
+                if (!conv || i == 3 || !conv->subject
+                    || message_subject_matchconv(&subj, conv)) {
                     arrayu64_add(matchlist, cid);
                 }
             }
@@ -3897,12 +3935,12 @@ out:
     strarray_fini(&want);
     buf_free(&buf);
     arrayu64_fini(&cids);
+    message_subject_fini(&subj);
     free(c_refs);
     free(c_env);
     free(c_inreplyto);
     free(c_msgid);
     free(c_me_msgid);
-    free(msubj_oldstyle);
 
     return r;
 }

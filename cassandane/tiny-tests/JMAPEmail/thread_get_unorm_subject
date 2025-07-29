@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_thread_get_unorm_subject {
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    # Unicode Character 'LATIN SMALL LETTER E WITH CIRCUMFLEX' (U+00EA)
+    my $subject1 = "por que =?utf-8?q?voc=C3=AA?= existe?";
+
+    # Unicode Character 'LATIN SMALL LETTER E' (U+0065) plus
+    # Unicode Character 'COMBINING CIRCUMFLEX ACCENT' (U+0302)
+    my $subject2 = "por que =?utf-8?q?voce=CC=82?= existe?";
+
+    $self->make_message(
+        $subject1,
+        messageid => 'msg1@example.com'
+    );
+
+    $self->make_message(
+        $subject2,
+        messageid => 'msg2@example.com',
+        extra_headers => [
+            [ "in-reply-to", '<msg1@example.com>' ],
+        ],
+    );
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/query', { }, 'R1'
+        ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => ['threadId'],
+            },
+            'R2'
+        ],
+    ]);
+
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{list}});
+    $self->assert_str_equals(
+        $res->[1][1]{list}[0]{threadId},
+        $res->[1][1]{list}[1]{threadId}
+    );
+}
