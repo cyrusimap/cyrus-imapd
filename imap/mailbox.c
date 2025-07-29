@@ -5766,7 +5766,9 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                     }
                     else {
                         // make sure we don't have a JMAP ID (internaldate) clash
-                        conversations_adjust_internaldate(cstate, guid,
+                        conversations_adjust_internaldate(cstate,
+                                                          mailbox_name(mailbox),
+                                                          guid,
                                                           &copyrecord.internaldate);
                     }
                 }
