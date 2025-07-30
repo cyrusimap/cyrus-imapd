@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_bodyvalues_iso2022jp
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $mime = <<'EOF';
+From: <from@local>
+To: <to@local>
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Subject: msg5
+MIME-Version: 1.0
+Content-Type: text/html; charset="iso-2022-jp"
+Content-Transfer-Encoding: quoted-printable
+
+=1B$B!J=1B(B=1B$BGcJ*=
+=1B(B=1B$B!K=1B(B=
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $mime);
+    $self->{instance}->deliver($msg);
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name     => 'Email/query',
+                path     => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+            properties => ['bodyValues'],
+        }, 'R2'],
+    ], $using);
+
+use utf8;
+    my $bodyValue = $res->[1][1]{list}[0]{bodyValues}{1};
+    $self->assert_str_equals("（買物）", $bodyValue->{value});
+    $self->assert_equals(JSON::false, $bodyValue->{isEncodingProblem});
+    $self->assert_equals(JSON::false, $bodyValue->{isTruncated});
+no utf8;
+}
