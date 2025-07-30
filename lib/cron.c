@@ -53,6 +53,8 @@ EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
                                      const struct timeval *timeval)
 {
     struct tm *tm = localtime(&timeval->tv_sec);
+    fprintf(stderr, "XXX t=" TIME_T_FMT " gave time=%s\n",
+                    timeval->tv_sec, asctime(tm));
 
     if (tm->tm_mday == 0) {
         /* quoth localtime(3):
@@ -70,10 +72,14 @@ EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
 
         syslog(LOG_DEBUG, "%s: compensating for tm_mon=%d tm_mday=%d!\n",
                           __func__, tm->tm_mon, tm->tm_mday);
+        fprintf(stderr, "XXX compensating for tm_mon=%d tm_mday=%d!\n",
+                        tm->tm_mon, tm->tm_mday);
         tm->tm_mday = monthdays[result->months] + leapday;
         tm->tm_mon = (tm->tm_mon + 12 - 1) % 12;
         syslog(LOG_DEBUG, "%s: computed tm_mon=%d tm_mday=%d!\n",
                           __func__, tm->tm_mon, tm->tm_mday);
+        fprintf(stderr, "XXX computed tm_mon=%d tm_mday=%d!\n",
+                        tm->tm_mon, tm->tm_mday);
     }
 
     if (result) {
