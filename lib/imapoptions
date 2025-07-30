@@ -2846,9 +2846,8 @@ product version in the capabilities
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
-{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twom", "twoskip"), "UNRELEASED" }
-/* The cyrusdb backend to use for caching sort results (currently only
-   used for xconvmultisort). */
+{ "sortcache_db", "twoskip", STRINGLIST("skiplist", "twom", "twoskip"), "UNRELEASED", "UNRELEASED" }
+/* Deprecated: This option does nothing. */
 
 { "specialuse_extra", NULL, STRING, "2.5.0" }
 /* Whitespace separated list of extra special-use attributes
