@@ -1048,7 +1048,8 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
             else if (internaldate) {
                 // make sure we don't have a JMAP ID (internaldate) clash
-                conversations_adjust_internaldate(cstate, guid, internaldate);
+                conversations_adjust_internaldate(cstate, mailbox_name(mailbox),
+                                                  guid, internaldate);
             }
 
             // if we found a file, use it

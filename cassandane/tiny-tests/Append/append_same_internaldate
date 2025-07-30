@@ -30,7 +30,7 @@ EOF
 
     # Did we log any conflicts?
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: JMAPID conflict during append/);
+                                 qr/JMAPID conflict during append/);
 }
 
 1;
