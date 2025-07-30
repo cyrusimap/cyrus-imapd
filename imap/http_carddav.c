@@ -459,15 +459,15 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
 
 static int _create_mailbox(const char *userid, const char *mailboxname, int type,
-                           const char *displayname, struct mboxlock **namespacelockp)
+                           const char *displayname, unslock_t **unslockp)
 {
     struct mailbox *mailbox = NULL;
 
     int r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
-    if (!*namespacelockp) {
-        *namespacelockp = mboxname_usernamespacelock(mailboxname);
+    if (!*unslockp) {
+        *unslockp = unslock_lockmb(mailboxname);
         // maybe we lost the race on this one
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT) return r;
@@ -506,7 +506,7 @@ static int _create_mailbox(const char *userid, const char *mailboxname, int type
 
 
 EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
-    struct mboxlock *namespacelock = NULL;
+    unslock_t *unslock = NULL;
 
     /* addressbook-home-set */
     mbname_t *mbname = mbname_from_userid(userid);
@@ -530,7 +530,7 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
 
         if (!r) r = _create_mailbox(userid, mbname_intname(mbname),
                                     MBTYPE_ADDRESSBOOK, NULL,
-                                    &namespacelock);
+                                    &unslock);
     }
     if (r) goto done;
 
@@ -540,11 +540,11 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = _create_mailbox(userid, mbname_intname(mbname),
                             MBTYPE_ADDRESSBOOK, "Personal",
-                            &namespacelock);
+                            &unslock);
     }
 
  done:
-    mboxname_release(&namespacelock);
+    unslock_release(&unslock);
     mbname_free(&mbname);
     return r;
 }

@@ -890,7 +890,7 @@ static int _create_upload_collection(const char *accountid,
                                      struct mailbox **mailboxp)
 {
     /* upload collection */
-    struct mboxlock *namespacelock = user_namespacelock(accountid);
+    unslock_t *unslock = unslock_lock(accountid);
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
     int need_setacl = 0;
@@ -967,7 +967,7 @@ static int _create_upload_collection(const char *accountid,
     }
 
  done:
-    mboxname_release(&namespacelock);
+    unslock_release(&unslock);
     mboxlist_entry_free(&mbentry);
     return r;
 }

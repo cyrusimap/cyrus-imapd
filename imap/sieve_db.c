@@ -882,17 +882,12 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     if (r) return IMAP_IOERROR;
 
 
-    struct mboxlock *namespacelock = NULL;
     char *mboxname = sieve_mboxname(userid);
     r = mboxlist_lookup(mboxname, NULL, NULL);
 
+    unslock_t *unslock = NULL;
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        namespacelock = user_namespacelock(userid);
-
-        if (!namespacelock) {
-            r = IMAP_MAILBOX_LOCKED;
-            goto done;
-        }
+        unslock = unslock_lock(userid);
 
         /* maybe we lost the race on this one */
         r = mboxlist_lookup(mboxname, NULL, NULL);
@@ -928,7 +923,8 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         mailbox_close(&mailbox);
     }
 
-    mboxname_release(&namespacelock);
+    // release before opening mailbox so mailbox takes and holds a lock
+    unslock_release(&unslock);
 
     if (!r && mailboxptr) {
         r = mailbox_open_iwl(mboxname, mailboxptr);
@@ -941,7 +937,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
     }
 
   done:
-    mboxname_release(&namespacelock);
+    unslock_release(&unslock);
     free(mboxname);
     return r;
 }

@@ -1271,6 +1271,9 @@ EXPORTED int index_fetch(struct index_state *state,
 
     index_unlock(state);
 
+    // we better not leak the annotationsdb acrosst this change
+    assert(!annotate_globaldb_isopen());
+
     index_checkflags(state, 1, 0);
 
     if (seqset_first(vanishedlist)) {

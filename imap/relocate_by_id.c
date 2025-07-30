@@ -227,14 +227,7 @@ int main(int argc, char **argv)
 
             if (!quiet) printf("\nRelocating: %s\n", extname);
 
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
-            if (!namespacelock) {
-                fprintf(stderr,
-                        "Failed to create namespacelock for %s: %s\n",
-                        extname, error_message(r));
-                mboxlist_entry_free(&mbentry);
-                goto cleanup;
-            }
+            unslock_t *unslock = unslock_lockmb(mbentry->name);
 
             /* If we're missing a partition, use the partition of child */
             if (!partition || !*partition) partition = buf_cstring(&part_buf);
@@ -370,7 +363,7 @@ int main(int argc, char **argv)
             }
 
           cleanup:
-            if (namespacelock) mboxname_release(&namespacelock);
+            unslock_release(&unslock);
             mboxlist_entry_free(&mbentry);
             strarray_free(oldpaths);
             strarray_free(newpaths);
@@ -431,9 +424,9 @@ static int find_p(const mbentry_t *mbentry, void *rock)
             if (!quiet) printf("\nPromoting intermediary: %s\n", extname);
 
             if (!nochanges) {
-                struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+                unslock_t *unslock = unslock_lockmb(mbentry->name);
                 r = mboxlist_promote_intermediary(mbentry->name);
-                mboxname_release(&namespacelock);
+                unslock_release(&unslock);
                 if (r) {
                     fprintf(stderr,
                             "\tFailed to promote intermediary %s: %s\n",
