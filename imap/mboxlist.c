@@ -1478,11 +1478,12 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
             /* XXX is there a difference between "" and NULL? */
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
-                                "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
-                                "oldacl=<%s> acl=<%s> "
+                                "mailbox=<%s> uniqueid=<%s> jmapid=<%s> "
+                                "mbtype=<%s> oldacl=<%s> acl=<%s> "
                                 "foldermodseq=<" MODSEQ_FMT ">",
                     session_id(),
-                    name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
+                    name, mbentry->uniqueid, mbentry->jmapid,
+                    mboxlist_mbtype_to_string(mbentry->mbtype),
                     old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
         }
     }
@@ -3266,10 +3267,11 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                 NULL : xstrdup(mailbox_uniqueid(oldmailbox));
             if (config_auditlog)
                 syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
-                       "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
+                       "mailbox=<%s> uniqueid=<%s> jmapid=<%s> "
+                       "oldpart=<%s> newpart=<%s>",
                        session_id(),
                        mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
-                       oldpartition, partition);
+                       mailbox_jmapid(oldmailbox), oldpartition, partition);
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);

@@ -2346,9 +2346,10 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         if (change->flags & CHANGE_ISAPPEND)
             /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
+                   "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s> cid=<%s> messageid=%s size=<" UINT64_FMT">",
-                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
+                   session_id(), mailbox_name(mailbox),
+                   mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid),
                    conversation_id_encode(cstate, record->cid),
@@ -2356,9 +2357,10 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
+                   "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s> cid=<%s> size=<" UINT64_FMT ">",
-                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
+                   session_id(), mailbox_name(mailbox),
+                   mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid),
                    conversation_id_encode(cstate, record->cid),
@@ -2366,9 +2368,10 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
+                   "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> modseq=<" MODSEQ_FMT "> "
                    "sysflags=<%s> guid=<%s>",
-                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox), record->uid,
+                   session_id(), mailbox_name(mailbox),
+                   mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox), record->uid,
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid));
     }
@@ -3308,9 +3311,10 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
 
     if (config_auditlog && mailbox->modseq_dirty)
         syslog(LOG_NOTICE, "auditlog: modseq sessionid=<%s> "
-               "mailbox=<%s> uniqueid=<%s> highestmodseq=<" MODSEQ_FMT
+               "mailbox=<%s> uniqueid=<%s> jmapid=<%s> highestmodseq=<" MODSEQ_FMT
                "> deletedmodseq=<" MODSEQ_FMT "> crcs=<%u/%u>",
-            session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+            session_id(), mailbox_name(mailbox),
+            mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
             mailbox->i.highestmodseq, mailbox->i.deletedmodseq,
             mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
 
@@ -4907,9 +4911,10 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         flags_to_str(&oldrecord, oldflags);
         flags_to_str(record, sysflags);
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
-               "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
+               "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> guid=<%s> cid=<%s> "
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
-               session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+               session_id(), mailbox_name(mailbox),
+               mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                record->uid, message_guid_encode(&record->guid),
                conversation_id_encode(cstate, record->cid),
                record->modseq, oldflags, sysflags);
@@ -5060,8 +5065,9 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     if (cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd) == 0) {
         if (config_auditlog) {
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-                   "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                   session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+                   "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> sysflags=<%s>",
+                   session_id(), mailbox_name(mailbox),
+                   mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                    uid, flagstr);
         }
     }
@@ -5070,8 +5076,9 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
         if (cyrus_unlink_fdptr(archivefname, &mailbox->archive_dirfd) == 0) {
             if (config_auditlog) {
                 syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
-                       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                       session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+                       "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uid=<%u> sysflags=<%s>",
+                       session_id(), mailbox_name(mailbox),
+                       mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                        uid, flagstr);
             }
         }
@@ -6069,8 +6076,9 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             char flagstr[FLAGMAPSTR_MAXLEN];
             flags_to_str(&copyrecord, flagstr);
             syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> "
-                   "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
-                   action, session_id(), mailbox_name(mailbox), mailbox_uniqueid(mailbox),
+                   "uniqueid=<%s> jmapid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
+                   action, session_id(), mailbox_name(mailbox),
+                   mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
                    conversation_id_encode(cstate, copyrecord.cid),
                    flagstr);
@@ -6557,9 +6565,10 @@ EXPORTED int mailbox_create(const char *name,
 
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: create sessionid=<%s> "
-                           "mailbox=<%s> uniqueid=<%s> uidvalidity=<%u>",
+                           "mailbox=<%s> uniqueid=<%s> jmapid=<%s> uidvalidity=<%u>",
                            session_id(), mailbox_name(mailbox),
-                           mailbox_uniqueid(mailbox), mailbox->i.uidvalidity);
+                           mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
+                           mailbox->i.uidvalidity);
 
 done:
     mbname_free(&mbname);
@@ -6817,9 +6826,10 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: delete sessionid=<%s> "
-                           "mailbox=<%s> uniqueid=<%s>",
+                           "mailbox=<%s> uniqueid=<%s> jmapid=<%s>",
                            session_id(),
-                           mailbox_name(mailbox), mailbox_uniqueid(mailbox));
+                           mailbox_name(mailbox),
+                           mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox));
 
     proc_killmbox(mailbox_name(mailbox));
 
@@ -7332,9 +7342,10 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: rename sessionid=<%s> "
-                           "oldmailbox=<%s> newmailbox=<%s> uniqueid=<%s>",
+                           "oldmailbox=<%s> newmailbox=<%s> uniqueid=<%s> jmapid=<%s>",
                            session_id(),
-                           mailbox_name(oldmailbox), newname, mailbox_uniqueid(newmailbox));
+                           mailbox_name(oldmailbox), newname,
+                           mailbox_uniqueid(newmailbox), mailbox_jmapid(newmailbox));
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);
