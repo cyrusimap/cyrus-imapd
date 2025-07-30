@@ -752,7 +752,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
             mbentry_t *mbentry = NULL;
             if (mboxlist_lookup_allow_all(name, &mbentry, NULL))
                 continue;
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
+            user_nslock_t *user_nslock = user_nslock_lockmb_w(mbentry->name);
             if (!mboxname_isdeletedmailbox(mbentry->name, NULL)) {
                 mboxname_setmodseq(mbentry->name, mbentry->foldermodseq,
                                    mbentry->mbtype & ~MBTYPE_DELETED,
@@ -763,7 +763,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
                 // clean up again, counters probably got re-created
                 user_deletedata(mbentry, 1);
             }
-            mboxname_release(&namespacelock);
+            user_nslock_release(&user_nslock);
             mboxlist_entry_free(&mbentry);
         }
 

@@ -98,6 +98,7 @@
 #include "quota.h"
 #include "seen.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */
@@ -574,13 +575,13 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* make sure data is loaded in memory to limit lock time */
     index_warmup(data->mbentry, WARMUP_ALL, /*uids*/NULL);
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
+    user_nslock_t *user_nslock = user_nslock_lock_w(mbname_userid(data->mbname));
 
     if (setversion) {
         r = mailbox_open_exclusive(name, &mailbox);
         if (r) {
             com_err(name, r, "Failed to open mailbox to set version");
-            mboxname_release(&namespacelock);
+            user_nslock_release(&user_nslock);
             return 0;
         }
         if ((setversion != mailbox->i.minor_version) ||
@@ -608,7 +609,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
                 int i, n = ptrarray_size(&records);
 
                 mailbox_close(&mailbox);
-                mboxname_release(&namespacelock);
+                user_nslock_release(&user_nslock);
 
                 if (!r) {
                     r = mailbox_open_irl(name, &mailbox);
@@ -634,7 +635,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
             free(extname);
         }
         mailbox_close(&mailbox);
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
         return 0;
     }
 
@@ -642,7 +643,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     if (r) {
         com_err(name, r, "%s",
                 (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
         return 0;
     }
 
@@ -776,7 +777,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     }
     mailbox_close(&mailbox);
     free(extname);
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     if (rrock->discovered) {
         char fnamebuf[MAX_MAILBOX_PATH];
@@ -848,7 +849,7 @@ static void reconstruct_mbentry(const char *header_path)
     size_t pathlen = strlen(header_path);
     size_t fnamelen = strlen(FNAME_HEADER);
     mbentry_t *mbentry = NULL;
-    struct mboxlock *namespacelock = NULL;
+    user_nslock_t *user_nslock = NULL;
     int fix_header = 0;
 
     if (!realpath(header_path, real)) {
@@ -876,7 +877,7 @@ static void reconstruct_mbentry(const char *header_path)
         goto done;
     }
 
-    namespacelock = mboxname_usernamespacelock(mbentry->name);
+    user_nslock = user_nslock_lockmb_w(mbentry->name);
 
     if (!mbentry->uniqueid) {
         /* Look elsewhere for a UID */
@@ -1029,7 +1030,7 @@ static void reconstruct_mbentry(const char *header_path)
     }
 
   done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     mboxlist_entry_free(&mbentry);
     buf_free(&buf);
 }

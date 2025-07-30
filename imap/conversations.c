@@ -105,7 +105,7 @@
 
 struct conversations_open {
     struct conversations_state s;
-    struct mboxlock *local_namespacelock;
+    user_nslock_t *user_nslock;
     struct conversations_open *next;
 };
 
@@ -396,13 +396,13 @@ EXPORTED int conversations_open_path_version(const char *fname,
     open_conversations = open;
 
     /* first ensure that the usernamespace is locked */
-    int haslock = user_isnamespacelocked(userid);
+    int haslock = user_nslock_islocked(userid);
     if (haslock) {
         if (!shared) assert(haslock != LOCK_SHARED);
     }
     else {
         int locktype = shared ? LOCK_SHARED : LOCK_EXCLUSIVE;
-        open->local_namespacelock = user_namespacelock_full(userid, locktype);
+        open->user_nslock = user_nslock_lock(userid, locktype);
     }
 
     /* set version -
@@ -576,8 +576,7 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.folders);
             if (cur->s.altrep)
                 strarray_free(cur->s.altrep);
-            if (cur->local_namespacelock)
-                mboxname_release(&cur->local_namespacelock);
+            user_nslock_release(&cur->user_nslock);
             free(cur);
             return;
         }

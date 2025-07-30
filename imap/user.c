@@ -272,7 +272,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     const char *sieve_path = NULL, **suffixes;
     int i;
 
-    assert(user_isnamespacelocked(userid));
+    assert(user_nslock_islocked(userid));
 
     if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS) && mbentry->uniqueid) {
         for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
@@ -711,29 +711,117 @@ static const char *_namelock_name_from_userid(const char *userid)
     return buf_cstring(&buf);
 }
 
-EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int locktype)
-{
-    struct mboxlock *namelock = NULL;
-    if (!user_isnamespacelocked(userid))
-        assert(!open_mailboxes_namelocked(userid));
-    const char *name = _namelock_name_from_userid(userid);
-    int r = mboxname_lock(name, &namelock, locktype);
-    if (!(locktype & LOCK_NONBLOCKING)) assert(!r);
-    return namelock;
-}
-
 EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock)
 {
-    struct mboxlock *userlock = user_namespacelock(userid);
+    user_nslock_t *user_nslock = user_nslock_lock(userid, LOCK_EXCLUSIVE);
     int r = cb(rock);
-    mboxname_release(&userlock);
+    user_nslock_release(&user_nslock);
     return r;
 }
 
-EXPORTED int user_isnamespacelocked(const char *userid)
+// we don't need two separate APIs for this because a NULL mboxname means a single mailbox, so you
+// can pass NULL to the second argument and mean "just lock one mailbox please".
+EXPORTED user_nslock_t *user_nslock_bymboxname(const char *mboxname1, const char *mboxname2, int locktype)
+{
+    char *userid1 = mboxname_to_userid(mboxname1);
+    if (!mboxname2) {
+        user_nslock_t *locks = user_nslock_lock(userid1, locktype);
+        free(userid1);
+        return locks;
+    }
+    char *userid2 = mboxname_to_userid(mboxname2);
+    user_nslock_t *locks = user_nslock_lockdouble(userid1, userid2, locktype);
+    free(userid2);
+    free(userid1);
+    return locks;
+}
+
+EXPORTED user_nslock_t *user_nslock_lock(const char *userid, int locktype)
+{
+    if (!user_nslock_islocked(userid)) {
+        assert(!open_mailboxes_namelocked(userid));
+        assert(!annotate_anydb_islocked());
+    }
+    user_nslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
+    const char *lockname = _namelock_name_from_userid(userid);
+    if (mboxname_lock(lockname, &locks->l1, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        user_nslock_release(&locks);
+        return NULL;
+    }
+    return locks;
+}
+
+// we need separate double and single locks because a NULL userid might mean a shared namespace,
+// so there's no other way to distinguish between an operation involving a shared mailbox and
+// an single mailbox operation
+EXPORTED user_nslock_t *user_nslock_lockdouble(const char *userid1, const char *userid2, int locktype)
+{
+    int cmp = strcmpsafe(userid1, userid2);
+    // if it's the same user (including both NULL, aka: both shared) then
+    // we can use full1 to lock it.
+    if (!cmp) return user_nslock_lock(userid1, locktype);
+
+    // otherwise we have ordering to follow.  The alphabetically first user is always
+    // locked first to avoid deadlocks.
+    const char *l1user = userid1, *l2user = userid2;
+    if (cmp > 0) {
+        l1user = userid2;
+        l2user = userid1;
+    }
+
+    // ensure locking invariants - we are allowed to have the first lock already, but
+    // we MUST NOT have the second lock if we don't have the first lock, and we can't
+    // have any mailboxes open for a user which is not yet locked.
+    if (!user_nslock_islocked(l1user)) {
+        assert(!user_nslock_islocked(l2user));
+        assert(!open_mailboxes_namelocked(l1user));
+        assert(!open_mailboxes_namelocked(l2user));
+        assert(!annotate_anydb_islocked());
+    }
+    else if (!user_nslock_islocked(l2user)) {
+        assert(!open_mailboxes_namelocked(l2user));
+    }
+
+    user_nslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
+    // take the two locks in order (even if already locked, we refcount add it again)
+    const char *name = _namelock_name_from_userid(l1user);
+    if (mboxname_lock(name, &locks->l1, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        user_nslock_release(&locks);
+        return NULL;
+    }
+    name = _namelock_name_from_userid(l2user);
+    if (mboxname_lock(name, &locks->l2, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        user_nslock_release(&locks);
+        return NULL;
+    }
+    return locks;
+}
+
+EXPORTED void user_nslock_release(user_nslock_t **ptr)
+{
+    user_nslock_t *locks = *ptr;
+    if (!locks) return;
+    mboxname_release(&locks->l2);
+    mboxname_release(&locks->l1);
+    free(locks);
+    *ptr = NULL;
+}
+
+EXPORTED int user_nslock_islocked(const char *userid)
 {
     const char *name = _namelock_name_from_userid(userid);
     return mboxname_islocked(name);
+}
+
+EXPORTED int user_nslock_islockedmb(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    int r = user_nslock_islocked(userid);
+    free(userid);
+    return r;
 }
 
 EXPORTED int user_isreplicaonly(const char *userid)

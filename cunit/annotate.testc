@@ -12,6 +12,7 @@
 #include "imap/annotate.h"
 #include "imap/append.h"
 #include "imap/mboxlist.h"
+#include "imap/user.h"
 #include "imap/imap_err.h"
 
 #define DBDIR           "test-dbdir"
@@ -2212,7 +2213,7 @@ static int set_up(void)
     mboxlist_init();
     mboxlist_open(NULL);
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(MBOXNAME1_INT);
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(MBOXNAME1_INT);
 
     /* XXX API abuse? perhaps this should just call mboxlist_create,
      * XXX rather than the low level APIs. */
@@ -2239,9 +2240,9 @@ static int set_up(void)
         return r;
     mailbox_close(&mailbox);
 
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
-    namespacelock = mboxname_usernamespacelock(MBOXNAME2_INT);
+    user_nslock = user_nslock_lockmb_w(MBOXNAME2_INT);
 
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
                        makeuuid(), /*jmapid*/0,
@@ -2266,9 +2267,9 @@ static int set_up(void)
         return r;
     mailbox_close(&mailbox);
 
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
-    namespacelock = mboxname_usernamespacelock(MBOXNAME3_INT);
+    user_nslock = user_nslock_lockmb_w(MBOXNAME3_INT);
 
     r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, /*version*/0, PARTITION, ACL,
                        makeuuid(), /*jmapid*/0,
@@ -2290,7 +2291,7 @@ static int set_up(void)
 
     mailbox_close(&mailbox);
 
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     old_annotation_definitions =
         imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s;

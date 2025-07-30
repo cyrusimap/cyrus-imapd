@@ -2162,7 +2162,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
         int num_user_records = 0;
         int skip_user = 0;
         char *userid = NULL;
-        struct mboxlock *nslock = NULL;
+        user_nslock_t *user_nslock = NULL;
         for (i = 0; i < rock.list.count; i++) {
             struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
 
@@ -2179,20 +2179,20 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
                 num_user_records = 0;
                 skip_user = 0;
                 free(userid);
-                mboxname_release(&nslock);
+                user_nslock_release(&user_nslock);
                 userid = xstrdup(mbname_userid(mbname));
                 if (user_isreplicaonly(userid)) {
                     skip_user = 1;
                     continue;
                 }
-                nslock = user_namespacelock_full(userid, LOCK_NONBLOCKING);
+                user_nslock = user_nslock_lock(userid, LOCK_NONBLOCKING);
             }
             mbname_free(&mbname);
 
             if (skip_user) continue;
 
             // if we failed to lock the user, or have done too many for this user, skip
-            if (!nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
+            if (!user_nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
                 skipped_some++;
                 caldav_alarm_fini(data);
                 free(data);
@@ -2205,8 +2205,8 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
             free(data);
         }
 
+        user_nslock_release(&user_nslock);
         free(userid);
-        mboxname_release(&nslock);
 
         // if we both made some progress AND skipped some, then retry again immediately
         if (did_some && skipped_some) *intervalp = 0;

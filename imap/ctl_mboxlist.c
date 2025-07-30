@@ -495,7 +495,7 @@ static void do_pop_mupdate(void)
         struct mb_node *me = wipe_head;
         wipe_head = wipe_head->next;
 
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
+        user_nslock_t *user_nslock = user_nslock_lockmb_w(me->mailbox);
 
         if (!mboxlist_delayed_delete_isenabled() ||
             mboxname_isdeletedmailbox(me->mailbox, NULL)) {
@@ -506,7 +506,7 @@ static void do_pop_mupdate(void)
                     MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
         }
 
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
 
         if (ret) {
             fprintf(stderr, "couldn't delete defunct mailbox %s\n",

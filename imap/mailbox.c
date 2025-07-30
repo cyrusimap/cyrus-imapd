@@ -975,15 +975,15 @@ static int mailbox_relock(struct mailbox *mailbox, int locktype, int index_lockt
     mailbox_unlock_index(mailbox, NULL);
     mailbox_release_resources(mailbox);
     mboxname_release(&mailbox->namelock);
-    mboxname_release(&mailbox->local_namespacelock);
+    user_nslock_release(&mailbox->user_nslock);
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
-    int haslock = user_isnamespacelocked(userid);
+    int haslock = user_nslock_islocked(userid);
     if (haslock) {
         if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
             return IMAP_MAILBOX_LOCKED;
     }
     else {
-        mailbox->local_namespacelock = user_namespacelock_full(userid, index_locktype);
+        mailbox->user_nslock = user_nslock_lock(userid, index_locktype);
     }
     free(userid);
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, locktype);
@@ -1006,17 +1006,17 @@ static int mailbox_open_advanced(const char *name,
 {
     int r = 0;
     assert(*mailboxptr == NULL);
-    struct mboxlock *local_namespacelock = NULL;
+    user_nslock_t *user_nslock = NULL;
 
     // lock the user namespace FIRST before anything else
     char *userid = mboxname_to_userid(name);
-    int haslock = user_isnamespacelocked(userid);
+    int haslock = user_nslock_islocked(userid);
     if (haslock) {
         if ((haslock & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
             r = IMAP_MAILBOX_LOCKED;
     }
     else {
-        local_namespacelock = user_namespacelock_full(userid, index_locktype);
+        user_nslock = user_nslock_lock(userid, index_locktype);
     }
     free(userid);
     if (r) return r;
@@ -1047,7 +1047,7 @@ static int mailbox_open_advanced(const char *name,
 
     if (r) {
         mboxlist_entry_free(&mbentry);
-        mboxname_release(&local_namespacelock);
+        user_nslock_release(&user_nslock);
         return r;
     }
 
@@ -1057,7 +1057,7 @@ static int mailbox_open_advanced(const char *name,
 
     /* already open?  just use this one */
     if (mailbox) {
-        if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
+        if (user_nslock) mailbox->user_nslock = user_nslock;
         mboxlist_entry_free(&mbentry);
         /* can't promote a readonly index */
         if ((mailbox->index_locktype & LOCK_SHARED) && (index_locktype & LOCK_EXCLUSIVE))
@@ -1085,12 +1085,12 @@ static int mailbox_open_advanced(const char *name,
             xsyslog(LOG_ERR, "IOERROR: lock failed",
                              "mailbox=<%s> error=<%s>",
                              name, error_message(r));
-        mboxname_release(&local_namespacelock);
+        user_nslock_release(&user_nslock);
         mboxlist_entry_free(&mbentry);
         remove_listitem(mailbox);
         return r;
     }
-    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
+    if (user_nslock) mailbox->user_nslock = user_nslock;
 
     if (!mbentry->name) mbentry->name = xstrdup(name);
     mailbox->mbentry = mbentry;
@@ -1373,7 +1373,7 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     }
 
     mboxname_release(&mailbox->namelock);
-    mboxname_release(&mailbox->local_namespacelock);
+    user_nslock_release(&mailbox->user_nslock);
 
     remove_listitem(mailbox);
 }
@@ -2747,7 +2747,7 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
     else {
         // if the user isn't locked, we always need to relock
         char *userid = mboxname_to_userid(mailbox_name(mailbox));
-        if (!user_isnamespacelocked(userid))
+        if (!user_nslock_islocked(userid))
             need_relock = 1;
         free(userid);
     }
@@ -2850,7 +2850,7 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     ptrarray_fini(&mailbox->caches);
 
     // release the namespacelock here
-    mboxname_release(&mailbox->local_namespacelock);
+    user_nslock_release(&mailbox->user_nslock);
 }
 
 static char *mailbox_header_data_cstring(struct mailbox *mailbox)
@@ -6342,7 +6342,7 @@ EXPORTED int mailbox_create(const char *name,
 
     /* needs to be an exclusive namelock to create a mailbox */
     mbname = mbname_from_intname(name);
-    int haslock = user_isnamespacelocked(mbname_userid(mbname));
+    int haslock = user_nslock_islocked(mbname_userid(mbname));
     assert(haslock == LOCK_EXCLUSIVE);
 
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
@@ -7618,19 +7618,19 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
                 | OPT_POP3_NEW_UIDL;
-    struct mboxlock *local_namespacelock = NULL;
+    user_nslock_t *user_nslock = NULL;
     mbentry_t *mbentry = NULL;
     int r = 0;
 
     // lock the user namespace FIRST before the mailbox namespace
     char *userid = mboxname_to_userid(name);
-    int haslock = user_isnamespacelocked(userid);
+    int haslock = user_nslock_islocked(userid);
     if (haslock) {
         if (!(haslock & LOCK_EXCLUSIVE)) {
             r = IMAP_MAILBOX_LOCKED;
         }
         else {
-            local_namespacelock = user_namespacelock_full(userid, LOCK_EXCLUSIVE);
+            user_nslock = user_nslock_lock_w(userid);
         }
     }
     free(userid);
@@ -7656,7 +7656,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     if (r) goto done;
 
     mailbox->mbentry = mboxlist_entry_copy(mbentry);
-    if (local_namespacelock) mailbox->local_namespacelock = local_namespacelock;
+    if (user_nslock) mailbox->user_nslock = user_nslock;
 
     syslog(LOG_NOTICE, "create new mailbox %s", name);
 

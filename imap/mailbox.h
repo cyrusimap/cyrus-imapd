@@ -62,7 +62,6 @@
 #define MAX_MAILBOX_NAME 510
 #define MAX_MAILBOX_BUFFER 1024
 #define MAX_MAILBOX_PATH 4096
-
 #define MAX_USER_FLAGS (16*8)
 
 #define MAILBOX_HEADER_MAGIC ("\241\002\213\015Cyrus mailbox header\n" \
@@ -294,7 +293,7 @@ struct mailbox {
     struct conversations_state *cstate_value;
 
     /* namespace lock */
-    struct mboxlock *local_namespacelock;
+    struct usernamespacelocks *user_nslock;
 
 #ifdef WITH_DAV
     struct caldav_db *local_caldav;

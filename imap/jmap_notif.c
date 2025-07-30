@@ -78,7 +78,7 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
     int r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* lock the namespace lock and try again */
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
         mbentry_t mbentry = MBENTRY_INITIALIZER;
         mbentry.name = notifmboxname;
@@ -93,7 +93,7 @@ HIDDEN int jmap_create_notify_collection(const char *userid, mbentry_t **mbentry
                       notifmboxname, error_message(r));
 
         r = mboxlist_lookup(notifmboxname, mbentryptr, NULL);
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
     }
 
     free(notifmboxname);
@@ -401,8 +401,8 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
 
     assert(oldical || newical);
 
-    if ((user_isnamespacelocked(accountid) == LOCK_SHARED) ||
-        (user_isnamespacelocked(userid) == LOCK_SHARED)) {
+    if ((user_nslock_islocked(accountid) == LOCK_SHARED) ||
+        (user_nslock_islocked(userid) == LOCK_SHARED)) {
         /* bail out, before notification mailbox crashes on invalid lock */
         xsyslog(LOG_ERR, "can not exlusively lock jmapnotify collection",
                 "accountid=%s", accountid);
