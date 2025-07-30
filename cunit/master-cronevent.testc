@@ -1,15 +1,60 @@
 #include "cunit/unit.h"
 #include "master/cronevent.h"
 
+#include "lib/cron.h"
+#include "lib/dynarray.h"
+
+extern void cronevent_get_schedule(dynarray_t **schedule,
+                                   dynarray_t **details);
+
 static int tear_down(void)
 {
     cronevent_clear();
     return 0;
 }
 
+static void assert_event_invariants(const struct cron_spec *spec,
+                                    const struct cronevent_details *details)
+{
+    /* no invalid bits set in the spec */
+    CU_ASSERT_EQUAL((spec->minutes & ~CRON_ALL_MINUTES), 0);
+    CU_ASSERT_EQUAL((spec->hours & ~CRON_ALL_HOURS), 0);
+    CU_ASSERT_EQUAL((spec->days_of_month & ~CRON_ALL_DAYS_OF_MONTH), 0);
+    CU_ASSERT_EQUAL((spec->months & ~CRON_ALL_MONTHS), 0);
+    CU_ASSERT_EQUAL((spec->days_of_week & ~CRON_ALL_DAYS_OF_WEEK), 0);
+
+    /* better have a name */
+    CU_ASSERT_PTR_NOT_NULL(details->name);
+    CU_ASSERT_STRING_NOT_EQUAL(details->name, "");
+
+    /* better have something to execute */
+    CU_ASSERT_NOT_EQUAL(strarray_size(&details->exec), 0);
+}
+
+static void assert_schedule_invariants(void)
+{
+    dynarray_t *schedule, *details;
+    int sched_count, det_count;
+    int i;
+
+    cronevent_get_schedule(&schedule, &details);
+
+    sched_count = dynarray_size(schedule);
+    CU_ASSERT(sched_count >= 0);
+
+    det_count = dynarray_size(details);
+    CU_ASSERT(det_count >= 0);
+    CU_ASSERT_EQUAL(sched_count, det_count);
+
+    for (i = 0; i < sched_count; i++) {
+        assert_event_invariants(dynarray_nth(schedule, i),
+                                dynarray_nth(details, i));
+    }
+}
+
 static void test_foo(void)
 {
-
+    assert_schedule_invariants();
 }
 
 /* vim: set ft=c: */

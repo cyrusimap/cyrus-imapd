@@ -54,11 +54,6 @@
 #include <sysexits.h>
 #include <time.h>
 
-struct cronevent_details {
-    char *name;
-    strarray_t exec;
-};
-
 static dynarray_t cronevent_schedule
     = DYNARRAY_INITIALIZER(sizeof(struct cron_spec));
 static dynarray_t cronevent_details
@@ -66,31 +61,44 @@ static dynarray_t cronevent_details
 
 static time_t cronevent_last_run_time = 0;
 
+/* for unit tests */
+HIDDEN void cronevent_get_schedule(dynarray_t **schedule,
+                                   dynarray_t **details)
+{
+    *schedule = &cronevent_schedule;
+    *details = &cronevent_details;
+}
+
 EXPORTED int cronevent_add(const char *name, const char *spec, const char *cmd)
 {
+    char err_buf[1024];
     struct cron_spec cron_spec = {0};
     struct cronevent_details *details = NULL;
     const char *parse_err = NULL;
     int spec_idx, det_idx;
 
-    if (cron_parse_spec(spec, &cron_spec, &parse_err)) {
-        char buf[1024];
+    if (!cmd || !*cmd) {
+        snprintf(err_buf, sizeof(err_buf), "missing cmd for %s", name);
+        fatal(err_buf, EX_CONFIG);
+    }
 
-        snprintf(buf, sizeof(buf), "unable to parse spec for %s \"%s\": %s",
-                                   name, spec, parse_err);
-        fatal(buf, EX_CONFIG);
+    if (cron_parse_spec(spec, &cron_spec, &parse_err)) {
+        snprintf(err_buf, sizeof(err_buf),
+                 "unable to parse spec \"%s\" for %s: %s",
+                 spec, name, parse_err);
+        fatal(err_buf, EX_CONFIG);
     }
 
     spec_idx = dynarray_append(&cronevent_schedule, &cron_spec);
+
     det_idx = dynarray_append_empty(&cronevent_details, (void **) &details);
     assert(spec_idx == det_idx);
+
     details->name = xstrdup(name);
-    if (cmd) {
-        /* The xstrdup here looks weird, but strarray_splitm specifically wants
-         * a heap-allocated string it can take ownership of.  It's not leaked.
-         */
-        strarray_splitm(&details->exec, xstrdup(cmd), NULL, 0);
-    }
+    /* The xstrdup here looks weird, but strarray_splitm specifically wants
+     * a heap-allocated string it can take ownership of.  It's not leaked.
+     */
+    strarray_splitm(&details->exec, xstrdup(cmd), NULL, 0);
 
     return 0;
 }
