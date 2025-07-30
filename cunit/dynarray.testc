@@ -1,6 +1,6 @@
 #include <stdint.h>
 #
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "xmalloc.h"
 #include "dynarray.h"
 

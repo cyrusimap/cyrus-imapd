@@ -48,12 +48,8 @@ use Cwd;
 use File::Basename;
 use File::Compare;
 
-my $unitdir = dirname($0);
-my $project;
-my $DEFAULT_PROJECT = "default.cunit";
-my @suites;
-my @libraries;
-my $here = getcwd();
+my $srcdir = getcwd();
+my $builddir = getcwd();
 my $verbose = 0;
 
 #
@@ -208,58 +204,22 @@ sub path_absrel($$)
 #
 # Given a pathname of the C source file of a suite, return
 # the name by which the suite will be known to CUnit.
-# Args: absolute pathname
+# Args: relative pathname
 # Returns: name
 #
 sub suite_path_to_name($)
 {
     my ($path) = @_;
 
-    # Generate a path from the "top" directory down to this
-    # C source file.  The "top" directory should be something
-    # like @top_srcdir@ in autoconf speak, but we have to
-    # infer it from the location of the project file.
-    my ($projdir, $whatever) = path_absrel($project, $here);
-    my $topdir = path_common($path, $projdir);
-    vmsg("inferred top_srcdir is \"$topdir\"");
-    my $name = path_relativise($path, $topdir);
+    my $name = $path;
 
+    $name =~ s/^cunit\///g;
     $name =~ s/\.(testc|c)$//;
     $name =~ s/\/test_?/\//g;
     $name =~ s/_?test\//\//g;
     $name =~ s/\/+/\//g;
     $name =~ s/^\/+/\//;
     return $name;
-}
-
-#
-# Given a pathname (relative or absolute, doesn't matter)
-# of the C source file of a suite, return the relative
-# path of the wrapper C source file.  This is always in
-# the basedir.
-# Args: pathname
-# Returns: pathname
-#
-sub suite_path_to_wrapper($)
-{
-    my ($path) = @_;
-    return $path . "-cunit.c";
-}
-
-#
-# Given a pathname (relative or absolute, doesn't matter)
-# of the C source file of a suite, return the relative
-# path of the object file.  This is always in the basedir.
-# Args: pathname
-# Returns: pathname
-#
-sub suite_path_to_object($)
-{
-    my ($path) = @_;
-    my $obj = basename($path);
-    $obj =~ s/^/.cunit-/;
-    $obj =~ s/\.c$/.o/;
-    return $obj;
 }
 
 #
@@ -306,12 +266,9 @@ sub suite_new($$)
 
     my $suite =
     {
-        basedir => $basedir,
         relpath => $relpath,
         abspath => $abspath,
-        name => suite_path_to_name($abspath),
-        wrap => suite_path_to_wrapper($relpath),
-        object => suite_path_to_object($relpath),
+        name => suite_path_to_name($relpath),
         setupfn => undef,
         teardownfn => undef,
         params => [],
@@ -319,30 +276,6 @@ sub suite_new($$)
     };
     $suite->{suitevar} = suite_name_to_var($suite->{name});
     return $suite;
-}
-
-#
-# Compare two suite hashes; suitable for use as a sort function.
-# Args: ref to suite hash, ref to suite hash
-# Returns: 0 if the same, <0 or >0 if not the same.
-#
-sub suite_cmp($$)
-{
-    my ($s1, $s2) = @_;
-    return ($s1->{abspath} cmp $s2->{abspath});
-}
-
-#
-# Return the linker argument for a suite hash, adjusted
-# to be relative to the current working directory if
-# appropriate.
-# Args: ref to suite hash
-# Returns: string linker argument
-#
-sub suite_get_linkable($)
-{
-    my ($suite) = @_;
-    return path_relativise($suite->{basedir} . "/" . $suite->{object}, $here);
 }
 
 # Any of these (case insensitive) names can be used as the setup function
@@ -510,115 +443,6 @@ sub suite_scan_for_tests($)
 }
 
 #
-# Return the subset of @suites located in or below the current directory.
-# Args: void
-# Returns: list refs to suite hash
-#
-sub suites_for_here()
-{
-    my $heresl = "$here/";
-    my $l = length($heresl);
-    return grep { substr($_->{abspath},0,$l) eq $heresl } @suites;
-}
-
-#
-# Return the suite which corresponds to the given C source file.
-# Args: C source file name
-# Returns: ref to suite hash, or undef if not found
-#
-sub suite_find($)
-{
-    my ($path) = @_;
-
-    foreach my $suite (@suites)
-    {
-        # canonicalise path before comparison
-        my ($abs, $rel) = path_absrel($path, $suite->{basedir});
-
-        return $suite
-            if ($suite->{relpath} eq $rel);
-    }
-    return undef;
-}
-
-#
-# Create a new library hash.
-#
-# Note that we maintain the basedirectory and relative path
-# separately, like for suites, but only after partially
-# parsing the argument to see if comprises or contains
-# a path.
-#
-# Args: linker argument, directory which any path is relative to.
-# Returns: ref to new library hash
-#
-sub library_new($$)
-{
-    my ($arg, $basedir) = @_;
-    my $abspath;
-    my $relpath;
-
-    if ($arg =~ m/\.[oa]$/)
-    {
-        ($abspath, $relpath) = path_absrel($arg, $basedir);
-    }
-    elsif (my ($dir) = ($arg =~ m/^-L(.+)$/))
-    {
-        ($abspath, $relpath) = path_absrel($dir, $basedir);
-    }
-    elsif (!($arg =~ m/^-[lBW]/))
-    {
-        die "Don't know what to do with library \"$arg\"";
-    }
-
-    my $lib =
-    {
-        arg => $arg,
-        basedir => $basedir,
-        relpath => $relpath,    # might be undef
-        abspath => $abspath,    # might be undef
-    };
-    return $lib;
-}
-
-#
-# Compare two library hashes; suitable for use as a sort function.
-# Args: ref to library hash, ref to library hash
-# Returns: 0 if the same, <0 or >0 if not the same.
-#
-sub library_cmp($$)
-{
-    my ($l1, $l2) = @_;
-    return ($l1->{basedir} cmp $l2->{basedir} ||
-            $l1->{arg} cmp $l2->{arg});
-}
-
-#
-# Return the linker argument for a library hash, adjusted
-# to be relative to the current working directory if
-# appropriate.
-# Args: ref to library hash
-# Returns: string linker argument
-#
-sub library_get_linkable($)
-{
-    my ($lib) = @_;
-    my $arg = $lib->{arg};
-
-    if ($arg =~ m/\.[oa]$/)
-    {
-        my ($abspath, $relpath) = path_absrel($arg, $lib->{basedir});
-        $arg = path_relativise($abspath, $here);
-    }
-    elsif (my ($dir) = ($arg =~ m/^-L(.+)$/))
-    {
-        my ($abspath, $relpath) = path_absrel($dir, $lib->{basedir});
-        $arg = "-L" . path_relativise($abspath, $here);
-    }
-    return $arg;
-}
-
-#
 # Atomic rewrite: atomic update of file contents.
 #
 # We use the standard trick for POSIX filesystems of writing all
@@ -686,10 +510,10 @@ sub atomic_rewrite_end($)
 # Args: ref to suite hash
 # Returns: void
 #
-sub suite_generate_wrap($)
+sub suite_generate_wrap($$)
 {
-    my ($suite) = @_;
-    my $file = atomic_rewrite_begin($suite->{wrap});
+    my ($suite, $wrapfile) = @_;
+    my $file = atomic_rewrite_begin($wrapfile);
     my $cfile = $suite->{abspath};
 
     open WRAP,'>',$file
@@ -758,378 +582,45 @@ sub suite_generate_wrap($)
 
     close WRAP;
 
-    atomic_rewrite_end($suite->{wrap});
+    atomic_rewrite_end($wrapfile);
 }
 
 #
-# Load the $project file into the arrays @suites and @libraries.
-# Args: void
-# Returns: void
+# Generate a wrapper C source file for a test suite
 #
-sub project_load()
+sub generate_wrapper($$)
 {
-    open PROJ,'<',$project
-        or return;      # TODO: should be silent on ENOENT only
+    my ($wrapfile, $testfile) = @_;
 
-    # TODO: should check file version header
+    $testfile = path_sanitise("$builddir/$testfile");
 
-    while (<PROJ>)
-    {
-        chomp;
-        next if (m/^#/);    # skip comments
-        my @a = split;
+    my $suite = suite_new($testfile, $srcdir);
+    my $ntests = suite_scan_for_tests($suite);
+    die "No tests in $testfile" if $ntests == 0;
 
-        if ($a[0] eq 'suite')
-        {
-            die "Invalid format"
-                unless scalar(@a) == 3;
-            push(@suites, suite_new($a[1], $a[2]));
-        }
-        elsif ($a[0] eq 'library')
-        {
-            die "Invalid format"
-                unless scalar(@a) == 3;
-            push(@libraries, library_new($a[1], $a[2]));
-        }
-    }
-    close PROJ;
-
-    vmsg("loaded project $project");
+    suite_generate_wrap($suite, $wrapfile);
 }
-
-#
-# Add a suite to @suites, if it's not already present.
-# Args: ref to a suite hash
-# Returns: void
-#
-sub project_add_suite($)
-{
-    my ($suite) = @_;
-
-    return if grep { !suite_cmp($_,$suite) } @suites;
-    #
-    # Note: appending is an important semantic.  It ensures
-    # that the order of suites in the CUnit run matches the
-    # order in which they were added (alphabetic)
-    #
-    vmsg("adding suite $suite->{relpath} $suite->{basedir}");
-    push(@suites, $suite);
-}
-
-#
-# Add a library to the @libraries if it's not already present.
-# Args: library string
-# Returns: void
-#
-sub project_add_library($)
-{
-    my ($lib) = @_;
-
-    @libraries = grep { library_cmp($_, $lib) } @libraries;
-    vmsg("adding library $lib->{arg} $lib->{basedir}");
-    push(@libraries, $lib);
-}
-
-#
-# Save the @suites and @libraries arrays to the $project file
-# Uses atomic rewrite.
-# Args: void
-# Returns: void
-#
-sub project_save()
-{
-    my $file = atomic_rewrite_begin($project);
-
-    open PROJ,'>',$file
-        or die "Failed to open $file for writing: $!";
-
-    print PROJ "#CUnitProject-1.0\n";
-
-    foreach my $suite (@suites)
-    {
-        print PROJ "suite $suite->{relpath} $suite->{basedir}\n";
-    }
-    foreach my $lib (@libraries)
-    {
-        print PROJ "library $lib->{arg} $lib->{basedir}\n";
-    }
-    close PROJ;
-
-    atomic_rewrite_end($project);
-}
-
-#
-# Add the named test sources (which are C source files) to the
-# project, and rewrite the project file.  Re-adding is deliberately
-# a harmless no-op; in particular the project file is not written
-# if it's contents would not change.
-#
-sub add_sources(@)
-{
-    my (@args) = @_;
-
-    project_load();
-
-    # Test sources are listed mostly alphabetically in Makefile.am, but
-    # there are exceptions for uninteresting reasons.
-    # There should not be any order dependency, so we can disregard the
-    # order they were listed in, and instead force them into alphabetic
-    # order for better readability of the test suite output.
-    foreach my $path (sort @args)
-    {
-        die "$path: not a C source file"
-            unless (-f $path && $path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
-        project_add_suite(suite_new($path, $here));
-    }
-
-    project_save();
-}
-
-#
-# Add the named libraries (which may be object files, lib.a archives,
-# or -llibrary -Ldirectory -Bfoo -Wl,-foo ldflags, to the project,
-# and rewrite the project file.  Re-adding is deliberately a harmless
-# no-op; in particular the project file is not written if it's contents
-# would not change.
-#
-sub add_libraries(@)
-{
-    my (@args) = @_;
-
-    project_load();
-
-    foreach my $arg (@args)
-    {
-        project_add_library(library_new($arg, $here));
-    }
-
-    project_save();
-}
-
-#
-# Generate a wrapper C source file for each of the suites
-# specified by their C source files on the commandline.
-#
-sub generate_wrapper(@)
-{
-    my @args = @_;
-    my $nfails = 0;
-
-    project_load();
-
-    foreach my $a (@args)
-    {
-        my $suite = suite_find($a);
-        if (!defined $suite)
-        {
-            print STDERR "$a: unknown suite, did you use --add-sources?\n";
-            $nfails++;
-            next;
-        }
-        my $ntests = suite_scan_for_tests($suite);
-        if ($ntests == 0)
-        {
-            vmsg("No tests in $suite->{relpath}");
-            if ( -f $suite->{wrap})
-            {
-                vmsg("Removing stale $suite->{wrap}");
-                unlink($suite->wrap)
-                    or die "Cannot unlink $suite->{wrap}: $!";
-            }
-            next;
-        }
-        suite_generate_wrap($suite);
-    }
-
-    exit 1
-        if ($nfails > 0);
-}
-
-#
-# Emit to the MAKE filehandle, a makefile fragment which contains
-# variable definitions which list the objects/libraries/linkflags
-# for the final link step, and which list the objects/libraries to
-# depend on for the final link step, assuming we want all the tests
-# in all the suites mentioned in the project.  We rely on the calling
-# Makefile to define the actual link rule.
-#
-# Note that the order and uniqueness of @linkables matters
-# but not in obvious ways, and may interact in interesting
-# ways with weird linker switches.  We try to optimise by
-# listing each individual linkable exactly once, so it's
-# only searched once.  This will break if the libraries
-# have circular dependencies, so don't do stupid things
-# like that!  To preserve link order semantics, the *last*
-# instance of each library seen is used.
-#
-# We should probably disable this optimisation if fancy
-# order-dependent options like -Bstatic were given.  Also,
-# we don't handle GNU linker groups very well either.
-#
-# Args: void
-# Returns: void
-#
-sub emit_final_makefile_bits()
-{
-    my ($makefile) = @_;
-    my %seen;
-    my @all_linkables;
-    my @linkables;
-    my @deplibs;
-
-    push(@all_linkables, map { suite_get_linkable($_) } @suites );
-    push(@all_linkables, map { library_get_linkable($_) } @libraries );
-    map { $seen{$_}++ } @all_linkables;
-    foreach my $arg (@all_linkables)
-    {
-        push (@linkables, $arg)
-            if ($seen{$arg} == 1);
-        $seen{$arg}--;
-    }
-
-    @deplibs = grep { m/\.[oa]$/ } @linkables;
-
-    print MAKE "CUNIT_OBJECTS = " . join(' ', @linkables) . "\n";
-    print MAKE "CUNIT_DEPLIBS = " . join(' ', @deplibs) . "\n";
-}
-
-#
-# Emit to the MAKE filehandle, a makefile fragment which contains
-# rules to build wrappers around each test source in this directory
-# or it's descendents, and to build object files from those wrappers.
-#
-# Args: name of output makefile
-# Returns: void
-#
-sub emit_partial_makefile_bits($)
-{
-    my ($makefile) = @_;
-    my $cunit;
-
-    $cunit = "$0";
-    $cunit .= " --project $project"
-        unless ($project eq $DEFAULT_PROJECT);
-
-    print MAKE "CUNIT_TEST_WRAPS =";
-    foreach my $suite (suites_for_here())
-    {
-        print MAKE " $suite->{wrap}";
-    }
-    print MAKE "\n";
-
-    print MAKE "CUNIT_TEST_OBJS =";
-    foreach my $suite (suites_for_here())
-    {
-        print MAKE " $suite->{object}";
-    }
-    print MAKE "\n";
-
-    foreach my $suite (suites_for_here())
-    {
-        print MAKE "$suite->{object}: $suite->{wrap} $suite->{relpath}\n";
-    }
-    print MAKE "\n";
-
-    foreach my $suite (suites_for_here())
-    {
-        print MAKE "$suite->{wrap}: $suite->{relpath}\n";
-        print MAKE "\t$cunit --generate-wrapper \$<\n";
-    }
-    print MAKE "\n";
-
-    print MAKE "clean::\n";
-    print MAKE "\t\$(RM) -f \$(CUNIT_TEST_WRAPS) \$(CUNIT_TEST_OBJS) $makefile\n";
-    print MAKE "\n";
-}
-
-#
-# Generate a makefile fragment which contains rules to build
-# wrappers around each test source in this directory or it's
-# descendents, and to build object files from those wrappers.
-#
-sub generate_partial_makefile(@)
-{
-    my ($makefile) = @_;
-
-    project_load();
-
-    my $file = atomic_rewrite_begin($makefile);
-
-    open MAKE,'>',$file
-        or die "Cannot open $file for writing: $!";
-
-    print MAKE "# Automatically generated by cunit.pl, do not edit\n";
-    print MAKE "\n";
-
-    emit_partial_makefile_bits($makefile);
-
-    print MAKE "check:: \$(CUNIT_TEST_OBJS)\n";
-    print MAKE "\n";
-
-    atomic_rewrite_end($makefile);
-}
-
-#
-# Generate a makefile fragment which contains variable definitions
-# which list the objects/libraries/linkflags for the final link
-# step, and which list the objects/libraries to depend on for
-# the final link step, assuming we want all the tests in all the
-# suites mentioned in the project.  We rely on the calling Makefile
-# to define the actual link rule.
-#
-sub generate_final_makefile(@)
-{
-    my ($makefile) = @_;
-
-    project_load();
-
-    my $file = atomic_rewrite_begin($makefile);
-
-    open MAKE,'>',$file
-        or die "Cannot open $file for writing: $!";
-
-    print MAKE "# Automatically generated by cunit.pl, do not edit\n";
-    print MAKE "\n";
-
-    emit_final_makefile_bits();
-
-    atomic_rewrite_end($makefile);
-}
-
-#
-# Generate a combined makefile fragment which does both the
-# partial and final stages.
-#
-sub generate_makefile(@)
-{
-    my ($makefile) = @_;
-
-    project_load();
-
-    my $file = atomic_rewrite_begin($makefile);
-
-    open MAKE,'>',$file
-        or die "Cannot open $file for writing: $!";
-
-    print MAKE "# Automatically generated by cunit.pl, do not edit\n";
-    print MAKE "\n";
-
-    emit_partial_makefile_bits($makefile);
-    emit_final_makefile_bits();
-
-    atomic_rewrite_end($makefile);
-}
-
 
 #
 # Generate a file containing a C function register_cunit_suites()
 # which registers all the CUnit suites in the project.
 #
-sub generate_register_function(@)
+sub generate_registry($@)
 {
-    my ($cfile) = @_;
+    my ($cfile, @args) = @_;
+    my @suites;
 
-    project_load();
+    # There should not be any order dependency, so we can disregard the order
+    # the tests were listed in, and instead force them into alphabetic order
+    # for better readability of the test suite output.
+    foreach my $testfile (sort @args)
+    {
+        die "$testfile: not a C source file"
+            unless (-f $testfile && $testfile =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
+
+        $testfile = path_sanitise("$builddir/$testfile");
+        push @suites, suite_new($testfile, $srcdir);
+    }
 
     my $file = atomic_rewrite_begin($cfile);
 
@@ -1137,6 +628,8 @@ sub generate_register_function(@)
         or die "Cannot open $file for writing: $!";
 
     print CFILE "/* Automatically generated by cunit.pl, do not edit */\n";
+    print CFILE "#include \"cunit/unit-registry.h\"\n";
+    print CFILE "#include <CUnit/CUnit.h>\n";
 
     foreach my $suite (@suites)
     {
@@ -1145,12 +638,14 @@ sub generate_register_function(@)
 
     print CFILE "void register_cunit_suites(void)\n";
     print CFILE "{\n";
-    print CFILE "    CU_SuiteInfo ss[2] = { CU_SUITE_INFO_NULL, CU_SUITE_INFO_NULL };\n";
+    print CFILE "    CU_SuiteInfo ss[] = {\n";
     foreach my $suite (@suites)
     {
-        print CFILE "    ss[0] = $suite->{suitevar};\n";
-        print CFILE "    CU_register_suites(ss);\n";
+        print CFILE "        $suite->{suitevar},\n";
     }
+    print CFILE "        CU_SUITE_INFO_NULL,\n";
+    print CFILE "    };\n";
+    print CFILE "    CU_register_suites(ss);\n";
     print CFILE "}\n";
 
     atomic_rewrite_end($cfile);
@@ -1162,17 +657,13 @@ sub generate_register_function(@)
 
 sub usage()
 {
-    print STDERR "Usage: cunit.pl [flags] --add-sources file.c ...\n";
-    print STDERR "Usage: cunit.pl [flags] --add-libraries [-llib|-Ldir] ...\n";
-    print STDERR "       cunit.pl [flags] --generate-partial-makefile foo.mk\n";
-    print STDERR "       cunit.pl [flags] --generate-wrapper testfoo.c\n";
-    print STDERR "       cunit.pl [flags] --generate-final-makefile foo.mk\n";
-    print STDERR "       cunit.pl [flags] --generate-makefile foo.mk\n";
-    print STDERR "       cunit.pl [flags] --emit-register-function foo.c\n";
+    print STDERR "Usage: cunit.pl [flags] --generate-wrapper foo.c foo.testc\n";
+    print STDERR "       cunit.pl [flags] --generate-registry registry.c TESTFILES\n";
     print STDERR "\n";
     print STDERR "flags include:\n";
-    print STDERR "    --project PROJ, -p PROJ       specify the project file (default is \"$DEFAULT_PROJECT\")\n";
-    print STDERR "    --verbose, -v                 be more verbose\n";
+    print STDERR "    --srcdir SRCDIR, -s SRCDIR\n"
+               . "                              the project source directory\n";
+    print STDERR "    --verbose, -v             be more verbose\n";
     exit 1;
 }
 
@@ -1181,53 +672,26 @@ my @args;
 my $want_args = 0;
 while (my $a = shift)
 {
-    if ($a eq '--project' || $a eq '-p')
-    {
-        $project = shift;
-        usage() unless defined $project;
-    }
-    elsif ($a eq '--add-sources' || $a eq '-a')
-    {
-        $modefn = \&add_sources;
-        $want_args = 1;
-    }
-    elsif ($a eq '--add-libraries' || $a eq '-A')
-    {
-        $modefn = \&add_libraries;
-        $want_args = 2;
-    }
-    elsif ($a eq '--generate-partial-makefile' || $a eq '-p')
-    {
-        $modefn = \&generate_partial_makefile;
-        my $makefile = shift;
-        usage() unless defined $makefile;
-        push(@args, $makefile);
-    }
-    elsif ($a eq '--generate-final-makefile' || $a eq '-f')
-    {
-        $modefn = \&generate_final_makefile;
-        my $makefile = shift;
-        usage() unless defined $makefile;
-        push(@args, $makefile);
-    }
-    elsif ($a eq '--generate-makefile' || $a eq '-m')
-    {
-        $modefn = \&generate_makefile;
-        my $makefile = shift;
-        usage() unless defined $makefile;
-        push(@args, $makefile);
-    }
-    elsif ($a eq '--generate-wrapper' || $a eq '-w')
+    if ($a eq '--generate-wrapper' || $a eq '-w')
     {
         $modefn = \&generate_wrapper;
         $want_args = 1;
+        my $wrapfile = shift;
+        usage() unless defined $wrapfile;
+        push(@args, $wrapfile);
     }
-    elsif ($a eq '--generate-register-function' || $a eq '-r')
+    elsif ($a eq '--generate-registry' || $a eq '-r')
     {
-        $modefn = \&generate_register_function;
+        $modefn = \&generate_registry;
+        $want_args = 1;
         my $cfile = shift;
         usage() unless defined $cfile;
         push(@args, $cfile);
+    }
+    elsif ($a eq '--srcdir' || $a eq '-s')
+    {
+        $srcdir = path_sanitise(shift);
+        usage() unless -d $srcdir;
     }
     elsif ($a eq '--verbose' || $a eq '-v')
     {
@@ -1251,16 +715,6 @@ while (my $a = shift)
     }
 }
 
-if (!defined $project)
-{
-    $project = $DEFAULT_PROJECT;
-}
-elsif ( -d $project)
-{
-    $project = "$project/$DEFAULT_PROJECT";
-}
-
 # Actually run the selected mode
 usage() unless defined $modefn;
 $modefn->(@args);
-

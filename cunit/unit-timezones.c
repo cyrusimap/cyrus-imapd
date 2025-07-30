@@ -1,5 +1,4 @@
-/* timeofday.c - time of day warping utilities for unit tests
- *
+/*
  * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,15 +39,58 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __CYRUS_CUNIT_TIMEOFDAY_H__
-#define __CYRUS_CUNIT_TIMEOFDAY_H__
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <assert.h>
+#include <time.h>
 
-#include <sys/types.h>
+#include "cunit/unit-timezones.h"
 
-extern void time_push_rate(long n, long d);
-extern void time_push_stop(void);
-extern void time_push_fixed(time_t fixed);
-extern void time_pop(void);
-extern void time_restore(void);
+extern int verbose;
 
-#endif /* __CYRUS_CUNIT_TIMEOFDAY_H__ */
+#define MAX_TZ_STACK    5
+static int n_tz_stack = 0;
+static char *tz_stack[MAX_TZ_STACK];
+
+static inline void xxputenv(char *s, const char *f)
+{
+    if (verbose > 1)
+        fprintf(stderr, "\n%s:putenv(\"%s\")\n", f, s);
+    putenv(s);
+}
+#define putenv(s) xxputenv((s), __FUNCTION__)
+
+static char *stash_tz(const char *tz)
+{
+    char *s = malloc(4+(tz == NULL ? 0 : strlen(tz)));
+    assert(s);
+    sprintf(s, "TZ=%s", (tz == NULL ? "" : tz));
+    assert(n_tz_stack < MAX_TZ_STACK-1);
+    return tz_stack[n_tz_stack++] = s;
+}
+
+void push_tz(const char *tz)
+{
+    if (n_tz_stack == 0)
+        stash_tz(getenv("TZ"));
+    putenv(stash_tz(tz));
+    tzset();
+}
+
+void pop_tz(void)
+{
+    char *old;
+    assert(n_tz_stack > 1);
+    old = tz_stack[--n_tz_stack];
+    putenv(tz_stack[n_tz_stack-1]);
+    tzset();
+    free(old);
+}
+
+void restore_tz(void)
+{
+    while (n_tz_stack > 1)
+        pop_tz();
+}

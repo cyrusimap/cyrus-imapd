@@ -1,4 +1,4 @@
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include "util.h"
 
 #define ASSERT_TO_HEX(BIN, HEX, hex, flags) \

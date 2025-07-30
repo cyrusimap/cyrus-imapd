@@ -51,17 +51,16 @@
 #include <valgrind/valgrind.h>
 #endif
 #include <setjmp.h>
-#include "timeout.h"
-#include "cyrunit.h"
-#include "util.h"
-#include "xmalloc.h"
 
-#include "lib/retry.h"
+#include "cunit/unit.h"
+#include "cunit/unit-registry.h"
+#include "cunit/unit-timeout.h"
+
 #include "lib/libconfig.h"
+#include "lib/retry.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
 #include "lib/xunlink.h"
-
-/* generated headers are not necessarily in current directory */
-#include "cunit/registers.h"
 
 int verbose = 0;
 int num_testspecs = 0;

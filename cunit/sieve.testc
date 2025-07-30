@@ -5,7 +5,7 @@
  * - * Larry Greenfield
  *
  */
-#include "cunit/cyrunit.h"
+#include "cunit/unit.h"
 #include <malloc.h>
 #include "sieve/bytecode.h"
 #include "sieve/comparator.h"

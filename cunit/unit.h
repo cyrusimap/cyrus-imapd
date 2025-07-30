@@ -1,4 +1,4 @@
-/* cyrunit.h - wrapper for CUnit assert macros
+/* unit.h - wrapper for CUnit assert macros
  *
  * Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
  *
@@ -40,13 +40,14 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef INCLUDED_CUNIT_H
-#define INCLUDED_CUNIT_H
+#ifndef CUNIT_UNIT_H
+#define CUNIT_UNIT_H
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <CUnit/CUnit.h>
-#include "cunit-syslog.h"
+
+#include "cunit/unit-syslog.h"
 
 extern int verbose;
 
@@ -288,4 +289,4 @@ extern void __cunit_params_begin(struct cunit_param *);
 extern int __cunit_params_next(struct cunit_param *);
 extern void __cunit_params_end(void);
 
-#endif /* INCLUDED_CUNIT_H */
+#endif /* CUNIT_UNIT_H */

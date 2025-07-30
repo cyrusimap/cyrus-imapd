@@ -79,6 +79,7 @@ endif
 # have distcheck try to build with all optional components enabled, to aid
 # detection of missing files for these components
 AM_DISTCHECK_CONFIGURE_FLAGS = \
+    --enable-unit-tests \
     --enable-http \
     --enable-calalarmd \
     --enable-replication \
@@ -593,24 +594,18 @@ AM_CPPFLAGS += $(GUESSTZ_CFLAGS)
 LD_SERVER_ADD += $(GUESSTZ_LIBS)
 endif
 
-if CUNIT
-
-CUNIT_PROJECT = cunit/default.cunit
-BUILT_SOURCES += cunit/registers.h $(CUNIT_PROJECT)
-CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
-check_PROGRAMS += cunit/unit
-
 cunit_FRAMEWORK = \
     cunit/unit.c \
-    cunit/cyrunit.h \
-    cunit/syslog.c \
-    cunit/cunit-syslog.h \
-    cunit/timeout.c \
-    cunit/timeout.h \
-    cunit/timezones.c \
-    cunit/timezones.h \
-    cunit/timeofday.c \
-    cunit/timeofday.h
+    cunit/unit.h \
+    cunit/unit-registry.h \
+    cunit/unit-syslog.c \
+    cunit/unit-syslog.h \
+    cunit/unit-timeofday.c \
+    cunit/unit-timeofday.h \
+    cunit/unit-timeout.c \
+    cunit/unit-timeout.h \
+    cunit/unit-timezones.c \
+    cunit/unit-timezones.h
 
 cunit_TESTS = \
     cunit/aaa-db.testc \
@@ -680,30 +675,33 @@ endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/mutex_fake.c imap/spool.c imap/search_expr.c
+nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
-CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
+# n.b. $(patsubst ...) is a GNU Make function, not an automake thing.
+# It's passed through to Makefile verbatim, not interpreted in any way.
+CUNIT_INTERMEDIATES = $(patsubst %.testc,%.c,$(cunit_TESTS))
 
+# GNU Make usually discards intermediate source files (that is: those produced
+# from a chain of implicit rules, e.g. the x.c in x.y -> x.c -> x.o) at exit.
+# Making them prerequisites to the .SECONDARY target marks them to be kept,
+# so they're available for coverage analysis, and don't need to be regenerated
+# if something depending on them is being rebuilt.
+.SECONDARY: $(CUNIT_INTERMEDIATES)
 
+CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
-# don't discard the temporary source file if building with coverage
-if HAVE_COVERAGE
-    CUNIT_RM = true
-else
-    CUNIT_RM = $(RM)
-endif
+.testc.c:
+	$(AM_V_GEN)$(CUNIT_PL) --generate-wrapper $@ $<
 
-.testc.o:
-	$(AM_V_at)$(CUNIT_PL) --generate-wrapper $<
-	$(AM_V_CC)$(COMPILE) -c -o $@ $<-cunit.c
-	$(AM_V_at)$(CUNIT_RM) $<-cunit.c
+cunit/unit-registry.c: $(cunit_TESTS)
+	$(AM_V_GEN)$(CUNIT_PL) --generate-registry $@ $^
 
-$(CUNIT_PROJECT):
-	$(AM_V_at)$(RM) $@
-	$(AM_V_GEN)$(CUNIT_PL) --add-sources $(addprefix $(top_srcdir)/,$(cunit_TESTS))
+if CUNIT
 
-cunit/registers.h: $(CUNIT_PROJECT)
-	$(AM_V_GEN)$(CUNIT_PL) --generate-register-function $@
+BUILT_SOURCES += cunit/unit-registry.c
+CLEANFILES += cunit/unit-registry.c $(CUNIT_INTERMEDIATES)
+check_PROGRAMS += cunit/unit
 
 # To run under Valgrind, do: make VG=1 check
 VALGRIND = ${abs_top_srcdir}/libtool --mode=execute valgrind \

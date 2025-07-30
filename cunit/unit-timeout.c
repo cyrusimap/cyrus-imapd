@@ -47,7 +47,8 @@
 #include <sys/wait.h>
 #include <sys/signal.h>
 #include <errno.h>
-#include "timeout.h"
+
+#include "cunit/unit-timeout.h"
 
 static void (*timeout_callback)(void);
 static pid_t timeout_pid = -1;
