@@ -2444,7 +2444,7 @@ static int conversations_set_guid(struct conversations_state *state,
                                    record->internal_flags,
                                    nano_internaldate,
                                    add);
-    if (!r) {
+    if (!r && UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
         struct buf key = BUF_INITIALIZER;
 
         /* Build J key */
@@ -2457,7 +2457,7 @@ static int conversations_set_guid(struct conversations_state *state,
             r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
                                &state->txn, /*force*/1);
         }
-        else {
+        else if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             /* Add J record */
             r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                               guidrep, strlen(guidrep), &state->txn);
@@ -2734,10 +2734,12 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         free(env);
     }
 
-
+    uint64_t nano_internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+        nano_internaldate = 0; // don't update if an expunged record comes along!
     conversation_update_thread(conv,
                                &record->guid,
-                               TIMESPEC_TO_NANOSEC(&record->internaldate),
+                               nano_internaldate,
                                record->createdmodseq,
                                delta_exists);
 
