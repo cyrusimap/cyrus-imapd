@@ -50,6 +50,7 @@
 
 static struct slowio slowio_read = { 0 };
 static struct slowio slowio_write = { 0 };
+static double slowio_min_elapsed = NAN;
 
 EXPORTED void slowio_reset_impl(void)
 {
@@ -76,7 +77,21 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
 
     if (n_bytes < 0) return; /* that wasn't a valid I/O op! */
 
-    if (clock_gettime(CLOCK_MONOTONIC, &now)) {
+    if (isnan(slowio_min_elapsed)) {
+        struct timespec res;
+
+        /* initialise slowio_min_elapsed to the resolution of the clock */
+        if (0 == clock_getres(CLOCK_PROCESS_CPUTIME_ID, &res)) {
+            slowio_min_elapsed = res.tv_sec + res.tv_nsec / 1000000000.0;
+        }
+        else {
+            xsyslog(LOG_DEBUG, "clock_getres failed", NULL);
+            errno = 0;
+            slowio_min_elapsed = 0.000001; /* XXX idk, 1μs */
+        }
+    }
+
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now)) {
         xsyslog(LOG_DEBUG, "clock_gettime failed", NULL);
         errno = 0;
         return;
@@ -100,8 +115,12 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
                      + (double)(now.tv_nsec - slowio->last_delay.tv_nsec)
                        / 1000000000.0;
 
-    /* XXX skip out early if elapsed time is very short? */
-    if (elapsed <= 0.0 || slowio->bytes_since_last_delay == 0) return;
+    if (slowio->bytes_since_last_delay == 0) return;
+
+    /* can't divide by zero, but if bytes have arrived without any observable
+     * time having passed, we're running extremely fast and must delay!
+     */
+    if (elapsed <= 0.0) elapsed = slowio_min_elapsed;
 
     if (slowio->bytes_since_last_delay / elapsed > max_bytes_per_sec) {
         double delay = (slowio->bytes_since_last_delay / max_bytes_per_sec)
@@ -121,7 +140,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
             r = nanosleep(&sleeptime, &sleeptime);
         } while (r == -1 && errno == EINTR);
 
-        clock_gettime(CLOCK_MONOTONIC, &slowio->last_delay);
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &slowio->last_delay);
         slowio->bytes_since_last_delay = 0;
     }
 }
