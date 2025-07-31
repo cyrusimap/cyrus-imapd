@@ -236,7 +236,7 @@ static void usage(const char *progname)
     printf("Usage: %s [OPTION]... [DB]...\n", progname);
 
     printf("  -b, --benchmarks     comma separated list of benchmarks to run\n");
-    printf("                       [will run all the benchmarks by default]");
+    printf("                       [will run all the benchmarks by default]\n");
     printf("                       Available benchmarks:\n");
     printf("                       * writeseq       - write values in sequential key order\n");
     printf("                       * writeseqtxn    - write values in sequential key order in separate transactions\n");

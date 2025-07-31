@@ -263,7 +263,7 @@ BUILT_SOURCES += \
     imap/tz_err.h
 
 libexec_PROGRAMS += imap/httpd
-check_PROGRAMS += imap/ical_apply_patch
+noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
@@ -282,7 +282,7 @@ endif # HAVE_SSL
 sbin_PROGRAMS += imap/unexpunge
 
 if SIEVE
-check_PROGRAMS += notifyd/notifytest
+noinst_PROGRAMS += notifyd/notifytest
 libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
 endif # SERVER
@@ -307,7 +307,7 @@ endif # PERL
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
-check_PROGRAMS += sieve/test sieve/test_mailbox
+noinst_PROGRAMS += sieve/test sieve/test_mailbox
 sbin_PROGRAMS += sieve/sievec sieve/sieved
 
 if SERVER
@@ -1686,7 +1686,7 @@ dist_man8_MANS = \
     man/unexpunge.8
 
 if BENCH
-check_PROGRAMS += bench/cyrdbbench
+noinst_PROGRAMS += bench/cyrdbbench
 bench_cyrdbbench_SOURCES = bench/cyrdbbench.c imap/mutex_fake.c
 bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
 endif # BENCH
