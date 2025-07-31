@@ -2491,6 +2491,9 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
 
 EXPORTED int mailbox_read_basecid(struct mailbox *mailbox, const struct index_record *record)
 {
+    // since version 20, basecid is no longer an annotation, so it's always loaded
+    if (mailbox->i.minor_version >= 20) return 0;
+
     if (record->basecid) return 0;
 
     if (record->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION) {
@@ -4826,6 +4829,11 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
      */
     if (!record->basecid && (record->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION))
         record->basecid = oldrecord.basecid;
+    /* but then if it's identical to CID, zero it */
+    if (record->basecid == record->cid)
+        record->basecid = 0;
+    if (!record->basecid)
+        record->internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
 
     if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)
         changeflags |= CHANGE_WASEXPUNGED;
@@ -5004,6 +5012,12 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         tm->tm_hour = 0;
         record->sentdate.tv_sec = mktime(tm);
     }
+
+    /* zero out the basecid if it's the same as the cid */
+    if (record->basecid == record->cid)
+        record->basecid = 0;
+    if (!record->basecid)
+        record->internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
 
     /* update the highestmodseq if needed */
     if (record->silentupdate) {
