@@ -5515,20 +5515,28 @@ struct find_dup_rock {
 static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
 {
     struct find_dup_rock *frock = (struct find_dup_rock *) rock;
-    int ret = 0;
 
-    if (rec->version == 4 && !rec->part &&
-        !(rec->foldernum == frock->foldernum && rec->uid == frock->uid)) {
-        // found a duplicate email; use its internaldate
-        struct timespec internaldate;
-        TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
-        if (internaldate.tv_nsec < UTIME_OMIT) {
-            frock->internaldate = internaldate;
-            ret = CYRUSDB_DONE;
-        }
+    if (!rec->part) return 0;
+
+    // skip self
+    if (rec->foldernum == frock->foldernum && rec->uid == frock->uid) return 0;
+
+    // can only find timestamps on v4 or above
+    if (rec->version < 4) return 0;
+
+    // ignore expunged messages, we want to be able to bump internaldate with
+    // replace!
+    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
+
+    // found a duplicate email; use its internaldate if it has one
+    struct timespec internaldate;
+    TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
+    if (internaldate.tv_nsec < UTIME_OMIT) {
+        frock->internaldate = internaldate;
+        return CYRUSDB_DONE;
     }
 
-    return ret;
+    return 0;
 }
 
 /* need a mailbox exclusive lock, we're rewriting files */
@@ -5740,7 +5748,8 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
         }
 
         /* calculate nanoseconds for internaldate if not yet present or re-calculating */
-        if (cstate && (copyrecord.internaldate.tv_nsec == UTIME_OMIT || recalc_nanosec)) {
+        if (cstate && repack->newmailbox.i.minor_version >= 20 &&
+            (copyrecord.internaldate.tv_nsec == UTIME_OMIT || recalc_nanosec)) {
             struct index_record oldrecord = copyrecord;
 
             // attempt to find an existing message with the same guid
@@ -5769,7 +5778,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                                                   &copyrecord.internaldate);
             }
 
-            if (!dryrun) {
+            if (!dryrun && records) {
                 // track this record so we can set the file timestamps later
                 // we only need UID, internaldate, and internal_flags
                 struct index_record *trecord =

@@ -905,7 +905,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 
     // if we need to get a timestamp still
     if (rock->dupcheck.internaldate && rock->dupcheck.internaldate->tv_nsec == UTIME_OMIT) {
-        if (rec->version >= 4) {
+        if (rec->version >= 4 && !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             // found a non-expunged duplicate email; use its internaldate
             struct timespec internaldate;
             TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);

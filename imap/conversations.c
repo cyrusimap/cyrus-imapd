@@ -1888,9 +1888,9 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
 
     message_guid_copy(&thread->guid, guid);
     // these should always be the same for all copies of an email!
-    // but if not (e.g. IMAP append) we want the earliest non-zero value
-    if (!thread->nano_internaldate ||
-        thread->nano_internaldate > nano_internaldate)
+    // but if not (replacing a previously expunged email) then we want
+    // the most recent.
+    if (thread->nano_internaldate < nano_internaldate)
         thread->nano_internaldate = nano_internaldate;
     // the same email may exist multiple times in a folder or in multiple
     // folders with different createdmodseq.  We want to track the earliest
@@ -2428,7 +2428,7 @@ static int conversations_set_guid(struct conversations_state *state,
                                    record->internal_flags,
                                    nano_internaldate,
                                    add);
-    if (!r) {
+    if (!r && record->internaldate.tv_nsec != UTIME_OMIT) {
         struct buf key = BUF_INITIALIZER;
 
         /* Build J key */
@@ -2441,7 +2441,7 @@ static int conversations_set_guid(struct conversations_state *state,
             r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
                                &state->txn, /*force*/1);
         }
-        else if (mailbox->i.minor_version >= 20) {
+        else if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             /* Add J record */
             r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                               guidrep, strlen(guidrep), &state->txn);
@@ -2718,10 +2718,12 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         free(env);
     }
 
-
+    uint64_t nano_internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+        nano_internaldate = 0; // don't update if an expunged record comes along!
     conversation_update_thread(conv,
                                &record->guid,
-                               TIMESPEC_TO_NANOSEC(&record->internaldate),
+                               nano_internaldate,
                                record->createdmodseq,
                                delta_exists);
 
