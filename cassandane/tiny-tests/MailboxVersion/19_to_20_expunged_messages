@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Util::Slurp;
+
+sub test_19_to_20_expunged_messages
+    :min_version_3_3 :MailboxVersion(19)
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "need an inbox/archive folder";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {}, "R1"],
+        ['Mailbox/set', {
+            create => {
+                'A' => { name => 'Archive', parentId => undef },
+            }
+         }, "R2"],
+    ]);
+
+    my $inboxId = $res->[0][1]{list}[0]{id};
+    my $archiveId = $res->[1][1]{created}{A}{id};
+
+    $self->assert_not_null($inboxId);
+    $self->assert_not_null($archiveId);
+
+    xlog $self, "create a message in inbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        $inboxId => JSON::true
+                    },
+                    from => [{ email => q{foo1@bar} }],
+                    to => [{ email => q{bar1@foo} }],
+                    subject => "email1"
+                }
+            },
+        }, 'R2'],
+        ['Email/get', {
+            ids => [ '#email1' ],
+            properties => ['receivedAt']
+         }, "R3"]
+    ]);
+
+    my $emailId1 = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId1);
+
+    my $blobId1 = $res->[0][1]{created}{email1}{blobId};
+    $self->assert_not_null($blobId1);
+
+    xlog $self, "move it to archive";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId1 => { mailboxIds => { $archiveId => JSON::true } },
+            },
+        }, "R1"],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId1});
+
+    $self->upgrade_19_to_20();
+
+    my $emailId1New = $self->lookup_email_id($emailId1);
+
+    xlog $self, "ensure we can see the message in the new folder still";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [ $archiveId ] }, "R1"],
+        ['Email/get', {
+            ids => ["$emailId1New"],
+            properties => ['subject', 'keywords', 'mailboxIds', 'receivedAt', 'threadId']
+         }, "R2"],
+    ]);
+    $self->assert_not_null($res);
+
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals("Archive", $res->[0][1]{list}[0]{name});
+
+    my $newArchiveId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($newArchiveId);
+
+    $self->assert_str_equals('Email/get', $res->[1][0]);
+    $self->assert_str_equals('R2', $res->[1][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
+    $self->assert_str_equals("$emailId1New", $res->[1][1]{list}[0]{id});
+    $self->assert_deep_equals(
+        { $newArchiveId => JSON::true },
+        $res->[1][1]{list}[0]{mailboxIds},
+    );
+
+    xlog $self, "Ensure we only have 1 J key";
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/conv-output.txt";
+    $self->{instance}->run_command({ cyrus => 1,
+                                     redirects => { stdout => $outfile } },
+                                   'ctl_conversationsdb', '-d', 'cassandane');
+    my $data = slurp_file($outfile);
+    my %jkeys = map {
+        my ($k, $v) = split(/\s+/, $_);
+        $k => $v
+    } grep { /^J/ } split(/\n/, $data);
+
+    # Email Ids have an S prefix, J keys do not
+    $emailId1New =~ s/^S//;
+
+    # BlobIds have a G prefix, the value in the G key does not
+    $blobId1 =~ s/^G//;
+
+    $self->assert_deep_equals(
+        { "J$emailId1New" => $blobId1 },
+        \%jkeys,
+    );
+}
