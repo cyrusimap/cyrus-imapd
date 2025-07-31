@@ -307,10 +307,18 @@ static int jmap_sieve_get(jmap_req_t *req)
         goto done;
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
+    char *mboxname = sieve_mboxname(req->accountid);
+    r = mailbox_open_irl(mboxname, &mailbox);
+    free(mboxname);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, MODSEQ_FMT, 0L);
+        get.state = buf_release(&buf);
+        jmap_ok(req, jmap_get_reply(&get));
+        goto done;
+    }
     if (r) goto done;
-
-    mailbox_unlock_index(mailbox, NULL);
 
     db = sievedb_open_userid(req->accountid);
     if (!db) {
@@ -1156,10 +1164,20 @@ static int jmap_sieve_query(jmap_req_t *req)
         }
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
+    char *mboxname = sieve_mboxname(req->accountid);
+    r = mailbox_open_irl(mboxname, &mailbox);
+    free(mboxname);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, MODSEQ_FMT, 0L);
+        query.query_state = buf_release(&buf);
+        query.result_position = query.position;
+        query.can_calculate_changes = 0;
+        jmap_ok(req, jmap_query_reply(&query));
+        goto done;
+    }
     if (r) goto done;
-
-    mailbox_unlock_index(mailbox, NULL);
 
     db = sievedb_open_userid(req->accountid);
     if (!db) {

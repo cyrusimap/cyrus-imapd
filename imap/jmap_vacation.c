@@ -204,11 +204,10 @@ static const jmap_property_t vacation_props[] = {
 static json_t *vacation_read(jmap_req_t *req, struct mailbox *mailbox,
                              struct sieve_data *sdata, unsigned *status)
 {
-    const char *sieve_dir = user_sieve_path(req->accountid);
     struct buf content = BUF_INITIALIZER;
     json_t *vacation = NULL;
 
-    sieve_script_fetch(mailbox, sdata, &content);
+    if (mailbox && sdata) sieve_script_fetch(mailbox, sdata, &content);
 
     /* Parse JMAP from vacation script */
     if (buf_len(&content)) {
@@ -230,6 +229,7 @@ static json_t *vacation_read(jmap_req_t *req, struct mailbox *mailbox,
 
         if (isEnabled && !isActive) {
 #ifdef USE_SIEVE
+            const char *sieve_dir = user_sieve_path(req->accountid);
             /* Check if vacation script is really active */
             const char *activebc =  sievedir_get_active(sieve_dir);
             struct buf *buf = NULL;
@@ -323,10 +323,14 @@ static int jmap_vacation_get(jmap_req_t *req)
         goto done;
     }
 
-    r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);
+    char *mboxname = sieve_mboxname(req->accountid);
+    r = mailbox_open_irl(mboxname, &mailbox);
+    free(mboxname);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;
+        goto respond;
+    }
     if (r) goto done;
-
-    mailbox_unlock_index(mailbox, NULL);
 
     db = sievedb_open_userid(req->accountid);
     if (!db) {
@@ -342,6 +346,8 @@ static int jmap_vacation_get(jmap_req_t *req)
             goto done;
         }
     }
+
+respond:
 
     /* Does the client request specific responses? */
     if (JNOTNULL(get.ids)) {
@@ -361,7 +367,7 @@ static int jmap_vacation_get(jmap_req_t *req)
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, sdata->modseq);
+    buf_printf(&buf, MODSEQ_FMT, sdata ? sdata->modseq : 0L);
     get.state = buf_release(&buf);
     jmap_ok(req, jmap_get_reply(&get));
 
