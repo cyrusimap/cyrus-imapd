@@ -2198,6 +2198,130 @@ static void convert_ncleanup(struct convert_rock *rock, int n, int is_free) {
 }
 #define convert_free(rock) convert_ncleanup(rock, 0, 1)
 
+struct iso2022jp_state {
+    uint32_t seq[6];
+    size_t len;
+};
+
+static int iso2022jp_flush(struct convert_rock *rock)
+{
+    struct iso2022jp_state *state = rock->state;
+
+    for (size_t i = 0; i < state->len; i++)
+        convert_putc(rock->next, state->seq[i]);
+
+    state->len = 0;
+    return 0;
+}
+
+static void iso2022jp_convert(struct convert_rock *rock, uint32_t c)
+{
+    /*
+     * The ISO-2022-JP encoding is defined as segments of
+     * one-byte or two-byte characters, see RFC 1468.
+     * Segments start with escape sequences.
+     *
+     * One-byte character segments start with the sequence:
+     * ESC "(" ( "B" / "J" )
+     *
+     * Two-byte character segments start with the sequence:
+     * ESC "$" ( "@" / "B" )
+     *
+     * A segment must not be empty, that is: an escape sequence
+     * must not be followed directly by other escape sequence.
+     * Unfortunately some encoders do produce empty segments,
+     * e.g. they produce bytes such as
+     *
+     * ESC "(" "B" ESC "$" "@"
+     *
+     * where the initial three bytes are useless because they
+     * are not followed by any segment data but immediately
+     * by another escape sequence.
+     *
+     * The ICU library emits a REPLACEMENT character for any
+     * empty segment and this is by design:
+     * https://unicode-org.atlassian.net/browse/ICU-6175
+     * But we don't want those REPLACEMENT characters and
+     * cross-checking with iconv, Java and Go shows that
+     * ignoring empty segments is an equally fine choice.
+     *
+     * In this function, we keep track of up to the last 6 bytes
+     * and check if they represent two escape sequences. If so,
+     * we simply discard the first sequence from the byte stream,
+     * thus prevent ICU from inserting a REPLACEMENT character.
+     */
+
+    struct iso2022jp_state *state = rock->state;
+
+    switch (state->len % 3) {
+    case 0:
+        if (c == 27) {
+            // Buffer ESC and wait for next input.
+            state->seq[state->len++] = c;
+            return;
+        }
+        break;
+    case 1:
+        if (c == '(' || c == '$') {
+            // Buffer byte and wait for next input.
+            state->seq[state->len++] = c;
+            return;
+        }
+        break;
+    case 2:
+        if (c == 'B' || (c == 'J' && state->seq[state->len - 1] == '(')
+            || (c == '@' && state->seq[state->len - 1] == '$'))
+        {
+            // This byte finishes a sequence.
+            if (state->len == 5) {
+                // Discard the first sequence, move the second
+                // sequence to the start of the buffer.
+                state->seq[0] = state->seq[3];
+                state->seq[1] = state->seq[4];
+                state->seq[2] = c;
+                state->len = 3;
+            }
+            else {
+                // Buffer byte and wait for next input.
+                state->seq[state->len++] = c;
+            }
+            return;
+        }
+        break;
+    }
+
+    // Codepoint c is not part of a sequence.
+    iso2022jp_flush(rock);
+    convert_putc(rock->next, c);
+}
+
+static void iso2022jp_cleanup(struct convert_rock *rock, int is_free)
+{
+    if (!rock || !rock->state) return;
+
+    struct iso2022jp_state *state = rock->state;
+    if (is_free) {
+        free(state);
+        free(rock);
+    }
+    else {
+        state->len = 0;
+    }
+}
+
+static struct convert_rock *iso2022jp_init(struct convert_rock *next)
+{
+    struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
+    struct iso2022jp_state *state = xzmalloc(sizeof(struct iso2022jp_state));
+
+    rock->f = iso2022jp_convert;
+    rock->flush = iso2022jp_flush;
+    rock->cleanup = iso2022jp_cleanup;
+    rock->next = next;
+    rock->state = state;
+    return rock;
+}
+
 struct ucharbuf {
     UChar *s;
     int32_t len;
@@ -2436,6 +2560,11 @@ static struct convert_rock *convert_init(struct charset_charset *s,
         table_reset(rock, to_uni);
     } 
 
+    if (to_uni && !strcmpsafe("iso-2022-jp", charset_canon_name(s))) {
+        // See iso2022jp_convert for more info.
+        rock = iso2022jp_init(rock);
+    }
+
     return rock;
 }
 
@@ -2534,10 +2663,17 @@ struct convert_rock *striphtml_init(int flags, struct convert_rock *next)
     return rock;
 }
 
-static int convert_to_name(struct buf *dst,
-                           const char *to_name,
-                           charset_t charset,
-                           const char *src, size_t len)
+enum fastpath_result {
+    FASTPATH_SUCCESS,
+    FASTPATH_ERROR,
+    FASTPATH_UNSUPPORTED,
+};
+
+static enum fastpath_result convert_fastpath(struct buf *dst,
+                                             const char *to_name,
+                                             charset_t charset,
+                                             const char *src,
+                                             size_t len)
 {
     UErrorCode err = U_ZERO_ERROR;
     const char *from;
@@ -2546,11 +2682,16 @@ static int convert_to_name(struct buf *dst,
     /* determine the name of the source encoding */
     from = charset_canon_name(charset);
 
+    if (!strcmpsafe("iso-2022-jp", from)) {
+        // See iso2022jp_convert for more info.
+        return FASTPATH_UNSUPPORTED;
+    }
+
     /* allocate the target buffer */
     /* we preflight to compromise between memory and runtime efficiency */
     n = ucnv_convert(to_name, from, dst->s, 0, src, len, &err) + 1;
     if (err != U_BUFFER_OVERFLOW_ERROR)
-        return -1;
+        return FASTPATH_ERROR;
 
     /* ucnv_convert return value includes size with NUL byte */
     if (n < 2) {
@@ -2564,12 +2705,12 @@ static int convert_to_name(struct buf *dst,
     err = U_ZERO_ERROR;
     ucnv_convert(to_name, from, dst->s, n, src, len, &err);
     if (U_FAILURE(err)) {
-        return -1;
+        return FASTPATH_ERROR;
     }
 
     buf_truncate(dst, n - 1);
     buf_cstring(dst);
-    return 0;
+    return FASTPATH_SUCCESS;
 }
 
 static charset_t lookup_buf(const char *buf, size_t len)
@@ -2826,11 +2967,18 @@ EXPORTED char *charset_to_imaputf7(const char *msg_base, size_t len, charset_t c
     /* check if we can convert the whole block at once */
     if (encoding == ENCODING_NONE) {
         struct buf buf = BUF_INITIALIZER;
-        if (convert_to_name(&buf, "imap-mailbox-name", charset, msg_base, len) < 0) {
+        switch (
+            convert_fastpath(&buf, "imap-mailbox-name", charset, msg_base, len))
+        {
+        case FASTPATH_SUCCESS:
+            return buf_release(&buf);
+        case FASTPATH_ERROR:
             buf_free(&buf);
             return NULL;
+        case FASTPATH_UNSUPPORTED:
+            // Take slow path.
+            break;
         }
-        else return buf_release(&buf);
     }
 
     /* set up the conversion path */
@@ -2988,7 +3136,15 @@ EXPORTED int charset_to_utf8(struct buf *dst, const char *src, size_t len, chars
 
     /* check if we can convert the whole block at once */
     if (encoding == ENCODING_NONE) {
-        return convert_to_name(dst, "utf-8", charset, src, len);
+        switch (convert_fastpath(dst, "utf-8", charset, src, len)) {
+        case FASTPATH_SUCCESS:
+            return 0;
+        case FASTPATH_ERROR:
+            return -1;
+        case FASTPATH_UNSUPPORTED:
+            // Take slow path.
+            break;
+        }
     }
 
     /* set up the conversion path */
