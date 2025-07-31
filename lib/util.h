@@ -158,6 +158,7 @@ extern const unsigned char convert_to_uppercase[256];
 #define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
         (ts)->tv_sec  = (nanosec) / 1000000000; \
         (ts)->tv_nsec = (nanosec) % 1000000000; \
+        if (!(ts)->tv_nsec) (ts)->tv_nsec = UTIME_OMIT; \
 }
 
 #define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
