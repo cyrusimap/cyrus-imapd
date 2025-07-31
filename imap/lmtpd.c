@@ -455,7 +455,7 @@ EXPORTED int fuzzy_match(mbname_t *mbname)
         int i;
         const strarray_t *newboxes = mbname_boxes(frock.result);
         mbname_truncate_boxes(mbname, 0);
-        for (i = 0; i < strarray_size(newboxes); i++)
+        for (i = 0; i < frock.depth; i++)
             mbname_push_boxes(mbname, strarray_nth(newboxes, i));
         mbname_free(&frock.result);
         return 1;
@@ -805,12 +805,19 @@ static int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags,
             if (!ret) mode |= TARGET_FUZZY;
         }
 
-        ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                              md->size, imap4flags, NULL,
-                              mydata->authuser, mydata->authstate, md->id,
-                              mbname_userid(mbname), mydata->notifyheader,
-                              mode, mbname_intname(mbname), md->date,
-                              0 /*savedate*/, quotaoverride, 0);
+        if (strarray_size(mbname_boxes(mbname)) == 1 &&
+            !strcasecmp("INBOX", strarray_nth(mbname_boxes(mbname), 0))) {
+            // never deliver to INBOX.INBOX
+            ret = 1;
+        }
+        else {
+            ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+                                  md->size, imap4flags, NULL,
+                                  mydata->authuser, mydata->authstate, md->id,
+                                  mbname_userid(mbname), mydata->notifyheader,
+                                  mode, mbname_intname(mbname), md->date,
+                                  0 /*savedate*/, quotaoverride, 0);
+        }
     }
 
     if (ret) {
