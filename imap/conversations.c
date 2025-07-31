@@ -2441,7 +2441,7 @@ static int conversations_set_guid(struct conversations_state *state,
             r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
                                &state->txn, /*force*/1);
         }
-        else {
+        else if (mailbox->i.minor_version >= 20) {
             /* Add J record */
             r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
                               guidrep, strlen(guidrep), &state->txn);
