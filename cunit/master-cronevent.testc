@@ -4,6 +4,9 @@
 #include "lib/cron.h"
 #include "lib/dynarray.h"
 
+#include <stdlib.h>
+#include <sysexits.h>
+
 extern void cronevent_get_schedule(dynarray_t **schedule,
                                    dynarray_t **details);
 
@@ -52,9 +55,43 @@ static void assert_schedule_invariants(void)
     }
 }
 
-static void test_foo(void)
+static void test_cronevent_add_bad(void)
 {
-    assert_schedule_invariants();
+    const struct {
+        const char *name;
+        const char *spec;
+        const char *cmd;
+        int expect_fatal_code;
+        const char *expect_fatal_msg;
+    } tests[] = {
+        { "unparseable spec", "donkey", "command", EX_CONFIG, "XXX" },
+
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        CU_EXPECT_CYRFATAL_BEGIN
+        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        CU_EXPECT_CYRFATAL_END(tests[i].expect_fatal_code,
+                               tests[i].expect_fatal_msg);
+    }
+}
+
+static void test_cronevent_add(void)
+{
+    const struct {
+        int i;
+    } tests[] = {
+
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+
+        assert_schedule_invariants();
+    }
 }
 
 /* vim: set ft=c: */

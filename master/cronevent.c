@@ -78,11 +78,17 @@ EXPORTED int cronevent_add(const char *name, const char *spec, const char *cmd)
     int spec_idx, det_idx;
 
     if (!cmd || !*cmd) {
+        /* XXX this is hard to test for... log the error details, fatal
+         * XXX with a simpler message
+         */
         snprintf(err_buf, sizeof(err_buf), "missing cmd for %s", name);
         fatal(err_buf, EX_CONFIG);
     }
 
     if (cron_parse_spec(spec, &cron_spec, &parse_err)) {
+        /* XXX this is hard to test for... log the error details, fatal
+         * XXX with a simpler message
+         */
         snprintf(err_buf, sizeof(err_buf),
                  "unable to parse spec \"%s\" for %s: %s",
                  spec, name, parse_err);
