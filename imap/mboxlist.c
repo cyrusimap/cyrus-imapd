@@ -2506,6 +2506,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                     int flags)
 {
     mbentry_t *mbentry = NULL;
+    mbentry_t *newmbentry = NULL;
     int r = 0;
     long myrights;
     struct mailbox *mailbox = NULL;
@@ -2565,7 +2566,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
         // make it deleted and mark it done!
         if (!mboxname_isdeletedmailbox(name, NULL)) {
-            mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+            newmbentry = mboxlist_entry_copy(mbentry);
             newmbentry->mbtype |= MBTYPE_DELETED;
             if (!silent) {
                 newmbentry->foldermodseq = mboxname_nextmodseq(newmbentry->name, newmbentry->foldermodseq,
@@ -2578,7 +2579,6 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                  "mailbox=<%s> error=<%s>",
                                  name, cyrusdb_strerror(r));
             }
-            mboxlist_entry_free(&newmbentry);
         }
         else {
             r = mboxlist_update_entry_full(name, NULL, 0, silent);
@@ -2641,12 +2641,18 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
     if (r && !force) goto done;
 
+    int haschildren = mboxlist_haschildren(name);
+    newmbentry = mboxlist_entry_copy(mbentry);
+    newmbentry->mbtype |= (haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED);
+
     /* delete underlying mailbox */
     if (!isremote && mailbox) {
         /* only on a real delete do we delete from the remote end as well */
         sync_log_unmailbox(mailbox_name(mailbox));
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_access(mboxevent, NULL, NULL, userid, mailbox_name(mailbox), 1);
+
+        newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
 
         r = mailbox_delete(&mailbox);
         /* abort event notification */
@@ -2656,17 +2662,6 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
     if (!isremote && !isentirely && !mboxname_isdeletedmailbox(name, NULL)) {
         /* store a DELETED marker */
-        int haschildren = mboxlist_haschildren(name);
-        mbentry_t *newmbentry = mboxlist_entry_create();
-        newmbentry->name = xstrdupnull(name);
-        newmbentry->mbtype = mbentry->mbtype |
-            (haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED);
-        if (mailbox) {
-            newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
-            newmbentry->uidvalidity = mailbox->i.uidvalidity;
-            newmbentry->createdmodseq = mailbox->i.createdmodseq;
-            newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
-        }
         r = mboxlist_update_full(newmbentry, /*localonly*/1, silent);
 
         /* any other updated intermediates get the same modseq */
@@ -2681,7 +2676,6 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                mbentry->mbtype, MBOXMODSEQ_ISDELETE);
         }
 
-        mboxlist_entry_free(&newmbentry);
     }
     else {
         /* delete entry (including DELETED.* mailboxes, no need
@@ -2706,6 +2700,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
 
  done:
+    mboxlist_entry_free(&newmbentry);
     mailbox_close(&mailbox);
     mboxlist_entry_free(&mbentry);
     mbname_free(&mbname);
