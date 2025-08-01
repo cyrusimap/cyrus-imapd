@@ -1000,6 +1000,9 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         if (r) goto out;
     }
 
+    char guid[2*MESSAGE_GUID_SIZE+1];
+    strcpy(guid, message_guid_encode(&(*body)->guid));
+
     /* XXX check errors */
     mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
@@ -1011,11 +1014,9 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
     if (cstate) {
-        char guid[2*MESSAGE_GUID_SIZE+1];
         struct findstage_cb_rock rock = {
             nolink ? NULL : mailbox_partition(mailbox),
-            strcpy(guid, message_guid_encode(&(*body)->guid)),
-            NULL /*fname*/, { 0 } /*dupcheck*/
+            guid, NULL /*fname*/, { 0 } /*dupcheck*/
         };
 
         rock.dupcheck.internaldate = &existing_internaldate;
@@ -1026,17 +1027,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
 
         // ignore errors, it's OK for this to fail
         conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
-
-        // if we found a matching message, use its internaldate
-        if (existing_internaldate.tv_nsec != UTIME_OMIT) {
-            internaldate = &existing_internaldate;
-        }
-        else if (internaldate) {
-            // timestamp might be nanoseconds from the clock plus seconds from the
-            // append timestamp, either way it MIGHT clash
-            // make sure we don't have a JMAP ID (internaldate) clash
-            conversations_adjust_internaldate(cstate, guid, internaldate);
-        }
 
         // if we found a file, use it
         if (rock.fname) {
@@ -1116,13 +1106,24 @@ havefile:
     }
 
     /* And make sure it has a timestamp */
+
     struct timespec now;
-    if (!internaldate || !UTIME_SAFE_NSEC(internaldate->tv_nsec)) {
+    // if we found a matching message, use its internaldate
+    if (UTIME_SAFE_NSEC(existing_internaldate.tv_nsec)) {
+        internaldate = &existing_internaldate;
+    }
+    else {
         clock_gettime(CLOCK_REALTIME, &now);
-        if (!internaldate)
+        if (!internaldate) {
             internaldate = &now;
-        else
+        }
+        else if (!UTIME_SAFE_NSEC(internaldate->tv_nsec)) {
             internaldate->tv_nsec = now.tv_nsec;
+        }
+        // timestamp might be nanoseconds from the clock plus seconds from the
+        // append timestamp, either way it MIGHT clash
+        // make sure we don't have a JMAP ID (internaldate) clash
+        if (cstate) conversations_adjust_internaldate(cstate, guid, internaldate);
     }
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
