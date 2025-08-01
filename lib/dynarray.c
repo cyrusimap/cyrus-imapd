@@ -57,8 +57,10 @@ EXPORTED void dynarray_init(struct dynarray *da, size_t membsize)
 
 EXPORTED void dynarray_fini(struct dynarray *da)
 {
+    size_t membsize = da->membsize;
     free(da->data);
     memset(da, 0, sizeof(struct dynarray));
+    da->membsize = membsize;
 }
 
 EXPORTED struct dynarray *dynarray_new(size_t membsize)
@@ -95,6 +97,7 @@ static inline int grow(int have, int want)
 static void ensure_alloc(struct dynarray *da, int newalloc)
 {
     assert(newalloc >= 0);
+    assert(da->membsize > 0);
     if (newalloc < da->alloc)
         return;
     newalloc = grow(da->alloc, newalloc + 1);
