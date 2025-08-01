@@ -84,17 +84,40 @@ static void test_cronevent_add_bad(void)
 static void test_cronevent_add(void)
 {
     const struct {
-        int i;
+        const char *name;
+        const char *cmd;
+        const char *spec;
+        int expect_exec_words;
     } tests[] = {
 
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
-    unsigned i;
+    dynarray_t *schedule, *details;
+    int i;
 
-    for (i = 0; i < n_tests; i++) {
+    cronevent_get_schedule(&schedule, &details);
 
+    for (i = 0; i < (int) n_tests; i++) {
+        struct cronevent_details *event_details;
+        int r;
+
+        r = cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        CU_ASSERT_EQUAL(r, 0);
         assert_schedule_invariants();
+
+        CU_ASSERT_EQUAL(dynarray_size(schedule), i + 1);
+
+        CU_ASSERT_EQUAL(dynarray_size(details), i + 1);
+        event_details = dynarray_nth(details, i);
+        CU_ASSERT_PTR_NOT_NULL(event_details);
+        CU_ASSERT_STRING_EQUAL(event_details->name, tests[i].name);
+        CU_ASSERT_EQUAL(strarray_size(&event_details->exec),
+                        tests[i].expect_exec_words);
     }
+
+    cronevent_clear();
+    CU_ASSERT_EQUAL(dynarray_size(schedule), 0);
+    CU_ASSERT_EQUAL(dynarray_size(details), 0);
 }
 
 /* vim: set ft=c: */
