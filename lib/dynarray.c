@@ -95,6 +95,7 @@ static inline int grow(int have, int want)
 static void ensure_alloc(struct dynarray *da, int newalloc)
 {
     assert(newalloc >= 0);
+    assert(da->membsize > 0);
     if (newalloc < da->alloc)
         return;
     newalloc = grow(da->alloc, newalloc + 1);
