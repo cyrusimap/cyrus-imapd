@@ -47,11 +47,13 @@
 #include "lib/cron.h"
 #include "lib/dynarray.h"
 #include "lib/strarray.h"
+#include "lib/util.h"
 #include "lib/xmalloc.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <sysexits.h>
+#include <syslog.h>
 #include <time.h>
 
 static dynarray_t cronevent_schedule
@@ -71,28 +73,29 @@ HIDDEN void cronevent_get_schedule(dynarray_t **schedule,
 
 EXPORTED int cronevent_add(const char *name, const char *spec, const char *cmd)
 {
-    char err_buf[1024];
     struct cron_spec cron_spec = {0};
     struct cronevent_details *details = NULL;
     const char *parse_err = NULL;
     int spec_idx, det_idx;
 
-    if (!cmd || !*cmd) {
-        /* XXX this is hard to test for... log the error details, fatal
-         * XXX with a simpler message
-         */
-        snprintf(err_buf, sizeof(err_buf), "missing cmd for %s", name);
-        fatal(err_buf, EX_CONFIG);
+    if (!name || !*name) {
+        xsyslog(LOG_ERR, "event missing name",
+                         "spec=<%s> cmd=<%s>",
+                         spec, cmd);
+        fatal("event missing name", EX_CONFIG);
     }
 
-    if (cron_parse_spec(spec, &cron_spec, &parse_err)) {
-        /* XXX this is hard to test for... log the error details, fatal
-         * XXX with a simpler message
-         */
-        snprintf(err_buf, sizeof(err_buf),
-                 "unable to parse spec \"%s\" for %s: %s",
-                 spec, name, parse_err);
-        fatal(err_buf, EX_CONFIG);
+    if (!cmd || !*cmd) {
+        xsyslog(LOG_ERR, "event missing cmd",
+                         "name=<%s>", name);
+        fatal("event missing cmd", EX_CONFIG);
+    }
+
+    if (!spec || cron_parse_spec(spec, &cron_spec, &parse_err)) {
+        xsyslog(LOG_ERR, "unable to parse cron spec",
+                         "name=<%s> spec=<%s> parse_err=<%s>",
+                         name, spec, parse_err);
+        fatal("unable to parse cron spec", EX_CONFIG);
     }
 
     spec_idx = dynarray_append(&cronevent_schedule, &cron_spec);
