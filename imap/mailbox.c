@@ -5718,6 +5718,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             }
             buf_reset(&buf);
             r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
+            if (r) goto done;
 
             /* extract BaseCID */
             buf_reset(&buf);
