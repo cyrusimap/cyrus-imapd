@@ -3459,6 +3459,10 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
     struct buf jidrep = BUF_INITIALIZER;
     uint64_t count = 0;
 
+    // always make the value legit
+    if (!UTIME_SAFE_NSEC(internaldate->tv_nsec))
+        internaldate->tv_nsec = 1;
+
     // check for a JMAPID (internaldate) clash, and adjust nanosec as needed
     do {
         char existing_guid[2*MESSAGE_GUID_SIZE+1];
