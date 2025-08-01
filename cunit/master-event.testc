@@ -1,0 +1,327 @@
+#include "cunit/unit.h"
+#include "master/event.h"
+
+#include "lib/strarray.h"
+#include "lib/util.h"
+
+#include <stdbool.h>
+#include <sysexits.h>
+#include <time.h>
+
+#define TV_INIT(s, u) (struct timeval){ .tv_sec = (s), .tv_usec = (u) }
+
+static int set_up(void)
+{
+    return 0;
+}
+
+static int tear_down(void)
+{
+    schedule_clear();
+    return 0;
+}
+
+static void assert_event_invariants(const struct event *evt,
+                                    bool in_schedule)
+{
+    /* must have a name */
+    CU_ASSERT_PTR_NOT_NULL(evt->name);
+    CU_ASSERT_STRING_NOT_EQUAL(evt->name, "");
+
+    if (in_schedule) {
+        /* if in a schedule, must have a mark */
+        CU_ASSERT_NOT_EQUAL(evt->mark.tv_sec, 0);
+    }
+    else {
+        /* otherwise, must not have a next pointer */
+        CU_ASSERT_PTR_NULL(evt->next);
+    }
+
+    /* periodic events must have a period */
+    if (evt->periodic) {
+        CU_ASSERT_NOT_EQUAL(evt->period, 0);
+    }
+
+    /* "at hh:mm" times must be within range */
+    CU_ASSERT(evt->hour >= 0 && evt->hour <= 23);
+    CU_ASSERT(evt->min >= 0 && evt->min <= 59);
+}
+
+static void assert_schedule_invariants(const struct event *schedule)
+{
+    while (schedule) {
+        assert_event_invariants(schedule, true);
+
+        if (schedule->next) {
+            /* not later than next event */
+            double diff = timesub(&schedule->mark, &schedule->next->mark);
+            CU_ASSERT(diff >= 0.0);
+        }
+
+        schedule = schedule->next;
+    }
+}
+
+static void test_event_new_oneshot(void)
+{
+    const struct {
+        const char *name;
+        struct timeval mark;
+    } tests[] = {
+        { "hello", { 123, 456 } },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct event *evt;
+
+        evt = event_new_oneshot(tests[i].name, tests[i].mark);
+        CU_ASSERT_PTR_NOT_NULL(evt);
+
+        /* expect the name to have been set */
+        CU_ASSERT_PTR_NOT_NULL(evt->name);
+        CU_ASSERT_STRING_EQUAL(evt->name, tests[i].name);
+
+        /* expect the mark to have been set */
+        CU_ASSERT_EQUAL(evt->mark.tv_sec, tests[i].mark.tv_sec);
+        CU_ASSERT_EQUAL(evt->mark.tv_usec, tests[i].mark.tv_usec);
+
+        /* expect other fields to be zeroed */
+        CU_ASSERT_EQUAL(evt->period, 0);
+        CU_ASSERT_EQUAL(evt->hour, 0);
+        CU_ASSERT_EQUAL(evt->min, 0);
+        CU_ASSERT_EQUAL(evt->periodic, 0);
+        CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
+        CU_ASSERT_PTR_NULL(evt->next);
+
+        /* belt and suspenders, check the invariants */
+        assert_event_invariants(evt, false);
+
+        event_free(evt);
+    }
+}
+
+static void test_event_new_periodic(void)
+{
+    const struct {
+        const char *name;
+        struct timeval mark;
+        time_t period;
+    } tests[] = {
+        { "hello", { 123, 456 }, 10 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct event *evt;
+
+        evt = event_new_periodic(tests[i].name, tests[i].mark, tests[i].period);
+        CU_ASSERT_PTR_NOT_NULL(evt);
+
+        /* expect the name to have been set */
+        CU_ASSERT_PTR_NOT_NULL(evt->name);
+        CU_ASSERT_STRING_EQUAL(evt->name, tests[i].name);
+
+        /* expect the mark to have been set */
+        CU_ASSERT_EQUAL(evt->mark.tv_sec, tests[i].mark.tv_sec);
+        CU_ASSERT_EQUAL(evt->mark.tv_usec, tests[i].mark.tv_usec);
+
+        /* expect the period to have been set */
+        CU_ASSERT_EQUAL(evt->periodic, 1);
+        CU_ASSERT_EQUAL(evt->period, tests[i].period);
+
+        /* expect other fields to be zeroed */
+        CU_ASSERT_EQUAL(evt->hour, 0);
+        CU_ASSERT_EQUAL(evt->min, 0);
+        CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
+        CU_ASSERT_PTR_NULL(evt->next);
+
+        /* belt and suspenders, check the invariants */
+        assert_event_invariants(evt, false);
+
+        event_free(evt);
+    }
+}
+
+static void test_event_new_hourmin(void)
+{
+    const struct {
+        const char *name;
+        int hour;
+        int min;
+    } tests[] = {
+        { "good morning", 7, 30 },
+        { "good night",  22, 30 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct event *evt;
+        struct tm *tm;
+        struct timeval now;
+        double diff;
+
+        evt = event_new_hourmin(tests[i].name, tests[i].hour, tests[i].min);
+        CU_ASSERT_PTR_NOT_NULL(evt);
+
+        /* expect the name to have been set */
+        CU_ASSERT_PTR_NOT_NULL(evt->name);
+        CU_ASSERT_STRING_EQUAL(evt->name, tests[i].name);
+
+        /* expect the mark to have been set */
+        tm = localtime(&evt->mark.tv_sec);
+        CU_ASSERT_EQUAL(tm->tm_hour, tests[i].hour);
+        CU_ASSERT_EQUAL(tm->tm_min, tests[i].min);
+
+        /* expect the mark to be in the future */
+        gettimeofday(&now, NULL);
+        diff = timesub(&now, &evt->mark);
+        CU_ASSERT(diff >= 0.0);
+
+        /* expect the period to have been set */
+        CU_ASSERT_EQUAL(evt->periodic, 0);
+        CU_ASSERT_EQUAL(evt->period, 24 * 60 * 60);
+
+        /* expect the hour and minute to have been set */
+        CU_ASSERT_EQUAL(evt->hour, tests[i].hour);
+        CU_ASSERT_EQUAL(evt->min, tests[i].min);
+
+        /* expect other fields to be zeroed */
+        CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
+        CU_ASSERT_PTR_NULL(evt->next);
+
+        /* belt and suspenders, check the invariants */
+        assert_event_invariants(evt, false);
+
+        event_free(evt);
+    }
+}
+
+static void test_event_set_exec(void)
+{
+    const struct {
+        const char *cmd;
+        int expect_exec_count;
+    } tests[] = {
+        { NULL, 0 },
+        { "", 0 },
+        { "ctl_cyrusdb -c", 2 },
+        { "cyr_expire -E 3", 3 },
+        { "cyr_expire -E 4 -D 28", 5 },
+        { "cyr_expire -E 4 -X 28", 5 },
+        { "tls_prune", 1 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct event *event;
+    unsigned i;
+
+    event = event_new_oneshot("test event", TV_INIT(time(NULL) + 10, 0));
+
+    for (i = 0; i < n_tests; i++) {
+        event_set_exec(event, tests[i].cmd);
+        CU_ASSERT_EQUAL(tests[i].expect_exec_count, strarray_size(&event->exec));
+    }
+
+    event_free(event);
+}
+
+static void test_schedule_event_bad(void)
+{
+    struct event evt = { 0 }; /* no name */
+
+    CU_EXPECT_CYRFATAL_BEGIN
+    schedule_event(&evt);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+                           "Serious software bug found: schedule_event()"
+                           " called on unnamed event!");
+
+    CU_ASSERT_PTR_NULL(schedule_peek());
+}
+
+static void test_schedule_event(void)
+{
+    const struct {
+        time_t mark_offset;
+    } tests[] = {
+        /* out of order! */
+        { 59 },
+        { 54 },
+        { 27 },
+        { 36 },
+        { 33 },
+        { 96 },
+        { 66 },
+        { 18 },
+        { 60 },
+        { 26 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    time_t now = time(NULL);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        char name[64] = {0};
+        struct event *event;
+
+        snprintf(name, sizeof(name), "event %u (" TIME_T_FMT ")",
+                                     i, tests[i].mark_offset);
+
+        event = event_new_oneshot(name, TV_INIT(now + tests[i].mark_offset, 0));
+
+        schedule_event(event);
+    }
+
+    CU_ASSERT_PTR_NOT_NULL(schedule_peek());
+    assert_schedule_invariants(schedule_peek());
+}
+
+static void test_schedule_splice_due(void)
+{
+    const size_t n_events = 10;
+    const unsigned gap = 10; /* seconds */
+    time_t now = time(NULL), mid;
+    struct event *due, *schedule;
+    unsigned i;
+
+    for (i = 0; i < n_events; i++) {
+        char name[64] = {0};
+        struct event *event;
+
+        snprintf(name, sizeof(name), "event %u", i);
+
+        event = event_new_oneshot(name, TV_INIT(now + gap * i, 0));
+        schedule_event(event);
+    }
+    assert_schedule_invariants(schedule_peek());
+
+    mid = gap * i / 2 + now;
+    due = schedule_splice_due(TV_INIT(mid, 0));
+
+    /* check that the spliced events are cogent */
+//     assert_schedule_invariants(due);
+    CU_ASSERT_PTR_NOT_NULL(due);
+    while (due) {
+        struct event *next;
+
+        /* XXX spliced events currently have their order reversed,
+         * XXX so we can't just use assert_schedule_invariants here
+         */
+        assert_event_invariants(due, true);
+        CU_ASSERT(due->mark.tv_sec <= mid);
+
+        next = due->next;
+        event_free(due);
+        due = next;
+    }
+
+    /* check that the remaining schedule is still cogent */
+    schedule = schedule_peek();
+    assert_schedule_invariants(schedule);
+    CU_ASSERT_PTR_NOT_NULL(schedule);
+    CU_ASSERT(schedule->mark.tv_sec > mid);
+}
+
+/* vim: set ft=c: */

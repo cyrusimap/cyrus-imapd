@@ -1,0 +1,181 @@
+#include "cunit/unit.h"
+#include "master/cronevent.h"
+
+#include "lib/cron.h"
+#include "lib/dynarray.h"
+#include "lib/hash.h"
+
+#include <stdlib.h>
+#include <sysexits.h>
+
+#define TV_INIT(s, u) (struct timeval){ .tv_sec = (s), .tv_usec = (u) }
+
+extern void cronevent_get_schedule(dynarray_t **schedule,
+                                   dynarray_t **details);
+extern time_t cronevent_get_last_run_time(void);
+extern void cronevent_set_last_run_time(time_t run_time);
+
+static int tear_down(void)
+{
+    fprintf(stderr, "XXX in tear_down!\n");
+    cronevent_clear();
+    return 0;
+}
+
+static void assert_event_invariants(const struct cron_spec *spec,
+                                    const struct cronevent_details *details)
+{
+    /* no invalid bits set in the spec */
+    CU_ASSERT_EQUAL((spec->minutes & ~CRON_ALL_MINUTES), 0);
+    CU_ASSERT_EQUAL((spec->hours & ~CRON_ALL_HOURS), 0);
+    CU_ASSERT_EQUAL((spec->days_of_month & ~CRON_ALL_DAYS_OF_MONTH), 0);
+    CU_ASSERT_EQUAL((spec->months & ~CRON_ALL_MONTHS), 0);
+    CU_ASSERT_EQUAL((spec->days_of_week & ~CRON_ALL_DAYS_OF_WEEK), 0);
+
+    /* better have a name */
+    CU_ASSERT_PTR_NOT_NULL(details->name);
+    CU_ASSERT_STRING_NOT_EQUAL(details->name, "");
+
+    /* better have something to execute */
+    CU_ASSERT_NOT_EQUAL(strarray_size(&details->exec), 0);
+}
+
+static void assert_schedule_invariants(void)
+{
+    dynarray_t *schedule, *details;
+    int sched_count, det_count;
+    int i;
+
+    cronevent_get_schedule(&schedule, &details);
+
+    sched_count = dynarray_size(schedule);
+    CU_ASSERT(sched_count >= 0);
+
+    det_count = dynarray_size(details);
+    CU_ASSERT(det_count >= 0);
+    CU_ASSERT_EQUAL(sched_count, det_count);
+
+    for (i = 0; i < sched_count; i++) {
+        assert_event_invariants(dynarray_nth(schedule, i),
+                                dynarray_nth(details, i));
+    }
+}
+
+static void test_cronevent_add_bad(void)
+{
+    const struct {
+        const char *name;
+        const char *cmd;
+        const char *spec;
+        const char *expect_fatal;
+    } tests[] = {
+        { NULL,   NULL,  NULL,    "event missing name" },
+        { "",     NULL,  NULL,    "event missing name" },
+        { "name", NULL,  NULL,    "event missing cmd" },
+        { "name", "",    NULL,    "event missing cmd" },
+        { "name", "cmd", NULL,    "unable to parse cron spec" },
+        { "name", "cmd", "",      "unable to parse cron spec" },
+        { "name", "cmd", "bogus", "unable to parse cron spec" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        CU_EXPECT_CYRFATAL_BEGIN
+        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        CU_EXPECT_CYRFATAL_END(EX_CONFIG, tests[i].expect_fatal);
+    }
+}
+
+static void test_cronevent_add(void)
+{
+    const struct {
+        const char *name;
+        const char *cmd;
+        const char *spec;
+        int expect_exec_words;
+    } tests[] = {
+
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    dynarray_t *schedule, *details;
+    int i;
+
+    cronevent_get_schedule(&schedule, &details);
+
+    for (i = 0; i < (int) n_tests; i++) {
+        struct cronevent_details *event_details;
+        struct cron_spec *event_spec, expect_spec = {0};
+        int r;
+
+        r = cron_parse_spec(tests[i].spec, &expect_spec, NULL);
+        CU_ASSERT_EQUAL(r, 0);
+
+        r = cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        CU_ASSERT_EQUAL(r, 0);
+        assert_schedule_invariants();
+
+        CU_ASSERT_EQUAL(dynarray_size(schedule), i + 1);
+        event_spec = dynarray_nth(schedule, i);
+        CU_ASSERT_PTR_NOT_NULL(event_spec);
+        CU_ASSERT_EQUAL(expect_spec.minutes, event_spec->minutes);
+        CU_ASSERT_EQUAL(expect_spec.hours, event_spec->hours);
+        CU_ASSERT_EQUAL(expect_spec.days_of_month, event_spec->days_of_month);
+        CU_ASSERT_EQUAL(expect_spec.months, event_spec->months);
+        CU_ASSERT_EQUAL(expect_spec.days_of_week, event_spec->days_of_week);
+
+        CU_ASSERT_EQUAL(dynarray_size(details), i + 1);
+        event_details = dynarray_nth(details, i);
+        CU_ASSERT_PTR_NOT_NULL(event_details);
+        CU_ASSERT_STRING_EQUAL(event_details->name, tests[i].name);
+        CU_ASSERT_EQUAL(strarray_size(&event_details->exec),
+                        tests[i].expect_exec_words);
+    }
+
+    cronevent_clear();
+    CU_ASSERT_EQUAL(dynarray_size(schedule), 0);
+    CU_ASSERT_EQUAL(dynarray_size(details), 0);
+}
+
+static void spawn_counter(const char *name,
+                          const strarray_t *exec __attribute__((unused)),
+                          void *rock)
+{
+    hash_table *ht = rock;
+    uintptr_t count;
+
+    count = (uintptr_t) hash_lookup(name, ht);
+    count++;
+    fprintf(stderr, "spawn_counter setting count=%lu\n", count);
+    hash_insert(name, (void *) count, ht);
+}
+
+static void test_only_once_per_minute(void)
+{
+    const size_t n_tests = 100;
+    const time_t start_time = 1337; /* anything positive and non-zero */
+    hash_table spawn_counts = HASH_TABLE_INITIALIZER;
+    uintptr_t expect_spawned = 1;
+    uintptr_t i;
+
+    construct_hash_table(&spawn_counts, 5, 1);
+
+    cronevent_add("my event", "* * * * *", "echo hello");
+
+    for (i = 0; i < n_tests; i++) {
+        uintptr_t actual_spawned;
+
+        if (i && (start_time + i) % 60 == 0) expect_spawned ++;
+
+        cronevent_poll_due(TV_INIT(start_time + i, 0),
+                           &spawn_counter,
+                           &spawn_counts);
+
+        actual_spawned = (uintptr_t) hash_lookup("my event", &spawn_counts);
+        CU_ASSERT_EQUAL(actual_spawned, expect_spawned);
+    }
+
+    free_hash_table(&spawn_counts, NULL);
+}
+
+/* vim: set ft=c: */

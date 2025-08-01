@@ -67,7 +67,7 @@ int num_testspecs = 0;
 const char **testspecs;
 enum { RUN, LIST } mode = RUN;
 int xml_flag = 0;
-int timeouts_flag = 1;
+int timeouts_flag = 0;
 
 #if HAVE_VALGRIND_VALGRIND_H
 #define log1(fmt, a1) do {                                                  \
@@ -95,7 +95,7 @@ int fatal_code;
 EXPORTED void fatal(const char *s, int code)
 {
     if (fatal_expected) {
-        if (verbose) {
+        if (verbose > 1) {
             log1("fatal(%s)", s);
         }
         fatal_expected = 0;
