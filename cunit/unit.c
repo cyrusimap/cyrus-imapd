@@ -95,7 +95,7 @@ int fatal_code;
 EXPORTED void fatal(const char *s, int code)
 {
     if (fatal_expected) {
-        if (verbose) {
+        if (verbose > 1) {
             log1("fatal(%s)", s);
         }
         fatal_expected = 0;
