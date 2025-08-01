@@ -2428,7 +2428,7 @@ static int conversations_set_guid(struct conversations_state *state,
                                    record->internal_flags,
                                    nano_internaldate,
                                    add);
-    if (!r && record->internaldate.tv_nsec != UTIME_OMIT) {
+    if (!r && UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
         struct buf key = BUF_INITIALIZER;
 
         /* Build J key */

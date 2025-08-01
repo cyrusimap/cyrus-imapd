@@ -3652,7 +3652,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
 
     switch (mailbox->i.minor_version) {
     case 20:
-        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+        if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
             buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
             crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
             buf_reset(&buf);
@@ -5733,7 +5733,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
         }
         if (mailbox->i.minor_version >= 20 && repack->newmailbox.i.minor_version < 20) {
             /* store the nanosecond timestamp */
-            if (record->internaldate.tv_nsec != UTIME_OMIT) {
+            if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
                 buf_reset(&buf);
                 buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
@@ -5750,7 +5750,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
 
         /* calculate nanoseconds for internaldate if not yet present or re-calculating */
         if (cstate && repack->newmailbox.i.minor_version >= 20 &&
-            (copyrecord.internaldate.tv_nsec == UTIME_OMIT || recalc_nanosec)) {
+            (!UTIME_SAFE_NSEC(copyrecord.internaldate.tv_nsec) || recalc_nanosec)) {
             struct index_record oldrecord = copyrecord;
 
             // attempt to find an existing message with the same guid
@@ -5765,7 +5765,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                                        find_dup_msg, &frock);
 
             // if we found a matching message, use its internaldate instead
-            if (frock.internaldate.tv_nsec != UTIME_OMIT) {
+            if (UTIME_SAFE_NSEC(frock.internaldate.tv_nsec)) {
                 copyrecord.internaldate = frock.internaldate;
             }
             else {
