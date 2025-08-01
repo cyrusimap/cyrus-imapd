@@ -154,11 +154,11 @@ extern const unsigned char convert_to_uppercase[256];
 
 /* We have an issue that we can't store UTIME_OMIT into the nanosecond
  * space, so we reserve '0' to mean OMIT, meaning that we can only store
- * postitive nanosecond values.  If we have a tv_nsec of 0, we store it
- * as 1 instead */
+ * postitive nanosecond values.  We also store 0 as 0, so callers are
+ * required to make sure they have a SAFE_NSEC value when writing */
 #define UTIME_SAFE_NSEC(n) (n > 0 && n < 1000000000)
 #define _NSVAL(n)                                                           \
-        (n ? (UTIME_SAFE_NSEC(n) ? n : 0) : 1)
+        (UTIME_SAFE_NSEC(n) ? n : 0)
 #define TIMESPEC_TO_NANOSEC(ts)                                             \
         ((uint64_t) (ts)->tv_sec * 1000000000 + _NSVAL((ts)->tv_nsec))
 
