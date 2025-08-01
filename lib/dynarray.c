@@ -57,8 +57,10 @@ EXPORTED void dynarray_init(struct dynarray *da, size_t membsize)
 
 EXPORTED void dynarray_fini(struct dynarray *da)
 {
+    size_t membsize = da->membsize;
     free(da->data);
     memset(da, 0, sizeof(struct dynarray));
+    da->membsize = membsize;
 }
 
 EXPORTED struct dynarray *dynarray_new(size_t membsize)
