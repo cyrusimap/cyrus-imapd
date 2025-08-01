@@ -131,7 +131,6 @@ sub default
             quota_db => 'quotalegacy',
             search_indexed_db => 'twoskip',
             seenstate_db => 'twoskip',
-            sortcache_db => 'twoskip',
             subscription_db => 'flat',
             statuscache_db => 'twoskip',
             sync_cache_db => 'twoskip',
