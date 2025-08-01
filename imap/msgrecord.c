@@ -291,8 +291,7 @@ EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, struct timespec *t)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    t->tv_sec  = mr->record.internaldate.tv_sec;
-    t->tv_nsec = mr->record.internaldate.tv_nsec;
+    *t = mr->record.internaldate;
     return 0;
 }
 
@@ -684,8 +683,7 @@ EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, struct timespec *intern
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    mr->record.internaldate.tv_sec  = internaldate->tv_sec;
-    mr->record.internaldate.tv_nsec = internaldate->tv_nsec;
+    mr->record.internaldate = *internaldate;
     return 0;
 }
 

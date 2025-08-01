@@ -885,15 +885,8 @@ out:
 
 struct findstage_cb_rock {
     const char *partition;
-    const char *guid;
+    struct message_guid *guid;
     char *fname;
-    struct {
-        struct timespec *internaldate;
-        struct {
-            uint32_t uid;
-            const char *mboxname;
-        } ignoremsg;
-    } dupcheck;
 };
 
 static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
@@ -903,25 +896,8 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
-    // if we need to get a timestamp still
-    if (rock->dupcheck.internaldate && !UTIME_SAFE_NSEC(rock->dupcheck.internaldate->tv_nsec)) {
-        if (rec->version >= 4 && !(rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-            // found a non-expunged duplicate email; use its internaldate
-            struct timespec internaldate;
-            TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
-            if (UTIME_SAFE_NSEC(internaldate.tv_nsec)) {
-                *rock->dupcheck.internaldate = internaldate;
-            }
-        }
-    }
-
-    // if we're not looking for a file, skip out now
-    if (!rock->partition) return 0;
-
     // no point copying from archive, spool is on data
     if (rec->internal_flags & FLAG_INTERNAL_ARCHIVED) return 0;
-
-    if (rock->fname) return 0;
 
     mbentry_t *mbentry = NULL;
     r = conv_guidrec_mbentry(rec, &mbentry);
@@ -936,7 +912,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
             if (file) {
                 struct body *body = NULL;
                 r = message_parse_file(file, NULL, NULL, &body, msgpath);
-                if (!r && !strcmp(rock->guid, message_guid_encode(&body->guid))) {
+                if (!r && message_guid_equal(rock->guid, &body->guid)) {
                     rock->fname = xstrdup(msgpath);
                 }
                 if (body) {
@@ -950,8 +926,12 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
 
     mboxlist_entry_free(&mbentry);
 
-    return 0;
+    if (!rock->fname) return 0;
+
+    // found it!
+    return CYRUSDB_DONE;
 }
+
 
 /*
  * staging, to allow for single-instance store.  the complication here
@@ -1000,38 +980,28 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         if (r) goto out;
     }
 
-    char guid[2*MESSAGE_GUID_SIZE+1];
-    strcpy(guid, message_guid_encode(&(*body)->guid));
+    struct message_guid *guid = &(*body)->guid;
 
     /* XXX check errors */
     mboxlist_findstage(mailbox_name(mailbox), stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
 
-    struct timespec existing_internaldate = { 0, UTIME_OMIT };
-
     /* attempt to find an existing message with the same guid
        and use it as the stagefile and/or use its internaldate */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
-    if (cstate) {
-        struct findstage_cb_rock rock = {
-            nolink ? NULL : mailbox_partition(mailbox),
-            guid, NULL /*fname*/, { 0 } /*dupcheck*/
-        };
-
-        rock.dupcheck.internaldate = &existing_internaldate;
-        if (meta->replacing.uid) {
-            rock.dupcheck.ignoremsg.uid      = meta->replacing.uid;
-            rock.dupcheck.ignoremsg.mboxname = meta->replacing.mboxname;
-        }
+    if (!nolink && cstate) {
+        struct findstage_cb_rock rock = { mailbox_partition(mailbox), guid, NULL };
 
         // ignore errors, it's OK for this to fail
-        conversations_guid_foreach(cstate, guid, findstage_cb, &rock);
+        char guidrep[2*MESSAGE_GUID_SIZE+1];
+        strcpy(guidrep, message_guid_encode(guid));
+        conversations_guid_foreach(cstate, guidrep, findstage_cb, &rock);
 
         // if we found a file, use it
         if (rock.fname) {
             syslog(LOG_NOTICE, "found existing file %s for %s; linking",
-                   guid, rock.fname);
+                   guidrep, rock.fname);
             linkfile = rock.fname;
             goto havefile;
         }
@@ -1108,23 +1078,16 @@ havefile:
     /* And make sure it has a timestamp */
 
     struct timespec now;
-    // if we found a matching message, use its internaldate
-    if (UTIME_SAFE_NSEC(existing_internaldate.tv_nsec)) {
-        internaldate = &existing_internaldate;
-    }
-    else {
+    if (!internaldate) {
         clock_gettime(CLOCK_REALTIME, &now);
-        if (!internaldate) {
-            internaldate = &now;
-        }
-        else if (!UTIME_SAFE_NSEC(internaldate->tv_nsec)) {
-            internaldate->tv_nsec = now.tv_nsec;
-        }
-        // timestamp might be nanoseconds from the clock plus seconds from the
-        // append timestamp, either way it MIGHT clash
-        // make sure we don't have a JMAP ID (internaldate) clash
-        if (cstate) conversations_adjust_internaldate(cstate, guid, internaldate);
+        internaldate = &now;
     }
+
+    // timestamp might be nanoseconds from the clock plus seconds from the
+    // append timestamp, either way it MIGHT clash
+    // make sure we don't have a JMAP ID (internaldate) clash
+    conversations_adjust_internaldate(cstate, guid, internaldate);
+
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
 
