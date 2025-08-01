@@ -59,13 +59,17 @@ static void test_cronevent_add_bad(void)
 {
     const struct {
         const char *name;
-        const char *spec;
         const char *cmd;
-        int expect_fatal_code;
-        const char *expect_fatal_msg;
+        const char *spec;
+        const char *expect_fatal;
     } tests[] = {
-        { "unparseable spec", "donkey", "command", EX_CONFIG, "XXX" },
-
+        { NULL,   NULL,  NULL,    "event missing name" },
+        { "",     NULL,  NULL,    "event missing name" },
+        { "name", NULL,  NULL,    "event missing cmd" },
+        { "name", "",    NULL,    "event missing cmd" },
+        { "name", "cmd", NULL,    "unable to parse cron spec" },
+        { "name", "cmd", "",      "unable to parse cron spec" },
+        { "name", "cmd", "bogus", "unable to parse cron spec" },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
@@ -73,8 +77,7 @@ static void test_cronevent_add_bad(void)
     for (i = 0; i < n_tests; i++) {
         CU_EXPECT_CYRFATAL_BEGIN
         cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
-        CU_EXPECT_CYRFATAL_END(tests[i].expect_fatal_code,
-                               tests[i].expect_fatal_msg);
+        CU_EXPECT_CYRFATAL_END(EX_CONFIG, tests[i].expect_fatal);
     }
 }
 
