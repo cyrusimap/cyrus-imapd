@@ -293,6 +293,8 @@ void annotate_done(void);
 int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
+int annotate_globaldb_isopen();
+
 /* Maybe this isn't the right place - move later */
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);

@@ -93,25 +93,25 @@ static jmap_method_t jmap_backup_methods_nonstandard[] = {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_contacts,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE,
     },
     {
         "Backup/restoreCalendars",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_calendars,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE,
     },
     {
         "Backup/restoreNotes",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_notes,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE,
     },
     {
         "Backup/restoreMail",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_mail,
-        /*flags*/0
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE,
     },
     { NULL, NULL, NULL, 0}
 };
@@ -901,7 +901,6 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         goto done;
     }
 
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
     syslog(restore.log_level, "jmap_backup_restore_contacts(%s, " TIME_T_FMT ")",
@@ -927,7 +926,6 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     free(addrhomeset);
     carddav_close(crock.carddavdb);
     buf_free(&crock.buf);
-    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1394,7 +1392,6 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
         goto done;
     }
 
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *calhomeset = caldav_mboxname(req->accountid, NULL);
 
     syslog(restore.log_level, "jmap_backup_restore_calendars(%s, " TIME_T_FMT ")",
@@ -1418,7 +1415,6 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     free(crock.inboxname);
     free(crock.outboxname);
     caldav_close(crock.caldavdb);
-    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -1487,7 +1483,6 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         goto done;
     }
 
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
 
     syslog(restore.log_level, "jmap_backup_restore_notes(%s, " TIME_T_FMT ")",
@@ -1507,8 +1502,6 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         }
         free(notes);
     }
-
-    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {
@@ -2138,7 +2131,6 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         goto done;
     }
 
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table emailids = HASH_TABLE_INITIALIZER;
     hash_table msgids = HASH_TABLE_INITIALIZER;
@@ -2186,7 +2178,6 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     free_hash_table(&emailids, &message_t_free);
     free_hash_table(&msgids, &message_t_free);
     free(inbox);
-    mboxname_release(&namespacelock);
 
     /* Build response */
     if (r) {

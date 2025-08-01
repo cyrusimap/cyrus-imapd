@@ -272,7 +272,7 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     const char *sieve_path = NULL, **suffixes;
     int i;
 
-    assert(user_isnamespacelocked(userid));
+    assert(unslock_islocked(userid));
 
     if (!(mbentry->mbtype & MBTYPE_LEGACY_DIRS) && mbentry->uniqueid) {
         for (suffixes = user_file_suffixes; *suffixes; suffixes++) {
@@ -711,29 +711,109 @@ static const char *_namelock_name_from_userid(const char *userid)
     return buf_cstring(&buf);
 }
 
-EXPORTED struct mboxlock *user_namespacelock_full(const char *userid, int locktype)
-{
-    struct mboxlock *namelock = NULL;
-    if (!user_isnamespacelocked(userid))
-        assert(!open_mailboxes_namelocked(userid));
-    const char *name = _namelock_name_from_userid(userid);
-    int r = mboxname_lock(name, &namelock, locktype);
-    if (!(locktype & LOCK_NONBLOCKING)) assert(!r);
-    return namelock;
-}
-
 EXPORTED int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock)
 {
-    struct mboxlock *userlock = user_namespacelock(userid);
+    unslock_t *unslock = unslock_lock(userid);
     int r = cb(rock);
-    mboxname_release(&userlock);
+    unslock_release(&unslock);
     return r;
 }
 
-EXPORTED int user_isnamespacelocked(const char *userid)
+EXPORTED unslock_t *unslock_fullmb(const char *mboxnamea, const char *mboxnameb, int locktype)
+{
+    char *userida = mboxname_to_userid(mboxnamea);
+    if (!mboxnameb) {
+        unslock_t *locks = unslock_full1(userida, locktype);
+        free(userida);
+        return locks;
+    }
+    char *useridb = mboxname_to_userid(mboxnameb);
+    unslock_t *locks = unslock_full2(userida, useridb, locktype);
+    free(useridb);
+    free(userida);
+    return locks;
+}
+
+EXPORTED unslock_t *unslock_full1(const char *user, int locktype)
+{
+    if (!unslock_islocked(user)) {
+        assert(!open_mailboxes_namelocked(user));
+        assert(!annotate_globaldb_isopen());
+    }
+    unslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
+    const char *name = _namelock_name_from_userid(user);
+    if (mboxname_lock(name, &locks->l1, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        unslock_release(&locks);
+        return NULL;
+    }
+    return locks;
+}
+
+EXPORTED unslock_t *unslock_full2(const char *usera, const char *userb, int locktype)
+{
+    int cmp = strcmpsafe(usera, userb);
+    if (!cmp) return unslock_full1(usera, locktype);  // same user?  Just lock one
+
+    // otherwise we have ordering to follow
+    const char *l1user = usera, *l2user = userb;
+    if (cmp > 0) {
+        l1user = userb;
+        l2user = usera;
+    }
+
+    // ensure locking invariants - we are allowed to have the first lock already, but
+    // we MUST NOT have the second lock if we don't have the first lock, and we can't
+    // have any mailboxes open
+    if (!unslock_islocked(l1user)) {
+        assert(!unslock_islocked(l2user));
+        assert(!open_mailboxes_namelocked(l1user));
+        assert(!open_mailboxes_namelocked(l2user));
+        assert(!annotate_globaldb_isopen());
+    }
+    else if (!unslock_islocked(l2user)) {
+        assert(!open_mailboxes_namelocked(l2user));
+    }
+
+    unslock_t *locks = xzmalloc(sizeof(struct usernamespacelocks));
+    // take the two locks in order (even if already locked, we refcount add it again)
+    const char *name = _namelock_name_from_userid(l1user);
+    if (mboxname_lock(name, &locks->l1, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        unslock_release(&locks);
+        return NULL;
+    }
+    name = _namelock_name_from_userid(l2user);
+    if (mboxname_lock(name, &locks->l2, locktype)) {
+        assert(locktype == LOCK_NONBLOCKING);
+        unslock_release(&locks);
+        return NULL;
+    }
+    return locks;
+}
+
+EXPORTED void unslock_release(unslock_t **ptr)
+{
+    unslock_t *locks = *ptr;
+    if (!locks) return;
+    mboxname_release(&locks->l2);
+    mboxname_release(&locks->l1);
+    free(locks);
+    *ptr = NULL;
+}
+
+EXPORTED int unslock_islocked(const char *userid)
 {
     const char *name = _namelock_name_from_userid(userid);
     return mboxname_islocked(name);
+}
+
+EXPORTED int unslock_islockedmb(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    int r = unslock_islocked(userid);
+    free(userid);
+    return r;
 }
 
 EXPORTED int user_isreplicaonly(const char *userid)

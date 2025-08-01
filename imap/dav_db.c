@@ -495,7 +495,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
     dav_getpath_byuserid(&newfname, userid);
     buf_printf(&newfname, ".NEW");
 
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    unslock_t *unslock = unslock_lock(userid);
 
     r = IMAP_IOERROR;
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
@@ -541,7 +541,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         }
     }
 
-    mboxname_release(&namespacelock);
+    unslock_release(&unslock);
 
     buf_free(&newfname);
     buf_free(&fname);

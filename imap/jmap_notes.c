@@ -87,19 +87,19 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
         "Note/get",
         JMAP_NOTES_EXTENSION,
         &jmap_note_get,
-        /*flags*/0
+        JMAP_NEED_CSTATE,
     },
     {
         "Note/set",
         JMAP_NOTES_EXTENSION,
         &jmap_note_set,
-        JMAP_READ_WRITE
+        JMAP_NEED_CSTATE|JMAP_READ_WRITE
     },
     {
         "Note/changes",
         JMAP_NOTES_EXTENSION,
         &jmap_note_changes,
-        /*flags*/0
+        JMAP_NEED_CSTATE,
     },
     { NULL, NULL, NULL, 0}
 };
@@ -201,14 +201,6 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
         return 0;
     }
 
-    // otherwise, clean up ready for next attempt
-    mboxlist_entry_free(&mbentry);
-
-    struct mboxlock *namespacelock = user_namespacelock(accountid);
-
-    // did we lose the race?
-    r = lookup_notes_collection(accountid, &mbentry);
-
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (!mbentry) goto done;
         else if (mbentry->server) {
@@ -242,7 +234,6 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
     }
 
  done:
-    mboxname_release(&namespacelock);
     if (mbentryp && !r) *mbentryp = mbentry;
     else mboxlist_entry_free(&mbentry);
     return r;

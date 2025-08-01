@@ -177,7 +177,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEvent/copy",
         JMAP_URN_CALENDARS,
         &jmap_calendarevent_copy,
-        JMAP_READ_WRITE // can't open conversations until we have locks ordered
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "CalendarEvent/parse",
@@ -2190,7 +2190,6 @@ static int setcalendars_parse_args(jmap_req_t *req __attribute__((unused)),
 
 static int jmap_calendar_set(struct jmap_req *req)
 {
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
     int on_destroy_remove_events = 0;
@@ -2310,7 +2309,6 @@ static int jmap_calendar_set(struct jmap_req *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    mboxname_release(&namespacelock);
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;
@@ -7698,10 +7696,6 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
     json_t *destroy_events = json_array();
     struct mailbox *notifmbox = NULL;
     mbentry_t *notifmb = NULL;
-    struct mboxlock *srcnamespacelock = NULL;
-    struct mboxlock *dstnamespacelock = NULL;
-    char *srcinbox = NULL;
-    char *dstinbox = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
@@ -7710,20 +7704,11 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
         goto done;
     }
 
-    srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
-    dstinbox = mboxname_user_mbox(req->accountid, NULL);
-    if (strcmp(srcinbox, dstinbox) < 0) {
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-    }
-    else {
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-    }
-
     if (copy.if_from_in_state) {
         struct mboxname_counters counters;
+        char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
         assert (!mboxname_read_counters(srcinbox, &counters));
+        free(srcinbox);
         if (atomodseq_t(copy.if_from_in_state) != counters.caldavmodseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
@@ -7741,15 +7726,6 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
         copy.old_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, 0));
     }
 
-    // now we can open the cstate
-    int r = conversations_open_user(req->accountid, 0, &req->cstate);
-    if (r) {
-        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
-                        error_message(r));
-        jmap_error(req, jmap_server_error(r));
-        goto done;
-    }
-
     src_db = caldav_open_userid(copy.from_account_id);
     if (!src_db) {
         jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
@@ -7762,7 +7738,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
     }
 
     /* Open notifications mailbox, but continue even on error. */
-    r = jmap_create_notify_collection(req->accountid, &notifmb);
+    int r = jmap_create_notify_collection(req->accountid, &notifmb);
     if (!r) r = mailbox_open_iwl(notifmb->name, &notifmbox);
     if (r) {
         xsyslog(LOG_WARNING, "can not open jmapnotify collection",
@@ -7815,12 +7791,8 @@ done:
     json_decref(destroy_events);
     if (src_db) caldav_close(src_db);
     if (dst_db) caldav_close(dst_db);
-    mboxname_release(&srcnamespacelock);
-    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
-    free(srcinbox);
-    free(dstinbox);
     return 0;
 }
 
@@ -10649,7 +10621,6 @@ done:
 
 static int jmap_sharenotification_set(struct jmap_req *req)
 {
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;
@@ -10689,7 +10660,6 @@ static int jmap_sharenotification_set(struct jmap_req *req)
 
 done:
     mboxlist_entry_free(&notifmb);
-    mboxname_release(&namespacelock);
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return 0;
@@ -11426,7 +11396,6 @@ done:
 
 static int jmap_calendareventnotification_set(struct jmap_req *req)
 {
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     char *notifmboxname = jmap_notifmboxname(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
@@ -11462,7 +11431,6 @@ static int jmap_calendareventnotification_set(struct jmap_req *req)
 done:
     mboxlist_entry_free(&notifmb);
     free(notifmboxname);
-    mboxname_release(&namespacelock);
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return 0;

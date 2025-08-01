@@ -4180,9 +4180,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
 
     set.super.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
-    mboxname_release(&namespacelock);
     jmap_ok(req, jmap_set_reply(&set.super));
 
 done:

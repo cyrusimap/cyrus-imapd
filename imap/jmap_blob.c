@@ -71,7 +71,7 @@ static jmap_method_t jmap_blob_methods_standard[] = {
         "Blob/copy",
         JMAP_URN_CORE,
         &jmap_blob_copy,
-        JMAP_READ_WRITE // no conversations, we need to get lock ordering first
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     /* RFC 9404 */
     {
@@ -275,35 +275,11 @@ static int jmap_blob_copy(jmap_req_t *req)
     size_t i = 0;
     int r = 0;
     struct mailbox *to_mbox = NULL;
-    struct mboxlock *srcnamespacelock = NULL;
-    struct mboxlock *dstnamespacelock = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
-        goto cleanup;
-    }
-
-    char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
-    char *dstinbox = mboxname_user_mbox(req->accountid, NULL);
-    if (strcmp(srcinbox, dstinbox) < 0) {
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-    }
-    else {
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-    }
-    free(srcinbox);
-    free(dstinbox);
-
-    // now we can open the cstate
-    r = conversations_open_user(req->accountid, 0, &req->cstate);
-    if (r) {
-        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
-                        error_message(r));
-        jmap_error(req, jmap_server_error(r));
         goto cleanup;
     }
 
@@ -340,8 +316,6 @@ done:
 
 cleanup:
     mailbox_close(&to_mbox);
-    mboxname_release(&srcnamespacelock);
-    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     return r;

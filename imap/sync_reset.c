@@ -128,7 +128,7 @@ static int reset_single(const char *userid)
 {
     int r = 0;
     int i;
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    unslock_t *unslock = unslock_lock(userid);
 
     /* XXX: adding an entry to userdeny_db here would avoid the need to
      * protect against new logins with external proxy rules - Cyrus could
@@ -171,7 +171,7 @@ static int reset_single(const char *userid)
     if (mbentry) r = user_deletedata(mbentry, 1);
 
  fail:
-    mboxname_release(&namespacelock);
+    unslock_release(&unslock);
     mboxlist_entry_free(&mbentry);
     strarray_free(mblist);
     strarray_free(sublist);

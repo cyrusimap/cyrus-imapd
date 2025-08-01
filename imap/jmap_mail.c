@@ -173,7 +173,7 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         "Email/copy",
         JMAP_URN_MAIL,
         &jmap_email_copy,
-        JMAP_READ_WRITE // don't want cstate, we need to take locks in order
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "SearchSnippet/get",
@@ -9174,9 +9174,7 @@ static void _email_append(jmap_req_t *req,
 
         /* Convert intermediary mailbox to real mailbox */
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
             r = mboxlist_promote_intermediary(mbentry->name);
-            mboxname_release(&namespacelock);
             if (r) goto done;
         }
 
@@ -13057,9 +13055,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
             const mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxrec->mbox_id);
             int r = 0;
             if (mbentry && mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
                 r = mboxlist_promote_intermediary(mbentry->name);
-                mboxname_release(&namespacelock);
             }
             else if (!mbentry) {
                 r = IMAP_MAILBOX_NONEXISTENT;
@@ -13135,9 +13131,7 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                     !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
                 int r = 0;
                 if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbentry->name);
                     r = mboxlist_promote_intermediary(mbentry->name);
-                    mboxname_release(&namespacelock);
                 }
                 if (!r) r = mailbox_open_iwl(mbentry->name, &mbox);
             }
@@ -14587,10 +14581,6 @@ static int jmap_email_copy(jmap_req_t *req)
         goto done;
     }
 
-    if (open_mboxlocks_exist()) {
-        abort();
-    }
-
     srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
     dstinbox = mboxname_user_mbox(req->accountid, NULL);
 
@@ -14614,15 +14604,6 @@ static int jmap_email_copy(jmap_req_t *req)
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
-    }
-
-    r = conversations_open_user(req->accountid, 0, &req->cstate);
-    if (r) {
-        xsyslog(LOG_ERR, "can't open conversations",
-                "accountId=<%s> error=<%s>",
-                req->accountid, error_message(r));
-        jmap_error(req, jmap_server_error(r));
-        goto done;
     }
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);

@@ -2853,6 +2853,14 @@ sub install_sieve_script
     die "Symlink does not exist: $sieved/defaultbc" if not -l "$sieved/defaultbc";
 
     xlog "Sieve script installed successfully";
+
+    if ($params{upgrade}) {
+        my $srv = $self->get_service('imap');
+        my $adminstore = $srv->create_store(username => 'admin');
+        my $adminclient = $adminstore->get_client();
+        $adminclient->_imap_cmd('UPGRADESIEVE', 0, '', $user);
+        xlog "Sieve upgraded to mailbox version";
+    }
 }
 
 sub install_old_mailbox
