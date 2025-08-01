@@ -54,8 +54,10 @@ extern int cronevent_add(const char *name, const char *spec, const char *cmd);
 extern void cronevent_clear(void);
 
 typedef void (cronevent_spawn_fn)(const char *name,
-                                  const strarray_t *exec);
+                                  const strarray_t *exec,
+                                  void *rock);
 extern void cronevent_poll_due(struct timeval now,
-                               cronevent_spawn_fn *spawner);
+                               cronevent_spawn_fn *spawner,
+                               void *rock);
 
 #endif

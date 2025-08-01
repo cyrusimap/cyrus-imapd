@@ -63,14 +63,6 @@ static dynarray_t cronevent_details
 
 static time_t cronevent_last_run_time = 0;
 
-/* for unit tests */
-HIDDEN void cronevent_get_schedule(dynarray_t **schedule,
-                                   dynarray_t **details)
-{
-    *schedule = &cronevent_schedule;
-    *details = &cronevent_details;
-}
-
 EXPORTED int cronevent_add(const char *name, const char *spec, const char *cmd)
 {
     struct cron_spec cron_spec = {0};
@@ -116,10 +108,12 @@ EXPORTED void cronevent_clear(void)
 {
     dynarray_fini(&cronevent_schedule);
     dynarray_fini(&cronevent_details);
+    cronevent_last_run_time = 0;
 }
 
 EXPORTED void cronevent_poll_due(struct timeval now,
-                                 cronevent_spawn_fn *spawner)
+                                 cronevent_spawn_fn *spawner,
+                                 void *rock)
 {
     struct cron_spec current_time;
     time_t run_time;
@@ -128,7 +122,14 @@ EXPORTED void cronevent_poll_due(struct timeval now,
     cron_spec_from_timeval(&current_time, &run_time, &now);
 
     /* only do anything once per minute */
-    if (run_time <= cronevent_last_run_time) return;
+    if (cronevent_last_run_time && run_time <= cronevent_last_run_time) {
+//         fprintf(stderr, "decided not to run lrt=<"TIME_T_FMT"> rt=<"TIME_T_FMT"\n",
+//                         cronevent_last_run_time, run_time);
+        return;
+    }
+    else {
+        fprintf(stderr, "running at "TIME_T_FMT"\n", run_time);
+    }
 
     const int n_events = dynarray_size(&cronevent_schedule);
     assert(n_events == dynarray_size(&cronevent_details));
@@ -136,6 +137,19 @@ EXPORTED void cronevent_poll_due(struct timeval now,
     for (i = 0; i < n_events; i++) {
         struct cron_spec *spec = dynarray_nth(&cronevent_schedule, i);
         struct cronevent_details *details;
+        struct buf ct_buf = BUF_INITIALIZER, sp_buf = BUF_INITIALIZER;
+
+            details = dynarray_nth(&cronevent_details, i);
+        fprintf(stderr, "considering event %s...\n", details->name);
+
+        dump_cron_spec(&ct_buf, &current_time);
+        fprintf(stderr, "current_time:\n%s\n", buf_cstring(&ct_buf));
+        dump_cron_spec(&sp_buf, spec);
+        fprintf(stderr, "spec:\n%s\n", buf_cstring(&sp_buf));
+
+        buf_free(&ct_buf);
+        buf_free(&sp_buf);
+
 
         /* quoth crontab(5):
          *   Note: The day of a command's execution can be specified by two
@@ -151,10 +165,28 @@ EXPORTED void cronevent_poll_due(struct timeval now,
             && ((spec->days_of_month & current_time.days_of_month)
                 || (spec->days_of_week & current_time.days_of_week)))
         {
-            details = dynarray_nth(&cronevent_details, i);
-            spawner(details->name, &details->exec);
+            fprintf(stderr, "running spawner for %s\n", details->name);
+            spawner(details->name, &details->exec, rock);
         }
     }
 
+    cronevent_last_run_time = run_time;
+}
+
+/* hidden accessors for unit tests */
+HIDDEN void cronevent_get_schedule(dynarray_t **schedule,
+                                   dynarray_t **details)
+{
+    *schedule = &cronevent_schedule;
+    *details = &cronevent_details;
+}
+
+HIDDEN time_t cronevent_get_last_run_time(void)
+{
+    return cronevent_last_run_time;
+}
+
+HIDDEN void cronevent_set_last_run_time(time_t run_time)
+{
     cronevent_last_run_time = run_time;
 }

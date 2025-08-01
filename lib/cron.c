@@ -42,11 +42,116 @@
 #include <config.h>
 
 #include "lib/cron.h"
+#include "lib/util.h"
 #include "lib/xmalloc.h"
 
 #include <sysexits.h>
 #include <syslog.h>
 #include <time.h>
+
+// struct cron_spec {
+//     uint64_t minutes;       /* bits 0-59 represent minutes */
+//     uint32_t hours;         /* bits 0-23 represent hours */
+//     uint32_t days_of_month; /* bits 0-30 represent days 1-31 */
+//     uint16_t months;        /* bits 0-11 represent months 1-12 */
+//     uint8_t  days_of_week;  /* bits 0-6 represent days sun-sat */
+// };
+#define BIT(n) (UINT64_C(1) << (n))
+EXPORTED void dump_cron_spec(struct buf *buf, const struct cron_spec *spec)
+{
+    const char *sep;
+    unsigned i;
+
+    if (spec->minutes == CRON_ALL_MINUTES) {
+        buf_appendcstr(buf, "minutes: all\n");
+    }
+    else if (spec->minutes == 0) {
+        buf_appendcstr(buf, "minutes: none\n");
+    }
+    else {
+        sep = "";
+        buf_appendcstr(buf, "minutes: ");
+        for (i = 0; i < 60; i++) {
+            if ((spec->minutes & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+
+    if (spec->hours == CRON_ALL_HOURS) {
+        buf_appendcstr(buf, "hours: all\n");
+    }
+    else if (spec->hours == 0) {
+        buf_appendcstr(buf, "hours: none\n");
+    }
+    else {
+        sep = "";
+        buf_appendcstr(buf, "hours: ");
+        for (i = 0; i < 24; i++) {
+            if ((spec->hours & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+
+    if (spec->days_of_month == CRON_ALL_DAYS_OF_MONTH) {
+        buf_appendcstr(buf, "days_of_month: all\n");
+    }
+    else if (spec->days_of_month == 0) {
+        buf_appendcstr(buf, "days_of_month: none\n");
+    }
+    else {
+        sep = "";
+        buf_appendcstr(buf, "days_of_month: ");
+        for (i = 0; i < 31; i++) {
+            if ((spec->days_of_month & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+
+    if (spec->months == CRON_ALL_MONTHS) {
+        buf_appendcstr(buf, "months: all\n");
+    }
+    else if (spec->months == 0) {
+        buf_appendcstr(buf, "months: none\n");
+    }
+    else {
+        sep = "";
+        buf_appendcstr(buf, "months: ");
+        for (i = 0; i < 12; i++) {
+            if ((spec->months & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+
+    if (spec->days_of_week == CRON_ALL_DAYS_OF_WEEK) {
+        buf_appendcstr(buf, "days_of_week: all\n");
+    }
+    else if (spec->days_of_week == 0) {
+        buf_appendcstr(buf, "days_of_week: none\n");
+    }
+    else {
+        sep = "";
+        buf_appendcstr(buf, "days_of_week: ");
+        for (i = 0; i < 7; i++) {
+            if ((spec->days_of_week & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+}
 
 EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
                                      time_t *run_time,
