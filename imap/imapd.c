@@ -106,6 +106,7 @@
 #include "prometheus.h"
 #include "quota.h"
 #include "seen.h"
+#include "sieve_db.h"
 #include "slowio.h"
 #include "statuscache.h"
 #include "sync_log.h"
@@ -568,6 +569,7 @@ static void cmd_status(char *tag, char *name);
 static void cmd_namespace(char* tag);
 static void cmd_mupdatepush(char *tag, char *name);
 static void cmd_id(char* tag);
+static void cmd_upgradesieve(char *tag, char *name);
 
 static void cmd_idle(char* tag);
 
@@ -2680,6 +2682,15 @@ static void cmdloop(void)
 
                 cmd_undump(tag.s, arg1.s);
                 /* XXX prometheus_increment(CYRUS_IMAP_UNDUMP_TOTAL); */
+            }
+            else if (!strcmp(cmd.s, "Upgradesieve")) {
+                if (!imapd_userisadmin) goto adminsonly;
+                if (readonly) goto noreadonly;
+                if (c != ' ') goto missingargs;
+                c = getastring(imapd_in, imapd_out, &arg1);
+                if (!IS_EOL(c, imapd_in)) goto extraargs;
+
+                cmd_upgradesieve(tag.s, arg1.s);
             }
 #ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Urlfetch")) {
@@ -14100,6 +14111,20 @@ static int reset_saslconn(sasl_conn_t **conn)
     /* End TLS/SSL Info */
 
     return SASL_OK;
+}
+
+static void cmd_upgradesieve(char *tag, char *userid)
+{
+    struct mailbox *mailbox = NULL;
+    int r = sieve_ensure_folder(userid, &mailbox, /*silent*/0);
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    }
+    else {
+        mailbox_close(&mailbox);
+        prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                    error_message(IMAP_OK_COMPLETED));
+    }
 }
 
 static void cmd_mupdatepush(char *tag, char *name)
