@@ -3447,6 +3447,7 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     if (!mbentry) goto out;
+    if (!mbentry->uniqueid) goto out;
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
         !(mrock->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
