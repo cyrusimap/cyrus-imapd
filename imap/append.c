@@ -909,7 +909,7 @@ static int findstage_cb(const conv_guidrec_t *rec, void *vrock)
             // found a non-expunged duplicate email; use its internaldate
             struct timespec internaldate;
             TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
-            if (internaldate.tv_nsec < UTIME_OMIT) {
+            if (UTIME_SAFE_NSEC(internaldate.tv_nsec)) {
                 *rock->dupcheck.internaldate = internaldate;
             }
         }
@@ -1117,7 +1117,7 @@ havefile:
 
     /* And make sure it has a timestamp */
     struct timespec now;
-    if (!internaldate || internaldate->tv_nsec >= UTIME_OMIT) {
+    if (!internaldate || !UTIME_SAFE_NSEC(internaldate->tv_nsec)) {
         clock_gettime(CLOCK_REALTIME, &now);
         if (!internaldate)
             internaldate = &now;

@@ -5531,7 +5531,7 @@ static int find_dup_msg(const conv_guidrec_t *rec, void *rock)
     // found a duplicate email; use its internaldate if it has one
     struct timespec internaldate;
     TIMESPEC_FROM_NANOSEC(&internaldate, rec->nano_internaldate);
-    if (internaldate.tv_nsec < UTIME_OMIT) {
+    if (UTIME_SAFE_NSEC(internaldate.tv_nsec)) {
         frock->internaldate = internaldate;
         return CYRUSDB_DONE;
     }
