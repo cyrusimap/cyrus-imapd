@@ -5796,6 +5796,10 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
             repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
 
+            // preload cache so we don't load it on newmailbox
+            r = mailbox_cacherecord(mailbox, &copyrecord);
+            if (r) goto done;
+
             // update G & J records
             r = mailbox_update_conversations(&repack->newmailbox, &oldrecord, &copyrecord);
             if (r) goto done;
