@@ -1464,7 +1464,7 @@ static void encode_annotations(struct dlist *parent,
 
     switch (mailbox->i.minor_version) {
     case 20:
-        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+        if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
             if (!annots)
                 annots = dlist_newlist(parent, "ANNOTATIONS");
             aa = dlist_newkvlist(annots, NULL);
@@ -2734,8 +2734,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
-            copy.internaldate.tv_sec  = mrecord.internaldate.tv_sec;
-            copy.internaldate.tv_nsec = mrecord.internaldate.tv_nsec;
+            copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;

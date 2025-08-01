@@ -376,15 +376,14 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     size_t msglen = buf_len(msg);
     FILE *f = NULL;
     int r;
-    struct timespec now, internaldate;
+    struct timespec internaldate, now;
 
     clock_gettime(CLOCK_REALTIME, &now);
-    internaldate.tv_nsec = now.tv_nsec;
+    internaldate = now;
 
     if (!holduntil) {
         /* Already sent */
         msglen = 0;
-        internaldate.tv_sec = now.tv_sec;
         strarray_append(&flags, "\\Answered");
         if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
             /* delete the EmailSubmission object immediately */
