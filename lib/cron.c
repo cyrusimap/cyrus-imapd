@@ -91,3 +91,42 @@ EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
         *run_time = mktime(tm);
     }
 }
+
+#define BIT(n) (UINT64_C(1) << (n))
+static void dump_one(struct buf *buf,
+                     const char *desc,
+                     unsigned n_bits,
+                     uint64_t all_bits,
+                     uint64_t value)
+{
+    if (value == all_bits) {
+        buf_printf(buf, "%s: all\n", desc);
+    }
+    else if (value == 0) {
+        buf_printf(buf, "%s: none\n", desc);
+    }
+    else {
+        const char *sep = "";
+        unsigned i;
+
+        buf_printf(buf, "%s: ", desc);
+        for (i = 0; i < n_bits; i++) {
+            if ((value & BIT(i))) {
+                buf_printf(buf, "%s%u", sep, i);
+                sep = ", ";
+            }
+        }
+        buf_appendcstr(buf, "\n");
+    }
+}
+
+EXPORTED void cron_spec_dump(struct buf *buf, const struct cron_spec *spec)
+{
+    dump_one(buf, "minutes", 60, CRON_ALL_MINUTES, spec->minutes);
+    dump_one(buf, "hours", 24, CRON_ALL_HOURS, spec->hours);
+    dump_one(buf, "days of month", 31,
+             CRON_ALL_DAYS_OF_MONTH, spec->days_of_month);
+    dump_one(buf, "months", 12, CRON_ALL_MONTHS, spec->months);
+    dump_one(buf, "days of week", 7,
+             CRON_ALL_DAYS_OF_WEEK, spec->days_of_week);
+}
