@@ -365,7 +365,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     if (init && init->select)
         init->vanishedlist = index_vanished(state, &init->vanished);
 
-    if (!init->stay_locked) index_unlock(state);
+    if (!init || !init->stay_locked) index_unlock(state);
 
     *stateptr = state;
 
