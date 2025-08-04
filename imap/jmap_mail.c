@@ -14322,6 +14322,8 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     mbentry_t *mbentry = NULL;
     int r = 0;
 
+    if (rec->part) goto done;
+
     conv_guidrec_mbentry(rec, &mbentry);
 
     if (!mbentry || mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
