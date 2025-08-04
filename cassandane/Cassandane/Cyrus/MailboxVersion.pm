@@ -185,18 +185,7 @@ sub upgrade_19_to_20
         }
     }
 
-    {
-        xlog $self, "Turn on compact ids for $user";
-
-        my $res = $self->{instance}->run_command_capture(
-            { cyrus => 1 },
-            qw(ctl_conversationsdb -v -I on), $user,
-        );
-
-        $self->assert_num_equals(0, $res->status);
-        $self->assert_str_equals("", $res->stdout);
-        $self->assert_str_equals("", $res->stderr);
-    }
+    $self->enable_compact_ids($user);
 
     # Replica gets created at version 20 / mailbox version 2 so can't test...
 }
@@ -210,7 +199,7 @@ sub downgrade_20_to_19
     {
         $user //= "cassandane";
 
-        xlog $self, "Upgrade master mailbox version 20 -> 19 for $user";
+        xlog $self, "Downgrade master mailbox version 20 -> 19 for $user";
 
         my $res = $self->{instance}->run_command_capture(
             { cyrus => 1 },
@@ -233,6 +222,42 @@ sub downgrade_20_to_19
             );
         }
     }
+}
+
+sub enable_compact_ids
+{
+    my ($self, $user) = @_;
+
+    $user //= "cassandane";
+
+    xlog $self, "Turn on compact ids for $user";
+
+    my $res = $self->{instance}->run_command_capture(
+        { cyrus => 1 },
+        qw(ctl_conversationsdb -v -I on), $user,
+    );
+
+    $self->assert_num_equals(0, $res->status);
+    $self->assert_str_equals("", $res->stdout);
+    $self->assert_str_equals("", $res->stderr);
+}
+
+sub disable_compact_ids
+{
+    my ($self, $user) = @_;
+
+    $user //= "cassandane";
+
+    xlog $self, "Turn off compact ids for $user";
+
+    my $res = $self->{instance}->run_command_capture(
+        { cyrus => 1 },
+        qw(ctl_conversationsdb -v -I off), $user,
+    );
+
+    $self->assert_num_equals(0, $res->status);
+    $self->assert_str_equals("", $res->stdout);
+    $self->assert_str_equals("", $res->stderr);
 }
 
 sub lookup_email_id
