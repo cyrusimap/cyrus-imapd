@@ -22,7 +22,7 @@ sub test_email_legacy_ids
 
     xlog $self, "Fetching EMAILIDs";
     $talk->examine('INBOX');
-    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID DIGEST.SHA1)');
+    my $res = $talk->fetch('1:*', '(UID EMAILID THREADID DIGEST.SHA1 SAVEDATE INTERNALDATE)');
     my $id1 = $res->{1}{emailid}[0];
     my $id2 = $res->{2}{emailid}[0];
     my $id3 = $res->{3}{emailid}[0];
