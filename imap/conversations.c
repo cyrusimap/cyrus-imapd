@@ -3466,16 +3466,65 @@ EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *sta
     return 0;
 }
 
+/* find if there's any non-expunged message with the same GUID and use its internaldate */
+static int find_internaldate_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct timespec *internaldate = (struct timespec *)rock;
+
+    // only full messages
+    if (rec->part) return 0;
+
+    // can only find timestamps on v4 or above
+    if (rec->version < 4) return 0;
+
+    // ignore expunged messages, we want to be able to destroy and recreate
+    // without waiting a week
+    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
+
+    // found a duplicate email; use its internaldate if it has one
+    struct timespec this;
+    TIMESPEC_FROM_NANOSEC(&this, rec->nano_internaldate);
+    if (!UTIME_SAFE_NSEC(this.tv_nsec)) return 0;
+
+    // always keep the highest internaldate; this matches the thread logic and also means that
+    // a reconstruct will fix all records to match the highest if we get out of sync
+    if (!UTIME_SAFE_NSEC(internaldate->tv_nsec) || TIMESPEC_TO_NANOSEC(internaldate) < rec->nano_internaldate)
+        *internaldate = this;
+
+    return 0;
+}
+
 EXPORTED void conversations_adjust_internaldate(struct conversations_state *cstate,
-                                                const char *my_guid,
+                                                struct message_guid *guid,
                                                 struct timespec *internaldate)
 {
+
+    if (!cstate) return;  // can't look up anything
+
+    char my_guid[2*MESSAGE_GUID_SIZE+1];
+    strcpy(my_guid, message_guid_encode(guid));
+    // is there an existing timestamp for this GUID?
+    struct timespec existing = { 0, 0 };
+    conversations_guid_foreach(cstate, my_guid, find_internaldate_cb, &existing);
+    if (UTIME_SAFE_NSEC(existing.tv_nsec)) {
+        *internaldate = existing;
+        return;
+    }
+
     struct buf jidrep = BUF_INITIALIZER;
     uint64_t count = 0;
+    char existing_guid[2*MESSAGE_GUID_SIZE+1];
 
     // check for a JMAPID (internaldate) clash, and adjust nanosec as needed
     do {
-        char existing_guid[2*MESSAGE_GUID_SIZE+1];
+        if (!UTIME_SAFE_NSEC(internaldate->tv_nsec)) {
+            // assign internaldate.nsec in a deterministic manner -
+            // use the first 29 bits of GUID
+            // (0x1FFFFFFF < 999999999 nanoseconds)
+            internaldate->tv_nsec = *((uint32_t *) guid->value) >> 3;
+            // and if THAT's no good, start at 1
+            if (!UTIME_SAFE_NSEC(internaldate->tv_nsec)) internaldate->tv_nsec = 1;
+        }
 
         buf_reset(&jidrep);
         NANOSEC_TO_JMAPID(&jidrep, TIMESPEC_TO_NANOSEC(internaldate));
@@ -3483,8 +3532,9 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
                                                     buf_cstring(&jidrep),
                                                     existing_guid);
         if (r || !strcmp(my_guid, existing_guid)) {
-            // JMAP ID doesn't exist or it references our GUID
-            break;
+            // nothing found or self, we're good
+            buf_free(&jidrep);
+            return;
         }
 
         xsyslog(LOG_INFO, "IOERROR: JMAPID conflict during append,"
@@ -3493,12 +3543,13 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
                 buf_cstring(&jidrep), my_guid, existing_guid);
 
         // try the next nanosecond */
-        internaldate->tv_nsec = (internaldate->tv_nsec + 1) % 1000000000;
+        internaldate->tv_nsec++;
 
         // in the unlikely event that we reach the limit below, we're screwed
-    } while (++count < 1000000000);
+    } while (++count < 1000);
 
-    buf_free(&jidrep);
+    // couldn't fine a valid ID in a thousand tries? something is badly wrong. 
+    abort();
 }
 
 EXPORTED int conversations_enable_compactids(struct conversations_state *state,
