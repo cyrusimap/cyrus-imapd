@@ -7912,6 +7912,13 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             record->internaldate = now;
         }
     }
+
+    if (mailbox->i.minor_version >= 20 && !(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        /* but regardless, obey the rules for v20 or above mailboxes! */
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        conversations_adjust_internaldate(cstate, &record->guid, &record->internaldate);
+    }
+
     if (!record->gmtime.tv_sec) {
         record->gmtime.tv_sec = record->internaldate.tv_sec;
         record->gmtime.tv_nsec = 0;
@@ -8084,6 +8091,12 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     /* copy the timestamp from the file if not calculated */
     if (!record.internaldate.tv_sec) {
         record.internaldate = sbuf.st_mtim;
+    }
+
+    if (mailbox->i.minor_version >= 20 && !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        /* but regardless, obey the rules for v20 or above mailboxes! */
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        conversations_adjust_internaldate(cstate, &record.guid, &record.internaldate);
     }
 
     if (uid > mailbox->i.last_uid) {
