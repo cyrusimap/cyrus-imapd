@@ -969,31 +969,60 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
                          JSON_DISABLE_EOF_CHECK, &jerr);
 
         const char *id = json_string_value(json_object_get(sub, "emailId"));
-        if (USER_COMPACT_EMAILIDS(req->cstate) &&
-            *id == JMAP_LEGACY_EMAILID_PREFIX) {
-            /* Rewrite to use nanosecond-based emailId */
-            uint64_t internaldate;
-            r = jmap_email_find(req, NULL, id, NULL, NULL, &internaldate);
+        if (USER_COMPACT_EMAILIDS(req->cstate)) {
+            if (*id == JMAP_LEGACY_EMAILID_PREFIX) {
+                /* Rewrite to use nanosecond-based emailId */
+                uint64_t internaldate;
+                r = jmap_email_find(req, NULL, id, NULL, NULL, &internaldate);
+                if (!r) {
+                    char emailid[JMAP_MAX_EMAILID_SIZE];
+                    jmap_set_emailid(req->cstate, NULL,
+                                     internaldate, NULL, emailid);
+                    json_object_set_new(sub, "emailId", json_string(emailid));
+                }
+
+                json_t *onsend = json_object_get(sub, "onSend");
+                if (onsend &&
+                    (id = json_string_value(json_object_get(onsend,
+                                                            "moveToMailboxId"))) &&
+                    *id != JMAP_MAILBOXID_PREFIX) {
+                    /* Rewrite to use createdmodseq-based mailboxId */
+                    mbentry_t *mbentry = NULL;
+                    mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+                    if (mbentry) {
+                        char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+                        jmap_set_mailboxid(req->cstate, mbentry, mboxid);
+                        json_object_set_new(onsend, "moveToMailboxId",
+                                            json_string(mboxid));
+                        mboxlist_entry_free(&mbentry);
+                    }
+                }
+            }
+        }
+        else if (*id == JMAP_EMAILID_PREFIX) {
+            /* Rewrite to use GUID-based emailId */
+            char guidrep[2*MESSAGE_GUID_SIZE+2] =
+                { JMAP_LEGACY_EMAILID_PREFIX, 0 };
+
+            r = conversations_jmapid_guidrep_lookup(req->cstate,
+                                                    id + 1, guidrep + 1);
             if (!r) {
-                char emailid[JMAP_MAX_EMAILID_SIZE];
-                jmap_set_emailid(req->cstate, NULL,
-                             internaldate, NULL, emailid);
-                json_object_set_new(sub, "emailId", json_string(emailid));
+                json_object_set_new(sub, "emailId",
+                                    json_pack("s%", guidrep,
+                                              JMAP_LEGACY_EMAILID_SIZE-1));
             }
 
             json_t *onsend = json_object_get(sub, "onSend");
             if (onsend &&
                 (id = json_string_value(json_object_get(onsend,
                                                         "moveToMailboxId"))) &&
-                *id != JMAP_MAILBOXID_PREFIX) {
-                /* Rewrite to use createdmodseq-based mailboxId */
+                *id == JMAP_MAILBOXID_PREFIX) {
+                /* Rewrite to use uniqueid-based mailboxId */
                 mbentry_t *mbentry = NULL;
-                mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+                mboxlist_lookup_by_jmapid(req->accountid, id, &mbentry, NULL);
                 if (mbentry) {
-                    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-                    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
                     json_object_set_new(onsend, "moveToMailboxId",
-                                        json_string(mboxid));
+                                        json_string(mbentry->uniqueid));
                     mboxlist_entry_free(&mbentry);
                 }
             }
