@@ -1904,9 +1904,9 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
 
     message_guid_copy(&thread->guid, guid);
     // these should always be the same for all copies of an email!
-    // but if not (e.g. IMAP append) we want the earliest non-zero value
-    if (!thread->nano_internaldate ||
-        thread->nano_internaldate > nano_internaldate)
+    // but if not (replacing a previously expunged email) then we want
+    // the most recent.
+    if (thread->nano_internaldate < nano_internaldate)
         thread->nano_internaldate = nano_internaldate;
     // the same email may exist multiple times in a folder or in multiple
     // folders with different createdmodseq.  We want to track the earliest
