@@ -367,15 +367,15 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     size_t msglen = buf_len(msg);
     FILE *f = NULL;
     int r;
-    struct timespec now, internaldate;
+    struct timespec internaldate = { holduntil, 0 };
+    struct timespec now;
 
     clock_gettime(CLOCK_REALTIME, &now);
-    internaldate.tv_nsec = now.tv_nsec;
 
     if (!holduntil) {
         /* Already sent */
         msglen = 0;
-        internaldate.tv_sec = now.tv_sec;
+        internaldate = now;
         strarray_append(&flags, "\\Answered");
         if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
             /* delete the EmailSubmission object immediately */
@@ -383,9 +383,6 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
             // this non-standard flag is magic and works on the append layer
             strarray_append(&flags, "\\Expunged");
         }
-    }
-    else {
-        internaldate.tv_sec = holduntil;
     }
 
     /* Prepare to stage the message */
@@ -450,7 +447,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
 
     /* Append the message to the mailbox */
     struct append_metadata meta = {
-        &internaldate, /*savedate */now.tv_sec, /*cmodseq*/ 0,
+        &internaldate, /*savedate */0, /*cmodseq*/ 0,
         &flags, /*annots*/ NULL, /*nolink*/ 0, /*replacing*/ { 0, NULL }
     };
     r = append_fromstage_full(&as, &body, stage, &meta);

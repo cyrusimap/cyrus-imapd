@@ -257,7 +257,8 @@ struct appendstage {
     struct stagemsg *stage;
     FILE *f;
     strarray_t flags;
-    struct timespec internaldate;
+    struct timespec *internaldate;
+    struct timespec ts;
     int binary;
     struct entryattlist *annotations;
 };
@@ -4373,9 +4374,6 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
         curstage = xzmalloc(sizeof(*curstage));
         ptrarray_push(&stages, curstage);
 
-        /* Initialize the internaldate to "now" */
-        clock_gettime(CLOCK_REALTIME, &curstage->internaldate);
-
         /* Set limit on the total number of bytes allowed for mailbox+append-opts */
         maxargssize_mark = prot_bytes_in(imapd_in) + (maxargssize - strlen(name));
 
@@ -4415,12 +4413,14 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
         /* Parse internaldate */
         if (c == '\"' && !arg.s[0]) {
             prot_ungetc(c, imapd_in);
-            c = getdatetime(&(curstage->internaldate.tv_sec));
+            c = getdatetime(&(curstage->ts.tv_sec));
             if (c != ' ') {
                 parseerr = "Invalid date-time in Append command";
                 r = IMAP_PROTOCOL_ERROR;
                 goto done;
             }
+            curstage->ts.tv_nsec = 0;
+            curstage->internaldate = &curstage->ts;
             c = getword(imapd_in, &arg);
         }
 
@@ -4585,7 +4585,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
             }
             if (!r) {
                 struct append_metadata meta = {
-                    &curstage->internaldate, /*savedate*/ 0, /*cmodseq*/ 0,
+                    curstage->internaldate, /*savedate*/ 0, /*cmodseq*/ 0,
                     &curstage->flags, &curstage->annotations, /*nolink*/ 0,
                     { replace_uid, replace_uid ? cur_name : NULL }
                 };

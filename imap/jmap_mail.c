@@ -14083,12 +14083,9 @@ gotrecord:
     }
 
     /* set receivedAt property */
-    struct timespec now, internaldate;
+    struct timespec internaldate = { 0, 0 };
     const char *received_at =
         json_string_value(json_object_get(jemail_import, "receivedAt"));
-
-    clock_gettime(CLOCK_REALTIME, &now);
-    internaldate.tv_nsec = now.tv_nsec;
 
     if (received_at) {
         time_from_iso8601(received_at, &internaldate.tv_sec);
@@ -14098,7 +14095,7 @@ gotrecord:
                                                               buf_len(&content));
     }
     if (!internaldate.tv_sec)
-        internaldate.tv_sec = now.tv_sec;
+        clock_gettime(CLOCK_REALTIME, &internaldate);
 
     // mailbox will be readonly, drop the lock so it can be make writable
     if (mbox) mailbox_unlock_index(mbox, NULL);
