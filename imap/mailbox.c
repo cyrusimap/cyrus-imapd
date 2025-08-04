@@ -3652,7 +3652,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
 
     switch (mailbox->i.minor_version) {
     case 20:
-        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+        if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
             buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
             crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);
             buf_reset(&buf);
@@ -5691,7 +5691,8 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             if (r) goto done;
         }
         if (mailbox->i.minor_version >= 20 && repack->newmailbox.i.minor_version < 20) {
-            if (record->internaldate.tv_nsec != UTIME_OMIT) {
+            /* store the nanosecond timestamp */
+            if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
                 buf_reset(&buf);
                 buf_printf(&buf, UINT64_FMT, record->internaldate.tv_nsec);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "internaldate.nsec", "", &buf);

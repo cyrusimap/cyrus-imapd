@@ -1464,7 +1464,7 @@ static void encode_annotations(struct dlist *parent,
 
     switch (mailbox->i.minor_version) {
     case 20:
-        if (record->internaldate.tv_nsec != UTIME_OMIT) {
+        if (UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
             if (!annots)
                 annots = dlist_newlist(parent, "ANNOTATIONS");
             aa = dlist_newkvlist(annots, NULL);

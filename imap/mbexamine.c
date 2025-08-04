@@ -312,7 +312,7 @@ static int do_examine(struct findall_data *data, void *rock)
                "   INT_DATE:" TIME_T_FMT,
                msgno, record->uid, record->internaldate.tv_sec);
         if (mailbox->i.minor_version >= 20 &&
-            record->internaldate.tv_nsec < UTIME_OMIT) {
+                UTIME_SAFE_NSEC(record->internaldate.tv_nsec)) {
             printf(UINT64_NANOSEC_FMT, record->internaldate.tv_nsec);
         }
         printf(" SENTDATE:" TIME_T_FMT
