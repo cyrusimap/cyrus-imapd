@@ -1503,6 +1503,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         uint32_t src_uid;
         uint32_t src_system_flags;
         uint32_t src_internal_flags;
+        struct timespec internaldate;
+        struct message_guid guid;
 
         if (prock) prock->cb(msg, msgrecs->count, prock);
 
@@ -1511,6 +1513,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         r = msgrecord_get_systemflags(src_msgrec, &src_system_flags);
         if (r) goto out;
         r = msgrecord_get_internalflags(src_msgrec, &src_internal_flags);
+        if (r) goto out;
+        r = msgrecord_get_internaldate(src_msgrec, &internaldate);
+        if (r) goto out;
+        r = msgrecord_get_guid(src_msgrec, &guid);
         if (r) goto out;
         /* read in existing cache record BEFORE we copy data, so that the
          * mmap will be up to date even if it's the same mailbox for source
@@ -1548,6 +1554,12 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         }
 
         r = msgrecord_set_cache_offset(dst_msgrec, 0);
+        if (r) goto out;
+
+        struct conversations_state *cstate = mailbox_get_cstate(as->mailbox);
+        conversations_adjust_internaldate(cstate, &guid, &internaldate);
+
+        r = msgrecord_set_internaldate(dst_msgrec, &internaldate);
         if (r) goto out;
 
         /* renumber the message into the new mailbox */

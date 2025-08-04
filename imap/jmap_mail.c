@@ -9270,8 +9270,6 @@ static void _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        jmap_set_emailid(req->cstate, &guid,
-                         0, internaldate, detail->email_id);
         jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
         munmap(addr, len);
@@ -9371,6 +9369,14 @@ static void _email_append(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
     jmap_set_threadid(req->cstate, cid, detail->thread_id);
+    struct message_guid guid;
+    struct timespec jinternaldate;
+    r = msgrecord_get_guid(mr, &guid);
+    if (r) goto done;
+    r = msgrecord_get_internaldate(mr, &jinternaldate);
+    if (r) goto done;
+    jmap_set_emailid(req->cstate, &guid,
+                     0, &jinternaldate, detail->email_id);
 
     /* Complete message creation */
     if (stage) {
@@ -13319,6 +13325,12 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                                                 json_true());
                         }
                     }
+                    if (update->received_at) {
+                        /* Write internaldate (Email/copy only) */
+                        struct timespec internaldate = { 0, 0 };
+                        time_from_iso8601(update->received_at, &internaldate.tv_sec);
+                        msgrecord_set_internaldate(mrw, &internaldate);
+                    }
                 }
             }
             int r = _copy_msgrecords(httpd_authstate, bulk->req->userid, &jmap_namespace,
@@ -13356,8 +13368,7 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 /* XXX append_copy should take new flags as parameter */
                 struct email_update *update = hash_lookup(src_uidrec->email_id,
                                                           &bulk->updates_by_email_id);
-                if (update->received_at ||  // Email/copy only
-                    update->keywords || update->full_keywords) {
+                if (update->keywords || update->full_keywords) {
                     ptrarray_append(&plan->setflags, new_uidrec);
                 }
 
@@ -13413,15 +13424,6 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             struct email_update *update = hash_lookup(email_id, &bulk->updates_by_email_id);
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
             int r = 0;
-
-            if (update->received_at) {
-                /* Write internaldate (Email/copy only) */
-                struct timespec now, internaldate;
-                clock_gettime(CLOCK_REALTIME, &now);
-                internaldate.tv_nsec = now.tv_nsec;
-                time_from_iso8601(update->received_at, &internaldate.tv_sec);
-                r = msgrecord_set_internaldate(mrw, &internaldate);
-            }
 
             /* Determine if to write the aggregated or updated JMAP keywords */
             json_t *keywords = uidrec->is_new ? update->full_keywords : update->keywords;
