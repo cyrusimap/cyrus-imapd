@@ -495,27 +495,26 @@ HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
     bv_clear(&parser->is_encoded, strarray_size(&parser->path));
 }
 
-HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
+EXPORTED const char* jmap_parser_path(struct jmap_parser *parser)
 {
     int i;
-    buf_reset(buf);
+    buf_reset(&parser->buf);
 
     for (i = 0; i < parser->path.count; i++) {
         const char *p = strarray_nth(&parser->path, i);
         if (!bv_isset(&parser->is_encoded, i) && jmap_pointer_needsencode(p)) {
             char *tmp = jmap_pointer_encode(p);
-            buf_appendcstr(buf, tmp);
+            buf_appendcstr(&parser->buf, tmp);
             free(tmp);
-        }
-        else {
-            buf_appendcstr(buf, p);
+        } else {
+            buf_appendcstr(&parser->buf, p);
         }
         if ((i + 1) < parser->path.count) {
-            buf_appendcstr(buf, "/");
+            buf_appendcstr(&parser->buf, "/");
         }
     }
 
-    return buf_cstring(buf);
+    return buf_cstring(&parser->buf);
 }
 
 HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
@@ -524,7 +523,7 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_push(parser, prop);
 
     json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
+            json_string(jmap_parser_path(parser)));
 
     if (prop)
         jmap_parser_pop(parser);
@@ -542,7 +541,7 @@ HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
         jmap_parser_push(parser, prop);
 
     json_object_set_new(parser->serverset,
-            jmap_parser_path(parser, &parser->buf), val);
+            jmap_parser_path(parser), val);
 
     if (prop)
         jmap_parser_pop(parser);

@@ -4585,7 +4585,6 @@ static void jsprops_to_ical(icalcomponent *comp,
                             struct jmap_parser *parser,
                             json_t *jsobj)
 {
-    struct buf buf = BUF_INITIALIZER;
     const char *pname;
     json_t *jval;
 
@@ -4598,7 +4597,7 @@ static void jsprops_to_ical(icalcomponent *comp,
         icalproperty *xprop = icalproperty_new(ICAL_X_PROPERTY);
         icalproperty_set_x_name(xprop, JMAPICAL_XPROP_JSPROP);
         icalproperty_set_xparam(xprop, JMAPICAL_XPARAM_JSPTR,
-                jmap_parser_path(parser, &buf), 1);
+                jmap_parser_path(parser), 1);
 
         char *textval = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
         icalproperty_set_value_from_string(xprop, textval, "TEXT");
@@ -4607,8 +4606,6 @@ static void jsprops_to_ical(icalcomponent *comp,
         icalcomponent_add_property(comp, xprop);
         jmap_parser_pop(parser);
     }
-
-    buf_free(&buf);
 }
 
 static void remove_jsprops(icalcomponent *comp, const char *path)
