@@ -1867,7 +1867,7 @@ static int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     if (!dlist_getguid(kr, "GUID", &tmpguid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    record->internaldate.tv_nsec = UTIME_OMIT;
+    record->internaldate.tv_nsec = 0;
     record->guid = *tmpguid;
 
     /* parse the flags */

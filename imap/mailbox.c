@@ -2129,7 +2129,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
        and rearranged fields so that these would fall on 8-byte boundaries */
     if (version < 20) {
         record->internaldate.tv_sec  = ntohl(*((bit32 *)(buf+PRE20_OFFSET_INTERNALDATE)));
-        record->internaldate.tv_nsec = UTIME_OMIT;
+        record->internaldate.tv_nsec = 0;
         record->sentdate.tv_sec = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SENTDATE)));
         record->size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_SIZE)));
         record->header_size = ntohl(*((bit32 *)(buf+PRE20_OFFSET_HEADER_SIZE)));
@@ -7814,7 +7814,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (re_parse) {
         /* set NULL in case parse finds a new value */
         record->internaldate.tv_sec  = 0;
-        record->internaldate.tv_nsec = UTIME_OMIT;
+        record->internaldate.tv_nsec = 0;
 
         r = message_parse(fname, record);
         if (r) goto out;
@@ -7912,8 +7912,10 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             record->internaldate = now;
         }
     }
-    if (!record->gmtime.tv_sec)
+    if (!record->gmtime.tv_sec) {
         record->gmtime.tv_sec = record->internaldate.tv_sec;
+        record->gmtime.tv_nsec = 0;
+    }
     if (!record->sentdate.tv_sec) {
         struct tm *tm = localtime(&record->internaldate.tv_sec);
         /* truncate to the day */
@@ -7921,6 +7923,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         tm->tm_min = 0;
         tm->tm_hour = 0;
         record->sentdate.tv_sec = mktime(tm);
+        record->sentdate.tv_nsec = 0;
     }
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */
