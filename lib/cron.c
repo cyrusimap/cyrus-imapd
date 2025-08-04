@@ -92,6 +92,37 @@ EXPORTED void cron_spec_from_timeval(struct cron_spec *result,
     }
 }
 
+EXPORTED bool cron_spec_matches(const struct cron_spec *spec,
+                                const struct cron_spec *current_time)
+{
+    bool min_hr_mon, day;
+
+    min_hr_mon = ((spec->minutes & current_time->minutes)
+                  && (spec->hours & current_time->hours)
+                  && (spec->months & current_time->months));
+
+    /* quoth crontab(5):
+     *   Note: The day of a command's execution can be specified by two
+     *   fields — day of month, and day of week. If both fields are
+     *   restricted (i.e., aren't *), the command will be run when either
+     *   field matches the current time. For example, ``30 4 1,15 * 5''
+     *   would cause a command to be run at 4:30 am on the 1st and 15th of
+     *   each month, plus every Friday.
+     */
+    if (spec->days_of_month == CRON_ALL_DAYS_OF_MONTH) {
+        day = (spec->days_of_week & current_time->days_of_week);
+    }
+    else if (spec->days_of_week == CRON_ALL_DAYS_OF_WEEK) {
+        day = (spec->days_of_month & current_time->days_of_month);
+    }
+    else {
+        day = ((spec->days_of_month & current_time->days_of_month)
+               || (spec->days_of_week & current_time->days_of_week));
+    }
+
+    return min_hr_mon && day;
+}
+
 #define BIT(n) (UINT64_C(1) << (n))
 static void dump_one(struct buf *buf,
                      const char *desc,
