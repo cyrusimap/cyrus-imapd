@@ -4586,8 +4586,7 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
             if (!r) {
                 struct append_metadata meta = {
                     curstage->internaldate, /*savedate*/ 0, /*cmodseq*/ 0,
-                    &curstage->flags, &curstage->annotations, /*nolink*/ 0,
-                    { replace_uid, replace_uid ? cur_name : NULL }
+                    &curstage->flags, &curstage->annotations, /*nolink*/ 0
                 };
                 r = append_fromstage_full(&appendstate, &body,
                                           curstage->stage, &meta);

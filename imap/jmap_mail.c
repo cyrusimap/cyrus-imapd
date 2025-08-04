@@ -9346,7 +9346,7 @@ static void _email_append(jmap_req_t *req,
     }
     struct append_metadata meta = {
         internaldate, savedate, /*cmodseq*/ 0, flags.count ? &flags : NULL,
-        &annots, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+        &annots, /*nolink*/ 0
     };
     r = append_fromstage_full(&as, &body, stage, &meta);
     freeentryatts(annots);

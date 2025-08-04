@@ -1230,7 +1230,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 {
     struct append_metadata meta = {
         internaldate, /*savedate*/ 0, createdmodseq,
-        flags, user_annotsp, !!nolink, /*replacing*/ { 0, NULL }
+        flags, user_annotsp, !!nolink
     };
 
     return append_fromstage_full(as, body, stage, &meta);

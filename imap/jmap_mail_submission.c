@@ -448,7 +448,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     /* Append the message to the mailbox */
     struct append_metadata meta = {
         &internaldate, /*savedate */0, /*cmodseq*/ 0,
-        &flags, /*annots*/ NULL, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+        &flags, /*annots*/ NULL, /*nolink*/ 0
     };
     r = append_fromstage_full(&as, &body, stage, &meta);
 
