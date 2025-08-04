@@ -45,6 +45,7 @@
 
 #include "lib/util.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define CRON_ALL_MINUTES       UINT64_C(0x0FFFFFFFFFFFFFFF)
@@ -67,5 +68,7 @@ extern int cron_parse_spec(const char *spec,
 extern void cron_spec_from_timeval(struct cron_spec *result,
                                    time_t *run_time,
                                    const struct timeval *timeval);
+extern bool cron_spec_matches(const struct cron_spec *spec,
+                              const struct cron_spec *current_time);
 extern void cron_spec_dump(struct buf *buf, const struct cron_spec *spec);
 #endif

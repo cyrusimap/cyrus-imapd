@@ -406,4 +406,55 @@ static void test_cron_spec_from_timeval(void)
     }
 }
 
+static void test_cron_spec_matches(void)
+{
+    const struct {
+        const char *spec_str;
+        struct cron_spec current_time;
+        bool expect_matches;
+    } tests[] = {
+        /* any time should match all asterisks */
+        { "* * * * *", CS_MOMENT(27, 11, 4, 8, 1), true },
+        /* 4am on 2nd of any month regardless of day-of-week */
+        { "0 4 2 * *", CS_MOMENT(0, 4, 2, 8, 6), true },
+        { "0 4 2 * *", CS_MOMENT(1, 4, 2, 8, 6), false },
+        { "0 4 2 * *", CS_MOMENT(0, 3, 2, 8, 6), false },
+        { "0 4 2 * *", CS_MOMENT(0, 4, 3, 8, 0), false },
+        { "0 4 2 * *", CS_MOMENT(0, 4, 2, 7, 3), true },
+        /* 4am on any day of august */
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 2, 8, 6), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 3, 8, 0), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 4, 8, 1), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 8, 2), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 7, 1), false },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 6, 4), false },
+        /* 4am on any friday regardless of day-of-month */
+        { "0 4 * * 5", CS_MOMENT(0, 4,  1, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4,  8, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 15, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 22, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 29, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 30, 8, 6), false },
+        /* 4am on any friday OR any 13th day-of-month */
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 17, 6, 2), false },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 20, 6, 5), true },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 13, 7, 0), true },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 13, 6, 5), true },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec spec = SENTINEL;
+        bool actual_matches;
+        int r;
+
+        r = cron_parse_spec(tests[i].spec_str, &spec, NULL);
+        CU_ASSERT_EQUAL(r, 0);
+
+        actual_matches = cron_spec_matches(&spec, &tests[i].current_time);
+        CU_ASSERT_EQUAL(actual_matches, tests[i].expect_matches);
+    }
+}
+
 /* vim: set ft=c: */
