@@ -1312,20 +1312,20 @@ EXPORTED void jmap_set_emailid(struct conversations_state *cstate,
                                uint64_t nanosec, struct timespec *ts,
                                char *emailid)
 {
-    // initialize a struct buf with char emailid[JMAP_MAX_EMAILID_SIZE]
-    struct buf buf = { emailid, 0, JMAP_MAX_EMAILID_SIZE, 0 };
+    // always zero out the entire emailid buffer
+    memset(emailid, 0, JMAP_MAX_EMAILID_SIZE);
 
     if (USER_COMPACT_EMAILIDS(cstate)) {
-        buf_putc(&buf, JMAP_EMAILID_PREFIX);
-        NANOSEC_TO_JMAPID(&buf, ts ? TIMESPEC_TO_NANOSEC(ts) : nanosec);
+        if (ts) nanosec = TIMESPEC_TO_NANOSEC(ts);
+        emailid[0] = JMAP_EMAILID_PREFIX;
+        struct buf buf = { emailid+1, 0, JMAP_MAX_EMAILID_SIZE-1, 0 };
+        NANOSEC_TO_JMAPID(&buf, nanosec);
     }
     else {
-        buf_putc(&buf, JMAP_LEGACY_EMAILID_PREFIX);
-        buf_appendmap(&buf,
-                      message_guid_encode(guid), JMAP_LEGACY_EMAILID_SIZE-2);
+        // guid encoding is longer, copy the first 24 bytes
+        emailid[0] = JMAP_LEGACY_EMAILID_PREFIX;
+        memcpy(emailid+1, message_guid_encode(guid), JMAP_LEGACY_EMAILID_SIZE-2);
     }
-
-    buf_cstring(&buf);
 }
 
 EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
