@@ -7651,8 +7651,7 @@ static int records_match(const char *mboxname,
     int match = 1;
     int userflags_dirty = 0;
 
-    if (old->internaldate.tv_sec  != new->internaldate.tv_sec ||
-        old->internaldate.tv_nsec != new->internaldate.tv_nsec) {
+    if (old->internaldate.tv_sec  != new->internaldate.tv_sec) {
         printf("%s uid %u mismatch: internaldate\n",
                mboxname, new->uid);
         match = 0;
@@ -7821,8 +7820,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
         /* unchanged, keep the old value */
         if (!record->internaldate.tv_sec) {
-            record->internaldate.tv_sec  = copy.internaldate.tv_sec;
-            record->internaldate.tv_nsec = copy.internaldate.tv_nsec;
+            record->internaldate = copy.internaldate;
         }
 
         /* it's not the same message! */
@@ -7905,14 +7903,12 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     /* get internaldate from the file if not set */
     if (!record->internaldate.tv_sec) {
         if (did_stat || stat(fname, &sbuf) != -1) {
-            record->internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
-            record->internaldate.tv_nsec = sbuf.st_mtim.tv_nsec;
+            record->internaldate = sbuf.st_mtim;
         }
         else {
             struct timespec now;
             clock_gettime(CLOCK_REALTIME, &now);
-            record->internaldate.tv_sec  = now.tv_sec;
-            record->internaldate.tv_nsec = now.tv_nsec;
+            record->internaldate = now;
         }
     }
     if (!record->gmtime.tv_sec)
@@ -8083,8 +8079,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
 
     /* copy the timestamp from the file if not calculated */
     if (!record.internaldate.tv_sec) {
-        record.internaldate.tv_sec  = sbuf.st_mtim.tv_sec;
-        record.internaldate.tv_nsec = sbuf.st_mtim.tv_nsec;
+        record.internaldate = sbuf.st_mtim;
     }
 
     if (uid > mailbox->i.last_uid) {

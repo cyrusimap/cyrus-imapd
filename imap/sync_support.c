@@ -2734,8 +2734,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.basecid = mrecord.basecid;
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
-            copy.internaldate.tv_sec  = mrecord.internaldate.tv_sec;
-            copy.internaldate.tv_nsec = mrecord.internaldate.tv_nsec;
+            copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
             copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;

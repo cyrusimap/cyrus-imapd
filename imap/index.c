@@ -5553,8 +5553,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 cur->sentdate = record.gmtime.tv_sec;
                 /* fall through */
             case SORT_ARRIVAL:
-                cur->internaldate.tv_sec  = record.internaldate.tv_sec;
-                cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
+                cur->internaldate = record.internaldate;
                 break;
             case SORT_FROM:
                 cur->from = get_localpart_addr(cacheitem_base(&record, CACHE_FROM));
@@ -5597,8 +5596,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
-                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
+                    cur->internaldate = record.internaldate;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
@@ -5624,8 +5622,7 @@ MsgData **index_msgdata_load(struct index_state *state,
 #endif
                 if (!cur->savedate) {
                     /* If not snoozed in mailboxId, we use receivedAt */
-                    cur->internaldate.tv_sec  = record.internaldate.tv_sec;
-                    cur->internaldate.tv_nsec = record.internaldate.tv_nsec;
+                    cur->internaldate = record.internaldate;
                 }
                 break;
             case LOAD_IDS:
