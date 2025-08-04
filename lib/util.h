@@ -171,6 +171,7 @@ extern const unsigned char convert_to_uppercase[256];
 }
 
 #define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
+        assert(nanosec);                                                    \
         uint64_t u64 = htonll(UINT64_MAX - (nanosec));                      \
         charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
 }
