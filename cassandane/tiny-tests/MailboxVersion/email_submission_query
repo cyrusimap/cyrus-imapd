@@ -1,0 +1,166 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_submission_query
+    :min_version_3_7 :needs_component_calalarmd :OldJMAPIds
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # created and onSend properties
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
+    my $res = $jmap->CallMethods([
+        [ 'Identity/get', {}, "R0" ],
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "Drafts",
+                    role => "drafts"
+                },
+                "2" => {
+                    name => "Scheduled",
+                    role => "scheduled"
+                },
+                "3" => {
+                    name => "Sent",
+                    role => "sent"
+                }
+            }
+         }, "R1"],
+    ]);
+
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $draftsid = $res->[1][1]{created}{"1"}{id};
+    my $schedid = $res->[1][1]{created}{"2"}{id};
+    my $sentid = $res->[1][1]{created}{"3"}{id};
+
+    # Loop twice, first time we create without compact ids and query with
+    # Second time we create with compactids and query without
+    for my $action (qw(enable disable)) {
+        xlog $self, "Create an Email";
+
+        $res = $jmap->CallMethods([
+            ['Email/set', {
+                create => {
+                    'm1' => {
+                        mailboxIds => {
+                            $draftsid => JSON::true,
+                        },
+                        keywords => {
+                            '$draft' => JSON::true,
+                        },
+                        from => [{
+                            name => '', email => 'cassandane@local'
+                        }],
+                        to => [{
+                            name => '', email => 'foo@local'
+                        }],
+                        subject => 'foo',
+                    },
+                },
+            }, 'R1'],
+        ]);
+
+        my $emailid1 = $res->[0][1]->{created}{m1}{id};
+        $self->assert_not_null($emailid1);
+
+        xlog $self, "Create an EmailSubmission";
+        $res = $jmap->CallMethods( [
+            [ 'EmailSubmission/set', {
+                create => {
+                    '1' => {
+                        identityId => $identityid,
+                        emailId  => $emailid1,
+                        envelope => {
+                            mailFrom => {
+                                email => 'from@localhost',
+                                parameters => {
+                                    "holdfor" => "30",
+                                }
+                            },
+                            rcptTo => [
+                                {
+                                    email => 'rcpt1@localhost',
+                                }],
+                        },
+                        onSend => {
+                            moveToMailboxId => $sentid,
+                            setKeywords => { '$Sent' => $JSON::true },
+                        }
+                    },
+                },
+                onSuccessUpdateEmail => {
+                    '#1' => {
+                        "mailboxIds/$draftsid" => JSON::null,
+                        "mailboxIds/$schedid" => $JSON::true,
+                        'keywords/$Draft' =>  JSON::null
+                    },
+                }
+            }, "R1" ],
+        ] );
+
+        my $msgsubid1 = $res->[0][1]->{created}{1}{id};
+        $self->assert_not_null($msgsubid1);
+
+        # Toggle compact ids, grab the latest EmailId, then EmailSubmission
+        # query for that
+        $action eq 'enable' ? $self->enable_compact_ids()
+                            : $self->disable_compact_ids();
+
+        $res = $jmap->CallMethods([
+            [ "Mailbox/query" => { filter => { role => "scheduled" } }, "A" ],
+        ]);
+
+        my $diff_schedid = $res->[0][1]{ids}[0];
+        $self->assert_not_null($diff_schedid);
+
+        $res = $jmap->CallMethods([
+            [ "Email/query" => { filter => { inMailbox => $diff_schedid } }, "A" ],
+        ]);
+
+        my $diff_emailid = $res->[0][1]{ids}[0];
+        $self->assert_not_null($diff_emailid);
+
+        $res = $jmap->CallMethods([
+            [ "EmailSubmission/query" => { filter => { emailIds => [ $diff_emailid ] } }, "A" ],
+        ]);
+
+        # We better get back an id
+        my $diff_submissionid = $res->[0][1]{ids}[0];
+        $self->assert_not_null($diff_submissionid);
+
+        $res = $jmap->CallMethods([
+            [ "Mailbox/query" => { filter => { role => "drafts" } }, "A" ],
+        ]);
+
+        my $diff_draftsid = $res->[0][1]{ids}[0];
+        $self->assert_not_null($diff_draftsid);
+
+        # Cancel it
+        $res = $jmap->CallMethods([[
+            "EmailSubmission/set" => {
+                update => {
+                    $diff_submissionid => {
+                        undoStatus => "canceled",
+                    },
+                },
+                onSuccessUpdateEmail => {
+                    $diff_submissionid => {
+                        'keywords/$Draft' => JSON::null,
+                        "mailboxIds/$diff_draftsid" => JSON::true,
+                        "mailboxIds/$diff_schedid" => $JSON::null,
+                    },
+                },
+            }, "A"
+        ]]);
+
+        $self->assert(exists $res->[0][1]{updated}{$diff_submissionid});
+        $self->assert(exists $res->[1][1]{updated}{$diff_emailid});
+
+    }
+}
