@@ -2717,9 +2717,12 @@ int twom_cursor_next(struct twom_cursor *cur,
 
     // have we left our prefix?
     if (cur->prefixlen) {
-        size_t keylen = KEYLEN(ptr);
+        const char *this = ptr;
+        if (TYPE(ptr) == DELETE)
+            this = safeptr(loc, ANCESTOR(ptr));
+        size_t keylen = KEYLEN(this);
         if (keylen < cur->prefixlen) return TWOM_DONE;
-        const char *key = KEYPTR(ptr);
+        const char *key = KEYPTR(this);
         if (txn->file->compar(key, cur->prefixlen, cur->prefix, cur->prefixlen))
             return TWOM_DONE;
     }
