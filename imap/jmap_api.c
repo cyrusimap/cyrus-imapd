@@ -769,10 +769,20 @@ HIDDEN int jmap_api(struct transaction_t *txn,
             continue;
         }
 
+        int readonly = !(mp->flags & JMAP_READ_WRITE);
+        int locktype = readonly ? LOCK_SHARED : LOCK_EXCLUSIVE;
+        user_nslock_t *user_nslock = NULL;
+        arg = json_object_get(args, "fromAccountId");
+        if (arg && arg != json_null()) {
+            user_nslock = user_nslock_lockdouble(accountid, json_string_value(arg), locktype);
+        }
+        else {
+            user_nslock = user_nslock_lock(accountid, locktype);
+        }
+
         struct conversations_state *cstate = NULL;
         if (mp->flags & JMAP_NEED_CSTATE) {
-            r = conversations_open_user(accountid,
-                                        !(mp->flags & JMAP_READ_WRITE), &cstate);
+            r = conversations_open_user(accountid, readonly, &cstate);
 
             if (r) {
                 txn->error.desc = error_message(r);
@@ -820,6 +830,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         account_inboxname = NULL;
         if (r) {
             conversations_abort(&req.cstate);
+            user_nslock_release(&user_nslock);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             jmap_finireq(&req);
@@ -844,12 +855,14 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
         if (r) {
             conversations_abort(&req.cstate);
+            user_nslock_release(&user_nslock);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
             json_decref(args);
             goto done;
         }
         conversations_commit(&req.cstate);
+        user_nslock_release(&user_nslock);
 
         // run any notification updates after conversations are released
         dav_run_notifications();
