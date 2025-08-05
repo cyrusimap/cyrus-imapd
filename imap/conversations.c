@@ -2550,14 +2550,16 @@ EXPORTED int conversations_nanosecfix_record(struct conversations_state *cstate,
     r = conversation_load(cstate, record->cid, &conv);
     if (r) return r;
 
-    conversation_update_thread(conv,
-                               &record->guid,
-                               TIMESPEC_TO_NANOSEC(&record->internaldate),
-                               record->createdmodseq,
-                               /*delta_exists*/0);
+    if (conv) {
+        conversation_update_thread(conv,
+                                   &record->guid,
+                                   TIMESPEC_TO_NANOSEC(&record->internaldate),
+                                   record->createdmodseq,
+                                   /*delta_exists*/0);
 
-    r = conversation_save(cstate, record->cid, conv);
-    conversation_free(conv);
+        r = conversation_save(cstate, record->cid, conv);
+        conversation_free(conv);
+    }
     return r;
 }
 
