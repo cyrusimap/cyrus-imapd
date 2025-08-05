@@ -5738,6 +5738,10 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 repack->crcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
                 repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
                 repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
+                repack->newmailbox.i.synccrcs.basic ^= crc_basic(&repack->newmailbox, &oldrecord);
+                repack->newmailbox.i.synccrcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
+                repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
+                repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
             }
 
             // update G & J records
