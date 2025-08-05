@@ -1892,7 +1892,9 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
     if (!thread) {
         if (delta_exists <= 0) return; // no thread and no count, skip
         thread = xzmalloc(sizeof(*thread));
+        message_guid_copy(&thread->guid, guid);
         *nextp = thread;
+        conv->flags |= CONV_ISDIRTY;
     }
     else if (thread->exists + delta_exists <= 0) {
         /* we're just removing the thread, this is always sort-safe */
@@ -1902,22 +1904,23 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
         return;
     }
 
-    message_guid_copy(&thread->guid, guid);
     // these should always be the same for all copies of an email!
     // but if not (replacing a previously expunged email) then we want
     // the most recent.
-    if (thread->nano_internaldate < nano_internaldate)
+    if (thread->nano_internaldate < nano_internaldate) {
         thread->nano_internaldate = nano_internaldate;
+        conv->flags |= CONV_ISDIRTY;
+    }
     // the same email may exist multiple times in a folder or in multiple
     // folders with different createdmodseq.  We want to track the earliest
     // one
-    if (!thread->createdmodseq || thread->createdmodseq > createdmodseq)
+    if (createdmodseq && (!thread->createdmodseq || thread->createdmodseq > createdmodseq)) {
         thread->createdmodseq = createdmodseq;
+        conv->flags |= CONV_ISDIRTY;
+    }
     _apply_delta(&thread->exists, delta_exists);
 
     conversations_thread_sort(conv);
-    // if we've sorted, it's probably dirty
-    conv->flags |= CONV_ISDIRTY;
 }
 
 EXPORTED void conversation_update_sender(conversation_t *conv,
