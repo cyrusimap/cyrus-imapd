@@ -140,6 +140,8 @@ struct twom_txn {
 };
 
 struct twom_cursor {
+    char *prefix;
+    size_t prefixlen;
     struct tm_loc loc;
     struct twom_txn *txn;
     unsigned alwaysyield:1;
@@ -2713,6 +2715,15 @@ int twom_cursor_next(struct twom_cursor *cur,
         if (!ptr) return TWOM_IOERROR;
     }
 
+    // have we left our prefix?
+    if (cur->prefixlen) {
+        size_t keylen = KEYLEN(ptr);
+        if (keylen < cur->prefixlen) return TWOM_DONE;
+        const char *key = KEYPTR(ptr);
+        if (txn->file->compar(key, cur->prefixlen, cur->prefix, cur->prefixlen))
+            return TWOM_DONE;
+    }
+
     // latest is a delete?  move along
     if (TYPE(ptr) == DELETE) goto again;
 
@@ -2774,6 +2785,7 @@ int twom_cursor_abort(struct twom_cursor **curp)
         cur->loc.file = NULL;
     }
     int r = twom_txn_abort(&cur->txn);
+    free(cur->prefix);
     free(cur);
     *curp = NULL;
     return r;
@@ -2787,6 +2799,7 @@ int twom_cursor_commit(struct twom_cursor **curp)
         cur->loc.file = NULL;
     }
     int r = twom_txn_commit(&cur->txn); // will call abort itself on error
+    free(cur->prefix);
     free(cur);
     *curp = NULL;
     return r;
@@ -2800,6 +2813,10 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
     struct twom_cursor *cur = (struct twom_cursor *)twom_zmalloc(sizeof(struct twom_cursor));
     cur->txn = txn;
     if (flags & TWOM_ALWAYSYIELD) cur->alwaysyield = 1;
+    if ((flags & TWOM_CURSOR_PREFIX) && prefix && prefixlen) {
+        cur->prefix = strdup(prefix);
+        cur->prefixlen = prefixlen;
+    }
 
     int r = find_loc(cur->txn, &cur->loc, prefix, prefixlen);
     if (r) goto done;
@@ -2831,6 +2848,7 @@ void twom_cursor_fini(struct twom_cursor **curp)
         cur->loc.file->refcount--;
         cur->loc.file = NULL;
     }
+    free(cur->prefix);
     free(cur);
     *curp = NULL;
     return;
@@ -2861,16 +2879,10 @@ int twom_txn_foreach(struct twom_txn *txn,
     assert(cb);
     if (prefixlen) assert(prefix);
 
-    r = twom_txn_begin_cursor(txn, prefix, prefixlen, &cur, flags);
+    r = twom_txn_begin_cursor(txn, prefix, prefixlen, &cur, flags | TWOM_CURSOR_PREFIX);
     if (r) goto done;
 
     while ((r = twom_cursor_next(cur, &key, &keylen, &data, &datalen)) == 0) {
-        /* does it match prefix? */
-        if (prefixlen) {
-            if (keylen < prefixlen) break;
-            if (txn->file->compar(key, prefixlen, prefix, prefixlen)) break;
-        }
-
         if ((!goodp || goodp(rock, key, keylen, data, datalen))) {
             /* make callback */
             cb_r = cb(rock, key, keylen, data, datalen);
