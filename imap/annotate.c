@@ -599,6 +599,15 @@ out:
     return r;
 }
 
+EXPORTED int annotate_anydb_islocked()
+{
+    struct annotate_db *d;
+    for (d = all_dbs_head ; d ; d = d->next) {
+        if (d->in_txn) return 1;
+    }
+    return 0;
+}
+
 static int _annotate_getdb(const char *mboxid,
                            const struct mailbox *mailbox,
                            unsigned int uid,

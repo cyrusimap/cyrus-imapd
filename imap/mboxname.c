@@ -324,14 +324,6 @@ EXPORTED int mboxname_islocked(const char *mboxname)
     return lockitem->l.locktype;
 }
 
-EXPORTED struct mboxlock *mboxname_usernamespacelock_full(const char *mboxname, int locktype)
-{
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    struct mboxlock *lock = user_namespacelock_full(mbname_userid(mbname), locktype);
-    mbname_free(&mbname);
-    return lock;
-}
-
 /******************** mbname stuff **********************/
 
 static void _mbdirty(mbname_t *mbname)

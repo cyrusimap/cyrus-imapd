@@ -15,7 +15,7 @@ sub test_sieve_get
 require ["fileinto"];\r
 fileinto "$target";\r
 EOF
-    $self->{instance}->install_sieve_script($script);
+    $self->{instance}->install_sieve_script($script, upgrade => 1);
 
     xlog "get all scripts";
     my $res = $jmap->CallMethods([

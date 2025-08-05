@@ -2520,7 +2520,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     if (!createsievefolder) return IMAP_MAILBOX_NONEXISTENT;
 
     // lock the namespace and check again before trying to create
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(internalname);
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
     // did we lose the race?
     r = mboxlist_lookup(internalname, 0, 0);
@@ -2567,7 +2567,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     free(parent);
 
 done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     return r;
 }
 

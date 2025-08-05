@@ -2915,9 +2915,9 @@ static int sync_apply_mailbox(struct dlist *kin,
         newmbentry->foldermodseq = highestmodseq;
         newmbentry->createdmodseq = createdmodseq;
 
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+        user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
         r = mboxlist_update_full(newmbentry, /*localonly*/1, /*silent*/1);
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
 
         mboxlist_entry_free(&newmbentry);
 
@@ -2968,14 +2968,7 @@ static int sync_apply_mailbox(struct dlist *kin,
 
     options = sync_parse_options(options_str);
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
-    if (!namespacelock) {
-        r = IMAP_MAILBOX_LOCKED;
-        xsyslog(LOG_ERR, "IOERROR: failed to usernamespacelock",
-                         "mailbox=<%s> uniqueid=<%s>",
-                         mboxname, uniqueid);
-        goto done;
-    }
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -3365,7 +3358,7 @@ done:
     if (!r) mailbox_commit(mailbox);
 
     mailbox_close(&mailbox);
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     return r;
 }
@@ -3944,7 +3937,7 @@ static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
     /* Delete with admin privileges */
     int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
@@ -3954,7 +3947,7 @@ static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
                                    sstate->userid, sstate->authstate,
                                    NULL, delflags);
 
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     return r;
 }
@@ -3978,21 +3971,10 @@ static int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     /* optional */
     dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
 
-    struct mboxlock *oldlock = NULL;
-    struct mboxlock *newlock = NULL;
+    user_nslock_t *user_nslock = user_nslock_bymboxname(oldmboxname, newmboxname, LOCK_EXCLUSIVE);
+
     mbentry_t *olddestmbentry = NULL;
     mbentry_t *newdestmbentry = NULL;
-
-    /* make sure we grab these locks in a stable order! */
-    if (strcmpsafe(oldmboxname, newmboxname) < 0) {
-        oldlock = mboxname_usernamespacelock(oldmboxname);
-        newlock = mboxname_usernamespacelock(newmboxname);
-    }
-    else {
-        // doesn't hurt to double lock, it's refcounted
-        newlock = mboxname_usernamespacelock(newmboxname);
-        oldlock = mboxname_usernamespacelock(oldmboxname);
-    }
 
     r = mboxlist_lookup_allow_all(oldmboxname, &mbentry, 0);
     if (r) goto done;
@@ -4058,8 +4040,7 @@ done:
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&olddestmbentry);
     mboxlist_entry_free(&newdestmbentry);
-    mboxname_release(&oldlock);
-    mboxname_release(&newlock);
+    user_nslock_release(&user_nslock);
 
     return r;
 }
@@ -4318,7 +4299,7 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         return 0;
     }
 
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
     /* Nuke subscriptions */
     /* ignore failures here - the subs file gets deleted soon anyway */
@@ -4358,7 +4339,7 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     }
 
  done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     mboxlist_entry_free(&mbentry);
     strarray_free(list);
 
@@ -4658,7 +4639,7 @@ static int sync_restore_mailbox(struct dlist *kin,
             uidvalidity = 0;
         }
 
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+        user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
         // try again under lock
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -4687,7 +4668,7 @@ static int sync_restore_mailbox(struct dlist *kin,
                 __func__, mboxname, error_message(r));
             is_new_mailbox = 1;
         }
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
     }
     if (r) {
         syslog(LOG_ERR, "Failed to open mailbox %s to restore: %s",

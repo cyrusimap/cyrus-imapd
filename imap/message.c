@@ -3574,7 +3574,7 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     int r = mailbox_open_iwl(mboxname, mailboxptr);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
     // try again - maybe we lost the race!
     r = mailbox_open_iwl(mboxname, mailboxptr);
@@ -3590,7 +3590,7 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
                                    0/*flags*/, mailboxptr);
     }
 
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     return r;
 }

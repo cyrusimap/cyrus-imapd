@@ -293,6 +293,10 @@ void annotate_done(void);
 int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
+// An API to check if any annotation database is locked, for consistency
+// and safety checks
+int annotate_anydb_islocked();
+
 /* Maybe this isn't the right place - move later */
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);

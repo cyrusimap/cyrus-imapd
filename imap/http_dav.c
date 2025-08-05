@@ -4426,7 +4426,9 @@ static int dav_move_collection(struct transaction_t *txn,
         }
     }
 
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(newmailboxname);
+    user_nslock_t *user_nslock = user_nslock_bymboxname(oldmailboxname,
+                                                        newmailboxname,
+                                                        LOCK_EXCLUSIVE);
 
     r = mboxlist_createmailboxcheck(newmailboxname, 0, NULL, httpd_userisadmin,
                                     httpd_userid, httpd_authstate,
@@ -4495,7 +4497,7 @@ static int dav_move_collection(struct transaction_t *txn,
         buf_free(&mrock.newname);
 
         if (mrock.root) {
-            mboxname_release(&namespacelock);
+            user_nslock_release(&user_nslock);
             sync_checkpoint(txn->conn->pin);
             xml_response(HTTP_MULTI_STATUS, txn, mrock.root->doc);
             xmlFreeDoc(mrock.root->doc);
@@ -4504,7 +4506,7 @@ static int dav_move_collection(struct transaction_t *txn,
     }
 
   done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     switch (r) {
     case 0:
         sync_checkpoint(txn->conn->pin);
@@ -4922,11 +4924,11 @@ static int meth_delete_collection(struct transaction_t *txn,
     /* if FastMail sharing, we need to remove ACLs */
     if (config_getswitch(IMAPOPT_FASTMAILSHARING) &&
         !mboxname_userownsmailbox(httpd_userid, txn->req_tgt.mbentry->name)) {
-        struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
+        user_nslock_t *user_nslock = user_nslock_lockmb_w(txn->req_tgt.mbentry->name);
         r = mboxlist_setacl(&httpd_namespace, txn->req_tgt.mbentry->name,
                             httpd_userid, /*rights*/NULL, /*isadmin*/1,
                             httpd_userid, httpd_authstate);
-        mboxname_release(&namespacelock);
+        user_nslock_release(&user_nslock);
         if (r) {
             syslog(LOG_ERR, "meth_delete(%s) failed to remove acl: %s",
                    txn->req_tgt.mbentry->name, error_message(r));
@@ -5082,7 +5084,7 @@ static int meth_delete_collection(struct transaction_t *txn,
     mailbox_close(&mailbox);
 
     mbname_t *mbname = mbname_from_intname(txn->req_tgt.mbentry->name);
-    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
+    user_nslock_t *user_nslock = user_nslock_lock_w(mbname_userid(mbname));
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
     if (mboxlist_delayed_delete_isenabled()) {
@@ -5106,7 +5108,7 @@ static int meth_delete_collection(struct transaction_t *txn,
     else mboxevent_notify(&mboxevent);
 
     mboxevent_free(&mboxevent);
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     mbname_free(&mbname);
 
   done:
@@ -5728,7 +5730,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     char *partition = NULL;
     struct proppatch_ctx pctx;
     struct mailbox *mailbox = NULL;
-    struct mboxlock *namespacelock = NULL;
+    user_nslock_t *user_nslock = NULL;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -5815,7 +5817,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         instr = root->children;
     }
 
-    namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
+    user_nslock = user_nslock_lockmb_w(txn->req_tgt.mbentry->name);
 
     /* Create the mailbox */
     mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -5835,7 +5837,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         if (!root) {
             ret = HTTP_SERVER_ERROR;
             txn->error.desc = "Unable to create XML response";
-            mboxname_release(&namespacelock);
+            user_nslock_release(&user_nslock);
             goto done;
         }
 
@@ -5872,7 +5874,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
                 xml_response(r, txn, outdoc);
             }
 
-            mboxname_release(&namespacelock);
+            user_nslock_release(&user_nslock);
             goto done;
         }
     }
@@ -5898,7 +5900,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
   done:
     buf_free(&pctx.buf);
     mailbox_close(&mailbox);
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
 
     sync_checkpoint(txn->conn->pin);
 

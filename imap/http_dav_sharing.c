@@ -378,7 +378,7 @@ int dav_lookup_notify_collection(const char *userid, mbentry_t **mbentryp)
 static int _create_notify_collection(const char *userid, mbentry_t **mbentryp) 
 {
     /* lock the namespace lock and try again */
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
     int r = dav_lookup_notify_collection(userid, mbentryp);
 
@@ -401,7 +401,7 @@ static int _create_notify_collection(const char *userid, mbentry_t **mbentryp)
     }
 
  done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     return r;
 }
 
@@ -1994,7 +1994,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     }
 
     /* Local mailbox */
-    struct mboxlock *namespacelock = mboxname_usernamespacelock(txn->req_tgt.mbentry->name);
+    user_nslock_t *user_nslock = user_nslock_lockmb_w(txn->req_tgt.mbentry->name);
 
     /* Read body */
     ret = parse_xml_body(txn, &root, DAVSHARING_CONTENT_TYPE);
@@ -2164,7 +2164,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
     buf_free(&resource);
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     dav_run_notifications();
 
     return ret;

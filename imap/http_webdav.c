@@ -332,12 +332,12 @@ static int my_webdav_auth(const char *userid)
     }
 
     /* Auto-provision toplevel DAV drive collection for 'userid' */
-    struct mboxlock *namespacelock = NULL;
+    user_nslock_t *user_nslock = NULL;
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        namespacelock = user_namespacelock(userid);
+        user_nslock = user_nslock_lock_w(userid);
         // did we lose the race?  Nothing to do!
         r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
@@ -385,7 +385,7 @@ static int my_webdav_auth(const char *userid)
     }
 
  done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     mbname_free(&mbname);
     return r;
 }

@@ -326,14 +326,6 @@ static int ensure_submission_collection(const char *accountid,
         return 0;
     }
 
-    // otherwise, clean up ready for next attempt
-    mboxlist_entry_free(&mbentry);
-
-    struct mboxlock *namespacelock = user_namespacelock(accountid);
-
-    // did we lose the race?
-    r = lookup_submission_collection(accountid, &mbentry);
-
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (created) *created = 1;
 
@@ -356,7 +348,6 @@ static int ensure_submission_collection(const char *accountid,
     }
 
  done:
-    mboxname_release(&namespacelock);
     if (mbentryp && !r) *mbentryp = mbentry;
     else mboxlist_entry_free(&mbentry);
     return r;
