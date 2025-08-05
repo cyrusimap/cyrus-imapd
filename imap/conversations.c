@@ -2439,7 +2439,9 @@ static int conversations_set_guid(struct conversations_state *state,
     buf_printf(&item, "%d:%u", folder, record->uid);
     const char *base = buf_cstring(&item);
 
-    const char *guidrep = message_guid_encode(&record->guid);
+    char guidrep[MESSAGE_GUID_SIZE*2+1];
+    guidrep[MESSAGE_GUID_SIZE*2] = '\0';
+    memcpy(guidrep, message_guid_encode(&record->guid), MESSAGE_GUID_SIZE*2);
     uint64_t nano_internaldate = TIMESPEC_TO_NANOSEC(&record->internaldate);
     r = conversations_guid_setitem(state, guidrep,
                                    base, record->cid, record->basecid,
@@ -2455,7 +2457,7 @@ static int conversations_set_guid(struct conversations_state *state,
         NANOSEC_TO_JMAPID(&key, nano_internaldate);
 
         /* Do we have an existing toplevel G record? */
-        if (!conversations_guid_cid_lookup(state, guidrep, NULL)) {
+        if (!add && !conversations_guid_cid_lookup(state, guidrep, NULL)) {
             /* Remove J record */
             r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key),
                                &state->txn, /*force*/1);
