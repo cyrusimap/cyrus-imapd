@@ -772,12 +772,14 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         int readonly = !(mp->flags & JMAP_READ_WRITE);
         int locktype = readonly ? LOCK_SHARED : LOCK_EXCLUSIVE;
         user_nslock_t *user_nslock = NULL;
-        arg = json_object_get(args, "fromAccountId");
-        if (arg && arg != json_null()) {
-            user_nslock = user_nslock_lockdouble(accountid, json_string_value(arg), locktype);
-        }
-        else {
-            user_nslock = user_nslock_lock(accountid, locktype);
+        if (!(mp->flags & JMAP_NO_USERLOCK)) {
+            arg = json_object_get(args, "fromAccountId");
+            if (arg && arg != json_null()) {
+                user_nslock = user_nslock_lockdouble(accountid, json_string_value(arg), locktype);
+            }
+            else {
+                user_nslock = user_nslock_lock(accountid, locktype);
+            }
         }
 
         struct conversations_state *cstate = NULL;

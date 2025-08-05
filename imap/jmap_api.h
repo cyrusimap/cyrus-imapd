@@ -220,6 +220,7 @@ enum jmap_method_flags {
     JMAP_READ_WRITE  = (1 << 0),  /* user can change state with this method */
     JMAP_NEED_CSTATE = (1 << 1),  /* conv.db is required for this method
                                      (lock type determined by r/w flag) */
+    JMAP_NO_USERLOCK = (1 << 2)   /* action touches many users, it will do its own locking */
 };
 
 typedef struct {
