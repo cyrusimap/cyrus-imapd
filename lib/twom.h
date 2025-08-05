@@ -54,6 +54,7 @@ enum twom_flagspec {
     TWOM_FETCHNEXT       = 1<<13,   /* Return the record AFTER the given key */
     TWOM_SKIPROOT        = 1<<14,   /* For foreach or cursor, skip the first record if it matches exactly */
     TWOM_MVCC            = 1<<15,   /* For cursor or transaction, operate in serializable isolation (MVCC) mode */
+    TWOM_CURSOR_PREFIX   = 1<<16,   /* For cursor or transaction, only iterate inside the prefix */
 
     TWOM_CSUM_NULL       = 1<<27,   /* use the NULL checksum when creating or repacking database */
     TWOM_CSUM_XXH64      = 1<<28,   /* use the XXH64 checksum algorithm when creating or repacking */
