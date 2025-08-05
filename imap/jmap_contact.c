@@ -181,7 +181,7 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         "ContactCard/copy",
         JMAP_URN_CONTACTS,
         &jmap_card_copy,
-        JMAP_READ_WRITE // need to do lock ordering before opening conversations
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     {
         "ContactCard/parse",
@@ -248,7 +248,7 @@ static jmap_method_t jmap_contact_methods_nonstandard[] = {
         "Contact/copy",
         JMAP_CONTACTS_EXTENSION,
         &jmap_contact_copy,
-        JMAP_READ_WRITE // can't open conversations until we get locks ordered
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -4736,10 +4736,6 @@ static int _contacts_copy(struct jmap_req *req,
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
     json_t *destroy_cards = json_array();
-    struct mboxlock *srcnamespacelock = NULL;
-    struct mboxlock *dstnamespacelock = NULL;
-    char *srcinbox = NULL;
-    char *dstinbox = NULL;
 
     /* Parse request */
     jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
@@ -4748,20 +4744,11 @@ static int _contacts_copy(struct jmap_req *req,
         goto done;
     }
 
-    srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
-    dstinbox = mboxname_user_mbox(req->accountid, NULL);
-    if (strcmp(srcinbox, dstinbox) < 0) {
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-    }
-    else {
-        dstnamespacelock = mboxname_usernamespacelock(dstinbox);
-        srcnamespacelock = mboxname_usernamespacelock(srcinbox);
-    }
-
     if (copy.if_from_in_state) {
         struct mboxname_counters counters;
+        char *srcinbox = mboxname_user_mbox(copy.from_account_id, NULL);
         assert (!mboxname_read_counters(srcinbox, &counters));
+        free(srcinbox);
         if (atomodseq_t(copy.if_from_in_state) != counters.carddavmodseq) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
@@ -4777,15 +4764,6 @@ static int _contacts_copy(struct jmap_req *req,
     }
     else {
         copy.old_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
-    }
-
-    // now we can open the cstate
-    int r = conversations_open_user(req->accountid, 0, &req->cstate);
-    if (r) {
-        syslog(LOG_ERR, "jmap_email_copy: can't open converstaions: %s",
-                        error_message(r));
-        jmap_error(req, jmap_server_error(r));
-        goto done;
     }
 
     src_db = carddav_open_userid(copy.from_account_id);
@@ -4839,12 +4817,8 @@ static int _contacts_copy(struct jmap_req *req,
 done:
     json_decref(destroy_cards);
     if (src_db) carddav_close(src_db);
-    mboxname_release(&srcnamespacelock);
-    mboxname_release(&dstnamespacelock);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
-    free(srcinbox);
-    free(dstinbox);
     return 0;
 }
 
@@ -5707,7 +5681,6 @@ static int setaddressbooks_parse_args(jmap_req_t *req __attribute__((unused)),
 
 static int jmap_addressbook_set(struct jmap_req *req)
 {
-    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
     int on_destroy_remove_contents = 0;
@@ -5816,7 +5789,6 @@ static int jmap_addressbook_set(struct jmap_req *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    mboxname_release(&namespacelock);
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;

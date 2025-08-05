@@ -170,7 +170,6 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
     char *calhomename = caldav_mboxname(userid, NULL);
     struct caldav_db *caldavdb = NULL;
     struct conversations_state *cstate = NULL;
-    struct mboxlock *namespacelock = NULL;
     strarray_t sched_addrs = STRARRAY_INITIALIZER;
 
     int r = conversations_open_user(userid, 0, &cstate);
@@ -181,15 +180,6 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
                 error_message(r));
         json_object_set_new(err, "description",
                 json_string(buf_cstring(&rock->buf)));
-        json_object_set_new(rock->not_rewritten, userid, err);
-        goto done;
-    }
-
-    namespacelock = user_namespacelock(userid);
-    if (!namespacelock) {
-        json_t *err = jmap_server_error(IMAP_INTERNAL);
-        json_object_set_new(err, "description",
-                json_string("can not lock namespace"));
         json_object_set_new(rock->not_rewritten, userid, err);
         goto done;
     }
@@ -323,7 +313,6 @@ done:
     buf_free(&rock->buf);
 
     if (caldavdb) caldav_close(caldavdb);
-    mboxname_release(&namespacelock);
     conversations_commit(&cstate);
     strarray_fini(&sched_addrs);
     free(calhomename);
