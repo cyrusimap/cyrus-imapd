@@ -350,6 +350,10 @@ extern int conversation_store(struct conversations_state *state,
  * consistency rules (e.g. the conversation's modseq is the
  * maximum of all the per-folder modseqs).  Sets CONV_DIRTY
  * if any data actually changed.  */
+extern int conversations_nanosecfix_record(struct conversations_state *cstate,
+                                           struct mailbox *mailbox,
+                                           struct index_record *record,
+                                           int fixthread);
 extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
                                        const struct index_record *old,

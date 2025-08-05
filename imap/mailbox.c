@@ -5728,19 +5728,20 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 trecord->internal_flags = copyrecord.internal_flags;
                 ptrarray_append(records, trecord);
             }
+            int dirty = oldrecord.internaldate.tv_sec != copyrecord.internaldate.tv_sec
+                     || oldrecord.internaldate.tv_nsec != copyrecord.internaldate.tv_nsec;
 
-            // update the CRCs
-            repack->crcs.basic ^= crc_basic(&repack->newmailbox, &oldrecord);
-            repack->crcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
-            repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
-            repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
-
-            // preload cache so we don't load it on newmailbox
-            r = mailbox_cacherecord(mailbox, &copyrecord);
-            if (r) goto done;
+            if (dirty) {
+                // update the CRCs
+                syslog(LOG_NOTICE, "updating internaldate CRCs for %s:%u", mailbox_name(mailbox), copyrecord.uid);
+                repack->crcs.basic ^= crc_basic(&repack->newmailbox, &oldrecord);
+                repack->crcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
+                repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
+                repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
+            }
 
             // update G & J records
-            r = mailbox_update_conversations(&repack->newmailbox, &oldrecord, &copyrecord);
+            r = conversations_nanosecfix_record(cstate, mailbox, &copyrecord, dirty);
             if (r) goto done;
 
             buf_reset(&buf);

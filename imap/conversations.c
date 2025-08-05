@@ -2533,6 +2533,29 @@ EXPORTED void emailcounts_fini(struct emailcounts *ecounts)
     *ecounts = init;
 }
 
+EXPORTED int conversations_nanosecfix_record(struct conversations_state *cstate,
+                                             struct mailbox *mailbox,
+                                             struct index_record *record,
+                                             int fixthread)
+{
+    int r = conversations_set_guid(cstate, mailbox, record, /*add*/1);
+    if (r) return r;
+    if (!fixthread) return 0;
+    conversation_t *conv = NULL;
+    r = conversation_load(cstate, record->cid, &conv);
+    if (r) return r;
+
+    conversation_update_thread(conv,
+                               &record->guid,
+                               TIMESPEC_TO_NANOSEC(&record->internaldate),
+                               record->createdmodseq,
+                               /*delta_exists*/0);
+
+    r = conversation_save(cstate, record->cid, conv);
+    conversation_free(conv);
+    return r;
+}
+
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
