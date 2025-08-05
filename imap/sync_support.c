@@ -567,7 +567,7 @@ struct sync_msgid_list *sync_reserve_partlist(struct sync_reserve_list *l,
     struct sync_reserve *item;
 
     for (item = l->head; item; item = item->next) {
-        if (!strcmp(item->part, part))
+        if (!strcmpsafe(item->part, part))
             return item->list;
     }
 
@@ -675,7 +675,7 @@ struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
     struct sync_folder *p;
 
     for (p = l->head; p; p = p->next) {
-        if (!strcmp(p->uniqueid, uniqueid))
+        if (!strcmpsafe(p->uniqueid, uniqueid))
             return p;
     }
     return NULL;
@@ -687,7 +687,7 @@ static const struct sync_folder *sync_folder_lookup_byname(struct sync_folder_li
     struct sync_folder *p;
 
     for (p = l->head; p; p = p->next) {
-        if (!strcmp(p->name, name))
+        if (!strcmpsafe(p->name, name))
             return p;
     }
     return NULL;
@@ -769,7 +769,7 @@ static struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
     struct sync_rename *p;
 
     for (p = l->head; p; p = p->next) {
-        if (!strcmp(p->oldname, oldname))
+        if (!strcmpsafe(p->oldname, oldname))
             return p;
     }
 
@@ -833,7 +833,7 @@ static struct sync_quota *sync_quota_lookup(struct sync_quota_list *l,
     struct sync_quota *p;
 
     for (p = l->head; p; p = p->next) {
-        if (!strcmp(p->root, name))
+        if (!strcmpsafe(p->root, name))
             return p;
     }
 
@@ -943,7 +943,7 @@ static struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const cha
     struct sync_sieve *p;
 
     for (p = l->head; p; p = p->next) {
-        if (!strcmp(p->name, name))
+        if (!strcmpsafe(p->name, name))
             return p;
     }
 
@@ -1150,7 +1150,7 @@ static struct sync_name *sync_name_lookup(struct sync_name_list *l,
     struct sync_name *p;
 
     for (p = l->head; p; p = p->next)
-        if (!strcmp(p->name, name))
+        if (!strcmpsafe(p->name, name))
             return p;
 
     return NULL;
@@ -1209,7 +1209,7 @@ static struct sync_seen *sync_seen_list_lookup(struct sync_seen_list *l,
     struct sync_seen *p;
 
     for (p = l->head; p; p = p->next)
-        if (!strcmp(p->uniqueid, uniqueid))
+        if (!strcmpsafe(p->uniqueid, uniqueid))
             return p;
 
     return NULL;
@@ -1347,8 +1347,8 @@ static void sync_action_list_add(struct sync_action_list *l,
     if (!name && !user) return;
 
     for (current = l->head ; current ; current = current->next) {
-        if ((!name || (current->name && !strcmp(current->name, name))) &&
-            (!user || (current->user && !strcmp(current->user, user)))) {
+        if ((!name || (current->name && !strcmpsafe(current->name, name))) &&
+            (!user || (current->user && !strcmpsafe(current->user, user)))) {
             current->active = 1;  /* Make sure active */
             return;
         } else {
@@ -1552,7 +1552,7 @@ static int decode_annotations(/*const*/struct dlist *annots,
     modseq_t modseq;
 
     *salp = NULL;
-    if (strcmp(annots->name, "ANNOTATIONS"))
+    if (strcmpsafe(annots->name, "ANNOTATIONS"))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     for (aa = annots->head ; aa ; aa = aa->next) {
@@ -2571,7 +2571,7 @@ static int sync_apply_reserve(struct dlist *kl,
         if (!part_list->toupload) break;
         if (mboxlist_lookup(folder->name, &mbentry, 0))
             continue;
-        if (strcmp(mbentry->partition, partition)) {
+        if (strcmpsafe(mbentry->partition, partition)) {
             mboxlist_entry_free(&mbentry);
             continue; /* try folders on the same partition first! */
         }
@@ -3042,7 +3042,7 @@ static int sync_apply_mailbox(struct dlist *kin,
 #endif
     }
 
-    if (!r && strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
+    if (!r && strcmpsafe(mailbox_uniqueid(mailbox), uniqueid)) {
         if (opt_force || mailbox->i.last_uid == 0) {
             xsyslog(LOG_NOTICE, "SYNCNOTICE: mailbox uniqueid changed - replacing",
                                 "mailbox=<%s> origuniqueid=<%s> newuniqueid=<%s>",
@@ -3447,6 +3447,7 @@ static int sync_mailbox_byentry(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     if (!mbentry) goto out;
+    if (!mbentry->uniqueid) goto out;
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
         !(mrock->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
@@ -4476,7 +4477,7 @@ static int sync_apply_expunge(struct dlist *kin,
     mailbox->silentchanges = 1;
 
     /* don't want to expunge the wrong mailbox! */
-    if (strcmp(mailbox_uniqueid(mailbox), uniqueid)) {
+    if (strcmpsafe(mailbox_uniqueid(mailbox), uniqueid)) {
         r = IMAP_MAILBOX_MOVED;
         goto done;
     }
@@ -6455,7 +6456,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_show_after != mailbox->i.pop3_show_after.tv_sec) return 0;
     if (remote->options != options) return 0;
     if (remote->foldermodseq && remote->foldermodseq != mailbox_foldermodseq(mailbox)) return 0;
-    if (strcmp(remote->acl, mailbox_acl(mailbox))) return 0;
+    if (strcmpsafe(remote->acl, mailbox_acl(mailbox))) return 0;
 
     if (config_getswitch(IMAPOPT_REVERSEACLS)) {
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox_name(mailbox));
@@ -6562,8 +6563,8 @@ static int update_mailbox_once(struct sync_client_state *sync_cs,
     annotate_state_begin(astate);
 
     /* definitely bad if these don't match! */
-    if (strcmp(mailbox_uniqueid(mailbox), local->uniqueid) ||
-        strcmp(mailbox_partition(mailbox), local->part)) {
+    if (strcmpsafe(mailbox_uniqueid(mailbox), local->uniqueid) ||
+        strcmpsafe(mailbox_partition(mailbox), local->part)) {
         r = IMAP_MAILBOX_MOVED;
         goto done;
     }
@@ -6921,8 +6922,8 @@ int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname)
     while (ma || ra) {
         if (!ra) n = -1;                /* add all master annotations */
         else if (!ma) n = 1;            /* remove all replica annotations */
-        else if ((n = strcmp(ma->entry, ra->entry)) == 0)
-            n = strcmp(ma->userid, ra->userid);
+        else if ((n = strcmpsafe(ma->entry, ra->entry)) == 0)
+            n = strcmpsafe(ma->userid, ra->userid);
 
         if (n > 0) {
             /* remove replica annotation */
@@ -6997,7 +6998,7 @@ static int do_folders(struct sync_client_state *sync_cs,
 
         /* does it need a rename? partition change is a rename too */
         const char *part = topart ? topart : mfolder->part;
-        if (strcmp(mfolder->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
+        if (strcmpsafe(mfolder->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
             sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
                                  mfolder->name, part, mfolder->uidvalidity);
         }
@@ -7025,7 +7026,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             else {
                 /* we've found a rename! */
                 const char *part = topart ? topart : tombstone->partition;
-                if (strcmp(tombstone->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
+                if (strcmpsafe(tombstone->name, rfolder->name) || (rfolder->part && strcmpsafe(part, rfolder->part))) {
                     sync_rename_list_add(rename_folders, tombstone->uniqueid, rfolder->name,
                                          tombstone->name, part, tombstone->uidvalidity);
                 }
@@ -7062,7 +7063,7 @@ static int do_folders(struct sync_client_state *sync_cs,
 
     struct sync_rename *item;
     for (item = rename_folders->head; item; item = item->next) {
-        if (!strcmp(item->oldname, item->newname)) continue;
+        if (!strcmpsafe(item->oldname, item->newname)) continue;
         if (!sync_folder_lookup_byname(replica_folders, item->oldname)) continue;
         if (!sync_folder_lookup_byname(replica_folders, item->newname)) continue;
 
@@ -7097,7 +7098,7 @@ static int do_folders(struct sync_client_state *sync_cs,
             if (item->done) continue;
 
             /* don't skip rename to different partition */
-            if (strcmp(item->oldname, item->newname)) {
+            if (strcmpsafe(item->oldname, item->newname)) {
                 item2 = sync_rename_lookup(rename_folders, item->newname);
                 if (item2 && !item2->done && sync_folder_lookup_byname(replica_folders, item->newname)) continue;
             }
@@ -7991,7 +7992,7 @@ static void remove_meta(char *user, struct sync_action_list *list)
     struct sync_action *action;
 
     for (action = list->head ; action ; action = action->next) {
-        if (!strcmp(user, action->user)) {
+        if (!strcmpsafe(user, action->user)) {
             action->active = 0;
         }
     }
