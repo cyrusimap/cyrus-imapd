@@ -14702,7 +14702,7 @@ static int jmap_email_lookup(jmap_req_t *req)
     }
     else {
         json_t *jid, *jids = json_object();
-        char newid[JMAP_EMAILID_SIZE];
+        char newid[JMAP_MAX_EMAILID_SIZE];
         size_t i;
 
         json_array_foreach(oldids, i, jid) {
