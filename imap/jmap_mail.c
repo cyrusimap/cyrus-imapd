@@ -4541,7 +4541,7 @@ static int emailquery_uidsearch(jmap_req_t *req,
     struct emailquery_uidsearch_result_rock *rrock =
         xzmalloc(sizeof(struct emailquery_uidsearch_result_rock));
 
-    rrock->seen_emails = hashset_new(MESSAGE_GUID_SIZE);
+    rrock->seen_emails = hashset_new(JMAP_MAX_EMAILID_SIZE);
     if (q->want_partids) {
         construct_hashu64_table(&rrock->partid_bynum, 1024, 0);
         construct_hash_table(&rrock->partnum_byid, 1024, 0);
