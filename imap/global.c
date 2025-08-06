@@ -187,19 +187,19 @@ static void cyrus_modules_done()
     }
 }
 
+static void debug_update_log_suppression() {
+  if (config_debug)
+    setlogmask(LOG_UPTO(LOG_DEBUG));
+  else
+    setlogmask(LOG_UPTO(LOG_INFO));
+}
+
 static void debug_toggled(void)
 {
-    int logmask = setlogmask(0); /* gets the current log mask */
-
-    if (config_debug)
-        logmask |= LOG_MASK(LOG_DEBUG);
-    else
-        logmask &= ~LOG_MASK(LOG_DEBUG);
+    debug_update_log_suppression();
 
     syslog(LOG_INFO, "debug logging turned %s",
                      config_debug ? "on" : "off");
-
-    setlogmask(logmask);
 }
 
 /* Called before a cyrus application starts (but after command line parameters
@@ -262,6 +262,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
 
+    debug_update_log_suppression();
+
     /* allow toggleable debug logging */
     config_toggle_debug_cb = &debug_toggled;
 
@@ -287,6 +289,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
         closelog();
         openlog(ident_buf, syslog_opts, facnum);
+        debug_update_log_suppression();
     }
     /* Do not free ident_buf, syslog needs it for the life of this process! */
 
