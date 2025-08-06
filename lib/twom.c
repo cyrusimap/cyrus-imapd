@@ -2787,7 +2787,6 @@ int twom_cursor_commit(struct twom_cursor **curp)
         cur->loc.file = NULL;
     }
     int r = twom_txn_commit(&cur->txn); // will call abort itself on error
-    free(cur);
     *curp = NULL;
     return r;
 }
