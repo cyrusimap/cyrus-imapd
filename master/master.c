@@ -88,20 +88,21 @@
 #define IPV6_V6ONLY     IPV6_BINDV6ONLY
 #endif
 
-#include "masterconf.h"
+#include "master/master.h"
 
-#include "master.h"
-#include "event.h"
-#include "service.h"
+#include "master/cronevent.h"
+#include "master/event.h"
+#include "master/masterconf.h"
+#include "master/service.h"
 
-#include "assert.h"
-#include "cyr_lock.h"
-#include "proc.h"
-#include "retry.h"
-#include "strarray.h"
-#include "util.h"
-#include "xmalloc.h"
-#include "xunlink.h"
+#include "lib/assert.h"
+#include "lib/cyr_lock.h"
+#include "lib/proc.h"
+#include "lib/retry.h"
+#include "lib/strarray.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
+#include "lib/xunlink.h"
 
 enum {
     child_table_size = 10000,
@@ -1199,13 +1200,66 @@ static void spawn_service(struct service *s, int si, int wdi)
     }
 }
 
+static void spawn_exec(const char *name,
+                       const strarray_t *exec,
+                       void *rock __attribute__((unused)))
+{
+    char path[PATH_MAX];
+    struct centry *c;
+    int i, r;
+    pid_t p;
+
+    get_executable(path, sizeof(path), exec);
+    switch (p = fork()) {
+    case -1:
+        syslog(LOG_CRIT, "can't fork process to run event %s", name);
+        break;
+
+    case 0:
+        /* Child - Release our pidfile lock. */
+        xclose(pidfd);
+
+        set_caps(AFTER_FORK, /*is_master*/1);
+
+        /* close all listeners */
+        for (i = 0; i < nservices; i++) {
+            xclose(Services[i].socket);
+            xclose(Services[i].stat[0]);
+            xclose(Services[i].stat[1]);
+        }
+        for (i = 0; i < nwaitdaemons; i++) {
+            xclose(WaitDaemons[i].socket);
+            xclose(WaitDaemons[i].stat[0]);
+            xclose(WaitDaemons[i].stat[1]);
+        }
+
+        syslog(LOG_DEBUG, "about to exec %s", path);
+        execv(path, exec->data);
+        syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
+        exit(EX_OSERR);
+        break;
+
+    default:
+        /* we don't wait for it to complete */
+
+        /* add to child table */
+        c = centry_alloc();
+        centry_set_name(c, "EVENT", name, path);
+        centry_set_state(c, SERVICE_STATE_READY);
+        r = proc_register(&c->proc_handle, p, name, NULL, NULL, NULL, NULL);
+        if (r) {
+            syslog(LOG_ERR, "ERROR: unable to register process %u"
+                            " for event %s",
+                            p, name);
+        }
+        centry_add(c, p);
+        break;
+    }
+}
+
 static void spawn_schedule(struct timeval now)
 {
     struct event *due, *next;
-    int i, r;
-    char path[PATH_MAX];
-    pid_t p;
-    struct centry *c;
 
     due = schedule_splice_due(now);
 
@@ -1214,55 +1268,8 @@ static void spawn_schedule(struct timeval now)
         /* if due->exec is empty, we just used the event to wake up,
          * so we actually don't need to exec anything at the moment */
         if (strarray_size(&due->exec)) {
-            get_executable(path, sizeof(path), &due->exec);
-            switch (p = fork()) {
-            case -1:
-                syslog(LOG_CRIT,
-                       "can't fork process to run event %s", due->name);
-                break;
-
-            case 0:
-                /* Child - Release our pidfile lock. */
-                xclose(pidfd);
-
-                set_caps(AFTER_FORK, /*is_master*/1);
-
-                /* close all listeners */
-                for (i = 0; i < nservices; i++) {
-                    xclose(Services[i].socket);
-                    xclose(Services[i].stat[0]);
-                    xclose(Services[i].stat[1]);
-                }
-                for (i = 0; i < nwaitdaemons; i++) {
-                    xclose(WaitDaemons[i].socket);
-                    xclose(WaitDaemons[i].stat[0]);
-                    xclose(WaitDaemons[i].stat[1]);
-                }
-
-                syslog(LOG_DEBUG, "about to exec %s", path);
-                execv(path, due->exec.data);
-                syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
-                exit(EX_OSERR);
-                break;
-
-            default:
-                /* we don't wait for it to complete */
-
-                /* add to child table */
-                c = centry_alloc();
-                centry_set_name(c, "EVENT", due->name, path);
-                centry_set_state(c, SERVICE_STATE_READY);
-                r = proc_register(&c->proc_handle, p,
-                                  due->name, NULL, NULL, NULL, NULL);
-                if (r) {
-                    syslog(LOG_ERR, "ERROR: unable to register process %u"
-                                    " for event %s",
-                                    p, due->name);
-                }
-                centry_add(c, p);
-                break;
-            }
-        } /* due->exec */
+            spawn_exec(due->name, &due->exec, NULL);
+        }
 
         /* reschedule as needed */
         next = due->next;
@@ -1428,7 +1435,7 @@ static void reap_child(void)
                     break;
                 }
             } else {
-                /* children from spawn_schedule (events) or
+                /* children from spawn_exec (events) or
                  * children of services removed by reread_conf() */
                 if (c->service_state != SERVICE_STATE_READY) {
                     syslog(LOG_WARNING,
@@ -1473,6 +1480,22 @@ static void reap_child(void)
             }
         }
     }
+}
+
+static void init_cronevent(struct timeval now)
+{
+    struct event *evt;
+    time_t mark, extra_seconds;
+
+    /* align initial mark to next whole minute boundary */
+    mark = now.tv_sec;
+    extra_seconds = mark % 60;
+    mark = mark + 60 - extra_seconds;
+
+    evt = event_new_periodic("cronevent periodic wakeup call",
+                             (struct timeval){ mark, 0 },
+                             60);
+    schedule_event(evt);
 }
 
 static void init_janitor(struct timeval now)
@@ -2314,10 +2337,10 @@ static void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
     const char *cmd = masterconf_getstring(e, "cmd", "");
+    const char *cron = masterconf_getstring(e, "cron", NULL);
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
     struct timeval now;
-    struct event *evt;
 
     gettimeofday(&now, 0);
 
@@ -2334,16 +2357,23 @@ static void add_event(const char *name, struct entry *e, void *rock)
         fatal(buf, EX_CONFIG);
     }
 
-    if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
-        evt = event_new_hourmin(name, hour, min);
+    if (cron) {
+        cronevent_add(name, cron, cmd, ignore_err);
     }
     else {
-        evt = event_new_periodic(name, now, period);
+        struct event *evt;
+
+        if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
+            evt = event_new_hourmin(name, hour, min);
+        }
+        else {
+            evt = event_new_periodic(name, now, period);
+        }
+
+        event_set_exec(evt, cmd);
+
+        schedule_event(evt);
     }
-
-    event_set_exec(evt, cmd);
-
-    schedule_event(evt);
 }
 
 #ifdef HAVE_SETRLIMIT
@@ -2699,6 +2729,7 @@ static void reread_conf(struct timeval now)
 
     /* remove existing events */
     schedule_clear();
+    cronevent_clear();
 
     /* read events */
     masterconf_getsection("EVENTS", &add_event, (void*) 1);
@@ -2708,6 +2739,9 @@ static void reread_conf(struct timeval now)
 
     /* reinit prom report */
     init_prom_report(now);
+
+    /* reinit cronevent subsystem */
+    init_cronevent(now);
 
     /* send some feedback to admin */
     syslog(LOG_NOTICE,
@@ -3131,6 +3165,9 @@ int main(int argc, char **argv)
     /* init prom report */
     init_prom_report(now);
 
+    /* init cronevent subsystem */
+    init_cronevent(now);
+
     /* start up waitdaemons, sequentially in order */
     for (i = 0; i < nwaitdaemons; i++) {
         spawn_waitdaemon(&WaitDaemons[i], i);
@@ -3163,8 +3200,10 @@ int main(int argc, char **argv)
         }
 
         /* run any scheduled processes */
-        if (!in_shutdown)
+        if (!in_shutdown) {
             spawn_schedule(now);
+            cronevent_poll_due(now, &spawn_exec, NULL);
+        }
 
         /* reap first, that way if we need to babysit we will */
         if (gotsigchld) {
@@ -3384,6 +3423,7 @@ finished:
     }
 
     schedule_clear();
+    cronevent_clear();
 
     /* tell caller we're done */
     master_ready(ready_file, 0);
