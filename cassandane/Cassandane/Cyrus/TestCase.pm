@@ -668,7 +668,10 @@ sub _create_instances
         $instance_params{old_jmap_ids} = $self->{old_jmap_ids}
             if exists $self->{old_jmap_ids};
 
-        $instance_params{description} = "main instance for test $self->{_name}";
+        my $class = ref $self;
+        my $name  = $self->{_name} =~ s/^test_//r;
+        $instance_params{description} = "main instance for test $class.$name";
+
         $self->{instance} = Cassandane::Instance->new(%instance_params);
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
