@@ -141,6 +141,10 @@ sub default
             userdeny_db => 'flat',
             zoneinfo_db => $default_backend,
 
+            # This, because some tests include tarballs of state which might
+            # not be in $default_backend format. -- rjbs, 2025-08-06
+            cyrusdb_autoconvert => 'yes',
+
             # smtpclient_open should fail by default!
             #
             # If your test fails and writes something like
