@@ -52,7 +52,7 @@ sub new
 sub _otherparams
 {
     my ($self) = @_;
-    return ( qw(period at) );
+    return ( qw(period at cron) );
 }
 
 1;
