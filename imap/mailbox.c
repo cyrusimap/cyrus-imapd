@@ -7664,7 +7664,8 @@ static int records_match(const char *mboxname,
     int match = 1;
     int userflags_dirty = 0;
 
-    if (old->internaldate.tv_sec  != new->internaldate.tv_sec) {
+    if (old->internaldate.tv_sec != new->internaldate.tv_sec ||
+        old->internaldate.tv_nsec != new->internaldate.tv_nsec) {
         printf("%s uid %u mismatch: internaldate\n",
                mboxname, new->uid);
         match = 0;
