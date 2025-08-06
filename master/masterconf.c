@@ -121,7 +121,7 @@ int masterconf_init(const char *ident, const char *alt_config)
 
     /* drop debug messages locally */
     if (!config_debug)
-        setlogmask(~LOG_MASK(LOG_DEBUG));
+        setlogmask(LOG_UPTO(LOG_INFO));
 
     return 0;
 }
