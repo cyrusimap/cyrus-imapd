@@ -5729,14 +5729,18 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             if (dirty) {
                 // update the CRCs
                 syslog(LOG_NOTICE, "updating internaldate CRCs for %s:%u", mailbox_name(mailbox), copyrecord.uid);
-                repack->crcs.basic ^= crc_basic(&repack->newmailbox, &oldrecord);
-                repack->crcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
-                repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
-                repack->crcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
-                repack->newmailbox.i.synccrcs.basic ^= crc_basic(&repack->newmailbox, &oldrecord);
-                repack->newmailbox.i.synccrcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
-                repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
-                repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
+                if (oldrecord.internaldate.tv_sec != copyrecord.internaldate.tv_sec) {
+                    uint32_t basic = crc_basic(&repack->newmailbox, &oldrecord)
+                                   ^ crc_basic(&repack->newmailbox, &copyrecord);
+                    repack->crcs.basic ^= basic;
+                    repack->newmailbox.i.synccrcs.basic ^= basic;
+                }
+                if (oldrecord.internaldate.tv_nsec != copyrecord.internaldate.tv_nsec) {
+                    uint32_t virtannot = crc_virtannot(&repack->newmailbox, &oldrecord)
+                                       ^ crc_virtannot(&repack->newmailbox, &copyrecord);
+                    repack->crcs.annot ^= virtannot;
+                    repack->newmailbox.i.synccrcs.annot ^= virtannot;
+                }
 
                 if (!dryrun && records) {
                     // track this record so we can set the file timestamps later
