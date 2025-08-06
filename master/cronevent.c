@@ -63,7 +63,10 @@ static dynarray_t cronevent_details
 
 static time_t cronevent_last_run_time = 0;
 
-EXPORTED void cronevent_add(const char *name, const char *spec, const char *cmd)
+EXPORTED void cronevent_add(const char *name,
+                            const char *spec,
+                            const char *cmd,
+                            bool ignore_err)
 {
     struct cron_spec cron_spec = {0};
     struct cronevent_details *details = NULL;
@@ -74,12 +77,14 @@ EXPORTED void cronevent_add(const char *name, const char *spec, const char *cmd)
         xsyslog(LOG_ERR, "event missing name",
                          "spec=<%s> cmd=<%s>",
                          spec, cmd);
+        if (ignore_err) return;
         fatal("event missing name", EX_CONFIG);
     }
 
     if (!cmd || !*cmd) {
         xsyslog(LOG_ERR, "event missing cmd",
                          "name=<%s>", name);
+        if (ignore_err) return;
         fatal("event missing cmd", EX_CONFIG);
     }
 
@@ -87,6 +92,7 @@ EXPORTED void cronevent_add(const char *name, const char *spec, const char *cmd)
         xsyslog(LOG_ERR, "unable to parse cron spec",
                          "name=<%s> spec=<%s> parse_err=<%s>",
                          name, spec, parse_err);
+        if (ignore_err) return;
         fatal("unable to parse cron spec", EX_CONFIG);
     }
 
