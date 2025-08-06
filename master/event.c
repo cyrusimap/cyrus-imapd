@@ -199,25 +199,23 @@ EXPORTED struct event *schedule_peek(void)
 
 EXPORTED struct event *schedule_splice_due(struct timeval now)
 {
-    struct event *due = NULL, *next;
+    struct event *due, *last_due = NULL;
 
-    /* XXX same algorithm as original, including the bug where it
-     * XXX reverses the order of the events, which becomes very
-     * XXX clear as soon as you use good variable names instead
-     * XXX of "a" and "ptr" :/
-     */
-    while (schedule && timesub(&now, &schedule->mark) <= 0.0) {
-        next = schedule;
-
-        /* delete */
-        schedule = schedule->next;
-
-        /* insert */
-        next->next = due;
-        due = next;
+    due = schedule;
+    while (due && timesub(&now, &due->mark) <= 0.0) {
+        last_due = due;
+        due = due->next;
     }
 
-    return due;
+    if (last_due) {
+        due = schedule;
+        schedule = last_due->next;
+        last_due->next = NULL;
+        return due;
+    }
+    else {
+        return NULL;
+    }
 }
 
 EXPORTED void schedule_clear(void)
