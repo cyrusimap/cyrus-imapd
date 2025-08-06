@@ -929,19 +929,25 @@ static void test_mboxlist(void)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
-static void test_foreach(void)
+static void test_foreach_nullkey(void)
 {
     struct db *db = NULL;
     struct txn *txn = NULL;
     struct binary_result *results = NULL;
-    struct deleteit deldata;
-    /* random word generator to the rescue! */
-    static const char KEY1[] = "carib";
-    static const char DATA1[] = "delays maj bullish packard ronald";
-    static const char KEY2[] = "cubist";
-    static const char DATA2[] = "bobby tswana cu albumin created";
-    static const char KEY3[] = "eulogy";
-    static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
+    int i;
+    static const char *KEY[] = {
+            "a\0a", "a\0b", "a\0c", "abc"
+    };
+    static const char *DATA[] = {
+        "delays maj bullish packard ronald",
+        "bobby tswana cu albumin created",
+        "aleut stoic muscovy adonis moe docent",
+        "."
+    };
+
+    // flat doesn't support NULL keys
+    if (!strcmp(backend, "flat")) return;
+
     int r;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
@@ -949,17 +955,125 @@ static void test_foreach(void)
     CU_ASSERT_PTR_NOT_NULL(db);
 
     /* store() some records */
-    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    for (i = 0; i < 4; i++)
+        CANSTORE(KEY[i], 3, DATA[i], strlen(DATA[i]));
 
     /* commit succeeds */
     CANCOMMIT();
 
     /* all records can be fetched back */
-    CANFETCH(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-    CANFETCH(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-    CANFETCH(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    for (i = 0; i < 4; i++)
+        CANFETCH(KEY[i], 3, DATA[i], strlen(DATA[i]));
+
+    /* foreach succeeds in txn */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 2, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 3; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    r = cyrusdb_delete(db, KEY[1], 3, NULL, /*force*/1);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 2, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    GOTRESULT(KEY[3], 3, DATA[3], strlen(DATA[3]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "", 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    GOTRESULT(KEY[3], 3, DATA[3], strlen(DATA[3]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+static void test_foreach(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct binary_result *results = NULL;
+    struct deleteit deldata;
+    /* random word generator to the rescue! */
+    int i;
+    static const char *KEY[] = {
+            "carib", "cubist", "eulogy", "dressing",
+            "inside", "resident", "conflict", "progress"
+    };
+    static const char *DATA[] = {
+        "delays maj bullish packard ronald",
+        "bobby tswana cu albumin created",
+        "aleut stoic muscovy adonis moe docent",
+        ".",
+        "0",
+        "The mysterious diary records the voice.",
+        "the\nquick\tbrown fox",
+        "Lets all be unique together",
+    };
+    static int order[] = { 0, 6, 1, 3, 2, 4, 7, 5 };
+    // these need to be reset!
+    order[1] = 6;
+    order[7] = 5;
+
+    int r;
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    for (i = 0; i < 8; i++)
+        CANSTORE(KEY[i], strlen(KEY[i]), DATA[i], strlen(DATA[i]));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* all records can be fetched back */
+    for (i = 0; i < 8; i++)
+        CANFETCH(KEY[i], strlen(KEY[i]), DATA[i], strlen(DATA[i]));
 
     /* commit succeeds */
     CANCOMMIT();
@@ -969,18 +1083,31 @@ static void test_foreach(void)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
-    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    for (i = 0; i < 8; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
+
     /* foreach iterated over exactly all the keys */
     CU_ASSERT_PTR_NULL(results);
 
     /* only check "fetchnext" iteration if it's defined for this backend */
     if (cyrusdb_canfetchnext(backend)) {
-        CANFETCHNEXT(NULL, 0, KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-        CANFETCHNEXT(KEY1, strlen(KEY1), KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-        CANFETCHNEXT(KEY2, strlen(KEY2), KEY3, strlen(KEY3), DATA3, strlen(DATA3));
-        CANNOTFETCHNEXT(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+        const char *prev = NULL;
+        int prevlen = 0;
+        for (i = 0; i < 8; i++) {
+            int n = order[i];
+            if (n < 0) continue;
+            const char *key = KEY[n];
+            const char *data = DATA[n];
+            size_t keylen = strlen(key);
+            size_t datalen = strlen(data);
+            CANFETCHNEXT(prev, prevlen, key, keylen, data, datalen);
+            prev = key;
+            prevlen = keylen;
+        }
+        CANNOTFETCHNEXT(prev, prevlen, CYRUSDB_NOTFOUND);
     }
 
     /* close the txn - it doesn't matter here if we commit or abort */
@@ -991,29 +1118,118 @@ static void test_foreach(void)
     /* foreach succeeds without txn */
     r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-
-    /* got the expected keys in the expected order */
-    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
-    /* foreach iterated over exactly all the keys */
+    for (i = 0; i < 8; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
     CU_ASSERT_PTR_NULL(results);
+
+    /* foreacher succeeds with a prefix */
+    r = cyrusdb_foreach(db, "c", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    for (i = 0; i < 3; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreacher succeeds with a non-prefix */
+    r = cyrusdb_foreach(db, " ", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreacher succeeds with a non-prefix afterwards */
+    r = cyrusdb_foreach(db, "z", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreacher succeeds with a non-prefix just one match */
+    r = cyrusdb_foreach(db, "e", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[2], strlen(KEY[2]), DATA[2], strlen(DATA[2]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* delete some records */
+    int n = order[7];
+    r = cyrusdb_delete(db, KEY[n], strlen(KEY[n]), NULL, /*force*/0);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    n = order[1];
+    r = cyrusdb_delete(db, KEY[n], strlen(KEY[n]), NULL, /*force*/0);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    order[7] = -1;
+    order[1] = -1;
+
+    /* foreach only finds active records */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 8; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach with a prefix finds active records */
+    r = cyrusdb_foreach(db, "c", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 3; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreacher only deleted record finds nothing */
+    r = cyrusdb_foreach(db, "r", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NULL(results);
+
+    /* only check "fetchnext" iteration if it's defined for this backend */
+    if (cyrusdb_canfetchnext(backend)) {
+        const char *prev = NULL;
+        size_t prevlen = 0;
+        for (i = 0; i < 8; i++) {
+            int n = order[i];
+            if (n < 0) continue;
+            const char *key = KEY[n];
+            const char *data = DATA[n];
+            size_t keylen = strlen(key);
+            size_t datalen = strlen(data);
+            CANFETCHNEXT(prev, prevlen, key, keylen, data, datalen);
+            prev = key;
+            prevlen = keylen;
+        }
+        CANNOTFETCHNEXT(prev, prevlen, CYRUSDB_NOTFOUND);
+        /* close the txn - it doesn't matter here if we commit or abort */
+        CANCOMMIT();
+    }
 
     /* delete all the records after viewing them */
     deldata.db = db;
     deldata.results = &results;
     r = cyrusdb_foreach(db, NULL, 0, NULL, deleter, &deldata, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 8; i++) {
+        int n = order[i];
+        if (n < 0) continue;
+        GOTRESULT(KEY[n], strlen(KEY[n]), DATA[n], strlen(DATA[n]));
+    }
+    CU_ASSERT_PTR_NULL(results);
 
     /* got the expected keys in the expected order */
-    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
-    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
     /* foreach iterated over exactly all the keys */
     CU_ASSERT_PTR_NULL(results);
 
     /* nothing left! */
     r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &deldata, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NULL(results);
+
+    /* even with a prefix */
+    r = cyrusdb_foreach(db, " ", 1, NULL, foreacher, &results, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NULL(results);
 

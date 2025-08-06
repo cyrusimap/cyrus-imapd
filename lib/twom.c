@@ -2625,6 +2625,7 @@ int twom_txn_fetch(struct twom_txn *txn,
     if (r) return r;
 
     if (flags & TWOM_FETCHNEXT) {
+again:
         r = advance_loc(txn, loc);
         if (r == TWOM_DONE) return TWOM_NOTFOUND;
         if (r) return r;
@@ -2646,7 +2647,10 @@ int twom_txn_fetch(struct twom_txn *txn,
     }
 
     /* active ancestor is a delete */
-    if (TYPE(ptr) == DELETE) return TWOM_NOTFOUND;
+    if (TYPE(ptr) == DELETE) {
+        if (flags & TWOM_FETCHNEXT) goto again;
+        return TWOM_NOTFOUND;
+    }
 
     r = check_tailcsum(txn, loc->file, ptr, offset);
     if (r) return r;
@@ -2817,7 +2821,8 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
     cur->txn = txn;
     if (flags & TWOM_ALWAYSYIELD) cur->alwaysyield = 1;
     if ((flags & TWOM_CURSOR_PREFIX) && prefix && prefixlen) {
-        cur->prefix = strdup(prefix);
+        cur->prefix = twom_zmalloc(prefixlen);
+        memcpy(cur->prefix, prefix, prefixlen);
         cur->prefixlen = prefixlen;
     }
 
