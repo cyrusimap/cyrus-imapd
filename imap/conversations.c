@@ -1878,7 +1878,8 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
                                          const struct message_guid *guid,
                                          uint64_t nano_internaldate,
                                          modseq_t createdmodseq,
-                                         int delta_exists)
+                                         int delta_exists,
+                                         int force)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
 
@@ -1907,7 +1908,7 @@ EXPORTED void conversation_update_thread(conversation_t *conv,
     // these should always be the same for all copies of an email!
     // but if not (replacing a previously expunged email) then we want
     // the most recent.
-    if (thread->nano_internaldate < nano_internaldate) {
+    if (thread->nano_internaldate < nano_internaldate || force) {
         thread->nano_internaldate = nano_internaldate;
         conv->flags |= CONV_ISDIRTY;
     }
@@ -2545,21 +2546,29 @@ EXPORTED int conversations_nanosecfix_record(struct conversations_state *cstate,
 {
     int r = conversations_set_guid(cstate, mailbox, record, /*add*/1);
     if (r) return r;
+
+    // haven't changed the internaldate?  The existing thread should still be OK
     if (!fixthread) return 0;
+
+    // expunged records never count towards our thread
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
+
     conversation_t *conv = NULL;
     r = conversation_load(cstate, record->cid, &conv);
     if (r) return r;
 
+    // should always exists, but a corrupt DB could be missing it, don't crash if so!
     if (conv) {
         conversation_update_thread(conv,
                                    &record->guid,
                                    TIMESPEC_TO_NANOSEC(&record->internaldate),
                                    record->createdmodseq,
-                                   /*delta_exists*/0);
+                                   /*delta_exists*/0, /*force*/1);
 
         r = conversation_save(cstate, record->cid, conv);
         conversation_free(conv);
     }
+
     return r;
 }
 
@@ -2771,7 +2780,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                &record->guid,
                                nano_internaldate,
                                record->createdmodseq,
-                               delta_exists);
+                               delta_exists,
+                               /*force*/0);
 
     r = conversation_update(cstate, conv, &ecounts,
                             delta_size, delta_counts,

@@ -5220,6 +5220,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     repack->crcs = mailbox->i.synccrcs;
     repack->newmailbox = *mailbox; // struct copy
     repack->newmailbox.index_fd = -1;
+    repack->newmailbox.silentchanges = 1;
 
     /* new files */
     fname = mailbox_meta_newfname(mailbox, META_INDEX);
@@ -5541,6 +5542,9 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
         int needs_cache_upgrade = 0;
         annotate_state_t *astate = NULL;
 
+        copyrecord.silentupdate = 1;
+        copyrecord.ignorelimits = 1;
+
         r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
         if (r) goto done;
 
@@ -5712,22 +5716,13 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             (!UTIME_SAFE_NSEC(copyrecord.internaldate.tv_nsec) || recalc_nanosec)) {
             struct index_record oldrecord = copyrecord;
 
+            // keep existing IDs as much as possible!  Avoid churn
+            // copyrecord.internaldate.tv_nsec = 0;
+
             // make sure we don't have a JMAP ID (internaldate) clash
-            copyrecord.internaldate.tv_nsec = 0;
             conversations_adjust_internaldate(cstate, &copyrecord.guid,
                                               &copyrecord.internaldate);
 
-            if (!dryrun && records) {
-                // track this record so we can set the file timestamps later
-                // we only need UID, internaldate, and internal_flags
-                struct index_record *trecord =
-                    xzmalloc(sizeof(struct index_record));
-
-                trecord->uid = copyrecord.uid;
-                trecord->internaldate = copyrecord.internaldate;
-                trecord->internal_flags = copyrecord.internal_flags;
-                ptrarray_append(records, trecord);
-            }
             int dirty = oldrecord.internaldate.tv_sec != copyrecord.internaldate.tv_sec
                      || oldrecord.internaldate.tv_nsec != copyrecord.internaldate.tv_nsec;
 
@@ -5742,9 +5737,17 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
                 repack->newmailbox.i.synccrcs.basic ^= crc_basic(&repack->newmailbox, &copyrecord);
                 repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &oldrecord);
                 repack->newmailbox.i.synccrcs.annot ^= crc_virtannot(&repack->newmailbox, &copyrecord);
+
+                if (!dryrun && records) {
+                    // track this record so we can set the file timestamps later
+                    // we only need UID, internaldate, and internal_flags
+                    struct index_record *trecord = xzmalloc(sizeof(struct index_record));
+                    *trecord = copyrecord;
+                    ptrarray_append(records, trecord);
+                }
             }
 
-            // update G & J records
+            // update G & J records, we may have wiped them so always have to write
             r = conversations_nanosecfix_record(cstate, mailbox, &copyrecord, dirty);
             if (r) goto done;
 

@@ -385,7 +385,8 @@ extern void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
                                        uint64_t nano_internaldate,
                                        modseq_t createdmodseq,
-                                       int delta_exists);
+                                       int delta_exists,
+                                       int force);
 
 extern int conversations_prune(struct conversations_state *state,
                                time_t thresh, unsigned int *,
