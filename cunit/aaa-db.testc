@@ -929,6 +929,108 @@ static void test_mboxlist(void)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
+static void test_foreach_nullkey(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct binary_result *results = NULL;
+    int i;
+    static const char *KEY[] = {
+            "a\0a", "a\0b", "a\0c", "abc"
+    };
+    static const char *DATA[] = {
+        "delays maj bullish packard ronald",
+        "bobby tswana cu albumin created",
+        "aleut stoic muscovy adonis moe docent",
+        "."
+    };
+
+    // flat doesn't support NULL keys
+    if (!strcmp(backend, "flat")) return;
+
+    int r;
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    for (i = 0; i < 4; i++)
+        CANSTORE(KEY[i], 3, DATA[i], strlen(DATA[i]));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* all records can be fetched back */
+    for (i = 0; i < 4; i++)
+        CANFETCH(KEY[i], 3, DATA[i], strlen(DATA[i]));
+
+    /* foreach succeeds in txn */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 2, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 3; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    for (i = 0; i < 4; i++) {
+        GOTRESULT(KEY[i], 3, DATA[i], strlen(DATA[i]));
+    }
+    CU_ASSERT_PTR_NULL(results);
+
+    r = cyrusdb_delete(db, KEY[1], 3, NULL, /*force*/1);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a\0", 2, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "a", 1, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    GOTRESULT(KEY[3], 3, DATA[3], strlen(DATA[3]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* foreach succeeds no txn */
+    r = cyrusdb_foreach(db, "", 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    GOTRESULT(KEY[0], 3, DATA[0], strlen(DATA[0]));
+    GOTRESULT(KEY[2], 3, DATA[2], strlen(DATA[2]));
+    GOTRESULT(KEY[3], 3, DATA[3], strlen(DATA[3]));
+    CU_ASSERT_PTR_NULL(results);
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
 static void test_foreach(void)
 {
     struct db *db = NULL;
