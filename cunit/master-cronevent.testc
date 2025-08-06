@@ -82,9 +82,44 @@ static void test_cronevent_add_bad(void)
     volatile unsigned i;
 
     for (i = 0; i < n_tests; i++) {
+        CU_SYSLOG_MATCH(tests[i].expect_fatal);
         CU_EXPECT_CYRFATAL_BEGIN
-        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd, false);
         CU_EXPECT_CYRFATAL_END(EX_CONFIG, tests[i].expect_fatal);
+        CU_ASSERT_SYSLOG(/*all*/ 0, 1);
+    }
+}
+
+static void test_cronevent_add_bad_nonfatal(void)
+{
+    const struct {
+        const char *name;
+        const char *cmd;
+        const char *spec;
+        const char *expect_err;
+    } tests[] = {
+        { NULL,   NULL,  NULL,    "event missing name" },
+        { "",     NULL,  NULL,    "event missing name" },
+        { "name", NULL,  NULL,    "event missing cmd" },
+        { "name", "",    NULL,    "event missing cmd" },
+        { "name", "cmd", NULL,    "unable to parse cron spec" },
+        { "name", "cmd", "",      "unable to parse cron spec" },
+        { "name", "cmd", "bogus", "unable to parse cron spec" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    dynarray_t *schedule, *details;
+    volatile unsigned i;
+
+    cronevent_get_schedule(&schedule, &details);
+
+    for (i = 0; i < n_tests; i++) {
+        CU_SYSLOG_MATCH(tests[i].expect_err);
+        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd, true);
+        CU_ASSERT_SYSLOG(/*all*/ 0, 1);
+
+        assert_schedule_invariants();
+        CU_ASSERT_EQUAL(dynarray_size(schedule), 0);
+        CU_ASSERT_EQUAL(dynarray_size(details), 0);
     }
 }
 
@@ -116,7 +151,7 @@ static void test_cronevent_add(void)
         r = cron_parse_spec(tests[i].spec, &expect_spec, NULL);
         CU_ASSERT_EQUAL(r, 0);
 
-        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd);
+        cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd, false);
         assert_schedule_invariants();
 
         CU_ASSERT_EQUAL(dynarray_size(schedule), i + 1);
@@ -164,7 +199,7 @@ static void test_only_once_per_minute(void)
 
     construct_hash_table(&spawn_counts, 5, 1);
 
-    cronevent_add("my event", "* * * * *", "echo hello");
+    cronevent_add("my event", "* * * * *", "echo hello", false);
     assert_schedule_invariants();
 
     for (i = 0; i < n_tests; i++) {
@@ -223,7 +258,7 @@ static void test_fullday(void)
     construct_hash_table(&spawn_counts, n_tests, 1);
 
     for (i = 0; i < n_tests; i++) {
-        cronevent_add(tests[i].name, tests[i].spec_str, "echo hello");
+        cronevent_add(tests[i].name, tests[i].spec_str, "echo hello", false);
     }
     assert_schedule_invariants();
 

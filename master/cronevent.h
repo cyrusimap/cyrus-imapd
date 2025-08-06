@@ -44,13 +44,18 @@
 
 #include "lib/strarray.h"
 
+#include <stdbool.h>
+
 /* unit tests need to know this struct */
 struct cronevent_details {
     char *name;
     strarray_t exec;
 };
 
-extern void cronevent_add(const char *name, const char *spec, const char *cmd);
+extern void cronevent_add(const char *name,
+                          const char *spec,
+                          const char *cmd,
+                          bool ignore_err);
 extern void cronevent_clear(void);
 
 typedef void (cronevent_spawn_fn)(const char *name,
