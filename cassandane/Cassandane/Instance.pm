@@ -692,6 +692,7 @@ sub _list_pid_files
 sub _build_skeleton
 {
     my ($self) = @_;
+    my $basedir = $self->{basedir};
 
     my @subdirs =
     (
@@ -721,9 +722,20 @@ sub _build_skeleton
     );
     foreach my $sd (@subdirs)
     {
-        my $d = $self->{basedir} . '/' . $sd;
+        my $d = "$basedir/$sd";
         mkpath $d
             or die "Cannot make path $d: $!";
+    }
+
+    if ($self->{description}) {
+        open my $desc_fh, '>', "$basedir/description"
+            or die "Can't write to $basedir/description: $!";
+
+        $desc_fh->say($self->{description})
+            or die "Error writing to $basedir/description: $!";
+
+        close $desc_fh
+            or die "Error closing $basedir/description: $!";
     }
 }
 

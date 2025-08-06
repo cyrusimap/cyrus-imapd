@@ -668,7 +668,10 @@ sub _create_instances
         $instance_params{old_jmap_ids} = $self->{old_jmap_ids}
             if exists $self->{old_jmap_ids};
 
-        $instance_params{description} = "main instance for test $self->{_name}";
+        my $class = ref $self;
+        my $name  = $self->{_name} =~ s/^test_//r;
+        $instance_params{description} = "main instance for test $class.$name";
+
         $self->{instance} = Cassandane::Instance->new(%instance_params);
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
@@ -699,7 +702,9 @@ sub _create_instances
                 $replica_params{installation} = 'replica';
             }
 
-            $replica_params{description} = "replica instance for test $self->{_name}";
+            my $class = ref $self;
+            my $name  = $self->{_name} =~ s/^test_//r;
+            $replica_params{description} = "replica instance for test $class.$name";
             $self->{replica} = Cassandane::Instance->new(%replica_params,
                                                          setup_mailbox => 0);
             my ($v) = Cassandane::Instance->get_version($replica_params{installation});
@@ -745,7 +750,9 @@ sub _create_instances
                 $instance_params{installation} = 'murder';
             }
 
-            $instance_params{description} = "murder frontend for test $self->{_name}";
+            my $class = ref $self;
+            my $name  = $self->{_name} =~ s/^test_//r;
+            $instance_params{description} = "murder frontend for test $class.$name";
             $instance_params{config} = $frontend_conf;
             $self->{frontend} = Cassandane::Instance->new(%instance_params,
                                                           setup_mailbox => 0);
@@ -810,7 +817,9 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            $instance_params{description} = "murder backend2 for test $self->{_name}";
+            my $class = ref $self;
+            my $name  = $self->{_name} =~ s/^test_//r;
+            $instance_params{description} = "murder backend2 for test $class.$name";
             $instance_params{config} = $backend2_conf;
             $self->{backend2} = Cassandane::Instance->new(%instance_params,
                                                           setup_mailbox => 0); # XXX ?
