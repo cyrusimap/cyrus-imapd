@@ -4428,10 +4428,6 @@ static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emai
             md->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
 
-        char emailid[JMAP_MAX_EMAILID_SIZE];
-        jmap_set_emailid(q->cstate, &md->guid,
-                         0, &md->internaldate, emailid);
-
         /* Is there another copy of this message with a targeted savedate? */
         if (!md->savedate &&
             rrock->savedates &&
@@ -4439,7 +4435,7 @@ static void emailquery_uidsearch_result_ensure(struct emailquery *q, struct emai
             continue;
 
         /* Have we seen this message already? */
-        if (!hashset_add(rrock->seen_emails, emailid))
+        if (!hashset_add(rrock->seen_emails, &md->guid.value))
             continue;
 
         /* Add message to result */
@@ -4541,7 +4537,7 @@ static int emailquery_uidsearch(jmap_req_t *req,
     struct emailquery_uidsearch_result_rock *rrock =
         xzmalloc(sizeof(struct emailquery_uidsearch_result_rock));
 
-    rrock->seen_emails = hashset_new(JMAP_MAX_EMAILID_SIZE);
+    rrock->seen_emails = hashset_new(MESSAGE_GUID_SIZE);
     if (q->want_partids) {
         construct_hashu64_table(&rrock->partid_bynum, 1024, 0);
         construct_hash_table(&rrock->partnum_byid, 1024, 0);
