@@ -2821,7 +2821,8 @@ int twom_txn_begin_cursor(struct twom_txn *txn,
     cur->txn = txn;
     if (flags & TWOM_ALWAYSYIELD) cur->alwaysyield = 1;
     if ((flags & TWOM_CURSOR_PREFIX) && prefix && prefixlen) {
-        cur->prefix = strdup(prefix);
+        cur->prefix = twom_zmalloc(prefixlen);
+        memcpy(cur->prefix, prefix, prefixlen);
         cur->prefixlen = prefixlen;
     }
 
