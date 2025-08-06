@@ -346,50 +346,104 @@ static void test_reschedule_event(void)
     }
 }
 
+static size_t count_events(const struct event *list)
+{
+    size_t counter = 0;
+
+    for (; list; list = list->next)
+        counter++;
+
+    return counter;
+}
+
 static void test_schedule_splice_due(void)
 {
-    const size_t n_events = 10;
-    const unsigned gap = 10; /* seconds */
-    time_t now = time(NULL), mid;
-    struct event *due, *schedule;
-    unsigned i;
+    const struct {
+        unsigned n_events;
+        unsigned event_times[10];
+        time_t splice_time;
+        unsigned expect_due;
+        unsigned expect_remainder;
+    } tests[] = {
+        { 10, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90 },
+          50, 6, 4 },
+        { 10, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90 },
+          45, 5, 5 },
+        { 10, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90 },
+          90, 10, 0 },
+        { 10, { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90 },
+          100, 10, 0 },
+        { 1, { 10 },
+          0, 0, 1 },
+        { 1, { 10 },
+          5, 0, 1 },
+        { 1, { 10 },
+          10, 1, 0 },
+        { 1, { 10 },
+          20, 1, 0 },
+        { 0, { 0 },
+          50, 0, 0 },
+        { 0, { 0 },
+          0, 0, 0 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned t;
 
-    for (i = 0; i < n_events; i++) {
-        char name[64] = {0};
-        struct event *event;
+    for (t = 0; t < n_tests; t++) {
+        const time_t now = time(NULL);
+        const time_t splice_time = now + tests[t].splice_time;
+        struct event *due;
+        unsigned e;
 
-        snprintf(name, sizeof(name), "event %u", i);
+        for (e = 0; e < tests[t].n_events; e++) {
+            char name[64] = {0};
+            struct event *event;
+            time_t event_time = now + tests[t].event_times[e];
 
-        event = event_new_oneshot(name, TV_INIT(now + gap * i, 0));
-        schedule_event(event);
+            snprintf(name, sizeof(name), "event %u", e);
+
+            event = event_new_oneshot(name, TV_INIT(event_time, 0));
+            schedule_event(event);
+        }
+        assert_schedule_invariants(schedule_peek());
+
+        due = schedule_splice_due(TV_INIT(splice_time, 0));
+
+        /* check that the spliced events are cogent */
+        if (tests[t].expect_due) {
+            CU_ASSERT_PTR_NOT_NULL(due);
+            assert_schedule_invariants(due);
+            CU_ASSERT_EQUAL(count_events(due), tests[t].expect_due);
+
+            /* don't forget to free the due list! */
+            while (due) {
+                struct event *next;
+
+                CU_ASSERT(due->mark.tv_sec <= splice_time);
+
+                next = due->next;
+                event_free(due);
+                due = next;
+            }
+        }
+        else {
+            CU_ASSERT_PTR_NULL(due);
+        }
+
+        /* check that the remaining schedule is still cogent */
+        if (tests[t].expect_remainder) {
+            struct event *schedule = schedule_peek();
+            CU_ASSERT_PTR_NOT_NULL(schedule);
+            assert_schedule_invariants(schedule);
+            CU_ASSERT_EQUAL(count_events(schedule), tests[t].expect_remainder);
+            CU_ASSERT(schedule->mark.tv_sec > splice_time);
+        }
+        else {
+            CU_ASSERT_PTR_NULL(schedule_peek());
+        }
+
+        schedule_clear();
     }
-    assert_schedule_invariants(schedule_peek());
-
-    mid = gap * i / 2 + now;
-    due = schedule_splice_due(TV_INIT(mid, 0));
-
-    /* check that the spliced events are cogent */
-//     assert_schedule_invariants(due);
-    CU_ASSERT_PTR_NOT_NULL(due);
-    while (due) {
-        struct event *next;
-
-        /* XXX spliced events currently have their order reversed,
-         * XXX so we can't just use assert_schedule_invariants here
-         */
-        assert_event_invariants(due, true);
-        CU_ASSERT(due->mark.tv_sec <= mid);
-
-        next = due->next;
-        event_free(due);
-        due = next;
-    }
-
-    /* check that the remaining schedule is still cogent */
-    schedule = schedule_peek();
-    assert_schedule_invariants(schedule);
-    CU_ASSERT_PTR_NOT_NULL(schedule);
-    CU_ASSERT(schedule->mark.tv_sec > mid);
 }
 
 /* vim: set ft=c: */
