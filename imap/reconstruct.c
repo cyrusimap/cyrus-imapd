@@ -386,11 +386,11 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         if (dousers) {
+            struct conversations_state *state = NULL;
             if (setversion &&
                 (reconstruct_flags & RECONSTRUCT_RECALC_NANOSEC) &&
                 (reconstruct_flags & RECONSTRUCT_MAKE_CHANGES)) {
                 /* delete G & J keys in conversations db */
-                struct conversations_state *state = NULL;
 
                 r = conversations_open_user(argv[i], 0/*shared*/, &state);
                 if (r) {
@@ -421,10 +421,11 @@ int main(int argc, char **argv)
                     continue;
                 }
 
-                conversations_commit(&state);
             }
             mboxlist_usermboxtree(argv[i], NULL, do_reconstruct_p, &rrock,
                                   MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
+
+            conversations_commit(&state);
             continue;
         }
         else if (dopaths) {

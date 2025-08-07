@@ -125,10 +125,6 @@ struct append_metadata {
     const strarray_t *flags;
     struct entryattlist **annotations;
     unsigned nolink : 1;
-    struct {
-        uint32_t uid;
-        const char *mboxname;
-    } replacing;
 };
 
 /* adds a new mailbox to the stage initially created by append_newstage() */

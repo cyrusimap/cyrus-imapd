@@ -796,7 +796,7 @@ static int fix_modseqs(struct conversations_state *a,
                  * other conversation */
                 conversation_update_thread(&convb, &threada->guid,
                                            threada->nano_internaldate,
-                                           threada->createdmodseq, /*delta_exists*/0);
+                                           threada->createdmodseq, /*delta_exists*/0, /*force*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip

@@ -1395,6 +1395,7 @@ static int _email_get_cid(jmap_req_t *req, const char *msgid,
 struct email_expunge_check {
     jmap_req_t *req;
     modseq_t since_modseq;
+    uint64_t nano_internaldate;
     int status;
 };
 
@@ -1407,6 +1408,8 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     int r = 0;
 
     if (rec->part) return 0;
+
+    if (check->nano_internaldate && rec->nano_internaldate != check->nano_internaldate) return 0;
 
     r = jmap_openmbox_by_guidrec(check->req, rec, &mbox, 0);
     if (r == IMAP_MAILBOX_NONEXISTENT) return 0;
@@ -2160,6 +2163,8 @@ static void emailsearch_folders_internalise(struct index_state *state,
 
 static int emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
 {
+    if (rec->part) return 0;
+
     struct emailsearch_folders_value *val = rock;
     if (rec->foldernum == val->jmapupload_foldernum ||
             (!val->want_expunged &&
@@ -5660,7 +5665,10 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (highest_modseq < md->modseq)
             highest_modseq = md->modseq;
 
-        struct email_expunge_check rock = { req, changes->since_modseq, 0 };
+        struct email_expunge_check rock = { req, changes->since_modseq, 0, 0 };
+        if (USER_COMPACT_EMAILIDS(req->cstate)) {
+            rock.nano_internaldate = TIMESPEC_TO_NANOSEC(&md->internaldate);
+        }
         int r = conversations_guid_foreach(req->cstate, guidrep,
                                            _email_is_expunged_cb, &rock);
         if (r) {
@@ -6424,14 +6432,17 @@ struct thread_get_rock {
     jmap_req_t *req;
     int is_own_account; /* input argument */
     int is_visible;     /* output argument */
+    uint64_t nano_internaldate;
 };
 
 static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
 {
+    struct thread_get_rock *rock = vrock;
+
     if (rec->part) return 0;
     if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
+    if (rock->nano_internaldate && rec->nano_internaldate != rock->nano_internaldate) return 0;
 
-    struct thread_get_rock *rock = vrock;
     static int needrights = JACL_READITEMS;
     mbentry_t *mbentry = NULL;
 
@@ -6474,7 +6485,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         int is_own_account = !strcmp(req->userid, req->accountid);
         json_t *ids = json_array();
         for (thread = conv.thread; thread; thread = thread->next) {
-            struct thread_get_rock rock = { req, is_own_account, 0 };
+            struct thread_get_rock rock = { req, is_own_account, 0, thread->nano_internaldate };
             const char *guidrep = message_guid_encode(&thread->guid);
             int r = conversations_guid_foreach(req->cstate, guidrep,
                                               _thread_get_cb, &rock);
@@ -6779,6 +6790,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
     msgrecord_t *mr = NULL;
 
     if (rec->part) return 0;
+    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
 
     conv_guidrec_mbentry(rec, &mbentry);
 
@@ -9256,8 +9268,6 @@ static void _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        jmap_set_emailid(req->cstate, &guid,
-                         0, internaldate, detail->email_id);
         jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
         munmap(addr, len);
@@ -9334,7 +9344,7 @@ static void _email_append(jmap_req_t *req,
     }
     struct append_metadata meta = {
         internaldate, savedate, /*cmodseq*/ 0, flags.count ? &flags : NULL,
-        &annots, /*nolink*/ 0, /*replacing*/ { 0, NULL }
+        &annots, /*nolink*/ 0
     };
     r = append_fromstage_full(&as, &body, stage, &meta);
     freeentryatts(annots);
@@ -9357,6 +9367,14 @@ static void _email_append(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
     jmap_set_threadid(req->cstate, cid, detail->thread_id);
+    struct message_guid guid;
+    struct timespec jinternaldate;
+    r = msgrecord_get_guid(mr, &guid);
+    if (r) goto done;
+    r = msgrecord_get_internaldate(mr, &jinternaldate);
+    if (r) goto done;
+    jmap_set_emailid(req->cstate, &guid,
+                     0, &jinternaldate, detail->email_id);
 
     /* Complete message creation */
     if (stage) {
@@ -13305,6 +13323,12 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                                                 json_true());
                         }
                     }
+                    if (update->received_at) {
+                        /* Write internaldate (Email/copy only) */
+                        struct timespec internaldate = { 0, 0 };
+                        time_from_iso8601(update->received_at, &internaldate.tv_sec);
+                        msgrecord_set_internaldate(mrw, &internaldate);
+                    }
                 }
             }
             int r = _copy_msgrecords(httpd_authstate, bulk->req->userid, &jmap_namespace,
@@ -13342,8 +13366,7 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 /* XXX append_copy should take new flags as parameter */
                 struct email_update *update = hash_lookup(src_uidrec->email_id,
                                                           &bulk->updates_by_email_id);
-                if (update->received_at ||  // Email/copy only
-                    update->keywords || update->full_keywords) {
+                if (update->keywords || update->full_keywords) {
                     ptrarray_append(&plan->setflags, new_uidrec);
                 }
 
@@ -13399,15 +13422,6 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             struct email_update *update = hash_lookup(email_id, &bulk->updates_by_email_id);
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
             int r = 0;
-
-            if (update->received_at) {
-                /* Write internaldate (Email/copy only) */
-                struct timespec now, internaldate;
-                clock_gettime(CLOCK_REALTIME, &now);
-                internaldate.tv_nsec = now.tv_nsec;
-                time_from_iso8601(update->received_at, &internaldate.tv_sec);
-                r = msgrecord_set_internaldate(mrw, &internaldate);
-            }
 
             /* Determine if to write the aggregated or updated JMAP keywords */
             json_t *keywords = uidrec->is_new ? update->full_keywords : update->keywords;
@@ -14083,12 +14097,9 @@ gotrecord:
     }
 
     /* set receivedAt property */
-    struct timespec now, internaldate;
+    struct timespec internaldate = { 0, 0 };
     const char *received_at =
         json_string_value(json_object_get(jemail_import, "receivedAt"));
-
-    clock_gettime(CLOCK_REALTIME, &now);
-    internaldate.tv_nsec = now.tv_nsec;
 
     if (received_at) {
         time_from_iso8601(received_at, &internaldate.tv_sec);
@@ -14098,7 +14109,7 @@ gotrecord:
                                                               buf_len(&content));
     }
     if (!internaldate.tv_sec)
-        internaldate.tv_sec = now.tv_sec;
+        clock_gettime(CLOCK_REALTIME, &internaldate);
 
     // mailbox will be readonly, drop the lock so it can be make writable
     if (mbox) mailbox_unlock_index(mbox, NULL);
@@ -14308,6 +14319,8 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     uint32_t internal_flags;
     mbentry_t *mbentry = NULL;
     int r = 0;
+
+    if (rec->part) goto done;
 
     conv_guidrec_mbentry(rec, &mbentry);
 
@@ -14687,7 +14700,7 @@ static int jmap_email_lookup(jmap_req_t *req)
     }
     else {
         json_t *jid, *jids = json_object();
-        char newid[JMAP_EMAILID_SIZE];
+        char newid[JMAP_MAX_EMAILID_SIZE];
         size_t i;
 
         json_array_foreach(oldids, i, jid) {

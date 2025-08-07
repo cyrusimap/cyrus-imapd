@@ -311,7 +311,7 @@ extern int conversations_jmapid_guidrep_lookup(struct conversations_state *state
                                                const char *jidrep,
                                                char guidrep[2*MESSAGE_GUID_SIZE+1]);
 extern void conversations_adjust_internaldate(struct conversations_state *cstate,
-                                              const char *guidrep,
+                                              struct message_guid *guid,
                                               struct timespec *internaldate);
 
 /* F record items */
@@ -350,6 +350,9 @@ extern int conversation_store(struct conversations_state *state,
  * consistency rules (e.g. the conversation's modseq is the
  * maximum of all the per-folder modseqs).  Sets CONV_DIRTY
  * if any data actually changed.  */
+extern int conversations_nanosecfix_record(struct conversations_state *cstate,
+                                           struct mailbox *mailbox,
+                                           struct index_record *record);
 extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
                                        const struct index_record *old,
@@ -381,7 +384,8 @@ extern void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
                                        uint64_t nano_internaldate,
                                        modseq_t createdmodseq,
-                                       int delta_exists);
+                                       int delta_exists,
+                                       int force);
 
 extern int conversations_prune(struct conversations_state *state,
                                time_t thresh, unsigned int *,

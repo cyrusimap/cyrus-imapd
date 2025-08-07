@@ -152,15 +152,26 @@ extern const unsigned char convert_to_uppercase[256];
 }
 #endif
 
+/* We have an issue that we can't store UTIME_OMIT into the nanosecond
+ * space, so we reserve '0' to mean OMIT, meaning that we can only store
+ * postitive nanosecond values.  We also store 0 as 0, so callers are
+ * required to make sure they have a SAFE_NSEC value when writing */
+#define UTIME_SAFE_NSEC(n) (n > 0 && n < 1000000000)
+#define _NSVAL(n)                                                           \
+        (UTIME_SAFE_NSEC(n) ? n : 0)
 #define TIMESPEC_TO_NANOSEC(ts)                                             \
-        ((uint64_t) (ts)->tv_sec * 1000000000 + (ts)->tv_nsec)
+        ((uint64_t) (ts)->tv_sec * 1000000000 + _NSVAL((ts)->tv_nsec))
 
+/* On the way back, we convert 0 to UTIME_OMIT and all other values stay the
+ * same, meaning that round-tripping a time with zero nanoseconds through this
+ * function pair will add one nanosecond */
 #define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
         (ts)->tv_sec  = (nanosec) / 1000000000; \
         (ts)->tv_nsec = (nanosec) % 1000000000; \
 }
 
 #define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
+        assert(nanosec);                                                    \
         uint64_t u64 = htonll(UINT64_MAX - (nanosec));                      \
         charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
 }

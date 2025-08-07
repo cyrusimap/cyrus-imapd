@@ -1,0 +1,402 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_intrash_regression
+    :min_version_3_3 :needs_component_sieve
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    xlog $self, "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    $imap->create("INBOX.C") or die;
+    $imap->create("INBOX.D") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ], $using);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+    my $mboxIdC = $mboxByName{'C'}->{id};
+    my $mboxIdD = $mboxByName{'D'}->{id};
+
+    xlog $self, "create emails";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mA' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'A',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mB' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'B',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mC' => {
+                    mailboxIds => {
+                        $mboxIdC => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'C',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mD' => {
+                    mailboxIds => {
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    receivedAt => '2024-01-01T02:03:04Z',
+                    subject => 'D',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mAB' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                        $mboxIdB => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'AB',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mCD' => {
+                    mailboxIds => {
+                        $mboxIdC => JSON::true,
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'CD',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+                'mABCD' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                        $mboxIdB => JSON::true,
+                        $mboxIdC => JSON::true,
+                        $mboxIdD => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'ABCD',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test magic',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $emailIdA = $res->[0][1]->{created}{mA}{id};
+    $self->assert_not_null($emailIdA);
+    my $emailIdB = $res->[0][1]->{created}{mB}{id};
+    $self->assert_not_null($emailIdB);
+    my $emailIdC = $res->[0][1]->{created}{mC}{id};
+    $self->assert_not_null($emailIdC);
+    my $emailIdD = $res->[0][1]->{created}{mD}{id};
+    $self->assert_not_null($emailIdD);
+    my $emailIdAB = $res->[0][1]->{created}{mAB}{id};
+    $self->assert_not_null($emailIdAB);
+    my $emailIdCD = $res->[0][1]->{created}{mCD}{id};
+    $self->assert_not_null($emailIdCD);
+    my $emailIdABCD = $res->[0][1]->{created}{mABCD}{id};
+    $self->assert_not_null($emailIdABCD);
+
+    my $blobD = $res->[0][1]->{created}{mD}{blobId};
+
+    my $blobId = $res->[0][1]->{created}{mABCD}{blobId};
+    my $size = $res->[0][1]->{created}{mABCD}{size};
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'mattach' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'attach',
+                    bodyStructure => {
+                        subParts => [{
+                            partId => "part1",
+                            type => "text/plain"
+                        },{
+                            blobId => $blobId,
+                            cid => undef,
+                            disposition => "attachment",
+                            name => "attached.eml",
+                            size => $size,
+                            type => "message/rfc822"
+                        }],
+                        type => "multipart/mixed",
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'attach magic',
+                        }
+                    },
+                },
+            },
+            destroy => [$emailIdD],
+        }, 'R1'],
+    ]);
+    my $emailIdAttach = $res->[0][1]->{created}{mattach}{id};
+    $self->assert_not_null($emailIdAttach);
+    $self->assert_str_equals($res->[0][1]->{destroyed}[0], $emailIdD);
+
+    $res = $jmap->CallMethods([
+        ['Email/import', {
+            emails => {
+                "newD" => {
+                    blobId => $blobD,
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ]);
+    my $newIdD = $res->[0][1]->{created}{newD}{id};
+    $self->assert_not_null($newIdD);
+    # This is only true with v20 IDs
+    if ($newIdD =~ m/^S/) {
+       $self->assert_str_not_equals($newIdD, $emailIdD);
+    }
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $newIdD => {
+                    mailboxIds => {
+                        $mboxIdD => JSON::true,
+                    },
+                },
+            },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]->{updated}{$newIdD});
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @wantIds;
+
+    xlog $self, "query emails in mailbox A";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                inMailbox => $mboxIdA,
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdAB, $emailIdABCD, $emailIdAttach);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    xlog $self, "query emails in mailbox A (reverse logic)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                from => 'foo@local',
+                inMailboxOtherThan => [ $mboxIdB, $mboxIdC, $mboxIdD ],
+            },
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdAB, $emailIdABCD, $emailIdAttach);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdB => { mailboxIds => { $mboxIdD => JSON::true } },
+                $emailIdAB => { mailboxIds => { $mboxIdD => JSON::true } },
+                $emailIdABCD => { mailboxIds => { $mboxIdD => JSON::true } },
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdB});
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdAB});
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdABCD});
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdABCD => { mailboxIds => { $mboxIdB => JSON::true, $mboxIdD => JSON::true } },
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdABCD});
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdABCD => { mailboxIds => { $mboxIdD => JSON::true } },
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdABCD});
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdABCD => { mailboxIds => { $mboxIdB => JSON::true, $mboxIdD => JSON::true } },
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdABCD});
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailIdABCD => { mailboxIds => { $mboxIdD => JSON::true } },
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert(exists $res->[0][1]->{updated}{$emailIdABCD});
+
+    xlog $self, "query emails in mailbox A (reverse logic)";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            calculateTotal => JSON::false,
+            collapseThreads => JSON::true,
+            filter => {
+                text => 'magic',
+                inMailboxOtherThan => [ $mboxIdC, $mboxIdD ],
+            },
+            findAllInThread => JSON::true,
+            findMatchingParts => JSON::true,
+            limit => 30,
+            position => 0,
+            sort => [{
+                property => 'id',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+    @wantIds = sort ($emailIdA, $emailIdAttach);
+    $self->assert_deep_equals(\@wantIds, $res->[0][1]{ids});
+}
