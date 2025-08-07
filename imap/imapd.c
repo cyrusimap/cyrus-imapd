@@ -6868,6 +6868,9 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
 
   done:
 
+    index_release(imapd_index);
+    sync_checkpoint(imapd_in);
+
     if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
         const char *respcode = "";
         if (r == IMAP_MAILBOX_NOTSUPPORTED) {
@@ -6892,9 +6895,6 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             free(copyuid);
     }
     else {
-        index_release(imapd_index);
-        sync_checkpoint(imapd_in);
-
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
