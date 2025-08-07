@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_list_return_uidvalidity
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+    ]);
+
+    $imaptalk->select("Fruit");
+
+    my $data = $imaptalk->list([qw()], "", "*", 'RETURN', ['STATUS', [qw(UIDVALIDITY)]]);
+
+    $self->assert_mailbox_structure($data, '/', {
+        'INBOX'                 => [qw( \\HasNoChildren )],
+        'Fruit'                 => [qw( \\HasChildren )],
+        'Fruit/Apple'           => [qw( \\HasNoChildren )],
+        'Fruit/Banana'          => [qw( \\HasNoChildren )],
+        'Fruit/Peach'           => [qw( \\HasNoChildren )],
+    });
+}

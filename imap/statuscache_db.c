@@ -470,9 +470,6 @@ HIDDEN void status_fill_seen(const char *userid, struct statusdata *sdata,
     assert(userid);
     assert(sdata);
 
-    // we need a matching parent record to exist for these values to be valid
-    assert(sdata->statusitems & STATUS_HIGHESTMODSEQ);
-
     sdata->userid = userid;
     sdata->recent = numrecent;
     sdata->unseen = numunseen;
