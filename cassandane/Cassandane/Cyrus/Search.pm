@@ -460,6 +460,175 @@ EOF
     $self->assert_str_equals('INBOX.a.b', $results[2][0][3]);
 }
 
+sub test_esearch_always_fuzzy
+    :NoAltNameSpace :needs_search_xapian :Conversations :SearchFuzzyAlways
+{
+    my ($self) = @_;
+
+    xlog $self, "Create shared folder, writeable by cassandane user";
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("shared");
+    $admintalk->setacl("shared", "cassandane", "lrsip");
+
+    xlog $self, "Create some personal folders";
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( INBOX.a INBOX.a.b.c INBOX.d INBOX.d.e INBOX.f )] ],
+        [ 'subscribe' => [qw( INBOX.a.b INBOX.d )] ],
+        [ 'subscribe' => [qw( shared )] ],
+    ]);
+
+    xlog $self, "Remove 'p' right from most  personal folders";
+    $imaptalk->setacl("INBOX.a", "anyone", "-p");
+    $imaptalk->setacl("INBOX.a.b", "anyone", "-p");
+    $imaptalk->setacl("INBOX.a.b.c", "anyone", "-p");
+    $imaptalk->setacl("INBOX.d", "anyone", "-p");
+    $imaptalk->setacl("INBOX.d.e", "anyone", "-p");
+
+    my $alldata = $imaptalk->list("", "*");
+
+    $self->assert_mailbox_structure($alldata, '.', {
+        'INBOX'                 => [qw( \\HasChildren )],
+        'INBOX.a'               => [qw( \\HasChildren )],
+        'INBOX.a.b'             => [qw( \\HasChildren )],
+        'INBOX.a.b.c'           => [qw( \\HasNoChildren )],
+        'INBOX.d'               => [qw( \\HasChildren )],
+        'INBOX.d.e'             => [qw( \\HasNoChildren )],
+        'INBOX.f'               => [qw( \\HasNoChildren )],
+        'shared'                => [qw( \\HasNoChildren )],
+    });
+
+    xlog $self, "Append some emails into the folders";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+        E => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test3\r
+Message-Id: <messageid3\@foo>\r
+In-Reply-To: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test E\r
+EOF
+        F => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test F\r
+EOF
+        G => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid5\@foo>\r
+In-Reply-To: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    $imaptalk->append('INBOX',       "()", $raw{A}) || die $@;
+    $imaptalk->append('INBOX',       "()", $raw{B}) || die $@;
+    $imaptalk->append('INBOX',       "()", $raw{C}) || die $@;
+    $imaptalk->append('INBOX.a',     "()", $raw{B}) || die $@;
+    $imaptalk->append('INBOX.a.b',   "()", $raw{C}) || die $@;
+    $imaptalk->append('INBOX.a.b.c', "()", $raw{D}) || die $@;
+    $imaptalk->append('INBOX.d',     "()", $raw{E}) || die $@;
+    $imaptalk->append('INBOX.f',     "()", $raw{F}) || die $@;
+    $imaptalk->append('shared',      "()", $raw{G}) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    xlog $self, "Search message bodies in the personal namespace";
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(PERSONAL)', 'body', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(6, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('1:3', $results[0][3]);
+    $self->assert_str_equals('INBOX.a', $results[1][0][3]);
+    $self->assert_num_equals(1, $results[1][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[2][0][3]);
+    $self->assert_num_equals(1, $results[2][3]);
+    $self->assert_str_equals('INBOX.a.b.c', $results[3][0][3]);
+    $self->assert_num_equals(1, $results[3][3]);
+    $self->assert_str_equals('INBOX.d', $results[4][0][3]);
+    $self->assert_num_equals(1, $results[4][3]);
+    $self->assert_str_equals('INBOX.f', $results[5][0][3]);
+    $self->assert_num_equals(1, $results[5][3]);
+}
+
 sub test_searchres
     :NoAltNameSpace :min_version_3_7
 {
