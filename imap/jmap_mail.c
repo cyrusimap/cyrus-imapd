@@ -2163,6 +2163,8 @@ static void emailsearch_folders_internalise(struct index_state *state,
 
 static int emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
 {
+    if (rec->part) return 0;
+
     struct emailsearch_folders_value *val = rock;
     if (rec->foldernum == val->jmapupload_foldernum ||
             (!val->want_expunged &&
