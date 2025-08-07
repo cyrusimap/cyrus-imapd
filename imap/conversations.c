@@ -2541,14 +2541,10 @@ EXPORTED void emailcounts_fini(struct emailcounts *ecounts)
 
 EXPORTED int conversations_nanosecfix_record(struct conversations_state *cstate,
                                              struct mailbox *mailbox,
-                                             struct index_record *record,
-                                             int fixthread)
+                                             struct index_record *record)
 {
     int r = conversations_set_guid(cstate, mailbox, record, /*add*/1);
     if (r) return r;
-
-    // haven't changed the internaldate?  The existing thread should still be OK
-    if (!fixthread) return 0;
 
     // expunged records never count towards our thread
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;

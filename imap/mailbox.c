@@ -5752,7 +5752,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             }
 
             // update G & J records, we may have wiped them so always have to write
-            r = conversations_nanosecfix_record(cstate, mailbox, &copyrecord, dirty);
+            r = conversations_nanosecfix_record(cstate, mailbox, &copyrecord);
             if (r) goto done;
 
             buf_reset(&buf);
