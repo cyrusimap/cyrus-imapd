@@ -6407,6 +6407,20 @@ static void cmd_search(const char *tag, const char *cmd)
             searchargs->returnopts = SEARCH_RETURN_ALL;
         }
 
+        struct conversations_state *cstate = NULL;
+        if (searchargs->fuzzy_depth &&
+            config_getswitch(IMAPOPT_CONVERSATIONS) &&
+            config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
+            /* Open the cstate here to avoid doing it for every mailbox
+               and avoid lock conflicts */
+            int r = conversations_open_user(imapd_userid, 1/*shared*/, &cstate);
+            if (r) {
+                syslog(LOG_WARNING, "error opening conversations for %s: %s",
+                       imapd_userid,
+                       error_message(r));
+            }
+        }
+
         /* Cycle through each of the possible source filters */
         for (mrock.filter = SEARCH_SOURCE_SELECTED;
              mrock.filter <= SEARCH_SOURCE_MAILBOXES; mrock.filter <<= 1) {
@@ -6476,6 +6490,7 @@ static void cmd_search(const char *tag, const char *cmd)
             }
         }
 
+        conversations_abort(&cstate);
         search_expr_free(mrock.expr);
         free_hash_table(&mrock.mailboxes, NULL);
     }
