@@ -6432,7 +6432,6 @@ struct thread_get_rock {
     jmap_req_t *req;
     int is_own_account; /* input argument */
     int is_visible;     /* output argument */
-    uint64_t nano_internaldate;
 };
 
 static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
@@ -6441,7 +6440,6 @@ static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
     if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
-    if (rock->nano_internaldate && rec->nano_internaldate != rock->nano_internaldate) return 0;
 
     static int needrights = JACL_READITEMS;
     mbentry_t *mbentry = NULL;
@@ -6485,7 +6483,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         int is_own_account = !strcmp(req->userid, req->accountid);
         json_t *ids = json_array();
         for (thread = conv.thread; thread; thread = thread->next) {
-            struct thread_get_rock rock = { req, is_own_account, 0, thread->nano_internaldate };
+            struct thread_get_rock rock = { req, is_own_account, 0 };
             const char *guidrep = message_guid_encode(&thread->guid);
             int r = conversations_guid_foreach(req->cstate, guidrep,
                                               _thread_get_cb, &rock);
