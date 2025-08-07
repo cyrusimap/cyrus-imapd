@@ -4553,6 +4553,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     struct buf body_buf = BUF_INITIALIZER;
+    user_nslock_t *user_nslock = NULL;
 
     memset(&dest_tgt, 0, sizeof(struct request_target_t));
 
@@ -4709,6 +4710,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Local source and destination mailboxes */
+
+    user_nslock = user_nslock_bymboxname(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name, LOCK_EXCLUSIVE);
 
     if (!strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) {
         /* Same source and destination - Open source mailbox for writing */
@@ -4873,6 +4876,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
     if (src_davdb) cparams->davdb.close_db(src_davdb);
     if (src_mbox) mailbox_close(&src_mbox);
+
+    user_nslock_release(&user_nslock);
 
     buf_free(&msg_buf);
     buf_free(&body_buf);
