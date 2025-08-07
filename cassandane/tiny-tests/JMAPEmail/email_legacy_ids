@@ -61,6 +61,21 @@ sub test_email_legacy_ids
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{'state'});
 
+    xlog $self, "get threads";
+    $res = $jmap->CallMethods([['Thread/get',
+                                { ids => [ $thrid1, $thrid2 ] }, "R1"]]);
+    # We don't need to sort the arrays because the order is consistent
+    # due to the files being part of a tarball and therefore static ids
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_str_equals($thrid1, $res->[0][1]->{list}[0]{id});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{list}[0]{emailIds}});
+    $self->assert_str_equals($id1, $res->[0][1]->{list}[0]{emailIds}[0]);
+    $self->assert_str_equals($id3, $res->[0][1]->{list}[0]{emailIds}[1]);
+    $self->assert_str_equals($id4, $res->[0][1]->{list}[0]{emailIds}[2]);
+    $self->assert_str_equals($thrid2, $res->[0][1]->{list}[1]{id});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}[1]{emailIds}});
+    $self->assert_str_equals($id2, $res->[0][1]->{list}[1]{emailIds}[0]);
+
     xlog $self, "Append an old email from gmail.com";
     # This will create a v4 G record in conv.db
     # (nanoseconds-based internaldate), but should still sort BEFORE
