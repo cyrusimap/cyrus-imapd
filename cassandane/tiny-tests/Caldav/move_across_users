@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_move_across_users
+    :FastmailSharing :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create Manifold calendar";
+    my $ManCalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "share to user";
+    $admintalk->setacl("user.manifold.#calendars.$ManCalendarId", "cassandane" => 'lrswipcdn');
+    my $talk = $self->{store}->get_client();
+    $talk->subscribe("user.manifold.#calendars.$ManCalendarId");
+
+    xlog $self, "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(3, scalar @$CasCal);
+    my $names = join "/", sort map { $_->{name} } @$CasCal;
+    my %byname = map { $_->{name} => $_ } @$CasCal;
+    $self->assert_str_equals($names, "Manifold Calendar/foo/personal");
+
+    my $mancal = $byname{"Manifold Calendar"};
+
+    my $uuid1 = "172a9c9e-7ed3-4f50-a582-4888b6545f4f";
+    my $href = "$mancal->{id}/$uuid1.ics";
+    my $card1 = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid1
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:Test Event 1
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+BEGIN:VALARM
+TRIGGER:PT0M
+ACTION:DISPLAY
+DESCRIPTION:alarmTime2
+END:VALARM
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card1, 'Content-Type' => 'text/calendar');
+
+    my $preman = $CalDAV->GetCalendar($mancal->{id});
+    my $precas = $CalDAV->GetCalendar($CalendarId);
+
+    $CalDAV->MoveEvent($href, $CalendarId);
+
+    my ($adds, $removes, $errors) = $CalDAV->SyncEvents($mancal->{id}, syncToken => $preman->{syncToken});
+    $self->assert_deep_equals([], $adds);
+    $self->assert_equals(1, scalar @$removes);
+    $self->assert_str_equals($href, $removes->[0]);
+    $self->assert_deep_equals([], $errors);
+
+    ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $precas->{syncToken});
+
+    $self->assert_equals(1, scalar @$adds);
+    $self->assert_str_equals($adds->[0]{uid}, $uuid1);
+    $self->assert_deep_equals([], $removes);
+    $self->assert_deep_equals([], $errors);
+}
