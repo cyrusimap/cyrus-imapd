@@ -50,9 +50,6 @@ struct event {
     char *name;
     struct timeval mark;
     time_t period;
-    int hour;
-    int min;
-    int periodic;
     strarray_t exec;
     struct event *next;
 };
@@ -61,7 +58,6 @@ extern struct event *event_new_oneshot(const char *name, struct timeval mark);
 extern struct event *event_new_periodic(const char *name,
                                         struct timeval mark,
                                         time_t period);
-extern struct event *event_new_hourmin(const char *name, int hour, int min);
 extern void event_free(struct event *evt);
 
 extern void event_set_exec(struct event *evt, const char *cmd);

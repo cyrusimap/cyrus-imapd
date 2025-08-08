@@ -77,37 +77,7 @@ EXPORTED struct event *event_new_periodic(const char *name,
     assert(period > 0);
 
     evt->mark = mark;
-    evt->periodic = 1;
     evt->period = period;
-
-    return evt;
-}
-
-EXPORTED struct event *event_new_hourmin(const char *name, int hour, int min)
-{
-    struct event *evt = event_new(name);
-    struct tm *tm;
-    struct timeval now;
-
-    assert(hour >= 0 && hour <= 23);
-    assert(min >= 0 && min <= 59);
-
-    gettimeofday(&now, NULL);
-    tm = localtime(&now.tv_sec);
-    tm->tm_hour = hour;
-    tm->tm_min = min;
-    tm->tm_sec = 0;
-
-    evt->periodic = 0;
-    evt->period = 86400; /* 24 hours */
-    evt->hour = hour;
-    evt->min = min;
-    evt->mark.tv_sec = mktime(tm);
-
-    if (timesub(&now, &evt->mark) < 0.0) {
-        /* already missed it, so schedule for next day */
-        evt->mark.tv_sec += evt->period;
-    }
 
     return evt;
 }
@@ -156,45 +126,17 @@ EXPORTED void schedule_event(struct event *evt)
 
 EXPORTED void reschedule_event(struct event *evt, struct timeval now)
 {
-    assert(evt->period);
+    time_t now_s = now.tv_sec;
+    time_t period = evt->period;
+    time_t mark = MIN(now_s, evt->mark.tv_sec);
 
-    if (evt->periodic) {
-        time_t now_s = now.tv_sec;
-        time_t period = evt->period;
-        time_t mark = MIN(now_s, evt->mark.tv_sec);
+    assert(period > 0);
 
-        /* don't fall behind schedule if we're running slow for some reason */
-        while (mark <= now_s)
-            mark += period;
+    /* don't fall behind schedule if we're running slow for some reason */
+    while (mark <= now_s)
+        mark += period;
 
-        evt->mark.tv_sec = mark;
-    }
-    else {
-        struct tm *tm;
-        int delta;
-
-        /* Daily Event */
-        while (timesub(&now, &evt->mark) <= 0.0)
-            evt->mark.tv_sec += evt->period;
-
-        /* check for daylight savings fuzz... */
-        tm = localtime(&evt->mark.tv_sec);
-        if (tm->tm_hour != evt->hour || tm->tm_min != evt->min) {
-            /* calculate the same time on the new day */
-            tm->tm_hour = evt->hour;
-            tm->tm_min = evt->min;
-            delta = mktime(tm) - evt->mark.tv_sec;
-            /* bring it within half a period either way */
-            while (delta > (evt->period/2)) delta -= evt->period;
-            while (delta < -(evt->period/2)) delta += evt->period;
-            /* update the time */
-            evt->mark.tv_sec += delta;
-            /* and let us know about the change */
-            syslog(LOG_NOTICE,
-                   "timezone shift for %s - altering schedule by %d seconds",
-                   evt->name, delta);
-        }
-    }
+    evt->mark.tv_sec = mark;
 
     schedule_event(evt);
 }

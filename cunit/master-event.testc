@@ -37,14 +37,10 @@ static void assert_event_invariants(const struct event *evt,
         CU_ASSERT_PTR_NULL(evt->next);
     }
 
-    /* periodic events must have a period */
-    if (evt->periodic) {
-        CU_ASSERT_NOT_EQUAL(evt->period, 0);
+    /* period must be zero or positive */
+    if (evt->period) {
+        CU_ASSERT(evt->period > 0);
     }
-
-    /* "at hh:mm" times must be within range */
-    CU_ASSERT(evt->hour >= 0 && evt->hour <= 23);
-    CU_ASSERT(evt->min >= 0 && evt->min <= 59);
 }
 
 static void assert_schedule_invariants(const struct event *schedule)
@@ -89,9 +85,6 @@ static void test_event_new_oneshot(void)
 
         /* expect other fields to be zeroed */
         CU_ASSERT_EQUAL(evt->period, 0);
-        CU_ASSERT_EQUAL(evt->hour, 0);
-        CU_ASSERT_EQUAL(evt->min, 0);
-        CU_ASSERT_EQUAL(evt->periodic, 0);
         CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
         CU_ASSERT_PTR_NULL(evt->next);
 
@@ -129,65 +122,7 @@ static void test_event_new_periodic(void)
         CU_ASSERT_EQUAL(evt->mark.tv_usec, tests[i].mark.tv_usec);
 
         /* expect the period to have been set */
-        CU_ASSERT_EQUAL(evt->periodic, 1);
         CU_ASSERT_EQUAL(evt->period, tests[i].period);
-
-        /* expect other fields to be zeroed */
-        CU_ASSERT_EQUAL(evt->hour, 0);
-        CU_ASSERT_EQUAL(evt->min, 0);
-        CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
-        CU_ASSERT_PTR_NULL(evt->next);
-
-        /* belt and suspenders, check the invariants */
-        assert_event_invariants(evt, false);
-
-        event_free(evt);
-    }
-}
-
-static void test_event_new_hourmin(void)
-{
-    const struct {
-        const char *name;
-        int hour;
-        int min;
-    } tests[] = {
-        { "good morning", 7, 30 },
-        { "good night",  22, 30 },
-    };
-    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
-    unsigned i;
-
-    for (i = 0; i < n_tests; i++) {
-        struct event *evt;
-        struct tm *tm;
-        struct timeval now;
-        double diff;
-
-        evt = event_new_hourmin(tests[i].name, tests[i].hour, tests[i].min);
-        CU_ASSERT_PTR_NOT_NULL(evt);
-
-        /* expect the name to have been set */
-        CU_ASSERT_PTR_NOT_NULL(evt->name);
-        CU_ASSERT_STRING_EQUAL(evt->name, tests[i].name);
-
-        /* expect the mark to have been set */
-        tm = localtime(&evt->mark.tv_sec);
-        CU_ASSERT_EQUAL(tm->tm_hour, tests[i].hour);
-        CU_ASSERT_EQUAL(tm->tm_min, tests[i].min);
-
-        /* expect the mark to be in the future */
-        gettimeofday(&now, NULL);
-        diff = timesub(&now, &evt->mark);
-        CU_ASSERT(diff >= 0.0);
-
-        /* expect the period to have been set */
-        CU_ASSERT_EQUAL(evt->periodic, 0);
-        CU_ASSERT_EQUAL(evt->period, 24 * 60 * 60);
-
-        /* expect the hour and minute to have been set */
-        CU_ASSERT_EQUAL(evt->hour, tests[i].hour);
-        CU_ASSERT_EQUAL(evt->min, tests[i].min);
 
         /* expect other fields to be zeroed */
         CU_ASSERT_EQUAL(strarray_size(&evt->exec), 0);
@@ -222,7 +157,8 @@ static void test_event_set_exec(void)
 
     for (i = 0; i < n_tests; i++) {
         event_set_exec(event, tests[i].cmd);
-        CU_ASSERT_EQUAL(tests[i].expect_exec_count, strarray_size(&event->exec));
+        CU_ASSERT_EQUAL(tests[i].expect_exec_count,
+                        strarray_size(&event->exec));
     }
 
     event_free(event);
@@ -269,7 +205,8 @@ static void test_schedule_event(void)
         snprintf(name, sizeof(name), "event %u (" TIME_T_FMT ")",
                                      i, tests[i].mark_offset);
 
-        event = event_new_oneshot(name, TV_INIT(now + tests[i].mark_offset, 0));
+        event = event_new_oneshot(name,
+                                  TV_INIT(now + tests[i].mark_offset, 0));
 
         schedule_event(event);
     }
@@ -337,7 +274,6 @@ static void test_reschedule_event(void)
 
         snprintf(name, sizeof(name), "event %u", i);
 
-        /* XXX not testing at=hhmm events: they'll go away soon anyway */
         event = event_new_periodic(name,
                                    TV_INIT(tests[i].mark, 0),
                                    tests[i].period);
