@@ -2339,7 +2339,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     const char *cmd = masterconf_getstring(e, "cmd", "");
     const char *cron = masterconf_getstring(e, "cron", NULL);
     int period = 60 * masterconf_getint(e, "period", 0);
-    int at = masterconf_getint(e, "at", -1), hour, min;
+    int at = masterconf_getint(e, "at", -1);
     struct timeval now;
 
     gettimeofday(&now, 0);
@@ -2360,18 +2360,27 @@ static void add_event(const char *name, struct entry *e, void *rock)
     if (cron) {
         cronevent_add(name, cron, cmd, ignore_err);
     }
-    else {
-        struct event *evt;
+    else if (at >= 0) {
+        char cronspec[16];
+        int hour, min;
 
-        if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
-            evt = event_new_hourmin(name, hour, min);
+        hour = at / 100;
+        min = at % 100;
+
+        if (hour > 23 || min > 59) {
+            xsyslog(LOG_ERR, "invalid at=hhmm specification",
+                             "name=<%s> at=<%d>", name, at);
+            if (ignore_err) return;
+            fatal("invalid at=hhmm specification", EX_CONFIG);
         }
-        else {
-            evt = event_new_periodic(name, now, period);
-        }
+
+        snprintf(cronspec, sizeof(cronspec), "%d %d * * *", min, hour);
+        cronevent_add(name, cronspec, cmd, ignore_err);
+    }
+    else {
+        struct event *evt = event_new_periodic(name, now, period);
 
         event_set_exec(evt, cmd);
-
         schedule_event(evt);
     }
 }
