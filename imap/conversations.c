@@ -3532,7 +3532,23 @@ static int find_internaldate_cb(const conv_guidrec_t *rec, void *rock)
     return 0;
 }
 
+struct guidrep_lookup_rock {
+    mbentry_t *mbentry;
+    uint32_t uid;
+};
+
+static int _guidrep_lookup_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct guidrep_lookup_rock *lrock = (struct guidrep_lookup_rock *) rock;
+
+    conv_guidrec_mbentry(rec, &lrock->mbentry);
+    lrock->uid = rec->uid;
+
+    return IMAP_OK_COMPLETED;
+}
+
 EXPORTED void conversations_adjust_internaldate(struct conversations_state *cstate,
+                                                const char *mboxname,
                                                 struct message_guid *guid,
                                                 struct timespec *internaldate)
 {
@@ -3575,10 +3591,28 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
             return;
         }
 
-        xsyslog(LOG_INFO, "IOERROR: JMAPID conflict during append,"
+        // lookup conflicting GUID to report mailbox and UID
+        const char *existing_mboxname = "";
+        const char *existing_uniqueid = "";
+        struct guidrep_lookup_rock lrock = { NULL, 0 };
+        conversations_guid_foreach(cstate, existing_guid,
+                                   _guidrep_lookup_cb, &lrock);
+
+        if (lrock.mbentry) {
+            existing_mboxname = lrock.mbentry->name;
+            existing_uniqueid = lrock.mbentry->uniqueid;
+        }
+ 
+        xsyslog(LOG_INFO, "JMAPID conflict during append,"
                 " incrementing internaldate.tv_nsec",
-                "JMAPID=<%s> GUID=<%s> existing_GUID=<%s>",
-                buf_cstring(&jidrep), my_guid, existing_guid);
+                "mboxname=<%s> guid=<%s>"
+                " internaldate=<" UINT64_FMT UINT64_NANOSEC_FMT ">"
+                " existing.mboxname=<%s> existing.uniqueid=<%s>"
+                " existing.uid=<%u> existing.guid=<%s>",
+                mboxname, my_guid, internaldate->tv_sec, internaldate->tv_nsec,
+                existing_mboxname, existing_uniqueid, lrock.uid, existing_guid);
+
+        mboxlist_entry_free(&lrock.mbentry);
 
         // try the next nanosecond */
         internaldate->tv_nsec++;

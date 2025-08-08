@@ -5720,7 +5720,9 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             // copyrecord.internaldate.tv_nsec = 0;
 
             // make sure we don't have a JMAP ID (internaldate) clash
-            conversations_adjust_internaldate(cstate, &copyrecord.guid,
+            conversations_adjust_internaldate(cstate,
+                                              mailbox_name(mailbox),
+                                              &copyrecord.guid,
                                               &copyrecord.internaldate);
 
             int dirty = oldrecord.internaldate.tv_sec != copyrecord.internaldate.tv_sec
@@ -7929,7 +7931,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (mailbox->i.minor_version >= 20 && !(record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         /* but regardless, obey the rules for v20 or above mailboxes! */
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        conversations_adjust_internaldate(cstate, &record->guid, &record->internaldate);
+        conversations_adjust_internaldate(cstate, mailbox_name(mailbox),
+                                          &record->guid, &record->internaldate);
     }
 
     if (!record->gmtime.tv_sec) {
@@ -8109,7 +8112,8 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (mailbox->i.minor_version >= 20 && !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         /* but regardless, obey the rules for v20 or above mailboxes! */
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        conversations_adjust_internaldate(cstate, &record.guid, &record.internaldate);
+        conversations_adjust_internaldate(cstate, mailbox_name(mailbox),
+                                          &record.guid, &record.internaldate);
     }
 
     if (uid > mailbox->i.last_uid) {
