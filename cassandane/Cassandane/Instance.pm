@@ -311,6 +311,8 @@ sub _make_instance_info
 
 sub _make_unique_instance_info
 {
+    my ($self) = @_;
+
     # This must be kept in sync with cleanup_leftovers, which expects
     # to be able to recognise instance directories by name for cleanup.
     if (!defined $stamp)
@@ -336,7 +338,9 @@ sub _make_unique_instance_info
         last if mkdir($basedir);
         die "Cannot create $basedir: $!" if ($! != EEXIST);
     }
-    return _make_instance_info($name, $basedir);
+    my $info = _make_instance_info($name, $basedir);
+
+    return $info;
 }
 
 sub list
@@ -372,7 +376,7 @@ sub _init_basedir_and_name
     {
         # have neither name nor basedir
         # usual first time case for test instances
-        $info = _make_unique_instance_info();
+        $info = $self->_make_unique_instance_info();
     }
     else
     {
@@ -691,6 +695,7 @@ sub _list_pid_files
 sub _build_skeleton
 {
     my ($self) = @_;
+    my $basedir = $self->{basedir};
 
     my @subdirs =
     (
@@ -720,9 +725,20 @@ sub _build_skeleton
     );
     foreach my $sd (@subdirs)
     {
-        my $d = $self->{basedir} . '/' . $sd;
+        my $d = "$basedir/$sd";
         mkpath $d
             or die "Cannot make path $d: $!";
+    }
+
+    if ($self->{description}) {
+      open my $desc_fh, '>', "$basedir/description"
+        or die "Can't write to $basedir/description: $!";
+
+      $desc_fh->say($self->{description})
+        or die "Error writing to $basedir/description: $!";
+
+      close $desc_fh
+        or die "Error closing $basedir/description: $!";
     }
 }
 
