@@ -319,10 +319,14 @@ static void test_reschedule_event(void)
         time_t reschedule_at;
         time_t expect_mark;
     } tests[] = {
+        { 1000, 10,  905,  915 }, /* shouldn't happen, but don't break! */
         { 1000, 10, 1000, 1010 },
-        { 1000, 10, 1001, 1011 },
-        { 1000, 10, 1002, 1012 },
-        { 1000, 10, 1003, 1013 },
+        { 1000, 10, 1001, 1010 },
+        { 1000, 10, 1002, 1010 },
+        { 1000, 10, 1003, 1010 },
+        { 1000, 10, 1009, 1010 },
+        { 1000, 10, 1010, 1020 },
+        { 1000, 10, 1011, 1020 },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
