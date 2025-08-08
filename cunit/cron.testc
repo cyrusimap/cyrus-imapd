@@ -1,0 +1,460 @@
+/* Unit test for lib/cron.c and lib/cron-parse.y */
+#include <config.h>
+#include "cunit/unit.h"
+#include "cunit/unit-timezones.h"
+
+#include "lib/cron.h"
+
+#define SENTINEL (struct cron_spec){            \
+    .minutes = UINT64_C(0xcafef00dcafef00d),    \
+    .hours = UINT32_C(0xcafef00d),              \
+    .days_of_month = UINT32_C(0xcafef00d),      \
+    .months = UINT16_C(0xcafe),                 \
+    .days_of_week = UINT8_C(0xcf),              \
+}
+
+#define DO_CRON_PARSE_SPEC(a, b, c, d) do {                                 \
+    const char *arg_spec = (a);                                             \
+    const int arg_expect_r = (b);                                           \
+    const struct cron_spec *arg_expect_result = (c);                        \
+    const char *arg_expect_err = (d);                                       \
+                                                                            \
+    struct cron_spec actual_result = SENTINEL;                              \
+    const char *actual_err = NULL;                                          \
+    int actual_r;                                                           \
+                                                                            \
+    actual_r = cron_parse_spec(arg_spec, &actual_result, &actual_err);      \
+    CU_ASSERT_EQUAL(actual_r, arg_expect_r);                                \
+                                                                            \
+    if (arg_expect_r) {                                                     \
+        CU_ASSERT_PTR_NOT_NULL(actual_err);                                 \
+        CU_ASSERT_STRING_EQUAL(actual_err, arg_expect_err);                 \
+        CU_ASSERT_EQUAL(actual_result.minutes, SENTINEL.minutes);           \
+        CU_ASSERT_EQUAL(actual_result.hours, SENTINEL.hours);               \
+        CU_ASSERT_EQUAL(actual_result.days_of_month,                        \
+                        SENTINEL.days_of_month);                            \
+        CU_ASSERT_EQUAL(actual_result.months, SENTINEL.months);             \
+        CU_ASSERT_EQUAL(actual_result.days_of_week, SENTINEL.days_of_week); \
+    }                                                                       \
+    else {                                                                  \
+        CU_ASSERT_PTR_NULL(actual_err);                                     \
+        CU_ASSERT_EQUAL(actual_result.hours,                                \
+                        arg_expect_result->hours);                          \
+        CU_ASSERT_EQUAL(actual_result.days_of_month,                        \
+                        arg_expect_result->days_of_month);                  \
+        CU_ASSERT_EQUAL(actual_result.months,                               \
+                        arg_expect_result->months);                         \
+        CU_ASSERT_EQUAL(actual_result.days_of_week,                         \
+                        arg_expect_result->days_of_week);                   \
+    }                                                                       \
+} while (0)
+
+static int tear_down(void)
+{
+    restore_tz();
+    return 0;
+}
+
+static void test_cron_parse_spec_asterisk(void)
+{
+    const char *spec = "* * * * *";
+    struct cron_spec expect_result = {
+        CRON_ALL_MINUTES,
+        CRON_ALL_HOURS,
+        CRON_ALL_DAYS_OF_MONTH,
+        CRON_ALL_MONTHS,
+        CRON_ALL_DAYS_OF_WEEK,
+    };
+
+    DO_CRON_PARSE_SPEC(spec, 0, &expect_result, NULL);
+}
+
+static void test_cron_parse_spec_minutes(void)
+{
+    const struct {
+        const char *minutes_spec;
+        int expect_r;
+        uint64_t expect_minutes;
+        const char *expect_err;
+    } tests[] = {
+        { "0",       0, UINT64_C(0b1), NULL },
+        { "1",       0, UINT64_C(0b10), NULL },
+        { "2",       0, UINT64_C(0b100), NULL },
+        { "3",       0, UINT64_C(0b1000), NULL },
+        { "03",      0, UINT64_C(0b1000), NULL },
+        { "1,3",     0, UINT64_C(0b1010), NULL },
+        { "2-4,6-7,9",
+                     0, UINT64_C(0b1011011100), NULL },
+        { "4-17",    0, UINT64_C(0b111111111111110000), NULL },
+        { "*/5",     0,
+          UINT64_C(0b0000000010000100001000010000100001000010000100001000010000100001),
+          NULL },
+        { "5-15/2",  0, UINT64_C(0b0101010101000000), NULL },
+        { "0-2,5-6,7-23/3",
+                     0, UINT64_C(0b001001001001001001100111), NULL },
+        { "60",     -1, UINT64_C(0), "minutes out of range" },
+        { "65-70",  -1, UINT64_C(0), "value out of range" },
+        { "0-60",   -1, UINT64_C(0), "minutes out of range" },
+        { "0-60/5", -1, UINT64_C(0), "minutes out of range" },
+        { "15-2",   -1, UINT64_C(0), "range back to front" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec expect_result = {
+            tests[i].expect_minutes,
+            CRON_ALL_HOURS,
+            CRON_ALL_DAYS_OF_MONTH,
+            CRON_ALL_MONTHS,
+            CRON_ALL_DAYS_OF_WEEK,
+        };
+        char spec[128];
+
+        snprintf(spec, sizeof(spec), "%s * * * *", tests[i].minutes_spec);
+
+        DO_CRON_PARSE_SPEC(spec,
+                           tests[i].expect_r,
+                           &expect_result,
+                           tests[i].expect_err);
+    }
+}
+
+static void test_cron_parse_spec_hours(void)
+{
+    const struct {
+        const char *hours_spec;
+        int expect_r;
+        uint64_t expect_hours;
+        const char *expect_err;
+    } tests[] = {
+        { "0",       0, UINT32_C(0b1), NULL },
+        { "1",       0, UINT32_C(0b10), NULL },
+        { "2",       0, UINT32_C(0b100), NULL },
+        { "3",       0, UINT32_C(0b1000), NULL },
+        { "03",      0, UINT32_C(0b1000), NULL },
+        { "1,3",     0, UINT32_C(0b1010), NULL },
+        { "2-4,6-7,9",
+                     0, UINT32_C(0b1011011100), NULL },
+        { "4-17",    0, UINT32_C(0b111111111111110000), NULL },
+        { "*/5",     0, UINT32_C(0b000100001000010000100001), NULL },
+        { "5-15/2",  0, UINT32_C(0b0101010101000000), NULL },
+        { "0-2,5-6,7-23/3",
+                     0, UINT32_C(0b001001001001001001100111), NULL },
+        { "24",     -1, UINT32_C(0), "hours out of range" },
+        { "60-70",  -1, UINT32_C(0), "value out of range" },
+        { "0-24",   -1, UINT32_C(0), "hours out of range" },
+        { "0-24/4", -1, UINT32_C(0), "hours out of range" },
+        { "15-2",   -1, UINT32_C(0), "range back to front" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec expect_result = {
+            CRON_ALL_MINUTES,
+            tests[i].expect_hours,
+            CRON_ALL_DAYS_OF_MONTH,
+            CRON_ALL_MONTHS,
+            CRON_ALL_DAYS_OF_WEEK,
+        };
+        char spec[128];
+
+        snprintf(spec, sizeof(spec), "* %s * * *", tests[i].hours_spec);
+
+        DO_CRON_PARSE_SPEC(spec,
+                           tests[i].expect_r,
+                           &expect_result,
+                           tests[i].expect_err);
+    }
+}
+
+static void test_cron_parse_spec_days_of_month(void)
+{
+    const struct {
+        const char *doms_spec;
+        int expect_r;
+        uint32_t expect_doms;
+        const char *expect_err;
+    } tests[] = {
+        { "0",       0, UINT32_C(0b1000000000000000000000000000000), NULL },
+        { "1",       0, UINT32_C(0b1), NULL },
+        { "2",       0, UINT32_C(0b10), NULL },
+        { "3",       0, UINT32_C(0b100), NULL },
+        { "03",      0, UINT32_C(0b100), NULL },
+        { "1,3",     0, UINT32_C(0b101), NULL },
+        { "2-4,6-7,9",
+                     0, UINT32_C(0b101101110), NULL },
+        { "4-17",    0, UINT32_C(0b11111111111111000), NULL },
+        { "*/5",     0, UINT32_C(0b00100001000010000100001000010000), NULL },
+        { "5-15/2",  0, UINT32_C(0b00000000000000000010101010100000), NULL },
+        { "1-2,5-6,7-23/3",
+                     0, UINT32_C(0b00000000000100100100100100110011), NULL },
+        { "32",     -1, UINT32_C(0), "days of month out of range" },
+        { "65-70",  -1, UINT32_C(0), "value out of range" },
+        { "0-32",   -1, UINT32_C(0), "days of month out of range" },
+        { "0-40/5", -1, UINT32_C(0), "days of month out of range" },
+        { "15-2",   -1, UINT32_C(0), "range back to front" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec expect_result = {
+            CRON_ALL_MINUTES,
+            CRON_ALL_HOURS,
+            tests[i].expect_doms,
+            CRON_ALL_MONTHS,
+            CRON_ALL_DAYS_OF_WEEK,
+        };
+        char spec[128];
+
+        snprintf(spec, sizeof(spec), "* * %s * *", tests[i].doms_spec);
+
+        DO_CRON_PARSE_SPEC(spec,
+                           tests[i].expect_r,
+                           &expect_result,
+                           tests[i].expect_err);
+    }
+}
+
+static void test_cron_parse_spec_months(void)
+{
+    const struct {
+        const char *months_spec;
+        int expect_r;
+        uint16_t expect_months;
+        const char *expect_err;
+    } tests[] = {
+        { "0",       0, UINT16_C(0b100000000000), NULL },
+        { "1",       0, UINT16_C(0b1), NULL },
+        { "2",       0, UINT16_C(0b10), NULL },
+        { "3",       0, UINT16_C(0b100), NULL },
+        { "03",      0, UINT16_C(0b100), NULL },
+        { "1,3",     0, UINT16_C(0b101), NULL },
+        { "2-4,6-7,9",
+                     0, UINT16_C(0b101101110), NULL },
+        { "*/2",     0, UINT16_C(0b101010101010), NULL },
+        { "*/3",     0, UINT16_C(0b100100100100), NULL },
+        { "*/4",     0, UINT16_C(0b100010001000), NULL },
+        { "*/5",     0, UINT16_C(0b001000010000), NULL },
+        { "*/6",     0, UINT16_C(0b100000100000), NULL },
+        { "*/7",     0, UINT16_C(0b000001000000), NULL },
+        { "5-11/2",  0, UINT16_C(0b001010100000), NULL },
+        { "1-2,5-6,7-12/3",
+                     0, UINT16_C(0b100100110011), NULL },
+        { "jan",     0, UINT16_C(0b1), NULL },
+        { "feb",     0, UINT16_C(0b10), NULL },
+        { "mar",     0, UINT16_C(0b100), NULL },
+        { "apr",     0, UINT16_C(0b1000), NULL },
+        { "may",     0, UINT16_C(0b10000), NULL },
+        { "jun",     0, UINT16_C(0b100000), NULL },
+        { "jul",     0, UINT16_C(0b1000000), NULL },
+        { "aug",     0, UINT16_C(0b10000000), NULL },
+        { "sep",     0, UINT16_C(0b100000000), NULL },
+        { "oct",     0, UINT16_C(0b1000000000), NULL },
+        { "nov",     0, UINT16_C(0b10000000000), NULL },
+        { "dec",     0, UINT16_C(0b100000000000), NULL },
+        { "13",     -1, UINT16_C(0), "months out of range" },
+        { "65-70",  -1, UINT16_C(0), "value out of range" },
+        { "1-13",   -1, UINT16_C(0), "months out of range" },
+        { "1-20/5", -1, UINT16_C(0), "months out of range" },
+        { "7-2",    -1, UINT16_C(0), "range back to front" },
+        { "cat",    -1, UINT16_C(0), "syntax error" },
+        { "jan,feb",-1, UINT16_C(0), "syntax error" },
+        { "sun",    -1, UINT16_C(0), "syntax error" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec expect_result = {
+            CRON_ALL_MINUTES,
+            CRON_ALL_HOURS,
+            CRON_ALL_DAYS_OF_MONTH,
+            tests[i].expect_months,
+            CRON_ALL_DAYS_OF_WEEK,
+        };
+        char spec[128];
+
+        snprintf(spec, sizeof(spec), "* * * %s *", tests[i].months_spec);
+
+        DO_CRON_PARSE_SPEC(spec,
+                           tests[i].expect_r,
+                           &expect_result,
+                           tests[i].expect_err);
+    }
+}
+
+static void test_cron_parse_spec_days_of_week(void)
+{
+    const struct {
+        const char *dows_spec;
+        int expect_r;
+        uint8_t expect_dows;
+        const char *expect_err;
+    } tests[] = {
+        { "0",       0, UINT8_C(0b1), NULL },
+        { "7",       0, UINT8_C(0b1), NULL },
+        { "1",       0, UINT8_C(0b10), NULL },
+        { "2",       0, UINT8_C(0b100), NULL },
+        { "3",       0, UINT8_C(0b1000), NULL },
+        { "03",      0, UINT8_C(0b1000), NULL },
+        { "1,3",     0, UINT8_C(0b1010), NULL },
+        { "2-4,6-7", 0, UINT8_C(0b01011101), NULL },
+        { "*/2",     0, UINT8_C(0b01010101), NULL },
+        { "*/3",     0, UINT8_C(0b01001001), NULL },
+        { "*/4",     0, UINT8_C(0b00010001), NULL },
+        { "*/5",     0, UINT8_C(0b00100001), NULL },
+        { "*/6",     0, UINT8_C(0b01000001), NULL },
+        { "*/7",     0, UINT8_C(0b00000001), NULL },
+        { "2-7/2",   0, UINT8_C(0b01010100), NULL },
+        { "0,2-6/3", 0, UINT8_C(0b01001001), NULL },
+        { "sun",     0, UINT8_C(0b1), NULL },
+        { "mon",     0, UINT8_C(0b10), NULL },
+        { "tue",     0, UINT8_C(0b100), NULL },
+        { "wed",     0, UINT8_C(0b1000), NULL },
+        { "thu",     0, UINT8_C(0b10000), NULL },
+        { "fri",     0, UINT8_C(0b100000), NULL },
+        { "sat",     0, UINT8_C(0b1000000), NULL },
+        { "8",      -1, UINT8_C(0), "days of week out of range" },
+        { "65-70",  -1, UINT8_C(0), "value out of range" },
+        { "1-13",   -1, UINT8_C(0), "days of week out of range" },
+        { "1-20/5", -1, UINT8_C(0), "days of week out of range" },
+        { "7-2",    -1, UINT8_C(0), "range back to front" },
+        { "cat",    -1, UINT8_C(0), "syntax error" },
+        { "sat,sun",-1, UINT8_C(0), "syntax error" },
+        { "jan",    -1, UINT8_C(0), "syntax error" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec expect_result = {
+            CRON_ALL_MINUTES,
+            CRON_ALL_HOURS,
+            CRON_ALL_DAYS_OF_MONTH,
+            CRON_ALL_MONTHS,
+            tests[i].expect_dows,
+        };
+        char spec[128];
+
+        snprintf(spec, sizeof(spec), "* * * * %s", tests[i].dows_spec);
+
+        DO_CRON_PARSE_SPEC(spec,
+                           tests[i].expect_r,
+                           &expect_result,
+                           tests[i].expect_err);
+    }
+}
+
+#define TV_INIT(s, u) (struct timeval){ .tv_sec = (s), .tv_usec = (u) }
+
+#define CS_MOMENT(min, hr, dm, mon, dw) (struct cron_spec) {                \
+    .minutes = UINT64_C(1) << (min),                                        \
+    .hours = UINT32_C(1) << (hr),                                           \
+    .days_of_month = UINT32_C(1) << ((dm) - 1),                             \
+    .months = UINT16_C(1) << ((mon) - 1),                                   \
+    .days_of_week = UINT8_C(1) << (dw),                                     \
+}
+
+#define TIME_T_NOSEC(t) ({ __auto_type t_ = (t); t_ - (t_ % 60); })
+
+static void test_cron_spec_from_timeval(void)
+{
+    const struct {
+        const char *tz;
+        struct timeval tv;
+        struct cron_spec expect_spec;
+        time_t expect_run_time;
+    } tests[] = {
+        { TZ_MELBOURNE,
+          TV_INIT(1753837286, 0),   /* UTC: 2025-07-30 01:01 */
+          /* just a normal time */
+          CS_MOMENT(1, 12, 30, 7, 3),
+          TIME_T_NOSEC(1753837286) },
+        { TZ_NEWYORK,
+          TV_INIT(1754020800, 0),   /* UTC: 2025-08-01 04:00 */
+          /* trying to exercise tm_mday==0 behaviour... */
+          CS_MOMENT(0, 23, 31, 7, 4),
+          TIME_T_NOSEC(1754020800) },
+        { TZ_MELBOURNE,
+          TV_INIT(1709179200, 0),   /* UTC: 2024-02-29 04:00 */
+          /* better try february 29... */
+          CS_MOMENT(0, 15, 29, 2, 4),
+          TIME_T_NOSEC(1709179200) },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec actual_spec = SENTINEL;
+        time_t actual_run_time = -1;
+
+        push_tz(tests[i].tz);
+        cron_spec_from_timeval(&actual_spec, &actual_run_time, &tests[i].tv);
+        pop_tz();
+
+        CU_ASSERT_EQUAL(actual_spec.hours, tests[i].expect_spec.hours);
+        CU_ASSERT_EQUAL(actual_spec.days_of_month,
+                        tests[i].expect_spec.days_of_month);
+        CU_ASSERT_EQUAL(actual_spec.months, tests[i].expect_spec.months);
+        CU_ASSERT_EQUAL(actual_spec.days_of_week,
+                        tests[i].expect_spec.days_of_week);
+
+        CU_ASSERT_EQUAL(actual_run_time, tests[i].expect_run_time);
+    }
+}
+
+static void test_cron_spec_matches(void)
+{
+    const struct {
+        const char *spec_str;
+        struct cron_spec current_time;
+        bool expect_matches;
+    } tests[] = {
+        /* any time should match all asterisks */
+        { "* * * * *", CS_MOMENT(27, 11, 4, 8, 1), true },
+        /* 4am on 2nd of any month regardless of day-of-week */
+        { "0 4 2 * *", CS_MOMENT(0, 4, 2, 8, 6), true },
+        { "0 4 2 * *", CS_MOMENT(1, 4, 2, 8, 6), false },
+        { "0 4 2 * *", CS_MOMENT(0, 3, 2, 8, 6), false },
+        { "0 4 2 * *", CS_MOMENT(0, 4, 3, 8, 0), false },
+        { "0 4 2 * *", CS_MOMENT(0, 4, 2, 7, 3), true },
+        /* 4am on any day of august */
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 2, 8, 6), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 3, 8, 0), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 4, 8, 1), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 8, 2), true },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 7, 1), false },
+        { "0 4 * 8 *", CS_MOMENT(0, 4, 5, 6, 4), false },
+        /* 4am on any friday regardless of day-of-month */
+        { "0 4 * * 5", CS_MOMENT(0, 4,  1, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4,  8, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 15, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 22, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 29, 8, 5), true },
+        { "0 4 * * 5", CS_MOMENT(0, 4, 30, 8, 6), false },
+        /* 4am on any friday OR any 13th day-of-month */
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 17, 6, 2), false },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 20, 6, 5), true },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 13, 7, 0), true },
+        { "0 4 13 * 5", CS_MOMENT(0, 4, 13, 6, 5), true },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct cron_spec spec = SENTINEL;
+        bool actual_matches;
+        int r;
+
+        r = cron_parse_spec(tests[i].spec_str, &spec, NULL);
+        CU_ASSERT_EQUAL(r, 0);
+
+        actual_matches = cron_spec_matches(&spec, &tests[i].current_time);
+        CU_ASSERT_EQUAL(actual_matches, tests[i].expect_matches);
+    }
+}
+
+/* vim: set ft=c: */

@@ -889,6 +889,97 @@ sub test_periodic_event_slow
                               }, $self->lemming_census());
 }
 
+sub test_at_event_bad
+{
+    my ($self) = @_;
+
+    my $srv = $self->lemming_service(tag => 'A');
+
+    # schedule an event with a bad at=hhmm specification
+    $self->lemming_event(tag => 'B',
+                         mode => 'success',
+                         at => '2401');
+    eval {
+        $self->start();
+    };
+    my $e = $@;
+    # The exception thrown depends on how cassandane and master race
+    # against one another.  If master wins, cassandane gets stuck waiting
+    # for the PID file to be valid, and eventually throws a timeout
+    # exception.  If cassandane wins, it correctly detects that master is
+    # no longer running, and throws that.
+    $self->assert_not_null($e);
+#     $self->assert_matches(qr{the master PID file to exist}, $e);
+#     $self->assert_matches(qr{Master no longer running}, $e);
+
+    $self->assert_num_equals(0, $self->{instance}->is_running());
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{invalid at=hhmm specification});
+}
+
+sub test_at_event_slow
+{
+    my ($self) = @_;
+
+    my $srv = $self->lemming_service(tag => 'A');
+
+    # schedule some events to run a little after the current time, and check
+    # that they do
+    my @offsets = (1, 3, 20);
+
+    my $now = time;
+    my $localtz = DateTime::TimeZone->new(name => 'local');
+    foreach my $offset (@offsets) {
+        my $dt = DateTime->from_epoch(epoch => $now, time_zone => $localtz);
+        $dt->add(minutes => $offset);
+        my $hhmm = $dt->strftime('%H%M');
+        $self->lemming_event(tag => $offset,
+                             mode => 'success',
+                             at => $hhmm);
+    }
+    $self->start();
+
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5 * 60 + 5);
+
+    $self->assert_deep_equals({
+        '1'  => { live => 0, dead => 1 },
+        '3'  => { live => 0, dead => 1 },
+        # 20 shouldn't run
+    }, $self->lemming_census());
+}
+
+sub test_cron_event_slow
+{
+    my ($self) = @_;
+
+    my $srv = $self->lemming_service(tag => 'A');
+
+    # schedule an event to run a few times a little after the current time,
+    # and check that it does
+    my @offsets = (1, 3, 20);
+
+    my $now = time;
+    my $localtz = DateTime::TimeZone->new(name => 'local');
+    my @minutes;
+    foreach my $offset (@offsets) {
+        my $dt = DateTime->from_epoch(epoch => $now, time_zone => $localtz);
+        $dt->add(minutes => $offset);
+        push @minutes, $dt->minute;
+    }
+    $self->lemming_event(tag => 'B',
+                         mode => 'success',
+                         cron => join(',', @minutes) . " * * * *");
+    $self->start();
+
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5 * 60 + 5);
+
+    $self->assert_deep_equals({
+        'B'  => { live => 0, dead => 2 },
+    }, $self->lemming_census());
+}
+
 sub test_service_bad_name
 {
     my ($self) = @_;

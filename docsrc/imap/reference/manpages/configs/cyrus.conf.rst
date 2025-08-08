@@ -225,19 +225,30 @@ scheduled cleanup/maintenance.
 
 ..
 
-        The interval (in minutes) at which to run the command.  This
-        integer value is optional, but SHOULD be a positive integer >
-        10.
+        The interval (in minutes) at which to run the command.
+
+        This is optional, but one of "period" or "cron" must be specified.
 
 .. parsed-literal::
 
-    **at=**\ <hhmm>
+    **cron=**\ "min hr dom mon dow"
+
+..
+
+        A string containing five space-delimited fields describing the
+        minute, hour, day-of-month, month, and day-of-week that this job
+        should run, like :manpage:`crontab(5)`.
+
+        This is optional, but one of "period" or "cron" must be specified.
+
+.. parsed-literal::
+
+    **at=**\ hhmm
 
 ..
 
         The time (24-hour format) at which to run the command each day.
-        If set to a valid time (0000-2359), period is automatically
-        set to 1440. This string argument is optional.
+        This is an alias for ``cron="mm hh * * *"``.
 
 DAEMON
 ------
