@@ -159,8 +159,15 @@ EXPORTED void reschedule_event(struct event *evt, struct timeval now)
     assert(evt->period);
 
     if (evt->periodic) {
-        evt->mark = now;
-        evt->mark.tv_sec += evt->period;
+        time_t now_s = now.tv_sec;
+        time_t period = evt->period;
+        time_t mark = MIN(now_s, evt->mark.tv_sec);
+
+        /* don't fall behind schedule if we're running slow for some reason */
+        while (mark <= now_s)
+            mark += period;
+
+        evt->mark.tv_sec = mark;
     }
     else {
         struct tm *tm;
