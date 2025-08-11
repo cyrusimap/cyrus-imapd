@@ -3765,6 +3765,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_THREADID)) {
+        struct buf buf = BUF_INITIALIZER;
         if (!record.cid) {
             buf_appendcstr(&buf, "NIL");
         }
