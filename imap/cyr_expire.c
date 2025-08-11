@@ -749,22 +749,36 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         int n = strarray_size(&ctx->erock.to_cleanup);
         for (i = n; i > 0; i--) {
             const char *name = strarray_nth(&ctx->erock.to_cleanup, i-1);
+            user_nslock_t *user_nslock = user_nslock_lockmb_w(name);
+
             mbentry_t *mbentry = NULL;
+            mbentry_t *unqmbentry = NULL;
             if (mboxlist_lookup_allow_all(name, &mbentry, NULL))
-                continue;
-            user_nslock_t *user_nslock = user_nslock_lockmb_w(mbentry->name);
+                goto done;
+            if (mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &unqmbentry, NULL))
+                goto done;
+            // if we're deleting the current mailbox, bump the deletemodseq counter so we know we can't
+            // calculate changes to this any more
             if (!mboxname_isdeletedmailbox(mbentry->name, NULL)) {
                 mboxname_setmodseq(mbentry->name, mbentry->foldermodseq,
                                    mbentry->mbtype & ~MBTYPE_DELETED,
                                    MBOXMODSEQ_ISFOLDER|MBOXMODSEQ_ISDELETE);
             }
             mboxlist_delete(mbentry);
-            if (mboxname_isusermailbox(mbentry->name, 1)) {
+            // also if this was the INBOX and the user's mbentry is either deleted or the same, then clean
+            // up the userdata, as counters may have been recreated
+            if (mboxname_isusermailbox(mbentry->name, 1)
+                 && (!strcmp(mbentry->name, unqmbentry->name)
+                     || mboxname_isdeletedmailbox(unqmbentry->name, NULL))) {
                 // clean up again, counters probably got re-created
                 user_deletedata(mbentry, 1);
             }
-            user_nslock_release(&user_nslock);
+
+done:
+            mboxlist_entry_free(&unqmbentry);
             mboxlist_entry_free(&mbentry);
+
+            user_nslock_release(&user_nslock);
         }
 
         if (n) {
