@@ -696,8 +696,13 @@ sub test_downgrade_upgrade
 
 sub test_upgrade_v19_to_v20
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :Replication
+    :NoStartInstances
 {
     my ($self) = @_;
+
+    $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
+    $self->{replica}->{config}->set(mboxlist_db => 'twoskip');
+    $self->_start_instances();
 
     my $talk = $self->{store}->get_client();
     $talk->create('INBOX.foo');

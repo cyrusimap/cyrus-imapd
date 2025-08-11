@@ -2,9 +2,16 @@
 use Cassandane::Tiny;
 
 sub test_email_legacy_ids
-    :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions
+    :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions :NoStartInstances
 {
     my ($self) = @_;
+
+    $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
+
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+    $self->setup_default_using();
+
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};
