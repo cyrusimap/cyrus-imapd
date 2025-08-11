@@ -8635,7 +8635,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
 
     // make the mailbox dirty regardless
     if (flags & RECONSTRUCT_ALWAYS_DIRTY)
-        mailbox_index_dirty(mailbox);
+        mailbox_modseq_dirty(mailbox);
 
     /* fix up 2.4.0 bug breakage */
     if (!mailbox->i.uidvalidity) {
