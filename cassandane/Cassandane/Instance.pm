@@ -2715,6 +2715,10 @@ sub setup_syslog_replacement
 # But if you need to make sure an error WAS logged, first make sure that
 # $instance->{have_syslog_replacement} is true, otherwise you will always
 # fail on systems where the syslog replacement doesn't work.
+#
+# In most cases you probably want assert_syslog_matches from TestCase
+# (or assert_syslog_does_not_match).  If you need something trickier,
+# check those anyway to see how to do so safely.
 sub getsyslog
 {
     my ($self, $pattern) = @_;
