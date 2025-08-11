@@ -599,7 +599,7 @@ sub _create_instances
     my $want = $self->{_want};
     my %instance_params = %{$self->{_instance_params}};
 
-    $instance_params{lsan_suppressions} = "$self->{lsan_suppressions}";
+    $instance_params{lsan_suppressions} = $self->{lsan_suppressions} // "";
 
     my $cassini = Cassandane::Cassini->instance();
 
