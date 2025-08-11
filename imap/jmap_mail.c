@@ -1872,20 +1872,20 @@ static void emailsearch_jmapseen_decref(struct search_attr **attrp)
 
     struct jmapseen_attrdata *ad = attr->data1;
     if (ad) {
-        if (ad->refcount)
+        if (ad->refcount) {
             --ad->refcount;
-        if (!ad->refcount) {
-            if (ad->seendb)
-                seen_close(&ad->seendb);
-            for (int i = 0; i < ad->numfolders; i++) {
-                if (ad->folders[i].seendb_uids)
-                    seqset_free(&ad->folders[i].seendb_uids);
+            if (!ad->refcount) {
+                if (ad->seendb)
+                    seen_close(&ad->seendb);
+                for (int i = 0; i < ad->numfolders; i++) {
+                    if (ad->folders[i].seendb_uids)
+                        seqset_free(&ad->folders[i].seendb_uids);
+                }
+                xzfree(ad->folders);
+                xzfree(ad->userid);
+                xzfree(attr->data1);
+                xzfree(*attrp);
             }
-            free(ad->folders);
-            free(ad->userid);
-            xzfree(ad);
-            free(*attrp);
-            *attrp = NULL;
         }
     }
 }
