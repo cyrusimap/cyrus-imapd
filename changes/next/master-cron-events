@@ -1,0 +1,24 @@
+Description:
+
+Adds support for cron-style scheduling of cyrus.conf EVENTS
+
+
+Documentation:
+
+cyrus.conf(5)
+doc/examples/cyrus_conf/*
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None
