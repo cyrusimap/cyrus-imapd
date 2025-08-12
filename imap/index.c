@@ -154,7 +154,8 @@ static int index_store_annotation(struct index_state *state, uint32_t msgno,
                            msgrecord_t *mrw, struct storeargs *storeargs,
                            int *dirty);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-                            const struct fetchargs *fetchargs);
+                            const struct fetchargs *fetchargs,
+                            struct buf *msg, struct buf *item);
 static void index_printflags(struct index_state *state, uint32_t msgno,
                              unsigned tell_flags);
 static char *get_localpart_addr(const char *header);
@@ -1119,6 +1120,8 @@ EXPORTED int index_fetchresponses(struct index_state *state,
     int inc;
     unsigned long count = 0;
     annotate_db_t *annot_db = NULL;
+    struct buf msg = BUF_INITIALIZER;  // reusable buffer for mmaped message
+    struct buf item = BUF_INITIALIZER; // resubale buffer for item values
 
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
@@ -1182,10 +1185,13 @@ EXPORTED int index_fetchresponses(struct index_state *state,
 
         if (++count < fetchargs->partial.low) continue;
 
-        if ((r = index_fetchreply(state, msgno, fetchargs)))
+        if ((r = index_fetchreply(state, msgno, fetchargs, &msg, &item)))
             break;
         fetched = 1;
     }
+
+    buf_free(&msg);
+    buf_free(&item);
 
     /* Update oldhighestmodseq, ensuring we don't have unsolicited updates */
     state->oldhighestmodseq = state->highestmodseq;
@@ -3577,11 +3583,11 @@ static void loadbody(struct mailbox *mailbox, struct index_record *record,
  * Helper function to send requested * FETCH data for a message
  */
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-                            const struct fetchargs *fetchargs)
+                            const struct fetchargs *fetchargs,
+                            struct buf *msg, struct buf *item)
 {
     struct mailbox *mailbox = state->mailbox;
     int fetchitems = fetchargs->fetchitems;
-    struct buf buf = BUF_INITIALIZER;
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
@@ -3592,6 +3598,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
     struct body *body = NULL;
+
+    buf_reset(msg);
 
     /* Check the modseq against changedsince */
     if (fetchargs->changedsince && im->modseq <= fetchargs->changedsince)
@@ -3618,7 +3626,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         fetchargs->cache_atleast > record.cache_version ||
         fetchargs->binsections || fetchargs->sizesections ||
         fetchargs->bodysections) {
-        if (mailbox_map_record(mailbox, &record, &buf)) {
+        if (mailbox_map_record(mailbox, &record, msg)) {
             prot_printf(state->out, "* OK ");
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
@@ -3707,19 +3715,18 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         /* Per RFC 8970, Section 6: "PREVIEW" SP nstring */
         prot_printf(state->out, "%cPREVIEW ", sepchar);
         const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
-        struct buf previewbuf = BUF_INITIALIZER;
+        buf_reset(item);
         annotatemore_msg_lookup(mailbox, record.uid, annot+7,
-                                /*userid*/"", &previewbuf);
-        if (buf_len(&previewbuf) > 256)
-            buf_truncate(&previewbuf, 256); // XXX - utf8 chars
-        prot_printstring(state->out, buf_cstring(&previewbuf));
-        buf_free(&previewbuf);
+                                /*userid*/"", item);
+        if (buf_len(item) > 256)
+            buf_truncate(item, 256); // XXX - utf8 chars
+        prot_printstring(state->out, buf_cstring(item));
 
         sepchar = ' ';
     }
     if (fetchitems & FETCH_FILESIZE) {
-        unsigned int msg_size = buf.len;
-        if (!buf.s) {
+        unsigned int msg_size = buf_len(msg);
+        if (!(msg->flags & BUF_MMAP)) {
             const char *fname = mailbox_record_fname(mailbox, &record);
             struct stat sbuf;
             /* Find the size of the message file */
@@ -3734,53 +3741,50 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if (fetchitems & FETCH_SHA1) {
         struct message_guid tmpguid;
-        message_guid_generate(&tmpguid, buf.s, buf.len);
+        message_guid_generate(&tmpguid, buf_base(msg), buf_len(msg));
         prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        struct buf buf = BUF_INITIALIZER;
+        buf_reset(item);
         if (state->has_compactids) {
-            buf_putc(&buf, 'S');
-            NANOSEC_TO_JMAPID(&buf,
+            buf_putc(item, 'S');
+            NANOSEC_TO_JMAPID(item,
                               TIMESPEC_TO_NANOSEC(&record.internaldate));
         }
         else {
-            buf_putc(&buf, 'M');
-            buf_appendmap(&buf, message_guid_encode(&record.guid), 24);
+            buf_putc(item, 'M');
+            buf_appendmap(item, message_guid_encode(&record.guid), 24);
         }
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(&buf));
-        buf_free(&buf);
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(item));
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
-        struct buf buf = BUF_INITIALIZER;
+        buf_reset(item);
         if (!record.cid)
-            buf_appendcstr(&buf, "NIL");
+            buf_appendcstr(item, "NIL");
         else
-            buf_printf(&buf, CONV_FMT, record.cid);
-        prot_printf(state->out, "%cCID %s", sepchar, buf_cstring(&buf));
-        buf_free(&buf);
+            buf_printf(item, CONV_FMT, record.cid);
+        prot_printf(state->out, "%cCID %s", sepchar, buf_cstring(item));
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_THREADID)) {
-        struct buf buf = BUF_INITIALIZER;
+        buf_reset(item);
         if (!record.cid) {
-            buf_appendcstr(&buf, "NIL");
+            buf_appendcstr(item, "NIL");
         }
         else if (state->has_compactids) {
-            buf_putc(&buf, 'A');
+            buf_putc(item, 'A');
             uint64_t u64 = htonll(record.cid);
-            charset_encode(&buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
+            charset_encode(item, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
         }
         else {
-            buf_putc(&buf, 'T');
-            buf_printf(&buf, CONV_FMT, record.cid);
+            buf_putc(item, 'T');
+            buf_printf(item, CONV_FMT, record.cid);
         }
 
-        prot_printf(state->out, "%cTHREADID (%s)", sepchar, buf_cstring(&buf));
-        buf_free(&buf);
+        prot_printf(state->out, "%cTHREADID (%s)", sepchar, buf_cstring(item));
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
@@ -3805,13 +3809,12 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if ((fetchitems & FETCH_BASECID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {
         mailbox_read_basecid(mailbox, &record);
-        struct buf buf = BUF_INITIALIZER;
+        buf_reset(item);
         if (!record.basecid)
-            buf_appendcstr(&buf, "NIL");
+            buf_appendcstr(item, "NIL");
         else
-            buf_printf(&buf, CONV_FMT, record.basecid);
-        prot_printf(state->out, "%cBASECID %s", sepchar, buf_cstring(&buf));
-        buf_free(&buf);
+            buf_printf(item, CONV_FMT, record.basecid);
+        prot_printf(state->out, "%cBASECID %s", sepchar, buf_cstring(item));
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_FOLDER)) {
@@ -3868,7 +3871,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_HEADER) {
         prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
         sepchar = ' ';
-        index_fetchmsg(state, &buf, 0,
+        index_fetchmsg(state, msg, 0,
                        record.header_size,
                        (fetchitems & FETCH_IS_PARTIAL) ?
                          fetchargs->start_octet : 0,
@@ -3879,7 +3882,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
         sepchar = ' ';
         if (fetchargs->cache_atleast > record.cache_version) {
-            index_fetchheader(state, buf.s, buf.len,
+            index_fetchheader(state, buf_base(msg), buf_len(msg),
                               record.header_size,
                               &fetchargs->headers, &fetchargs->headers_not);
         } else {
@@ -3890,7 +3893,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_TEXT) {
         prot_printf(state->out, "%cRFC822.TEXT ", sepchar);
         sepchar = ' ';
-        index_fetchmsg(state, &buf,
+        index_fetchmsg(state, msg,
                        record.header_size, record.size - record.header_size,
                        (fetchitems & FETCH_IS_PARTIAL) ?
                          fetchargs->start_octet : 0,
@@ -3900,7 +3903,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_RFC822) {
         prot_printf(state->out, "%cRFC822 ", sepchar);
         sepchar = ' ';
-        index_fetchmsg(state, &buf, 0, record.size,
+        index_fetchmsg(state, msg, 0, record.size,
                        (fetchitems & FETCH_IS_PARTIAL) ?
                          fetchargs->start_octet : 0,
                        (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3926,7 +3929,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         if (fetchargs->cache_atleast > record.cache_version) {
             loadbody(mailbox, &record, &body);
             if (body) {
-                index_fetchfsection(state, buf.s, buf.len,
+                index_fetchfsection(state, buf_base(msg), buf_len(msg),
                                     fsection,
                                     body,
                                     (fetchitems & FETCH_IS_PARTIAL) ?
@@ -3960,7 +3963,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         loadbody(mailbox, &record, &body);
         if (body) {
             /* n.b. success should not conceal an earlier error */
-            int r2 = index_fetchsection(state, respbuf, &buf,
+            int r2 = index_fetchsection(state, respbuf, msg,
                                         section->name, body, record.size,
                                         (fetchitems & FETCH_IS_PARTIAL) ?
                                          fetchargs->start_octet : oi->start_octet,
@@ -3983,7 +3986,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         if (body) {
             oi = &section->octetinfo;
             /* n.b. success should not conceal an earlier error */
-            int r2 = index_fetchsection(state, respbuf, &buf,
+            int r2 = index_fetchsection(state, respbuf, msg,
                                         section->name, body, record.size,
                                         (fetchitems & FETCH_IS_PARTIAL) ?
                                          fetchargs->start_octet : oi->start_octet,
@@ -4005,7 +4008,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         loadbody(mailbox, &record, &body);
         if (body) {
             /* n.b. success should not conceal an earlier error */
-            int r2 = index_fetchsection(state, respbuf, &buf,
+            int r2 = index_fetchsection(state, respbuf, msg,
                                         section->name, body, record.size,
                                         fetchargs->start_octet,
                                         fetchargs->octet_count);
@@ -4017,7 +4020,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         /* finish the response if we have one */
         prot_printf(state->out, ")\r\n");
     }
-    buf_free(&buf);
     if (body) {
         message_free_body(body);
         free(body);
