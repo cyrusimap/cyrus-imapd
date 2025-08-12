@@ -1084,7 +1084,8 @@ havefile:
     // timestamp might be nanoseconds from the clock plus seconds from the
     // append timestamp, either way it MIGHT clash
     // make sure we don't have a JMAP ID (internaldate) clash
-    conversations_adjust_internaldate(cstate, guid, internaldate);
+    conversations_adjust_internaldate(cstate, mailbox_name(mailbox),
+                                      guid, internaldate);
 
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
@@ -1557,7 +1558,8 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         struct conversations_state *cstate = mailbox_get_cstate(as->mailbox);
-        conversations_adjust_internaldate(cstate, &guid, &internaldate);
+        conversations_adjust_internaldate(cstate, mailbox_name(as->mailbox),
+                                          &guid, &internaldate);
 
         r = msgrecord_set_internaldate(dst_msgrec, &internaldate);
         if (r) goto out;
