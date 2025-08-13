@@ -70,7 +70,10 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, UPGRADE, ENABLE_COMPACTIDS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS };
+
+static int recalc_repair  = 0;
+static int recalc_upgrade = 0;
 
 static int verbose = 0;
 
@@ -415,14 +418,14 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     return r;
 }
 
-static int do_recalc(const char *userid, int do_upgrade)
+static int do_recalc(const char *userid)
 {
     struct conversations_state *state = NULL;
 
     int r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    if (do_upgrade && state->version == CONVERSATIONS_VERSION) {
+    if (recalc_upgrade && !recalc_repair && state->version == CONVERSATIONS_VERSION) {
         if (verbose)
             printf("%s already version %d, skipping\n", userid, state->version);
         conversations_commit(&state);
@@ -432,7 +435,7 @@ static int do_recalc(const char *userid, int do_upgrade)
     // wipe if it's currently folders_byname, will recreate with byid
     int wipe = state->folders_byname;
 
-    r = conversations_zero_counts(state, wipe, do_upgrade);
+    r = conversations_zero_counts(state, wipe, recalc_upgrade);
     if (r) goto err;
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
@@ -1053,7 +1056,7 @@ static int do_user(const char *userid, void *rock)
         break;
 
     case RECALC:
-        if (do_recalc(userid, /*do_upgrade*/0))
+        if (do_recalc(userid))
             r = EX_NOINPUT;
         break;
 
@@ -1064,11 +1067,6 @@ static int do_user(const char *userid, void *rock)
 
     case CHECKFOLDERS:
         if (do_checkfolders(userid))
-            r = EX_NOINPUT;
-        break;
-
-    case UPGRADE:
-        if (do_recalc(userid, /*do_upgrade*/1))
             r = EX_NOINPUT;
         break;
 
@@ -1190,8 +1188,9 @@ int main(int argc, char **argv)
             break;
 
         case 'R':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN && mode != RECALC)
                 usage(argv[0]);
+            recalc_repair = 1;
             mode = RECALC;
             break;
 
@@ -1208,9 +1207,10 @@ int main(int argc, char **argv)
             break;
 
         case 'U':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN && mode != RECALC)
                 usage(argv[0]);
-            mode = UPGRADE;
+            recalc_upgrade = 1;
+            mode = RECALC;
             break;
 
         case 'I':
@@ -1287,9 +1287,8 @@ static int usage(const char *name)
     fprintf(stderr, "    -d             dump the conversations database to stdout\n");
     fprintf(stderr, "    -z             zero the conversations DB (make all NULLs)\n");
     fprintf(stderr, "    -b             build conversations entries for any NULL records\n");
-    fprintf(stderr, "    -R             recalculate all counts, do not upgrade version\n");
-    fprintf(stderr, "    -U             upgrade and recalculate all counts. No-op if already at\n"
-                    "                   latest version\n");
+    fprintf(stderr, "    -R             recalculate all counts\n");
+    fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
     fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
