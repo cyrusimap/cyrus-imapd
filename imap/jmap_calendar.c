@@ -96,6 +96,7 @@
 static int jmap_calendar_get(struct jmap_req *req);
 static int jmap_calendar_changes(struct jmap_req *req);
 static int jmap_calendar_set(struct jmap_req *req);
+static int jmap_calendar_touch(struct jmap_req *req);
 static int jmap_calendarevent_get(struct jmap_req *req);
 static int jmap_calendarevent_changes(struct jmap_req *req);
 static int jmap_calendarevent_query(struct jmap_req *req);
@@ -323,6 +324,12 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
 
 // clang-format off
 jmap_method_t jmap_calendar_methods_nonstandard[] = {
+    {
+        "Calendar/touch",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendar_touch,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -2312,6 +2319,28 @@ done:
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
     return r;
+}
+
+static void calid_to_mbentry(jmap_req_t *req, const char *id,
+                             mbentry_t **mbentry)
+{
+    char *mboxname = caldav_mboxname(req->accountid, id);
+    int r = mboxlist_lookup(mboxname, mbentry, NULL);
+
+    if (r) {
+        if (r != IMAP_NOTFOUND) {
+            syslog(LOG_ERR, "Error reading mbentry for calendar %s: %s",
+                   mboxname, error_message(r));
+        }
+
+        *mbentry = NULL;
+    }
+    free(mboxname);
+}
+
+static int jmap_calendar_touch(jmap_req_t *req)
+{
+    return jmap_touch_exec(req, MBTYPE_CALENDAR, &calid_to_mbentry);
 }
 
 struct calendarevent_getblob_rock {

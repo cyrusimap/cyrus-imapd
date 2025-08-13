@@ -614,6 +614,32 @@ extern void jmap_parse_fini(struct jmap_parse *parse);
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
 
+/* Foo/touch */
+
+struct jmap_touch {
+    /* Request arguments */
+    json_t *ids;
+
+    /* Response fields */
+    char *state;
+    json_t *not_touched;
+};
+
+#define JMAP_TOUCH_INITIALIZER {0}
+
+extern void jmap_touch_parse(jmap_req_t *req, struct jmap_parser *parser,
+                             struct jmap_touch *touch,
+                             json_t **err);
+
+extern void jmap_touch_fini(struct jmap_touch *touch);
+
+extern json_t *jmap_touch_reply(struct jmap_touch *touch);
+
+extern int jmap_touch_exec(jmap_req_t *req, int mbtype,
+                           void (*id_to_mbentry)(jmap_req_t *req, const char *id,
+                                                 mbentry_t **mbentry));
+
+
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite,

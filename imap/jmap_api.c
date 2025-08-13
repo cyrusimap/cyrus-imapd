@@ -1359,10 +1359,13 @@ static char *_state_string(int prefixed_state, modseq_t modseq)
 EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
                                  int mbtype, int flags)
 {
+    int prefixed_state =
+        (mbtype == MBTYPE_EMAIL) && USER_COMPACT_EMAILIDS(req->cstate);
+
     // if we were not given a modseq, look it up by mbtype
     if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
 
-    return _state_string(USER_COMPACT_EMAILIDS(req->cstate), modseq);
+    return _state_string(prefixed_state, modseq);
 }
 
 HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
@@ -2788,6 +2791,105 @@ HIDDEN json_t *jmap_parse_reply(struct jmap_parse *parse)
     else
         json_object_set_new(res, "notFound", json_null());
     return res;
+}
+
+
+/* Foo/touch */
+
+HIDDEN void jmap_touch_parse(jmap_req_t *req,
+                             struct jmap_parser *parser,
+                             struct jmap_touch *touch,
+                             json_t **err)
+{
+    json_t *jargs = req->args;
+    const char *key;
+    json_t *arg;
+
+    // assume that we are given an initialized jmap_touch struct
+    touch->not_touched = json_array();
+
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+
+        else if (!strcmp(key, "ids") && json_array_size(arg) &&
+                 jmap_parse_strings(arg, parser, "ids")) {
+            touch->ids = arg;
+        }
+
+        else {
+            jmap_parser_invalid(parser, key);
+        }
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+HIDDEN void jmap_touch_fini(struct jmap_touch *touch)
+{
+    free(touch->state);
+    json_decref(touch->not_touched);
+}
+
+HIDDEN json_t *jmap_touch_reply(struct jmap_touch *touch)
+{
+    json_t *res = json_object();
+
+    json_object_set_new(res, "state", json_string(touch->state));
+    if (json_array_size(touch->not_touched))
+        json_object_set(res, "notTouched", touch->not_touched);
+    else
+        json_object_set_new(res, "notTouched", json_null());
+    return res;
+}
+
+HIDDEN int jmap_touch_exec(jmap_req_t *req, int mbtype,
+                           void (*id_to_mbentry)(jmap_req_t *req, const char *id,
+                                                 mbentry_t **mbentry))
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_touch touch = JMAP_TOUCH_INITIALIZER;
+    json_t *err = NULL, *id;
+    size_t i;
+
+    /* Parse request */
+    jmap_touch_parse(req, &parser, &touch, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    json_array_foreach(touch.ids, i, id) {
+        mbentry_t *mbentry = NULL;
+        struct mailbox *mailbox = NULL;
+
+        id_to_mbentry(req, json_string_value(id), &mbentry);
+
+        if (mbentry && !mailbox_open_iwl(mbentry->name, &mailbox)) {
+            mboxlist_update_foldermodseq(mbentry->name,
+                                         mailbox_modseq_dirty(mailbox));
+        }
+        else {
+            json_array_append(touch.not_touched, id);
+        }
+
+        mailbox_close(&mailbox);
+        mboxlist_entry_free(&mbentry);
+    }
+
+    /* Build response */
+    touch.state = jmap_state_string(req, 0, mbtype, JMAP_MODSEQ_RELOAD);
+    jmap_ok(req, jmap_touch_reply(&touch));
+
+ done:
+    jmap_parser_fini(&parser);
+    jmap_touch_fini(&touch);
+
+    return 0;
 }
 
 

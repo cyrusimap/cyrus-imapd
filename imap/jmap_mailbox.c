@@ -83,6 +83,7 @@ static int jmap_mailbox_set(jmap_req_t *req);
 static int jmap_mailbox_changes(jmap_req_t *req);
 static int jmap_mailbox_query(jmap_req_t *req);
 static int jmap_mailbox_querychanges(jmap_req_t *req);
+static int jmap_mailbox_touch(jmap_req_t *req);
 
 struct rolesort_data {
     const char *name;
@@ -139,6 +140,12 @@ static jmap_method_t jmap_mailbox_methods_standard[] = {
 
 // clang-format off
 static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
+    {
+        "Mailbox/touch",
+        JMAP_MAIL_EXTENSION,
+        &jmap_mailbox_touch,
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -4433,4 +4440,34 @@ done:
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;
+}
+
+static void mboxid_to_mbentry(jmap_req_t *req, const char *id,
+                             mbentry_t **mbentry)
+{
+    const char *idtype;
+    int r;
+
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        idtype = "jmapid";
+        r = mboxlist_lookup_by_jmapid(req->accountid, id, mbentry, NULL);
+    }
+    else {
+        idtype = "uniqueid";
+        r = mboxlist_lookup_by_uniqueid(id, mbentry, NULL);
+    }
+
+    if (r) {
+        if (r != IMAP_NOTFOUND) {
+            syslog(LOG_ERR, "Error reading mbentry for %s %s: %s",
+                   idtype, id, error_message(r));
+        }
+
+        *mbentry = NULL;
+    }
+}
+
+static int jmap_mailbox_touch(jmap_req_t *req)
+{
+    return jmap_touch_exec(req, MBTYPE_EMAIL, &mboxid_to_mbentry);
 }
