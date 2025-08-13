@@ -219,6 +219,11 @@ scheduled cleanup/maintenance.
         The command (with options) to spawn as a child process.  This
         string argument is required.
 
+        Note that this argument is parsed quite naively: arguments are
+        split on whitespace, quoting is not supported.  If you need to run
+        a complex command, make a shell script that calls the real command,
+        and set the event to run the script.
+
 .. parsed-literal::
 
     **period=**\ 0
