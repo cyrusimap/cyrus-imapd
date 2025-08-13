@@ -1100,7 +1100,7 @@ sub test_threadid
     $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
 
     $imaptalk->select("INBOX");
-    my $res = $imaptalk->fetch('200', '(cid threadid)');
+    my $res = $imaptalk->fetch('200', '(rfc822.text cid threadid)');
     my $cid = $res->{200}{cid};
     my $thrid = $res->{200}{threadid}[0];
 
