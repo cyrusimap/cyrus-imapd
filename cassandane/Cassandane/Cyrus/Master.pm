@@ -1504,8 +1504,8 @@ sub test_babysit
     };
 
     # make sure it said it's going to wait
-    my @lines = $self->{instance}->getsyslog(qr/ERROR: too many failures .*disabling/);
-    $self->assert_num_equals(1, scalar @lines);
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{ERROR: too many failures .*disabling});
 
     # master should not have restarted after 5 deaths
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
