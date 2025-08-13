@@ -176,6 +176,61 @@ static void test_cronevent_add(void)
     CU_ASSERT_EQUAL(dynarray_size(details), 0);
 }
 
+/* This test proves some current bad behaviour in cmd=".." parsing.
+ * If we fix the parser, we should move sane versions of these tests
+ * to test_cronevent_add above
+ */
+static void test_cronevent_add_broken_command(void)
+{
+    const struct {
+        const char *cmd;
+        unsigned expect_n_tokens;
+        const char *expect_tokens[10];
+    } tests[] = {
+        { "echo 'hello world'",
+          /* OOPS: breaks up quoted argument */
+          3, { "echo", "'hello", "world'" } },
+        { "echo \"hello world\"",
+          /* OOPS: breaks up quoted argument */
+          3, { "echo", "\"hello", "world\"" } },
+        { "sh -c 'echo \"hello world\"'",
+          /* OOPS: breaks up quoted argument */
+          5, { "sh", "-c", "'echo", "\"hello", "world\"'" } },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    dynarray_t *schedule, *details;
+    int i;
+
+    cronevent_get_schedule(&schedule, &details);
+
+    for (i = 0; i < (int) n_tests; i++) {
+        char name[16];
+        const char *spec = "* * * * *";
+        struct cronevent_details *event_details;
+        unsigned j;
+
+        snprintf(name, sizeof(name), "event %d", i);
+
+        cronevent_add(name, spec, tests[i].cmd, false);
+        assert_schedule_invariants();
+
+        event_details = dynarray_nth(details, i);
+        CU_ASSERT_PTR_NOT_NULL(event_details);
+        CU_ASSERT_STRING_EQUAL(event_details->name, name);
+        CU_ASSERT_EQUAL(strarray_size(&event_details->exec),
+                        tests[i].expect_n_tokens);
+
+        for (j = 0; j < tests[i].expect_n_tokens; j++) {
+            CU_ASSERT_STRING_EQUAL(strarray_nth(&event_details->exec, j),
+                                   tests[i].expect_tokens[j]);
+        }
+    }
+
+    cronevent_clear();
+    CU_ASSERT_EQUAL(dynarray_size(schedule), 0);
+    CU_ASSERT_EQUAL(dynarray_size(details), 0);
+}
+
 static void spawn_counter(const char *name,
                           const strarray_t *exec __attribute__((unused)),
                           void *rock)
