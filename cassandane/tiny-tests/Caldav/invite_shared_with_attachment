@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_invite_shared_with_attachment
+    :Conversations :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Shared Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog $self, "share to user (without 'k' or 'x')";
+    $admintalk->setacl("user.manifold.#calendars.$CalendarId",
+                       "cassandane" => 'lrspwiten');
+
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "manifold.$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+ATTACH;ENCODING=BASE64;VALUE=BINARY:/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    $self->assert_caldav_notified(
+        { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
+    );
+
+    # Update the event (will cause an assert() if we have a lock inversion)
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+}

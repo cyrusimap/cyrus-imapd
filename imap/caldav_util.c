@@ -233,21 +233,17 @@ EXPORTED int caldav_is_personalized(struct mailbox *mailbox,
 
     if (cdata->comp_flags.shared) {
         /* Lookup per-user calendar data */
-        int r = mailbox_get_annotate_state(mailbox, cdata->dav.imap_uid, NULL);
+        mbname_t *mbname = NULL;
 
-        if (!r) {
-            mbname_t *mbname = NULL;
-
-            if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
-                /* No longer using per-user-data - use owner data */
-                mbname = mbname_from_intname(mailbox_name(mailbox));
-                userid = mbname_userid(mbname);
-            }
-
-            r = mailbox_annotation_lookup(mailbox, cdata->dav.imap_uid,
-                                          PER_USER_CAL_DATA, userid, userdata);
-            mbname_free(&mbname);
+        if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
+            /* No longer using per-user-data - use owner data */
+            mbname = mbname_from_intname(mailbox_name(mailbox));
+            userid = mbname_userid(mbname);
         }
+
+        int r = annotatemore_msg_lookup(mailbox, cdata->dav.imap_uid,
+                                        PER_USER_CAL_DATA, userid, userdata);
+        mbname_free(&mbname);
 
         if (!r && buf_len(userdata)) return 1;
         buf_free(userdata);
