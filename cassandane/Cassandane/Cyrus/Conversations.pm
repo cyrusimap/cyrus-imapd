@@ -350,6 +350,15 @@ sub test_upgrade
     my $data = slurp_file($outfile);
     $self->assert_matches(qr/already version/, $data);
 
+    # should reconstruct
+    xlog $self, "Upgrade shouldn't have anything to do, but we also used -R";
+    $self->{instance}->run_command(
+      { cyrus => 1, redirects => { stdout => $outfile } },
+      'ctl_conversationsdb', '-U', '-R', '-r', '-v',
+    );
+    $data = slurp_file($outfile);
+    $self->assert_does_not_match(qr/already version/, $data);
+
     # nuke the version key
     my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
     my $format = $self->{instance}->{config}->get('conversations_db');
