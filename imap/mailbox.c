@@ -2274,7 +2274,8 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     /* finally always copy the data into place */
     change->record = *record;
-    change->flags = flags;
+    /* rewrite might set extra flags, keep all of them */
+    change->flags |= flags;
 
     if (mailbox_cacherecord(mailbox, record)) {
         /* failed to load cache record */
