@@ -168,10 +168,11 @@ int main(int argc, char **argv)
     progname = basename(argv[0]);
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:GIMOPRUV:Tfnop:qrsux";
+    static const char short_options[] = "C:DGIMOPRUV:Tcfnop:qrsux";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
+        { "always-dirty", no_argument, NULL, 'D' },
         { "force-reparse", no_argument, NULL, 'G' },
         { "update-uniqueids", no_argument, NULL, 'I' },
         { "prefer-mboxlist", no_argument, NULL, 'M' },
@@ -181,6 +182,7 @@ int main(int argc, char **argv)
         { "guid-mismatch-discard", no_argument, NULL, 'U' },
         { "set-version", required_argument, NULL, 'V' },
         { "recalc-nanosec", no_argument, NULL, 'T' },
+        { "keep-cache", no_argument, NULL, 'c' },
         { "scan-filesystem", no_argument, NULL, 'f' },
         { "dry-run", no_argument, NULL, 'n' },
         { "ignore-odd-files", no_argument, NULL, 'o' },
@@ -189,7 +191,6 @@ int main(int argc, char **argv)
         { "recursive", no_argument, NULL, 'r' },
         { "no-stat", no_argument, NULL, 's' },
         { "userids", no_argument, NULL, 'u' },
-        { "keep-cache", no_argument, NULL, 'c' },
         { "ignore-disk-metadata", no_argument, NULL, 'x' },
 
         { 0, 0, 0, 0 },
@@ -221,6 +222,10 @@ int main(int argc, char **argv)
 
         case 'n':
             reconstruct_flags &= ~RECONSTRUCT_MAKE_CHANGES;
+            break;
+
+        case 'D':
+            reconstruct_flags |= RECONSTRUCT_ALWAYS_DIRTY;
             break;
 
         case 'G':

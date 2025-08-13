@@ -8637,6 +8637,10 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags, struct mailbox **m
     /* inform users of any changed header fields */
     reconstruct_compare_headers(mailbox, &old_header, &mailbox->i);
 
+    // make the mailbox dirty regardless
+    if (flags & RECONSTRUCT_ALWAYS_DIRTY)
+        mailbox_modseq_dirty(mailbox);
+
     /* fix up 2.4.0 bug breakage */
     if (!mailbox->i.uidvalidity) {
         if (make_changes) {

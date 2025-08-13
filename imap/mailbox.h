@@ -526,6 +526,7 @@ typedef enum _MsgInternalFlags {
 #define RECONSTRUCT_PREFER_MBOXLIST (1<<9)
 #define RECONSTRUCT_RECALC_NANOSEC  (1<<10)
 #define RECONSTRUCT_KEEP_CACHE      (1<<11)
+#define RECONSTRUCT_ALWAYS_DIRTY    (1<<12)
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 
