@@ -359,6 +359,7 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
 int warmup_file(const char *filename, off_t offset, off_t length);
 
 const char *makeuuid();
+const char *makeuuid5(const char *nsuuid, unsigned const char *value, size_t len);
 
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
