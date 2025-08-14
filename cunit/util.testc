@@ -1,0 +1,39 @@
+#include "cunit/unit.h"
+#include "util.h"
+#include "xsha1.h"
+
+static void test_makeuuid5(void)
+{
+    struct test_case {
+        const char *ns;
+        const char *value;
+        const char *want_uuid;
+    } tcs[] = {{
+        // example from RFC 9562, Section A.4.
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+        "www.example.com",
+        "2ed6657d-e927-568b-95e1-2665a8aea6a2"
+    }, {
+        "bd68393a-1318-46f1-8da2-cf58b279fa65",
+        "", // empty value
+        "38ed5a93-fe6c-5e6e-9fbc-aa2b4f60db14"
+    }};
+
+    for (size_t i = 0; i < sizeof(tcs)/sizeof(tcs[i]); i++) {
+        struct test_case *tc = &tcs[i];
+        CU_ASSERT_STRING_EQUAL(tc->want_uuid,
+            makeuuid5(tc->ns,
+                (const unsigned char*)tc->value, strlen(tc->value)));
+    }
+
+    // malformed namespace ID
+    CU_ASSERT_PTR_NULL(makeuuid5("6ba7b8109dad11d180b400c04fd430c8",
+        (const unsigned char*) "foo", 3));
+    CU_ASSERT_PTR_NULL(makeuuid5("04fd430c8",
+        (const unsigned char*) "foo", 3));
+    CU_ASSERT_PTR_NULL(makeuuid5(NULL,
+        (const unsigned char*) "foo", 3));
+    CU_ASSERT_PTR_NULL(makeuuid5("",
+        (const unsigned char*) "foo", 3));
+}
+
