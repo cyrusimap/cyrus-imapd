@@ -674,6 +674,7 @@ cunit_TESTS += \
     cunit/tok.testc \
     cunit/vparse.testc \
     cunit/dynarray.testc \
+    cunit/util.testc \
     cunit/xsha1.testc
 
 if HTTPD
@@ -1811,7 +1812,7 @@ master_master_SOURCES = \
     master/event.c \
     master/event.h \
     master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
+master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
 
 
 netnews_remotepurge_SOURCES = \
