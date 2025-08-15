@@ -1,6 +1,6 @@
-/* unit-timezones.h - timezone utilities for unit tests
+/* master/event.h -- master process event subsystem
  *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,19 +39,35 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifndef MASTER_EVENT_H
+#define MASTER_EVENT_H
 
-#ifndef CUNIT_UNIT_TIMEZONES_H
-#define CUNIT_UNIT_TIMEZONES_H
+#include <sys/time.h>
 
-#include <stdio.h>
-#include <stdarg.h>
+#include "lib/strarray.h"
 
-#define TZ_UTC          "UTC+00"
-#define TZ_NEWYORK      "EST+05"
-#define TZ_MELBOURNE    "AEST-11" /* XXX 11 is AEDT not AEST... */
+struct event {
+    char *name;
+    struct timeval mark;
+    time_t period;
+    strarray_t exec;
+    struct event *next;
+};
 
-extern void push_tz(const char *tz);
-extern void pop_tz(void);
-extern void restore_tz(void);
+extern struct event *event_new_oneshot(const char *name, struct timeval mark);
+extern struct event *event_new_periodic(const char *name,
+                                        struct timeval mark,
+                                        time_t period);
+extern void event_free(struct event *evt);
 
-#endif /* CUNIT_UNIT_TIMEZONES_H */
+extern void event_set_exec(struct event *evt, const char *cmd);
+
+extern void schedule_event(struct event *evt);
+extern void reschedule_event(struct event *evt, struct timeval now);
+
+extern struct event *schedule_splice_due(struct timeval now);
+extern struct event *schedule_peek(void);
+
+extern void schedule_clear(void);
+
+#endif

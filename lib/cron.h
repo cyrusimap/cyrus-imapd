@@ -1,6 +1,6 @@
-/* unit-timezones.h - timezone utilities for unit tests
+/* cron.h -- parsing Cron-style date-time specifications
  *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,19 +39,36 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifndef INCLUDED_CRON_H
+#define INCLUDED_CRON_H
+#include <config.h>
 
-#ifndef CUNIT_UNIT_TIMEZONES_H
-#define CUNIT_UNIT_TIMEZONES_H
+#include "lib/util.h"
 
-#include <stdio.h>
-#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-#define TZ_UTC          "UTC+00"
-#define TZ_NEWYORK      "EST+05"
-#define TZ_MELBOURNE    "AEST-11" /* XXX 11 is AEDT not AEST... */
+#define CRON_ALL_MINUTES       UINT64_C(0x0FFFFFFFFFFFFFFF)
+#define CRON_ALL_HOURS         UINT64_C(0x00FFFFFF)
+#define CRON_ALL_DAYS_OF_MONTH UINT64_C(0x7FFFFFFF)
+#define CRON_ALL_MONTHS        UINT64_C(0x0FFF)
+#define CRON_ALL_DAYS_OF_WEEK  UINT64_C(0x7F)
 
-extern void push_tz(const char *tz);
-extern void pop_tz(void);
-extern void restore_tz(void);
+struct cron_spec {
+    uint64_t minutes;       /* bits 0-59 represent minutes */
+    uint32_t hours;         /* bits 0-23 represent hours */
+    uint32_t days_of_month; /* bits 0-30 represent days 1-31 */
+    uint16_t months;        /* bits 0-11 represent months 1-12 */
+    uint8_t  days_of_week;  /* bits 0-6 represent days sun-sat */
+};
 
-#endif /* CUNIT_UNIT_TIMEZONES_H */
+extern int cron_parse_spec(const char *spec,
+                           struct cron_spec *result,
+                           const char **err);
+extern void cron_spec_from_timeval(struct cron_spec *result,
+                                   time_t *run_time,
+                                   const struct timeval *timeval);
+extern bool cron_spec_matches(const struct cron_spec *spec,
+                              const struct cron_spec *current_time);
+extern void cron_spec_dump(struct buf *buf, const struct cron_spec *spec);
+#endif

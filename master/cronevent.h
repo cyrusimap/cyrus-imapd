@@ -1,6 +1,6 @@
-/* unit-timezones.h - timezone utilities for unit tests
+/* master/cronevent.h -- master process cronevent subsystem
  *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,19 +39,30 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#ifndef MASTER_CRONEVENT_H
+#define MASTER_CRONEVENT_H
 
-#ifndef CUNIT_UNIT_TIMEZONES_H
-#define CUNIT_UNIT_TIMEZONES_H
+#include "lib/strarray.h"
 
-#include <stdio.h>
-#include <stdarg.h>
+#include <stdbool.h>
 
-#define TZ_UTC          "UTC+00"
-#define TZ_NEWYORK      "EST+05"
-#define TZ_MELBOURNE    "AEST-11" /* XXX 11 is AEDT not AEST... */
+/* unit tests need to know this struct */
+struct cronevent_details {
+    char *name;
+    strarray_t exec;
+};
 
-extern void push_tz(const char *tz);
-extern void pop_tz(void);
-extern void restore_tz(void);
+extern void cronevent_add(const char *name,
+                          const char *spec,
+                          const char *cmd,
+                          bool ignore_err);
+extern void cronevent_clear(void);
 
-#endif /* CUNIT_UNIT_TIMEZONES_H */
+typedef void (cronevent_spawn_fn)(const char *name,
+                                  const strarray_t *exec,
+                                  void *rock);
+extern void cronevent_poll_due(struct timeval now,
+                               cronevent_spawn_fn *spawner,
+                               void *rock);
+
+#endif

@@ -68,6 +68,8 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
+AM_YFLAGS = -d
+
 if ENABLE_RELEASE_CHECKS
     CFG2HDR_FORBID_UNRELEASED=--forbid-unreleased
     SPHINX_FAIL_ON_WARNINGS=-W --keep-going
@@ -620,6 +622,7 @@ cunit_TESTS = \
     cunit/charset.testc \
     cunit/command.testc \
     cunit/conversations.testc \
+    cunit/cron.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
     cunit/dlist.testc \
@@ -633,6 +636,8 @@ cunit_TESTS = \
     cunit/imparse.testc \
     cunit/libconfig.testc \
     cunit/mailbox.testc \
+    cunit/master-cronevent.testc \
+    cunit/master-event.testc \
     cunit/mboxname.testc \
     cunit/md5.testc \
     cunit/message.testc \
@@ -674,7 +679,8 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-    imap/mutex_fake.c imap/spool.c imap/search_expr.c
+    imap/mutex_fake.c imap/spool.c imap/search_expr.c \
+    master/event.c master/cronevent.c
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
@@ -775,6 +781,7 @@ include_HEADERS = \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
+    lib/cron.h \
     lib/cyr_lock.h \
     lib/cyr_qsort_r.h \
     lib/cyrusdb.h \
@@ -1530,11 +1537,16 @@ libcrc32_la_CFLAGS = -O3 $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 nodist_lib_libcyrus_min_la_SOURCES = \
     lib/imapopts.c
 
+BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
+
 lib_libcyrus_min_la_SOURCES = \
     lib/arrayu64.c \
     lib/assert.c \
     lib/bufarray.c \
     lib/byteorder.c \
+    lib/cron.c \
+    lib/cron-lex.l \
+    lib/cron-parse.y \
     lib/dynarray.c \
     lib/hash.c \
     lib/hashset.c \
@@ -1696,6 +1708,10 @@ master_master_SOURCES = \
     master/master.h \
     master/masterconf.c \
     master/masterconf.h \
+    master/cronevent.c \
+    master/cronevent.h \
+    master/event.c \
+    master/event.h \
     master/service.h
 master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
 
