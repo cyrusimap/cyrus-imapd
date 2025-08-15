@@ -2107,6 +2107,9 @@ static int send_response(void *ac, void *ic,
     smtpclient_close(&sm);
 
     if (r == 0) {
+        const char *fromaddr = src->fromaddr;
+        struct buf buf = BUF_INITIALIZER;
+
         sievedb = make_sieve_db(mbname_recipient(sdata->mbname, ((deliver_data_t *) mc)->ns));
 
         dkey.id = outmsgid;
@@ -2119,6 +2122,24 @@ static int send_response(void *ac, void *ic,
         }
 
         prometheus_increment(CYRUS_LMTP_SIEVE_AUTORESPOND_SENT_TOTAL);
+
+        if (!strchr(fromaddr, '<')) {
+            buf_printf(&buf, "<%s>", fromaddr);
+            fromaddr = buf_cstring(&buf);
+        }
+
+        xsyslog(LOG_INFO, "sieve autoresponded",
+                    "in.msgid=%s out.msgid=%s from=%s to=<%s>",
+                    md->id ? md->id : "", outmsgid, fromaddr, src->addr);
+        if (config_auditlog) {
+            xsyslog(LOG_NOTICE, "auditlog: vacation response",
+                    "sessionid=<%s> userid=<%s> in.msgid=%s"
+                    " out.msgid=%s from=%s to=<%s>",
+                    session_id(), ctx->userid, md->id ? md->id : "",
+                    outmsgid, fromaddr, src->addr);
+        }
+
+        buf_free(&buf);
 
         ret = SIEVE_OK;
     } else {
