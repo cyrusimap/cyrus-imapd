@@ -3,6 +3,7 @@ use Cassandane::Tiny;
 
 sub test_vacation_multiple
     :min_version_3_1
+    :want_smtpdaemon
 {
     my ($self) = @_;
 

@@ -681,19 +681,19 @@ static int validate_envelope_params(ptrarray_t *params)
         smtp_param_t *param = ptrarray_nth(params, i);
         if (!smtp_is_valid_esmtp_keyword(param->key)) {
             syslog(LOG_ERR,
-                   "smtpclient: sessionid=<%s> invalid estmp keyword: \"%s\"",
+                   "smtpclient: sessionid=<%s> invalid esmtp keyword: \"%s\"",
                    session_id(), param->key);
             return IMAP_PROTOCOL_ERROR;
         }
         if (!strcasecmp(param->key, "AUTH")) {
             syslog(LOG_ERR,
-                   "smptclient: sessionid=<%s> rejecting AUTH parameter in envelope",
+                   "smtpclient: sessionid=<%s> rejecting AUTH parameter in envelope",
                    session_id());
             return IMAP_PERMISSION_DENIED;
         }
         if (param->val && !smtp_is_valid_esmtp_value(param->val)) {
             syslog(LOG_ERR,
-                   "smtpclient: sessionid=<%s> invalid estmp value: \"%s\"",
+                   "smtpclient: sessionid=<%s> invalid esmtp value: \"%s\"",
                    session_id(), param->val);
             return IMAP_PROTOCOL_ERROR;
         }
@@ -923,7 +923,7 @@ EXPORTED int smtpclient_open_host(const char *addr, smtpclient_t **smp)
     if (sasl_cb) free_callbacks(sasl_cb);
     if (!bk) {
         syslog(LOG_ERR,
-               "smptclient_open: sessionid=<%s> can't connect to host: %s",
+               "smtpclient_open: sessionid=<%s> can't connect to host: %s",
                session_id(), host);
         if (logfd != -1) close(logfd);
         r = IMAP_INTERNAL;
@@ -1091,7 +1091,7 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     bk = backend_connect_pipe(ctx->infd, ctx->outfd, &smtp_protocol, 0, logfd);
     if (!bk) {
         syslog(LOG_ERR,
-               "smptclient_open: sessionid=<%s> can't open sendmail backend",
+               "smtpclient_open: sessionid=<%s> can't open sendmail backend",
                session_id());
         r = IMAP_INTERNAL;
         smtpclient_sendmail_freectx(ctx);
