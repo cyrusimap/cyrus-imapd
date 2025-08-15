@@ -1478,11 +1478,12 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
             /* XXX is there a difference between "" and NULL? */
             xsyslog(LOG_NOTICE, "auditlog: acl",
                                 "sessionid=<%s> "
-                                "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
-                                "oldacl=<%s> acl=<%s> "
+                                "mailbox=<%s> uniqueid=<%s> jmapid=<%s> "
+                                "mbtype=<%s> oldacl=<%s> acl=<%s> "
                                 "foldermodseq=<" MODSEQ_FMT ">",
                     session_id(),
-                    name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
+                    name, mbentry->uniqueid, mbentry->jmapid,
+                    mboxlist_mbtype_to_string(mbentry->mbtype),
                     old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
         }
     }
@@ -3256,11 +3257,12 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             char *olduniqueid = (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
                 NULL : xstrdup(mailbox_uniqueid(oldmailbox));
             if (config_auditlog)
-                syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
-                       "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
-                       session_id(),
-                       mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
-                       oldpartition, partition);
+                xsyslog(LOG_NOTICE, "auditlog: partitionmove",
+                        "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
+                        " oldpart=<%s> newpart=<%s>",
+                        session_id(),
+                        mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
+                        mailbox_jmapid(oldmailbox), oldpartition, partition);
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
@@ -4844,7 +4846,8 @@ EXPORTED int mboxlist_setquotas(const char *root,
                                quota_names[res], oldquotas[res],
                                quota_names[res], newquotas[res]);
                 }
-                syslog(LOG_NOTICE, "auditlog: setquota root=<%s>%s", root, buf_cstring(&item));
+                xsyslog(LOG_NOTICE, "auditlog: setquota",
+                        "root=<%s>%s", root, buf_cstring(&item));
                 buf_free(&item);
             }
         }
@@ -4911,7 +4914,8 @@ EXPORTED int mboxlist_setquotas(const char *root,
             buf_printf(&item, " new%s=<%lld>",
                        quota_names[res], newquotas[res]);
         }
-        syslog(LOG_NOTICE, "auditlog: newquota root=<%s>%s", root, buf_cstring(&item));
+        xsyslog(LOG_NOTICE, "auditlog: newquota",
+                "root=<%s>%s", root, buf_cstring(&item));
         buf_free(&item);
     }
 
@@ -4973,7 +4977,8 @@ EXPORTED int mboxlist_unsetquota(const char *root, int silent)
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
             buf_printf(&item, " old%s=<%lld>", quota_names[res], q.limits[res]);
         }
-        syslog(LOG_NOTICE, "auditlog: rmquota root=<%s>%s", root, buf_cstring(&item));
+        xsyslog(LOG_NOTICE, "auditlog: rmquota",
+                "root=<%s>%s", root, buf_cstring(&item));
         buf_free(&item);
     }
 
