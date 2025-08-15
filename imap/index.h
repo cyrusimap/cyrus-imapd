@@ -120,7 +120,6 @@ struct index_state {
     modseq_t delayed_modseq;
     struct index_map *map;
     unsigned mapsize;
-    int has_compactids;
     int internalseen;
     int skipped_expunge;
     int seen_dirty;
@@ -133,7 +132,7 @@ struct index_state {
     char *userid;
     char *mboxname;
     char *uniqueid;
-    char *jmapid;
+    char *mailboxid;
     struct protstream *out;
     struct auth_state *authstate;
     int want_dav;
@@ -378,7 +377,7 @@ extern int index_getuidsequence(struct index_state *state,
 
 extern const char *index_mboxname(const struct index_state *state);
 extern const char *index_uniqueid(const struct index_state *state);
-extern const char *index_jmapid(const struct index_state *state);
+extern const char *index_mailboxid(const struct index_state *state);
 extern int index_hasrights(const struct index_state *state, int rights);
 
 extern int index_reload_record(struct index_state *state,

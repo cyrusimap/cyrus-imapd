@@ -57,6 +57,7 @@
 #include "assert.h"
 #include "cyrusdb.h"
 #include "imapd.h"
+#include "jmap_util.h"
 #include "global.h"
 #include "mboxlist.h"
 #include "mailbox.h"
@@ -433,8 +434,8 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
 {
     assert(mailbox);
     assert(sdata);
-    static char static_uniqueid[101];
-    static char static_mailboxid[101];
+    static char static_uniqueid[UUID_STR_LEN];
+    static char static_mailboxid[JMAP_MAX_MAILBOXID_SIZE];
 
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
@@ -449,17 +450,14 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     sdata->uidvalidity = mailbox->i.uidvalidity;
     const char *uniqueid = mailbox_uniqueid(mailbox);
     if (uniqueid) {
-        strncpy(static_uniqueid, uniqueid, 100);
+        strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
 
     // need the cstate to get the right mailboxid
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    const char *mailboxid = USER_COMPACT_EMAILIDS(cstate) ? mailbox_jmapid(mailbox) : mailbox_uniqueid(mailbox);
-    if (mailboxid) {
-        strncpy(static_mailboxid, mailboxid, 100);
-        sdata->mailboxid = static_mailboxid;
-    }
+    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), static_mailboxid);
+    sdata->mailboxid = static_mailboxid;
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }
