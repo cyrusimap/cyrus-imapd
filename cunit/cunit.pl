@@ -253,21 +253,24 @@ sub suite_name_to_var($)
 # the wrapper, object file, and archive in places where we
 # won't be able to find them again later.
 #
-# Args: relative path, directory the path is relative to.
+# Args: testfile
 # Returns: ref to new suite hash
 #
-sub suite_new($$)
+sub suite_new($)
 {
-    my ($relpath, $basedir) = @_;
+    my ($testfile) = @_;
 
-    # recalculate relpath to ensure canonical value
-    my ($abspath, $whatever) = path_absrel($relpath, $basedir);
-    $relpath = path_relativise($abspath, $basedir);
+    # testfile might be relative to the builddir, but we need a path relative
+    # to the srcdir.  first convert it to an absolute path
+    ($testfile, undef) = path_absrel($testfile, $builddir);
+
+    # then calculate relpath relative to srcdir
+    my $relpath = path_relativise($testfile, $srcdir);
 
     my $suite =
     {
         relpath => $relpath,
-        abspath => $abspath,
+        abspath => $testfile,
         name => suite_path_to_name($relpath),
         setupfn => undef,
         teardownfn => undef,
@@ -592,9 +595,7 @@ sub generate_wrapper($$)
 {
     my ($wrapfile, $testfile) = @_;
 
-    $testfile = path_sanitise("$builddir/$testfile");
-
-    my $suite = suite_new($testfile, $srcdir);
+    my $suite = suite_new($testfile);
     my $ntests = suite_scan_for_tests($suite);
     die "No tests in $testfile" if $ntests == 0;
 
@@ -618,8 +619,7 @@ sub generate_registry($@)
         die "$testfile: not a C source file"
             unless (-f $testfile && $testfile =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
 
-        $testfile = path_sanitise("$builddir/$testfile");
-        push @suites, suite_new($testfile, $srcdir);
+        push @suites, suite_new($testfile);
     }
 
     my $file = atomic_rewrite_begin($cfile);
