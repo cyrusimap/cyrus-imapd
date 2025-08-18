@@ -1017,6 +1017,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/imapparse.h \
     imap/index.c \
     imap/index.h \
+    imap/index_file.c \
+    imap/index_file.h \
     imap/jmap_util.c \
     imap/jmap_util.h \
     imap/json_support.c \
