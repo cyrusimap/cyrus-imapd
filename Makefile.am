@@ -630,6 +630,7 @@ cunit_TESTS = \
     cunit/hashset.testc \
     cunit/imapurl.testc \
     cunit/imparse.testc \
+    cunit/index_file.testc \
     cunit/libconfig.testc \
     cunit/loginlog.testc \
     cunit/logfmt.testc \

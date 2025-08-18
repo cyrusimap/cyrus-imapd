@@ -1,0 +1,287 @@
+#include "cunit/unit.h"
+#include "imap/index_file.h"
+
+static void assert_fieldset_invariants(size_t expect_data_size,
+                                       size_t expect_disk_size,
+                                       const index_field_t *fields,
+                                       const char *desc,
+                                       unsigned mailbox_minor_version)
+{
+    const index_field_t *field;
+    uint8_t *byte_map = NULL;
+    size_t actual_disk_size = 0;
+    unsigned i;
+
+    byte_map = xzmalloc(sizeof(byte_map[0]) * expect_data_size);
+
+    for (field = fields; field->data_type; field++) {
+        size_t field_data_size;
+        bool is_known_overlap = false;
+
+        switch (field->data_type) {
+        case '4':
+            if (field->disk_size == 0) {
+                /* index_header.exists may overlap */
+                CU_ASSERT_EQUAL(field->data_offset,
+                                offsetof(struct index_header, exists));
+                is_known_overlap = true;
+            }
+            else {
+                CU_ASSERT_EQUAL(field->disk_size, sizeof(bit32));
+            }
+            field_data_size = sizeof(bit32);
+            break;
+        case '8':
+            if (field->disk_size == 0) {
+                /* index_header.deletedmodseq may overlap */
+                CU_ASSERT_EQUAL(field->data_offset,
+                                offsetof(struct index_header, deletedmodseq));
+                is_known_overlap = true;
+            }
+            else if (field->disk_size == sizeof(bit32)) {
+                /* some 8-byte fields are only 4 bytes on disk */
+            }
+            else {
+                CU_ASSERT_EQUAL(field->disk_size, sizeof(bit64));
+            }
+            field_data_size = sizeof(bit64);
+            break;
+        case 'B':
+            CU_ASSERT_NOT_EQUAL(field->disk_size, 0);
+            field_data_size = field->disk_size;
+            break;
+        case 'T':
+            if (field->disk_size == 0) {
+                /* index_header.changes_epoch may overlap */
+                CU_ASSERT_EQUAL(field->data_offset,
+                                offsetof(struct index_header, changes_epoch));
+                is_known_overlap = true;
+            }
+            else if (field->disk_size == sizeof(bit32)) {
+                /* some 8-byte fields are only 4 bytes on disk */
+            }
+            else {
+                CU_ASSERT_EQUAL(field->disk_size, sizeof(bit64));
+            }
+            field_data_size = sizeof(bit64);
+            break;
+        case 'E':
+            /* empty field: arbitrary disk size, no data size */
+            field_data_size = 0;
+            break;
+        default:
+            CU_FAIL_FATAL("unrecognised field data_type");
+            /* optimiser doesn't recognise that CU_FAIL_FATAL doesn't return */
+            return;
+        }
+
+        /* check field->data_offset is in range */
+        CU_ASSERT(field->data_offset >= 0);
+        CU_ASSERT((size_t) field->data_offset + field_data_size
+                  <= expect_data_size);
+
+        /* count which bytes in the struct we've actually used,
+         * (unless we know this field may overlap)
+         */
+        if (!is_known_overlap) {
+            for (i = 0; i < field_data_size; i++) {
+                byte_map[field->data_offset + i]++;
+            }
+        }
+
+        actual_disk_size += field->disk_size;
+    }
+
+    CU_ASSERT_EQUAL(actual_disk_size, expect_disk_size);
+
+    unsigned dup_start = 0, dup_end = 0;
+    bool in_dup_seq = false, has_dups = false;
+    for (i = 0; i < expect_data_size; i++) {
+        /* it's fine if some bytes of the struct aren't used, but there'd
+         * better not be any that were unexpectedly touched by multiple fields
+         */
+        if (byte_map[i] > 1) {
+            if (!in_dup_seq) {
+                dup_start = dup_end = i;
+                in_dup_seq = has_dups = true;
+            }
+            else {
+                dup_end = i;
+            }
+        }
+        else {
+            if (in_dup_seq) {
+                if (verbose)
+                    fprintf(stderr, "v%u %s: duplicates found in bytes %u-%u\n",
+                                    mailbox_minor_version, desc,
+                                    dup_start, dup_end);
+                dup_start = dup_end = 0;
+                in_dup_seq = false;
+            }
+        }
+    }
+    if (in_dup_seq) {
+        if (verbose)
+            fprintf(stderr, "v%u %s: duplicates found in bytes %u-%u\n",
+                            mailbox_minor_version, desc,
+                            dup_start, dup_end);
+    }
+    CU_ASSERT(!has_dups);
+
+    free(byte_map);
+}
+
+static void assert_template_invariants(const struct index_file_template *template,
+                                       unsigned mailbox_minor_version)
+{
+    /* index 0 contains only the base header fields */
+    const index_file_template_t *base_header = index_files_by_version[0];
+    size_t expect_header_disk_size = template->header_size;
+    size_t expect_record_disk_size = template->record_size;
+
+    if (mailbox_minor_version != 0) {
+        /* header_size includes the base fields too, but this won't count them */
+        expect_header_disk_size -= base_header->header_size;
+    }
+
+    if (template->crc_field) {
+        /* sizes include the crc field, but this won't count it */
+        expect_header_disk_size -= template->crc_field->disk_size;
+        expect_record_disk_size -= template->crc_field->disk_size;
+    }
+
+    assert_fieldset_invariants(sizeof(struct index_header),
+                               expect_header_disk_size,
+                               template->header_fields,
+                               "header",
+                               mailbox_minor_version);
+    assert_fieldset_invariants(sizeof(struct index_record),
+                               expect_record_disk_size,
+                               template->record_fields,
+                               "record",
+                               mailbox_minor_version);
+
+    /* no crc before version 12 */
+    if (mailbox_minor_version >= 12) {
+        CU_ASSERT_PTR_NOT_NULL_FATAL(template->crc_field);
+        CU_ASSERT_EQUAL(template->crc_field->disk_size, 4);
+        CU_ASSERT_EQUAL(template->crc_field->data_type, '4');
+        CU_ASSERT_EQUAL(template->crc_field->data_offset, 0);
+    }
+    else {
+        CU_ASSERT_PTR_NULL(template->crc_field);
+    }
+}
+
+static void test_base_header_template(void)
+{
+    /* index 0 contains only the base header fields */
+    const index_file_template_t *base_header = index_files_by_version[0];
+
+    assert_fieldset_invariants(sizeof(struct index_header),
+                               base_header->header_size,
+                               base_header->header_fields,
+                               "header",
+                               0);
+
+    /* no record or crc fields */
+    CU_ASSERT_EQUAL(base_header->record_size, 0);
+    CU_ASSERT_PTR_NULL(base_header->record_fields);
+    CU_ASSERT_PTR_NULL(base_header->crc_field);
+}
+
+static void test_nonexistent_mailbox_versions(void)
+{
+    CU_ASSERT_PTR_NULL(index_files_by_version[1]);
+    CU_ASSERT_PTR_NULL(index_files_by_version[2]);
+    CU_ASSERT_PTR_NULL(index_files_by_version[3]);
+    CU_ASSERT_PTR_NULL(index_files_by_version[4]);
+    CU_ASSERT_PTR_NULL(index_files_by_version[5]);
+    CU_ASSERT_PTR_NULL(index_files_by_version[11]);
+}
+
+static void test_existent_mailbox_versions(void)
+{
+    unsigned v;
+
+    for (v = 6; v <= MAILBOX_MINOR_VERSION; v++) {
+        if (v == 11) continue;
+
+        CU_ASSERT_PTR_NOT_NULL(index_files_by_version[v]);
+        assert_template_invariants(index_files_by_version[v], v);
+    }
+}
+
+#define dump_offset(o, f) do { \
+    fprintf(stderr, "%s.%s: " OFF_T_FMT "\n", #o, #f, offsetof(o, f)); \
+} while(0)
+
+static void test_dump_offsets(void)
+{
+    if (verbose < 2) return;
+
+    /* this is useful for finding out which field was duplicated
+     * if assert_fieldset_invariants complained about that
+     */
+
+    dump_offset(struct index_header, dirty);
+    dump_offset(struct index_header, generation_no);
+    dump_offset(struct index_header, format);
+    dump_offset(struct index_header, minor_version);
+    dump_offset(struct index_header, start_offset);
+    dump_offset(struct index_header, record_size);
+    dump_offset(struct index_header, num_records);
+    dump_offset(struct index_header, last_appenddate);
+    dump_offset(struct index_header, last_uid);
+    dump_offset(struct index_header, quota_mailbox_used);
+    dump_offset(struct index_header, pop3_last_login);
+    dump_offset(struct index_header, uidvalidity);
+    dump_offset(struct index_header, deleted);
+    dump_offset(struct index_header, answered);
+    dump_offset(struct index_header, flagged);
+    dump_offset(struct index_header, unseen);
+    dump_offset(struct index_header, options);
+    dump_offset(struct index_header, leaked_cache_records);
+    dump_offset(struct index_header, highestmodseq);
+    dump_offset(struct index_header, deletedmodseq);
+    dump_offset(struct index_header, exists);
+    dump_offset(struct index_header, first_expunged);
+    dump_offset(struct index_header, last_repack_time);
+    dump_offset(struct index_header, changes_epoch);
+    dump_offset(struct index_header, createdmodseq);
+    dump_offset(struct index_header, header_file_crc);
+    dump_offset(struct index_header, synccrcs);
+    dump_offset(struct index_header, recentuid);
+    dump_offset(struct index_header, recenttime);
+    dump_offset(struct index_header, pop3_show_after);
+    dump_offset(struct index_header, quota_annot_used);
+    dump_offset(struct index_header, quota_deleted_used);
+    dump_offset(struct index_header, quota_expunged_used);
+
+    dump_offset(struct index_record, uid);
+    dump_offset(struct index_record, internaldate);
+    dump_offset(struct index_record, sentdate);
+    dump_offset(struct index_record, size);
+    dump_offset(struct index_record, header_size);
+    dump_offset(struct index_record, gmtime);
+    dump_offset(struct index_record, cache_offset);
+    dump_offset(struct index_record, last_updated);
+    dump_offset(struct index_record, system_flags);
+    dump_offset(struct index_record, internal_flags);
+    dump_offset(struct index_record, user_flags);
+    dump_offset(struct index_record, savedate);
+    dump_offset(struct index_record, cache_version);
+    dump_offset(struct index_record, guid);
+    dump_offset(struct index_record, modseq);
+    dump_offset(struct index_record, createdmodseq);
+    dump_offset(struct index_record, cid);
+    dump_offset(struct index_record, basecid);
+    dump_offset(struct index_record, cache_crc);
+    dump_offset(struct index_record, recno);
+    /* XXX can't get offset of bit-field structure member */
+//     dump_offset(struct index_record, silentupdate);
+//     dump_offset(struct index_record, ignorelimits);
+    dump_offset(struct index_record, crec);
+}
+
+/* vim: set ft=c: */
