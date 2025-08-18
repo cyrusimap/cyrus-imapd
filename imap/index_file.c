@@ -45,21 +45,8 @@
 
 #include "index_file.h"
 
-struct index_field {
-    uint8_t disk_size; // size of data on disk
-                       // 0 = read w/o advancing, write nothing
-    char data_type;    // data storage type:
-                       // '4' = 4 bytes (bit32)
-                       // '8' = 8 bytes (bit64)
-                       // 'B' = byte array
-                       // 'T' = struct timespec
-                       // 'E' = empty field (no storage)
-    off_t data_offset; // offset to data type in storage struct
-};
-
-#define EMPTY_FIELD(N) { N, 'E', 0 }
-#define END_FIELD      { 0,  0,  0 }
-
+#define EMPTY_FIELD(N) (struct opaque_index_field){ N, 'E', 0 }
+#define END_FIELD      (struct opaque_index_field){ 0,  0,  0 }
 
 /*
  * Index file header fields by version
