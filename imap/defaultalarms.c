@@ -93,6 +93,7 @@ static icalcomponent *internalize_alarms(icalcomponent *alarms, enum internalize
             }
         }
 
+#ifdef WITH_JMAP
         const char *jmapid = icalcomponent_get_jmapid(valarm);
         if (!jmapid) {
             jmapid = icalcomponent_get_uid(valarm);
@@ -102,6 +103,7 @@ static icalcomponent *internalize_alarms(icalcomponent *alarms, enum internalize
             }
             icalcomponent_set_jmapid(valarm, jmapid);
         }
+#endif
     }
 
     icalcomponent_normalize_x(myalarms);
