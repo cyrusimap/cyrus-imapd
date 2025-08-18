@@ -444,7 +444,7 @@ static const index_file_template_t v20_template =
     { 192, 144, MAILBOX_OPT_VALID, v20_hdr_fields, v20_rec_fields, crc_field };
 
 
-EXPORTED const index_file_template_t *index_files_by_version[MAILBOX_MINOR_VERSION+1] = {
+EXPORTED const index_file_template_t *const index_files_by_version[] = {
     &v00_template, // "base" header fields
     NULL,
     NULL,
@@ -467,6 +467,8 @@ EXPORTED const index_file_template_t *index_files_by_version[MAILBOX_MINOR_VERSI
     &v19_template,
     &v20_template
 };
+EXPORTED const size_t n_index_files = sizeof(index_files_by_version)
+                                      / sizeof(index_files_by_version[0]);
 
 EXPORTED const char *index_file_read_fields(const char *bufp, void *base,
                                             const index_field_t *fields)
