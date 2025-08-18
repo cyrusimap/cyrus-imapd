@@ -292,7 +292,7 @@ EXPORTED void index_close(struct index_state **stateptr)
     free(state->map);
     free(state->mboxname);
     free(state->uniqueid);
-    free(state->jmapid);
+    free(state->mailboxid);
     free(state->userid);
     seqset_free(&state->searchres);
     free(state->last_partial.expr);
@@ -314,11 +314,12 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     struct index_state *state = xzmalloc(sizeof(struct index_state));
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
 
-    state->has_compactids = USER_COMPACT_EMAILIDS(cstate);
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
     state->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
-    state->jmapid = xstrdupnull(mailbox_jmapid(state->mailbox));
+    state->mailboxid = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
+
+    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), state->mailboxid);
 
     if (init) {
         state->authstate = init->authstate;
@@ -375,7 +376,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 fail:
     free(state->mboxname);
     free(state->uniqueid);
-    free(state->jmapid);
+    free(state->mailboxid);
     free(state->userid);
     free(state);
     return r;
@@ -857,7 +858,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->has_compactids ? state->jmapid : state->uniqueid);
+    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -3382,14 +3383,9 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
                                        fmb_rock->fetchargs->namespace,
                                        fmb_rock->fetchargs->userid);
     }
-    else if (USER_COMPACT_EMAILIDS(fmb_rock->fetchargs->convstate)) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_putc(&buf, 'P');
-        MODSEQ_TO_JMAPID(&buf, mbentry->createdmodseq);
-        mboxval = buf_release(&buf);
-    }
     else {
-        mboxval = xstrdup(mbentry->uniqueid);
+        mboxval = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
+        jmap_set_mailboxid(fmb_rock->fetchargs->convstate, mbentry, mboxval);
     }
 
     if (fmb_rock->sep)
@@ -3746,17 +3742,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (fetchitems & FETCH_EMAILID) {
-        buf_reset(item);
-        if (state->has_compactids) {
-            buf_putc(item, 'S');
-            NANOSEC_TO_JMAPID(item,
-                              TIMESPEC_TO_NANOSEC(&record.internaldate));
-        }
-        else {
-            buf_putc(item, 'M');
-            buf_appendmap(item, message_guid_encode(&record.guid), 24);
-        }
-        prot_printf(state->out, "%cEMAILID (%s)", sepchar, buf_cstring(item));
+        char emailid[JMAP_MAX_EMAILID_SIZE];
+
+        jmap_set_emailid(fetchargs->convstate, &record.guid,
+                         0, &record.internaldate, emailid);
+        prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_CID) &&
@@ -3770,21 +3760,16 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_THREADID)) {
-        buf_reset(item);
+        char threadid[JMAP_THREADID_SIZE];
+
         if (!record.cid) {
-            buf_appendcstr(item, "NIL");
-        }
-        else if (state->has_compactids) {
-            buf_putc(item, 'A');
-            uint64_t u64 = htonll(record.cid);
-            charset_encode(item, (const char *) &u64, 8, ENCODING_BASE64JMAPID);
+            strcpy(threadid, "NIL");
         }
         else {
-            buf_putc(item, 'T');
-            buf_printf(item, CONV_FMT, record.cid);
+            jmap_set_threadid(fetchargs->convstate, record.cid, threadid);
         }
 
-        prot_printf(state->out, "%cTHREADID (%s)", sepchar, buf_cstring(item));
+        prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
@@ -7456,10 +7441,10 @@ EXPORTED const char *index_uniqueid(const struct index_state *state)
     return state->uniqueid;
 }
 
-EXPORTED const char *index_jmapid(const struct index_state *state)
+EXPORTED const char *index_mailboxid(const struct index_state *state)
 {
     if (!state) return NULL;
-    return state->jmapid;
+    return state->mailboxid;
 }
 
 EXPORTED int index_hasrights(const struct index_state *state, int rights)
