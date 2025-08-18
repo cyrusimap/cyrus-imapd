@@ -94,6 +94,7 @@
 #include "md5.h"
 #include "global.h"
 #include "imparse.h"
+#include "jmap_util.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "mappedfile.h"
