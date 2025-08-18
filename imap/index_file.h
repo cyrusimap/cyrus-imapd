@@ -70,7 +70,8 @@ typedef struct index_file_template {
     const index_field_t *crc_field;
 } index_file_template_t;
 
-extern const index_file_template_t *index_files_by_version[];
+extern const index_file_template_t *const index_files_by_version[];
+extern const size_t n_index_files;
 
 extern const char *index_file_read_fields(const char *bufp, void *base,
                                           const index_field_t *fields)
