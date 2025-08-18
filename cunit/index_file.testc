@@ -212,6 +212,11 @@ static void test_existent_mailbox_versions(void)
     }
 }
 
+static void test_no_missing_versions(void)
+{
+    CU_ASSERT_EQUAL(n_index_files, MAILBOX_MINOR_VERSION + 1);
+}
+
 #define dump_offset(o, f) do { \
     fprintf(stderr, "%s.%s: " OFF_T_FMT "\n", #o, #f, offsetof(o, f)); \
 } while(0)
