@@ -7172,6 +7172,7 @@ int meth_put(struct transaction_t *txn, void *params)
     unsigned flags = 0;
     void *davdb = NULL, *obj = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
+    user_nslock_t *user_nslock = NULL;
 
     if (txn->meth == METH_POST) {
         reqd_rights = DACL_ADDRSRC;
@@ -7276,6 +7277,12 @@ int meth_put(struct transaction_t *txn, void *params)
             return HTTP_SERVER_ERROR;
         }
     }
+
+    mbname_t *mbname = mbname_from_intname(txn->req_tgt.mbentry->name);
+    const char *owner = mbname_userid(mbname);
+    user_nslock = user_nslock_lockdouble(owner,
+                                         txn->req_tgt.userid, LOCK_EXCLUSIVE);
+    mbname_free(&mbname);
 
     /* Open mailbox for writing */
     r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &mailbox);
@@ -7427,6 +7434,7 @@ int meth_put(struct transaction_t *txn, void *params)
     buf_free(&msg_buf);
     if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
+    user_nslock_release(&user_nslock);
 
     // XXX - this is AFTER the response has been sent, we need to
     // refactor this for total safety
