@@ -47,7 +47,19 @@
 
 #include "mailbox.h"
 
-typedef struct index_field index_field_t;
+/* "opaque" struct -- if you saw this, no you didn't (unit tests need it) */
+struct opaque_index_field {
+    uint8_t disk_size; // size of data on disk
+                       // 0 = read w/o advancing, write nothing
+    char data_type;    // data storage type:
+                       // '4' = 4 bytes (bit32)
+                       // '8' = 8 bytes (bit64)
+                       // 'B' = byte array
+                       // 'T' = struct timespec
+                       // 'E' = empty field (no storage)
+    off_t data_offset; // offset to data type in storage struct
+};
+typedef struct opaque_index_field index_field_t;
 
 typedef struct index_file_template {
     uint8_t header_size;
