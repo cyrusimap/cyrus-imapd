@@ -614,6 +614,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     /* char *uniqueid; */
     json_object_set_new(jobj, "uniqueid", json_string(mbentry->uniqueid));
 
+    /* char *jmapid; */
+    json_object_set_new(jobj, "jmapId", json_string(mbentry->jmapid));
+
     /* char *legacy_specialuse; */
     json_object_set_new(jobj, "legacy_specialuse",
                               json_string(mbentry->legacy_specialuse));
@@ -926,6 +929,16 @@ static int do_undump(void)
         else {
             /* XXX could potentially infer this if the mailbox is on disk */
             fprintf(stderr, "missing uniqueid for %s\n", key);
+            goto skip;
+        }
+
+        /* char *jmapid; */
+        if ((tmp = json_string_value(json_object_get(value, "jmapId")))) {
+           newmbentry->jmapid = xstrdup(tmp);
+        }
+        else {
+            /* XXX could potentially infer this if the mailbox is on disk */
+            fprintf(stderr, "missing jmapId for %s\n", key);
             goto skip;
         }
 
