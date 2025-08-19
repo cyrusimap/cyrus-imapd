@@ -3754,9 +3754,17 @@ static int extract_convdata(struct conversations_state *state,
     int i;
     size_t j;
     int r = 0;
+    int is_memo = 0;
 
     r = message_need(msg, M_RECORD|M_CACHE);
-    if (r) {
+    if (!r) {
+        const struct index_record *record = msg_record(msg);
+        struct mailbox *mbox = msg_mailbox(msg);
+        if (record && mbox) {
+            is_memo = mailbox_record_hasflag(mbox, record, "$memo");
+        }
+    }
+    else {
         r = message_need(msg, M_MAP|M_FULLBODY);
         if (r) {
             /* nope, now we're screwed */
@@ -3919,8 +3927,10 @@ static int extract_convdata(struct conversations_state *state,
                 if (r) goto out;
                 /* [IRIS-1576] if X-ME-Message-ID says the messages are
                 * linked, ignore any difference in Subject: header fields. */
+                /* Do not require subjects to match if message has the
+                 * $memo keyword set. */
 
-                if (!conv || i == 3 || !conv->subject
+                if (!conv || i == 3 || !conv->subject || is_memo
                     || message_subject_matchconv(&subj, conv)) {
                     arrayu64_add(matchlist, cid);
                 }
