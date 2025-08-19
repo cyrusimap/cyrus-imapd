@@ -217,7 +217,7 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
                 r = IMAP_MESSAGE_CONTAINSNULL;
             }
             else if (*p == '\n') {
-                if (!sawcr && (inheader || !allow_null))
+                if (!sawcr)
                     r = IMAP_MESSAGE_CONTAINSNL;
                 sawcr = 0;
                 if (blankline) {

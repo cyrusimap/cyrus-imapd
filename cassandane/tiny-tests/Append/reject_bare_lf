@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_reject_bare_lf
+  : RFC2047_UTF8 : NoMunge8Bit {
+    my ($self) = @_;
+    my $imap   = $self->{store}->get_client();
+
+    my $mimeBareLF = <<"EOF";
+From: from\@local\r
+To: to\@local\r
+Subject: test\r
+Date: Mon, 13 Apr 2020 15:34:03 +0200\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+some
+bare
+newline
+EOF
+
+    $imap->append('inbox', { Binary => $mimeBareLF });
+    $self->assert_str_equals('no', $imap->get_last_completion_response());
+    $self->assert_matches(qr/bare newlines/, $imap->get_last_error());
+}
