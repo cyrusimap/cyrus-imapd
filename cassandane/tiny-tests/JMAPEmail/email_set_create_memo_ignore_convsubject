@@ -1,0 +1,129 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_memo_ignore_convsubject
+{
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    xlog $self, "Create emails with differing subject but same X-ME-Message-ID";
+    for my $i (1 .. 3) {
+        my $mime = <<"EOF";
+From: <from\@local>
+To: <to\@local>
+Subject: msg$i
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Message-ID: <message-id-$i\@example.com>
+X-ME-Message-Id: <x-me-message-id-2e97\@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msg$i
+EOF
+        $mime =~ s/\r?\n/\r\n/gs;
+        $imap->append('INBOX', $mime) || die $@;
+    }
+
+    xlog $self, "Assert all emails belong to the same thread";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [ 'threadId', 'messageId' ],
+            },
+            'R2'
+        ],
+    ]);
+    $self->assert_num_equals(3, scalar @{ $res->[0][1]{ids} });
+
+    my $threadId = $res->[1][1]{list}[0]{threadId};
+    $self->assert_str_equals($threadId, $res->[1][1]{list}[1]{threadId});
+    $self->assert_str_equals($threadId, $res->[1][1]{list}[2]{threadId});
+
+    my $memoSubject   = "non-matching-subject";
+    my $memoInReplyTo = $res->[1][1]{list}[2]{messageId};
+
+    xlog $self, 'Create email with non-matching subject and $memo keyword';
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    memo1 => {
+                        subject    => $memoSubject,
+                        inReplyTo  => $memoInReplyTo,
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        keywords => {
+                            '$seen' => JSON::true,
+                            '$memo' => JSON::true,
+                        },
+                        "from" => [ {
+                            "email" => 'cassandane@example.com',
+                        } ],
+                        "bodyStructure" => {
+                            "partId" => "text",
+                            "type"   => "text/plain"
+                        },
+                        "bodyValues" => {
+                            "text" => {
+                                "value"       => "some memo",
+                                "isTruncated" => JSON::false
+                            }
+                        },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+
+    xlog $self, "Assert the memo gets attached to the same thread";
+    $self->assert_str_equals($threadId, $res->[0][1]{created}{memo1}{threadId});
+
+    xlog $self, 'Create email with non-matching subject and no $memo keyword';
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    email1 => {
+                        subject    => $memoSubject,
+                        inReplyTo  => $memoInReplyTo,
+                        mailboxIds => {
+                            '$inbox' => JSON::true,
+                        },
+                        keywords => {
+                            '$seen' => JSON::true,
+                        },
+                        "from" => [ {
+                            "email" => 'cassandane@example.com',
+                        } ],
+                        "bodyStructure" => {
+                            "partId" => "text",
+                            "type"   => "text/plain"
+                        },
+                        "bodyValues" => {
+                            "text" => {
+                                "value"       => "some memo",
+                                "isTruncated" => JSON::false
+                            }
+                        },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+
+    xlog $self, "Assert the email does not get assigned to same thread";
+    $self->assert_str_not_equals($threadId, $res->[0][1]{created}{email1}{threadId});
+}
