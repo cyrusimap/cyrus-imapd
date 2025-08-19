@@ -93,6 +93,7 @@
 #include "imapurl.h"
 #include "imparse.h"
 #include "index.h"
+#include "jmap_util.h"
 #include "mailbox.h"
 #include "message.h"
 #include "mboxevent.h"
@@ -5810,7 +5811,7 @@ badannotation:
         fa->authstate = imapd_authstate;
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
-        && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES))) {
+        && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES|FETCH_EMAILID|FETCH_THREADID))) {
         int r = conversations_open_user(imapd_userid, 0/*shared*/, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
@@ -6986,7 +6987,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
-    char *mailboxid = NULL;
+    char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
     mbentry_t *parent = NULL;
     const char *origname = name;
     struct listargs listargs = {
@@ -7391,12 +7392,7 @@ localcreate:
                    imapd_userid, __FILE__, __LINE__);
         }
     }
-    if (USER_COMPACT_EMAILIDS(cstate)) {
-        mailboxid = xstrdup(mailbox_jmapid(mailbox));
-    }
-    else {
-        mailboxid = xstrdup(mailbox_uniqueid(mailbox));
-    }
+    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), mailboxid);
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -7456,7 +7452,6 @@ done:
     mboxlist_entry_free(&parent);
     buf_free(&specialuse);
     mbname_free(&mbname);
-    free(mailboxid);
     strarray_fini(&listargs.pat);
     if (name != origname) free(name);
 }
