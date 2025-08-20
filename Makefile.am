@@ -44,7 +44,7 @@
 WARN_CFLAGS = -Wall -Wextra
 
 ACLOCAL_AMFLAGS = -I cmulocal
-AM_CFLAGS = $(WARN_CFLAGS) @PERL_CCCDLFLAGS@ $(GCOV_CFLAGS)
+AM_CFLAGS = $(WARN_CFLAGS) @PERL_CCCDLFLAGS@ $(SSL_CFLAGS) $(GCOV_CFLAGS)
 AM_CXXFLAGS = $(WARN_CFLAGS) $(GCOV_CXXFLAGS)
 
 AM_CPPFLAGS = \
@@ -59,7 +59,6 @@ AM_CPPFLAGS = \
     ${DEFS} \
     ${LOCALDEFS} \
     $(SASLFLAGS) \
-    $(SSL_CPPFLAGS) \
     $(ICU_CFLAGS)
 
 if HAVE_LDAP
@@ -85,7 +84,6 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
     --enable-http \
     --enable-calalarmd \
     --enable-replication \
-    --with-openssl=yes \
     --enable-nntp \
     --enable-murder \
     --enable-idled \
@@ -214,6 +212,7 @@ sbin_PROGRAMS += \
     imap/quota \
     imap/reconstruct \
     imap/relocate_by_id \
+    imap/tls_prune \
     imap/cvt_xlist_specialuse \
     ptclient/ptdump \
     ptclient/ptexpire
@@ -276,10 +275,6 @@ if REPLICATION
 libexec_PROGRAMS += imap/sync_server
 sbin_PROGRAMS += imap/sync_client imap/sync_reset
 endif # REPLICATION
-
-if HAVE_SSL
-sbin_PROGRAMS += imap/tls_prune
-endif # HAVE_SSL
 
 sbin_PROGRAMS += imap/unexpunge
 
