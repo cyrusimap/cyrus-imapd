@@ -136,6 +136,9 @@ sub create_testmessages
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 }
 
+# Tests that call this function must have :needs_component_jmap
+# We could add that to new() but then NO tests would run without jmap,
+# and most tests don't need snippets.
 sub get_snippets
 {
     # Previous versions of this test module used XSNIPPETS to
