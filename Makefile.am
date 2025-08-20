@@ -1559,7 +1559,6 @@ lib_libcyrus_min_la_SOURCES = \
     lib/util.c \
     lib/vparse.c \
     lib/xmalloc.c \
-    lib/xsha1.c \
     lib/xstrlcat.c \
     lib/xstrlcpy.c \
     lib/xstrnchr.c \
