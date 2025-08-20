@@ -7,7 +7,8 @@ Name: Cyrus Imapd libcyrus_imap
 Description: IMAP library of Cyrus Imapd
 URL: http://www.cyrusimap.org/
 Version: @PACKAGE_VERSION@
-Cflags: -I${includedir}/cyrus
+Requires: openssl >= 3.0
 Requires.private: libcyrus_min = @PACKAGE_VERSION@, libcyrus = @PACKAGE_VERSION@
+Cflags: -I${includedir}/cyrus
 Libs: -L${libdir} -lcyrus_imap -lcyrus -lcyrus_min
 Libs.private: @PKG_CONFIG_COM_ERR_LIB@
