@@ -133,8 +133,17 @@ EXPORTED void reschedule_event(struct event *evt, struct timeval now)
     assert(period > 0);
 
     /* don't fall behind schedule if we're running slow for some reason */
-    while (mark <= now_s)
-        mark += period;
+    mark += period;
+    if (mark <= now_s) {
+        unsigned skipped = 0;
+        do {
+            mark += period;
+            skipped ++;
+        } while (mark <= now_s);
+        xsyslog(LOG_WARNING, "periodic event behind schedule",
+                             "name=<%s> period=<" TIME_T_FMT "> skipped=<%u>",
+                             evt->name, evt->period, skipped);
+    }
 
     evt->mark.tv_sec = mark;
 

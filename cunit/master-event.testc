@@ -298,24 +298,32 @@ static void test_reschedule_event(void)
         time_t period;
         time_t reschedule_at;
         time_t expect_mark;
+        unsigned expect_skipped;
     } tests[] = {
-        { 1000, 10,  905,  915 }, /* shouldn't happen, but don't break! */
-        { 1000, 10, 1000, 1010 },
-        { 1000, 10, 1001, 1010 },
-        { 1000, 10, 1002, 1010 },
-        { 1000, 10, 1003, 1010 },
-        { 1000, 10, 1009, 1010 },
-        { 1000, 10, 1010, 1020 },
-        { 1000, 10, 1011, 1020 },
+        { 1000, 10,  905,  915, 0 }, /* shouldn't happen, but don't break! */
+        { 1000, 10, 1000, 1010, 0 },
+        { 1000, 10, 1001, 1010, 0 },
+        { 1000, 10, 1002, 1010, 0 },
+        { 1000, 10, 1003, 1010, 0 },
+        { 1000, 10, 1009, 1010, 0 },
+        { 1000, 10, 1010, 1020, 1 },
+        { 1000, 10, 1011, 1020, 1 },
+        { 1000, 10, 1028, 1030, 2 },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
 
     for (i = 0; i < n_tests; i++) {
-        char name[64];
+        char name[32];
+        char skipped[32];
         struct event *event;
 
         snprintf(name, sizeof(name), "event %u", i);
+
+        snprintf(skipped, sizeof(skipped),
+                 "skipped=<%u>",
+                 tests[i].expect_skipped);
+        CU_SYSLOG_MATCH(skipped);
 
         event = event_new_periodic(name,
                                    TV_INIT(tests[i].mark, 0),
@@ -326,6 +334,7 @@ static void test_reschedule_event(void)
         assert_schedule_invariants(schedule_peek());
 
         CU_ASSERT_EQUAL(event->mark.tv_sec, tests[i].expect_mark);
+        CU_ASSERT_SYSLOG(/* all */ 0, !!tests[i].expect_skipped);
     }
 }
 
