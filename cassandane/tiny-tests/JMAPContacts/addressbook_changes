@@ -14,8 +14,14 @@ sub test_addressbook_changes
     my $state = $res->[0][1]{state};
 
     xlog $self, "create addressbooks";
-    my $id1 = $carddav->NewAddressBook("foo");
-    my $id2 = $carddav->NewAddressBook("bar");
+    my $path1 = $carddav->NewAddressBook("foo");
+    my $path2 = $carddav->NewAddressBook("bar");
+
+    xlog $self, "get addressbook ids";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => undef}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $id1 = $m{"foo"}{id};
+    my $id2 = $m{"bar"}{id};
 
     xlog $self, "get addressbook updates";
     $res = $jmap->CallMethods([['AddressBook/changes', {
@@ -39,8 +45,8 @@ sub test_addressbook_changes
 
     my $basepath = $carddav->{basepath};
     xlog $self, "update name of addressbook $id1, destroy addressbook $id2";
-    $carddav->UpdateAddressBook($basepath . "/" . $id1, name => "foo (upd)");
-    $carddav->DeleteAddressBook($basepath . "/" . $id2);
+    $carddav->UpdateAddressBook($basepath . "/" . $path1, name => "foo (upd)");
+    $carddav->DeleteAddressBook($basepath . "/" . $path2);
 
     xlog $self, "get addressbook updates";
     $res = $jmap->CallMethods([['AddressBook/changes', {
