@@ -1283,14 +1283,11 @@ SASL_SET_GSSAPI_LIBS
 dnl
 dnl Check for OpenSSL library, needed for TLS support
 dnl
-PKG_CHECK_MODULES([SSL], [openssl >= 3.0],
-                  [ AC_DEFINE(HAVE_SSL, [], [Do we have OpenSSL?])
-                    with_ssl=yes ],
+PKG_CHECK_MODULES([SSL], [openssl >= 3.0], [],
                   AC_MSG_ERROR([openssl is required]))
 dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([SSL_LIBS])
 AC_SUBST([SSL_CFLAGS])
-AM_CONDITIONAL([HAVE_SSL], [test "x$with_ssl" = xyes])
 
 dnl Check whether OpenSSL supports TLS ALPN extension
 AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
