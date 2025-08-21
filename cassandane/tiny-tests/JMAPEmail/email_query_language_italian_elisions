@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_language_italian_elisions
+    :JMAPExtensions :SearchLanguage :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+use utf8;
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    subject => "it",
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => <<'EOF'
+L'italiano è una lingua romanza parlata principalmente in Italia. Per ragioni storiche e geografiche, l'italiano è la lingua romanza meno divergente dal latino (complessivamente a pari merito, anche se in parametri diversi, con la lingua sarda).
+Queta’mi l’audiologo un’ora.
+EOF
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]{created}{email1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @tests = ({
+        body => "l'audiologo",
+        wantIds => [$emailId],
+    }, {
+        body => "l’audiologo",
+        wantIds => [$emailId],
+    }, {
+        body => "audiologo",
+        wantIds => [$emailId],
+    });
+
+no utf8;
+
+    foreach (@tests) {
+        $res = $jmap->CallMethods([
+            ['Email/query', {
+                filter => {
+                    body => $_->{body},
+                },
+            }, 'R1'],
+        ]);
+        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
+    }
+}
