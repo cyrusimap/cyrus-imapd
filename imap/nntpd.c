@@ -130,9 +130,7 @@ static struct backend *backend_current = NULL;
 /* our cached connections */
 static ptrarray_t backend_cached = PTRARRAY_INITIALIZER;
 
-#ifdef HAVE_SSL
 static SSL *tls_conn;
-#endif /* HAVE_SSL */
 
 static sasl_conn_t *nntp_saslconn; /* the sasl connection context */
 
@@ -357,12 +355,10 @@ static void nntp_reset(void)
 
     if (protin) protgroup_reset(protin);
 
-#ifdef HAVE_SSL
     if (tls_conn) {
         tls_reset_servertls(&tls_conn);
         tls_conn = NULL;
     }
-#endif
 
     cyrus_reset_stdio();
 
@@ -623,9 +619,7 @@ void shut_down(int code)
 
     if (protin) protgroup_free(protin);
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
 
     if (newsgroups) free_wildmats(newsgroups);
     auth_freestate(newsmaster_authstate);
@@ -4004,7 +3998,6 @@ static void cmd_post(char *msgid, int mode)
     prot_flush(nntp_out);
 }
 
-#ifdef HAVE_SSL
 static void cmd_starttls(int nntps)
 {
     int result;
@@ -4082,13 +4075,6 @@ static void cmd_starttls(int nntps)
         backend_current = NULL;
     }
 }
-#else
-static void cmd_starttls(int nntps __attribute__((unused)))
-{
-    /* XXX should never get here */
-    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *alg)

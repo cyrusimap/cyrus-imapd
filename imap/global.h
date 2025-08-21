@@ -53,14 +53,8 @@
 #include "libcyr_cfg.h"
 #include "util.h"
 
-#ifdef HAVE_SSL
 #include <openssl/evp.h>
 #define MAX_FINISHED_LEN EVP_MAX_MD_SIZE
-
-#else /* !HAVE_SSL */
-#define MAX_FINISHED_LEN 1
-#endif /* HAVE_SSL */
-
 
 #define MAX_SESSIONID_SIZE 256
 

@@ -125,7 +125,6 @@ EXPORTED void id_response(struct protstream *pout)
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              "; Running w/%s", db_version(NULL, NULL, NULL));
 #endif
-#ifdef HAVE_SSL
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              "; Built w/%s", OPENSSL_VERSION_TEXT);
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
@@ -133,7 +132,6 @@ EXPORTED void id_response(struct protstream *pout)
 #ifdef EGD_SOCKET
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
              " (with EGD)");
-#endif
 #endif
 #ifdef HAVE_ZLIB
     snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
