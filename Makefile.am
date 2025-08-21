@@ -772,6 +772,7 @@ include_HEADERS = \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
+    lib/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -789,6 +790,7 @@ include_HEADERS = \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
+    lib/libconfig.h \
     lib/libcyr_cfg.h \
     lib/lsort.h \
     lib/map.h \
@@ -820,14 +822,16 @@ include_HEADERS = \
 nodist_include_HEADERS = \
     lib/imapopts.h
 
-nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_include_HEADERS = \
+    imap/message_guid.h \
+    sieve/sieve_interface.h
+
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
     lib/bufarray.h \
     lib/byteorder.h \
     lib/gai.h \
-    lib/libconfig.h \
     lib/md5.h \
     lib/prot.h \
     lib/ptrarray.h \
@@ -1020,7 +1024,6 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/mboxname.c \
     imap/mboxname.h \
     imap/message_guid.c \
-    imap/message_guid.h \
     imap/message.c \
     imap/message.h \
     imap/message_priv.h \
