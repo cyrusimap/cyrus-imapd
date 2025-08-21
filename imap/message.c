@@ -877,7 +877,9 @@ static void message_parse_headers(struct msg *msg, struct body *body,
     /* Slurp up all of the headers into 'headers' */
     while ((next = message_getline(&headers, msg)) &&
            (next[-1] != '\n' ||
-            (*next != '\r' || next[1] != '\n'))) {
+            (*next != '\r' || next[1] != '\n')) &&
+            // leniently parse empty line with bare LF as end of headers
+            *next != '\n') {
 
         len = strlen(next);
 
@@ -1973,8 +1975,15 @@ static void message_parse_content(struct msg *msg, struct body *body,
                 body->boundary_lines++;
             }
             if (body->content_size > 1) {
-                body->content_size -= 2;
-                body->boundary_size += 2;
+                if (line[-1] == '\n') {
+                    body->content_size--;
+                    body->boundary_size++;
+                    // Leniently handle bare LF.
+                    if (line[-2] == '\r') {
+                        body->content_size--;
+                        body->boundary_size++;
+                    }
+                }
             }
             break;
         }
@@ -5680,8 +5689,13 @@ EXPORTED int message_foreach_header(const char *headers, size_t len,
                 break;
         }
         if (!q) q = top;
-        /* Chomp of trailing CRLF */
-        buf_setmap(&val, p, q - p >= 2 ? q - p - 2 : 0);
+        /* Chomp of trailing CRLF - leniently handle bare LF */
+        const char *qq = q;
+        if (qq > p && p[qq - p - 1] == '\n')
+            qq--;
+        if (qq > p && p[qq - p - 1] == '\r')
+            qq--;
+        buf_setmap(&val, p, qq - p);
         /* Call callback for header */
         r = cb(buf_cstring(&key), buf_cstring(&val), rock);
         if (r) break;

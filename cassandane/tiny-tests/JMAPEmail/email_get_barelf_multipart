@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_barelf_multipart
+  : RFC2047_UTF8 : NoMunge8Bit
+{
+    my ($self) = @_;
+    my $imap   = $self->{store}->get_client();
+    my $jmap   = $self->{jmap};
+
+    # This is a regression test for handling MIME messages containing
+    # bare newline in Email/get. It assumes that APPEND accepts such
+    # messages as binary literals. This might change in the future in
+    # which case it's OK for this test to fail.
+    # The message cunit tests contain a regression test to ensure that
+    # parsing these MIME messages work even if APPEND rejects them.
+
+    my $mimeBareLF = <<"EOF";
+From: from\@local\r
+To: to\@local\r
+Subject: test\r
+Date: Mon, 13 Apr 2020 15:34:03 +0200\r
+Content-Type: multipart/alternative;\r
+ boundary=xxxxxxxxxxxxxxxxxxxxxx\r
+MIME-Version: 1.0\r
+\r
+--xxxxxxxxxxxxxxxxxxxxxx\r
+Content-Type: text/plain
+X-Foo: bar
+
+textbody
+--xxxxxxxxxxxxxxxxxxxxxx
+Content-Type: text/html
+
+htmlbody
+--xxxxxxxxxxxxxxxxxxxxxx--
+EOF
+    $imap->append('inbox', { Binary => $mimeBareLF });
+
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties         => [ 'bodyStructure', 'bodyValues' ],
+                bodyProperties     => [ 'partId', 'blobId', 'type', 'header:x-foo' ],
+                fetchAllBodyValues => JSON::true,
+            },
+            'R2'
+        ],
+    ]);
+
+    my $bodyStructure = $res->[1][1]{list}[0]{bodyStructure};
+    $self->assert_not_null($bodyStructure);
+    $self->assert_str_equals('multipart/alternative', $bodyStructure->{type});
+    $self->assert_num_equals(2, scalar @{ $bodyStructure->{subParts} });
+    $self->assert_str_equals('text/plain', $bodyStructure->{subParts}[0]{type});
+    $self->assert_str_equals(' bar', $bodyStructure->{subParts}[0]{'header:x-foo'});
+    $self->assert_str_equals('text/html',  $bodyStructure->{subParts}[1]{type});
+    $self->assert_null($bodyStructure->{subParts}[1]{'header:x-foo'});
+}

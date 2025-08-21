@@ -1419,4 +1419,112 @@ static void test_parse_received_semicolon(void)
    message_free_body(&body);
 
 }
+
+static int foreach_header_cb(const char *name, const char *value, void *rock)
+{
+    strarray_t *headers = rock;
+    strarray_append(headers, name);
+    strarray_append(headers, value);
+    return 0;
+}
+
+static void test_barelf_multipart(void)
+{
+    static const char msg[] =
+"From: from@local\r\n"
+"To: to@local\r\n"
+"Subject: test\r\n"
+"Date: Mon, 13 Apr 2020 15:34:03 +0200\r\n"
+"Content-Type: multipart/alternative;\r\n"
+" boundary=boundary123456789\r\n"
+"Message-ID: <fake800@fastmail.fm>\r\n"
+"MIME-Version: 1.0\r\n"
+"\r\n"
+"--boundary123456789\r\n"
+"Content-Type: text/plain\n" // bare LFs start here
+"X-Foo:bar\n"
+"\n"
+"textbody\n"
+"--boundary123456789\n"
+"Content-Type: text/html\n"
+"\n"
+"htmlbody\n"
+"--boundary123456789--\n";
+
+    struct buf buf = BUF_INITIALIZER;
+    strarray_t headers = STRARRAY_INITIALIZER;
+
+    struct body body;
+    memset(&body, 0x45, sizeof(body));
+    int r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(strlen(msg), body.filesize);
+
+    // Assert top-level headers and media type.
+    CU_ASSERT_STRING_EQUAL(body.message_id, "<fake800@fastmail.fm>");
+    CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "ALTERNATIVE");
+    CU_ASSERT_EQUAL(2, body.numparts);
+
+    // Assert first body part.
+
+    buf_setmap(&buf, msg + body.subpart[0].header_offset,
+            body.subpart[0].header_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf),
+            "Content-Type: text/plain\nX-Foo:bar\n\n");
+
+    message_foreach_header(
+        buf_base(&buf), buf_len(&buf), foreach_header_cb, &headers);
+    CU_ASSERT_EQUAL(4, strarray_size(&headers));
+    CU_ASSERT_STRING_EQUAL("Content-Type", strarray_nth(&headers, 0));
+    CU_ASSERT_STRING_EQUAL(" text/plain", strarray_nth(&headers, 1));
+    CU_ASSERT_STRING_EQUAL("X-Foo", strarray_nth(&headers, 2));
+    CU_ASSERT_STRING_EQUAL("bar", strarray_nth(&headers, 3));
+    strarray_fini(&headers);
+
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].subtype, "PLAIN");
+
+    buf_setmap(&buf, msg + body.subpart[0].content_offset,
+            body.subpart[0].content_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "textbody");
+
+    buf_setmap(&buf, msg +
+            body.subpart[0].content_offset +
+            body.subpart[0].content_size,
+            body.subpart[0].boundary_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\n--boundary123456789\n");
+
+    // Assert second body part.
+
+    buf_setmap(&buf, msg + body.subpart[1].header_offset,
+            body.subpart[1].header_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf),
+            "Content-Type: text/html\n\n");
+
+    message_foreach_header(
+        buf_base(&buf), buf_len(&buf), foreach_header_cb, &headers);
+    CU_ASSERT_EQUAL(2, strarray_size(&headers));
+    CU_ASSERT_STRING_EQUAL("Content-Type", strarray_nth(&headers, 0));
+    CU_ASSERT_STRING_EQUAL(" text/html", strarray_nth(&headers, 1));
+    strarray_fini(&headers);
+
+    CU_ASSERT_STRING_EQUAL(body.subpart[1].type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(body.subpart[1].subtype, "HTML");
+
+    buf_setmap(&buf, msg + body.subpart[1].content_offset,
+            body.subpart[1].content_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "htmlbody");
+
+    buf_setmap(&buf, msg +
+            body.subpart[1].content_offset +
+            body.subpart[1].content_size,
+            body.subpart[1].boundary_size);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), "\n--boundary123456789--\n");
+
+    message_free_body(&body);
+    strarray_fini(&headers);
+    buf_free(&buf);
+}
+
 /* vim: set ft=c: */
