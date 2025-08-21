@@ -1264,9 +1264,9 @@ static void cmd_apop(char *response)
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-        syslog(LOG_NOTICE, "badlogin: %s APOP (%s) %s",
-               popd_clienthost, popd_apop_chal,
-               sasl_errdetail(popd_saslconn));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+            lf_s("r.clienthost", popd_clienthost),
+            lf_s("error", sasl_errdetail(popd_saslconn)));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -1301,9 +1301,12 @@ static void cmd_apop(char *response)
     }
     popd_userid = xstrdup((const char *) canon_user);
 
-    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s SESSIONID=<%s>", popd_clienthost,
-           popd_userid, popd_subfolder ? popd_subfolder : "",
-           popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
+    xsyslog_ev(LOG_NOTICE, "login.good",
+        lf_s("session_id", session_id()),
+        lf_s("r.clienthost", popd_clienthost),
+        lf_s("u.username", popd_userid),
+        lf_s("pop.folder", popd_subfolder ? popd_subfolder : ""),
+        lf_c("login.tls", popd_starttls_done ? 1 : 0));
 
     popd_authstate = auth_newstate(popd_userid);
 
