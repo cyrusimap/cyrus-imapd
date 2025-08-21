@@ -1,0 +1,25 @@
+Description:
+
+OpenSSL is now required for all builds.
+
+
+Documentation:
+
+N/A
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+If you build Cyrus IMAP from source, make sure OpenSSL and its development
+headers are installed, and that an openssl.pc file is installed to your
+pkg-config path so that configure can find it.
+
+
+GitHub issue:
+
+None
