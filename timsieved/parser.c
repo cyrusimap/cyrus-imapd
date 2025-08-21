@@ -86,10 +86,7 @@ static int authenticated = 0;
 static int verify_only = 0;
 static int starttls_done = 0;
 static sasl_ssf_t sasl_ssf = 0;
-#ifdef HAVE_SSL
-/* our tls connection, if any */
 static SSL *tls_conn = NULL;
-#endif /* HAVE_SSL */
 extern int sieved_timeout;
 
 /* from elsewhere */
@@ -921,7 +918,6 @@ reset:
   goto cleanup;
 }
 
-#ifdef HAVE_SSL
 static int cmd_starttls(struct protstream *sieved_out,
                         struct protstream *sieved_in,
                         struct saslprops_t *saslprops)
@@ -984,11 +980,3 @@ static int cmd_starttls(struct protstream *sieved_out,
     return capabilities(sieved_out, sieved_saslconn, starttls_done,
                         authenticated, sasl_ssf);
 }
-#else
-static int cmd_starttls(struct protstream *sieved_out __attribute__((unused)),
-                        struct protstream *sieved_in __attribute__((unused)),
-                        struct saslprops_t *saslprops __attribute__((unused)))
-{
-    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */

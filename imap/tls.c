@@ -98,8 +98,6 @@
 
 #include <config.h>
 
-#ifdef HAVE_SSL
-
 /* System library. */
 
 #include <sys/types.h>
@@ -1746,16 +1744,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
 
     return r;
 }
-
-#else
-
-EXPORTED int tls_enabled(void)
-{
-    return 0;
-}
-
-#endif /* HAVE_SSL */
-
 
 EXPORTED int tls_starttls_enabled(void)
 {

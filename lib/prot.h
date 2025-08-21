@@ -51,9 +51,7 @@
 #include <sasl/sasl.h>
 #include <config.h>
 
-#ifdef HAVE_SSL
 #include <openssl/ssl.h>
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
@@ -88,10 +86,7 @@ struct protstream {
     sasl_conn_t *conn;
     int saslssf;
     int maxplain;
-
-#ifdef HAVE_SSL
     SSL *tls_conn;
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
     /* (De)compress stream */
@@ -234,11 +229,9 @@ extern uint64_t prot_bytes_out(struct protstream *s);
 extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
 extern void prot_unsetsasl(struct protstream *s);
 
-#ifdef HAVE_SSL
 /* Set TLS options for a given protstream (requires a completed tls
  * negotiation */
 extern int prot_settls(struct protstream *s, SSL *tlsconn);
-#endif /* HAVE_SSL */
 
 /* Mark this protstream as a "client" for the purpose of generating
  * or consuming literals (thanks LITERAL+) */

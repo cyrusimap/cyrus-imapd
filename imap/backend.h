@@ -76,10 +76,8 @@ struct backend {
     sasl_conn_t *saslconn;
     sasl_callback_t *sasl_cb;
     sasl_ssf_t ext_ssf;
-#ifdef HAVE_SSL
     SSL *tlsconn;
     SSL_SESSION *tlssess;
-#endif /* HAVE_SSL */
 
     unsigned long capability;
     int num_cap_params;

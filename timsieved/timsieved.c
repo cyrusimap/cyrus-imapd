@@ -130,9 +130,7 @@ void shut_down(int code)
         free(backend);
     }
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
 
     saslprops_free(&saslprops);
 
