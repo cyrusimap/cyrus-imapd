@@ -128,6 +128,8 @@ static int do_search(const char *mboxname,
     init.userid = userid;
     init.authstate = auth_newstate(userid);
     init.out = pout;
+    init.examine_mode = 1;
+    init.stay_locked = 1;
 
     r = index_open(mboxname, &init, &state);
     if (r) {

@@ -4066,13 +4066,15 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 
         mboxlist_entry_free(&mbentry);
 
-        /* local mailbox */
+        /* local mailbox - XXX - same name as selected? */
         if (!r) {
             struct index_init init;
             memset(&init, 0, sizeof(init));
             init.userid = imapd_userid;
             init.authstate = imapd_authstate;
             init.out = imapd_out;
+            init.examine_mode = 1;
+            init.stay_locked = 1;
             r = index_open(intname, &init, &state);
             seqset_free(&init.vanishedlist);
         }
@@ -6374,7 +6376,8 @@ static void cmd_search(const char *tag, const char *cmd)
             { .userid       = imapd_userid,
               .authstate    = imapd_authstate,
               .out          = imapd_out,
-              .examine_mode = 1
+              .examine_mode = 1,
+              .stay_locked  = 1
             },
             { &progress_cb, tag, time(0),
               searchargs->multi.filter != SEARCH_SOURCE_SELECTED }

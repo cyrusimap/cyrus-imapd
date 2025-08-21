@@ -6931,6 +6931,7 @@ static int eventquery_textsearch_run(jmap_req_t *req,
     init.want_expunged = 0;
     init.want_mbtype = MBTYPE_CALENDAR;
     init.examine_mode = 1;
+    init.stay_locked = 1;
 
     char *mboxname = mboxname_user_mbox(req->accountid, config_getstring(IMAPOPT_CALENDARPREFIX));
     r = index_open(mboxname, &init, &state);
