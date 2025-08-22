@@ -46,6 +46,7 @@
 
 #include <jansson.h>
 
+#include "carddav_db.h"
 #include "hash.h"
 #include "ical_support.h"
 #include "message.h"
@@ -228,6 +229,12 @@ extern void jmap_set_threadid(struct conversations_state *cstate,
 
 extern void jmap_set_addrbookid(struct conversations_state *cstate,
                                 const mbentry_t *mbentry, char *mboxid);
+
+#define JMAP_CONTACTID_PREFIX 'D'
+#define JMAP_CONTACTID_SIZE (CONV_JMAPID_SIZE + 2)  // +2 for prefix and NUL
+extern void jmap_set_contactid(struct conversations_state *cstate,
+                               const struct carddav_data *cdata,
+                               struct buf *cid);
 
 #ifdef HAVE_ICAL
 struct jmap_caleventid {
