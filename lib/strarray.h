@@ -61,7 +61,7 @@ typedef struct
 void strarray_fini(strarray_t *);
 
 strarray_t *strarray_new(void);
-void strarray_free(strarray_t *);
+void strarray_free(void *);
 
 #define strarray_appendv(sa, s) strarray_nth((sa), strarray_append((sa), (s)))
 #define strarray_addv(sa, s) strarray_nth((sa), strarray_add((sa), (s)))
