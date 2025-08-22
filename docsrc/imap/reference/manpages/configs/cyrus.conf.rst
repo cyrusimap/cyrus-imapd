@@ -219,25 +219,46 @@ scheduled cleanup/maintenance.
         The command (with options) to spawn as a child process.  This
         string argument is required.
 
+        Note that this argument is parsed quite naively: arguments are
+        split on whitespace, quoting is not supported.  If you need to run
+        a complex command, make a shell script that calls the real command,
+        and set the event to run the script.
+
 .. parsed-literal::
 
     **period=**\ 0
 
 ..
 
-        The interval (in minutes) at which to run the command.  This
-        integer value is optional, but SHOULD be a positive integer >
-        10.
+        The integer interval (in minutes) at which to run the command.
+
+        Intervals are counted starting from when :cyrusman:`master(8)` was
+        started, they are not aligned to any particular clock time.
+
+        This is optional, but one of **period** or **cron** must be specified.
 
 .. parsed-literal::
 
-    **at=**\ <hhmm>
+    **cron=**\ "min hr dom mon dow"
+
+..
+
+        A string containing five space-delimited fields describing the minutes,
+        hours, days-of-month, months, and days-of-week that this command should
+        run, just like :manpage:`crontab(5)`.  The usual cron features are
+        supported: asterisks, ranges, lists, step values, named months
+        (jan-dec), and named days of the week (sun-sat).
+
+        This is optional, but one of **period** or **cron** must be specified.
+
+.. parsed-literal::
+
+    **at=**\ hhmm
 
 ..
 
         The time (24-hour format) at which to run the command each day.
-        If set to a valid time (0000-2359), period is automatically
-        set to 1440. This string argument is optional.
+        This is an alias for ``cron="mm hh * * *"``.
 
 DAEMON
 ------
@@ -320,8 +341,8 @@ Examples
 
     EVENTS {
         checkpoint    cmd="ctl_cyrusdb -c" period=30
-        delprune      cmd="cyr_expire -E 3" at=0400
-        tlsprune      cmd="tls_prune" at=0400
+        delprune      cmd="cyr_expire -E 3" cron="0 4 * * *"
+        tlsprune      cmd="tls_prune" cron="0 4 * * *"
     }
 
     DAEMON {
@@ -353,4 +374,5 @@ See Also
 :cyrusman:`ctl_cyrusdb(8)`,
 :cyrusman:`ctl_deliver(8)`,
 :cyrusman:`tls_prune(8)`,
+:manpage:`crontab(5)`,
 :manpage:`hosts_access(5)`
