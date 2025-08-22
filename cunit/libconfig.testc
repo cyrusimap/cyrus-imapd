@@ -1125,4 +1125,67 @@ static void test_deprecated_bytesize(void)
     CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
 }
 
+static void test_partition_sanity_ok(void)
+{
+    int r;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "partition-foo: /srv/foo\n"
+        "archivepartition-foo: /srv/archive/foo\n"
+        "metapartition-foo: /srv/meta/foo\n"
+        "t1searchpartition-foo: /srv/search/t1/foo\n"
+        "t2searchpartition-foo: /srv/search/t2/foo\n"
+        "partition-bar: /srv/bar\n"
+        "archivepartition-bar: /srv/archive/bar\n"
+        "metapartition-bar: /srv/meta/bar\n"
+        "t1searchpartition-bar: /srv/search/t1/bar\n"
+        "t2searchpartition-bar: /srv/search/t2/bar\n"
+    );
+
+    r = config_partition_sanity();
+    CU_ASSERT_EQUAL(r, 0);
+}
+
+static void test_partition_sanity_bad_subdirs(void)
+{
+    int r;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "partition-foo: /srv/foo\n"
+        "archivepartition-foo: /srv/foo/archive\n" /* bad */
+        "metapartition-foo: /srv/foo/meta\n" /* bad */
+        "partition-foobar: /srv/foo-bar\n" /* this better not get in the way */
+        "archivepartition-foobar: /srv/archive/foo-bar\n" /* okay */
+    );
+
+    CU_SYSLOG_MATCH("disk path is a prefix of others");
+    r = config_partition_sanity();
+    /* there are two subdirs of /srv/foo configured, but since we're doing
+     * substring matches rather than a real tree lookup, we only notice the
+     * first.
+     */
+    CU_ASSERT_EQUAL(r, -1); // not -2
+    CU_ASSERT_SYSLOG(/*all*/0, 1); // not 2
+}
+
+static void test_partition_sanity_bad_dups(void)
+{
+    int r;
+
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "partition-foo: /srv/foo\n"
+        "t1searchpartition-foo: /srv/foo\n" /* uh oh */
+        "partition-bar: /srv/bar\n"
+        "archivepartition-bar: /srv/bar\n" /* uh oh */
+    );
+
+    CU_SYSLOG_MATCH("disk path used by multiple partitions");
+    r = config_partition_sanity();
+    CU_ASSERT_EQUAL(r, -2);
+    CU_ASSERT_SYSLOG(/*all*/0, 2);
+}
+
 /* vim: set ft=c: */
