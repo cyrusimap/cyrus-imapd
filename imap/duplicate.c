@@ -208,7 +208,7 @@ EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
       dkey->to, dkey->id, dkey->date, action);
     if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s user=<%s> date=<%s>",
+        syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s uniqueid-or-scope=<%s> date=<%s>",
                session_id(), action, dkey->id, dkey->to, dkey->date);
 }
 
