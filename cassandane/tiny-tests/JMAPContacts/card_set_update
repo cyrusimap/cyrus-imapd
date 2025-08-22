@@ -19,7 +19,7 @@ sub test_card_set_update
         expandurl => 1,
     );
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -27,7 +27,7 @@ sub test_card_set_update
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    uid => $id,
+                    uid => $uid,
                     name => { full => 'John Doe' },
                     nicknames => {
                         k391 => {
@@ -41,6 +41,7 @@ sub test_card_set_update
     ]);
 
     $self->assert_not_null($res->[0][1]{created}{1});
+    my $id = $res->[0][1]{created}{1}{id};
     my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
 
     $res = $jmap->CallMethods([
@@ -149,13 +150,13 @@ sub test_card_set_update
     $self->assert_not_null($res->[0][1]{updated}{$id});
     $self->assert_not_null($res->[0][1]{updated}{$id}{updated});
 
-    $res = $carddav->Request('GET', "$href/$id.vcf", '',
+    $res = $carddav->Request('GET', "$href/$uid.vcf", '',
                              'Accept' => 'text/vcard; version=4.0');
 
     $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr/UID(;VALUE=TEXT)?:$id/, $card);
+    $self->assert_matches(qr/UID(;VALUE=TEXT)?:$uid/, $card);
     $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
     $self->assert_matches(qr/CATEGORIES:foo/, $card);
     $self->assert_matches(qr/REV:/, $card);

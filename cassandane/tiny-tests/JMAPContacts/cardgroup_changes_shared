@@ -31,7 +31,7 @@ sub test_cardgroup_changes_shared
 
 # Update to Card[Group]/[get|set] once implemented
     xlog $self, "create contacts";
-    my $res = $jmap->CallMethods([['Contact/set', {
+    my $res = $jmap->CallMethods([['ContactCard/set', {
                     accountId => 'manifold',
                     create => {
                         "a" => {firstName => "a", lastName => "a"},
@@ -40,7 +40,7 @@ sub test_cardgroup_changes_shared
                         "d" => {firstName => "d", lastName => "d"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $contactA = $res->[0][1]{created}{"a"}{id};
     my $contactB = $res->[0][1]{created}{"b"}{id};
@@ -48,19 +48,21 @@ sub test_cardgroup_changes_shared
     my $contactD = $res->[0][1]{created}{"d"}{id};
 
     xlog $self, "get contact groups state";
-    $res = $jmap->CallMethods([['ContactGroup/get', { accountId => 'manifold', }, "R2"]]);
+    $res = $jmap->CallMethods([['ContactCard/get', { accountId => 'manifold', }, "R2"]]);
     my $state = $res->[0][1]{state};
 
     xlog $self, "create contact group 1";
-    $res = $jmap->CallMethods([['ContactGroup/set', {
-                    accountId => 'manifold',
-                    create => {
-                        "1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {
+        accountId => 'manifold',
+        create => {
+            "1" => {
+                name => { full => "group1" },
+                members => { $contactA => JSON::true, $contactB => JSON::true}
+            }}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
-
 
     xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactCard/changes', {
@@ -79,12 +81,15 @@ sub test_cardgroup_changes_shared
     $state = $res->[0][1]{newState};
 
     xlog $self, "create contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {
-                    accountId => 'manifold',
-                    create => {
-                        "2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {
+        accountId => 'manifold',
+        create => {
+            "2" => {
+                name => { full => "group2" },
+                members => { $contactC => JSON::true, $contactD => JSON::true }
+            }}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
@@ -145,13 +150,13 @@ sub test_cardgroup_changes_shared
     $state = $res->[0][1]{newState};
 
     xlog $self, "destroy contact group 1, update contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     accountId => 'manifold',
                     destroy => [$id1],
-                    update => {$id2 => {name => "second (updated)"}}
+                    update => {$id2 => {name => { full => "group2 (updated)"}}}
                 }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog $self, "get contact group updates";
@@ -169,11 +174,11 @@ sub test_cardgroup_changes_shared
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
     xlog $self, "destroy contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     accountId => 'manifold',
                     destroy => [$id2]
                 }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 }

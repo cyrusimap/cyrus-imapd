@@ -121,6 +121,11 @@ int carddav_lookup_imapuid(struct carddav_db *carddavdb,
 int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
                        struct carddav_data **result);
 
+/* lookup an entry from 'carddavdb' by JMAP ID
+   (optionally inside a transaction for updates) */
+int carddav_lookup_jmapid(struct carddav_db *carddavdb, const char *jmapid,
+                          struct carddav_data **result);
+
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
 strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
