@@ -1365,6 +1365,20 @@ EXPORTED void jmap_set_addrbookid(struct conversations_state *cstate,
     }
 }
 
+EXPORTED void jmap_set_contactid(struct conversations_state *cstate,
+                                 const struct carddav_data *cdata,
+                                 struct buf *cid)
+{
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        buf_reset(cid);
+        buf_putc(cid, JMAP_CONTACTID_PREFIX);
+        MODSEQ_TO_JMAPID(cid, cdata->dav.createdmodseq);
+    }
+    else {
+        buf_setcstr(cid, cdata->vcard_uid);
+    }
+}
+
 EXPORTED char *jmap_role_to_specialuse(const char *role)
 {
     if (!role) return NULL;

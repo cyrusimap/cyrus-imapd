@@ -50,7 +50,6 @@ EOF
         version => '1.0',
         addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        id => $id,
         uid => $id,
         created => '2023-08-24T14:36:19Z',
         vCardProps => [
@@ -69,6 +68,7 @@ EOF
     my $have_jscard = $res->[0][1]{list}[0];
 
     # Delete generated fields
+    delete $have_jscard->{id};
     delete $have_jscard->{blobId};
     delete $have_jscard->{'cyrusimap.org:blobId'};
     delete $have_jscard->{'cyrusimap.org:size'};
@@ -77,7 +77,5 @@ EOF
     normalize_jscard($want_jscard);
     normalize_jscard($have_jscard);
 
-warn Dumper($want_jscard);
-warn Dumper($have_jscard);
     $self->assert_deep_equals($want_jscard, $have_jscard);
 }

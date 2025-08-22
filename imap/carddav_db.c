@@ -377,6 +377,33 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 }
 
 
+#define CMD_SELJMAPID CMD_GETFIELDS \
+    " WHERE createdmodseq = :cmodseq AND alive = 1;"
+
+EXPORTED int carddav_lookup_jmapid(struct carddav_db *carddavdb,
+                                   const char *jmapid,
+                                   struct carddav_data **result)
+{
+    struct sqldb_bindval bval[] = {
+        { ":cmodseq", SQLITE_INTEGER, { .i = 0    } },
+        { NULL,       SQLITE_NULL,    { .s = NULL } } };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
+    modseq_t cmodseq;
+    int r;
+
+    MODSEQ_FROM_JMAPID(jmapid, &cmodseq);
+    bval[0].val.i = cmodseq;
+
+    *result = memset(&cdata, 0, sizeof(struct carddav_data));
+
+    r = sqldb_exec(carddavdb->db, CMD_SELJMAPID, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELMBOX CMD_GETFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1"
 
