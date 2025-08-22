@@ -186,6 +186,19 @@ extern const unsigned char convert_to_uppercase[256];
         charset_encode(buf, p, len, ENCODING_BASE64JMAPID);             \
 }
 
+#define MODSEQ_FROM_JMAPID(jmapid, modseqp) {                                   \
+        /* use a fixed modseq-sized decode buffer */                            \
+        size_t size = sizeof(modseq_t);                                         \
+        char decstr[size];                                                      \
+        struct buf decbuf = { decstr, 0, size, 0 };                             \
+        charset_decode(&decbuf, jmapid, strlen(jmapid), ENCODING_BASE64JMAPID); \
+        /* right-align the network-order decoded data */                        \
+        modseq_t u64 = 0;                                                       \
+        int len = buf_len(&decbuf);                                             \
+        memcpy((void *) &u64 + (size - len), buf_base(&decbuf), len);           \
+        *modseqp = ntohll(u64);                                                 \
+}
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;

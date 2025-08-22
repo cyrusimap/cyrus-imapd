@@ -60,9 +60,10 @@ sub test_cardgroup_set_update
     ]);
 
     my $id = $res->[0][1]{created}{1}{id};
+    my $guid = $res->[0][1]{created}{1}{uid};
     $self->assert_not_null($id);
 
-    my $href = "Default/$id.vcf";
+    my $href = "Default/$guid.vcf";
     my $member1 = "urn:uuid:$uid1";
     my $member2 = "urn:uuid:$uid2";
 

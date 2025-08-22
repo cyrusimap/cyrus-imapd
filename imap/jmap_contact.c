@@ -126,7 +126,7 @@ static int _json_to_card(struct jmap_req *req,
 
 static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
-#define JMAPCACHE_CARDVERSION 1
+#define JMAPCACHE_CARDVERSION 2
 
 // clang-format off
 static jmap_method_t jmap_contact_methods_standard[] = {
@@ -333,6 +333,7 @@ struct changes_rock {
     struct jmap_changes *changes;
     size_t seen_records;
     modseq_t highestmodseq;
+    struct buf *cid;        // buffer for constructing ContactCard ids
 };
 
 static void strip_spurious_deletes(struct changes_rock *urock)
@@ -404,6 +405,7 @@ struct cards_rock {
     struct mailbox *mailbox;
     mbentry_t *mbentry;
     hashu64_table jmapcache;
+    struct buf cid;          // buffer for constructing ContactCard ids
     int rows;
     struct contact_getargs args;
 };
@@ -769,6 +771,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
         .req = req,
         .get = &get,
         .jmapcache = HASHU64_TABLE_INITIALIZER,
+        .cid = BUF_INITIALIZER
     };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
@@ -812,7 +815,22 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
             rock.rows = 0;
             const char *id = json_string_value(jval);
 
-            r = carddav_get_cards(db, mbentry, req->userid, id, kind, cb, &rock);
+            if (kind == CARDDAV_KIND_ANY &&
+                USER_COMPACT_EMAILIDS(req->cstate)) {
+                if (id[0] == JMAP_CONTACTID_PREFIX &&
+                    strlen(id) < JMAP_CONTACTID_SIZE) {
+                    struct carddav_data *cdata = NULL;
+
+                    r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
+                    if (!r && cdata) {
+                        r = cb(&rock, cdata);
+                    }
+                }
+            }
+            else {
+                r = carddav_get_cards(db, mbentry, req->userid,
+                                      id, kind, cb, &rock);
+            }
             if (r || !rock.rows) {
                 json_array_append(get.not_found, jval);
             }
@@ -843,6 +861,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     mboxlist_entry_free(&mbentry);
     mailbox_close(&rock.mailbox);
     mboxlist_entry_free(&rock.mbentry);
+    buf_free(&rock.cid);
     free_hashu64_table(&rock.jmapcache, free);
     if (db) carddav_close(db);
     return r;
@@ -866,7 +885,7 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
 {
     struct changes_rock *urock = (struct changes_rock *) rock;
     struct dav_data dav = cdata->dav;
-    const char *uid = cdata->vcard_uid;
+    const char *id = cdata->vcard_uid;
     mbentry_t *mbentry = jmap_mbentry_from_dav(urock->req, &dav);
 
     int rights =
@@ -882,15 +901,20 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
+    if (urock->cid) {
+        jmap_set_contactid(urock->req->cstate, cdata, urock->cid);
+        id = buf_cstring(urock->cid);
+    }
+
     /* Report item as updated or destroyed. */
     if (dav.alive) {
         if (dav.createdmodseq <= urock->changes->since_modseq)
-            json_array_append_new(urock->changes->updated, json_string(uid));
+            json_array_append_new(urock->changes->updated, json_string(id));
         else
-            json_array_append_new(urock->changes->created, json_string(uid));
+            json_array_append_new(urock->changes->created, json_string(id));
     } else {
         if (dav.createdmodseq <= urock->changes->since_modseq)
-            json_array_append_new(urock->changes->destroyed, json_string(uid));
+            json_array_append_new(urock->changes->destroyed, json_string(id));
     }
 
     /* Fetch record to determine modseq. */
@@ -939,9 +963,13 @@ static int _contacts_changes(struct jmap_req *req, int kind)
         r = IMAP_INTERNAL;
         goto done;
     }
-    struct changes_rock rock = { req, &changes, 0 /*seen_records*/, 0 /*highestmodseq*/};
+    struct buf cid = BUF_INITIALIZER;
+    struct changes_rock rock = { req, &changes, 0 /*seen_records*/,
+                                 0 /*highestmodseq*/,
+                                 kind == CARDDAV_KIND_ANY ? &cid : NULL };
     r = carddav_get_updates(db, changes.since_modseq, mbentry, kind,
                             -1 /*max_records*/, &getchanges_cb, &rock);
+    buf_free(&cid);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -1268,23 +1296,31 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
     /* destroy */
     size_t index;
     for (index = 0; index < json_array_size(set.destroy); index++) {
-        const char *uid = _json_array_get_string(set.destroy, index);
-        if (!uid) {
+        const char *id = _json_array_get_string(set.destroy, index);
+        if (!id) {
             json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-            json_object_set_new(set.not_destroyed, uid, err);
+            json_object_set_new(set.not_destroyed, id, err);
             continue;
         }
         mbentry_t *mbentry = NULL;
         struct carddav_data *cdata = NULL;
         uint32_t olduid;
-        r = carddav_lookup_uid(db, uid, &cdata);
+        if (kind == CARDDAV_KIND_ANY && USER_COMPACT_EMAILIDS(req->cstate)) {
+            if (id[0] == JMAP_CONTACTID_PREFIX &&
+                strlen(id) < JMAP_CONTACTID_SIZE) {
+                r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
+            }
+        }
+        else {
+            r = carddav_lookup_uid(db, id, &cdata);
+        }
 
         /* is it a valid contact? */
         if (r || !cdata || !cdata->dav.imap_uid ||
             (cdata->kind != kind && kind != CARDDAV_KIND_ANY)) {
             r = 0;
             json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
+            json_object_set_new(set.not_destroyed, id, err);
             continue;
         }
         olduid = cdata->dav.imap_uid;
@@ -1296,7 +1332,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
             json_t *err = json_pack("{s:s}", "type",
                                     rights & JACL_READITEMS ?
                                     "accountReadOnly" : "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
+            json_object_set_new(set.not_destroyed, id, err);
             mboxlist_entry_free(&mbentry);
             continue;
         }
@@ -1311,7 +1347,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-               req->accountid, uid);
+               req->accountid, id);
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
@@ -1321,7 +1357,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
             goto done;
         }
 
-        json_array_append_new(set.destroyed, json_string(uid));
+        json_array_append_new(set.destroyed, json_string(id));
     }
 
     /* force modseq to stable */
@@ -2797,6 +2833,7 @@ struct contactsquery_rock {
     unsigned kind;
     int build_response;
     ptrarray_t entries;
+    struct buf cid;
 };
 
 static int _contactsquery_cb(void *rock, struct carddav_data *cdata)
@@ -3001,6 +3038,11 @@ static int contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
     return 0;
 }
 
+struct filter_parse_rock {
+    struct jmap_req *req;
+    struct carddav_db *db;
+};
+
 static int _contactsquery(struct jmap_req *req, unsigned kind,
                           void *(*_filter_parse)(json_t *arg, void *rock),
                           void (*_filter_free)(void *vf),
@@ -3061,7 +3103,8 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     json_t *filter = json_object_get(req->args, "filter");
     const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_buildfilter(filter, _filter_parse, NULL);
+        struct filter_parse_rock frock = { req, db };
+        parsed_filter = jmap_buildfilter(filter, _filter_parse, &frock);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
@@ -3083,7 +3126,8 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
         db,
         kind,
         1 /*build_result*/,
-        PTRARRAY_INITIALIZER
+        PTRARRAY_INITIALIZER,
+        BUF_INITIALIZER
     };
     if (wantuid) {
         /* Fast-path single filter condition by UID */
@@ -3119,7 +3163,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
             int i;
             for (i = 0; i < ptrarray_size(&rock.entries); i++) {
                 json_t *entry = ptrarray_nth(&rock.entries, i);
-                json_array_append(query.ids, json_object_get(entry, "uid"));
+                json_array_append(query.ids, json_object_get(entry, "id"));
                 json_decref(entry);
             }
             /* Determine start position of result window */
@@ -3171,6 +3215,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     }
     /* Clean up callback state */
     if (rock.mailbox) mailbox_close(&rock.mailbox);
+    buf_free(&rock.cid);
     /* Handle callback errors */
     if (r || err) {
         if (!err) err = jmap_server_error(r);
@@ -4619,6 +4664,7 @@ static int jmap_contact_set(struct jmap_req *req)
 
 static void _contact_copy(jmap_req_t *req,
                           json_t *jcard,
+                          struct conversations_state *src_cstate,
                           struct carddav_db *src_db,
                           json_t *(*_from_record)(jmap_req_t *req,
                                                   struct carddav_db *db,
@@ -4653,7 +4699,15 @@ static void _contact_copy(jmap_req_t *req,
 
     /* Lookup event */
     struct carddav_data *cdata = NULL;
-    r = carddav_lookup_uid(src_db, src_id, &cdata);
+    if (USER_COMPACT_EMAILIDS(src_cstate)) {
+        if (src_id[0] == JMAP_CONTACTID_PREFIX &&
+            strlen(src_id) < JMAP_CONTACTID_SIZE) {
+            r = carddav_lookup_jmapid(src_db, src_id+1, &cdata);  // strip prefix
+        }
+    }
+    else {
+        r = carddav_lookup_uid(src_db, src_id, &cdata);
+    }
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "carddav_lookup_uid(%s) failed: %s",
                src_id, error_message(r));
@@ -4731,6 +4785,7 @@ done:
 }
 
 static int _contacts_copy(struct jmap_req *req,
+                          int is_std,
                           json_t *(*_from_record)(jmap_req_t *req,
                                                   struct carddav_db *db,
                                                   struct mailbox *mailbox,
@@ -4746,6 +4801,7 @@ static int _contacts_copy(struct jmap_req *req,
     struct jmap_copy copy = JMAP_COPY_INITIALIZER;
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
+    struct conversations_state *src_cstate = NULL;
     json_t *destroy_cards = json_array();
 
     /* Parse request */
@@ -4777,7 +4833,12 @@ static int _contacts_copy(struct jmap_req *req,
         copy.old_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
     }
 
-    src_db = carddav_open_userid(copy.from_account_id);
+    int r = 0;
+    if (is_std) {
+        r =conversations_open_user(copy.from_account_id,
+                                   1/*shared*/, &src_cstate);
+    }
+    if (!r) src_db = carddav_open_userid(copy.from_account_id);
     if (!src_db) {
         jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
         goto done;
@@ -4791,7 +4852,7 @@ static int _contacts_copy(struct jmap_req *req,
         json_t *set_err = NULL;
         json_t *new_card = NULL;
 
-        _contact_copy(req, jcard, src_db,
+        _contact_copy(req, jcard, src_cstate, src_db,
                       _from_record, _set_create, &new_card, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
@@ -4813,8 +4874,7 @@ static int _contacts_copy(struct jmap_req *req,
 
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_cards)) {
-        const char *submethod = !strcmp(req->method, "Contact/copy") ?
-            "Contact/set" : "ContactCard/set";
+        const char *submethod = is_std ? "ContactCard/set" : "Contact/set";
         json_t *subargs = json_object();
         json_object_set(subargs, "destroy", destroy_cards);
         json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
@@ -4828,6 +4888,7 @@ static int _contacts_copy(struct jmap_req *req,
 done:
     json_decref(destroy_cards);
     if (src_db) carddav_close(src_db);
+    if (src_cstate) conversations_abort(&src_cstate);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     return 0;
@@ -4866,7 +4927,8 @@ static json_t *_contact_from_record(jmap_req_t *req,
 
 static int jmap_contact_copy(struct jmap_req *req)
 {
-    return _contacts_copy(req, &_contact_from_record, &_contact_set_create);
+    return _contacts_copy(req, 0/*is_std*/,
+                          &_contact_from_record, &_contact_set_create);
 }
 
 
@@ -7971,7 +8033,8 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
                             json_integer(record.size - record.header_size));
     }
 
-    json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
+    jmap_set_contactid(req->cstate, cdata, &crock->cid);
+    json_object_set_new(obj, "id", json_string(buf_cstring(&crock->cid)));
 
     char id[JMAP_MAX_ADDRBOOKID_SIZE];
     jmap_set_addrbookid(req->cstate, mbentry, id);
@@ -8055,15 +8118,16 @@ static void card_filter_free(void *vf)
 /* Parse the JMAP ContactCard FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *card_filter_parse(json_t *arg,
-                               void *rock __attribute__((unused)))
+static void *card_filter_parse(json_t *arg, void *rock)
 {
+    struct filter_parse_rock *frock = (struct filter_parse_rock *) rock;
     struct card_filter *f =
         (struct card_filter *) xzmalloc(sizeof(struct card_filter));
 
     /* inCardGroup */
     json_t *inCardGroup = json_object_get(arg, "inCardGroup");
     if (inCardGroup) {
+        struct buf cid = BUF_INITIALIZER;
         f->inCardGroup = xmalloc(sizeof(struct hash_table));
         construct_hash_table(f->inCardGroup,
                              json_array_size(inCardGroup)+1, 0);
@@ -8072,9 +8136,21 @@ static void *card_filter_parse(json_t *arg,
         json_array_foreach(inCardGroup, i, val) {
             const char *id;
             if (json_unpack(val, "s", &id) != -1) {
+                struct carddav_data *cdata = NULL;
+
+                if (USER_COMPACT_EMAILIDS(frock->req->cstate)) {
+                    if (id[0] == JMAP_CONTACTID_PREFIX &&
+                        strlen(id) < JMAP_CONTACTID_SIZE) {
+                        /* translate JMAP IDs to vCard UIDs */
+                        int r = carddav_lookup_jmapid(frock->db, id+1, &cdata);
+                        if (!r && cdata) id = cdata->vcard_uid;
+                    }
+                }
+
                 hash_insert(id, (void*)1, f->inCardGroup);
             }
         }
+        buf_free(&cid);
     }
 
     /* fullName */
@@ -8693,6 +8769,8 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     /* Update statistics */
     crock->query->total++;
 
+    jmap_set_contactid(crock->req->cstate, cdata, &crock->cid);
+
     if (crock->build_response) {
         struct jmap_query *query = crock->query;
         /* Apply windowing and build response ids */
@@ -8705,11 +8783,11 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
         if (!json_array_size(query->ids)) {
             query->result_position = query->total - 1;
         }
-        json_array_append_new(query->ids, json_string(cdata->vcard_uid));
+        json_array_append_new(query->ids, json_string(buf_cstring(&crock->cid)));
     }
     else {
         /* Keep matching entries for post-processing */
-        json_object_set_new(entry, "id", json_string(cdata->vcard_uid));
+        json_object_set_new(entry, "id", json_string(buf_cstring(&crock->cid)));
         json_object_set_new(entry, "uid", json_string(cdata->vcard_uid));
         ptrarray_append(&crock->entries, entry);
         entry = NULL;
@@ -11242,12 +11320,15 @@ static int _jscard_to_vcard(struct jmap_req *req,
 
         if (cdata) {
             if (!strcmp(key, "id")) {
-                if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                struct buf cid = BUF_INITIALIZER;
+                jmap_set_contactid(req->cstate, cdata, &cid);
+                if (strcmpnull(buf_cstring(&cid), json_string_value(jval))) {
                     jmap_parser_invalid(&parser, "id");
                 }
+                buf_free(&cid);
                 continue;
             }
-            if (!strcmp(key, "uid")) {
+            else if (!strcmp(key, "uid")) {
                 if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
                     jmap_parser_invalid(&parser, "uid");
                 }
@@ -11859,8 +11940,6 @@ static int _card_set_create(jmap_req_t *req,
     }
     r = 0;
 
-    json_object_set_new(item, "id", json_string(uid));
-
     /* If group members was not present, return {} */
     if (!members &&
         !strcasecmpsafe("group",
@@ -11870,6 +11949,16 @@ static int _card_set_create(jmap_req_t *req,
 
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
+
+    struct carddav_data cdata = {
+        .dav.createdmodseq = record.createdmodseq,
+        .vcard_uid = uid
+    };
+    struct buf cid = BUF_INITIALIZER;
+
+    jmap_set_contactid(req->cstate, &cdata, &cid);
+    json_object_set_new(item, "id", json_string(buf_cstring(&cid)));
+    buf_free(&cid);
 
     while ((blob = ptrarray_pop(&blobs))) {
         json_t *obj;
@@ -11929,7 +12018,7 @@ done:
 }
 
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
-                            unsigned kind, const char *uid, json_t *jcard,
+                            unsigned kind, const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors)
 {
@@ -11939,7 +12028,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     struct buf buf = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
     uint32_t olduid;
-    char *resource = NULL;
+    char *resource = NULL, *uid = NULL;
     int do_move = 0;
     json_t *jupdated = NULL;
     vcardcomponent *vcard = NULL;
@@ -11951,7 +12040,14 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     size_t num_props = json_object_size(jcard);
 
     /* is it a valid contact? */
-    r = carddav_lookup_uid(db, uid, &cdata);
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        if (id[0] == JMAP_CONTACTID_PREFIX && strlen(id) < JMAP_CONTACTID_SIZE) {
+            r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
+        }
+    }
+    else {
+        r = carddav_lookup_uid(db, id, &cdata);
+    }
     if (r || !cdata || !cdata->dav.imap_uid) {
         r = HTTP_NOT_FOUND;
         goto done;
@@ -11962,7 +12058,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
      * and thus overwrite our cdata
      */
     cdata = memcpy(&mycdata, cdata, sizeof(mycdata));
-    cdata->vcard_uid = uid;
+    cdata->vcard_uid = uid = xstrdup(cdata->vcard_uid);
     cdata->dav.resource = resource = xstrdup(cdata->dav.resource);
 
     json_t *jkind = json_object_get(jcard, "kind");
@@ -12216,6 +12312,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     freeentryatts(annots);
     vcardcomponent_free(vcard);
     free(resource);
+    free(uid);
     json_decref(jupdated);
     buf_free(&buf);
     while ((blob = ptrarray_pop(&blobs))) {
@@ -12308,7 +12405,8 @@ static int jmap_card_set(struct jmap_req *req)
 
 static int jmap_card_copy(struct jmap_req *req)
 {
-    return _contacts_copy(req, &_card_from_record, &_card_set_create);
+    return _contacts_copy(req, 1/*is_std*/,
+                          &_card_from_record, &_card_set_create);
 }
 
 struct card_parseargs {
