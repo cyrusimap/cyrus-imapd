@@ -1268,6 +1268,12 @@ sub test_unmap_failed_appends
     :NoCheckSyslog
 {
     my ($self) = @_;
+
+    if (not $self->{instance}->{have_syslog_replacement}) {
+        xlog "syslog replacement unavailable, can't do anything";
+        return;
+    }
+
     my $imap = $self->{store}->get_client();
 
     my $mime = <<'EOF';

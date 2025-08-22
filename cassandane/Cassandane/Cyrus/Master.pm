@@ -1589,9 +1589,9 @@ sub test_babysit
     for (1..20) {
       $killed++ if $self->lemming_cull();
 
-      last if $killed >= 5;
-
       sleep(.5);
+
+      last if $killed >= 5;
     };
 
     # make sure it said it's going to wait

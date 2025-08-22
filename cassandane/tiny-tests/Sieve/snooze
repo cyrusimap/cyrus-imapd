@@ -39,9 +39,8 @@ EOF
     $self->{instance}->deliver($msg1);
 
     xlog $self, "Check for error message in syslog";
-    my @lines =
-        $self->{instance}->getsyslog(qr/Sieve: can't find \\Snoozed mailbox/);
-    $self->assert_num_equals(1, scalar @lines);
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{Sieve: can't find \\Snoozed mailbox});
 
     xlog $self, "Check that the message was delivered to INBOX";
     $self->{store}->set_folder("INBOX");
