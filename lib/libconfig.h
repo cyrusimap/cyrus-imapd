@@ -63,9 +63,12 @@ extern int64_t config_getbytesize(enum imapopt opt, int defunit);
 extern const char *config_getoverflowstring(const char *key, const char *def);
 extern void config_foreachoverflowstring(
     void (*func)(const char *, const char *, void *), void *rock);
+
+/* partition utilities */
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
+extern int config_partition_sanity(void);
 
 /* for parsing duration/bytesize-format strings obtained elsewhere,
  * such as from an overflow string */
