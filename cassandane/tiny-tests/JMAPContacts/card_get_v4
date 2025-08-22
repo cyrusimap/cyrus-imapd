@@ -79,7 +79,6 @@ EOF
         version => '1.0',
         addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        id => $id,
         uid => $id,
         kind => 'individual',
         updated => '2023-04-22T19:46:39Z',
@@ -226,6 +225,7 @@ EOF
     $self->assert_not_null($s_blobid);
 
     # Delete generated fields
+    delete $have_jscard->{id};
     delete $have_jscard->{blobId};
     delete $have_jscard->{media}{P1}{blobId};
     delete $have_jscard->{media}{S1}{blobId};
