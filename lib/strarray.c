@@ -67,7 +67,7 @@ EXPORTED void strarray_fini(strarray_t *sa)
     sa->alloc = 0;
 }
 
-EXPORTED void strarray_free(strarray_t *sa)
+EXPORTED void strarray_free(void *sa)
 {
     if (!sa)
         return;
