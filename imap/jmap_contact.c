@@ -2475,7 +2475,8 @@ static void contact_filter_free(void *vf)
 /* Parse the JMAP Contact FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *contact_filter_parse(json_t *arg)
+static void *contact_filter_parse(json_t *arg,
+                                  void *rock __attribute__((unused)))
 {
     struct contact_filter *f =
         (struct contact_filter *) xzmalloc(sizeof(struct contact_filter));
@@ -2716,7 +2717,8 @@ static void contactgroup_filter_free(void *vf)
     free(vf);
 }
 
-static void *contactgroup_filter_parse(json_t *arg)
+static void *contactgroup_filter_parse(json_t *arg,
+                                       void *rock __attribute__((unused)))
 {
     struct contactgroup_filter *f =
         (struct contactgroup_filter *) xzmalloc(sizeof(struct contactgroup_filter));
@@ -2997,7 +2999,7 @@ static int contactsquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
 }
 
 static int _contactsquery(struct jmap_req *req, unsigned kind,
-                          void *(*_filter_parse)(json_t *arg),
+                          void *(*_filter_parse)(json_t *arg, void *rock),
                           void (*_filter_free)(void *vf),
                           void (*_filter_validate)(jmap_req_t *req,
                                                    struct jmap_parser *parser,
@@ -3056,7 +3058,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     json_t *filter = json_object_get(req->args, "filter");
     const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_buildfilter(filter, _filter_parse);
+        parsed_filter = jmap_buildfilter(filter, _filter_parse, NULL);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
@@ -7945,7 +7947,8 @@ static void card_filter_free(void *vf)
 /* Parse the JMAP ContactCard FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *card_filter_parse(json_t *arg)
+static void *card_filter_parse(json_t *arg,
+                               void *rock __attribute__((unused)))
 {
     struct card_filter *f =
         (struct card_filter *) xzmalloc(sizeof(struct card_filter));
