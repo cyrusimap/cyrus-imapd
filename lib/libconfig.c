@@ -1450,6 +1450,10 @@ static int check_no_subdirs(hash_table *by_value, FILE *user_output)
 
     all_values = hash_keys(by_value);
     strarray_sort(all_values, cmpstringp_path);
+    for (i = 0; i < strarray_size(all_values); i++) {
+        fprintf(stderr, "%s: [%d] -> %s\n",
+                        __func__, i, strarray_nth(all_values, i));
+    }
     prev = strarray_nth(all_values, 0);
     for (i = 1, n = strarray_size(all_values); i < n; i++) {
         size_t prev_len = strlen(prev);
