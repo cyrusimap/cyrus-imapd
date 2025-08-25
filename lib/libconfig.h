@@ -46,6 +46,8 @@
 #include "imapopts.h"
 #include "strarray.h"
 
+#include <stdio.h>
+
 /* these will assert() if they're called on the wrong type of
    option (imapopts.c) */
 extern void config_reset(void);
@@ -68,7 +70,7 @@ extern void config_foreachoverflowstring(
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
-extern int config_partition_sanity(void);
+extern int config_partition_sanity(FILE *user_output);
 
 /* for parsing duration/bytesize-format strings obtained elsewhere,
  * such as from an overflow string */
