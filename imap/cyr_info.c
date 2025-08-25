@@ -416,7 +416,10 @@ static void do_lint(void)
     /* check all overflow strings */
     config_foreachoverflowstring(lint_callback, &rock);
 
-    /* XXX - check directories and permissions? */
+    /* check partitions */
+    config_partition_sanity(stdout);
+
+    /* XXX - permissions? */
 
     /* clean up */
     struct service_item *ks = rock.known_services;
