@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <list>
 #include <memory>
 
 extern "C" {
@@ -329,57 +330,98 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
     }
 };
 
-
-class FrenchContractionStemmer : public Xapian::StemImplementation
+class ElisionStemmer : public Xapian::StemImplementation
 {
-    Xapian::Stem stem {"fr"};
+    const std::list<std::string> *elisions;
+    Xapian::Stem stem;
 
     public:
 
-    virtual std::string operator() (const std::string &word) override {
+    explicit ElisionStemmer(const std::list<std::string> *elisions,
+                            Xapian::Stem stem)
+        : elisions(elisions), stem(stem) { }
 
-        size_t pos = 0;
-        switch (word[0]) {
-            case 'q':
-                if (word.length() <= 3 || word[1] != 'u') {
-                    break;
-                }
+    virtual std::string operator() (const std::string &word) override {
+        // Look for first apostrophe in word, if any. This is supposed
+        // to be the APOSTROPHE (U+0027) character because of NFKC
+        // normalization, but let's also deal with its multi-byte variants.
+        size_t pos = 0, len = 0;
+        while (pos < word.size()) {
+            pos = word.find_first_of("'\xe2\xef", pos);
+            if (pos == std::string::npos) break;
+            if (word[pos] == '\'') {
+                // Found APOSTROPHE (U+0027).
+                len = 1;
+                break;
+            }
+            else if (word[pos] == (char) 0xe2 && pos + 2 < word.size()
+                     && word[pos + 1] == (char) 0x80
+                     && word[pos + 2] == (char) 0x99)
+            {
+                // Found RIGHT SINGLE QUOTATION MARK (U+2019).
+                len = 3;
+                break;
+            }
+            else if (word[pos] == (char) 0xef && pos + 2 < word.size()
+                     && word[pos + 1] == (char) 0xbc
+                     && word[pos + 2] == (char) 0x87)
+            {
+                // Found FULLWIDTH APOSTROPHE (U+FF07).
+                len = 3;
+                break;
+            }
+            else {
+                // Keep on searching.
                 pos++;
-                // fall through
-            case 'c':
-            case 'd':
-            case 'j':
-            case 'l':
-            case 'm':
-            case 'n':
-            case 's':
-            case 't':
-                // APOSTROPHE (U+0027)
-                if (word.length() > pos + 2 && word[pos+1] == 0x27) {
-                    return stem(word.substr(pos + 2));
-                }
-                // RIGHT SINGLE QUOTATION MARK (U+2019)
-                // FULLWIDTH APOSTROPHE (U+FF07)
-                else if (!word.compare(pos + 1, 3, "\xe2\x80\x99") ||
-                         !word.compare(pos + 1, 3, "\xef\xbc\x87")) {
-                    return stem(word.substr(pos + 4));
-                }
-                // fall through
+            }
         }
-        // not a contraction
+
+        if (pos && pos != std::string::npos && len && pos + len < word.size()) {
+            // Check if subword before apostrophe is a known elision.
+            auto prefix = word.substr(0, pos);
+            if (std::find(elisions->begin(), elisions->end(), prefix)
+                != elisions->end()) {
+                // Only stem subword following the apostrophe.
+                return stem(word.substr(pos + len));
+            }
+        }
+
+        // Stem whole word.
         return stem(word);
     }
 
     virtual std::string get_description () const override {
-        return "fr-contraction";
+        return "elision-stemmer";
     }
 };
 
 static Xapian::Stem get_stemmer(const std::string& iso_lang)
 {
-    return iso_lang == "fr" ?
-        Xapian::Stem{new FrenchContractionStemmer} :
-        Xapian::Stem{iso_lang};
+    Xapian::Stem stem(iso_lang);
+
+    if (iso_lang == "fr") {
+        static const std::list<std::string> elisions = {
+            "qu", "c", "d", "j", "l", "m", "n", "s", "t"
+        };
+        stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
+    }
+    else if (iso_lang == "it") {
+        static const std::list<std::string> elisions = {
+            "c",     "l",      "un",    "m",    "t",    "s",    "v",
+            "d",     "all",    "dall",  "dell", "nell", "sull", "coll",
+            "pell",  "gl",     "agl",   "dagl", "degl", "negl", "sugl",
+            "nient", "nessun", "quest", "quell"
+        };
+        stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
+    }
+    else if (iso_lang == "ga") {
+        static const std::list<std::string> elisions = {
+            "d", "m", "b"
+        };
+        stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
+    }
+
+    return stem;
 }
 
 #ifdef HAVE_CLD2
