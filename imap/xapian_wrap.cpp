@@ -7,7 +7,6 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <list>
 #include <memory>
 
 extern "C" {
@@ -332,12 +331,12 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
 
 class ElisionStemmer : public Xapian::StemImplementation
 {
-    const std::list<std::string> *elisions;
+    const std::vector<std::string> *elisions;
     Xapian::Stem stem;
 
     public:
 
-    explicit ElisionStemmer(const std::list<std::string> *elisions,
+    explicit ElisionStemmer(const std::vector<std::string> *elisions,
                             Xapian::Stem stem)
         : elisions(elisions), stem(stem) { }
 
@@ -400,13 +399,13 @@ static Xapian::Stem get_stemmer(const std::string& iso_lang)
     Xapian::Stem stem(iso_lang);
 
     if (iso_lang == "fr") {
-        static const std::list<std::string> elisions = {
+        static const std::vector<std::string> elisions = {
             "qu", "c", "d", "j", "l", "m", "n", "s", "t"
         };
         stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
     }
     else if (iso_lang == "it") {
-        static const std::list<std::string> elisions = {
+        static const std::vector<std::string> elisions = {
             "c",     "l",      "un",    "m",    "t",    "s",    "v",
             "d",     "all",    "dall",  "dell", "nell", "sull", "coll",
             "pell",  "gl",     "agl",   "dagl", "degl", "negl", "sugl",
@@ -415,7 +414,7 @@ static Xapian::Stem get_stemmer(const std::string& iso_lang)
         stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
     }
     else if (iso_lang == "ga") {
-        static const std::list<std::string> elisions = {
+        static const std::vector<std::string> elisions = {
             "d", "m", "b"
         };
         stem = Xapian::Stem{ new ElisionStemmer(&elisions, stem) };
