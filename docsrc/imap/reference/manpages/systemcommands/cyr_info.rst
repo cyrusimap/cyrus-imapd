@@ -59,8 +59,8 @@ configuring Cyrus easier.
 
 .. option:: conf-lint
 
-    Print only configuration options which are NOT recognised.  This
-    command should not print anything.  It uses cyrus.conf to find
+    Print configuration options which are NOT recognised, or are invalid.
+    This command should not print anything.  It uses cyrus.conf to find
     the names of configured services to avoid displaying any known
     configuration options for the named service.
 
