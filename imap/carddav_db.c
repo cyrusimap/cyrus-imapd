@@ -51,6 +51,7 @@
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "jmap_util.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "times.h"
@@ -371,6 +372,33 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
     *result = memset(&cdata, 0, sizeof(struct carddav_data));
 
     r = sqldb_exec(carddavdb->db, CMD_SELUID, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
+#define CMD_SELJMAPID CMD_GETFIELDS \
+    " WHERE createdmodseq = :cmodseq AND alive = 1;"
+
+EXPORTED int carddav_lookup_jmapid(struct carddav_db *carddavdb,
+                                   const char *jmapid,
+                                   struct carddav_data **result)
+{
+    struct sqldb_bindval bval[] = {
+        { ":cmodseq", SQLITE_INTEGER, { .i = 0    } },
+        { NULL,       SQLITE_NULL,    { .s = NULL } } };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
+    modseq_t cmodseq;
+    int r;
+
+    MODSEQ_FROM_JMAPID(jmapid, &cmodseq);
+    bval[0].val.i = cmodseq;
+
+    *result = memset(&cdata, 0, sizeof(struct carddav_data));
+
+    r = sqldb_exec(carddavdb->db, CMD_SELJMAPID, bval, &read_cb, &rrock);
     if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
     return r;
@@ -1275,6 +1303,9 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
+    buf_appendcstr(&value, ";\r\n\tjmapid=");
+    buf_putc(&value, JMAP_CONTACTID_PREFIX);
+    MODSEQ_TO_JMAPID(&value, createdmodseq);
     fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
     buf_free(&value);
 

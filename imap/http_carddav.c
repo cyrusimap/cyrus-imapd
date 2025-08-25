@@ -67,6 +67,7 @@
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "index.h"
+#include "jmap_util.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
@@ -633,6 +634,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     struct carddav_data *cdata;
     char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
+    modseq_t cmodseq = 0;
     char *mimehdr;
     int r;
 
@@ -688,6 +690,13 @@ static int carddav_store_resource(struct transaction_t *txn,
                     "mailbox=<%s> record=<%u> error=<%s>",
                     mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
         }
+
+        cmodseq = cdata->dav.createdmodseq;
+    }
+    else {
+        struct mboxname_counters counters;
+        if (!mboxname_read_counters(mailbox_name(mailbox), &counters))
+            cmodseq = counters.highestmodseq + 1;
     }
 
     /* Check size of vCard (allow existing oversized cards to be updated) */
@@ -726,6 +735,9 @@ static int carddav_store_resource(struct transaction_t *txn,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
+    buf_appendcstr(&txn->buf, ";\r\n\tjmapid=");
+    buf_putc(&txn->buf, JMAP_CONTACTID_PREFIX);
+    MODSEQ_TO_JMAPID(&txn->buf, cmodseq);
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
@@ -733,8 +745,7 @@ static int carddav_store_resource(struct transaction_t *txn,
 
     /* Store the resource */
     r = dav_store_resource(txn, buf_cstring(buf), 0,
-                           mailbox, oldrecord, cdata->dav.createdmodseq,
-                           NULL, NULL);
+                           mailbox, oldrecord, cmodseq, NULL, NULL);
     buf_destroy(buf);
 
   done:

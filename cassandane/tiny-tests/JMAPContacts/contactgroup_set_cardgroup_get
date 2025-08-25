@@ -25,12 +25,11 @@ sub test_contactgroup_set_cardgroup_get
             }
         }
     }, "R2"]]);
-    my $group1 = $res->[0][1]{created}{"1"}{id};
 
-    xlog $self, "get contact group $group1";
-    $res = $jmap->CallMethods([['ContactCard/get', { ids => [$group1] }, "R3"]]);
-    $self->assert_str_equals('group', $res->[0][1]{list}[0]{kind});
-    $self->assert_str_equals('group1', $res->[0][1]{list}[0]{name}{full});
-    $self->assert(exists $res->[0][1]{list}[0]{members}{$contact1});
-    $self->assert(exists $res->[0][1]{list}[0]{members}{$contact2});
+    xlog $self, "get contact group";
+    $res = $jmap->CallMethods([['ContactCard/get', { }, "R3"]]);
+    $self->assert_str_equals('group', $res->[0][1]{list}[2]{kind});
+    $self->assert_str_equals('group1', $res->[0][1]{list}[2]{name}{full});
+    $self->assert(exists $res->[0][1]{list}[2]{members}{$contact1});
+    $self->assert(exists $res->[0][1]{list}[2]{members}{$contact2});
 }
