@@ -11748,6 +11748,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                            db, *mailbox, &record,
                                            IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
     vcardcomponent_free(vcard);
+    vcard = NULL;
 
     /* Remove old "updated" */
     json_object_del(old_obj, "updated");
