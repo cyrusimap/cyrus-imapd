@@ -814,6 +814,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                      config_defpartition ? config_defpartition : "<name>");
             fatal(buf, EX_CONFIG);
         }
+
+        if (config_partition_sanity(NULL)) {
+            fatal("invalid partition value detected", EX_CONFIG);
+        }
     }
 
     /* look up mailbox hashing */
