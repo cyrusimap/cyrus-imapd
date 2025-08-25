@@ -54,10 +54,8 @@ struct server_state {
     int is_authenticated;
     int is_tls;
     sasl_conn_t *saslconn;          /* the sasl connection context */
-#ifdef HAVE_SSL
     SSL *tls_conn;
     char tls_alpn_proto[64];
-#endif
     struct protstream *in;
     struct protstream *out;
 };
@@ -714,7 +712,6 @@ static void test_oneline_caps(void)
  */
 static void test_starttls(void)
 {
-#ifdef HAVE_SSL
     struct backend *be;
     const char *auth_status = NULL;
     char *mechs;
@@ -742,7 +739,6 @@ static void test_starttls(void)
 
     backend_disconnect(be);
     free(be);
-#endif
 }
 
 /*
@@ -819,7 +815,7 @@ static void alpn_common(const struct tls_alpn_t *client_alpn_map,
 
 static void test_alpn_match_single(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -840,7 +836,7 @@ static void test_alpn_match_single(void)
 
 static void test_alpn_match_client_only(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -857,7 +853,7 @@ static void test_alpn_match_client_only(void)
 
 static void test_alpn_match_server_only(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t server_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -874,7 +870,7 @@ static void test_alpn_match_server_only(void)
 
 static void test_alpn_match_client_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -896,7 +892,7 @@ static void test_alpn_match_client_multi(void)
 
 static void test_alpn_match_server_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -918,7 +914,7 @@ static void test_alpn_match_server_multi(void)
 
 static void test_alpn_match_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -941,7 +937,7 @@ static void test_alpn_match_multi(void)
 
 static void test_alpn_nomatch_single(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -962,7 +958,7 @@ static void test_alpn_nomatch_single(void)
 
 static void test_alpn_nomatch_client_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -984,7 +980,7 @@ static void test_alpn_nomatch_client_multi(void)
 
 static void test_alpn_nomatch_server_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "qux", NULL, NULL },
         { "",    NULL, NULL },
@@ -1006,7 +1002,7 @@ static void test_alpn_nomatch_server_multi(void)
 
 static void test_alpn_nomatch_multi(void)
 {
-#if defined(HAVE_SSL) && defined(HAVE_TLS_ALPN)
+#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "baz", NULL, NULL },
         { "qux", NULL, NULL },
@@ -1186,9 +1182,7 @@ static int server_accept(struct server_state *state)
     state->is_authenticated = 0;
     state->is_connected = 1;
     state->is_tls = 0;
-#ifdef HAVE_SSL
     state->tls_conn = NULL;
-#endif
 
     return 0;
 }
@@ -1207,13 +1201,11 @@ static void server_unaccept(struct server_state *state)
     state->is_connected = 0;
     state->is_authenticated = 0;
     state->is_tls = 0;
-#ifdef HAVE_SSL
     if (state->tls_conn) {
         tls_reset_servertls(&state->tls_conn);
         state->tls_conn = NULL;
     }
     memset(state->tls_alpn_proto, 0, sizeof(state->tls_alpn_proto));
-#endif
 }
 
 /*
@@ -1501,7 +1493,6 @@ badsyntax:
  */
 static void cmd_starttls(struct server_state *state)
 {
-#ifdef HAVE_SSL
     int r;
     SSL *tls_conn = NULL;
     char *alpn_proto = NULL;
@@ -1554,10 +1545,6 @@ static void cmd_starttls(struct server_state *state)
     else {
         memset(state->tls_alpn_proto, 0, sizeof(state->tls_alpn_proto));
     }
-#else
-    server_printf(state, "BAD this server is not built with SSL\r\n");
-    server_flush(state);
-#endif
 }
 
 /*

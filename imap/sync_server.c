@@ -120,9 +120,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 static sasl_ssf_t extprops_ssf = 0;
 
-#ifdef HAVE_SSL
 static SSL *tls_conn;
-#endif /* HAVE_SSL */
 
 static sasl_conn_t *sync_saslconn = NULL; /* the sasl connection context */
 
@@ -198,12 +196,10 @@ static void sync_reset(void)
 
     sync_in = sync_out = NULL;
 
-#ifdef HAVE_SSL
     if (tls_conn) {
         tls_reset_servertls(&tls_conn);
         tls_conn = NULL;
     }
-#endif
 
     cyrus_reset_stdio();
 
@@ -432,9 +428,7 @@ void shut_down(int code)
         prot_free(sync_out);
     }
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
 
     saslprops_free(&saslprops);
 
@@ -823,7 +817,6 @@ static void cmd_authenticate(char *mech, char *resp)
     sync_logfd = telemetry_log(sync_userid, sync_in, sync_out, 0);
 }
 
-#ifdef HAVE_SSL
 static void cmd_starttls(void)
 {
     int result;
@@ -877,12 +870,6 @@ static void cmd_starttls(void)
 
     dobanner();
 }
-#else
-static void cmd_starttls(void)
-{
-    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *alg)

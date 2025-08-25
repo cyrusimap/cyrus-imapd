@@ -113,9 +113,7 @@ struct clientdata {
         DIDAUTH = 1
     } authenticated;
 
-#ifdef HAVE_SSL
     SSL *tls_conn;
-#endif /* HAVE_SSL */
     int starttls_done;
 };
 
@@ -634,11 +632,9 @@ static int savemsg(struct clientdata *cd,
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
     addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
-#ifdef HAVE_SSL
     if (cd->tls_conn) {
         addlen += 3 + tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
     }
-#endif
     addlen += 2 + strlen(datestr);
     p = addbody = xmalloc(addlen + 1);
 
@@ -941,9 +937,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.clienthost = "";
     cd.lhlo_param[0] = '\0';
     cd.authenticated =  NOAUTH;
-#ifdef HAVE_SSL
     cd.tls_conn = NULL;
-#endif
     cd.starttls_done = 0;
 
     max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
@@ -1428,7 +1422,6 @@ void lmtpmode(struct lmtp_func *func,
 
       case 's':
       case 'S':
-#ifdef HAVE_SSL
             if (!strcasecmp(buf, "starttls") && tls_starttls_enabled() &&
                 !func->preauth) { /* don't need TLS for preauth'd connect */
 
@@ -1495,7 +1488,6 @@ void lmtpmode(struct lmtp_func *func,
 
                 continue;
             }
-#endif /* HAVE_SSL*/
             goto syntaxerr;
 
       case 'v':
@@ -1524,12 +1516,10 @@ void lmtpmode(struct lmtp_func *func,
     saslprops_reset(&saslprops);
 
     cd.starttls_done = 0;
-#ifdef HAVE_SSL
     if (cd.tls_conn) {
         tls_reset_servertls(&cd.tls_conn);
         cd.tls_conn = NULL;
     }
-#endif
 }
 
 /************** client-side LMTP ****************/

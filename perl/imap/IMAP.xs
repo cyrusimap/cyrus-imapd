@@ -421,11 +421,7 @@ CODE:
 int
 imclient_havetls()
 CODE:
-#ifdef HAVE_SSL
         RETVAL = 1;
-#else
-        RETVAL = 0;
-#endif /* HAVE_SSL */
 OUTPUT:
         RETVAL
 
@@ -444,16 +440,12 @@ CODE:
         /* If the tls_{cert, key}_file parameters are undef, set to be NULL */
         if(!SvOK(ST(2))) tls_cert_file = NULL;
         if(!SvOK(ST(3))) tls_key_file = NULL;
-#ifdef HAVE_SSL
         rc = imclient_starttls(client->imclient, tls_cert_file, tls_key_file, CAfile, CApath);
         if (rc)
           ST(0) = &PL_sv_no;
         else {
           ST(0) = &PL_sv_yes;
         }
-#else
-        ST(0) = &PL_sv_no;
-#endif /* HAVE_SSL */
 
 void
 imclient_addcallback(client, ...)

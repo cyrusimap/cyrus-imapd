@@ -108,11 +108,7 @@ extern int optind;
 extern char *optarg;
 extern int opterr;
 
-
-
-#ifdef HAVE_SSL
 static SSL *tls_conn;
-#endif /* HAVE_SSL */
 
 static sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
@@ -366,12 +362,10 @@ static void popd_reset(void)
 
     popd_in = popd_out = NULL;
 
-#ifdef HAVE_SSL
     if (tls_conn) {
         tls_reset_servertls(&tls_conn);
         tls_conn = NULL;
     }
-#endif
 
     cyrus_reset_stdio();
 
@@ -667,9 +661,7 @@ void shut_down(int code)
                " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
                session_id(), bytes_in, bytes_out);
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
 
     prometheus_increment(code ? CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_POP3_SHUTDOWN_TOTAL_STATUS_OK);
@@ -1152,7 +1144,6 @@ void uidl_msg(uint32_t msgno)
     }
 }
 
-#ifdef HAVE_SSL
 static void cmd_stls(int pop3s)
 {
     int result;
@@ -1228,12 +1219,6 @@ static void cmd_stls(int pop3s)
     popd_starttls_done = 1;
     popd_tls_required = 0;
 }
-#else
-static void cmd_stls(int pop3s __attribute__((unused)))
-{
-    fatal("cmd_stls() called, but no OpenSSL", EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 static void cmd_apop(char *response)
 {

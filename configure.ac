@@ -1281,100 +1281,18 @@ fi
 SASL_SET_GSSAPI_LIBS
 
 dnl
-dnl Test for OpenSSL
+dnl Check for OpenSSL library, needed for TLS support
 dnl
-AC_ARG_WITH(openssl,
-        [AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
-        with_ssl="${withval}")
+PKG_CHECK_MODULES([SSL], [openssl >= 3.0], [],
+                  AC_MSG_ERROR([openssl is required]))
+dnl call AC_SUBST macro to support pkg-config version older than 0.24
+AC_SUBST([SSL_LIBS])
+AC_SUBST([SSL_CFLAGS])
 
-SSL_CPPFLAGS=
-SSL_LIBS=
-
-case "x$with_ssl" in
-xno)
-    # --without-openssl
-    # do not try to enable
-    ;;
-x|xyes)
-    # default args or --with-openssl
-    #
-    # Try pkg-config - OpenSSL >= 0.9.6 has openssl.pc
-    PKG_CHECK_MODULES(OPENSSL, [openssl >= 3.0], [with_ssl=yes])
-    ssl_cppflags="$OPENSSL_CFLAGS"
-    ssl_ldflags="$OPENSSL_LIBS"
-    #
-    # If pkg-config doesn't work, search in default system directories
-    ;;
-*)
-    # --with-openssl=DIR
-    # try to enable, search in given install directory
-    if test -d "$with_ssl"; then
-        ssl_cppflags="-I${with_ssl}/include"
-        ssl_ldflags=
-        if test -d "${with_ssl}/lib64"; then
-            CMU_ADD_LIBPATH_TO(${with_ssl}/lib64, ssl_ldflags)
-        else
-            CMU_ADD_LIBPATH_TO(${with_ssl}/lib, ssl_ldflags)
-        fi
-        with_ssl=yes
-    else
-        AC_WARN([Disabling OpenSSL - no include files found])
-        with_ssl=no
-    fi
-esac
-
-if test "$with_ssl" != "no"; then
-    save_CPPFLAGS="$CPPFLAGS"
-    save_LDFLAGS="$LDFLAGS"
-    CPPFLAGS="$CPPFLAGS $ssl_cppflags"
-    LDFLAGS="$LDFLAGS $ssl_ldflags"
-
-    AC_CHECK_HEADER(openssl/evp.h, [
-        with_ssl=yes
-    ],[
-        with_ssl=no
-    ])
-
-    dnl if openssl has been compiled with the rsaref2 libraries,
-    dnl we need to include the rsaref libraries in the crypto check
-    ssl_libs=
-    AC_CHECK_LIB(rsaref, RSAPublicEncrypt,[
-       ssl_libs="-lRSAglue -lrsaref"
-    ],[
-       # whatever, we do not care
-       :
-    ])
-    AC_CHECK_LIB(crypto, BIO_accept,[
-        ssl_libs="-lcrypto $ssl_libs"
-    ],[
-        with_ssl=no
-    ], $ssl_libs)
-    AC_CHECK_LIB(ssl, SSL_CTX_new, [
-        ssl_libs="-lssl $ssl_libs"
-    ],[
-        with_ssl=no
-    ], $ssl_libs)
-
-    if test "$with_ssl" = "no"; then
-        AC_WARN([Disabling SSL - no library files found])
-    fi
-    CPPFLAGS="$save_CPPFLAGS"
-    LDFLAGS="$save_LDFLAGS"
-fi
-
-AC_MSG_CHECKING(for ssl)
-AC_MSG_RESULT($with_ssl)
-
-if test "$with_ssl" != "no"; then
-    SSL_CPPFLAGS="$ssl_cppflags"
-    SSL_LIBS="$ssl_ldflags $ssl_libs"
-    AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
-    AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
-       AC_DEFINE(HAVE_TLS_ALPN,[], [Do we have support for TLS ALPN extension?]))
-fi
-AM_CONDITIONAL([HAVE_SSL], [test "$with_ssl" != "no"])
-AC_SUBST(SSL_CPPFLAGS)
-AC_SUBST(SSL_LIBS)
+dnl Check whether OpenSSL supports TLS ALPN extension
+AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
+             [ AC_DEFINE(HAVE_TLS_ALPN, [],
+                         [Do we have support for TLS ALPN extension?])])
 
 dnl
 dnl Allow for setting EGD socket file on systems without /dev/*random.

@@ -1111,9 +1111,8 @@ static void shut_down(int code)
         idle_done();
     }
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
+
     if (deliver_out) {
         prot_flush(deliver_out);
 

@@ -72,7 +72,7 @@ WriteMakefile(
     'LIBS'	=> ["$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @SQLITE_LIBADD@ @MYSQL_LIBADD@ @PGSQL_LIBADD@ @ICU_LIBS@"],
     'CCFLAGS'	=> '@GCOV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
+    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CFLAGS@",
     'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@',
     # This is a disgusting hack to effectively disable the stupid

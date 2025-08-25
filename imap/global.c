@@ -53,9 +53,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 
-#ifdef HAVE_SSL
 #include <openssl/rand.h>
-#endif
 
 #if HAVE_UNISTD_H
 # include <unistd.h>
@@ -904,15 +902,10 @@ EXPORTED void session_new_id(void)
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     if (!base) base = config_servername;
 
-#ifdef HAVE_SSL
     unsigned long long random;
     RAND_bytes((unsigned char *) &random, sizeof(random));
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
              base, session_id_time, getpid(), session_id_count, random);
-#else
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
-             base, session_id_time, getpid(), session_id_count);
-#endif
 }
 
 /* Return the session id */

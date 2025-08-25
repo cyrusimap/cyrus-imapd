@@ -133,9 +133,7 @@ HIDDEN void jmap_blob_init(jmap_settings_t *settings)
     json_t *algorithms = json_array();
     json_array_append_new(algorithms, json_string("md5"));
     json_array_append_new(algorithms, json_string("sha"));
-#ifdef HAVE_SSL
     json_array_append_new(algorithms, json_string("sha-256"));
-#endif
 
     blob_capabilities =
         json_pack("{s:i, s:i, s:o, s:o}",
@@ -384,13 +382,11 @@ static const jmap_property_t blob_xprops[] = {
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
-#ifdef HAVE_SSL
     {
         "digest:sha-256",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
     },
-#endif
     {
         "size",
         NULL,
@@ -547,7 +543,6 @@ static int jmap_blob_get(jmap_req_t *req)
                 json_object_set_new(item, "digest:sha", json_stringn(output, 28));
             }
 
-#ifdef HAVE_SSL
             if (jmap_wantprop(get.props, "digest:sha-256")) {
                 unsigned char data[32];
                 memset(data, 0, sizeof(data));
@@ -557,8 +552,6 @@ static int jmap_blob_get(jmap_req_t *req)
                 charset_b64encode_mimebody((char *)data, 32, output, &len64, NULL, 0 /* no wrap */);
                 json_object_set_new(item, "digest:sha-256", json_stringn(output, 44));
             }
-
-#endif
         }
         jmap_getblob_ctx_fini(&ctx);
     }
