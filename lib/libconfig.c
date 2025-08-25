@@ -1393,10 +1393,17 @@ static void collect_partitions(const char *key, const char *value, void *rock)
     }
 }
 
-static void check_no_dups(const char *value, void *foo, void *rock)
+struct check_no_dups_rock {
+    FILE *user_output;
+    int *found_bad;
+};
+
+static void check_no_dups(const char *value, void *vpkeys, void *vprock)
 {
-    const strarray_t *keys = foo;
-    int *found_bad = rock;
+    const strarray_t *keys = vpkeys;
+    struct check_no_dups_rock *rock = vprock;
+    FILE *user_output = rock->user_output;
+    int *found_bad = rock->found_bad;
 
     if (strarray_size(keys) > 1) {
         char *joined_keys = NULL;
@@ -1407,11 +1414,31 @@ static void check_no_dups(const char *value, void *foo, void *rock)
                          value, joined_keys);
         free(joined_keys);
 
+        if (user_output) {
+            int i, n;
+
+            for (i = 0, n = strarray_size(keys); i < n; i++) {
+                fprintf(user_output, "%s: %s\n", strarray_nth(keys, i), value);
+            }
+        }
+
         (*found_bad) ++;
     }
 }
 
-static int check_no_subdirs(const hash_table *by_value)
+static void dump_kv(FILE *user_output,
+                    hash_table *by_value,
+                    const char *value)
+{
+    const strarray_t *keys;
+
+    keys = hash_lookup(value, by_value);
+    if (keys && strarray_size(keys)) {
+        fprintf(user_output, "%s: %s\n", strarray_nth(keys, 0), value);
+    }
+}
+
+static int check_no_subdirs(hash_table *by_value, FILE *user_output)
 {
     strarray_t *all_values;
     const char *prev, *value;
@@ -1428,10 +1455,14 @@ static int check_no_subdirs(const hash_table *by_value)
             && 0 == strncmp(prev, value, prev_len)
             && value[prev_len] == '/')
         {
+            /* XXX only logs first example, and no keys... */
             xsyslog(LOG_ERR, "disk path is a prefix of others",
                              "path1=<%s> path2=<%s>",
                              prev, value);
-            /* XXX only reports first example, and no keys... */
+            if (user_output) {
+                dump_kv(user_output, by_value, prev);
+                dump_kv(user_output, by_value, value);
+            }
             found_bad++;
         }
 
@@ -1449,7 +1480,7 @@ static void wrap_strarray_free(void *vp)
     strarray_free((strarray_t *) vp);
 }
 
-EXPORTED int config_partition_sanity(void)
+EXPORTED int config_partition_sanity(FILE *user_output)
 {
     hash_table by_value = HASH_TABLE_INITIALIZER;
     int found_bad = 0;
@@ -1463,8 +1494,11 @@ EXPORTED int config_partition_sanity(void)
 
     config_foreachoverflowstring(&collect_partitions, &by_value);
 
-    hash_enumerate(&by_value, &check_no_dups, &found_bad);
-    found_bad += check_no_subdirs(&by_value);
+    hash_enumerate(&by_value, &check_no_dups, &(struct check_no_dups_rock){
+                                                    user_output,
+                                                    &found_bad,
+                                                });
+    found_bad += check_no_subdirs(&by_value, user_output);
 
     free_hash_table(&by_value, &wrap_strarray_free);
     return 0 - found_bad;
