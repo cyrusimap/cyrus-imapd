@@ -19,6 +19,10 @@ sub test_cardgroup_get_v4
         expandurl => 1,
     );
 
+    # get id of Default addressbook
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my $abookId = $res->[0][1]{list}[0]{id};
+
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $member1 = 'urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af';
     my $member2 = 'urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519';
@@ -37,7 +41,7 @@ EOF
     $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/get', {
         }, 'R1']
     ]);
@@ -45,7 +49,7 @@ EOF
     my $want_jscard = {
         '@type' => 'Card',
         version => '1.0',
-        addressBookIds => { Default => JSON::true },
+        addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         id => $id,
         uid => $id,
