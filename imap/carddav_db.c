@@ -51,6 +51,7 @@
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "jmap_util.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "times.h"
@@ -1302,6 +1303,9 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
+    buf_appendcstr(&value, ";\r\n\tjmapid=");
+    buf_putc(&value, JMAP_CONTACTID_PREFIX);
+    MODSEQ_TO_JMAPID(&value, createdmodseq);
     fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
     buf_free(&value);
 
