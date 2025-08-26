@@ -221,6 +221,14 @@ extern void jmap_set_mailboxid(struct conversations_state *cstate,
 extern void jmap_set_threadid(struct conversations_state *cstate,
                               conversation_id_t cid, char *thrid);
 
+#define JMAP_ADDRBOOKID_PREFIX 'R'
+#define JMAP_ADDRBOOKID_SIZE JMAP_MAILBOXID_SIZE
+
+#define JMAP_MAX_ADDRBOOKID_SIZE MAX(JMAP_ADDRBOOKID_SIZE, MAX_MAILBOX_NAME+1)
+
+extern void jmap_set_addrbookid(struct conversations_state *cstate,
+                                const mbentry_t *mbentry, char *mboxid);
+
 #ifdef HAVE_ICAL
 struct jmap_caleventid {
     const char *raw; /* as requested by client */

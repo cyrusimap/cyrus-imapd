@@ -73,6 +73,7 @@
 #include "vcard_support.h"
 #include "xapian_wrap.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -4927,6 +4928,45 @@ addressbook_sharewith_to_rights_iter:
     return newrights;
 }
 
+static void abookid_to_mbentry(jmap_req_t *req, const char *id,
+                               mbentry_t **mbentry)
+{
+    const char *idtype;
+    int r = IMAP_NOTFOUND;
+
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        idtype = "jmapid";
+        if (id[0] == JMAP_ADDRBOOKID_PREFIX) {
+            char jmapid[JMAP_ADDRBOOKID_SIZE];
+            strlcpy(jmapid, id, JMAP_ADDRBOOKID_SIZE);
+            jmapid[0] = JMAP_MAILBOXID_PREFIX;
+            r = mboxlist_lookup_by_jmapid(req->accountid, jmapid, mbentry, NULL);
+        }
+    }
+    else {
+        char *mboxname = carddav_mboxname(req->accountid, id);
+        idtype = "name";
+        r = mboxlist_lookup(mboxname, mbentry, NULL);
+        free(mboxname);
+    }
+
+    if (r) {
+        if (r != IMAP_NOTFOUND) {
+            syslog(LOG_ERR,
+                   "Error reading mbentry for addressbook via %s %s: %s",
+                   idtype, id, error_message(r));
+        }
+
+        *mbentry = NULL;
+    }
+    else if (((*mbentry)->mbtype & (MBTYPE_RESERVE | MBTYPE_DELETED)) ||
+             mboxname_isdeletedmailbox((*mbentry)->name, NULL)) {
+        /* Ignore "reserved" and "deleted" entries, like they aren't there */
+        mboxlist_entry_free(mbentry);
+        *mbentry = NULL;
+    }
+}
+
 struct getaddressbooks_rock {
     struct jmap_req *req;
     struct jmap_get *get;
@@ -4937,7 +4977,6 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getaddressbooks_rock *rock = vrock;
     jmap_req_t *req = rock->req;
-    mbname_t *mbname = NULL;
     int r = 0;
 
     /* Only addressbooks... */
@@ -4951,12 +4990,10 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     int rights = jmap_myrights_mbentry(rock->req, mbentry);
 
     /* OK, we want this one... */
-    mbname = mbname_from_intname(mbentry->name);
-
     json_t *obj = json_object();
 
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *id = strarray_nth(boxes, boxes->count-1);
+    char id[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(req->cstate, mbentry, id);
     json_object_set_new(obj, "id", json_string(id));
 
     if (jmap_wantprop(rock->get->props, "cyrusimap.org:href")) {
@@ -4975,7 +5012,13 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
                                         req->userid, &attrib);
         /* fall back to last part of mailbox name */
-        if (r || !attrib.len) buf_setcstr(&attrib, id);
+        if (r || !attrib.len) {
+            mbname_t *mbname = mbname_from_intname(mbentry->name);
+            const strarray_t *boxes = mbname_boxes(mbname);
+            const char *id = strarray_nth(boxes, boxes->count-1);
+            buf_setcstr(&attrib, id);
+            mbname_free(&mbname);
+        }
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
         buf_free(&attrib);
     }
@@ -5006,7 +5049,6 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     json_array_append_new(rock->get->list, obj);
 
     buf_free(&attrib);
-    mbname_free(&mbname);
     return r;
 }
 
@@ -5075,11 +5117,9 @@ static int jmap_addressbook_get(struct jmap_req *req)
         rock.skip_hidden = 0; /* complain about missing ACL rights */
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
-            char *mboxname = carddav_mboxname(req->accountid, id);
             mbentry_t *mbentry = NULL;
-
-            r = mboxlist_lookup(mboxname, &mbentry, NULL);
-            if (r == IMAP_NOTFOUND || !mbentry) {
+            abookid_to_mbentry(req, id, &mbentry);
+            if (!mbentry) {
                 json_array_append(get.not_found, jval);
                 r = 0;
             }
@@ -5092,7 +5132,6 @@ static int jmap_addressbook_get(struct jmap_req *req)
             }
 
             mboxlist_entry_free(&mbentry);
-            free(mboxname);
             if (r) goto done;
         }
     }
@@ -5122,7 +5161,6 @@ struct addressbookchanges_rock {
 static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct addressbookchanges_rock *rock = (struct addressbookchanges_rock *) vrock;
-    mbname_t *mbname = NULL;
     jmap_req_t *req = rock->req;
     int r = 0;
 
@@ -5143,9 +5181,8 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) return 0;
     }
 
-    mbname = mbname_from_intname(mbentry->name);
-    const strarray_t *boxes = mbname_boxes(mbname);
-    const char *id = strarray_nth(boxes, boxes->count-1);
+    char id[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(req->cstate, mbentry, id);
 
     /* Report this addressbook as created, updated or destroyed. */
     if (mbentry->mbtype & MBTYPE_DELETED) {
@@ -5160,7 +5197,6 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
     }
 
 done:
-    mbname_free(&mbname);
     return r;
 }
 
@@ -5399,19 +5435,12 @@ static int _addressbook_hascards_cb(void *rock __attribute__((unused)),
 static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
                                     int destroy_contents, json_t **err)
 {
-    char *mboxname = NULL;
+    char *mboxname = carddav_mboxname(req->accountid, DEFAULT_ADDRBOOK);
     mbentry_t *mbentry = NULL;
     struct carddav_db *db = NULL;
     int r = 0;
 
-    /* XXX  Don't delete default addressbook ??? */
-    if (!strcmp(abookid, DEFAULT_ADDRBOOK)) {
-        *err = json_pack("{s:s}", "type", "forbidden");
-        goto done;
-    }
-
-    mboxname = carddav_mboxname(req->accountid, abookid);
-    jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
+    abookid_to_mbentry(req, abookid, &mbentry);
 
     /* Check ACL */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -5420,6 +5449,12 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     }
     else if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {
         *err = json_pack("{s:s}", "type", "accountReadOnly");
+        goto done;
+    }
+
+    /* XXX  Don't delete default addressbook ??? */
+    if (!strcmp(mbentry->name, mboxname)) {
+        *err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
 
@@ -5453,19 +5488,19 @@ static void setaddressbooks_destroy(jmap_req_t *req, const char *abookid,
     }
     if (r) goto done;
 
-    jmap_myrights_delete(req, mboxname);
+    jmap_myrights_delete(req, mbentry->name);
 
     /* Remove from subscriptions db */
-    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0, 1);
+    mboxlist_changesub(mbentry->name, req->userid, req->authstate, 0, 1, 0, 1);
 
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
-        r = mboxlist_delayed_deletemailbox(mboxname,
+        r = mboxlist_delayed_deletemailbox(mbentry->name,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 req->userid, req->authstate, mboxevent,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
     } else {
-        r = mboxlist_deletemailbox(mboxname,
+        r = mboxlist_deletemailbox(mbentry->name,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 req->userid, req->authstate, mboxevent,
                 MBOXLIST_DELETE_CHECKACL|MBOXLIST_DELETE_KEEP_INTERMEDIARIES);
@@ -5596,12 +5631,31 @@ static void setaddressbooks_create(struct jmap_req *req,
         goto done;
     }
 
+    /* Lookup the new mailbox id */
+    mbentry_t *newmbentry = NULL;
+    r = jmap_mboxlist_lookup(mboxname, &newmbentry, NULL);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to lookup %s after create (%s)",
+                mboxname, error_message(r));
+        goto done;
+    }
+
     /* Report addressbook as created. */
-    *record = json_pack("{s:s s:o}", "id", uid,
+    char id[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(req->cstate, newmbentry, id);
+    *record = json_pack("{s:s s:o}", "id", id,
                         "myRights",
                         addressbookrights_to_jmap(jmap_myrights_mbentry(req,
-                                                                        &mbentry)));
-    jmap_add_id(req, creation_id, uid);
+                                                                        newmbentry)));
+    jmap_add_id(req, creation_id, id);
+
+    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
+        char *xhref = jmap_xhref(mboxname, NULL);
+        json_object_set_new(*record, "cyrusimap.org:href", json_string(xhref));
+        free(xhref);
+    }
+
+    mboxlist_entry_free(&newmbentry);
 
 done:
     if (r && *err == NULL) {
@@ -5621,20 +5675,26 @@ done:
 }
 
 static void setaddressbooks_update(jmap_req_t *req,
-                                   const char *uid,
+                                   const char *abookid,
                                    json_t *arg,
                                    json_t **record,
                                    json_t **err)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    char *mboxname = carddav_mboxname(req->accountid, uid);
-    mbname_t *mbname = mbname_from_intname(mboxname);
+    mbentry_t *mbentry = NULL;
+
+    abookid_to_mbentry(req, abookid, &mbentry);
+
+    if (!mbentry) {
+        *err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
 
     /* Parse and validate properties. */
     struct setaddressbook_props props;
-    setaddressbook_readprops(req, &parser, &props, arg, mboxname);
+    setaddressbook_readprops(req, &parser, &props, arg, mbentry->name);
     if (props.share.With) {
-        if (!jmap_hasrights(req, mboxname, ACL_ADMIN)) {
+        if (!jmap_hasrights(req, mbentry->name, ACL_ADMIN)) {
             jmap_parser_invalid(&parser, "shareWith");
         }
     }
@@ -5646,7 +5706,7 @@ static void setaddressbooks_update(jmap_req_t *req,
     }
 
     /* Update the addressbook */
-    int r = setaddressbook_writeprops(req, mboxname, &props, /*ignore_acl*/0);
+    int r = setaddressbook_writeprops(req, mbentry->name, &props, /*ignore_acl*/0);
     if (r) {
         switch (r) {
             case IMAP_MAILBOX_NONEXISTENT:
@@ -5666,9 +5726,8 @@ static void setaddressbooks_update(jmap_req_t *req,
     *record = json_null();
 
 done:
+    mboxlist_entry_free(&mbentry);
     jmap_parser_fini(&parser);
-    mbname_free(&mbname);
-    free(mboxname);
 }
 
 static int setaddressbooks_parse_args(jmap_req_t *req __attribute__((unused)),
@@ -7809,14 +7868,15 @@ static json_t *jmap_card_from_vcard(const char *userid,
 static int getcards_cb(void *rock, struct carddav_data *cdata)
 {
     struct cards_rock *crock = (struct cards_rock *) rock;
+    struct jmap_req *req = crock->req;
     struct index_record record;
     json_t *obj = NULL;
     int r = 0;
 
-    mbentry_t *mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     if (!mbentry ||
-        !jmap_hasrights_mbentry(crock->req, mbentry, JACL_READITEMS)) {
+        !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         mboxlist_entry_free(&mbentry);
         return 0;
     }
@@ -7852,7 +7912,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     if (crock->args.disable_uri_as_blobid)
         from_vcard_flags |= DISABLE_URI_AS_BLOBID;
 
-    obj = jmap_card_from_vcard(crock->req->userid, vcard, crock->db,
+    obj = jmap_card_from_vcard(req->userid, vcard, crock->db,
                                crock->mailbox, &record, from_vcard_flags);
     vcardcomponent_free(vcard);
 
@@ -7881,10 +7941,10 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
             if (!crock->mbentry ||
                 strcmp(crock->mbentry->uniqueid, cdata->dav.mailbox)) {
                 mboxlist_entry_free(&crock->mbentry);
-                crock->mbentry = jmap_mbentry_from_dav(crock->req, &cdata->dav);
+                crock->mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
             }
             if (crock->mbentry &&
-                jmap_hasrights_mbentry(crock->req,
+                jmap_hasrights_mbentry(req,
                                        crock->mbentry, JACL_READITEMS)) {
                 uniqueid = crock->mbentry->uniqueid;
             }
@@ -7907,8 +7967,10 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     }
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
-    json_object_set_new(obj, "addressBookIds",
-                             json_pack("{s:b}", strrchr(mbentry->name, '.')+1, 1));
+
+    char id[JMAP_MAX_ADDRBOOKID_SIZE];
+    jmap_set_addrbookid(req->cstate, mbentry, id);
+    json_object_set_new(obj, "addressBookIds", json_pack("{s:b}", id, 1));
 
     json_array_append_new(crock->get->list, obj);
     crock->rows++;
@@ -11594,7 +11656,7 @@ static int _card_set_create(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
-    char *mboxname = NULL;
+    mbentry_t *mbentry = NULL;
     json_t *media = NULL, *keys = NULL, *members = NULL;
 
     /* Validate uid */
@@ -11687,18 +11749,28 @@ static int _card_set_create(jmap_req_t *req,
     }
 
     if (! addressbookId) {
-        json_object_set_new(item, "addressBookIds", json_pack("{s:b}",
-                                                              "Default", 1));
-        addressbookId = "Default";
+        char *mboxname = mboxname_abook(req->accountid, DEFAULT_ADDRBOOK);
+
+        if (jmap_mboxlist_lookup(mboxname, &mbentry, NULL)) {
+            mboxlist_entry_free(&mbentry);
+        }
+        else {
+            char id[JMAP_MAX_ADDRBOOKID_SIZE];
+            jmap_set_addrbookid(req->cstate, mbentry, id);
+            json_object_set_new(item, "addressBookIds",
+                                json_pack("{s:b}", id, 1));
+        }
+        free(mboxname);
     }
-    mboxname = mboxname_abook(req->accountid, addressbookId);
-    json_object_del(jcard, "addressBookIds");
-    addressbookId = NULL;
+    else {
+        abookid_to_mbentry(req, addressbookId, &mbentry);
+        json_object_del(jcard, "addressBookIds");
+    }
 
     int needrights = required_set_rights(jcard);
 
     /* Check permissions. */
-    if (!jmap_hasrights(req, mboxname, needrights)) {
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
         json_array_append_new(invalid, json_string("addressBookIds"));
         goto done;
     }
@@ -11718,9 +11790,9 @@ static int _card_set_create(jmap_req_t *req,
     vcardcomponent_add_property(card, uidprop);
 
     /* we need to create and append a record */
-    if (!*mailbox || strcmp(mailbox_name(*mailbox), mboxname)) {
+    if (!*mailbox || strcmp(mailbox_name(*mailbox), mbentry->name)) {
         mailbox_close(mailbox);
-        r = mailbox_open_iwl(mboxname, mailbox);
+        r = mailbox_open_iwl(mbentry->name, mailbox);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("addressbookIds"));
             r = 0;
@@ -11763,9 +11835,9 @@ static int _card_set_create(jmap_req_t *req,
                   "full", 0, invalid, "s", &name);
 
     syslog(LOG_NOTICE, "jmap: create card %s/%s/%s (%s)",
-           req->accountid, mboxname, uid, name ? name : "");
+           req->accountid, mbentry->name, uid, name ? name : "");
 
-    r = _jscard_to_vcard(req, NULL, mboxname, card,
+    r = _jscard_to_vcard(req, NULL, mbentry->name, card,
                          jcard, &annots, &blobs, errors);
 
     if (json_array_size(invalid) || errors->blobNotFound) {
@@ -11828,14 +11900,14 @@ static int _card_set_create(jmap_req_t *req,
         json_object_set_new(item, "cyrusimap.org:size",
                             json_integer(record.size - record.header_size));
 
-        char *xhref = jmap_xhref(mboxname, resourcename);
+        char *xhref = jmap_xhref(mbentry->name, resourcename);
         json_object_set_new(item, "cyrusimap.org:href", json_string(xhref));
         free(xhref);
     }
 
 done:
     vcardcomponent_free(card);
-    free(mboxname);
+    mboxlist_entry_free(&mbentry);
     free(resourcename);
     freeentryatts(annots);
     free(uid);
@@ -11924,23 +11996,25 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     }
 
     if (addressbookId) {
-        char *mboxname = mboxname_abook(req->accountid, addressbookId);
+        mbentry_t *newmbentry = NULL;
+        abookid_to_mbentry(req, addressbookId, &newmbentry);
 
-        if (mbentry && strcmp(mboxname, mbentry->name)) {
+        if (mbentry && (!newmbentry || strcmp(newmbentry->name, mbentry->name))) {
             /* move */
-            if (!jmap_hasrights(req, mboxname, JACL_ADDITEMS)) {
+            if (!newmbentry ||
+                !jmap_hasrights_mbentry(req, newmbentry, JACL_ADDITEMS)) {
                 json_array_append_new(invalid, json_string("addressBookIds"));
                 r = HTTP_FORBIDDEN;
             }
-            else if ((r = mailbox_open_iwl(mboxname, &newmailbox))) {
-                syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
+            else if ((r = mailbox_open_iwl(newmbentry->name, &newmailbox))) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s", newmbentry->name);
             }
             else {
                 do_move = 1;
             }
         }
         json_object_del(jcard, "addressBookIds");
-        free(mboxname);
+        mboxlist_entry_free(&newmbentry);
 
         if (r) goto done;
     }

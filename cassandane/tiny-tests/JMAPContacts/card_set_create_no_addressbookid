@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_no_addressbookid
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "get default addressbook";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/get', { }, "R1"]
+    ]);
+
+    my $abookid = $res->[0][1]{list}[0]{id};
+
+    my $prodid = '-//Example Corp.//CardDAV Client//EN';
+    my $name = 'Mr. John Q. Public, Esq.';
+    my $uid = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $uid,
+                    prodId => $prodid,
+                    kind => 'individual',
+                    name => { full => $name }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_not_null($res->[0][1]{created}{1}{id});
+    $self->assert_not_null($res->[0][1]{created}{1}{addressBookIds}{$abookid});
+}

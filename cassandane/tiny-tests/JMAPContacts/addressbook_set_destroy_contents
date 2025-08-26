@@ -10,7 +10,12 @@ sub test_addressbook_set_destroy_contents
     my $carddav = $self->{carddav};
 
     xlog "Create addressbook and contact";
-    my $abookId = $carddav->NewAddressBook("foo");
+    my $abookPath = $carddav->NewAddressBook("foo");
+
+    xlog $self, "get addressbook ids";
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $abookId = $m{"foo"}{id};
 
     my $card = <<EOF;
 BEGIN:VCARD
@@ -25,10 +30,10 @@ END:VCARD
 EOF
 
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-    my $cardId = basename($carddav->NewContact($abookId, $VCard), '.vcf');
+    my $cardId = basename($carddav->NewContact($abookPath, $VCard), '.vcf');
 
     xlog "Destroy addressbook (with and without onDestroyRemoveContents)";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['AddressBook/set', {
             destroy => [$abookId],
         }, 'R1'],
