@@ -75,6 +75,7 @@ static char stack[STACKSIZE+1];
 static int outfd;
 
 static struct db *db = NULL;
+static struct txn **tidp = NULL;
 
 static int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
   int c,res,inkey;
@@ -148,7 +149,6 @@ static void batch_commands(struct db *db)
     struct buf key = BUF_INITIALIZER;
     struct buf val = BUF_INITIALIZER;
     struct txn *tid = NULL;
-    struct txn **tidp = NULL;
     struct protstream *in = prot_new(0, 0); // stdin
     struct protstream *out = prot_new(1, 1); // stdout
     int line = 0;
@@ -218,7 +218,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_commit(db, tid);
+                r = cyrusdb_commit(db, *tidp);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -228,7 +228,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_abort(db, tid);
+                r = cyrusdb_abort(db, *tidp);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -242,7 +242,7 @@ static void batch_commands(struct db *db)
 
 done:
     if (r) {
-        if (tid) cyrusdb_abort(db, tid);
+        if (*tidp) cyrusdb_abort(db, *tidp);
         fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
                 line, (int)cmd.len, cmd.s, error_message(r));
     }
@@ -272,7 +272,6 @@ int main(int argc, char *argv[])
     int use_stdin = 0;
     int db_flags = 0;
     struct txn *tid = NULL;
-    struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
     static const char short_options[] = "C:NRSTcnt";
@@ -434,18 +433,23 @@ int main(int argc, char *argv[])
     } else if (!strcmp(action, "repack")) {
         r = cyrusdb_repack(db);
     } else if (!strcmp(action, "damage")) {
-        cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
-        assert(!tid);
+        if (!tidp) tidp = &tid;
+        cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, tidp);
+        assert(!*tidp);
     } else {
         printf("Unknown action %s\n", action);
     }
-    if (tid && !r) {
-        r = cyrusdb_commit(db, tid);
-        tid = NULL;
-    }
-    if (r) {
-        if (tid) cyrusdb_abort(db, tid);
-        printf("ERROR: %s\n", cyrusdb_strerror(r));
+
+    if (tidp) {
+        if (r) {
+            printf("ABORTING: %s\n", cyrusdb_strerror(r));
+            r = cyrusdb_abort(db, *tidp);
+            if (r) printf("ERROR ON ABORT: %s\n", cyrusdb_strerror(r));
+        }
+        else {
+            r = cyrusdb_commit(db, *tidp);
+            if (r) printf("ERROR ON COMMIT: %s\n", cyrusdb_strerror(r));
+        }
     }
 
     cyrusdb_close(db);
