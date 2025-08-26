@@ -8,10 +8,14 @@ sub test_addressbook_set_unknown_addressbookright
 
     my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([
+    xlog $self, "get default addressbook id";
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my $id = $res->[0][1]{list}[0]{id};
+
+    $res = $jmap->CallMethods([
         ['AddressBook/set', {
             update => {
-                Default => {
+                $id => {
                     shareWith => {
                         sharee => {
                             unknownAddressBookRight => JSON::true,
@@ -23,8 +27,8 @@ sub test_addressbook_set_unknown_addressbookright
     ]);
 
     $self->assert_str_equals('invalidProperties',
-        $res->[0][1]{notUpdated}{Default}{type});
+        $res->[0][1]{notUpdated}{$id}{type});
 
     $self->assert_deep_equals(['shareWith/sharee/unknownAddressBookRight'],
-        $res->[0][1]{notUpdated}{Default}{properties});
+        $res->[0][1]{notUpdated}{$id}{properties});
 }
