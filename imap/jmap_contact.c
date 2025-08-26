@@ -4359,7 +4359,8 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
 #pragma GCC diagnostic pop
 
-    r = carddav_store(*mailbox, card, resourcename, 0, flags, &annots,
+    modseq_t cmodseq = req->counters.highestmodseq + 1;
+    r = carddav_store(*mailbox, card, resourcename, cmodseq, flags, &annots,
                       req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
@@ -11928,7 +11929,9 @@ static int _card_set_create(jmap_req_t *req,
         goto done;
     }
 
-    r = carddav_store_x(*mailbox, card, resourcename, 0, &annots,
+    modseq_t cmodseq =
+        mboxname_nextmodseq(mbentry->name, 0, MBTYPE_ADDRESSBOOK, 0);
+    r = carddav_store_x(*mailbox, card, resourcename, cmodseq, &annots,
                         req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
