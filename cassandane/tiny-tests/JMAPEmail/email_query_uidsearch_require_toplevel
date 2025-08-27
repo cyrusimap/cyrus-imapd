@@ -1,0 +1,118 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_uidsearch_require_toplevel
+  : JMAPExtensions
+{
+    my ($self) = @_;
+    my $imap   = $self->{store}->get_client();
+    my $jmap   = $self->{jmap};
+
+    xlog $self, "Create mailboxes A and B";
+    my $res = $jmap->CallMethods([
+        [
+            'Mailbox/set',
+            {
+                create => {
+                    a => { name => 'A' },
+                    b => { name => 'B' }
+                },
+            },
+            'R1'
+        ],
+    ]);
+    my $mboxIdA = $res->[0][1]{created}{a}{id};
+    $self->assert_not_null($mboxIdA);
+    my $mboxIdB = $res->[0][1]{created}{b}{id};
+    $self->assert_not_null($mboxIdB);
+
+    xlog $self, "Create message A in mailbox A";
+    my $mimeA = <<'EOF';
+From: fromA@local
+To: fromA@local
+Subject: msgASubject
+Message-ID: <message-id-a@local>
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+msgAbody
+EOF
+    $mimeA =~ s/\r?\n/\r\n/gs;
+    $imap->append('A', $mimeA);
+
+    xlog $self, "Create message B in mailbox B, having message A as attachment";
+    my $mimeB = <<EOF;
+From: fromB\@local
+To: fromB\@local
+Subject: msgBSubject
+Message-ID: <message-id-b\@local>
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed;boundary=a2a6fdfb746e
+
+--a2a6fdfb746e
+Content-Type: text/plain;charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+msgAbody
+--a2a6fdfb746e
+Content-Type: message/rfc822
+
+$mimeA
+--a2a6fdfb746e--
+EOF
+    $mimeB =~ s/\r?\n/\r\n/gs;
+    $imap->append('B', $mimeB);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    xlog $self, "Query for message A in mailbox B, filter by header";
+    $res = $jmap->CallMethods(
+        [
+            [
+                'Email/query',
+                {
+                    filter => {
+                        "operator"   => "AND",
+                        "conditions" => [
+                            {
+                                "operator"   => "NOT",
+                                "conditions" => [ {
+                                    "from" => 'fromB@local',
+                                } ]
+                            },
+                            { "inMailbox" => $mboxIdB },
+                            { "text"      => "msgA*" }
+                        ]
+                    },
+                    findMatchingParts => JSON::true,
+                },
+                'R1'
+            ],
+            [
+                'Email/get',
+                {
+                    '#ids' => {
+                        resultOf => 'R1',
+                        name     => 'Email/query',
+                        path     => '/ids',
+                    },
+                    properties => [ 'from', 'subject', 'bodyStructure', 'blobId' ],
+                },
+                'R2'
+            ],
+        ],
+        [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:mail',
+            'urn:ietf:params:jmap:submission',
+            'https://cyrusimap.org/ns/jmap/mail',
+            'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/performance',
+        ]
+    );
+    $self->assert_num_equals(0, scalar @{ $res->[0][1]{ids} });
+    $self->assert_equals(JSON::false, $res->[0][1]{performance}{details}{isGuidSearch});
+}
