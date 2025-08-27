@@ -62,6 +62,7 @@ use HTTP::Daemon;
 use DBI;
 use Time::HiRes qw(usleep);
 use List::Util qw(uniqstr);
+use MIME::Base64 qw(decode_base64 encode_base64);
 
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -2988,30 +2989,27 @@ sub run_mbpath
     return decode_json(slurp_file($filename));
 }
 
-sub _mkastring
-{
-    my $string = shift;
-    return '{' . length($string) . '+}' . "\r\n" . $string;
-}
-
 sub run_dbcommand_cb
 {
     my ($self, $linecb, $dbname, $engine, @items) = @_;
 
-    if (@items > 1) {
-        unshift @items, ['BEGIN'];
-        push @items, ['COMMIT'];
-    }
+    my $ro = 1;
 
     my $input = '';
     foreach my $item (@items) {
+        $ro = 0 if $item->[0] eq 'SET';
+        $ro = 0 if $item->[0] eq 'DELETE';
         $input .= $item->[0];
         for (1..2) {
-            $input .= ' ' . _mkastring($item->[$_]) if defined $item->[$_];
+            $input .= ' ' . encode_base64($item->[$_], '') if defined $item->[$_];
         }
         $input .= "\r\n";
     }
 
+    xlog "run_dbcommand: $input" if get_verbose;
+
+    my @args = ('-b', '-T');
+    push @args, '-R' if $ro;
     my $basedir = $self->{basedir};
     my $res = $self->run_command({
        redirects => {
@@ -3023,116 +3021,18 @@ sub run_dbcommand_cb
            exited_normally => sub { return 'ok'; },
            exited_abnormally => sub { return 'failure'; },
        },
-    }, 'cyr_dbtool', $dbname, $engine, 'batch');
+    }, 'cyr_dbtool', @args, $dbname, $engine, 'batch');
     return $res unless $res eq 'ok';
 
     my $needbytes = 0;
     my $buf = '';
 
-    # The output of `cyr_dbtool` is in theory one logical line at a time.
-    #  However each logical line can have IMAP literals in them. In that
-    #  case, you get a real line that ends with "{nbytes+}\r\n" and you then
-    #  have to read that many bytes of data (including possibly \r's and
-    #  \n's as well). This function potentially reads multiple real lines
-    #  in $line to gather up a single logical line in $buf, and then parses
-    #  that.
-    # It could be made simpler and more efficient by tokenising the line as
-    #  it goes, but it was extracted from an original codebase which processed
-    #  the entire response buffer from `cyr_dbtool` as a single giant string.
     open(FH, "<$basedir/run_dbcommand.out");
-    LINE: while (defined(my $line = <FH>)) {
-        $buf .= $line;
-
-        # inside a literal, that's all we need
-        if ($needbytes) {
-            my $len = length($line);
-            if ($len <= $needbytes) {
-                $needbytes -= $len;
-                next LINE;
-            }
-            substr($line, 0, $needbytes, '');
-            $needbytes = 0;
-        }
-
-        # does this line include a literal, process it now
-        if ($line =~ m/\{(\d+)\+?\}\r?\n$/s) {
-            $needbytes = $1;
-            next LINE;
-        }
-
-        # we have a line!
-
-        my @array;
-        my $pos = 0;
-        my $length = length($buf);
-        while ($pos < $length) {
-            my $chr = substr($buf, $pos, 1);
-
-            if ($chr eq ' ') {
-                $pos++;
-                next;
-            }
-
-            if ($chr eq "\n") {
-                $pos++;
-                next;
-            }
-
-            if ($chr eq '{') {
-                my $end = index($buf, '}', $pos);
-                die "Missing }" if $end < 0;
-                my $len = substr($buf, $pos + 1, $end - $pos - 1);
-                $len =~ s/\+//;
-                $pos = $end+1;
-                my $chr = substr($buf, $pos++, 1);
-                $chr = substr($buf, $pos++, 1) if $chr eq "\r";
-                die "BOGUS LITERAL" unless $chr eq "\n";
-                push @array, substr($buf, $pos, $len);
-                $pos += $len;
-                next;
-            }
-
-            if ($chr eq '"') {
-                my $end = index($buf, '"', $pos+1);
-                die "Missing quote" if $end < 0;
-                push @array, substr($buf, $pos + 1, $end - $pos - 1);
-                $pos = $end + 1;
-                next;
-            }
-
-            my $space = index($buf, ' ', $pos);
-            my $endline = index($buf, "\n", $pos);
-
-            if ($space < 0) {
-                push @array, substr($buf, $pos, $endline - $pos);
-                $pos = $endline;
-                next;
-            }
-
-            if ($endline < 0) {
-                push @array, substr($buf, $pos, $space - $pos);
-                $pos = $space;
-                next;
-            }
-
-            if ($endline < $space) {
-                push @array, substr($buf, $pos, $endline - $pos);
-                $pos = $endline;
-                next;
-            }
-
-            if ($space < $endline) {
-                push @array, substr($buf, $pos, $space - $pos);
-                $pos = $space;
-                next;
-            }
-
-            die "shouldn't get here";
-        }
-
+    while (defined(my $line = <FH>)) {
+        chomp $line;
+        my @array = map { decode_base64($_) } split ' ', $line;
+        xlog "run_dbcommand output: $line => ($array[0], $array[1])" if get_verbose;
         $linecb->(@array);
-
-        $buf = '';
     }
     close(FH);
 
