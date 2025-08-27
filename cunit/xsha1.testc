@@ -1,5 +1,5 @@
 #include <stdint.h>
-#
+
 #include "cunit/unit.h"
 #include "charset.h"
 #include "util.h"
@@ -4176,3 +4176,4 @@ static void test_4097(void)
     }
 }
 
+/* vim: set ft=c : */

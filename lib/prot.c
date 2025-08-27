@@ -215,8 +215,6 @@ EXPORTED int prot_setisclient(struct protstream *s, int val)
     return 0;
 }
 
-#ifdef HAVE_SSL
-
 /*
  * Turn on TLS for this connection
  */
@@ -232,8 +230,6 @@ EXPORTED int prot_settls(struct protstream *s, SSL *tlsconn)
 
     return 0;
 }
-
-#endif /* HAVE_SSL */
 
 /*
  * Decode data sent via a SASL security layer. Returns EOF on error.
@@ -675,12 +671,10 @@ EXPORTED int prot_fill(struct protstream *s)
         /* wait until get input */
         haveinput = 0;
 
-#ifdef HAVE_SSL
         /* maybe there's data stuck in the SSL buffer? */
         if (s->tls_conn != NULL) {
             haveinput = SSL_pending(s->tls_conn);
         }
-#endif
 
         /* if we've promised to call something before blocking or
            flush an output stream, check to see if we're going to block */
@@ -767,12 +761,10 @@ EXPORTED int prot_fill(struct protstream *s)
             if (s->fillcallback_proc != NULL) {
                 n = (*s->fillcallback_proc)(s->buf, PROT_BUFSIZE, s->fillcallback_rock);
             }
-#ifdef HAVE_SSL
             /* just do a SSL read instead if we're under a tls layer */
             else if (s->tls_conn != NULL) {
                 n = SSL_read(s->tls_conn, (char *) s->buf, PROT_BUFSIZE);
             }
-#endif /* HAVE_SSL */
             else {
                 n = read(s->fd, s->buf, PROT_BUFSIZE);
             }
@@ -975,15 +967,11 @@ static int prot_flush_writebuffer(struct protstream *s,
 
     do {
         cmdtime_netstart();
-#ifdef HAVE_SSL
         if (s->tls_conn != NULL) {
             n = SSL_write(s->tls_conn, (char *)buf, len);
         } else {
             n = write(s->fd, buf, len);
         }
-#else  /* HAVE_SSL */
-        n = write(s->fd, buf, len);
-#endif /* HAVE_SSL */
         cmdtime_netend();
     } while (n == -1 && errno == EINTR && !signals_poll());
 
@@ -1549,7 +1537,6 @@ EXPORTED int prot_select(struct protgroup *readstreams, int extra_read_fd,
             protgroup_insert(retval, s);
 
         }
-#ifdef HAVE_SSL
         else if(s->tls_conn != NULL && SSL_pending(s->tls_conn)) {
             found_fds++;
 
@@ -1558,7 +1545,6 @@ EXPORTED int prot_select(struct protgroup *readstreams, int extra_read_fd,
 
             protgroup_insert(retval, s);
         }
-#endif
     }
 
     /* XXX we should probably do a nonblocking select on the remaining

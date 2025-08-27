@@ -6,8 +6,9 @@ libdir = @libdir@
 Name: Cyrus Imapd libcyrus
 Description: libcyrus library of Cyrus Imapd
 URL: http://www.cyrusimap.org/
-Cflags: -I${includedir}/cyrus @SSL_CPPFLAGS@ @SASLFLAGS@
+Cflags: -I${includedir}/cyrus @SASLFLAGS@
 Version: @PACKAGE_VERSION@
+Requires: openssl >= 3.0
 Requires.private: libcyrus_min = @PACKAGE_VERSION@
 Libs: -L${libdir} -lcyrus -lcyrus_min
-Libs.private: @LIB_SASL@ @SSL_LIBS@
+Libs.private: @LIB_SASL@

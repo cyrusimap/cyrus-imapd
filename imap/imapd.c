@@ -65,10 +65,8 @@
 
 #include <sasl/sasl.h>
 
-#ifdef HAVE_SSL
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
-#endif /* HAVE_SSL */
 
 #include "acl.h"
 #include "annotate.h"
@@ -248,10 +246,8 @@ static struct id_data {
     int quirks;
 } imapd_id = { HASH_TABLE_INITIALIZER, 0, 0 };
 
-#ifdef HAVE_SSL
 /* our tls connection, if any */
 static SSL *tls_conn = NULL;
-#endif /* HAVE_SSL */
 
 /* stage(s) for APPEND */
 struct appendstage {
@@ -485,10 +481,8 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &imapd_userisadmin }                        },
     { "UNSELECT",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3691 */
     { "URL-PARTIAL",           CAPA_POSTAUTH,           { 0 } }, /* RFC 5550 */
-#ifdef HAVE_SSL
     { "URLAUTH",               CAPA_POSTAUTH,           { 0 } }, /* RFC 4467 */
     { "URLAUTH=BINARY",        CAPA_POSTAUTH,           { 0 } }, /* RFC 5524 */
-#endif
     { "UTF8=ACCEPT",           CAPA_POSTAUTH|CAPA_STATE,         /* RFC 6855 */
       { .statep = &imapd_utf8_allowed }                       },
     { "UTF8=ONLY",             0,/*precluded by ACCEPT*/{ 0 } }, /* RFC 6855 */
@@ -582,11 +576,9 @@ static void cmd_xstats(char *tag);
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
 
-#ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
 static void cmd_genurlauth(char *tag);
 static void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
-#endif
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg);
@@ -1021,14 +1013,12 @@ static void imapd_reset(void)
 
     if (protin) protgroup_reset(protin);
 
-#ifdef HAVE_SSL
     if (tls_conn) {
         if (tls_reset_servertls(&tls_conn) == -1) {
             fatal("tls_reset() failed", EX_TEMPFAIL);
         }
         tls_conn = NULL;
     }
-#endif
 
     cyrus_reset_stdio();
 
@@ -1418,9 +1408,7 @@ void shut_down(int code)
 
     if (protin) protgroup_free(protin);
 
-#ifdef HAVE_SSL
     tls_shutdown_serverengine();
-#endif
 
     saslprops_free(&saslprops);
 
@@ -1965,14 +1953,12 @@ static void cmdloop(void)
 
                 prometheus_increment(CYRUS_IMAP_GETQUOTAROOT_TOTAL);
             }
-#ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Genurlauth")) {
                 if (c != ' ') goto missingargs;
 
                 cmd_genurlauth(tag.s);
                 prometheus_increment(CYRUS_IMAP_GENURLAUTH_TOTAL);
             }
-#endif
             else goto badcmd;
             break;
 
@@ -2292,7 +2278,6 @@ static void cmdloop(void)
 
                 /* XXX prometheus_increment(prom_handle, CYRUS_IMAP_LSUB_TOTAL); */
             }
-#ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Resetkey")) {
                 int have_mbox = 0, have_mech = 0;
 
@@ -2311,7 +2296,6 @@ static void cmdloop(void)
                              have_mech ? arg2.s : 0);
                 /* XXX prometheus_increment(CYRUS_IMAP_RESETKEY_TOTAL); */
             }
-#endif
             else goto badcmd;
             break;
 
@@ -2694,14 +2678,12 @@ static void cmdloop(void)
 
                 cmd_upgradesieve(tag.s, arg1.s);
             }
-#ifdef HAVE_SSL
             else if (!strcmp(cmd.s, "Urlfetch")) {
                 if (c != ' ') goto missingargs;
 
                 cmd_urlfetch(tag.s);
                 /* XXX prometheus_increment(CYRUS_IMAP_URLFETCH_TOTAL); */
             }
-#endif
             else goto badcmd;
             break;
 
@@ -9490,7 +9472,6 @@ out:
     free(intname);
 }
 
-#ifdef HAVE_SSL
 static const struct tls_alpn_t imap_alpn_map[] = {
     { "imap", NULL, NULL },
     { "",     NULL, NULL }
@@ -9583,14 +9564,6 @@ static void cmd_starttls(char *tag, int imaps)
     imapd_tls_comp = (void *) SSL_get_current_compression(tls_conn);
     if (imapd_tls_comp) imapd_compress_allowed = 0;
 }
-#else
-void cmd_starttls(char *tag __attribute__((unused)),
-                  int imaps __attribute__((unused)))
-{
-    fatal("cmd_starttls() executed, but starttls isn't implemented!",
-          EX_SOFTWARE);
-}
-#endif // HAVE_SSL
 
 static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 {
@@ -14201,7 +14174,6 @@ done:
     }
 }
 
-#ifdef HAVE_SSL
 enum {
     URLAUTH_ALG_HMAC_SHA1 =     0 /* HMAC-SHA1 */
 };
@@ -14654,7 +14626,6 @@ static void cmd_resetkey(char *tag, char *name,
         }
     }
 }
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(char *tag, char *alg)
