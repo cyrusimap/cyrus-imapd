@@ -53,6 +53,7 @@ LOGO;PROP-ID=L1;MEDIATYPE=image/png:http://example.org/logo.png
 SOUND;VALUE=URI;PROP-ID=S1:data:audio/mpeg;base64,c29tZSBzb3VuZA==
 IMPP;PROP-ID=OS1;PREF=1:xmpp:simon\@example.com
 SOCIALPROFILE;PROP-ID=OS2;SERVICE-TYPE=Mastodon;USERNAME="Simon P.":https://example.com/\@simon
+X-SOCIALPROFILE;PROP-ID=OS3;TYPE=Twitter;X-USER=foo:https://example.com/foo
 REV:20230422T194639Z
 JSPROP;JSPTR=name/foo:"bar"
 JSPROP;JSPTR=organizations/O1/foo:{}
@@ -186,6 +187,12 @@ EOF
                 'user' => 'Simon P.',
                 'uri' => 'https://example.com/@simon',
                 'service' => 'Mastodon'
+            },
+            'OS3' => {
+                'vCardName' => 'x-socialprofile',
+                'user' => 'foo',
+                'uri' => 'https://example.com/foo',
+                'service' => 'Twitter'
             }
         },
         media => {
