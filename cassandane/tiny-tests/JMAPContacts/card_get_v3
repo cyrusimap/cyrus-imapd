@@ -109,7 +109,7 @@ EOF
                 service => 'Facebook'
             },
             OS2 => {
-                vCardName => 'x-social-profile',
+                vCardName => 'x-socialprofile',
                 service => 'GitHub',
                 user => 'foo'
             },

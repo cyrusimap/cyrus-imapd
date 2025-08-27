@@ -58,6 +58,9 @@ sub test_card_set_create_online
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $self->assert_matches(qr|IMPP;PROP-ID=x1;PREF=1:xmpp:alice\@example.com|, $card);
-    $self->assert_matches(qr|SOCIALPROFILE;SERVICE-TYPE=Mastodon;USERNAME=\@foo\@example.com;PROP-ID=x2:https://example.com/\@foo|, $card);
+    # We currently use X-SOCIALPROFILE instead of SOCIALPROFILE (RFC 9554)
+    # to be compatible with Apple
+    $self->assert_matches(qr|X-SOCIALPROFILE;TYPE=Mastodon;X-USER=\@foo\@example.com;PROP-ID=x2:https://example.com/\@foo|, $card);
+#    $self->assert_matches(qr|SOCIALPROFILE;SERVICE-TYPE=Mastodon;USERNAME=\@foo\@example.com;PROP-ID=x2:https://example.com/\@foo|, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }

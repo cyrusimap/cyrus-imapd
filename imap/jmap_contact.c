@@ -6734,8 +6734,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         else if (!strcmp(prop_name, "X-FM-OTHERACCOUNT-MEMBER")) {
             goto member;
         }
-        else if (!strcasecmp(prop_name, "X-SOCIAL-PROFILE")) {
-            kind = "x-social-profile";
+        else if (!strcasecmp(prop_name, "X-SOCIALPROFILE") ||
+                 !strcasecmp(prop_name, "X-SOCIAL-PROFILE")) {
+            kind = "x-socialprofile";
             goto online;
         }
         else if (!strcasecmp(prop_name, "X-FM-ONLINE-OTHER")) {
@@ -10054,16 +10055,36 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     }
 
     if (val) {
-        prop = vcardproperty_new(kind);
-        vcardproperty_set_value_from_string(prop, val, val_kind);
+        if (kind == VCARD_SOCIALPROFILE_PROPERTY) {
+            /* Use X-SOCIALPROFILE instead of SOCIALPROFILE (RFC 9554)
+               to be compatible with Apple */
+            prop = vcardproperty_new(VCARD_X_PROPERTY);
+            vcardproperty_set_x_name(prop, "X-SOCIALPROFILE");
+
+            if (service) {
+                vcardenumarray_element type = { .xvalue = service };
+                vcardproperty_add_type_parameter(prop, &type);
+            }
+            if (user) {
+                vcardparameter *param = vcardparameter_new_x(user);
+                vcardparameter_set_xname(param, "X-USER");
+                vcardproperty_add_parameter(prop, param);
+            }
+        }
+        else {
+            prop = vcardproperty_new(kind);
             
-        if (service) {
-            vcardproperty_add_parameter(prop,
-                                        vcardparameter_new_servicetype(service));
+            if (service) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_servicetype(service));
+            }
+            if (user) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_username(user));
+            }
         }
-        if (user) {
-            vcardproperty_add_parameter(prop, vcardparameter_new_username(user));
-        }
+
+        vcardproperty_set_value_from_string(prop, val, val_kind);
     }
 
     json_object_del(obj, "service");
