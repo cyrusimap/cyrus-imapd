@@ -760,7 +760,14 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
     }
 
     /* Create new component */
-    comp = icalcomponent_new(kind);
+    if (kind == ICAL_X_COMPONENT) {
+        char *x_name = ucase(xstrdup(type));
+        comp = icalcomponent_new_x(x_name);
+        free(x_name);
+    }
+    else {
+        comp = icalcomponent_new(kind);
+    }
     if (!comp) {
         syslog(LOG_ERR, "Creation of new %s component failed", type);
         return NULL;
