@@ -817,8 +817,6 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            my $class = ref $self;
-            my $name  = $self->{_name} =~ s/^test_//r;
             $instance_params{description} = "murder backend2 for test $class.$name";
             $instance_params{config} = $backend2_conf;
             $self->{backend2} = Cassandane::Instance->new(%instance_params,
