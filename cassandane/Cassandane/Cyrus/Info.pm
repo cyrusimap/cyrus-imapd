@@ -271,6 +271,100 @@ sub test_lint_partitions
     );
 }
 
+sub test_lint_partitions_dups
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        # each has its own disk path: good
+        'partition-good' => '/tmp/pgood',
+        'metapartition-good' => '/tmp/mgood',
+        'archivepartition-good' => '/tmp/agood',
+        'foosearchpartition-good' => '/tmp/sgood',
+
+        # reusing disk paths for same-named partition: bad
+        'partition-bad1' => '/tmp/bad',
+        'metapartition-bad1' => '/tmp/bad',
+
+        # reusing disk paths for other-named partition: bad
+        'partition-bad2' => '/tmp/bad',
+    );
+
+    # master should fail to start
+    eval {
+        $self->_start_instances();
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+
+    xlog $self, "test 'cyr_info conf-lint' with duplicated partitions configured";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+
+    $self->assert_deep_equals(
+        [ sort(
+            "partition-bad1: /tmp/bad\n",
+            "metapartition-bad1: /tmp/bad\n",
+            "partition-bad2: /tmp/bad\n",
+        ) ],
+        [ sort @output ]
+    );
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{disk path used by multiple partitions});
+}
+
+sub test_lint_partitions_subdirs
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        # each has its own disk path: good
+        'partition-good' => '/tmp/pgood',
+        'metapartition-good' => '/tmp/mgood',
+        'archivepartition-good' => '/tmp/agood',
+        'foosearchpartition-good' => '/tmp/sgood',
+
+        # disk paths that are children of other's disk paths: bad
+        'partition-bad1' => '/tmp/bad1',
+        'metapartition-bad1' => '/tmp/bad1/meta',
+        # XXX it can't currently report more than one bad child per parent
+
+        # disk paths that are descendents of other's disk paths: bad
+        'partition-bad2' => '/tmp/bad2',
+        'metapartition-bad2' => '/tmp/bad2/blah/meta',
+        # XXX it can't currently report more than one bad child per parent
+    );
+
+    # master should fail to start
+    eval {
+        $self->_start_instances();
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+
+    xlog $self, "test 'cyr_info conf-lint' with subdir partitions configured";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+
+    $self->assert_deep_equals(
+        [ sort(
+            "partition-bad1: /tmp/bad1\n",
+            "metapartition-bad1: /tmp/bad1/meta\n",
+            "partition-bad2: /tmp/bad2\n",
+            "metapartition-bad2: /tmp/bad2/blah/meta\n",
+        ) ],
+        [ sort @output ]
+    );
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{disk path is a prefix of others});
+}
+
 sub test_lint_services
     :want_service_http :needs_component_httpd :NoStartInstances
 {

@@ -87,7 +87,7 @@ void hash_enumerate_sorted(hash_table *table,void (*func)(const char *,void *,vo
                     void *rock, strarray_cmp_fn_t *cmp);
 
 /* gets all the keys from the hashtable */
-strarray_t *hash_keys(hash_table *table);
+strarray_t *hash_keys(const hash_table *table);
 
 /* counts the number of nodes in the hash table */
 
