@@ -2953,7 +2953,7 @@ int main(int argc, char **argv)
     }
 
     masterconf_init("master", alt_config);
-    if (config_partition_sanity(NULL)) {
+    if (config_check_partitions(NULL)) {
         fatal("invalid partition value detected", EX_CONFIG);
     }
 

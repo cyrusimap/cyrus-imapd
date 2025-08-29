@@ -815,7 +815,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
             fatal(buf, EX_CONFIG);
         }
 
-        if (config_partition_sanity(NULL)) {
+        if (config_check_partitions(NULL)) {
             fatal("invalid partition value detected", EX_CONFIG);
         }
     }
@@ -1484,7 +1484,7 @@ static void wrap_strarray_free(void *vp)
     strarray_free((strarray_t *) vp);
 }
 
-EXPORTED int config_partition_sanity(FILE *user_output)
+EXPORTED int config_check_partitions(FILE *user_output)
 {
     hash_table by_value = HASH_TABLE_INITIALIZER;
     int found_bad = 0;
@@ -1498,10 +1498,13 @@ EXPORTED int config_partition_sanity(FILE *user_output)
 
     config_foreachoverflowstring(&collect_partitions, &by_value);
 
+    /* check that multiple partitions are not using the same disk path */
     hash_enumerate(&by_value, &check_no_dups, &(struct check_no_dups_rock){
                                                     user_output,
                                                     &found_bad,
                                                 });
+
+    /* check that partitions are not subdirectories of other partitions */
     found_bad += check_no_subdirs(&by_value, user_output);
 
     free_hash_table(&by_value, &wrap_strarray_free);

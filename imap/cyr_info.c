@@ -417,7 +417,7 @@ static void do_lint(void)
     config_foreachoverflowstring(lint_callback, &rock);
 
     /* check partitions */
-    config_partition_sanity(stdout);
+    config_check_partitions(stdout);
 
     /* XXX - permissions? */
 
