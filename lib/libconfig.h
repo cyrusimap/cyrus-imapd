@@ -70,7 +70,7 @@ extern void config_foreachoverflowstring(
 extern const char *config_partitiondir(const char *partition);
 extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
-extern int config_partition_sanity(FILE *user_output);
+extern int config_check_partitions(FILE *user_output);
 
 /* for parsing duration/bytesize-format strings obtained elsewhere,
  * such as from an overflow string */
