@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cardgroup_set_add_remove_add
+    :needs_dependency_icalvcard :MailboxLegacyDirs
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "Make a contact card";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'John Doe' },
+                },
+            }
+        }, 'R1']
+    ]);
+
+    my $card_id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($card_id);
+
+    xlog $self, "Make empty contact groups";
+    my $name = 'The Doe Family';
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    kind => 'group',
+                    name => { full => $name },
+                },
+                "2" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    kind => 'group',
+                    name => { full => $name },
+                    members => JSON::null
+                }
+            }
+        }, 'R1']
+    ]);
+
+    my $group_id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($group_id);
+    $self->assert_deep_equals({}, $res->[0][1]{created}{1}{members});
+    $self->assert_not_null($res->[0][1]{created}{2});
+    $self->assert_deep_equals({}, $res->[0][1]{created}{2}{members});
+
+    xlog $self, "Add the member";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $group_id => {
+                    "members/$card_id" => JSON::true
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$group_id});
+
+    xlog $self, "Remove the member";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $group_id => {
+                    "members/$card_id" => undef,
+                }
+            }
+         }, "R2"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated}{$group_id});
+
+    xlog $self, "Re-add the member";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $group_id => {
+                    "members/$card_id" => JSON::true
+                }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$group_id});
+
+    xlog $self, "Remove all members";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $group_id => {
+                    members => JSON::null
+                }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$group_id});
+    $self->assert_deep_equals({}, $res->[0][1]{updated}{$group_id}{members});
+}
