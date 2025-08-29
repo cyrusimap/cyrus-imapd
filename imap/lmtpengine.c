@@ -1098,8 +1098,11 @@ void lmtpmode(struct lmtp_func *func,
                           if (r != SASL_NOUSER)
                               sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &userid);
 
-                          syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
-                                 cd.clienthost, mech, userid, sasl_errdetail(cd.conn));
+                          xsyslog_ev(LOG_NOTICE, "login.bad",
+                                     lf_s("r.clienthost", cd.clienthost),
+                                     lf_s("u.username", userid),
+                                     lf_s("login.mech", mech),
+                                     lf_s("error", sasl_errdetail(cd.conn)));
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
 
@@ -1135,9 +1138,11 @@ void lmtpmode(struct lmtp_func *func,
               /* authenticated successfully! */
 
               prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-              syslog(LOG_NOTICE, "login: %s %s %s%s %s",
-                     cd.clienthost, user, mech,
-                     cd.starttls_done ? "+TLS" : "", "User logged in");
+              xsyslog_ev(LOG_NOTICE, "login.good",
+                         lf_s("r.clienthost", cd.clienthost),
+                         lf_s("u.username", user),
+                         lf_s("login.mech", mech),
+                         lf_c("login.tls", cd.starttls_done ? 1 : 0));
 
               cd.authenticated = DIDAUTH;
               prot_printf(pout, "235 Authenticated!\r\n");
