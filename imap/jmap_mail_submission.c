@@ -370,7 +370,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     struct timespec internaldate = { holduntil, 0 };
     struct timespec now;
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
 
     if (!holduntil) {
         /* Already sent */

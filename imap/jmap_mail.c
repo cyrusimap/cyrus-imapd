@@ -9166,7 +9166,7 @@ static void _email_append(jmap_req_t *req,
         goto done;
     }
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
     if (!internaldate) internaldate = &now;
 
     /* Pick the mailbox to create the message in, prefer \Snoozed then \Drafts */
@@ -10718,7 +10718,7 @@ static void _parse_email(jmap_req_t *req,
         jmap_parser_invalid(parser, "sentAt");
     }
     /* receivedAt */
-    clock_gettime(CLOCK_REALTIME, &email->internaldate);
+    cyrus_gettime(CLOCK_REALTIME, &email->internaldate);
     prop = json_object_get(jemail, "receivedAt");
     if (json_is_utcdate(prop)) {
         time_from_iso8601(json_string_value(prop), &email->internaldate.tv_sec);
@@ -14109,7 +14109,7 @@ gotrecord:
                                                               buf_len(&content));
     }
     if (!internaldate.tv_sec)
-        clock_gettime(CLOCK_REALTIME, &internaldate);
+        cyrus_gettime(CLOCK_REALTIME, &internaldate);
 
     // mailbox will be readonly, drop the lock so it can be make writable
     if (mbox) mailbox_unlock_index(mbox, NULL);

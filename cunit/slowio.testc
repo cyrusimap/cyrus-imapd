@@ -118,11 +118,11 @@ static void busywait_for(double howlong)
     struct timespec start;
     int64_t max_tries = INT64_MAX;
 
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+    cyrus_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
 
     for (int64_t i = 0; i < max_tries; i++) {
         struct timespec now;
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
+        cyrus_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
 
         double elapsed = (double)(now.tv_sec - start.tv_sec);
         elapsed += (double)(now.tv_nsec - start.tv_nsec) / 1000000000.0;

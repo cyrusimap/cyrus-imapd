@@ -5002,7 +5002,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     }
 
     if (!record->internaldate.tv_sec) {
-        clock_gettime(CLOCK_REALTIME, &record->internaldate);
+        cyrus_gettime(CLOCK_REALTIME, &record->internaldate);
     }
     if (!record->gmtime.tv_sec)
         record->gmtime.tv_sec = record->internaldate.tv_sec;
@@ -7925,7 +7925,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
         }
         else {
             struct timespec now;
-            clock_gettime(CLOCK_REALTIME, &now);
+            cyrus_gettime(CLOCK_REALTIME, &now);
             record->internaldate = now;
         }
     }
@@ -8761,7 +8761,7 @@ EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
         if ((iter->until.tv_sec || iter->until.tv_nsec) &&
             ((!iter->nchecktime || (iter->recno % iter->nchecktime) == 0))) {
             struct timespec now;
-            if (clock_gettime(CLOCK_MONOTONIC, &now) >= 0 &&
+            if (cyrus_gettime(CLOCK_MONOTONIC, &now) >= 0 &&
                 (now.tv_sec > iter->until.tv_sec ||
                  (now.tv_sec == iter->until.tv_sec &&
                   now.tv_nsec > iter->until.tv_nsec))) {

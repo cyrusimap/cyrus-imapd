@@ -558,4 +558,18 @@ enum logfmt_type {
     (logfmt_arg){ key, LF_RAW, { .s = buf_release(&value) } }; \
 })
 
+/* Set up cyrus_gettime as a weak alias for a wrapper around clock_gettime.
+ * We then use cyrus_gettime everywhere instead of clock_gettime, and unit
+ * tests can mock cyrus_gettime if they need to fake the passing of time.
+ *
+ * We need this shim because, unlike gettimeofday, clock_gettime itself is
+ * not a weak alias, so it can't be overridden directly.
+ */
+static int wrap_clock_gettime(clockid_t id, struct timespec *ts)
+{
+    return clock_gettime(id, ts);
+}
+__attribute__((weak, alias("wrap_clock_gettime"), visibility("default")))
+extern int cyrus_gettime(clockid_t, struct timespec *);
+
 #endif /* INCLUDED_UTIL_H */
