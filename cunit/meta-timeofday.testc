@@ -63,7 +63,9 @@ static void test_time_fixed(void)
 {
     const time_t expect_fixed_time = 1354928400;
     time_t actual_s;
+    int64_t actual_ms;
     struct timeval actual_tv;
+    struct timespec actual_ts;
     unsigned i;
 
     time_push_fixed(expect_fixed_time);
@@ -72,22 +74,31 @@ static void test_time_fixed(void)
         sleep(1);
 
         actual_s = time(NULL);
+        actual_ms = now_ms();
         gettimeofday(&actual_tv, NULL);
+        cyrus_gettime(CLOCK_REALTIME, &actual_ts);
 
         CU_ASSERT_EQUAL(actual_s, expect_fixed_time);
+        CU_ASSERT_EQUAL(actual_ms, expect_fixed_time * 1000);
         CU_ASSERT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+        CU_ASSERT_EQUAL(actual_ts.tv_sec, expect_fixed_time);
 
         CU_ASSERT_EQUAL(actual_tv.tv_usec, 0);
+        CU_ASSERT_EQUAL(actual_ts.tv_nsec, 0);
     }
 
     time_pop();
 
     /* should be back to normal time after pop */
     actual_s = time(NULL);
+    actual_ms = now_ms();
     gettimeofday(&actual_tv, NULL);
+    cyrus_gettime(CLOCK_REALTIME, &actual_ts);
 
     CU_ASSERT_NOT_EQUAL(actual_s, expect_fixed_time);
+    CU_ASSERT_NOT_EQUAL(actual_ms, expect_fixed_time * 1000);
     CU_ASSERT_NOT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+    CU_ASSERT_NOT_EQUAL(actual_ts.tv_sec, expect_fixed_time);
 }
 
 /* vim: set ft=c : */

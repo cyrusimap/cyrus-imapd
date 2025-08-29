@@ -50,7 +50,8 @@
 
 extern int verbose;
 
-#define MICROSEC_PER_SEC    (1000000)
+#define NANOSEC_PER_SEC     (1000000000)
+#define NANOSEC_PER_USEC    (1000)
 
 struct trans
 {
@@ -77,40 +78,52 @@ static const struct trans identity = { 0, 0, 1, 1 };
 /*
  * Basic time manipulation.
  *
- * Internal time format is microseconds since the Unix epoch
+ * Internal time format is nanoseconds since the Unix epoch
  * in a signed 64b integer which is convenient to use and
  * allows some headroom for scaling.
  */
+static int64_t from_timespec(const struct timespec *ts)
+{
+    return (int64_t) ts->tv_nsec + (int64_t) ts->tv_sec * NANOSEC_PER_SEC;
+}
 
+static void to_timespec(int64_t t, struct timespec *ts)
+{
+    ts->tv_sec = t / NANOSEC_PER_SEC;
+    ts->tv_nsec = t % NANOSEC_PER_SEC;
+}
+
+__attribute__((unused))
 static int64_t from_timeval(const struct timeval *tv)
 {
-    return (int64_t)tv->tv_usec + (int64_t)tv->tv_sec * MICROSEC_PER_SEC;
+    return (int64_t)tv->tv_usec * NANOSEC_PER_USEC
+           + (int64_t)tv->tv_sec * NANOSEC_PER_SEC;
 }
 
 static void to_timeval(int64_t t, struct timeval *tv)
 {
-    tv->tv_sec = t / MICROSEC_PER_SEC;
-    tv->tv_usec = t % MICROSEC_PER_SEC;
+    tv->tv_sec = t / NANOSEC_PER_SEC;
+    tv->tv_usec = (t % NANOSEC_PER_SEC) / NANOSEC_PER_USEC;
 }
 
 static int64_t from_time_t(time_t tt)
 {
-    return (int64_t)tt * MICROSEC_PER_SEC;
+    return (int64_t)tt * NANOSEC_PER_SEC;
 }
 
 static time_t to_time_t(int64_t t)
 {
-    return t / MICROSEC_PER_SEC;
+    return t / NANOSEC_PER_SEC;
 }
 
 static int64_t now(void)
 {
-    struct timeval tv = { 0xffffffff, 0xffffffff };
-    int r = real_gettimeofday(&tv, NULL);
+    struct timespec ts = { 0xffffffff, 0xffffffff };
+    int r = clock_gettime(CLOCK_REALTIME, &ts);
     assert(r == 0);
-    assert(tv.tv_sec != 0xffffffff);
-    assert(tv.tv_usec != 0xffffffff);
-    return from_timeval(&tv);
+    assert(ts.tv_sec != 0xffffffff);
+    assert(ts.tv_nsec != 0xffffffff);
+    return from_timespec(&ts);
 }
 
 /*
@@ -188,8 +201,8 @@ void time_restore(void)
 #if defined(__GLIBC__)
 
 /* Must not include <config.h> in this file, because doing so will bring in
- * the libc gettimeofday(), which we don't want because we're trying to
- * replace it.  So we need to define EXPORTED ourselves rather than rely on
+ * the libc clock functions, which we don't want because we're trying to
+ * replace them.  So we need to define EXPORTED ourselves rather than rely on
  * config.h to figure it out. Just assume __attribute__ is supported.
  */
 #define EXPORTED __attribute__((__visibility__("default")))
@@ -237,6 +250,13 @@ EXPORTED int real_gettimeofday(struct timeval *tv, ...)
 /*
  * our mocked versions of the time functions
  */
+EXPORTED int cyrus_gettime(clockid_t clockid __attribute__((unused)),
+                           struct timespec *ts)
+{
+    to_timespec(transform(now()), ts);
+    return 0;
+}
+
 EXPORTED int gettimeofday(struct timeval *tv, ...)
 {
     to_timeval(transform(now()), tv);
@@ -251,5 +271,5 @@ EXPORTED time_t time(time_t *tp)
 }
 
 #else
-#error "Don't know how to intercept gettimeofday for this libc"
+#error "Don't know how to intercept clock functions for this libc"
 #endif
