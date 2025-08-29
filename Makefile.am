@@ -638,6 +638,7 @@ cunit_TESTS = \
     cunit/message.testc \
     cunit/message_iter_msgid.testc \
     cunit/message_guid.testc \
+    cunit/meta-timeofday.testc \
     cunit/parseaddr.testc \
     cunit/parse.testc \
     cunit/proc.testc \

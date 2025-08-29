@@ -1,0 +1,93 @@
+/* meta unit tests for our mocked time stuff
+ *
+ * based on the old "Tests - not usefully runnable, sorry." stuff
+ * that was previously embedded in unit-timeofday.c
+ */
+#include <config.h>
+#include <unistd.h>
+
+#include "cunit/unit.h"
+#include "cunit/unit-timeofday.h"
+
+#include "lib/util.h"
+
+#define MAX_SLEEPS (3)
+
+static int tear_down(void)
+{
+    time_restore();
+
+    return 0;
+}
+
+static void test_time_speedup(void)
+{
+    const time_t expect_seconds_per_second = 10;
+    time_t actual, prev;
+    unsigned i;
+
+    time_push_rate(expect_seconds_per_second, 1);
+
+    /* mocked time should elapse faster than real time */
+    prev = time(NULL);
+    for (i = 0; i < MAX_SLEEPS; i++) {
+        sleep(1);
+        actual = time(NULL);
+        CU_ASSERT_EQUAL(actual, prev + expect_seconds_per_second);
+        prev = actual;
+    }
+}
+
+static void test_time_slowdown(void)
+{
+    const double expect_seconds_per_second = 0.1;
+    struct timeval actual, prev;
+    unsigned i;
+
+    time_push_rate(1, 10);
+
+    /* mocked time should elapse slower than real time */
+    gettimeofday(&prev, NULL);
+    for (i = 0; i < MAX_SLEEPS; i++) {
+        sleep(1);
+        gettimeofday(&actual, NULL);
+        CU_ASSERT_DOUBLE_EQUAL(timeval_get_double(&actual),
+                               (timeval_get_double(&prev)
+                                + expect_seconds_per_second),
+                               0.001);
+        prev = actual;
+    }
+}
+
+static void test_time_fixed(void)
+{
+    const time_t expect_fixed_time = 1354928400;
+    time_t actual_s;
+    struct timeval actual_tv;
+    unsigned i;
+
+    time_push_fixed(expect_fixed_time);
+
+    for (i = 0; i < MAX_SLEEPS; i++) {
+        sleep(1);
+
+        actual_s = time(NULL);
+        gettimeofday(&actual_tv, NULL);
+
+        CU_ASSERT_EQUAL(actual_s, expect_fixed_time);
+        CU_ASSERT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+
+        CU_ASSERT_EQUAL(actual_tv.tv_usec, 0);
+    }
+
+    time_pop();
+
+    /* should be back to normal time after pop */
+    actual_s = time(NULL);
+    gettimeofday(&actual_tv, NULL);
+
+    CU_ASSERT_NOT_EQUAL(actual_s, expect_fixed_time);
+    CU_ASSERT_NOT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+}
+
+/* vim: set ft=c : */
