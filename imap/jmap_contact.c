@@ -6762,7 +6762,13 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     kind:
     case VCARD_KIND_PROPERTY:
         buf_setcstr(crock->buf, prop_value);
-        json_object_set_new(obj, "kind", json_string(buf_lcase(crock->buf)));
+
+        if (!strcmp("group", buf_lcase(crock->buf))) {
+            /* members should default to {} */
+            json_object_get_vanew(obj, "members", "{}");
+        }
+
+        json_object_set_new(obj, "kind", json_string(buf_cstring(crock->buf)));
         break;
 
     case VCARD_SOURCE_PROPERTY:
@@ -11364,7 +11370,7 @@ static int _card_set_create(jmap_req_t *req,
     ptrarray_t blobs = PTRARRAY_INITIALIZER;
     property_blob_t *blob;
     char *mboxname = NULL;
-    json_t *media = NULL, *keys = NULL;
+    json_t *media = NULL, *keys = NULL, *members = NULL;
 
     /* Validate uid */
     struct carddav_db *db = carddav_open_userid(req->accountid);
@@ -11503,6 +11509,13 @@ static int _card_set_create(jmap_req_t *req,
     media = json_deep_copy(json_object_get(jcard, "media"));
     keys = json_deep_copy(json_object_get(jcard, "cryptoKeys"));
 
+    /* Accept members => NULL by removing it and treating it as not present */
+    members = json_object_get(jcard, "members");
+    if (members && json_is_null(members)) {
+        json_object_del(jcard, "members");
+        members = NULL;
+    }
+
     if (!json_object_get(jcard, "created")) {
         /* set the CREATED time */
         char datestr[ISO8601_DATETIME_MAX+1] = "";
@@ -11538,6 +11551,13 @@ static int _card_set_create(jmap_req_t *req,
     r = 0;
 
     json_object_set_new(item, "id", json_string(uid));
+
+    /* If group members was not present, return {} */
+    if (!members &&
+        !strcasecmpsafe("group",
+                        json_string_value(json_object_get(jcard, "kind")))) {
+        json_object_set_new(item, "members", json_object());
+    }
 
     struct index_record record;
     mailbox_find_index_record(*mailbox, (*mailbox)->i.last_uid, &record);
@@ -11769,6 +11789,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                                            db, *mailbox, &record,
                                            IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
     vcardcomponent_free(vcard);
+    vcard = NULL;
 
     /* Remove old "updated" */
     json_object_del(old_obj, "updated");
@@ -11860,6 +11881,12 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
                 json_object_del(obj, "uri");
 
                 property_blob_free(&blob);
+            }
+
+            /* If group members was set to null, return {} */
+            if (cdata->kind == CARDDAV_KIND_GROUP &&
+                json_is_null(json_object_get(jcard, "members"))) {
+                json_object_set_new(*item, "members", json_object());
             }
 
             r = carddav_remove(*mailbox, olduid,
