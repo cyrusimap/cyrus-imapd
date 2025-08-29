@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_escaping
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $prodid = '-//Example Corp.//CardDAV Client//EN';
+    my $name = 'Mr. John Q. Public, Esq.';
+
+    xlog $self, "Create card with vCard X- property that needs escaping";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    prodId => $prodid,
+                    kind => 'individual',
+                    name => { full => $name },
+                    vCardProps => [
+                        [
+                            'x-activity-alert',
+                            {},
+                            'text',
+                            'type=text,snd=texttone:Droplet',
+                        ],
+                    ]    
+                }
+            }
+        }, 'R1']
+    ]);
+
+    my $id = $res->[0][1]{created}{1}{id};
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+
+    xlog $self, "Verify that X- property is escaped";
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+    my $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $self->assert_matches(qr/X-ACTIVITY-ALERT:type=text\\,snd=texttone:Droplet/,
+                          $card);
+
+    xlog $self, "Update the contact";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    prodId => 'foo'
+                }
+            }
+        }, 'R1']
+    ]);
+
+    xlog $self, "Verify that X- property is escaped ONCE";
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    $self->assert_matches(qr/X-ACTIVITY-ALERT:type=text\\,snd=texttone:Droplet/,
+                          $card);
+}

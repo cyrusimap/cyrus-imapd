@@ -7450,10 +7450,13 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
 
         buf_setcstr(crock->buf, vcardproperty_get_property_name(prop));
+        char *dequoted = vcardvalue_strdup_and_dequote_text(&prop_value, NULL);
+
         json_array_append_new(props,
                               json_pack("[s o o o]",
                                         buf_lcase(crock->buf), jparams, jtype,
-                                        jmap_utf8string(prop_value)));
+                                        jmap_utf8string(dequoted)));
+        free(dequoted);
         return;
     }
     }
