@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_dbtool** [ **-C** *config-file* ] [ **-c** ] [ **-N** ] [ **-n** ] [ **-R** ] [ **-S** ] [ **-T** ] [ **-t** ]
+    **cyr_dbtool** [ **-C** *config-file* ] [ **-b** ] [ **-c** ] [ **-N** ] [ **-n** ] [ **-R** ] [ **-S** ] [ **-T** ] [ **-t** ]
             *db-file* *db-backend* *action* [ *key* ] [ *value* ]
 
 Description
@@ -79,6 +79,12 @@ Options
 
     |cli-dash-c-text|
 
+.. option:: -b, --base64
+
+    If specified, all keys and values are provided in base64 format, making
+    automation easier, particularly with batch.  NOTE: the commands in batch
+    mode are still in plain text, just the keys and values are encoded.
+
 .. option:: -c, --convert
 
     Convert the database file if the specified format on the command line
@@ -96,7 +102,12 @@ Options
 .. option:: -R, --readonly
 
     Open the database readonly.  Even if --create is specified, will not
-    create a database if it doesn't exists (since that needs writing)
+    create a database if it doesn't exists (since that needs writing).
+    NOTE: you MUST use '-T' with '-R' as you'll stay in a read-only
+    transaction for the entire time.
+
+    With the twom backend, this will use an MVCC transaction which can
+    run slowly without blocking any other processes.
 
 .. option:: -S, --no-sync
 

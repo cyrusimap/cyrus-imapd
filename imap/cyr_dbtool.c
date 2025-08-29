@@ -75,6 +75,13 @@ static char stack[STACKSIZE+1];
 static int outfd;
 
 static struct db *db = NULL;
+static struct txn **tidp = NULL;
+static int base64 = 0;
+
+static struct buf inkeybuf = BUF_INITIALIZER;
+static struct buf invalbuf = BUF_INITIALIZER;
+static struct buf outkeybuf = BUF_INITIALIZER;
+static struct buf outvalbuf = BUF_INITIALIZER;
 
 static int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
   int c,res,inkey;
@@ -114,6 +121,16 @@ static int printer_cb(void *rock __attribute__((unused)),
     const char *key, size_t keylen,
     const char *data, size_t datalen)
 {
+    if (base64) {
+        buf_reset(&outkeybuf);
+        buf_reset(&outvalbuf);
+        charset_encode(&outkeybuf, key, keylen, ENCODING_BASE64);
+        charset_encode(&outvalbuf, data, datalen, ENCODING_BASE64);
+        key = buf_base(&outkeybuf);
+        keylen = buf_len(&outkeybuf);
+        data = buf_base(&outvalbuf);
+        datalen = buf_len(&outvalbuf);
+    }
     struct iovec io[4];
     io[0].iov_base = (char *) key;
     io[0].iov_len = keylen;
@@ -132,6 +149,17 @@ static int aprinter_cb(void *rock,
                        const char *key, size_t keylen,
                        const char *data, size_t datalen)
 {
+    if (base64) {
+        buf_reset(&outkeybuf);
+        buf_reset(&outvalbuf);
+        charset_encode(&outkeybuf, key, keylen, ENCODING_BASE64);
+        charset_encode(&outvalbuf, data, datalen, ENCODING_BASE64);
+        key = buf_base(&outkeybuf);
+        keylen = buf_len(&outkeybuf);
+        data = buf_base(&outvalbuf);
+        datalen = buf_len(&outvalbuf);
+    }
+
     struct protstream *out = (struct protstream *)rock;
 
     prot_printamap(out, key, keylen);
@@ -148,7 +176,6 @@ static void batch_commands(struct db *db)
     struct buf key = BUF_INITIALIZER;
     struct buf val = BUF_INITIALIZER;
     struct txn *tid = NULL;
-    struct txn **tidp = NULL;
     struct protstream *in = prot_new(0, 0); // stdin
     struct protstream *out = prot_new(1, 1); // stdout
     int line = 0;
@@ -185,21 +212,46 @@ static void batch_commands(struct db *db)
                 tidp = &tid;
             }
             else if (!strcmp(cmd.s, "SHOW")) {
-                r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
+                buf_reset(&inkeybuf);
+                if (base64) {
+                    charset_decode(&inkeybuf, buf_base(&key), buf_len(&key), ENCODING_BASE64);
+                }
+                else {
+                    buf_copy(&inkeybuf, &key);
+                }
+                r = cyrusdb_foreach(db, buf_base(&inkeybuf), buf_len(&inkeybuf), NULL, aprinter_cb, out, tidp);
                 if (r) goto done;
                 prot_flush(out);
             }
             else if (!strcmp(cmd.s, "SET")) {
-                r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
+                buf_reset(&inkeybuf);
+                buf_reset(&invalbuf);
+                if (base64) {
+                    charset_decode(&inkeybuf, buf_base(&key), buf_len(&key), ENCODING_BASE64);
+                    charset_decode(&invalbuf, buf_base(&val), buf_len(&val), ENCODING_BASE64);
+                }
+                else {
+                    buf_setmap(&inkeybuf, key.s, key.len);
+                    buf_setmap(&invalbuf, val.s, val.len);
+                }
+                r = cyrusdb_store(db, buf_base(&inkeybuf), buf_len(&inkeybuf),
+                                  buf_base(&invalbuf), buf_len(&invalbuf), tidp);
                 if (r) goto done;
             }
             else if (!strcmp(cmd.s, "GET")) {
                 const char *res;
                 size_t reslen;
-                r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
+                buf_reset(&inkeybuf);
+                if (base64) {
+                    charset_decode(&inkeybuf, buf_base(&key), buf_len(&key), ENCODING_BASE64);
+                }
+                else {
+                    buf_copy(&inkeybuf, &key);
+                }
+                r = cyrusdb_fetch(db, buf_base(&inkeybuf), buf_len(&inkeybuf), &res, &reslen, tidp);
                 switch (r) {
                 case 0:
-                    aprinter_cb(out, key.s, key.len, res, reslen);
+                    aprinter_cb(out, buf_base(&inkeybuf), buf_len(&inkeybuf), res, reslen);
                     prot_flush(out);
                     break;
                 case CYRUSDB_NOTFOUND:
@@ -210,7 +262,14 @@ static void batch_commands(struct db *db)
                 }
             }
             else if (!strcmp(cmd.s, "DELETE")) {
-                r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
+                buf_reset(&inkeybuf);
+                if (base64) {
+                    charset_decode(&inkeybuf, buf_base(&key), buf_len(&key), ENCODING_BASE64);
+                }
+                else {
+                    buf_copy(&inkeybuf, &key);
+                }
+                r = cyrusdb_delete(db, buf_base(&inkeybuf), buf_len(&inkeybuf), tidp, 1);
                 if (r) goto done;
             }
             else if (!strcmp(cmd.s, "COMMIT")) {
@@ -218,7 +277,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_commit(db, tid);
+                r = cyrusdb_commit(db, *tidp);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -228,7 +287,7 @@ static void batch_commands(struct db *db)
                     r = IMAP_NOTFOUND;
                     goto done;
                 }
-                r = cyrusdb_abort(db, tid);
+                r = cyrusdb_abort(db, *tidp);
                 if (r) goto done;
                 tid = NULL;
                 tidp = NULL;
@@ -242,7 +301,7 @@ static void batch_commands(struct db *db)
 
 done:
     if (r) {
-        if (tid) cyrusdb_abort(db, tid);
+        if (*tidp) cyrusdb_abort(db, *tidp);
         fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
                 line, (int)cmd.len, cmd.s, error_message(r));
     }
@@ -272,13 +331,13 @@ int main(int argc, char *argv[])
     int use_stdin = 0;
     int db_flags = 0;
     struct txn *tid = NULL;
-    struct txn **tidp = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:NRSTcnt";
+    static const char short_options[] = "C:NRSTbcnt";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
+        { "base64", no_argument, NULL, 'b' },
         { "convert", no_argument, NULL, 'c' },
         { "no-checksum", no_argument, NULL, 'N' },
         { "create", no_argument, NULL, 'n' },
@@ -295,6 +354,9 @@ int main(int argc, char *argv[])
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+        case 'b':
+            base64 = 1;
             break;
         case 'c':
             db_flags |= CYRUSDB_CONVERT;
@@ -394,17 +456,35 @@ int main(int argc, char *argv[])
           loop = 1;
         }
         while ( loop ) {
+          buf_reset(&inkeybuf);
+          buf_reset(&invalbuf);
+          if (base64) {
+            charset_decode(&inkeybuf, key, keylen, ENCODING_BASE64);
+            charset_decode(&invalbuf, value, vallen, ENCODING_BASE64);
+          }
+          else {
+            buf_setmap(&inkeybuf, key, keylen);
+            buf_setmap(&invalbuf, value, vallen);
+          }
           if (is_get) {
-            r = cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
+            r = cyrusdb_fetch(db, buf_base(&inkeybuf), buf_len(&inkeybuf), &res, &reslen, tidp);
             if (r) break;
-            printf("%.*s\n", (int)reslen, res);
+            if (base64) {
+              buf_reset(&outvalbuf);
+              charset_encode(&outvalbuf, res, reslen, ENCODING_BASE64);
+              printf("%.*s\n", (int)buf_len(&outvalbuf), buf_base(&outvalbuf));
+            } else {
+              printf("%.*s\n", (int)reslen, res);
+            }
           } else if (is_set) {
-            r = cyrusdb_store(db, key, keylen, value, vallen, tidp);
+            r = cyrusdb_store(db, buf_base(&inkeybuf), buf_len(&inkeybuf),
+                              buf_base(&invalbuf), buf_len(&invalbuf), tidp);
             if (r) break;
           } else if (is_delete) {
-            r = cyrusdb_delete(db, key, keylen, tidp, 1);
+            r = cyrusdb_delete(db, buf_base(&inkeybuf), buf_len(&inkeybuf), tidp, 1);
             if (r) break;
           }
+
           loop = 0;
           if ( use_stdin ) {
             loop = read_key_value( &key, &keylen, &value, &vallen );
@@ -434,23 +514,33 @@ int main(int argc, char *argv[])
     } else if (!strcmp(action, "repack")) {
         r = cyrusdb_repack(db);
     } else if (!strcmp(action, "damage")) {
-        cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
-        assert(!tid);
+        if (!tidp) tidp = &tid;
+        cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, tidp);
+        assert(!*tidp);
     } else {
         printf("Unknown action %s\n", action);
     }
-    if (tid && !r) {
-        r = cyrusdb_commit(db, tid);
-        tid = NULL;
-    }
-    if (r) {
-        if (tid) cyrusdb_abort(db, tid);
-        printf("ERROR: %s\n", cyrusdb_strerror(r));
+
+    if (tidp) {
+        if (r) {
+            printf("ABORTING: %s\n", cyrusdb_strerror(r));
+            r = cyrusdb_abort(db, *tidp);
+            if (r) printf("ERROR ON ABORT: %s\n", cyrusdb_strerror(r));
+        }
+        else {
+            r = cyrusdb_commit(db, *tidp);
+            if (r) printf("ERROR ON COMMIT: %s\n", cyrusdb_strerror(r));
+        }
     }
 
     cyrusdb_close(db);
 
     cyrus_done();
+
+    buf_free(&inkeybuf);
+    buf_free(&invalbuf);
+    buf_free(&outkeybuf);
+    buf_free(&outvalbuf);
 
     return r ? 1 : 0;
 }
