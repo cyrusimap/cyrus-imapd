@@ -11503,6 +11503,12 @@ static int _card_set_create(jmap_req_t *req,
     media = json_deep_copy(json_object_get(jcard, "media"));
     keys = json_deep_copy(json_object_get(jcard, "cryptoKeys"));
 
+    if (!json_object_get(jcard, "prodid")) {
+        /* set the PRODID */
+        vcardcomponent_add_property(card, vcardproperty_new_prodid(_prodid));
+        json_object_set_new(item, "prodid", json_string(_prodid));
+    }
+
     if (!json_object_get(jcard, "created")) {
         /* set the CREATED time */
         char datestr[ISO8601_DATETIME_MAX+1] = "";
