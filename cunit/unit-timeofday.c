@@ -69,8 +69,6 @@ struct trans
     long factor_den;
 };
 
-static int real_gettimeofday(struct timeval *, ...);
-
 #define MAX_TRANS_STACK 5
 static int n_trans_stack = 0;
 static struct trans trans_stack[MAX_TRANS_STACK];
@@ -196,8 +194,10 @@ void time_restore(void)
  */
 #define EXPORTED __attribute__((__visibility__("default")))
 
-/* call the real libc function */
-static int real_gettimeofday(struct timeval *tv, ...)
+/*
+ * "real" functions for internal use and tests
+ */
+EXPORTED int real_gettimeofday(struct timeval *tv, ...)
 {
     /* On 32- or 64-bit systems where time_t size is the word size,
      * we just want __gettimeofday().  __gettimeofday64() does not exist.
@@ -234,7 +234,9 @@ static int real_gettimeofday(struct timeval *tv, ...)
 #endif
 }
 
-/* provide a function to hide the libc weak alias */
+/*
+ * our mocked versions of the time functions
+ */
 EXPORTED int gettimeofday(struct timeval *tv, ...)
 {
     to_timeval(transform(now()), tv);

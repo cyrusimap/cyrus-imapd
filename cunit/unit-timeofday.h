@@ -51,4 +51,7 @@ extern void time_push_fixed(time_t fixed);
 extern void time_pop(void);
 extern void time_restore(void);
 
+
+extern int real_gettimeofday(struct timeval *, ...);
+
 #endif /* CUNIT_UNIT_TIMEOFDAY_H */
