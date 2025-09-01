@@ -39,12 +39,13 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <assert.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "cunit/unit-timeofday.h"
 
@@ -247,27 +248,150 @@ EXPORTED int real_gettimeofday(struct timeval *tv, ...)
 #endif
 }
 
+EXPORTED time_t real_time(time_t *tp)
+{
+    /* XXX can't find the name of the real function to wrap, so mimic it... */
+    struct timeval tv;
+
+    real_gettimeofday(&tv, NULL);
+    if (tp) *tp = tv.tv_sec;
+    return tv.tv_sec;
+}
+
+EXPORTED unsigned int real_sleep(unsigned int seconds)
+{
+    /* XXX can't find the name of the real function to wrap, so mimic it... */
+    struct timespec duration = { seconds, 0 }, remainder;
+    int r;
+
+    errno = 0;
+    r = real_nanosleep(&duration, &remainder);
+
+    if (r && errno == EINTR)
+        return remainder.tv_sec;
+
+    return 0;
+}
+
+EXPORTED int real_nanosleep(const struct timespec *duration,
+                            struct timespec *remainder)
+{
+    /* see comments in real_gettimeofday */
+#if __GLIBC__ > 2 || ( __GLIBC__ == 2 && __GLIBC_MINOR__ >= 39 )
+# if defined(__USE_TIME64_REDIRECTS)
+    extern int __nanosleep64(const struct timespec *, struct timespec *);
+    return __nanosleep64(duration, remainder);
+# else
+    extern int __nanosleep(const struct timespec *, struct timespec *);
+    return __nanosleep(duration, remainder);
+# endif
+#else
+# if defined(__USE_TIME_BITS64)
+    extern int __nanosleep64(const struct timespec *, struct timespec *);
+    return __nanosleep64(duration, remainder);
+# else
+    extern int __nanosleep(const struct timespec *, struct timespec *);
+    return __nanosleep(duration, remainder);
+# endif
+#endif
+}
+
 /*
  * our mocked versions of the time functions
  */
-EXPORTED int cyrus_gettime(clockid_t clockid __attribute__((unused)),
-                           struct timespec *ts)
+#define MOCKED __attribute__((__visibility__("default")))
+
+/* n.b. now_ms() from lib/util.c uses cyrus_gettime(), so it will return
+ * mocked time values under testing, even though there's no MOCKED
+ * implementation here.
+ */
+
+MOCKED int cyrus_gettime(clockid_t clockid __attribute__((unused)),
+                         struct timespec *ts)
 {
+    /* Note that clockid is ignored and CLOCK_REALTIME is always used. The
+     * transformation stack requires the underlying clock to be consistent
+     * across all mocked functions, which could break if the caller-supplied
+     * clock were used here.
+     * For testing purposes, this should be fine...
+     */
     to_timespec(transform(now()), ts);
     return 0;
 }
 
-EXPORTED int gettimeofday(struct timeval *tv, ...)
+MOCKED int gettimeofday(struct timeval *tv, ...)
 {
     to_timeval(transform(now()), tv);
     return 0;
 }
 
-EXPORTED time_t time(time_t *tp)
+MOCKED time_t time(time_t *tp)
 {
     time_t tt = to_time_t(transform(now()));
     if (tp) *tp = tt;
     return tt;
+}
+
+static int64_t do_transformed_sleep(int64_t ns)
+{
+    const struct trans *tr = trans_top();
+    struct timespec sleep_time, remainder = {0};
+    int r;
+
+    if (tr->factor_num <= 0) {
+        /* fixed or reverse time, don't try to transform! */
+        sleep_time.tv_sec = ns / NANOSEC_PER_SEC;
+        sleep_time.tv_nsec = ns % NANOSEC_PER_SEC;
+    }
+    else {
+        /* n.b. relative, and inverse of the usual transform() */
+        to_timespec(ns * tr->factor_den / tr->factor_num, &sleep_time);
+    }
+
+    errno = 0;
+    r = real_nanosleep(&sleep_time, &remainder);
+
+    if (!r || errno != EINTR) {
+        /* remainder isn't set */
+        return 0;
+    }
+    else if (tr->factor_num <= 0) {
+        /* can't transform */
+        return from_timespec(&remainder);
+    }
+    else {
+        /* remainder is in relative real time, transform back to mocked time */
+        return from_timespec(&remainder) * tr->factor_num / tr->factor_den;
+    }
+}
+
+MOCKED unsigned int sleep(unsigned int seconds)
+{
+    int64_t remainder;
+
+    remainder = do_transformed_sleep((int64_t) seconds * NANOSEC_PER_SEC);
+
+    if (remainder > 0)
+        return remainder / NANOSEC_PER_SEC;
+    else
+        return 0;
+}
+
+MOCKED int nanosleep(const struct timespec *duration,
+                     struct timespec *remainder)
+{
+    int64_t ns, rem_ns;
+
+    ns = duration->tv_nsec + duration->tv_sec * NANOSEC_PER_SEC;
+    rem_ns = do_transformed_sleep(ns);
+
+    if (rem_ns) {
+        to_timespec(rem_ns, remainder);
+        return -1;
+    }
+    else {
+        return 0;
+    }
 }
 
 #else

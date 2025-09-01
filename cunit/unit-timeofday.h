@@ -53,5 +53,9 @@ extern void time_restore(void);
 
 
 extern int real_gettimeofday(struct timeval *, ...);
+extern time_t real_time(time_t *tp);
+extern unsigned int real_sleep(unsigned int seconds);
+extern int real_nanosleep(const struct timespec *duration,
+                          struct timespec *remainder);
 
 #endif /* CUNIT_UNIT_TIMEOFDAY_H */

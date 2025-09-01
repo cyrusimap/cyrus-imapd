@@ -12,6 +12,7 @@
 #include "lib/util.h"
 
 #define MAX_SLEEPS (3)
+_Static_assert(MAX_SLEEPS >= 2, "need to sleep at least twice");
 
 static int tear_down(void)
 {
@@ -23,40 +24,59 @@ static int tear_down(void)
 static void test_time_speedup(void)
 {
     const time_t expect_seconds_per_second = 10;
-    time_t actual, prev;
+    struct timeval actual, prev;
     unsigned i;
 
     time_push_rate(expect_seconds_per_second, 1);
 
     /* mocked time should elapse faster than real time */
-    prev = time(NULL);
-    for (i = 0; i < MAX_SLEEPS; i++) {
-        sleep(1);
-        actual = time(NULL);
-        CU_ASSERT_EQUAL(actual, prev + expect_seconds_per_second);
+    gettimeofday(&prev, NULL);
+    for (i = 0; i < MAX_SLEEPS - 1; i++) {
+        real_sleep(1);
+        gettimeofday(&actual, NULL);
+        CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                               expect_seconds_per_second,
+                               0.1);
         prev = actual;
     }
+
+    /* mocked sleep should return faster than real time */
+    real_gettimeofday(&prev, NULL);
+    sleep(expect_seconds_per_second);
+    real_gettimeofday(&actual, NULL);
+    CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                           1.0,
+                           0.1);
 }
 
 static void test_time_slowdown(void)
 {
     const double expect_seconds_per_second = 0.1;
     struct timeval actual, prev;
+    struct timespec duration;
     unsigned i;
 
     time_push_rate(1, 10);
 
     /* mocked time should elapse slower than real time */
     gettimeofday(&prev, NULL);
-    for (i = 0; i < MAX_SLEEPS; i++) {
-        sleep(1);
+    for (i = 0; i < MAX_SLEEPS - 1; i++) {
+        real_sleep(1);
         gettimeofday(&actual, NULL);
-        CU_ASSERT_DOUBLE_EQUAL(timeval_get_double(&actual),
-                               (timeval_get_double(&prev)
-                                + expect_seconds_per_second),
+        CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                               expect_seconds_per_second,
                                0.001);
         prev = actual;
     }
+
+    /* mocked sleep should return slower than real time */
+    real_gettimeofday(&prev, NULL);
+    duration = (struct timespec){ 0, 1000000000 * expect_seconds_per_second };
+    nanosleep(&duration, NULL);
+    real_gettimeofday(&actual, NULL);
+    CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                           1.0,
+                           0.001);
 }
 
 static void test_time_fixed(void)
@@ -71,7 +91,7 @@ static void test_time_fixed(void)
     time_push_fixed(expect_fixed_time);
 
     for (i = 0; i < MAX_SLEEPS; i++) {
-        sleep(1);
+        real_sleep(1);
 
         actual_s = time(NULL);
         actual_ms = now_ms();
