@@ -6900,7 +6900,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     const char *server = NULL;
     const char *uniqueid = NULL;
     uint32_t minor_version = 0;
-    uint32_t compactids = 0;
+    uint32_t compactids = 1;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
@@ -7301,7 +7301,8 @@ localcreate:
 
     /* Close newly created mailbox before writing annotations */
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    if (is_inbox && compactids && (!minor_version || minor_version >= 20)) {
+    if (is_inbox && compactids && (!minor_version || minor_version >= 20)
+        && config_getswitch(IMAPOPT_CONVERSATIONS)) {
         r = conversations_enable_compactids(cstate, 1);
         if (r) {
             syslog(LOG_NOTICE,
