@@ -1,0 +1,46 @@
+Description:
+
+New compact object ids for Email, Mailbox, and Thread types
+
+Documentation:
+
+There isn't any.  (Should there be?)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+This version of Cyrus introduces "compact" object ids for email, mailbox, and
+thread objects.  These forms can be packed into 64-bits for more efficient
+client-side caching.  Their ASCII forms are also much shorter, for reduced
+bandwidth use.
+
+All users created in this version of Cyrus IMAP will have compact ids enabled
+by default.
+
+It is not strictly required to switch all users to compact object ids to
+upgrade to this version of Cyrus, but it will very likely be required before
+the next version.
+
+To switch a user to compact object ids, you must:
+
+* reconstruct each user using `reconstruct -u -T -V max`
+* upgrade the user's conversations database with `ctl_conversationsdb -U -R`
+
+In a replicated environment, these should be performed on the primary first and
+the replicas afterward.  Then, only on the primary:
+
+* switch on compact object ids for the user with `ctl_conversationsdb -I on`
+
+This conversion will change the value of the MAILBOXID, EMAILID, and THREADID
+data (q.v. RFC 8474) for the user's mailboxes and email.  While in theory this
+could be disruptive to aggressively caching IMAP clients, our finding is that
+in practice, no client relies on these.
+
+GitHub issue:
+
+None
