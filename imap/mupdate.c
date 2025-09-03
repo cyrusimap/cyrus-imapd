@@ -125,11 +125,7 @@ struct conn {
     sasl_conn_t *saslconn;
     char *userid;
 
-#ifdef HAVE_SSL
     SSL *tlsconn;
-#else
-    void *tlsconn;
-#endif
     void *tls_comp;     /* TLS compression method, if any */
     int compress_done;  /* have we done a successful compress? */
 
@@ -359,10 +355,8 @@ static void conn_free(struct conn *C)
     if (C->pin) prot_free(C->pin);
     if (C->pout) prot_free(C->pout);
 
-#ifdef HAVE_SSL
     if (C->tlsconn) tls_reset_servertls(&C->tlsconn);
     tls_shutdown_serverengine();
-#endif
 
     cyrus_close_sock(C->fd);
     if (C->logfd != -1) close(C->logfd);
@@ -1954,7 +1948,6 @@ static void sendupdates(struct conn *C, int flushnow)
     }
 }
 
-#ifdef HAVE_SSL
 static void cmd_starttls(struct conn *C, const char *tag)
 {
     int result;
@@ -2006,14 +1999,6 @@ static void cmd_starttls(struct conn *C, const char *tag)
     /* Reissue capability banner */
     dobanner(C);
 }
-#else
-void cmd_starttls(struct conn *C __attribute__((unused)),
-                  const char *tag __attribute__((unused)))
-{
-    fatal("cmd_starttls() executed, but starttls isn't implemented!",
-          EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg)

@@ -505,11 +505,10 @@ static int do_compress(struct backend *s __attribute__((unused)),
 }
 #endif /* HAVE_ZLIB */
 
-#ifdef HAVE_SSL
-EXPORTED int backend_starttls(  struct backend *s,
-                                struct tls_cmd_t *tls_cmd,
-                                const char *c_cert_file,
-                                const char *c_key_file)
+EXPORTED int backend_starttls(struct backend *s,
+                              struct tls_cmd_t *tls_cmd,
+                              const char *c_cert_file,
+                              const char *c_key_file)
 {
     char *auth_id = NULL;
     int *layerp = NULL;
@@ -555,15 +554,6 @@ EXPORTED int backend_starttls(  struct backend *s,
 
     return 0;
 }
-#else
-EXPORTED int backend_starttls(  struct backend *s __attribute__((unused)),
-                                struct tls_cmd_t *tls_cmd __attribute__((unused)),
-                                const char *c_cert_file __attribute__((unused)),
-                                const char *c_key_file __attribute__((unused)))
-{
-    return -1;
-}
-#endif /* HAVE_SSL */
 
 EXPORTED char *intersect_mechlists( char *config, char *server )
 {
@@ -696,7 +686,6 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (!mech_conf)
         mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
 
-#ifdef HAVE_SSL
     strlcpy(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
     if (p) *p = '\0';
@@ -718,10 +707,6 @@ static int backend_authenticate(struct backend *s, const char *userid,
     if (!c_key_file) {
         c_key_file = config_getstring(IMAPOPT_TLS_CLIENT_KEY);
     }
-#else
-    const char *c_cert_file = NULL;
-    const char *c_key_file = NULL;
-#endif
 
     mechlist = backend_get_cap_params(s, CAPA_AUTH);
 
@@ -1256,7 +1241,6 @@ EXPORTED void backend_disconnect(struct backend *s)
         prot_fill(s->in);
     }
 
-#ifdef HAVE_SSL
     /* Free tlsconn and tlssess */
     if (s->tlsconn) {
         tls_reset_servertls(&s->tlsconn);
@@ -1266,7 +1250,6 @@ EXPORTED void backend_disconnect(struct backend *s)
         SSL_SESSION_free(s->tlssess);
         s->tlssess = NULL;
     }
-#endif /* HAVE_SSL */
 
     /* close/free socket & prot layer */
     if (s->sock != -1) cyrus_close_sock(s->sock);

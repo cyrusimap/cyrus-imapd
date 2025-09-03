@@ -1258,8 +1258,6 @@ EXPORTED void fatal(const char* s, int code)
 }
 
 
-#ifdef HAVE_SSL
-
 static unsigned h2_is_available(void *rock __attribute__((unused)))
 {
     return http2_enabled;
@@ -1334,19 +1332,6 @@ static void starttls(struct http_connection *conn, int timeout)
 
     avail_auth_schemes |= AUTH_BASIC;
 }
-#else
-static int tls_init(int client_auth __attribute__((unused)),
-                    struct buf *serverinfo __attribute__((unused)))
-{
-    return HTTP_NOT_IMPLEMENTED;
-}
-
-static void starttls(struct http_connection *conn __attribute__((unused)),
-                     int timeout __attribute__((unused)))
-{
-    fatal("starttls() called, but no OpenSSL", EX_SOFTWARE);
-}
-#endif /* HAVE_SSL */
 
 
 /* Reset the given sasl_conn_t to a sane state */

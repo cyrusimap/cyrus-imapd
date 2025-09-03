@@ -63,8 +63,6 @@ struct tls_alpn_t {
     void *rock;
 };
 
-#ifdef HAVE_SSL
-
 #include <openssl/ssl.h>
 
 #include "global.h" /* for saslprops_t */
@@ -106,7 +104,5 @@ int tls_prune_sessions(void);
 
 /* fill string buffer with info about tls connection */
 int tls_get_info(SSL *conn, char *buf, size_t len);
-
-#endif /* HAVE_SSL */
 
 #endif /* INCLUDED_TLS_H */

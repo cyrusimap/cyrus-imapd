@@ -83,14 +83,11 @@
 #include "xstrlcpy.h"
 #include "xunlink.h"
 
-#ifdef HAVE_SSL
 #include <openssl/ssl.h>
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
 static SSL_SESSION *tls_sess = NULL;
-
-#endif /* HAVE_SSL */
 
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
@@ -298,8 +295,6 @@ int mysasl_config(void *context __attribute__((unused)),
 
     return SASL_FAIL;
 }
-
-#ifdef HAVE_SSL
 
 static int verify_depth;
 static int verify_error = X509_V_OK;
@@ -787,8 +782,6 @@ static void do_starttls(int ssl, const char *keyfile, unsigned *ssf)
     prot_settls (pin,  tls_conn);
     prot_settls (pout, tls_conn);
 }
-#endif /* HAVE_SSL */
-
 
 static sasl_security_properties_t *make_secprops(int min,int max)
 {
@@ -1218,14 +1211,12 @@ static void sigint_handler(int sig __attribute__((unused)))
 static int haveinput(struct protstream *s)
 {
     /* Is something currently pending in our protstream's buffer? */
-#ifdef HAVE_SSL
     if (s->cnt == 0 && s->tls_conn != NULL) {
         /* Maybe there's data pending in the SSL buffer? */
         int n = SSL_pending(s->tls_conn);
         if (verbose) printf("SSL_pending=%d\n", n);
         return n;
     }
-#endif
     return s->cnt;
 }
 
@@ -2689,14 +2680,12 @@ static void usage(char *prog, const char *prot)
         printf("             (\"basic\", \"negotiate\", \"scram-sha-1\", \"scram-sha-256\")\n");
     printf("  -f file  : pipe file into connection after authentication\n");
     printf("  -r realm : realm\n");
-#ifdef HAVE_SSL
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "pop3") ||
         !strcasecmp(prot, "nntp") || !strcasecmp(prot, "smtp") || !strcasecmp(prot, "http"))
         printf("  -s       : Enable %s over SSL (%ss)\n", prot, prot);
     if (strcasecmp(prot, "mupdate"))
         printf("  -t file  : Enable TLS. file has the TLS public and private keys\n"
                "             (specify \"\" to not use TLS for authentication)\n");
-#endif /* HAVE_SSL */
 #ifdef HAVE_ZLIB
     if (!strcasecmp(prot, "imap") || !strcasecmp(prot, "nntp") ||
         !strcasecmp(prot, "mupdate") || !strcasecmp(prot, "csync")) {
@@ -2831,11 +2820,6 @@ int main(int argc, char **argv)
     int result;
     int errflg = 0;
 
-#ifdef HAVE_SSL
-    #define WITH_SSL_ONLY /**/
-#else
-    #define WITH_SSL_ONLY __attribute__((unused))
-#endif
 #ifdef HAVE_ZLIB
     #define WITH_ZLIB_ONLY /**/
 #else
@@ -2843,10 +2827,10 @@ int main(int argc, char **argv)
 #endif
 
     char *prog;
-    const char *tls_keyfile WITH_SSL_ONLY = "";
+    const char *tls_keyfile = "";
     const char *port = "", *prot = "";
     int run_stress_test=0;
-    int dotls WITH_SSL_ONLY = 0, dossl = 0, docompress WITH_ZLIB_ONLY = 0;
+    int dotls = 0, dossl = 0, docompress WITH_ZLIB_ONLY = 0;
     unsigned long capabilities = 0;
     char str[1024];
     const char *pidfile = NULL;
@@ -2856,8 +2840,6 @@ int main(int argc, char **argv)
     char *val;
     char localip[60], remoteip[60];
     const char *haproxy_clientip = NULL;
-
-#undef WITH_SSL_ONLY
 
     if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
         imtest_fatal("could not construct config hash table");
@@ -2922,11 +2904,7 @@ int main(int argc, char **argv)
 #endif
             break;
         case 's':
-#ifdef HAVE_SSL
             dossl=1;
-#else
-            imtest_fatal("imtest was not compiled with SSL/TLS support\n");
-#endif
             break;
         case 'c':
             dochallenge=1;
@@ -2970,12 +2948,8 @@ int main(int argc, char **argv)
             realm=optarg;
             break;
         case 't':
-#ifdef HAVE_SSL
             dotls=1;
             tls_keyfile=optarg;
-#else
-            imtest_fatal("imtest was not compiled with SSL/TLS support\n");
-#endif
             break;
         case 'n':
             reauth = atoi(optarg);
@@ -3110,13 +3084,11 @@ int main(int argc, char **argv)
             prot_free(pin);
             prot_free(pout);
 
-#ifdef HAVE_SSL
             /* Properly shutdown TLS so that session can be reused */
             if (tls_conn) {
                 SSL_shutdown(tls_conn);
                 SSL_set_shutdown(tls_conn, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
             }
-#endif
 
             close(sock);
 
@@ -3174,11 +3146,9 @@ int main(int argc, char **argv)
             prot_flush(pout);
         }
 
-#ifdef HAVE_SSL
         if (dossl==1) {
             do_starttls(1, "", &ext_ssf);
         }
-#endif /* HAVE_SSL */
 
         if (protocol->banner.is_capa) {
             /* try to get the capabilities from the banner */
@@ -3207,7 +3177,6 @@ int main(int argc, char **argv)
                                       &capabilities, AUTO_NO);
         }
 
-#ifdef HAVE_SSL
         if ((dossl==0) && (dotls==1) && (capabilities & CAPA_STARTTLS)) {
             char *resp;
 
@@ -3240,7 +3209,6 @@ int main(int argc, char **argv)
         } else if ((dotls==1) && !(capabilities & CAPA_STARTTLS)) {
             imtest_fatal("STARTTLS not supported by the server!\n");
         }
-#endif /* HAVE_SSL */
 
         if (noinitresp) {
             /* don't use an initial response, even if its supported */

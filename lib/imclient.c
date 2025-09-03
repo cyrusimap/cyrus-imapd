@@ -41,6 +41,7 @@
  */
 
 #include <config.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,16 +61,12 @@
 
 #include <sasl/sasl.h>
 
-#ifdef HAVE_SSL
 #include <openssl/lhash.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/ssl.h>
-#else
-#include <errno.h>
-#endif /* HAVE_SSL */
 
 #include "assert.h"
 #include "xmalloc.h"
@@ -147,11 +144,9 @@ struct imclient {
     sasl_conn_t *saslconn;
     int saslcompleted;
 
-#ifdef HAVE_SSL
     SSL_CTX *tls_ctx;
     SSL *tls_conn;
     int tls_on; /* whether we are under a layer or not */
-#endif /* HAVE_SSL */
 };
 
 /*
@@ -255,11 +250,9 @@ EXPORTED int imclient_connect(struct imclient **imclient,
                  "BYE", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
                  (char *)0);
 
-#ifdef HAVE_SSL
     (*imclient)->tls_ctx=NULL;
     (*imclient)->tls_conn=NULL;
     (*imclient)->tls_on=0;
-#endif /* HAVE_SSL */
 
     if (!didinit) {
         /* attempt to start sasl */
@@ -960,17 +953,12 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
               n=0;
           }
 
-#ifdef HAVE_SSL
           if (imclient->tls_on==1)
           {
             n = SSL_write(imclient->tls_conn, cryptptr, cryptlen);
           } else {
             n = write(imclient->fd, cryptptr, cryptlen);
           }
-#else  /* HAVE_SSL */
-          n = write(imclient->fd, cryptptr,
-                    cryptlen);
-#endif /* HAVE_SSL */
 
           if (n > 0) {
             imclient->outstart += writelen;
@@ -985,17 +973,12 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
 
           /* No protection mechanism, just write the plaintext */
 
-#ifdef HAVE_SSL
           if (imclient->tls_on==1)
           {
             n = SSL_write(imclient->tls_conn, imclient->outstart, writelen);
           } else {
             n = write(imclient->fd, imclient->outstart, writelen);
           }
-#else  /* HAVE_SSL */
-          n = write(imclient->fd, imclient->outstart, writelen);
-#endif /* HAVE_SSL */
-
 
             if (n > 0) {
                 imclient->outstart += n;
@@ -1006,7 +989,6 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
 
         if (FD_ISSET(imclient->fd, &rfds))
         {
-#ifdef HAVE_SSL
           /* just do a SSL read instead if we're under a tls layer */
           if (imclient->tls_on==1)
           {
@@ -1015,10 +997,6 @@ EXPORTED void imclient_processoneevent(struct imclient *imclient)
           } else {
             n = read(imclient->fd, buf, sizeof(buf));
           }
-
-#else  /* HAVE_SSL */
-          n = read(imclient->fd, buf, sizeof(buf));
-#endif /* HAVE_SSL */
 
           if (n >= 0) {
             if (n == 0) {
@@ -1067,7 +1045,6 @@ static void authresult(struct imclient *imclient __attribute__((unused)),
 }
 
 /* Command completion for starttls */
-#ifdef HAVE_SSL
 static void tlsresult(struct imclient *imclient __attribute__((unused)),
                       void *rock,
                       struct imclient_reply *reply)
@@ -1085,8 +1062,6 @@ static void tlsresult(struct imclient *imclient __attribute__((unused)),
     }
     else result->replytype = replytype_bad;
 }
-#endif /* HAVE_SSL */
-
 
 static sasl_security_properties_t *make_secprops(int min,int max)
 {
@@ -1483,8 +1458,6 @@ static void imclient_writebase64(struct imclient *imclient,
 
 
 /*************** All these functions help do the starttls; these are copied from imtest.c ********/
-#ifdef HAVE_SSL
-
 static int verify_depth;
 static int verify_error = X509_V_OK;
 
@@ -1878,18 +1851,12 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
 
     return 0;
 }
-#endif /* HAVE_SSL */
 
 EXPORTED int imclient_havetls(void)
 {
-#ifdef HAVE_SSL
     return 1;
-#else
-    return 0;
-#endif
 }
 
-#ifdef HAVE_SSL
 EXPORTED int imclient_starttls(struct imclient *imclient,
                              char *cert_file,
                              char *key_file,
@@ -1948,14 +1915,3 @@ EXPORTED int imclient_starttls(struct imclient *imclient,
 
   return 0;
 }
-#else
-EXPORTED int imclient_starttls(struct imclient *imclient __attribute__((unused)),
-                             char *cert_file __attribute__((unused)),
-                             char *key_file __attribute__((unused)),
-                             char *CAfile __attribute__((unused)),
-                             char *CApath __attribute__((unused)))
-{
-  printf("[ TLS support not present (imclient_starttls) ]\n");
-  return 1;
-}
-#endif /* HAVE_SSL */
