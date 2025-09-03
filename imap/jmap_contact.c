@@ -11519,6 +11519,12 @@ static int _card_set_create(jmap_req_t *req,
         members = NULL;
     }
 
+    if (!json_object_get(jcard, "prodId")) {
+        /* set the PRODID */
+        vcardcomponent_add_property(card, vcardproperty_new_prodid(_prodid));
+        json_object_set_new(item, "prodId", json_string(_prodid));
+    }
+
     if (!json_object_get(jcard, "created")) {
         /* set the CREATED time */
         char datestr[ISO8601_DATETIME_MAX+1] = "";
