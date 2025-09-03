@@ -158,6 +158,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     copy->acl = xstrdupnull(src->acl);
     copy->uniqueid = xstrdupnull(src->uniqueid);
     copy->jmapid = xstrdupnull(src->jmapid);
+    copy->inboxid = xstrdupnull(src->inboxid);
 
     copy->legacy_specialuse = xstrdupnull(src->legacy_specialuse);
 
@@ -198,6 +199,7 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     free(mbentry->acl);
     free(mbentry->uniqueid);
     free(mbentry->jmapid);
+    free(mbentry->inboxid);
 
     free(mbentry->legacy_specialuse);
 
@@ -287,6 +289,9 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (key != KEY_TYPE_JID)
         dlist_setatom(dl, "J", mbentry->jmapid);
+
+    if (mbentry->inboxid)
+        dlist_setatom(dl, "R", mbentry->inboxid);
 
     if (mbentry->partition)
         dlist_setatom(dl, "P", mbentry->partition);
@@ -657,6 +662,9 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             else if (!strcmp(key, "J")) {
                 rock->mbentry->jmapid = xstrdupnull(d->data);
             }
+            else if (!strcmp(key, "R")) {
+                rock->mbentry->inboxid = xstrdupnull(d->data);
+            }
             else if (!strcmp(key, "M")) {
                 rock->mbentry->mtime = atoi(d->data);
             }
@@ -692,6 +700,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  H: name_h_istory
  *  I: unique_i_d
  *  J: j_mapid
+ *  R: _r_ootmailboxid (inboxid)
  *  M: _m_time
  *  N: _n_ame
  *  P: _p_artition
@@ -2082,6 +2091,7 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *usermbentry = NULL, *newmbentry = NULL;
     int silent = 0;
+    int isinbox;
 
     init_internal();
 
@@ -2090,6 +2100,8 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     if (r) goto done;
 
     assert_namespacelocked(mboxname);
+
+    isinbox = mboxname_isusermailbox(mboxname, 1);
 
     if ((flags & MBOXLIST_CREATE_SYNC)) {
         jmapid = mbentry->jmapid;
@@ -2151,9 +2163,11 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
     newmbentry->mbtype = mbtype;
     newmbentry->partition = xstrdupnull(newpartition);
     newmbentry->uniqueid = xstrdup(uniqueid ? uniqueid : makeuuid());
+    if (isinbox) newmbentry->inboxid = xstrdup(newmbentry->uniqueid);
+    else if (usermbentry) newmbentry->inboxid = xstrdup(usermbentry->uniqueid);
 
     if (!(flags & MBOXLIST_CREATE_DBONLY) && !isremote) {
-        if (mboxname_isusermailbox(mboxname, 1)) {
+        if (isinbox) {
             /* Create initial mbentry for new users --
                the uniqueid in the record is required to open
                user metadata files (conversations, counters) */
@@ -2985,6 +2999,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->jmapid = xstrdupnull(mailbox_jmapid(oldmailbox));
+        newmbentry->inboxid = xstrdupnull(mailbox_inboxid(oldmailbox));
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = silent ? mailbox_foldermodseq(oldmailbox)
                                           : mboxname_nextmodseq(newname, mailbox_foldermodseq(oldmailbox),
@@ -3050,6 +3065,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(newmailbox));
         newmbentry->jmapid = xstrdupnull(mailbox_jmapid(newmailbox));
+        newmbentry->inboxid = xstrdupnull(mailbox_inboxid(newmailbox));
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
@@ -3063,6 +3079,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->jmapid = xstrdupnull(mailbox_jmapid(oldmailbox));
+        newmbentry->inboxid = xstrdupnull(mailbox_inboxid(oldmailbox));
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
 
