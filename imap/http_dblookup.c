@@ -104,7 +104,7 @@ static int get_email(struct transaction_t *txn __attribute__((unused)),
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getemail(db, key);
+    array = carddav_getemail_groups(db, key);
     if (!array) goto done;
 
     json = json_array();
