@@ -2548,16 +2548,20 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if (json_is_true(json_object_get(filter, "bccAnyContact"))) {
             _email_search_contactgroup(this, "", "bcclist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "fromContactCardId"))) ||
+            (s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
             _email_search_contactgroup(this, s, "fromlist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "toContactCardId"))) ||
+            (s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
             _email_search_contactgroup(this, s, "tolist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "ccContactCardId"))) ||
+            (s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
             _email_search_contactgroup(this, s, "cclist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "bccContactCardId"))) ||
+            (s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
             _email_search_contactgroup(this, s, "bcclist", contactgroups);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
@@ -2921,7 +2925,8 @@ static void _email_contactfilter_initreq(jmap_req_t *req, struct email_contactfi
 {
     const char *addressbookid = json_string_value(json_object_get(req->args, "addressbookId"));
     jmap_email_contactfilter_init(req->accountid, req->authstate,
-            &jmap_namespace, addressbookid, cfilter);
+                                  &jmap_namespace, addressbookid,
+                                  USER_COMPACT_EMAILIDS(req->cstate), cfilter);
 }
 
 static void _email_parse_filter_cb(jmap_req_t *req,
