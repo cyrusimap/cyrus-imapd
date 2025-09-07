@@ -1,4 +1,5 @@
 #include "cunit/unit.h"
+#include "cunit/unit-timeofday.h"
 #include "lib/slowio.h"
 #include "lib/util.h"
 
@@ -14,6 +15,13 @@
  */
 #define RUNNING_ON_VALGRIND (0)
 #endif
+
+static int tear_down(void)
+{
+    time_restore();
+
+    return 0;
+}
 
 static void test_initialize(void)
 {
@@ -40,6 +48,8 @@ static void test_limit1(void)
     int64_t start, end, diff;
     int i;
 
+    time_push_rate(10, 1);
+
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
 
@@ -63,6 +73,8 @@ static void test_limit2(void)
     struct slowio slowio = {0}, saved_slowio;
     int64_t start, end, diff;
     int i;
+
+    time_push_rate(10, 1);
 
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
@@ -138,6 +150,8 @@ static void test_slower_than_rate_limit(void)
     struct slowio slowio = {0}, saved_slowio;
     int64_t start, end, diff;
     int i;
+
+    time_push_rate(10, 1);
 
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
