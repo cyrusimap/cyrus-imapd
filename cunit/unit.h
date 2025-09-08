@@ -217,6 +217,43 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
         #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
+#undef CU_ASSERT_DOUBLE_EQUAL
+#define CU_ASSERT_DOUBLE_EQUAL(actual,expected,granularity) do {        \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) <= fabs(_g)),          \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_DOUBLE_EQUAL(%s=%.17g,%s=%.17g,%s=%.17g)",           \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_EQUAL_FATAL
+#define CU_ASSERT_DOUBLE_EQUAL_FATAL(actual,expected,granularity) do {  \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) <= fabs(_g)),          \
+        __LINE__, __FILE__, "", CU_TRUE,                                \
+        "CU_ASSERT_DOUBLE_EQUAL_FATAL(%s=%.17g,%s=%.17g,%s=%.17g)",     \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_NOT_EQUAL
+#define CU_ASSERT_DOUBLE_NOT_EQUAL(actual,expected,granularity) do {    \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) > fabs(_g)),           \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_DOUBLE_NOT_EQUAL(%s=%.17g,%s=%.17g,%s=%.17g)",       \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL
+#define CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL(actual,expected,granularity)   \
+do {                                                                    \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) > fabs(_g)),           \
+        __LINE__, __FILE__, "", CU_TRUE,                                \
+        "CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL(%s=%.17g,%s=%.17g,%s=%.17g)", \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
 #define CU_SYSLOG_MATCH(re) \
     CU_syslogMatchBegin((re), __FILE__, __LINE__, 0)
 
