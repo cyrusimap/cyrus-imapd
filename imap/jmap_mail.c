@@ -3178,6 +3178,7 @@ static int emailsearch_run_uidsearch(jmap_req_t *req, struct emailsearch *search
     search->init.authstate = req->authstate;
     search->init.want_expunged = search->want_expunged;
     search->init.examine_mode = 1;
+    search->init.stay_locked = 1;
 
     // try to find a mailbox listed in the search expression if any
     char *mboxname = search_expr_firstmailbox(search->args->root);
@@ -6107,6 +6108,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     init.userid = req->userid;
     init.authstate = req->authstate;
     init.examine_mode = 1;
+    init.stay_locked = 1;
 
     char *qmboxname = search_expr_firstmailbox(searchargs->root);
     if (!qmboxname) qmboxname = mboxname_user_mbox(req->accountid, NULL);

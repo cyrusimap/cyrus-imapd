@@ -888,8 +888,9 @@ int deliver(message_data_t *msgdata, char *authuser,
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
         const mbname_t *mbname = msg_getrcpt(msgdata, n);
-        char *mboxname = mbname_userid(mbname) ?
-                mboxname_user_mbox(mbname_userid(mbname), NULL) :
+        const char *userid = mbname_userid(mbname);
+        char *mboxname = userid ?
+                mboxname_user_mbox(userid, NULL) :
                 xstrdup(mbname_intname(mbname));
 
         mbentry_t *mbentry = NULL;
@@ -904,10 +905,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             status[n] = nosieve;
         }
         else {
-            strarray_t flags = STRARRAY_INITIALIZER;
-            struct imap4flags imap4flags = { &flags, authstate };
 
-            const char *userid = mbname_userid(mbname);
             struct proc_limits limits;
             limits.servicename = config_ident;
             limits.clienthost = lmtpd_clienthost;
@@ -926,8 +924,10 @@ int deliver(message_data_t *msgdata, char *authuser,
             struct conversations_state *state = NULL;
             if (userid) {
                 r = conversations_open_user(userid, 0/*shared*/, &state);
-                if (r) goto setstatus;
+                if (r) goto unregister;
             }
+            strarray_t flags = STRARRAY_INITIALIZER;
+            struct imap4flags imap4flags = { &flags, authstate };
 
             /* local mailbox */
             mydata.cur_rcpt = n;
@@ -944,6 +944,7 @@ int deliver(message_data_t *msgdata, char *authuser,
             if (r < 0) strarray_append(&flags, "$SieveFailed");
 #ifdef WITH_DAV
             if (ctx.carddavdb) carddav_close(ctx.carddavdb);
+            ctx.carddavdb = NULL;
 #endif
             sieve_srs_free();
             sieve_interp_free(&interp);
@@ -957,13 +958,14 @@ int deliver(message_data_t *msgdata, char *authuser,
             }
             strarray_fini(&flags);
             conversations_commit(&state);
+
+           unregister:
             proc_register(&proc_handle, 0, config_ident, lmtpd_clienthost, NULL, NULL, NULL);
         }
 
-        telemetry_rusage(mbname_userid(mbname));
+        telemetry_rusage(userid);
 
-        setstatus:
-
+       setstatus:
         msg_setrcpt_status(msgdata, n, r, NULL);
 
         mboxlist_entry_free(&mbentry);
