@@ -6183,6 +6183,7 @@ struct multisearch_rock {
     int *n;
     struct index_init init;
     struct progress_rock prock;
+    struct conversations_state *cstate;
 };
 
 static int multisearch_cb(const mbentry_t *mbentry, void *rock)
@@ -6215,6 +6216,14 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     }
     }
 
+    char *userid = mboxname_to_userid(mbentry->name);
+
+    if (!mrock->cstate || strcmpsafe(userid, mrock->cstate->userid)) {
+        conversations_abort(&mrock->cstate);
+        if (userid) conversations_open_user(userid, /*shared*/1, &mrock->cstate);
+    }
+    free(userid);
+
     if ((r = index_open(mbentry->name, &mrock->init, &state))) {
         return r;
     }
@@ -6227,7 +6236,7 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     index_close(&state);
 
     /* Reset inprogress timer after ESEARCH response */
-    mrock->prock.last_resp =  time(0);
+    mrock->prock.last_resp = time(0);
 
     /* Keep track of each mailbox we search */
     hash_insert(mbentry->name, (void *) 1, &mrock->mailboxes);
@@ -6243,7 +6252,6 @@ static void cmd_search(const char *tag, const char *cmd)
     char mytime[100];
     int usinguid = 0, n = 0;
     int state = GETSEARCH_RETURN;
-    user_nslock_t *user_nslock = NULL;
 
     if (backend_current) {
         /* remote mailbox */
@@ -6328,13 +6336,9 @@ static void cmd_search(const char *tag, const char *cmd)
 
     client_behavior_mask |= searchargs->client_behavior_mask;
 
-    // hold a lock across potentially multiple mailboxes
-    // NOTE: we have to exclusively lock, because index_check will
-    // write RECENT data, *sigh*
-    if (imapd_index) user_nslock = user_nslock_lockmb_w(index_mboxname(imapd_index));
-
-    // this refreshes the index, we may be looking at it in our search
-    imapd_check(NULL, 0);
+    // we need non-shared locks on the current user when we access the current folder
+    // if we're not examining, because we may need to write the RECENT data
+    int shared = imapd_index ? imapd_index->examining : 1;
 
     if (searchargs->multi.filter) {
         /* Multisearch */
@@ -6380,7 +6384,8 @@ static void cmd_search(const char *tag, const char *cmd)
               .stay_locked  = 1
             },
             { &progress_cb, tag, time(0),
-              searchargs->multi.filter != SEARCH_SOURCE_SELECTED }
+              searchargs->multi.filter != SEARCH_SOURCE_SELECTED },
+            /*cstate*/NULL
         };
 
         construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
@@ -6393,20 +6398,6 @@ static void cmd_search(const char *tag, const char *cmd)
             searchargs->returnopts = SEARCH_RETURN_ALL;
         }
 
-        struct conversations_state *cstate = NULL;
-        if (searchargs->fuzzy_depth &&
-            config_getswitch(IMAPOPT_CONVERSATIONS) &&
-            config_getenum(IMAPOPT_SEARCH_ENGINE) == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
-            /* Open the cstate here to avoid doing it for every mailbox
-               and avoid lock conflicts */
-            int r = conversations_open_user(imapd_userid, 1/*shared*/, &cstate);
-            if (r) {
-                syslog(LOG_WARNING, "error opening conversations for %s: %s",
-                       imapd_userid,
-                       error_message(r));
-            }
-        }
-
         /* Cycle through each of the possible source filters */
         for (mrock.filter = SEARCH_SOURCE_SELECTED;
              mrock.filter <= SEARCH_SOURCE_MAILBOXES; mrock.filter <<= 1) {
@@ -6414,16 +6405,20 @@ static void cmd_search(const char *tag, const char *cmd)
             if (!(searchargs->multi.filter & mrock.filter)) continue;
 
             switch (mrock.filter) {
-            case SEARCH_SOURCE_SELECTED:
-                if (!index_check(imapd_index, 0)) {  /* update the index */
-                    n += index_search(imapd_index, searchargs, /* usinguid */1,
-                                      &mrock.prock);
+            case SEARCH_SOURCE_SELECTED: {
+                char *userid = mboxname_to_userid(imapd_index->mboxname);
+                conversations_open_user(userid, shared, &mrock.cstate);
+                free(userid);
+                imapd_check(NULL, 0);
+                n += index_search(imapd_index, searchargs, /* usinguid */1,
+                                  &mrock.prock);
+                index_release(imapd_index);
 
-                    /* Reset inprogress timer after ESEARCH response */
-                    mrock.prock.last_resp = time(0);
+                /* Reset inprogress timer after ESEARCH response */
+                mrock.prock.last_resp = time(0);
 
-                    hash_insert(index_mboxname(imapd_index),
-                                (void *) 1, &mrock.mailboxes);
+                hash_insert(index_mboxname(imapd_index),
+                            (void *) 1, &mrock.mailboxes);
                 }
                 break;
 
@@ -6476,7 +6471,7 @@ static void cmd_search(const char *tag, const char *cmd)
             }
         }
 
-        conversations_abort(&cstate);
+        conversations_abort(&mrock.cstate);
         search_expr_free(mrock.expr);
         free_hash_table(&mrock.mailboxes, NULL);
     }
@@ -6491,14 +6486,19 @@ static void cmd_search(const char *tag, const char *cmd)
             searchargs->returnopts = SEARCH_RETURN_ALL;
         }
 
+        struct conversations_state *cstate = NULL;
+        char *userid = mboxname_to_userid(imapd_index->mboxname);
+        conversations_open_user(userid, shared, &cstate);
+        free(userid);
+        // this refreshes the index, we may be looking at it in our search
+        imapd_check(NULL, 0);
         n = index_search(imapd_index, searchargs, usinguid, &prock);
+        index_release(imapd_index);
+        conversations_abort(&cstate);
     }
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SEARCH MODSEQ");
-
-    // release before responding
-    user_nslock_release(&user_nslock);
 
     int r = cmd_cancelled(/*insearch*/1);
     if (!r) {
@@ -6513,7 +6513,6 @@ static void cmd_search(const char *tag, const char *cmd)
 
   done:
     freesearchargs(searchargs);
-    user_nslock_release(&user_nslock);
 }
 
 /*
