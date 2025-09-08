@@ -75,6 +75,7 @@
 # endif
 #endif
 
+#include "acl.h"
 #include "annotate.h"
 #include "assert.h"
 #include "bsearch.h"
@@ -6211,6 +6212,10 @@ EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *us
 
     /* no username => use internal as well */
     if (!userid)
+        return 1;
+
+    /* any system user => use internal as well */
+    if (is_system_user(userid))
         return 1;
 
     /* otherwise the owner's seen state is internal */
