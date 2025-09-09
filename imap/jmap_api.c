@@ -1838,6 +1838,16 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
         }
 
+        /* applyEmptyUpdates */
+        else  if (!strcmp(key, "applyEmptyUpdates")) {
+            if (json_is_boolean(arg)) {
+                set->apply_empty_updates = json_is_true(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "applyEmptyUpdates");
+            }
+        }
+
         /* create */
         else if (!strcmp(key, "create")) {
             if (json_is_object(arg)) {

@@ -108,8 +108,8 @@ typedef struct {
 static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
                                struct mailbox **mailbox, json_t *item,
                                jmap_contact_errors_t *errors);
-static int _contact_set_update(jmap_req_t *req, unsigned kind,
-                               const char *uid, json_t *jcard,
+static int _contact_set_update(jmap_req_t *req, bool apply_empty_updates,
+                               unsigned kind, const char *uid, json_t *jcard,
                                struct carddav_db *db, struct mailbox **mailbox,
                                json_t **item, jmap_contact_errors_t *errors);
 static int required_set_rights(json_t *props);
@@ -1092,6 +1092,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
                                              json_t *item,
                                              jmap_contact_errors_t *errors),
                           int (*_set_update)(jmap_req_t *req,
+                                             bool apply_empty_updtes,
                                              unsigned kind,
                                              const char *uid,
                                              json_t *jcard,
@@ -1200,7 +1201,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
-        r = _set_update(req, kind, uid, arg, db, &mailbox, &item, &errors);
+        r = _set_update(req, set.apply_empty_updates,
+                        kind, uid, arg, db, &mailbox, &item, &errors);
         if (r) {
             json_t *err;
             switch (r) {
@@ -4352,8 +4354,9 @@ done:
     return r;
 }
 
-static int _contact_set_update(jmap_req_t *req, unsigned kind,
-                               const char *uid, json_t *jcard,
+static int _contact_set_update(jmap_req_t *req,
+                               bool apply_empty_updates __attribute__((unused)),
+                               unsigned kind, const char *uid, json_t *jcard,
                                struct carddav_db *db, struct mailbox **mailbox,
                                json_t **item, jmap_contact_errors_t *errors)
 {
@@ -11628,8 +11631,8 @@ done:
     return r;
 }
 
-static int _card_set_update(jmap_req_t *req, unsigned kind,
-                            const char *uid, json_t *jcard,
+static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
+                            unsigned kind, const char *uid, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors)
 {
@@ -11648,6 +11651,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     property_blob_t *blob;
     json_t *media = NULL, *keys = NULL;
     int r = 0;
+    size_t num_props = json_object_size(jcard);
 
     /* is it a valid contact? */
     r = carddav_lookup_uid(db, uid, &cdata);
@@ -11750,7 +11754,6 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
     annots = mailbox_extract_annots(*mailbox, &record);
 
     if (!newmailbox) {
-        size_t num_props = json_object_size(jcard);
         const char *key = "cyrusimap.org:importance";
         json_t *jval;
 
@@ -11761,7 +11764,7 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
             num_props--;
         }
 
-        if (!num_props) {
+        if (!num_props && !apply_empty_updates) {
             /* just bump the modseq
                if in the same mailbox and no data change */
             annotate_state_t *state = NULL;
@@ -11793,51 +11796,56 @@ static int _card_set_update(jmap_req_t *req, unsigned kind,
         goto done;
     }
 
-    /* Convert the vCard to a JSContact Card. */
-    json_t *old_obj = jmap_card_from_vcard(req->userid, vcard,
-                                           db, *mailbox, &record,
-                                           IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
-    vcardcomponent_free(vcard);
-    vcard = NULL;
+    if (num_props) {
+        /* Convert the vCard to a JSContact Card. */
+        json_t *old_obj = jmap_card_from_vcard(req->userid, vcard,
+                                               db, *mailbox, &record,
+                                               IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
+        vcardcomponent_free(vcard);
+        vcard = NULL;
 
-    /* Remove old "updated" */
-    json_object_del(old_obj, "updated");
+        /* Remove old "updated" */
+        json_object_del(old_obj, "updated");
 
-    /* Apply the patch as provided */
-    json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
+        /* Apply the patch as provided */
+        json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
 
-    json_decref(old_obj);
-    if (!new_obj) {
-        r = HTTP_BAD_REQUEST;
-        goto done;
+        json_decref(old_obj);
+        if (!new_obj) {
+            r = HTTP_BAD_REQUEST;
+            goto done;
+        }
+
+        /* Make copies of patched media/cryptoKeys properties
+           in case we need to report updated blobIds */
+        media = json_deep_copy(json_object_get(new_obj, "media"));
+        keys = json_deep_copy(json_object_get(new_obj, "cryptoKeys"));
+
+        vcard = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
+                                     vcardproperty_new_version(VCARD_VERSION_40),
+                                     vcardproperty_new_uid(uid),
+                                     NULL);
+
+        *item = json_object();
+
+        if (!json_object_get(new_obj, "updated")) {
+            /* set the REVision time */
+            char datestr[ISO8601_DATETIME_MAX+1] = "";
+            time_t now = time(NULL);
+
+            time_to_iso8601(now, datestr, sizeof(datestr), 1);
+
+            json_object_set_new(new_obj, "updated", json_string(datestr));
+            json_object_set_new(*item, "updated", json_string(datestr));
+        }
+
+        r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
+                             new_obj, &annots, &blobs, errors);
+        json_decref(new_obj);
     }
-
-    /* Make copies of patched media/cryptoKeys properties
-       in case we need to report updated blobIds */
-    media = json_deep_copy(json_object_get(new_obj, "media"));
-    keys = json_deep_copy(json_object_get(new_obj, "cryptoKeys"));
-
-    vcard = vcardcomponent_vanew(VCARD_VCARD_COMPONENT,
-                                 vcardproperty_new_version(VCARD_VERSION_40),
-                                 vcardproperty_new_uid(uid),
-                                 NULL);
-
-    *item = json_object();
-
-    if (!json_object_get(new_obj, "updated")) {
-        /* set the REVision time */
-        char datestr[ISO8601_DATETIME_MAX+1] = "";
-        time_t now = time(NULL);
-
-        time_to_iso8601(now, datestr, sizeof(datestr), 1);
-
-        json_object_set_new(new_obj, "updated", json_string(datestr));
-        json_object_set_new(*item, "updated", json_string(datestr));
+    else {
+        *item = json_null();
     }
-
-    r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
-                         new_obj, &annots, &blobs, errors);
-    json_decref(new_obj);
 
     if (!json_array_size(invalid) && !errors->blobNotFound) {
         struct mailbox *this_mailbox = newmailbox ? newmailbox : *mailbox;
