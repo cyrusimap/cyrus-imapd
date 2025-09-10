@@ -63,8 +63,9 @@ static void test_limit1(void)
         CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
 
         diff = end - start;
-        CU_ASSERT(diff >= 0.8 * (i * 1000));
-        CU_ASSERT(diff <= 1.2 * (i * 1000));
+        CU_ASSERT_INT_INRANGE(diff,
+                              0.8 * (i * 1000),
+                              1.2 * (i * 1000));
     }
 }
 
@@ -105,23 +106,16 @@ static void test_limit2(void)
             CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
 
             /* looser tolerances -- timings are swingier at this granularity */
-            if (verbose && (inner_diff <= 0.25 * ms_per_step
-                            || inner_diff >= 4.0 * ms_per_step))
-            {
-                fprintf(stderr, "%s: inner_diff(%" PRIi64 ") too large/small"
-                                " vs ms_per_step(%u..%u)\n",
-                                __func__, inner_diff,
-                                (unsigned)(0.25 * ms_per_step),
-                                (unsigned)(4.0 * ms_per_step));
-            }
-            CU_ASSERT(inner_diff > 0.25 * ms_per_step);
-            CU_ASSERT(inner_diff < 4.0 * ms_per_step);
+            CU_ASSERT_INT_INRANGE(inner_diff,
+                                  0.25 * ms_per_step,
+                                  4.0 * ms_per_step);
         }
         end = now_ms();
 
         diff = end - start;
-        CU_ASSERT(diff >= 0.8 * (i * 1000));
-        CU_ASSERT(diff <= 1.2 * (i * 1000));
+        CU_ASSERT_INT_INRANGE(diff,
+                              0.8 * (i * 1000),
+                              1.2 * (i * 1000));
     }
 }
 
