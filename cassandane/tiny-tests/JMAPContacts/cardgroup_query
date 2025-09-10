@@ -218,6 +218,7 @@ sub test_cardgroup_query
 
     $self->assert_num_equals(3, $res->[0][1]{total});
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals("group", $res->[0][1]{filter}{kind});
 
     xlog $self, "filter by group name (fullName)";
     $res = $jmap->CallMethods([ ['ContactCard/query', {

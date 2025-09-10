@@ -3173,6 +3173,10 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     }
 
     /* Build response */
+    if (kind == CARDDAV_KIND_GROUP) {
+        /* Replace kind => group filter */
+        json_object_set_new(query.filter, "kind", json_string("group"));
+    }
     query.query_state = modseqtoa(jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0));
 
     json_t *res = jmap_query_reply(&query);
@@ -8117,7 +8121,9 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                     *kind = CARDDAV_KIND_GROUP;
 
                     /* Group vs non-group is filtered by a flag in carddav.db.
-                       Remove property so we don't text match against it. */
+                       Remove this property so we don't waste cycles
+                       doing a text match against it.
+                       We will replace it later for the response. */
                     json_object_del(filter, "kind");
                 }
                 else {
