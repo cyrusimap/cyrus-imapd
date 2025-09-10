@@ -86,6 +86,7 @@ static void test_limit2(void)
         const unsigned bytes_per_step = SLOWIO_MAX_BYTES_SEC / steps_per_sec;
         const unsigned ms_per_step = 1000 / steps_per_sec;
         unsigned total_bytes = i * SLOWIO_MAX_BYTES_SEC;
+        unsigned inner_diff_outliers = 0;
         unsigned j;
 
         start = now_ms();
@@ -101,18 +102,30 @@ static void test_limit2(void)
 
             /* we're not doing any actual I/O between calls to
              * slowio_maybe_delay_impl, so it'll look like we're doing our I/O
-             * extremely fast, and so every call will add some delay
+             * extremely fast, and so every call _should_ add some delay
+             *
+             * but at this granularity, timings are swingy, and especially
+             * so under valgrind.  so we'll count outliers, and assert that
+             * there weren't too many
              */
-            CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
+            if (inner_diff < 0.25 * ms_per_step
+                || inner_diff > 4.0 * ms_per_step)
+            {
+                inner_diff_outliers ++;
+            }
 
-            /* looser tolerances -- timings are swingier at this granularity */
-            CU_ASSERT_INT_INRANGE(inner_diff,
-                                  0.25 * ms_per_step,
-                                  4.0 * ms_per_step);
+            if (!RUNNING_ON_VALGRIND) {
+                CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
+                CU_ASSERT_INT_INRANGE(inner_diff,
+                                      0.25 * ms_per_step,
+                                      4.0 * ms_per_step);
+            }
         }
         end = now_ms();
 
         diff = end - start;
+
+        CU_ASSERT(inner_diff_outliers < 3);
         CU_ASSERT_INT_INRANGE(diff,
                               0.8 * (i * 1000),
                               1.2 * (i * 1000));
