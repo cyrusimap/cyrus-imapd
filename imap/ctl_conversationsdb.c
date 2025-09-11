@@ -320,19 +320,20 @@ static int build_cid_cb(const mbentry_t *mbentry,
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
-    int count = 1;
+    int loop = 1;
     struct conversations_state *cstate = conversations_get_mbox(mbentry->name);
 
     if (!cstate) return IMAP_CONVERSATIONS_NOT_OPEN;
 
-    while (!r && count) {
+    while (!r && loop) {
         r = mailbox_open_iwl(mbentry->name, &mailbox);
         if (r) {
             fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
             return 0;
         }
 
-        count = 0;
+        int count = 0;
+        loop = 0;
 
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
         const message_t *msg;
@@ -356,7 +357,10 @@ static int build_cid_cb(const mbentry_t *mbentry,
 
             count++;
             /* batch so we don't lock for ages */
-            if (count > 8192) break;
+            if (count > 8192) {
+                loop = 1;
+                break;
+            }
         }
 
         mailbox_iter_done(&iter);
