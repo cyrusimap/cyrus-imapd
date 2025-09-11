@@ -395,6 +395,7 @@ extern json_t *jmap_get_reply(struct jmap_get *get);
 struct jmap_set {
     /* Request arguments */
     const char *if_in_state;
+    bool apply_empty_updates;
     json_t *create;
     json_t *update;
     json_t *destroy;

@@ -1,0 +1,148 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_update_empty
+    :needs_dependency_icalvcard :MagicPlus :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/test.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', { }, 'R1']
+    ]);
+    my $id = $res->[0][1]{list}[0]{id};
+    my $state = $res->[0][1]{'state'};
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $imaptalk = $plusstore->get_client();
+
+    $res = $imaptalk->examine('INBOX.#addressbooks.Default');
+    $res = $imaptalk->fetch('1', '(UID BODY[TEXT])');
+    $self->assert_num_equals(1, $res->{1}{uid});
+    $self->assert_str_equals($card, $res->{1}{body});
+    $self->assert(not exists $res->{2});
+
+    xlog $self, "empty update, w/o flag";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => { }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+
+    $res = $imaptalk->fetch('*', '(UID BODY[TEXT])');
+    $self->assert_num_equals(1, $res->{1}{uid});
+    $self->assert_str_equals($card, $res->{1}{body});
+    $self->assert(not exists $res->{2});
+
+    xlog $self, "get contact updates (since last change)";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $state
+    }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id, $res->[0][1]{updated}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "empty update, with flag = false";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            applyEmptyUpdates => JSON::false,
+            update => {
+                $id => { }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+
+    $res = $imaptalk->fetch('*', '(UID BODY[TEXT])');
+    $self->assert_num_equals(1, $res->{1}{uid});
+    $self->assert_str_equals($card, $res->{1}{body});
+    $self->assert(not exists $res->{2});
+
+    xlog $self, "get contact updates (since last change)";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $state
+    }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id, $res->[0][1]{updated}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog $self, "empty update, with bad flag";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            applyEmptyUpdates => 'foo',
+            update => {
+                $id => { }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_str_equals('applyEmptyUpdates', $res->[0][1]{arguments}[0]);
+
+    xlog $self, "empty update, with flag = true";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            applyEmptyUpdates => JSON::true,
+            update => {
+                $id => { }
+            }
+         }, "R2"]
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+
+    $res = $imaptalk->fetch('*', '(UID BODY[TEXT])');
+    $self->assert_num_equals(2, $res->{2}{uid});
+    $self->assert_str_equals($card, $res->{2}{body});
+
+    xlog $self, "get contact updates (since last change)";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $state
+    }, "R2"]]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($id, $res->[0][1]{updated}[0]);
+    $state = $res->[0][1]{newState};
+}
