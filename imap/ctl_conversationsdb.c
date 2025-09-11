@@ -331,6 +331,9 @@ static int build_cid_cb(const mbentry_t *mbentry, void *rock)
         int count = 0;
         loop = 0;
 
+        // skip mailboxes without conversations (e.g. the submission folder)
+        if (!mailbox_has_conversations(mailbox)) break;
+
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
