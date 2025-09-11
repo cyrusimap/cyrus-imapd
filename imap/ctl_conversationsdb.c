@@ -314,16 +314,12 @@ static int do_zeromodseq(const char *userid)
     return r;
 }
 
-
-static int build_cid_cb(const mbentry_t *mbentry,
-                        void *rock __attribute__((unused)))
+static int build_cid_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
     int loop = 1;
-    struct conversations_state *cstate = conversations_get_mbox(mbentry->name);
-
-    if (!cstate) return IMAP_CONVERSATIONS_NOT_OPEN;
+    struct conversations_state *cstate = (struct conversations_state *)rock;
 
     while (!r && loop) {
         r = mailbox_open_iwl(mbentry->name, &mailbox);
@@ -380,7 +376,7 @@ static int do_build(const char *userid)
     r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
-    r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, NULL, 0);
+    r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, state, 0);
 
     conversations_commit(&state);
     return r;
