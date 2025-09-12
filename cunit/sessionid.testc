@@ -1,9 +1,100 @@
 #include "cunit/unit.h"
 #include "lib/sessionid.h"
 
-static void test_stub(void)
+#include "lib/libconfig.h"
+#include "lib/xmalloc.h"
+
+#define DBDIR "test-sessionid-dbdir"
+
+static int set_up(void)
 {
-    // XXX test something!
+    /* need basic configuration for session_id() */
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    /* don't get confused by pollution from other tests */
+    session_clear_id();
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+
+    config_reset();
+    return system("rm -rf " DBDIR);
+}
+
+static void assert_sessionid_invariants(const char *id)
+{
+    /* better not be empty */
+    CU_ASSERT_STRING_NOT_EQUAL(id, "");
+
+    /* XXX check format? */
+}
+
+static void test_session_id(void)
+{
+    char *first = NULL, *second = NULL;
+
+    CU_ASSERT_FALSE(session_have_id());
+
+    /* session id must be auto-generated on first request */
+    first = xstrdup(session_id());
+    CU_ASSERT_TRUE(session_have_id());
+    assert_sessionid_invariants(first);
+
+    /* must be different after requesting a new one */
+    session_new_id();
+    second = xstrdup(session_id());
+    CU_ASSERT_TRUE(session_have_id());
+    assert_sessionid_invariants(second);
+    CU_ASSERT_STRING_NOT_EQUAL(second, first);
+
+    free(first);
+    free(second);
+}
+
+#define X16 "0123456789abcdef"
+#define X64 X16 X16 X16 X16
+#define X255 X64 X64 X64 X16 X16 X16 "0123456789abcde"
+#define X256 X64 X64 X64 X64
+_Static_assert(sizeof(X255) == 255 + 1, "X255 is wrong length");
+_Static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
+
+static void test_parse_sessionid(void)
+{
+    static const struct {
+        const char *input;
+        const char *expect;
+    } tests[] = {
+        { NULL, "unknown" },
+        { "there's no session id in this string", "unknown" },
+        { "SESSIONID=<this one isn't terminated", "unknown" },
+        { "SESSIONID=this one never started>", "unknown" },
+        { "SESSIONID=<ok>", "ok" },
+        { "SESSIONID=<ok> with stuff after", "ok" },
+        { "stuff before SESSIONID=<ok>", "ok" },
+        { "stuff before SESSIONID=<ok> and after", "ok" },
+        { "SESSIONID=<doesn't just return ok>", "doesn't just return ok" },
+        { "long SESSIONID=<" X64 ">", X64 },
+        { "maximum length SESSIONID=<" X255 ">", X255 },
+        { "too long SESSIONID=<" X256 ">", "invalid" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        char actual[MAX_SESSIONID_SIZE];
+
+        /* fill buffer with not-zero bytes to detect unterminated output */
+        memset(actual, 0xAA, sizeof(actual));
+
+        parse_sessionid(tests[i].input, actual);
+        CU_ASSERT_STRING_EQUAL(actual, tests[i].expect);
+    }
 }
 
 /* vim: set ft=c: */

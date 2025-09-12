@@ -81,6 +81,20 @@ EXPORTED const char *session_id(void)
     return (const char *)session_id_buf;
 }
 
+/* Do we have a session id? */
+EXPORTED bool session_have_id(void)
+{
+    return session_id_count && session_id_buf[0];
+}
+
+/* Reset session id state (needed for unit tests) */
+EXPORTED void session_clear_id(void)
+{
+    memset(session_id_buf, 0, sizeof(session_id_buf));
+    session_id_time = 0;
+    session_id_count = 0;
+}
+
 /* parse sessionid out of protocol answers */
 EXPORTED void parse_sessionid(const char *str, char *sessionid)
 {

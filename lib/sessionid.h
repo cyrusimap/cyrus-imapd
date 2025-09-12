@@ -42,10 +42,14 @@
 #ifndef INCLUDED_SESSIONID_H
 #define INCLUDED_SESSIONID_H
 
+#include <stdbool.h>
+
 #define MAX_SESSIONID_SIZE 256
 
 extern void session_new_id(void);
 extern const char *session_id(void);
+extern bool session_have_id(void);
+extern void session_clear_id(void);
 extern void parse_sessionid(const char *str, char *sessionid);
 
 #endif
