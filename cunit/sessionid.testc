@@ -6,6 +6,14 @@
 
 #define DBDIR "test-sessionid-dbdir"
 
+#define X15     "0123456789abcde"
+#define X16     X15 "f"
+#define X64     X16 X16 X16 X16
+#define X255    X64 X64 X64 X16 X16 X16 X15
+#define X256    X64 X64 X64 X64
+_Static_assert(sizeof(X255) == 255 + 1, "X255 is wrong length");
+_Static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
+
 static int set_up(void)
 {
     /* need basic configuration for session_id() */
@@ -15,6 +23,7 @@ static int set_up(void)
 
     /* don't get confused by pollution from other tests */
     session_clear_id();
+    trace_set_id(NULL, 0);
 
     return 0;
 }
@@ -22,6 +31,7 @@ static int set_up(void)
 static int tear_down(void)
 {
     session_clear_id();
+    trace_set_id(NULL, 0);
 
     config_reset();
     return system("rm -rf " DBDIR);
@@ -57,13 +67,6 @@ static void test_session_id(void)
     free(second);
 }
 
-#define X16 "0123456789abcdef"
-#define X64 X16 X16 X16 X16
-#define X255 X64 X64 X64 X16 X16 X16 "0123456789abcde"
-#define X256 X64 X64 X64 X64
-_Static_assert(sizeof(X255) == 255 + 1, "X255 is wrong length");
-_Static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
-
 static void test_parse_sessionid(void)
 {
     static const struct {
@@ -94,6 +97,73 @@ static void test_parse_sessionid(void)
 
         parse_sessionid(tests[i].input, actual);
         CU_ASSERT_STRING_EQUAL(actual, tests[i].expect);
+    }
+}
+
+static void test_trace_id(void)
+{
+    static const struct {
+        const char *set;
+        size_t len;
+        const char *expect;
+    } tests[] = {
+        { "len_0_is_automatic_for_cstrings", 0,
+          "len_0_is_automatic_for_cstrings" },
+        { "specify_the_length_when_the_string_is_unterminated", 18,
+          "specify_the_length" },
+        { NULL,  0, NULL }, /* NULL clears the buffer */
+        { NULL, 17, NULL }, /* (regardless of len) */
+        { "",    0, NULL }, /* empty clears the buffer */
+        { "",   17, NULL }, /* (regardless of len) */
+        { X64,   0,  X64 }, /* long values okay */
+        { X255,  0, X255 }, /* very long values okay */
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    const char *actual;
+    unsigned i;
+
+    /* no trace_id set yet */
+    actual = trace_id();
+    CU_ASSERT_PTR_NULL(actual);
+
+    for (i = 0; i < n_tests; i++) {
+        int r;
+
+        r = trace_set_id(tests[i].set, tests[i].len);
+        CU_ASSERT_EQUAL(r, 0);
+
+        actual = trace_id();
+        if (tests[i].expect) {
+            CU_ASSERT_STRING_EQUAL(actual, tests[i].expect);
+        }
+        else {
+            CU_ASSERT_PTR_NULL(actual);
+        }
+    }
+}
+
+static void test_trace_id_invalid(void)
+{
+    static const struct {
+        const char *set;
+        size_t len;
+    } tests[] = {
+        { "binary\0data\0not\0supported,\0sorry", 32 },
+        { "no spaces", 0 },
+        { X256, 0 }, /* too long */
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    /* preload a (valid) sentinel value */
+    trace_set_id("sentinel", 0);
+
+    for (i = 0; i < n_tests; i++) {
+        int r;
+
+        r = trace_set_id(tests[i].set, tests[i].len);
+        CU_ASSERT_EQUAL(r, -1);
+        CU_ASSERT_STRING_EQUAL(trace_id(), "sentinel");
     }
 }
 

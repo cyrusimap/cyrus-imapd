@@ -54,6 +54,8 @@ static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
 static int session_id_count = 0;
 
+static char trace_id_buf[MAX_TRACEID_SIZE];
+
 /* Set up the Session ID Buffer */
 EXPORTED void session_new_id(void)
 {
@@ -116,4 +118,30 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
     }
     else
         strcpy(sessionid, "unknown");
+}
+
+EXPORTED int trace_set_id(const char *traceid, size_t len)
+{
+    if (traceid && traceid[0]) {
+        if (!len) len = strlen(traceid);
+
+        if (len >= MAX_TRACEID_SIZE
+            || len > strspn(traceid, TRACE_ID_GOODCHARS))
+        {
+            return -1;
+        }
+
+        snprintf(trace_id_buf, sizeof(trace_id_buf), "%.*s",
+                 (int) len, traceid);
+        return 0;
+    }
+    else {
+        memset(trace_id_buf, 0, sizeof(trace_id_buf));
+        return 0;
+    }
+}
+
+EXPORTED const char *trace_id(void)
+{
+    return trace_id_buf[0] ? trace_id_buf : NULL;
 }
