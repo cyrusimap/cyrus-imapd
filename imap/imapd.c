@@ -1504,7 +1504,7 @@ static void cmdloop(void)
     struct sync_reserve_list *reserve_list =
         sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
     struct applepushserviceargs applepushserviceargs;
-    int readonly = config_getswitch(IMAPOPT_READONLY);
+    int readonly = config_getswitch(IMAPOPT_READONLY) || config_getswitch(IMAPOPT_REPLICAONLY);
     int syntax_errors = 0;
     const int syntax_errors_limit = 10; /* XXX make this configurable? */
     unsigned command_count = 0;
@@ -2471,6 +2471,9 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Syncapply")) {
                 if (!imapd_userisadmin) goto adminsonly;
+                // we don't check the readonly variable here because syncapply
+                // CAN run with `replicaonly` set.
+                if (config_getswitch(IMAPOPT_READONLY)) goto noreadonly;
 
                 struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
@@ -2501,6 +2504,9 @@ static void cmdloop(void)
             }
             else if (!strcmp(cmd.s, "Syncrestore")) {
                 if (!imapd_userisadmin) goto adminsonly;
+                // we don't check the readonly variable here because syncapply
+                // CAN run with `replicaonly` set.
+                if (config_getswitch(IMAPOPT_READONLY)) goto noreadonly;
 
                 struct dlist *kl = sync_parseline(imapd_in, sync_archive_enabled);
 
@@ -5020,7 +5026,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.userid = imapd_userid;
     init.authstate = imapd_authstate;
     init.out = imapd_out;
-    init.examine_mode = (cmd[0] == 'E') || config_getswitch(IMAPOPT_READONLY);
+    init.examine_mode = (cmd[0] == 'E')
+                     || config_getswitch(IMAPOPT_READONLY)
+                     || config_getswitch(IMAPOPT_REPLICAONLY);
     init.select = 1;
     init.stay_locked = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
