@@ -1,0 +1,9 @@
+#include "cunit/unit.h"
+#include "lib/sessionid.h"
+
+static void test_stub(void)
+{
+    // XXX test something!
+}
+
+/* vim: set ft=c: */
