@@ -72,7 +72,9 @@ EOF
         # sync server should have logged the write error
         my @lines = $self->{replica}->getsyslog();
         $self->assert_matches(qr{IOERROR:\sfailed\sto\supload\sfile
-                                 (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                                 (?:\s\(simulated\))?:
+                                 (?:\s[^=]+=<[^>]*>)*
+                                 \sguid=<$canaryguid>
                               }x,
                               "@lines");
 

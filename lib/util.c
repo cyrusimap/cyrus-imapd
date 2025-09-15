@@ -72,12 +72,13 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#include "assert.h"
 #include "byteorder.h"
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"
+#include "sessionid.h"
 #include "util.h"
-#include "assert.h"
 #include "xmalloc.h"
 #include "xunlink.h"
 #ifdef HAVE_ZLIB
@@ -2200,12 +2201,23 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
                          const char *func, const char *extra_fmt, ...)
 {
     struct buf buf = BUF_INITIALIZER;
+    const char *traceid = trace_id();
     int saved_errno = errno;
     int want_diag = (LOG_PRI(priority) != LOG_NOTICE
                      && LOG_PRI(priority) != LOG_INFO);
 
     buf_appendcstr(&buf, description);
     buf_appendmap(&buf, ": ", 2);
+    if (session_have_id()) {
+        buf_appendmap(&buf, "sessionid=<", 11);
+        buf_appendcstr(&buf, session_id());
+        buf_appendmap(&buf, "> ", 2);
+    }
+    if (traceid) {
+        buf_appendmap(&buf, "r.tid=<", 7);
+        buf_appendcstr(&buf, traceid);
+        buf_appendmap(&buf, "> ", 2);
+    }
     if (extra_fmt && *extra_fmt) {
         va_list args;
 
@@ -2325,11 +2337,26 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
                           logfmt_arg_list *arg)
 {
     static struct buf buf = BUF_INITIALIZER;
+    const char *traceid = trace_id();
 
     char *escaped = _xsyslog_ev_escape(event);
     buf_setcstr(&buf, "event=");
     buf_appendcstr(&buf, escaped);
     free(escaped);
+
+    if (session_have_id()) {
+        char *escaped_sid = _xsyslog_ev_escape(session_id());
+        buf_appendmap(&buf, " sessionid=", 11);
+        buf_appendcstr(&buf, escaped_sid);
+        free(escaped_sid);
+    }
+
+    if (traceid) {
+        char *escaped_tid = _xsyslog_ev_escape(traceid);
+        buf_appendmap(&buf, " r.tid=", 7);
+        buf_appendcstr(&buf, escaped_tid);
+        free(escaped_tid);
+    }
 
     for (size_t i = 0; i < arg->nmemb; i++) {
         buf_appendcstr(&buf, " ");
