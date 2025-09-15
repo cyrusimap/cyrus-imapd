@@ -950,8 +950,9 @@ void lmtpmode(struct lmtp_func *func,
     /* don't leak old connections */
     saslprops_reset(&saslprops);
 
-    /* new session id for this connection */
+    /* new session id and blank trace id for this connection */
     session_new_id();
+    trace_set_id(NULL, 0);
 
     /* determine who we're talking to */
     cd.clienthost = get_clienthost(fd, &localip, &remoteip);
@@ -1215,6 +1216,7 @@ void lmtpmode(struct lmtp_func *func,
                   prot_printf(pout,"250-%s\r\n", mechs);
               }
               prot_printf(pout, "250-IGNOREQUOTA\r\n");
+              prot_printf(pout, "250-TRACE\r\n");
               prot_printf(pout, "250 Ok SESSIONID=<%s>\r\n", session_id());
 
               strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
@@ -1412,6 +1414,7 @@ void lmtpmode(struct lmtp_func *func,
             }
             else if (!strcasecmp(buf, "rset")) {
                 session_new_id();
+                trace_set_id(NULL, 0);
                 prot_printf(pout, "250 2.0.0 Ok SESSIONID=<%s>\r\n", session_id());
 
               rset:
@@ -1481,16 +1484,35 @@ void lmtpmode(struct lmtp_func *func,
                     cd.authenticated = TLSCERT_AUTHED;
                 }
 
-                /* new session id for the encrypted session.
-                 * client will learn the new id when they send LHLO again
+                /* new session id and blank trace id for the encrypted session.
+                 * client will learn the new session id when they send LHLO again
                  */
                 session_new_id();
+                trace_set_id(NULL, 0);
 
                 /* tell the prot layer about our new layers */
                 prot_settls(pin, cd.tls_conn);
                 prot_settls(pout, cd.tls_conn);
 
                 cd.starttls_done = 1;
+
+                continue;
+            }
+            goto syntaxerr;
+
+      case 't':
+      case 'T':
+            if (!strncasecmp(buf, "trace ", 6)) {
+                r = trace_set_id(buf + 6, 0);
+                if (r) {
+                    /* LMTP_PROTOCOL_ERROR */
+                    prot_printf(pout, "501 5.5.4 Invalid TRACE id.\r\n");
+                }
+                else {
+                    prot_printf(pout,
+                                "250 2.0.0 Ok SESSIONID=<%s> TRACEID=<%s>\r\n",
+                                session_id(), trace_id());
+                }
 
                 continue;
             }
@@ -1705,6 +1727,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     int j, code, r = 0;
     char buf[8192], rsessionid[MAX_SESSIONID_SIZE];
     int onegood;
+    const char *traceid = trace_id();
 
     assert(conn && txn);
     /* pipelining v. no pipelining? */
@@ -1721,6 +1744,15 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     if (config_auditlog) {
         parse_sessionid(buf, rsessionid);
         syslog(LOG_NOTICE, "auditlog: proxy sessionid=<%s> remote=<%s>", session_id(), rsessionid);
+    }
+
+    /* forward traceid if remote supports it */
+    if (traceid && CAPA(conn, CAPA_TRACE)) {
+        prot_printf(conn->out, "TRACE %s\r\n", traceid);
+        r = getlastresp(buf, sizeof(buf)-1, &code, conn->in, NULL);
+        if (!ISGOOD(code)) {
+            goto failall;
+        }
     }
 
     /* mail from */
