@@ -404,8 +404,9 @@ static int getinclude(void *sc, const char *script, int isglobal,
     int r;
 
     if (strstr(script, "../")) {
-        syslog(LOG_NOTICE, "Illegal script name '%s' for user '%s'",
-               script, mbname_userid(sdata->mbname));
+        xsyslog(LOG_NOTICE, "illegal script name",
+                            "script=<%s> userid=<%s>",
+                            script, mbname_userid(sdata->mbname));
         return SIEVE_FAIL;
     }
 
@@ -524,8 +525,7 @@ static int send_rejection(const char *userid,
         r = smtpclient_send(sm, &sm_env, &msgbuf);
     }
     if (r) {
-        syslog(LOG_ERR, "sieve: send_rejection: SMTP error: %s",
-                error_message(r));
+        xsyslog(LOG_ERR, "sieve SMTP error", "error=<%s>", error_message(r));
     }
     smtpclient_close(&sm);
 
@@ -592,8 +592,9 @@ void sieve_srs_init(void)
     if (srs_status != SRS_SUCCESS) {
         sieve_srs_free();
 
-        syslog(LOG_ERR, "sieve SRS configuration error: %s",
-               srs_strerror(srs_status));
+        xsyslog(LOG_ERR, "sieve SRS configuration error",
+                         "error=<%s>",
+                         srs_strerror(srs_status));
     }
 }
 
@@ -628,8 +629,9 @@ static char *sieve_srs_forward(char *return_path)
                                    return_path, srs_domain);
 
     if (srs_status != SRS_SUCCESS) {
-        syslog(LOG_ERR, "sieve SRS forward failed (%s, %s): %s",
-               return_path, srs_domain, srs_strerror(srs_status));
+        xsyslog(LOG_ERR, "sieve SRS forward failed",
+                         "return_path=<%s> srs_domain=<%s> error=<%s>",
+                         return_path, srs_domain, srs_strerror(srs_status));
         if (srs_return_path) {
             free(srs_return_path);
             srs_return_path = NULL;
@@ -895,8 +897,10 @@ static int sieve_redirect(void *ac, void *ic,
         if (sievedb) duplicate_mark(&dkey, time(NULL), 0);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REDIRECT_TOTAL);
-        syslog(LOG_INFO, "sieve redirected: %s to: %s",
-               m->id ? m->id : "<nomsgid>", rc->addr);
+        xsyslog(LOG_INFO, "sieve redirect",
+                          "message-id=%s target=<%s>",
+                          m->id ? m->id : "<nomsgid>",
+                          rc->addr);
         if (config_auditlog)
             syslog(LOG_NOTICE,
                    "auditlog: redirect sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
@@ -923,8 +927,9 @@ static int sieve_discard(void *ac __attribute__((unused)),
     prometheus_increment(CYRUS_LMTP_SIEVE_DISCARD_TOTAL);
 
     /* ok, we won't file it, but log it */
-    syslog(LOG_INFO, "sieve discarded: %s",
-           md->id ? md->id : "<nomsgid>");
+    xsyslog(LOG_INFO, "sieve discard",
+                      "message-id=%s",
+                      md->id ? md->id : "<nomsgid>");
     if (config_auditlog)
         syslog(LOG_NOTICE, "auditlog: discard sessionid=<%s> message-id=%s",
                session_id(), md->id ? md->id : "<nomsgid>");
@@ -974,8 +979,9 @@ static int sieve_reject(void *ac, void *ic,
         msg_setrcpt_status(md, mydata->cur_rcpt, LMTP_MESSAGE_REJECTED, resp);
 
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        syslog(LOG_INFO, "sieve LMTP rejected: %s",
-               md->id ? md->id : "<nomsgid>");
+        xsyslog(LOG_INFO, "sieve LMTP reject",
+                          "message-id=%s",
+                          md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
             syslog(LOG_NOTICE,
                    "auditlog: LMTP reject sessionid=<%s> message-id=%s userid=<%s>",
@@ -991,8 +997,10 @@ static int sieve_reject(void *ac, void *ic,
     }
 
     if (strlen(md->return_path) == 0) {
-        syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
-               mbname_userid(sd->mbname), md->id ? md->id : "<nomsgid>");
+        xsyslog(LOG_INFO, "sieve discard-reject",
+                          "userid=<%s> message-id=%s",
+                          mbname_userid(sd->mbname),
+                          md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
             syslog(LOG_NOTICE,
                    "auditlog: discard-reject sessionid=<%s> message-id=%s userid=<%s>",
@@ -1006,8 +1014,10 @@ static int sieve_reject(void *ac, void *ic,
                               origreceip, mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns),
                               rc->msg, md->data)) == 0) {
         prometheus_increment(CYRUS_LMTP_SIEVE_REJECT_TOTAL);
-        syslog(LOG_INFO, "sieve rejected: %s to: %s",
-               md->id ? md->id : "<nomsgid>", md->return_path);
+        xsyslog(LOG_INFO, "sieve reject",
+                          "message-id=%s target=<%s>",
+                          md->id ? md->id : "<nomsgid>",
+                          md->return_path);
         if (config_auditlog)
             syslog(LOG_NOTICE,
                    "auditlog: reject sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
@@ -1508,9 +1518,10 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
         buf_setcstr(&cal->outcome, "error");
         buf_setcstr(&cal->reason,
                     "MUST have exactly one VCALENDAR component");
-        syslog(LOG_NOTICE,
-               "Sieve: message %s does not have exactly one VCALENDAR component",
-               mydata->m->id ? mydata->m->id : "<no-msgid>");
+        xsyslog(LOG_NOTICE, "Sieve: message does not have"
+                            " exactly one VCALENDAR component",
+                            "message-id=%s",
+                            mydata->m->id ? mydata->m->id : "<nomsgid>");
         goto done;
     }
 
@@ -1519,8 +1530,9 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
         if (cal->allow_public) meth = ICAL_METHOD_PUBLISH;
         else {
             buf_setcstr(&cal->reason, "missing METHOD property");
-            syslog(LOG_NOTICE, "Sieve: message %s contains non-iTIP iCalendar data",
-                   mydata->m->id ? mydata->m->id : "<no-msgid>");
+            xsyslog(LOG_NOTICE, "Sieve: message contains non-iTIP iCalendar data",
+                                "message-id=%s",
+                                mydata->m->id ? mydata->m->id : "<nomsgid>");
             goto done;
         }
     }
@@ -1735,9 +1747,11 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
     }
 
   done:
-    syslog(LOG_INFO, "sieve iMIP: %s: %s (%s)",
-           m->id ? m->id : "<nomsgid>",
-           buf_cstring(&cal->outcome), buf_cstring(&cal->reason));
+    xsyslog(LOG_INFO, "sieve iMIP",
+                      "message-id=%s outcome=<%s> error=<%s>",
+                      m->id ? m->id : "<nomsgid>",
+                      buf_cstring(&cal->outcome),
+                      buf_cstring(&cal->reason));
     if (config_auditlog)
         syslog(LOG_NOTICE,
                "auditlog: processed iMIP sessionid=<%s> message-id=%s"
@@ -2025,8 +2039,9 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     }
 
     if (r) {
-        syslog(LOG_NOTICE, "sieve fcc '%s' failed: %s",
-               fcc->mailbox, error_message(r));
+        xsyslog(LOG_NOTICE, "sieve fcc failed",
+                            "mailbox=<%s> error=<%s>",
+                            fcc->mailbox, error_message(r));
     }
 
     free(intname);
@@ -2128,9 +2143,9 @@ static int send_response(void *ac, void *ic,
         prometheus_increment(CYRUS_LMTP_SIEVE_AUTORESPOND_SENT_TOTAL);
 
         xsyslog(LOG_INFO, "sieve autoresponded",
-                    "in.msgid=%s out.msgid=%s from=%s to=<%s>",
-                md->id ? md->id : "", outmsgid,
-                buf_cstring(&fromaddr), src->addr);
+                          "in.msgid=%s out.msgid=%s from=%s to=<%s>",
+                          md->id ? md->id : "", outmsgid,
+                          buf_cstring(&fromaddr), src->addr);
         if (config_auditlog) {
             xsyslog(LOG_NOTICE, "auditlog: vacation response",
                     "userid=<%s> in.msgid=%s out.msgid=%s from=%s to=<%s>",
@@ -2258,7 +2273,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
             priority = LOG_ERR;
         }
 
-        syslog(priority, "sieve: jmapquery error: %s", errstr);
+        xsyslog(priority, "sieve jmapquery error", "error=<%s>", errstr);
 
         free(errstr);
         json_decref(err);
@@ -2276,8 +2291,9 @@ static int sieve_parse_error_handler(int lineno, const char *msg,
 {
     script_data_t *sd = (script_data_t *) sc;
 
-    syslog(LOG_INFO, "sieve parse error for %s: line %d: %s",
-           mbname_userid(sd->mbname), lineno, msg);
+    xsyslog(LOG_INFO, "sieve parse error",
+                      "userid=<%s> lineno=<%d> error=<%s>",
+                      mbname_userid(sd->mbname), lineno, msg);
 
     return SIEVE_OK;
 }
@@ -2289,8 +2305,11 @@ static int sieve_execute_error_handler(const char *msg,
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
 
-    syslog(LOG_INFO, "sieve runtime error for %s id %s: %s",
-           mbname_userid(sd->mbname), md->id ? md->id : "(null)", msg);
+    xsyslog(LOG_INFO, "sieve runtime error",
+                      "userid=<%s> message-id=%s error=<%s>",
+                      mbname_userid(sd->mbname),
+                      md->id ? md->id : "<null>",
+                      msg);
 
     return SIEVE_OK;
 }
@@ -2300,8 +2319,11 @@ void sieve_log(void *sc, void *mc, const char *text)
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
 
-    syslog(LOG_INFO, "sieve log: userid=%s messageid=%s text=%s",
-           mbname_userid(sd->mbname), md->id ? md->id : "(null)", text);
+    xsyslog(LOG_INFO, "sieve log",
+                      "userid=<%s> message-id=<%s> text=<%s>",
+                      mbname_userid(sd->mbname),
+                      md->id ? md->id : "<null>",
+                      text);
 }
 
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
@@ -2356,7 +2378,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
+        xsyslog(LOG_ERR, "sieve_register_vacation failed", "return=<%d>", res);
         fatal("sieve_register_vacation()", EX_SOFTWARE);
     }
 
@@ -2364,7 +2386,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
         config_getduration(IMAPOPT_SIEVE_DUPLICATE_MAX_EXPIRATION, 's');
     res = sieve_register_duplicate(interp, &duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
+        xsyslog(LOG_ERR, "sieve_register_duplicate failed", "return=<%d>", res);
         fatal("sieve_register_duplicate()", EX_SOFTWARE);
     }
 
@@ -2513,8 +2535,9 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     if (userid == NULL || internalname == NULL)
         return IMAP_MAILBOX_NONEXISTENT;
 
-    syslog(LOG_DEBUG, "autosievefolder: autosieve_createfolder() was called for user %s, folder %s",
-           userid, internalname);
+    xsyslog(LOG_DEBUG, "autosieve_createfolder() called",
+                       "userid=<%s> mailbox=<%s>",
+                       userid, internalname);
 
     if (config_getswitch(IMAPOPT_ANYSIEVEFOLDER)) {
         createsievefolder = 1;
@@ -2554,14 +2577,16 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
                                0/*isadmin*/, userid, auth_state,
                                MBOXLIST_CREATE_NOTIFY, NULL/*mailboxptr*/);
     if (r) {
-        syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
-               userid, internalname, error_message(r));
+        xsyslog(LOG_ERR, "mailbox creation failed",
+                         "userid=<%s> mailbox=<%s> error=<%s>",
+                         userid, internalname, error_message(r));
         goto done;
     }
 
     mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1, 1);
-    syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
-           userid, internalname);
+    xsyslog(LOG_DEBUG, "mailbox creation succeeded",
+                       "userid=<%s> mailbox=<%s>",
+                       userid, internalname);
 
     /* Attempt to inherit the color of parent mailbox,
        as long as the parent is NOT a top-level user mailbox */
@@ -2576,9 +2601,9 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
         if (buf.len) {
             int r1 = annotatemore_writemask(internalname, annot, userid, &buf);
             if (r1) {
-                syslog(LOG_NOTICE,
-                       "failed to write annotation %s on mailbox %s: %s",
-                       annot, internalname, error_message(r1));
+                xsyslog(LOG_NOTICE, "failed to write annotation",
+                                    "annotation=<%s> mailbox=<%s> error=<%s>",
+                                    annot, internalname, error_message(r1));
             }
         }
 

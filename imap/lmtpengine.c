@@ -961,9 +961,10 @@ void lmtpmode(struct lmtp_func *func,
         buf_setcstr(&saslprops.iplocalport, localip);
     }
 
-    syslog(LOG_DEBUG, "connection from %s%s",
-           cd.clienthost,
-           func->preauth ? " preauth'd as postman" : "");
+    xsyslog(LOG_DEBUG, "new connection",
+                       "clienthost=<%s> preauth=<%s>",
+                       cd.clienthost,
+                       func->preauth ? "postman" : "none");
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
@@ -1028,7 +1029,7 @@ void lmtpmode(struct lmtp_func *func,
       }
 
       if (config_getswitch(IMAPOPT_CHATTY))
-        syslog(LOG_NOTICE, "command: %s", buf);
+        xsyslog(LOG_NOTICE, "parsed command", "command=<%s>", buf);
 
       switch (buf[0]) {
       case 'a':
@@ -1445,9 +1446,7 @@ void lmtpmode(struct lmtp_func *func,
                                         NULL);
 
                 if (r == -1) {
-
-                    syslog(LOG_ERR, "[lmtpd] error initializing TLS");
-
+                    xsyslog(LOG_ERR, "error initializing TLS", NULL);
                     prot_printf(pout, "454 4.3.3 %s\r\n", "Error initializing TLS");
                     continue;
                 }
@@ -1465,8 +1464,9 @@ void lmtpmode(struct lmtp_func *func,
 
                 /* if error */
                 if (r==-1) {
-                    syslog(LOG_NOTICE,
-                           "TLS negotiation failed: %s", cd.clienthost);
+                    xsyslog(LOG_NOTICE, "TLS negotiation failed",
+                                        "clienthost=<%s>",
+                                        cd.clienthost);
                     func->shutdown(EX_PROTOCOL);
                 }
 
