@@ -91,6 +91,7 @@ static struct protocol_t lmtp_protocol =
           { "STARTTLS", CAPA_STARTTLS },
           { "PIPELINING", CAPA_PIPELINING },
           { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+          { "TRACE", CAPA_TRACE },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
