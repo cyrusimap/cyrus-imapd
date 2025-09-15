@@ -948,6 +948,9 @@ void lmtpmode(struct lmtp_func *func,
     /* don't leak old connections */
     saslprops_reset(&saslprops);
 
+    /* new session id for this connection */
+    session_new_id();
+
     /* determine who we're talking to */
     cd.clienthost = get_clienthost(fd, &localip, &remoteip);
     if (!strcmp(cd.clienthost, UNIX_SOCKET)) {
@@ -1212,8 +1215,6 @@ void lmtpmode(struct lmtp_func *func,
               prot_printf(pout, "250 Ok SESSIONID=<%s>\r\n", session_id());
 
               strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
-
-              session_new_id();
               continue;
           }
           goto syntaxerr;
@@ -1478,6 +1479,11 @@ void lmtpmode(struct lmtp_func *func,
                 if (buf_len(&saslprops.authid)) {
                     cd.authenticated = TLSCERT_AUTHED;
                 }
+
+                /* new session id for the encrypted session.
+                 * client will learn the new id when they send LHLO again
+                 */
+                session_new_id();
 
                 /* tell the prot layer about our new layers */
                 prot_settls(pin, cd.tls_conn);
