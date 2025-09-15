@@ -1249,8 +1249,8 @@ static int sieve_snooze(void *ac,
     if (!intname) {
         xsyslog(LOG_NOTICE,
                 "Sieve: can't find \\Snoozed mailbox",
-                "sessionid=<%s> userid=<%s> msgid=<%s>",
-                session_id(), userid, md->id);
+                "userid=<%s> msgid=<%s>",
+                userid, md->id);
         goto done;
     }
 
@@ -1271,8 +1271,8 @@ static int sieve_snooze(void *ac,
         if (!tz) {
             xsyslog(LOG_NOTICE,
                     "Sieve: unknown time zone",
-                    "sessionid=<%s> userid=<%s> msgid=<%s> tzid=<%s>",
-                    session_id(), userid, md->id, sn->tzid);
+                    "userid=<%s> msgid=<%s> tzid=<%s>",
+                    userid, md->id, sn->tzid);
             ret = IMAP_NOTFOUND;
             goto done;
         }
@@ -1417,8 +1417,8 @@ static int sieve_snooze(void *ac,
     if (ret) {
         xsyslog(LOG_NOTICE,
                 "Sieve: delivery to \\Snoozed mailbox failed",
-                "sessionid=<%s> userid=<%s> msgid=<%s> err=<%s>",
-                session_id(), userid, md->id, error_message(ret));
+                "userid=<%s> msgid=<%s> err=<%s>",
+                userid, md->id, error_message(ret));
     }
 
     strarray_free(imapflags);
@@ -2133,9 +2133,8 @@ static int send_response(void *ac, void *ic,
                 buf_cstring(&fromaddr), src->addr);
         if (config_auditlog) {
             xsyslog(LOG_NOTICE, "auditlog: vacation response",
-                    "sessionid=<%s> userid=<%s> in.msgid=%s"
-                    " out.msgid=%s from=%s to=<%s>",
-                    session_id(), ctx->userid, md->id ? md->id : "",
+                    "userid=<%s> in.msgid=%s out.msgid=%s from=%s to=<%s>",
+                    ctx->userid, md->id ? md->id : "",
                     outmsgid, buf_cstring(&fromaddr), src->addr);
         }
 
