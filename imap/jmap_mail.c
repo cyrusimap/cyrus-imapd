@@ -1136,13 +1136,17 @@ static conversation_id_t _cid_from_id(const char *thrid)
 /*
  * Lookup all mailboxes where guidrep is contained in.
  *
- * The return value is a JSON object keyed by the mailbox unique id,
- * and its mailbox name as value.
+ * The return value is a JSON object keyed by the mailbox id,
+ * and its value is a JSON object keyed by "added"/"removed"
+ * and its value is the corresponding date.
  */
-static json_t *_email_mailboxes(jmap_req_t *req, const char *guidrep)
+static json_t *_email_mailboxes(jmap_req_t *req,
+                                struct conversations_state *cstate,
+                                const char *guidrep)
 {
     struct _email_mailboxes_rock data = { req, json_object() };
-    conversations_guid_foreach(req->cstate, guidrep, _email_mailboxes_cb, &data);
+    conversations_guid_foreach(cstate ? cstate : req->cstate,
+                               guidrep, _email_mailboxes_cb, &data);
     return data.mboxs;
 }
 
@@ -7460,7 +7464,7 @@ static int _email_get_meta(jmap_req_t *req,
             jmap_wantprop(props, "addedDates") ? json_object() : NULL;
         json_t *removed =
             jmap_wantprop(props, "removedDates") ? json_object() : NULL;
-        json_t *mailboxes = _email_mailboxes(req, guidrep);
+        json_t *mailboxes = _email_mailboxes(req, NULL, guidrep);
 
         json_t *val;
         const char *mboxid;
@@ -13680,7 +13684,7 @@ static void _email_update_bulk(jmap_req_t *req,
             const char *guidrep = _guid_from_id(req->cstate, email_id);
             json_t *cur = NULL;
             if (guidrep) {
-                cur = _email_mailboxes(req, guidrep);
+                cur = _email_mailboxes(req, NULL, guidrep);
             }
             if (!json_object_size(cur)) {
                 json_object_set_new(not_updated, email_id,
@@ -14369,16 +14373,21 @@ static void _email_copy_parse(json_t *jemail,
             update->email_id = json_string_value(prop);
         }
         else if (!strcmp(pname, "mailboxIds")) {
-            jmap_parser_push(parser, "mailboxIds");
-            const char *mbox_id;
-            json_t *jbool;
-            json_object_foreach(prop, mbox_id, jbool) {
-                if (!strlen(mbox_id) || jbool != json_true()) {
-                    jmap_parser_invalid(parser, mbox_id);
+            if (json_is_object(prop)) {
+                jmap_parser_push(parser, "mailboxIds");
+                const char *mbox_id;
+                json_t *jbool;
+                json_object_foreach(prop, mbox_id, jbool) {
+                    if (!strlen(mbox_id) || jbool != json_true()) {
+                        jmap_parser_invalid(parser, mbox_id);
+                    }
                 }
+                jmap_parser_pop(parser);
+                update->mailboxids = json_copy(prop);
             }
-            jmap_parser_pop(parser);
-            update->mailboxids = json_copy(prop);
+            else {
+                jmap_parser_invalid(parser, "mailboxIds");
+            }
         }
         else if (!strcmp(pname, "keywords")) {
             if (json_is_object(prop)) {
@@ -14427,9 +14436,6 @@ static void _email_copy_parse(json_t *jemail,
     /* Check mandatory properties */
     if (!update->email_id) {
         jmap_parser_invalid(parser, "id");
-    }
-    if (!update->mailboxids) {
-        jmap_parser_invalid(parser, "mailboxIds");
     }
 
     buf_free(&buf);
@@ -14487,6 +14493,19 @@ static void _email_copy_bulk(jmap_req_t *req,
                                     json_pack("{s:s s:s}",
                                               "type", "alreadyExists",
                                               "existingId", email_id));
+            }
+            else if (!update->mailboxids) {
+                /* Get mailbox ids of email in from_account */
+                json_t *mboxids = _email_mailboxes(req, from_cstate, guidrep);
+                const char *mboxid;
+                json_t *val;
+
+                update->mailboxids = json_object();
+                json_object_foreach(mboxids, mboxid, val) {
+                    if (json_object_get(val, "added"))
+                        json_object_set(update->mailboxids, mboxid, json_true());
+                }
+                json_decref(mboxids);
             }
         }
 
