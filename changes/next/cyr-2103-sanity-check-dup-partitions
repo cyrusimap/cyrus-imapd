@@ -1,0 +1,28 @@
+Description:
+
+:cyrusman:`master(8)` now refuses to start when multiple partitions are
+configured with the same directory, or a subdirectory thereof.  This
+prevents potential store corruption when multiple things each think they
+own everything.  :cyrusman:`cyr_info(8)` ``conf-lint`` will report the
+invalid partitions.
+
+
+Documentation:
+
+:cyrusman:`cyr_info(8)`
+
+
+Config changes:
+
+``*partition-*`` entries in :cyrusman:`imapd.conf(5)` are now checked against
+one another.
+
+
+Upgrade instructions:
+
+Nothing required, unless your configuration was already bad.
+
+
+GitHub issue:
+
+#5573

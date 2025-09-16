@@ -343,10 +343,10 @@ EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void 
       }
 }
 
-EXPORTED strarray_t *hash_keys(hash_table *table)
+EXPORTED strarray_t *hash_keys(const hash_table *table)
 {
+    const bucket *temp;
     unsigned i;
-    bucket *temp;
 
     strarray_t *sa = strarray_new();
 

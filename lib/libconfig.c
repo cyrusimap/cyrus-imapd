@@ -814,6 +814,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                      config_defpartition ? config_defpartition : "<name>");
             fatal(buf, EX_CONFIG);
         }
+
+        if (config_check_partitions(NULL)) {
+            fatal("invalid partition value detected", EX_CONFIG);
+        }
     }
 
     /* look up mailbox hashing */
@@ -1306,4 +1310,203 @@ EXPORTED void config_toggle_debug(void)
 {
     config_debug = !config_debug;
     if (config_toggle_debug_cb) config_toggle_debug_cb();
+}
+
+static const unsigned char cmpstringp_path_lookup[] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,  /* interesting */
+    0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x20,  /* bit is here */
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+    0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
+    0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+    0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+};
+_Static_assert(256 == sizeof(cmpstringp_path_lookup),
+               "cmpstringp_path_lookup has wrong number of elems");
+
+/* Treats '/' (0x2f) as lower than other printables so that
+ * file paths sort pre-order, depth-first.
+ * XXX This should probably be in lib/bsearch.c, but that's in
+ * XXX libcyrus, which we don't have here.
+ */
+static int cmpstringp_path(const void *aa, const void *bb)
+{
+    const unsigned char *a = *(const unsigned char **) aa;
+    const unsigned char *b = *(const unsigned char **) bb;
+    int cmp = 0;
+
+    #define L(x) (cmpstringp_path_lookup[x])
+    #define CMP(y,z) ((y) > (z)) - ((y) < (z))
+
+    while (*a && *b && 0 == (cmp = CMP(L(*a), L(*b)))) {
+        a++;
+        b++;
+    }
+
+    /* found a mismatch */
+    if (cmp) return cmp;
+
+    /* Walked off the end of one (or both) strings, in which case one
+     * (or both) of these will be zero, and the string with bytes remaining
+     * is the greater.
+     */
+    return CMP(*a, *b);
+
+    #undef CMP
+    #undef L
+}
+
+static void collect_partitions(const char *key, const char *value, void *rock)
+{
+    hash_table *by_value = rock;
+
+    if (strstr(key, "partition-")) {
+        strarray_t *keys;
+
+        keys = hash_lookup(value, by_value);
+        if (!keys) {
+            keys = hash_insert(value, strarray_new(), by_value);
+        }
+
+        strarray_append(keys, key);
+    }
+}
+
+struct check_no_dups_rock {
+    FILE *user_output;
+    int *found_bad;
+};
+
+static void check_no_dups(const char *value, void *vpkeys, void *vprock)
+{
+    const strarray_t *keys = vpkeys;
+    struct check_no_dups_rock *rock = vprock;
+    FILE *user_output = rock->user_output;
+    int *found_bad = rock->found_bad;
+
+    if (strarray_size(keys) > 1) {
+        char *joined_keys = NULL;
+
+        joined_keys = strarray_join(keys, ",");
+        xsyslog(LOG_ERR, "disk path used by multiple partitions",
+                         "path=<%s> partitions=<%s>",
+                         value, joined_keys);
+        free(joined_keys);
+
+        if (user_output) {
+            int i, n;
+
+            for (i = 0, n = strarray_size(keys); i < n; i++) {
+                fprintf(user_output, "%s: %s\n", strarray_nth(keys, i), value);
+            }
+        }
+
+        (*found_bad) ++;
+    }
+}
+
+static void dump_kv(FILE *user_output,
+                    hash_table *by_value,
+                    const char *value)
+{
+    const strarray_t *keys;
+
+    keys = hash_lookup(value, by_value);
+    if (keys && strarray_size(keys)) {
+        fprintf(user_output, "%s: %s\n", strarray_nth(keys, 0), value);
+    }
+}
+
+static int check_no_subdirs(hash_table *by_value, FILE *user_output)
+{
+    strarray_t *all_values;
+    const char *prev, *value;
+    int found_bad = 0, i, n;
+
+    all_values = hash_keys(by_value);
+    strarray_sort(all_values, cmpstringp_path);
+    prev = strarray_nth(all_values, 0);
+    for (i = 1, n = strarray_size(all_values); i < n; i++) {
+        size_t prev_len = strlen(prev);
+
+        value = strarray_nth(all_values, i);
+        if (strlen(value) > prev_len
+            && 0 == strncmp(prev, value, prev_len)
+            && value[prev_len] == '/')
+        {
+            /* XXX only logs first example, and no keys... */
+            xsyslog(LOG_ERR, "disk path is a prefix of others",
+                             "path1=<%s> path2=<%s>",
+                             prev, value);
+            if (user_output) {
+                dump_kv(user_output, by_value, prev);
+                dump_kv(user_output, by_value, value);
+            }
+            found_bad++;
+        }
+
+        prev = value;
+    }
+
+    strarray_free(all_values);
+
+    return found_bad;
+}
+
+/* free_hash_table() needs a function matching free()'s signature */
+static void wrap_strarray_free(void *vp)
+{
+    strarray_free((strarray_t *) vp);
+}
+
+EXPORTED int config_check_partitions(FILE *user_output)
+{
+    hash_table by_value = HASH_TABLE_INITIALIZER;
+    int found_bad = 0;
+
+    assert(config_loaded);
+
+    /* supposing 2 search tiers, that's possibly 5 disk paths per named
+     * partition.  supposing 5 named partitions, that's possibly 25 paths.
+     */
+    construct_hash_table(&by_value, 25, /* mpool */ 1);
+
+    config_foreachoverflowstring(&collect_partitions, &by_value);
+
+    /* check that multiple partitions are not using the same disk path */
+    hash_enumerate(&by_value, &check_no_dups, &(struct check_no_dups_rock){
+                                                    user_output,
+                                                    &found_bad,
+                                                });
+
+    /* check that partitions are not subdirectories of other partitions */
+    found_bad += check_no_subdirs(&by_value, user_output);
+
+    free_hash_table(&by_value, &wrap_strarray_free);
+    return 0 - found_bad;
 }
