@@ -71,6 +71,10 @@ Options
 
     Deliver message even when receiving mailbox is over quota.
 
+.. option:: -t trace-id, --trace-id=trace-id
+
+    Specify a trace-id to associate with this delivery.
+
 .. option:: -l, --lmtp
 
     Accept messages using the LMTP protocol.

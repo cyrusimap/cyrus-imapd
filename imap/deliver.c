@@ -172,7 +172,7 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:DE:F:a:def:lm:qr:";
+    static const char short_options[] = "C:DE:F:a:def:lm:qr:t:";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
@@ -182,6 +182,7 @@ int main(int argc, char **argv)
         { "mailbox", required_argument, NULL, 'm' },
         { "ignore-quota", no_argument, NULL, 'q' },
         { "return-path", required_argument, NULL, 'r' },
+        { "trace-id", required_argument, NULL, 't' },
         { 0, 0, 0, 0 },
     };
 
@@ -244,6 +245,13 @@ int main(int argc, char **argv)
 
         case 'q':
             ignorequota = 1;
+            break;
+
+        case 't':
+            if (trace_set_id(optarg, 0)) {
+                fputs("deliver: invalid trace-id\n", stderr);
+                usage();
+            }
             break;
 
         default:
