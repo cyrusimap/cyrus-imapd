@@ -633,4 +633,38 @@ sub test_auditlog_size
     }
 }
 
+sub test_traceid
+{
+    my ($self) = @_;
+
+    my $good_traceid = "01234567890abcdefghijklmnopqrstuvwxyz";
+    my $bad_traceid = "spaces and quotes aren't valid";
+
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1", uid => 1);
+
+    # deliver with invalid traceid should fail
+    my $ret = $self->{instance}->deliver($msgs{1},
+                                         user => "cassandane",
+                                         trace_id => $bad_traceid);
+    $self->assert_num_not_equals(0, $ret);
+
+    # discard syslogs from setup
+    $self->{instance}->getsyslog();
+
+    # deliver with valid traceid should succeed
+    $ret = $self->{instance}->deliver($msgs{1},
+                                      user => "cassandane",
+                                      trace_id => $good_traceid);
+    $self->assert_num_equals(0, $ret);
+
+    # trace id should have been logged during delivery
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{\br\.tid=\<$good_traceid\>});
+
+    # message better have been delivered!
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
 1;
