@@ -1,0 +1,116 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_changes_shared
+    :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "Create sharer and share default calendar";
+    my ($sharerJmap) = $self->create_user('sharer');
+    $admin->setacl("user.sharer.#calendars.Default", cassandane => 'lrs');
+
+    xlog $self, "Sharer creates unshared calendars A and B";
+    my $res = $sharerJmap->CallMethods([
+        ['Calendar/get', {}, 'R1'],
+    ]);
+    my $calId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($calId);
+
+    xlog $self, "create event in shared calendar";
+    $res = $sharerJmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $calId => JSON::true,
+                            },
+                            "title" => "1",
+                            "description" => "",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::true,
+                            "start" => "2015-10-06T00:00:00",
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get shared event and current state";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {
+        accountId => 'sharer',
+    }, "R1"]]);
+    my $state = $res->[0][1]{'state'};
+
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "delete event in shared calendar";
+    $res = $sharerJmap->CallMethods([['CalendarEvent/set', {
+        destroy => [ $id ]
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        accountId => 'sharer',
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    my $newState = $res->[0][1]{newState};
+
+    my $diff = time() - $mark;
+    my $period = "PT" . $diff . "S";
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/backup',
+    ];
+
+    xlog "restore calendars prior to most recent changes";
+    $res = $sharerJmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod => $period,
+            undoAll => JSON::true
+         }, "R4"]],
+        $using);
+    $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
+
+    xlog $self, "get most recent calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        accountId => 'sharer',
+        sinceState => $newState
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{created}[0]);
+    $newState = $res->[0][1]{newState};
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        accountId => 'sharer',
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+
+    xlog $self, "delete event in shared calendar again";
+    $res = $sharerJmap->CallMethods([['CalendarEvent/set', {
+        destroy => [ $id ]
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get most recent calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        accountId => 'sharer',
+        sinceState => $newState
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        accountId => 'sharer',
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
