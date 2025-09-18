@@ -2346,9 +2346,12 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         char flagstr[FLAGMAPSTR_MAXLEN];
         char emailid[JMAP_MAX_EMAILID_SIZE];
+        char threadid[JMAP_THREADID_SIZE];
 
         jmap_set_emailid(cstate, &record->guid,
                          0, &record->internaldate, emailid);
+
+        jmap_set_threadid(cstate, record->cid, threadid);
 
         flags_to_str(record, flagstr);
         if (change->flags & CHANGE_ISAPPEND)
@@ -2360,8 +2363,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                     session_id(), mailbox_name(mailbox),
                     mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                     record->uid, record->modseq, flagstr,
-                    message_guid_encode(&record->guid), emailid,
-                    conversation_id_encode(cstate, record->cid),
+                    message_guid_encode(&record->guid), emailid, threadid,
                     change->msgid, record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
@@ -2372,8 +2374,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                     session_id(), mailbox_name(mailbox),
                     mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                     record->uid, record->modseq, flagstr,
-                    message_guid_encode(&record->guid), emailid,
-                    conversation_id_encode(cstate, record->cid),
+                    message_guid_encode(&record->guid), emailid, threadid,
                     record->size);
 
         if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
@@ -4929,9 +4930,12 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         char oldflags[FLAGMAPSTR_MAXLEN], sysflags[FLAGMAPSTR_MAXLEN];
         char emailid[JMAP_MAX_EMAILID_SIZE];
+        char threadid[JMAP_THREADID_SIZE];
 
         jmap_set_emailid(cstate, &record->guid,
                          0, &record->internaldate, emailid);
+        jmap_set_threadid(cstate, record->cid, threadid);
+
         flags_to_str(&oldrecord, oldflags);
         flags_to_str(record, sysflags);
         xsyslog(LOG_NOTICE, "auditlog: touched",
@@ -4940,8 +4944,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
                 " modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
                 session_id(), mailbox_name(mailbox),
                 mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                record->uid, message_guid_encode(&record->guid), emailid,
-                conversation_id_encode(cstate, record->cid),
+                record->uid, message_guid_encode(&record->guid), emailid, threadid,
                 record->modseq, oldflags, sysflags);
     }
 
@@ -6028,9 +6031,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             char flagstr[FLAGMAPSTR_MAXLEN];
             flags_to_str(&copyrecord, flagstr);
             char emailid[JMAP_MAX_EMAILID_SIZE];
+            char threadid[JMAP_THREADID_SIZE];
 
             jmap_set_emailid(cstate, &copyrecord.guid,
                              0, &copyrecord.internaldate, emailid);
+            jmap_set_threadid(cstate, copyrecord.cid, threadid);
+
             xsyslog(LOG_NOTICE, "auditlog:",
                     "action=<%s> sessionid=<%s>"
                     " mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
@@ -6038,8 +6044,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     action, session_id(), mailbox_name(mailbox),
                     mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
                     copyrecord.uid, message_guid_encode(&copyrecord.guid),
-                    emailid, conversation_id_encode(cstate, copyrecord.cid),
-                    flagstr);
+                    emailid, threadid, flagstr);
         }
     }
 
