@@ -67,6 +67,7 @@
 #include "mkgmtime.h"
 #include "stristr.h"
 #include "times.h"
+#include "tok.h"
 #include "user.h"
 #include "util.h"
 #include "vcard_support.h"
@@ -6685,6 +6686,59 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
     }
 }
 
+static void vcardvalues_to_json(const char *values, vcardvalue_kind vkind,
+                                json_t *jvals)
+{
+    const char *val, *p = strchr(values, ',');
+    tok_t vals = { 0 };
+
+    if (p && (p == values || p[-1] != '\\')) {
+        tok_init(&vals, values, ",", TOK_EMPTY);
+        val = tok_next(&vals);
+    }
+    else {
+        val = values;
+    }
+
+    do {
+        json_t *jval = NULL;
+
+        switch (vkind) {
+        case VCARD_BOOLEAN_VALUE:
+            jval = json_boolean(!strcasecmp("TRUE", val));
+            break;
+
+        case VCARD_INTEGER_VALUE: {
+            /* Could we do anything useful with endptr?
+               At this point we just trust that the stored vCard is valid */
+            int64_t i64 = strtoll(val, NULL, 10);
+            jval = json_integer(i64);
+            break;
+        }
+
+        case VCARD_FLOAT_VALUE: {
+            /* Could we do anything useful with endptr?
+               At this point we just trust that the stored vCard is valid */
+            double d = strtod(val, NULL);
+            jval = json_real(d);
+            break;
+        }
+
+        default: {
+            char *dequoted = vcardvalue_strdup_and_dequote_text(&val, NULL);
+            jval = jmap_utf8string(dequoted);
+            free(dequoted);
+            break;
+        }
+        }
+
+        json_array_append_new(jvals, jval);
+
+    } while ((val = tok_next(&vals)));
+
+    tok_fini(&vals);
+}
+
 static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                               const char *prop_id, struct card_rock *crock)
 {
@@ -7376,7 +7430,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         json_t *props = json_object_get_vanew(obj, "vCardProps", "[]");
         json_t *jtype, *jparams = json_object();
         const char *type = NULL;
-        vcardvalue_kind vkind;
 
         for (param = vcardproperty_get_first_parameter(prop,
                                                        VCARD_ANY_PARAMETER);
@@ -7396,9 +7449,10 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 int is_multivalued = 0;  /* XXX  Create JSON array? */
                 json_t *val;
 
-                vkind = vcardparameter_kind_value_kind(param_kind, &is_multivalued);
+                vcardvalue_kind param_vkind = 
+                    vcardparameter_kind_value_kind(param_kind, &is_multivalued);
 
-                switch (vkind) {
+                switch (param_vkind) {
                 case VCARD_INTEGER_VALUE:
                     val = json_integer(vcardparameter_get_index(param));
                     break;
@@ -7417,10 +7471,14 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             }
         }
 
-        if (!type) {
-            vkind = vcardproperty_kind_to_value_kind(prop_kind);
+        vcardvalue_kind prop_vkind;
+        if (type) {
+            prop_vkind = vcardvalue_string_to_kind(type);
+        }
+        else {
+            prop_vkind = vcardproperty_kind_to_value_kind(prop_kind);
 
-            switch (vkind) {
+            switch (prop_vkind) {
             case VCARD_X_VALUE:
             case VCARD_NO_VALUE:
                 type = "unknown";
@@ -7438,7 +7496,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 break;
 
             default:
-                buf_setcstr(crock->buf, vcardvalue_kind_to_string(vkind));
+                buf_setcstr(crock->buf, vcardvalue_kind_to_string(prop_vkind));
                 type = buf_lcase(crock->buf);
                 break;
             }
@@ -7463,13 +7521,38 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
 
         buf_setcstr(crock->buf, vcardproperty_get_property_name(prop));
-        char *dequoted = vcardvalue_strdup_and_dequote_text(&prop_value, NULL);
 
-        json_array_append_new(props,
-                              json_pack("[s o o o]",
-                                        buf_lcase(crock->buf), jparams, jtype,
-                                        jmap_utf8string(dequoted)));
-        free(dequoted);
+        json_t *jprop = json_pack("[s o o]",
+                                  buf_lcase(crock->buf), jparams, jtype);
+
+        json_array_append_new(props, jprop);
+
+        switch (prop_vkind) {
+        case VCARD_BOOLEAN_VALUE:
+        case VCARD_INTEGER_VALUE:
+        case VCARD_FLOAT_VALUE:
+            /* There is no way to detect a structured TEXT value in a X- prop */
+            if (strchr(prop_value, ';')) {
+                tok_t comps = TOK_INITIALIZER(prop_value, "\\;", 0);
+                json_t *jcomps = json_array();
+                const char *comp;
+
+                while ((comp = tok_next(&comps))) {
+                    vcardvalues_to_json(comp, prop_vkind, jcomps);
+                }
+
+                json_array_append_new(jprop, jcomps);
+                break;
+            }
+
+            /* Fall through */
+            GCC_FALLTHROUGH
+
+        default:
+            vcardvalues_to_json(prop_value, prop_vkind, jprop);
+            break;
+        }
+
         return;
     }
     }
@@ -10752,52 +10835,180 @@ static void _jscard_set_importance(struct jmap_req *req,
     }
 }
 
-static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jval,
+static const char *jprop_value_to_string(json_t *jval,
+                                         vcardparameter_value val_type,
+                                         struct buf *buf)
+{
+    const char *valstr = NULL;
+
+    buf_reset(buf);
+
+    switch (val_type) {
+    case VCARD_VALUE_BOOLEAN:
+        if (json_is_boolean(jval)) {
+            buf_setcstr(buf, json_boolean_value(jval) ? "TRUE" : "FALSE");
+            valstr = buf_cstring(buf);
+        }
+        break;
+
+    case VCARD_VALUE_INTEGER:
+        if (json_is_integer(jval)) {
+            buf_printf(buf, "%" JSON_INTEGER_FORMAT,
+                       json_integer_value(jval));
+            valstr = buf_cstring(buf);
+        }
+        break;
+
+    case VCARD_VALUE_FLOAT:
+        if (json_is_real(jval)) {
+            /* Write out 15 decimal digits */
+            buf_printf(buf, "%.15f", json_real_value(jval));
+            /* Strip trailing decimal zeros */
+            int len = buf_len(buf);
+            const char *endp = buf_base(buf) + len - 1;
+            while (*endp-- == '0') len--;
+            buf_truncate(buf, len);
+            valstr = buf_cstring(buf);
+        }
+        break;
+
+    default:
+        if (json_is_string(jval)) {
+            valstr = json_string_value(jval);
+        }
+        break;
+    }
+
+    return valstr;
+}
+
+static vcardstrarray *jprop_values_to_strarray(json_t *jvals, size_t idx,
+                                               vcardparameter_value val_type,
+                                               struct buf *buf)
+{
+    vcardstrarray *sa = vcardstrarray_new(1);
+    size_t nvals = json_array_size(jvals);
+
+    for (; idx < nvals; idx++) {
+        json_t *jval = json_array_get(jvals, idx);
+        const char *valstr = jprop_value_to_string(jval, val_type, buf);
+
+        if (!valstr) {
+            vcardstrarray_free(sa);
+            return NULL;
+        }
+
+        vcardstrarray_append(sa, valstr);
+    }
+
+    return sa;
+}
+
+static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jprops,
                                     vcardcomponent *card)
 {
     size_t i;
-    json_t *jcard;
+    json_t *jprop;
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
-    if (!json_is_array(jval)) {
+    if (!json_is_array(jprops)) {
         jmap_parser_invalid(parser, "vCardProps");
         return 0;
     }
 
     jmap_parser_push(parser, "vCardProps");
 
-    json_array_foreach(jval, i, jcard) {
-        const char *name, *val_type, *val;
-        json_t *params;
-        vcardproperty *prop;
+    json_array_foreach(jprops, i, jprop) {
+        const char *name, *typestr, *valstr;
+        json_t *params, *jval;
+        vcardstrarray *vals = NULL;
 
-        if (json_array_size(jcard) != 4) {
-            buf_reset(&buf);
-            buf_printf(&buf, "%zu", i);
-            jmap_parser_invalid(parser, buf_cstring(&buf));
+        // parse first 4 args
+        if (json_unpack(jprop, "[soso]", &name, &params, &typestr, &jval)) break;
+
+        // params MUST be an object
+        if (!json_is_object(params)) break;
+
+        // sanity check the value
+        switch (json_typeof(jval)) {
+        case JSON_OBJECT:
+        case JSON_NULL:
+            goto error;
+
+        case JSON_ARRAY:
+        // a structured value MUST be the only one & MUST NOT have too many comps
+        if (json_array_size(jprop) > 4 ||
+            json_array_size(jval) > VCARD_MAX_STRUCTURED_FIELDS) goto error;
+
+        default:
             break;
         }
 
-        name = json_string_value(json_array_get(jcard, 0));
-        params = json_array_get(jcard, 1);
-        val_type = json_string_value(json_array_get(jcard, 2));
-        val = json_string_value(json_array_get(jcard, 3));
-        prop = vcardproperty_new_x(val);
+        vcardproperty *prop = vcardproperty_new_x("");
+        vcardparameter_value val_type = vcardparameter_string_to_enum(typestr);
 
         buf_setcstr(&buf, name);
         vcardproperty_set_x_name(prop, buf_ucase(&buf));
         vcardcomponent_add_property(card, prop);
 
-        if (strcmp(val_type, "unknown")) {
-            vcardparameter_value type = vcardparameter_string_to_enum(val_type);;
+        // string_to_enum might give us a TYPE enum rather than a VALUE enum
+        if ((unsigned) val_type == VCARD_TYPE_TEXT)
+            val_type = VCARD_VALUE_TEXT;
+        else if ((unsigned) val_type == VCARD_TYPE_DATE)
+            val_type = VCARD_VALUE_DATE;;
 
-            vcardproperty_add_parameter(prop, vcardparameter_new_value(type));
-        }
+        vcardproperty_add_parameter(prop, vcardparameter_new_value(val_type));
 
         _vcardparams_to_prop(params, prop);
 
         r = 1;
+
+        if (json_is_array(jval)) {
+            vcardstructuredtype *st = vcardstructured_new();
+            json_t *jcomp;
+            size_t j;
+
+            json_array_foreach(jval, j, jcomp) {
+                if (json_is_array(jcomp)) {
+                    vals = jprop_values_to_strarray(jcomp, 0, val_type, &buf);
+                }
+                else {
+                    valstr = jprop_value_to_string(jcomp, val_type, &buf);
+                    if (valstr) {
+                        vals = vcardstrarray_new(1);
+                        vcardstrarray_append(vals, valstr);
+                    }
+                }
+
+                if (!vals) {
+                    vcardstructured_free(st);
+                    goto error;
+                }
+
+                st->field[st->num_fields++] = vals;
+            }
+
+            vcardproperty_set_value(prop, vcardvalue_new_structured(st));
+
+            // don't free strarrays which have been stolen by the vcardvalue
+            st->num_fields = 0;
+            vcardstructured_free(st);
+        }
+        else {
+            vals = jprop_values_to_strarray(jprop, 3, val_type, &buf);
+
+            if (!vals) goto error;
+
+            vcardproperty_set_value(prop, vcardvalue_new_textlist(vals));
+        }
+    }
+
+ error:
+    if (i < json_array_size(jprops)) {
+        buf_reset(&buf);
+        buf_printf(&buf, "%zu", i);
+        jmap_parser_invalid(parser, buf_cstring(&buf));
     }
 
     jmap_parser_pop(parser);
