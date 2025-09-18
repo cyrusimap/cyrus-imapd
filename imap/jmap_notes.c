@@ -567,7 +567,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
     json_t *prop;
     const char *uid = NULL, *created = NULL;
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {

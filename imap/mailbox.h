@@ -791,7 +791,7 @@ extern struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
                                               unsigned flags);
 /* Set a timer on the iterator, after which it returns no more messages.
  * The time is measured in CLOCK_MONOTONIC time as returned by
- * clock_gettime. The nchecktime argument defines how many records are
+ * cyrus_gettime. The nchecktime argument defines how many records are
  * processed before the clock is checked again. */
 extern void mailbox_iter_timer(struct mailbox_iter *iter,
                                struct timespec until, unsigned nchecktime);

@@ -921,11 +921,11 @@ EXPORTED int64_t now_ms(void)
 {
     struct timespec ts;
 
-    if (clock_gettime(CLOCK_REALTIME, &ts) == 0) {
+    if (cyrus_gettime(CLOCK_REALTIME, &ts) == 0) {
         return (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
     }
     else {
-        syslog(LOG_WARNING, "clock_gettime(): %m");
+        syslog(LOG_WARNING, "cyrus_gettime(): %m");
         return time(NULL) * 1000;
     }
 }
@@ -993,7 +993,7 @@ EXPORTED void cmdtime_netend(void)
  * Like the system clock() but works in system time
  * rather than process virtual time.  Would be more
  * useful and sensible if it worked in system monotonic
- * time using clock_gettime(CLOCK_MONOTONIC) but that
+ * time using cyrus_gettime(CLOCK_MONOTONIC) but that
  * would require linking with -lrt.
  */
 EXPORTED clock_t sclock(void)

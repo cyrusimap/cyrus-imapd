@@ -2006,7 +2006,7 @@ static int create_messages(struct mailbox *mailbox, int count)
         struct body *body = NULL;
         struct buf buf = BUF_INITIALIZER;
 
-        clock_gettime(CLOCK_REALTIME, &internaldate);
+        cyrus_gettime(CLOCK_REALTIME, &internaldate);
 
         /* Write the message to the filesystem */
         if (!(fp = append_newstage(mailbox_name(mailbox), internaldate.tv_sec, 0, &stage))) {

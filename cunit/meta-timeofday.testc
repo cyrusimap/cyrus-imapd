@@ -1,0 +1,136 @@
+/* meta unit tests for our mocked time stuff
+ *
+ * based on the old "Tests - not usefully runnable, sorry." stuff
+ * that was previously embedded in unit-timeofday.c
+ */
+#include <config.h>
+#include <unistd.h>
+
+#include "cunit/unit.h"
+#include "cunit/unit-timeofday.h"
+
+#include "lib/util.h"
+
+#if HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#else
+/* no valgrind header? assume we're NOT running on valgrind. might
+ * lead to test failures if we are running on valgrind after all,
+ * but without the header there's no way to tell
+ */
+#define RUNNING_ON_VALGRIND (0)
+#endif
+
+#define MAX_SLEEPS (3)
+_Static_assert(MAX_SLEEPS >= 2, "need to sleep at least twice");
+
+static int tear_down(void)
+{
+    time_restore();
+
+    return 0;
+}
+
+static void test_time_speedup(void)
+{
+    const time_t expect_seconds_per_second = 10;
+    const double tolerance = RUNNING_ON_VALGRIND ? 0.2 : 0.1;
+    struct timeval actual, prev;
+    unsigned i;
+
+    time_push_rate(expect_seconds_per_second, 1);
+
+    /* mocked time should elapse faster than real time */
+    gettimeofday(&prev, NULL);
+    for (i = 0; i < MAX_SLEEPS - 1; i++) {
+        real_sleep(1);
+        gettimeofday(&actual, NULL);
+        CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                               expect_seconds_per_second,
+                               tolerance);
+        prev = actual;
+    }
+
+    /* mocked sleep should return faster than real time */
+    real_gettimeofday(&prev, NULL);
+    sleep(expect_seconds_per_second);
+    real_gettimeofday(&actual, NULL);
+    CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                           1.0,
+                           tolerance);
+}
+
+static void test_time_slowdown(void)
+{
+    const double expect_seconds_per_second = 0.1;
+    const double tolerance = RUNNING_ON_VALGRIND ? 0.01 : 0.001;
+    struct timeval actual, prev;
+    struct timespec duration;
+    unsigned i;
+
+    time_push_rate(1, 10);
+
+    /* mocked time should elapse slower than real time */
+    gettimeofday(&prev, NULL);
+    for (i = 0; i < MAX_SLEEPS - 1; i++) {
+        real_sleep(1);
+        gettimeofday(&actual, NULL);
+        CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                               expect_seconds_per_second,
+                               tolerance);
+        prev = actual;
+    }
+
+    /* mocked sleep should return slower than real time */
+    real_gettimeofday(&prev, NULL);
+    duration = (struct timespec){ 0, 1000000000 * expect_seconds_per_second };
+    nanosleep(&duration, NULL);
+    real_gettimeofday(&actual, NULL);
+    CU_ASSERT_DOUBLE_EQUAL(timesub(&prev, &actual),
+                           1.0,
+                           tolerance);
+}
+
+static void test_time_fixed(void)
+{
+    const time_t expect_fixed_time = 1354928400;
+    time_t actual_s;
+    int64_t actual_ms;
+    struct timeval actual_tv;
+    struct timespec actual_ts;
+    unsigned i;
+
+    time_push_fixed(expect_fixed_time);
+
+    for (i = 0; i < MAX_SLEEPS; i++) {
+        real_sleep(1);
+
+        actual_s = time(NULL);
+        actual_ms = now_ms();
+        gettimeofday(&actual_tv, NULL);
+        cyrus_gettime(CLOCK_REALTIME, &actual_ts);
+
+        CU_ASSERT_EQUAL(actual_s, expect_fixed_time);
+        CU_ASSERT_EQUAL(actual_ms, expect_fixed_time * 1000);
+        CU_ASSERT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+        CU_ASSERT_EQUAL(actual_ts.tv_sec, expect_fixed_time);
+
+        CU_ASSERT_EQUAL(actual_tv.tv_usec, 0);
+        CU_ASSERT_EQUAL(actual_ts.tv_nsec, 0);
+    }
+
+    time_pop();
+
+    /* should be back to normal time after pop */
+    actual_s = time(NULL);
+    actual_ms = now_ms();
+    gettimeofday(&actual_tv, NULL);
+    cyrus_gettime(CLOCK_REALTIME, &actual_ts);
+
+    CU_ASSERT_NOT_EQUAL(actual_s, expect_fixed_time);
+    CU_ASSERT_NOT_EQUAL(actual_ms, expect_fixed_time * 1000);
+    CU_ASSERT_NOT_EQUAL(actual_tv.tv_sec, expect_fixed_time);
+    CU_ASSERT_NOT_EQUAL(actual_ts.tv_sec, expect_fixed_time);
+}
+
+/* vim: set ft=c : */

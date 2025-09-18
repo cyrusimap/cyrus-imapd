@@ -1092,7 +1092,7 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {

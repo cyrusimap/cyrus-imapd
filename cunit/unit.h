@@ -43,6 +43,7 @@
 #ifndef CUNIT_UNIT_H
 #define CUNIT_UNIT_H
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <CUnit/CUnit.h>
@@ -216,6 +217,74 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
         #actual, _a ? _a : "(null)",                                    \
         #expected, _e ? _e : "(null)");                                 \
 } while(0)
+
+#undef CU_ASSERT_DOUBLE_EQUAL
+#define CU_ASSERT_DOUBLE_EQUAL(actual,expected,granularity) do {        \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) <= fabs(_g)),          \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_DOUBLE_EQUAL(%s=%.17g,%s=%.17g,%s=%.17g)",           \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_EQUAL_FATAL
+#define CU_ASSERT_DOUBLE_EQUAL_FATAL(actual,expected,granularity) do {  \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) <= fabs(_g)),          \
+        __LINE__, __FILE__, "", CU_TRUE,                                \
+        "CU_ASSERT_DOUBLE_EQUAL_FATAL(%s=%.17g,%s=%.17g,%s=%.17g)",     \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_NOT_EQUAL
+#define CU_ASSERT_DOUBLE_NOT_EQUAL(actual,expected,granularity) do {    \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) > fabs(_g)),           \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_DOUBLE_NOT_EQUAL(%s=%.17g,%s=%.17g,%s=%.17g)",       \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+#undef CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL
+#define CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL(actual,expected,granularity)   \
+do {                                                                    \
+    double _a = (actual), _e = (expected), _g = (granularity);          \
+    CU_assertFormatImplementation((fabs(_a - _e) > fabs(_g)),           \
+        __LINE__, __FILE__, "", CU_TRUE,                                \
+        "CU_ASSERT_DOUBLE_NOT_EQUAL_FATAL(%s=%.17g,%s=%.17g,%s=%.17g)", \
+        #actual, _a, #expected, _e, #granularity, _g);                  \
+} while (0)
+
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_INT_INRANGE(actual, min, max) do {                    \
+    intmax_t _a = (actual), _l = (min), _u = (max);                     \
+    CU_assertFormatImplementation((_a >= _l && _a <= _u),               \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_INT_INRANGE(%s=%" PRIiMAX                            \
+                               " <= %s=%" PRIiMAX                       \
+                               " <= %s=%" PRIiMAX ")",                  \
+        #min, _l, #actual, _a, #max, _u);                               \
+} while (0)
+
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_UINT_INRANGE(actual, min, max) do {                   \
+    uintmax_t _a = (actual), _l = (min), _u = (max);                    \
+    CU_assertFormatImplementation((_a >= _l && _a <= _u),               \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_UINT_INRANGE(%s=%" PRIuMAX                           \
+                                " <= %s=%" PRIuMAX                      \
+                                " <= %s=%" PRIuMAX ")",                 \
+        #min, _l, #actual, _a, #max, _u);                               \
+} while (0)
+
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_DOUBLE_INRANGE(actual, min, max) do {                 \
+    double _a = (actual), _l = (min), _u = (max);                       \
+    CU_assertFormatImplementation((_a >= _l && _a <= _u),               \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_DOUBLE_INRANGE(%s=%.17g <= %s=%.17g <= %s=%.17g)",   \
+        #min, _l, #actual, _a, #max, _u);                               \
+} while (0)
 
 #define CU_SYSLOG_MATCH(re) \
     CU_syslogMatchBegin((re), __FILE__, __LINE__, 0)

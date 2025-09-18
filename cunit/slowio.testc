@@ -1,4 +1,5 @@
 #include "cunit/unit.h"
+#include "cunit/unit-timeofday.h"
 #include "lib/slowio.h"
 #include "lib/util.h"
 
@@ -14,6 +15,13 @@
  */
 #define RUNNING_ON_VALGRIND (0)
 #endif
+
+static int tear_down(void)
+{
+    time_restore();
+
+    return 0;
+}
 
 static void test_initialize(void)
 {
@@ -40,6 +48,8 @@ static void test_limit1(void)
     int64_t start, end, diff;
     int i;
 
+    time_push_rate(10, 1);
+
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
 
@@ -53,8 +63,9 @@ static void test_limit1(void)
         CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
 
         diff = end - start;
-        CU_ASSERT(diff >= 0.8 * (i * 1000));
-        CU_ASSERT(diff <= 1.2 * (i * 1000));
+        CU_ASSERT_INT_INRANGE(diff,
+                              0.8 * (i * 1000),
+                              1.2 * (i * 1000));
     }
 }
 
@@ -63,6 +74,8 @@ static void test_limit2(void)
     struct slowio slowio = {0}, saved_slowio;
     int64_t start, end, diff;
     int i;
+
+    time_push_rate(10, 1);
 
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
@@ -73,6 +86,7 @@ static void test_limit2(void)
         const unsigned bytes_per_step = SLOWIO_MAX_BYTES_SEC / steps_per_sec;
         const unsigned ms_per_step = 1000 / steps_per_sec;
         unsigned total_bytes = i * SLOWIO_MAX_BYTES_SEC;
+        unsigned inner_diff_outliers = 0;
         unsigned j;
 
         start = now_ms();
@@ -88,48 +102,33 @@ static void test_limit2(void)
 
             /* we're not doing any actual I/O between calls to
              * slowio_maybe_delay_impl, so it'll look like we're doing our I/O
-             * extremely fast, and so every call will add some delay
+             * extremely fast, and so every call _should_ add some delay
+             *
+             * but at this granularity, timings are swingy, and especially
+             * so under valgrind.  so we'll count outliers, and assert that
+             * there weren't too many
              */
-            CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
-
-            /* looser tolerances -- timings are swingier at this granularity */
-            if (verbose && (inner_diff <= 0.25 * ms_per_step
-                            || inner_diff >= 4.0 * ms_per_step))
+            if (inner_diff < 0.25 * ms_per_step
+                || inner_diff > 4.0 * ms_per_step)
             {
-                fprintf(stderr, "%s: inner_diff(%" PRIi64 ") too large/small"
-                                " vs ms_per_step(%u..%u)\n",
-                                __func__, inner_diff,
-                                (unsigned)(0.25 * ms_per_step),
-                                (unsigned)(4.0 * ms_per_step));
+                inner_diff_outliers ++;
             }
-            CU_ASSERT(inner_diff > 0.25 * ms_per_step);
-            CU_ASSERT(inner_diff < 4.0 * ms_per_step);
+
+            if (!RUNNING_ON_VALGRIND) {
+                CU_ASSERT_EQUAL(0, slowio.bytes_since_last_delay);
+                CU_ASSERT_INT_INRANGE(inner_diff,
+                                      0.25 * ms_per_step,
+                                      4.0 * ms_per_step);
+            }
         }
         end = now_ms();
 
         diff = end - start;
-        CU_ASSERT(diff >= 0.8 * (i * 1000));
-        CU_ASSERT(diff <= 1.2 * (i * 1000));
-    }
-}
 
-static void busywait_for(double howlong)
-{
-    struct timespec start;
-    int64_t max_tries = INT64_MAX;
-
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-
-    for (int64_t i = 0; i < max_tries; i++) {
-        struct timespec now;
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now);
-
-        double elapsed = (double)(now.tv_sec - start.tv_sec);
-        elapsed += (double)(now.tv_nsec - start.tv_nsec) / 1000000000.0;
-
-        if (elapsed > howlong) {
-            break;
-        }
+        CU_ASSERT(inner_diff_outliers < 3);
+        CU_ASSERT_INT_INRANGE(diff,
+                              0.8 * (i * 1000),
+                              1.2 * (i * 1000));
     }
 }
 
@@ -139,12 +138,15 @@ static void test_slower_than_rate_limit(void)
     int64_t start, end, diff;
     int i;
 
+    time_push_rate(10, 1);
+
     /* first call to initialize */
     slowio_maybe_delay_impl(&slowio, 0);
 
     /* pretend we're reading/writing slightly slower than the rate limit */
     for (i = 1; i <= 4; i++) {
-        busywait_for(i + .001); /* 1 ms over */
+        struct timespec io_delay = { i, 1000000 }; /* 1 ms over */
+        nanosleep(&io_delay, NULL);
 
         memcpy(&saved_slowio, &slowio, sizeof(slowio));
         start = now_ms();

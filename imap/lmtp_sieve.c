@@ -1996,7 +1996,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
         struct stagemsg *stage;
         struct timespec internaldate;
 
-        clock_gettime(CLOCK_REALTIME, &internaldate);
+        cyrus_gettime(CLOCK_REALTIME, &internaldate);
         /* post-date by 1 sec in an effort to have
            the FCC threaded AFTER the incoming message */
         internaldate.tv_sec += 1;

@@ -1078,7 +1078,7 @@ havefile:
     /* And make sure it has a timestamp */
 
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
     if (!internaldate) internaldate = &now;
 
     // timestamp might be nanoseconds from the clock plus seconds from the
@@ -1291,7 +1291,7 @@ EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
     /* And make sure it has a timestamp */
     struct timespec now;
     if (!internaldate) {
-        clock_gettime(CLOCK_REALTIME, &now);
+        cyrus_gettime(CLOCK_REALTIME, &now);
         internaldate = &now;
     }
     r = msgrecord_set_internaldate(msgrec, internaldate);

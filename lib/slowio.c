@@ -91,8 +91,8 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
         }
     }
 
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now)) {
-        xsyslog(LOG_DEBUG, "clock_gettime failed", NULL);
+    if (cyrus_gettime(CLOCK_PROCESS_CPUTIME_ID, &now)) {
+        xsyslog(LOG_DEBUG, "cyrus_gettime failed", NULL);
         errno = 0;
         return;
     }
@@ -140,7 +140,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
             r = nanosleep(&sleeptime, &sleeptime);
         } while (r == -1 && errno == EINTR);
 
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &slowio->last_delay);
+        cyrus_gettime(CLOCK_PROCESS_CPUTIME_ID, &slowio->last_delay);
         slowio->bytes_since_last_delay = 0;
     }
 }

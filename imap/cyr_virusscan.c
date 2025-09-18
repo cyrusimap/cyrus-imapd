@@ -739,7 +739,7 @@ static void append_notifications(const struct buf *template)
                 goto user_done;
             }
 
-            clock_gettime(CLOCK_REALTIME, &now);
+            cyrus_gettime(CLOCK_REALTIME, &now);
             put_notification_headers(f, outgoing_count++, now.tv_sec, owner);
 
             first = 1;

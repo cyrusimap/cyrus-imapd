@@ -1223,7 +1223,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     init_internal();
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox_name(mailbox), now.tv_sec, 0, &stage))) {

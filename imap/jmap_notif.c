@@ -355,7 +355,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
     }
 
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
 
     const char *byemail = schedule_addresses ?
         strarray_nth(schedule_addresses, 0) : NULL;
@@ -471,7 +471,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
         byemail = strarray_nth(schedule_addresses, 0);
     }
 
-    clock_gettime(CLOCK_REALTIME, &now);
+    cyrus_gettime(CLOCK_REALTIME, &now);
     json_t *jnotif = build_eventnotif(type, now.tv_sec,
             byprincipal, buf_cstring(&byname), byemail,
             ical_uid, NULL, is_draft, jevent, jpatch);

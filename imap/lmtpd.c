@@ -586,7 +586,7 @@ int deliver_mailbox(FILE *f,
     }
 
     /* initialize internaldate to "now" */
-    clock_gettime(CLOCK_REALTIME, &internaldate);
+    cyrus_gettime(CLOCK_REALTIME, &internaldate);
 
     /* if the body contains an x-deliveredinternaldate then that overrides all else */
     if (content->body->x_deliveredinternaldate) {
