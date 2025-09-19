@@ -50,6 +50,9 @@
 
 #include <stdint.h>
 
+extern void auditlog_mboxname(const char *action,
+                              const char *userid,
+                              const char *mboxname);
 extern void auditlog_quota(const char *action,
                            const char *root,
                            const quota_t *oldquotas,
