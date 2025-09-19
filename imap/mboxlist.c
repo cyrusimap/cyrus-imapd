@@ -3255,13 +3255,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             char *oldpartition = xstrdupnull(mailbox_partition(oldmailbox));
             char *olduniqueid = (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
                 NULL : xstrdup(mailbox_uniqueid(oldmailbox));
-            if (config_auditlog)
-                xsyslog(LOG_NOTICE, "auditlog: partitionmove",
-                        "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                        " oldpart=<%s> newpart=<%s>",
-                        session_id(),
-                        mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
-                        mailbox_jmapid(oldmailbox), oldpartition, partition);
+
+            auditlog_mailbox("partitionmove", NULL, oldmailbox, newpartition);
+
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);

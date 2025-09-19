@@ -104,6 +104,44 @@ HIDDEN void hidden_auditlog_finish(struct buf *buf)
  * Public API
  */
 
+EXPORTED void auditlog_mailbox(const char *action,
+                               const struct mailbox *oldmailbox,
+                               const struct mailbox *mailbox,
+                               const char *newpartition)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+
+    if (oldmailbox && strcmpsafe(mailbox_name(oldmailbox),
+                                 mailbox_name(mailbox)))
+    {
+        auditlog_push(&buf, "oldmailbox", mailbox_name(oldmailbox));
+    }
+
+    auditlog_push(&buf, "mailbox", mailbox_name(mailbox));
+    auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
+    auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
+    buf_printf(&buf, " uidvalidity=<%u>", mailbox->i.uidvalidity);
+
+    if (oldmailbox && strcmpsafe(mailbox_partition(oldmailbox),
+                                 mailbox_partition(mailbox)))
+    {
+        auditlog_push(&buf, "oldpart", mailbox_partition(oldmailbox));
+        auditlog_push(&buf, "newpart", mailbox_partition(mailbox));
+    }
+    else if (newpartition && strcmpsafe(mailbox_partition(mailbox),
+                                        newpartition))
+    {
+        auditlog_push(&buf, "oldpart", mailbox_partition(mailbox));
+        auditlog_push(&buf, "newpart", newpartition);
+    }
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_mboxname(const char *action,
                                 const char *userid,
                                 const char *mboxname)

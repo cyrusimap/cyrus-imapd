@@ -50,6 +50,10 @@
 
 #include <stdint.h>
 
+extern void auditlog_mailbox(const char *action,
+                             const struct mailbox *oldmailbox,
+                             const struct mailbox *mailbox,
+                             const char *newpartition);
 extern void auditlog_mboxname(const char *action,
                               const char *userid,
                               const char *mboxname);
