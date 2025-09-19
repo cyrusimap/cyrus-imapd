@@ -1,0 +1,26 @@
+Description:
+
+* Fixed: lmtpd generated a new session id after LHLO response
+* Adds lmtp `TRACE` capability and `TRACE trace-id` command.  The supplied
+  trace-id will be included in all log lines related to this delivery, until
+  the next `RSET`.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required.
+
+
+GitHub issue:
+
+None
