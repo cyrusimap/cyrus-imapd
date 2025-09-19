@@ -42,3 +42,40 @@
 #include <config.h>
 
 #include "imap/auditlog.h"
+
+#include <syslog.h>
+
+static inline void auditlog_begin(struct buf *buf, const char *action)
+{
+    buf_truncate(buf, 0);
+    buf_printf(buf, "auditlog: %s", action);
+
+    /* XXX session id and trace id here! after rebase */
+}
+
+static inline void auditlog_push(struct buf *buf,
+                                 const char *key,
+                                 const char *value)
+{
+    // XXX is this even useful?
+    buf_printf(buf, "%s=<%s>", key, value);
+}
+
+static void auditlog_finish(struct buf *buf)
+{
+    syslog(LOG_NOTICE, "%s", buf_cstring(buf));
+    buf_free(buf);
+}
+
+EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "traffic");
+    buf_printf(&buf, " bytes_in=<%" PRIu64 ">"
+                     " bytes_out=<%" PRIu64 ">",
+                     bytes_in, bytes_out);
+    auditlog_finish(&buf);
+}
