@@ -67,9 +67,10 @@ extern void auditlog_message(const char *action,
 /* auditlog: create
  * auditlog: delete
  * auditlog: rename (add oldmailbox)
- * auditlog: partitionmove (add oldpart, newpart)
+ * auditlog: partitionmove (add oldmailbox, oldpart, newpart)
  */
 extern void auditlog_mailbox(const char *action,
+                             const struct mailbox *oldmailbox,
                              const struct mailbox *mailbox);
 
 /* auditlog: setquota
