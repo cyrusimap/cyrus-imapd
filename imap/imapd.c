@@ -71,6 +71,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
+#include "auditlog.h"
 #include "auth.h"
 #ifdef USE_AUTOCREATE
 #include "autocreate.h"
@@ -1004,10 +1005,7 @@ static void imapd_reset(void)
         prot_free(imapd_out);
     }
 
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
+    auditlog_traffic(bytes_in, bytes_out);
 
     imapd_in = imapd_out = NULL;
 
@@ -1401,10 +1399,7 @@ void shut_down(int code)
     prometheus_increment(code ? CYRUS_IMAP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_IMAP_SHUTDOWN_TOTAL_STATUS_OK);
 
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
+    auditlog_traffic(bytes_in, bytes_out);
 
     if (protin) protgroup_free(protin);
 

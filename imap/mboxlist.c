@@ -61,6 +61,7 @@
 
 #include "acl.h"
 #include "annotate.h"
+#include "auditlog.h"
 #include "bsearch.h"
 #include "glob.h"
 #include "assert.h"
@@ -3256,13 +3257,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             char *oldpartition = xstrdupnull(mailbox_partition(oldmailbox));
             char *olduniqueid = (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
                 NULL : xstrdup(mailbox_uniqueid(oldmailbox));
-            if (config_auditlog)
-                xsyslog(LOG_NOTICE, "auditlog: partitionmove",
-                        "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                        " oldpart=<%s> newpart=<%s>",
-                        session_id(),
-                        mailbox_name(oldmailbox), mailbox_uniqueid(oldmailbox),
-                        mailbox_jmapid(oldmailbox), oldpartition, partition);
+
+            auditlog_mailbox("partitionmove", oldmailbox, newmailbox);
+
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
@@ -4839,17 +4836,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
                 mboxevent_extract_quota(quotachange_event, &q, res);
             }
 
-            if (config_auditlog) {
-                struct buf item = BUF_INITIALIZER;
-                for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                    buf_printf(&item, " old%s=<%lld> new%s=<%lld>",
-                               quota_names[res], oldquotas[res],
-                               quota_names[res], newquotas[res]);
-                }
-                xsyslog(LOG_NOTICE, "auditlog: setquota",
-                        "root=<%s>%s", root, buf_cstring(&item));
-                buf_free(&item);
-            }
+            auditlog_quota("setquota", root, oldquotas, newquotas);
         }
 
         if (!r)
@@ -4907,17 +4894,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     }
 
     quota_commit(&tid);
-
-    if (config_auditlog) {
-        struct buf item = BUF_INITIALIZER;
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            buf_printf(&item, " new%s=<%lld>",
-                       quota_names[res], newquotas[res]);
-        }
-        xsyslog(LOG_NOTICE, "auditlog: newquota",
-                "root=<%s>%s", root, buf_cstring(&item));
-        buf_free(&item);
-    }
+    auditlog_quota("newquota", root, NULL, newquotas);
 
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
@@ -4971,16 +4948,7 @@ EXPORTED int mboxlist_unsetquota(const char *root, int silent)
      */
     mboxlist_mboxtree(root, mboxlist_rmquota, (void *)root, /*flags*/0);
 
-    if (config_auditlog) {
-        struct buf item = BUF_INITIALIZER;
-        int res;
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            buf_printf(&item, " old%s=<%lld>", quota_names[res], q.limits[res]);
-        }
-        xsyslog(LOG_NOTICE, "auditlog: rmquota",
-                "root=<%s>%s", root, buf_cstring(&item));
-        buf_free(&item);
-    }
+    auditlog_quota("rmquota", root, q.limits, NULL);
 
     r = quota_deleteroot(root, silent);
     quota_changelockrelease();
@@ -5562,16 +5530,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         mboxevent_free(&mboxevent);
     }
 
-    if (add) {
-        xsyslog(LOG_NOTICE, "auditlog: subscribe",
-                            "sessionid=<%s> userid=<%s> mailbox=<%s>",
-                session_id(), userid, name);
-    }
-    else {
-        xsyslog(LOG_NOTICE, "auditlog: unsubscribe",
-                            "sessionid=<%s> userid=<%s> mailbox=<%s>",
-                session_id(), userid, name);
-    }
+    auditlog_mboxname(add ? "subscribe" : "unsubscribe", userid, name);
 
   done:
     mboxlist_entry_free(&mbentry);
