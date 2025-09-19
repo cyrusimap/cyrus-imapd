@@ -42,4 +42,14 @@
 #ifndef INCLUDED_AUDITLOG_H
 #define INCLUDED_AUDITLOG_H
 
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/quota.h"
+
+#include "lib/libconfig.h"
+
+#include <stdint.h>
+
+extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
+
 #endif

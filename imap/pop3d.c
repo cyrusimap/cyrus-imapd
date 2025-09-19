@@ -74,6 +74,7 @@
 #include "slowio.h"
 #include "tls.h"
 
+#include "auditlog.h"
 #include "imapd.h"
 #include "mailbox.h"
 #include "mboxevent.h"
@@ -355,10 +356,7 @@ static void popd_reset(void)
         prot_free(popd_out);
     }
 
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
+    auditlog_traffic(bytes_in, bytes_out);
 
     popd_in = popd_out = NULL;
 
@@ -656,10 +654,7 @@ void shut_down(int code)
         prometheus_decrement(CYRUS_POP3_READY_LISTENERS);
     }
 
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
+    auditlog_traffic(bytes_in, bytes_out);
 
     tls_shutdown_serverengine();
 

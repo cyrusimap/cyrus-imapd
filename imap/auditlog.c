@@ -42,3 +42,77 @@
 #include <config.h>
 
 #include "imap/auditlog.h"
+
+#include "lib/sessionid.h"
+
+#include <syslog.h>
+
+static inline void auditlog_begin(struct buf *buf, const char *action)
+{
+    const char *traceid = trace_id();
+
+    buf_reset(buf);
+    buf_printf(buf, "auditlog: %s", action);
+
+    if (session_have_id()) {
+        buf_appendmap(buf, " sessionid=<", 12);
+        buf_appendcstr(buf, session_id());
+        buf_putc(buf, '>');
+    }
+    if (traceid) {
+        buf_appendmap(buf, " r.tid=<", 8);
+        buf_appendcstr(buf, traceid);
+        buf_putc(buf, '>');
+    }
+}
+
+static inline void auditlog_push(struct buf *buf,
+                                 const char *key,
+                                 const char *value)
+{
+    buf_printf(buf, " %s=<%s>", key, value);
+}
+
+static inline void auditlog_finish(struct buf *buf)
+{
+    syslog(LOG_NOTICE, "%s", buf_cstring(buf));
+    buf_free(buf);
+}
+
+/*
+ * Partially-exposed internals for cunit tests
+ */
+
+HIDDEN void hidden_auditlog_begin(struct buf *buf, const char *action)
+{
+    return auditlog_begin(buf, action);
+}
+
+HIDDEN void hidden_auditlog_push(struct buf *buf,
+                                 const char *key,
+                                 const char *value)
+{
+    return auditlog_push(buf, key, value);
+}
+
+HIDDEN void hidden_auditlog_finish(struct buf *buf)
+{
+    return auditlog_finish(buf);
+}
+
+/*
+ * Public API
+ */
+
+EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "traffic");
+    buf_printf(&buf, " bytes_in=<%" PRIu64 ">"
+                     " bytes_out=<%" PRIu64 ">",
+                     bytes_in, bytes_out);
+    auditlog_finish(&buf);
+}

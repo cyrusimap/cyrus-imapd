@@ -1,9 +1,68 @@
 #include "cunit/unit.h"
 #include "imap/auditlog.h"
 
-static void test_stub(void)
+#include "lib/sessionid.h"
+#include "lib/libconfig.h"
+
+#define DBDIR "test-auditlog-dbdir"
+
+extern void hidden_auditlog_begin(struct buf *buf, const char *action);
+extern void hidden_auditlog_push(struct buf *buf,
+                                 const char *key,
+                                 const char *value);
+extern void hidden_auditlog_finish(struct buf *buf);
+
+static int set_up(void)
 {
-    // XXX test something
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
+
+static void test_session_id(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char match[32 + MAX_SESSIONID_SIZE];
+
+    /* need basic configuration for session_new_id() */
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    session_new_id();
+    snprintf(match, sizeof(match), " sessionid=<%s> ", session_id());
+
+    CU_SYSLOG_MATCH_SUBSTR(match);
+    hidden_auditlog_begin(&buf, "session id test");
+    hidden_auditlog_push(&buf, "key", "value");
+    hidden_auditlog_finish(&buf);
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    config_reset();
+    system("rm -rf " DBDIR);
+    buf_free(&buf);
+}
+
+static void test_trace_id(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    trace_set_id("sometraceid", 0);
+
+    CU_SYSLOG_MATCH_SUBSTR(" r.tid=<sometraceid> ");
+    hidden_auditlog_begin(&buf, "trace id test");
+    hidden_auditlog_push(&buf, "key", "value");
+    hidden_auditlog_finish(&buf);
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&buf);
 }
 
 /* vim: set ft=c: */
