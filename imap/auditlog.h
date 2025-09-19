@@ -78,8 +78,8 @@ extern void auditlog_mailbox(const char *action,
  */
 extern void auditlog_quota(const char *action,
                            const char *root,
-                           const quota_t oldquotas[QUOTA_NUMRESOURCES],
-                           const quota_t newquotas[QUOTA_NUMRESOURCES]);
+                           const quota_t *oldquotas,
+                           const quota_t *newquotas);
 
 
 /* auditlog: subscribe

@@ -67,6 +67,36 @@ static void auditlog_finish(struct buf *buf)
     buf_free(buf);
 }
 
+EXPORTED void auditlog_quota(const char *action,
+                             const char *root,
+                             const quota_t *oldquotas,
+                             const quota_t *newquotas)
+{
+    struct buf buf = BUF_INITIALIZER;
+    int resource;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+    auditlog_push(&buf, "root", root);
+
+    for (resource = 0; resource < QUOTA_NUMRESOURCES; resource++) {
+        if (oldquotas) {
+            buf_printf(&buf, " old%s=<%lld>",
+                             quota_names[resource],
+                             oldquotas[resource]);
+        }
+
+        if (newquotas) {
+            buf_printf(&buf, " new%s=<%lld>",
+                             quota_names[resource],
+                             newquotas[resource]);
+        }
+    }
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
 {
     struct buf buf = BUF_INITIALIZER;
