@@ -42,4 +42,49 @@
 #ifndef INCLUDED_AUDITLOG_H
 #define INCLUDED_AUDITLOG_H
 
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+#include "imap/quota.h"
+
+#include <stdint.h>
+
+extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
+
+/* auditlog: append
+ * auditlog: expunge (no message-id)
+ * auditlog: unlink (no cid, message-id, size)
+ * auditlog: touched (add oldflags)
+ * auditlog: action=<archive> (no modseq, message-id, sysflags)
+ * auditlog: action=<unarchive> (no modseq, message-id, sysflags)
+ */
+extern void auditlog_message(const char *action,
+                             const struct mailbox *mailbox,
+                             const struct index_record *record,
+                             const char *message_id);
+
+/* auditlog: create
+ * auditlog: delete
+ * auditlog: rename (add oldmailbox)
+ * auditlog: partitionmove (add oldpart, newpart)
+ */
+extern void auditlog_mailbox(const char *action,
+                             const struct mailbox *mailbox);
+
+/* auditlog: setquota
+ * auditlog: newquota (no oldquotas)
+ * auditlog: rmquota (no newquotas)
+ */
+extern void auditlog_quota(const char *action,
+                           const char *root,
+                           const quota_t oldquotas[QUOTA_NUMRESOURCES],
+                           const quota_t newquotas[QUOTA_NUMRESOURCES]);
+
+
+/* auditlog: subscribe
+ * auditlog: unsubscribe
+ */
+extern void auditlog_mbentry(const char *action,
+                             const char *userid,
+                             const mbentry_t *mbentry);
+
 #endif
