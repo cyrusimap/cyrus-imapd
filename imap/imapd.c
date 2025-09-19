@@ -924,11 +924,10 @@ static void imapd_log_client_behavior(void)
     }
 
     xsyslog(LOG_NOTICE, "session ended",
-                        "sessionid=<%s> userid=<%s>"
+                        "userid=<%s>"
                         " id.vendor=<%s> id.name=<%s> id.version=<%s>"
                         "%s",
 
-                        session_id(),
                         imapd_userid ? imapd_userid : "",
                         id_vendor    ? id_vendor    : "",
                         id_name      ? id_name      : "",
@@ -2854,10 +2853,9 @@ static void cmdloop(void)
             cmdtime_endtimer(&cmdtime, &nettime);
             if (cmdtime >= commandmintimerd) {
                 xsyslog(LOG_NOTICE, "cmdtimer",
-                                    "sessionid=<%s> userid=<%s> command=<%s>"
+                                    "userid=<%s> command=<%s>"
                                     " mailbox=<%s> cmdtime=<%f> nettime=<%f>"
                                     " total=<%f>",
-                                    session_id(),
                                     imapd_userid ? imapd_userid : "",
                                     cmdname,
                                     mboxname ? mboxname : "",
@@ -14658,8 +14656,7 @@ static void cmd_compress(char *tag, char *alg)
                     "%s OK %s active\r\n", tag, alg);
 
         xsyslog(LOG_INFO, "compression enabled",
-                          "sessionid=<%s> userid=<%s> algorithm=<%s>",
-                          session_id(),
+                          "userid=<%s> algorithm=<%s>",
                           imapd_userid ? imapd_userid : "",
                           alg);
 

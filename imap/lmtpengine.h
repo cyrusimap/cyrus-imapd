@@ -143,7 +143,8 @@ void lmtpmode(struct lmtp_func *func,
 enum {
     /* LMTP capabilities */
     CAPA_PIPELINING     = (1 << 3),
-    CAPA_IGNOREQUOTA    = (1 << 4)
+    CAPA_IGNOREQUOTA    = (1 << 4),
+    CAPA_TRACE          = (1 << 5),
 };
 
 struct lmtp_txn {

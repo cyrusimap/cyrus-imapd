@@ -120,10 +120,6 @@ EXPORTED char *config_skip_userlock;
 EXPORTED int haproxy_protocol = 0;
 EXPORTED int imaply_strict = 1;
 
-static char session_id_buf[MAX_SESSIONID_SIZE];
-static int session_id_time = 0;
-static int session_id_count = 0;
-
 static strarray_t *suppressed_capabilities = NULL;
 
 static int get_facility(const char *name)
@@ -887,56 +883,6 @@ EXPORTED int shutdown_file(char *buf, int size)
     fclose(f);
 
     return 1;
-}
-
-/* Set up the Session ID Buffer */
-EXPORTED void session_new_id(void)
-{
-    const char *base;
-    int now = time(NULL);
-    if (now != session_id_time) {
-        session_id_time = now;
-        session_id_count = 0;
-    }
-    ++session_id_count;
-    base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
-    if (!base) base = config_servername;
-
-    unsigned long long random;
-    RAND_bytes((unsigned char *) &random, sizeof(random));
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
-             base, session_id_time, getpid(), session_id_count, random);
-}
-
-/* Return the session id */
-EXPORTED const char *session_id(void)
-{
-    if (!session_id_count)
-        session_new_id();
-    return (const char *)session_id_buf;
-}
-
-/* parse sessionid out of protocol answers */
-EXPORTED void parse_sessionid(const char *str, char *sessionid)
-{
-    char *sp, *ep;
-    int len;
-
-    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
-    {
-        sp += 11;
-        len = ep - sp;
-        if (len < MAX_SESSIONID_SIZE)
-        {
-            strncpy(sessionid, sp, len);
-            ep = sessionid + len;
-            *ep = '\0';
-        }
-        else
-            strcpy(sessionid, "invalid");
-    }
-    else
-        strcpy(sessionid, "unknown");
 }
 
 EXPORTED int capa_is_disabled(const char *str)

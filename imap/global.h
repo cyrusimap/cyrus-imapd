@@ -48,6 +48,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "mboxname.h"
+#include "sessionid.h" /* XXX remove from here once it's auto-logged */
 #include "signals.h"
 #include "imapparse.h"
 #include "libcyr_cfg.h"
@@ -55,8 +56,6 @@
 
 #include <openssl/evp.h>
 #define MAX_FINISHED_LEN EVP_MAX_MD_SIZE
-
-#define MAX_SESSIONID_SIZE 256
 
 /* Flags for cyrus_init() */
 enum {
@@ -175,11 +174,6 @@ extern int charset_snippet_flags;
 extern size_t config_search_maxsize;
 extern int haproxy_protocol;
 extern int imaply_strict;
-
-/* Session ID */
-extern void session_new_id(void);
-extern const char *session_id(void);
-extern void parse_sessionid(const char *str, char *sessionid);
 
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);

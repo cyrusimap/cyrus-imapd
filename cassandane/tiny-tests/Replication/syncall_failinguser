@@ -98,7 +98,9 @@ EOF
     # sync server should have logged the write error
     $self->assert_syslog_matches($self->{replica},
                                  qr{IOERROR:\sfailed\sto\supload\sfile
-                                    (?:\s\(simulated\))?:\sguid=<$canaryguid>
+                                    (?:\s\(simulated\))?:
+                                    (?:\s[^=]+=<[^>]*>)*
+                                    \sguid=<$canaryguid>
                                  }x);
 
     xlog $self, "Check that cassandane user wasn't updated, both others were";

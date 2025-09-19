@@ -1972,6 +1972,11 @@ sub deliver
         push(@cmd, '-m', $folder);
     }
 
+    if (defined $params{trace_id})
+    {
+        push(@cmd, '--trace-id', $params{trace_id});
+    }
+
     my @users;
     if (defined $params{users})
     {
