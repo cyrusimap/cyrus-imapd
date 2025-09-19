@@ -85,8 +85,8 @@ extern void auditlog_quota(const char *action,
 /* auditlog: subscribe
  * auditlog: unsubscribe
  */
-extern void auditlog_mbentry(const char *action,
-                             const char *userid,
-                             const mbentry_t *mbentry);
+extern void auditlog_mboxname(const char *action,
+                              const char *userid,
+                              const char *mboxname);
 
 #endif
