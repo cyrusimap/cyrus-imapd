@@ -82,6 +82,7 @@
 #include "tls.h"
 #include "map.h"
 
+#include "auditlog.h"
 #include "imapd.h"
 #include "proc.h"
 #include "version.h"
@@ -726,12 +727,7 @@ static void httpd_reset(struct http_connection *conn)
         prot_free(httpd_out);
     }
 
-    if (config_auditlog) {
-        syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
-    }
+    auditlog_traffic(bytes_in, bytes_out);
 
     httpd_in = httpd_out = NULL;
 
@@ -1196,11 +1192,7 @@ void shut_down(int code)
     prometheus_increment(code ? CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_ERROR
                               : CYRUS_HTTP_SHUTDOWN_TOTAL_STATUS_OK);
 
-    if (config_auditlog)
-        syslog(LOG_NOTICE,
-               "auditlog: traffic sessionid=<%s>"
-               " bytes_in=<%" PRIu64 "> bytes_out=<%" PRIu64 ">",
-               session_id(), bytes_in, bytes_out);
+    auditlog_traffic(bytes_in, bytes_out);
 
     saslprops_free(&saslprops);
 
