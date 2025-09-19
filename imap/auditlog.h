@@ -50,6 +50,10 @@
 
 #include <stdint.h>
 
+extern void auditlog_quota(const char *action,
+                           const char *root,
+                           const quota_t *oldquotas,
+                           const quota_t *newquotas);
 extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
 
 #endif

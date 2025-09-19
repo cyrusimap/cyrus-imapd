@@ -61,6 +61,7 @@
 
 #include "acl.h"
 #include "annotate.h"
+#include "auditlog.h"
 #include "bsearch.h"
 #include "glob.h"
 #include "assert.h"
@@ -4837,17 +4838,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
                 mboxevent_extract_quota(quotachange_event, &q, res);
             }
 
-            if (config_auditlog) {
-                struct buf item = BUF_INITIALIZER;
-                for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                    buf_printf(&item, " old%s=<%lld> new%s=<%lld>",
-                               quota_names[res], oldquotas[res],
-                               quota_names[res], newquotas[res]);
-                }
-                xsyslog(LOG_NOTICE, "auditlog: setquota",
-                        "root=<%s>%s", root, buf_cstring(&item));
-                buf_free(&item);
-            }
+            auditlog_quota("setquota", root, oldquotas, newquotas);
         }
 
         if (!r)
@@ -4905,17 +4896,7 @@ EXPORTED int mboxlist_setquotas(const char *root,
     }
 
     quota_commit(&tid);
-
-    if (config_auditlog) {
-        struct buf item = BUF_INITIALIZER;
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            buf_printf(&item, " new%s=<%lld>",
-                       quota_names[res], newquotas[res]);
-        }
-        xsyslog(LOG_NOTICE, "auditlog: newquota",
-                "root=<%s>%s", root, buf_cstring(&item));
-        buf_free(&item);
-    }
+    auditlog_quota("newquota", root, NULL, newquotas);
 
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
@@ -4969,16 +4950,7 @@ EXPORTED int mboxlist_unsetquota(const char *root, int silent)
      */
     mboxlist_mboxtree(root, mboxlist_rmquota, (void *)root, /*flags*/0);
 
-    if (config_auditlog) {
-        struct buf item = BUF_INITIALIZER;
-        int res;
-        for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-            buf_printf(&item, " old%s=<%lld>", quota_names[res], q.limits[res]);
-        }
-        xsyslog(LOG_NOTICE, "auditlog: rmquota",
-                "root=<%s>%s", root, buf_cstring(&item));
-        buf_free(&item);
-    }
+    auditlog_quota("rmquota", root, q.limits, NULL);
 
     r = quota_deleteroot(root, silent);
     quota_changelockrelease();
