@@ -77,6 +77,7 @@
 
 #include "annotate.h"
 #include "assert.h"
+#include "auditlog.h"
 #include "bsearch.h"
 #ifdef WITH_DAV
 #include "caldav_db.h"
@@ -6526,13 +6527,7 @@ EXPORTED int mailbox_create(const char *name,
     r = mailbox_commit(mailbox);
     if (r) goto done;
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: create",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s>"
-                " mboxid=<%s> uidvalidity=<%u>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                mailbox->i.uidvalidity);
+    auditlog_mailbox("create", NULL, mailbox, NULL);
 
 done:
     mbname_free(&mbname);
@@ -6788,11 +6783,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox_name(mailbox));
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: delete",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox));
+    auditlog_mailbox("delete", NULL, mailbox, NULL);
 
     proc_killmbox(mailbox_name(mailbox));
 
@@ -7303,12 +7294,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_commit(newmailbox);
     if (r) goto fail;
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: rename",
-                "sessionid=<%s> oldmailbox=<%s> newmailbox=<%s>"
-                " uniqueid=<%s> mboxid=<%s>",
-                session_id(), mailbox_name(oldmailbox), newname,
-                mailbox_uniqueid(newmailbox), mailbox_jmapid(newmailbox));
+    auditlog_mailbox("rename", oldmailbox, newmailbox, NULL);
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);
