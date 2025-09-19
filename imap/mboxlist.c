@@ -5532,16 +5532,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         mboxevent_free(&mboxevent);
     }
 
-    if (add) {
-        xsyslog(LOG_NOTICE, "auditlog: subscribe",
-                            "userid=<%s> mailbox=<%s>",
-                            userid, name);
-    }
-    else {
-        xsyslog(LOG_NOTICE, "auditlog: unsubscribe",
-                            "userid=<%s> mailbox=<%s>",
-                            userid, name);
-    }
+    auditlog_mboxname(add ? "subscribe" : "unsubscribe", userid, name);
 
   done:
     mboxlist_entry_free(&mbentry);

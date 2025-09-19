@@ -104,6 +104,28 @@ HIDDEN void hidden_auditlog_finish(struct buf *buf)
  * Public API
  */
 
+EXPORTED void auditlog_mboxname(const char *action,
+                                const char *userid,
+                                const char *mboxname)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+
+    if (userid) {
+        auditlog_push(&buf, "userid", userid);
+    }
+
+    if (mboxname) {
+        /* XXX convert to consistent namespace? */
+        auditlog_push(&buf, "mailbox", mboxname);
+    }
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_quota(const char *action,
                              const char *root,
                              const quota_t *oldquotas,
