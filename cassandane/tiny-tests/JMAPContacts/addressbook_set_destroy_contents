@@ -10,7 +10,12 @@ sub test_addressbook_set_destroy_contents
     my $carddav = $self->{carddav};
 
     xlog "Create addressbook and contact";
-    my $abookId = $carddav->NewAddressBook("foo");
+    my $abookPath = $carddav->NewAddressBook("foo");
+
+    xlog $self, "get addressbook ids";
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $abookId = $m{"foo"}{id};
 
     my $card = <<EOF;
 BEGIN:VCARD
@@ -25,30 +30,27 @@ END:VCARD
 EOF
 
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-    my $cardId = basename($carddav->NewContact($abookId, $VCard), '.vcf');
+    $carddav->NewContact($abookPath, $VCard);
 
     xlog "Destroy addressbook (with and without onDestroyRemoveContents)";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['AddressBook/set', {
             destroy => [$abookId],
         }, 'R1'],
-# XXX  Change to ContactCard/get once implemented
-        ['Contact/get', {
-            ids => [$cardId],
+        ['ContactCard/get', {
             properties => ['id'],
         }, 'R2'],
         ['AddressBook/set', {
             destroy => [$abookId],
             onDestroyRemoveContents => JSON::true,
         }, 'R3'],
-        ['Contact/get', {
-            ids => [$cardId],
+        ['ContactCard/get', {
             properties => ['id'],
         }, 'R2'],
     ]);
     $self->assert_str_equals('addressBookHasContents',
         $res->[0][1]{notDestroyed}{$abookId}{type});
-    $self->assert_str_equals($cardId, $res->[1][1]{list}[0]{id});
+    $self->assert_num_equals(1, scalar(@{$res->[1][1]{list}}));
     $self->assert_deep_equals([$abookId], $res->[2][1]{destroyed});
-    $self->assert_deep_equals([$cardId], $res->[3][1]{notFound});
+    $self->assert_num_equals(0, scalar(@{$res->[3][1]{list}}));
 }
