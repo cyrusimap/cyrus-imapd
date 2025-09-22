@@ -180,11 +180,14 @@ static struct MsgFlagMap msgflagmap[] = {
     {"EX", (int)FLAG_INTERNAL_EXPUNGED}
     /* ZZ -> invalid file found on disk */
 };
+_Static_assert(N_MSGFLAGMAP == sizeof(msgflagmap) / sizeof(msgflagmap[0]),
+               "N_MSGFLAGMAP has the wrong value");
 /* The length of the msgflagmap list * 2 +
  * Total number of separators possible
  * = 33 bytes
  */
-#define FLAGMAPSTR_MAXLEN (1 + 3 *(sizeof(msgflagmap) / sizeof(struct MsgFlagMap)))
+_Static_assert(FLAGMAPSTR_MAXLEN == 1 + 3 * N_MSGFLAGMAP,
+               "FLAGMAPSTR_MAXLEN has the wrong value");
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int _mailbox_index_repack(struct mailbox *mailbox,
@@ -234,7 +237,7 @@ static inline void flags_to_str_internal(uint32_t flags, char *flagstr)
     }
 }
 
-static void flags_to_str(struct index_record *record, char *flagstr)
+EXPORTED void flags_to_str(const struct index_record *record, char *flagstr)
 {
     uint32_t flags = record->system_flags | record->internal_flags;
 
