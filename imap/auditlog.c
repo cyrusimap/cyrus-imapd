@@ -43,6 +43,8 @@
 
 #include "imap/auditlog.h"
 
+#include "imap/jmap_util.h"
+
 #include "lib/sessionid.h"
 
 #include <syslog.h>
@@ -161,6 +163,44 @@ EXPORTED void auditlog_mboxname(const char *action,
         auditlog_push(&buf, "mailbox", mboxname);
     }
 
+    auditlog_finish(&buf);
+}
+
+EXPORTED void auditlog_message(const char *action,
+                               struct mailbox *mailbox,
+                               const struct index_record *record,
+                               const char *message_id)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct conversations_state *cstate;
+    char flagstr[FLAGMAPSTR_MAXLEN] = {0};
+    char emailid[JMAP_MAX_EMAILID_SIZE] = {0};
+    char threadid[JMAP_THREADID_SIZE] = {0};
+
+    if (!config_auditlog) return;
+
+    cstate = mailbox_get_cstate(mailbox);
+    jmap_set_emailid(cstate, &record->guid, 0, &record->internaldate, emailid);
+    jmap_set_threadid(cstate, record->cid, threadid);
+    flags_to_str(record, flagstr);
+
+    auditlog_begin(&buf, action);
+
+    auditlog_push(&buf, "mailbox", mailbox_name(mailbox));
+    auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
+    auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
+    buf_printf(&buf, " uid=<%u> modseq=<" MODSEQ_FMT ">",
+                     record->uid, record->modseq);
+    auditlog_push(&buf, "sysflags", flagstr);
+    auditlog_push(&buf, "guid", message_guid_encode(&record->guid));
+    auditlog_push(&buf, "emailid", emailid);
+    auditlog_push(&buf, "cid", threadid);
+
+    if (message_id) {
+        buf_printf(&buf, " message-id=%s", message_id); /* already has <> */
+    }
+
+    buf_printf(&buf, " size=<" UINT64_FMT ">", record->size);
     auditlog_finish(&buf);
 }
 
