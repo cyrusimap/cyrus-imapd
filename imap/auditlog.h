@@ -66,6 +66,13 @@ extern void auditlog_quota(const char *action,
                            const char *root,
                            const quota_t *oldquotas,
                            const quota_t *newquotas);
+extern void auditlog_sieve(const char *action,
+                           const char *userid,
+                           const char *in_msgid,
+                           const char *out_msgid,
+                           const char *target,
+                           const char *from_addr,
+                           const char *to_addr);
 extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
 
 #endif
