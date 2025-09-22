@@ -42,6 +42,7 @@
 #ifndef INCLUDED_AUDITLOG_H
 #define INCLUDED_AUDITLOG_H
 
+#include "imap/duplicate.h"
 #include "imap/mailbox.h"
 #include "imap/mboxlist.h"
 #include "imap/quota.h"
@@ -53,6 +54,8 @@
 extern void auditlog_client(const char *action,
                             const char *userid,
                             const char *client);
+extern void auditlog_duplicate(const char *action,
+                               const duplicate_key_t *dkey);
 extern void auditlog_imip(const char *message_id,
                           const char *outcome,
                           const char *errstr);

@@ -134,6 +134,24 @@ EXPORTED void auditlog_client(const char *action,
     auditlog_finish(&buf);
 }
 
+/* n.b. you probably want to call duplicate_log()! */
+HIDDEN void auditlog_duplicate(const char *action,
+                               const duplicate_key_t *dkey)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "duplicate");
+
+    auditlog_push(&buf, "action", action);
+    auditlog_push(&buf, "message-id", dkey->id);
+    auditlog_push(&buf, "uniqueid-or-scope", dkey->to);
+    auditlog_push(&buf, "date", dkey->date);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_imip(const char *message_id,
                             const char *outcome,
                             const char *errstr)
