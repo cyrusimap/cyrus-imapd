@@ -45,6 +45,7 @@
 
 #include "imap/jmap_util.h"
 
+#include "lib/assert.h"
 #include "lib/sessionid.h"
 
 #include <syslog.h>
@@ -72,7 +73,18 @@ static inline void auditlog_push(struct buf *buf,
                                  const char *key,
                                  const char *value)
 {
-    buf_printf(buf, " %s=<%s>", key, value);
+    int len = 0;
+
+    assert(key && *key);
+    if (!value) value = "";
+
+    len = strlen(value);
+    if (len > 1 && value[0] == '<' && value[len - 1] == '>') {
+        value += 1;
+        len -= 2;
+    }
+
+    buf_printf(buf, " %s=<%.*s>", key, len, value);
 }
 
 static inline void auditlog_finish(struct buf *buf)
@@ -197,7 +209,7 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_push(&buf, "cid", threadid);
 
     if (message_id) {
-        buf_printf(&buf, " message-id=%s", message_id); /* already has <> */
+        auditlog_push(&buf, "message-id", message_id);
     }
 
     buf_printf(&buf, " size=<" UINT64_FMT ">", record->size);
@@ -269,20 +281,18 @@ EXPORTED void auditlog_sieve(const char *action,
     if (userid)
         auditlog_push(&buf, "userid", userid);
 
-    /* message-ids have their own <> */
-    buf_printf(&buf, " in.msgid=%s", in_msgid ? in_msgid : "<nomsgid>");
+    auditlog_push(&buf, "in.msgid", in_msgid ? in_msgid : "nomsgid");
     if (out_msgid)
-        buf_printf(&buf, " out.msgid=%s", out_msgid);
+        auditlog_push(&buf, "out.msgid", out_msgid);
 
     if (target)
         auditlog_push(&buf, "target", target);
 
-    /* from-addr has its own <> */
     if (from_addr)
-        buf_printf(&buf, " from=%s", from_addr);
+        auditlog_push(&buf, "from", from_addr);
 
     if (to_addr)
-        auditlog_push(&buf, "to", to_addr); // XXX ^
+        auditlog_push(&buf, "to", to_addr);
 
     auditlog_finish(&buf);
 }
