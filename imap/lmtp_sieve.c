@@ -1741,12 +1741,9 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
                       m->id ? m->id : "<nomsgid>",
                       buf_cstring(&cal->outcome),
                       buf_cstring(&cal->reason));
-    if (config_auditlog)
-        syslog(LOG_NOTICE,
-               "auditlog: processed iMIP sessionid=<%s> message-id=%s"
-               " outcome=%s errstr='%s'",
-               session_id(), m->id ? m->id : "<nomsgid>",
-               buf_cstring(&cal->outcome), buf_cstring(&cal->reason));
+    auditlog_imip(m->id,
+                  buf_cstring(&cal->outcome),
+                  buf_cstringnull_ifempty(&cal->reason));
 
     strarray_fini(&sched_addresses);
     if (parts) {
