@@ -3296,17 +3296,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
         return IMAP_IOERROR;
     }
 
-    if (config_auditlog && mailbox->modseq_dirty)
-        xsyslog(LOG_NOTICE, "auditlog: modseq",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                " highestmodseq=<" MODSEQ_FMT
-                "> deletedmodseq=<" MODSEQ_FMT "> crcs=<%u/%u>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                mailbox->i.highestmodseq, mailbox->i.deletedmodseq,
-                mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
-
     if (mailbox->modseq_dirty) {
+        auditlog_modseq(mailbox);
+
         struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_MODSEQ);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox_name(mailbox), 0);
