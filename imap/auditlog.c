@@ -118,6 +118,22 @@ HIDDEN void hidden_auditlog_finish(struct buf *buf)
  * Public API
  */
 
+EXPORTED void auditlog_client(const char *action,
+                              const char *userid,
+                              const char *client)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+
+    auditlog_push(&buf, "userid", userid);
+    auditlog_push(&buf, "client", client);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_imip(const char *message_id,
                             const char *outcome,
                             const char *errstr)
