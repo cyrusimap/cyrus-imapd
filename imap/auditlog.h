@@ -50,6 +50,9 @@
 
 #include <stdint.h>
 
+extern void auditlog_client(const char *action,
+                            const char *userid,
+                            const char *client);
 extern void auditlog_imip(const char *message_id,
                           const char *outcome,
                           const char *errstr);
