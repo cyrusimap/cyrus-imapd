@@ -118,6 +118,24 @@ HIDDEN void hidden_auditlog_finish(struct buf *buf)
  * Public API
  */
 
+EXPORTED void auditlog_imip(const char *message_id,
+                            const char *outcome,
+                            const char *errstr)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "processed iMIP");
+
+    auditlog_push(&buf, "message-id", message_id ? message_id : "nomsgid");
+    auditlog_push(&buf, "outcome", outcome);
+    if (errstr)
+        auditlog_push(&buf, "errstr", errstr);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_mailbox(const char *action,
                                const struct mailbox *oldmailbox,
                                const struct mailbox *mailbox,
