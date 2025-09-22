@@ -252,6 +252,41 @@ EXPORTED void auditlog_quota(const char *action,
     auditlog_finish(&buf);
 }
 
+EXPORTED void auditlog_sieve(const char *action,
+                             const char *userid,
+                             const char *in_msgid,
+                             const char *out_msgid,
+                             const char *target,
+                             const char *from_addr,
+                             const char *to_addr)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+
+    if (userid)
+        auditlog_push(&buf, "userid", userid);
+
+    /* message-ids have their own <> */
+    buf_printf(&buf, " in.msgid=%s", in_msgid ? in_msgid : "<nomsgid>");
+    if (out_msgid)
+        buf_printf(&buf, " out.msgid=%s", out_msgid);
+
+    if (target)
+        auditlog_push(&buf, "target", target);
+
+    /* from-addr has its own <> */
+    if (from_addr)
+        buf_printf(&buf, " from=%s", from_addr);
+
+    if (to_addr)
+        auditlog_push(&buf, "to", to_addr); // XXX ^
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
 {
     struct buf buf = BUF_INITIALIZER;
