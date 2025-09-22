@@ -623,7 +623,7 @@ sub test_auditlog_size
     xlog $self, "Check the correct size was auditlogged";
     if ($self->{instance}->{have_syslog_replacement}) {
         my @appends = $self->{instance}->getsyslog(
-            qr/auditlog: append: .* uid=<1>/);
+            qr/auditlog: append .* uid=<1>/);
         $self->assert_num_equals(1, scalar @appends);
 
         # delivery will add some headers, so it will be larger
