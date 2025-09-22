@@ -61,6 +61,7 @@ extern void auditlog_message(const char *action,
                              struct mailbox *mailbox,
                              const struct index_record *record,
                              const char *message_id);
+extern void auditlog_proxy(const char *userid, const char *status);
 extern void auditlog_quota(const char *action,
                            const char *root,
                            const quota_t *oldquotas,
