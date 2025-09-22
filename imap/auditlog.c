@@ -268,6 +268,29 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_finish(&buf);
 }
 
+EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "modseq");
+
+    auditlog_push(&buf, "mailbox", mailbox_name(mailbox));
+    auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
+    auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
+
+    buf_printf(&buf, " highestmodseq=<" MODSEQ_FMT ">",
+                     mailbox->i.highestmodseq);
+    buf_printf(&buf, " deletedmodseq=<" MODSEQ_FMT ">",
+                     mailbox->i.deletedmodseq);
+    buf_printf(&buf, " crcs=<%u/%u>",
+                     mailbox->i.synccrcs.basic,
+                     mailbox->i.synccrcs.annot);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_proxy(const char *userid, const char *status)
 {
     struct buf buf = BUF_INITIALIZER;
