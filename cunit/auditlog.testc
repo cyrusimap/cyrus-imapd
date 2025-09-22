@@ -65,4 +65,32 @@ static void test_trace_id(void)
     buf_free(&buf);
 }
 
+static void test_auditlog_push(void)
+{
+    static const struct {
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { "",                           " k=<>" },
+        { NULL,                         " k=<>" },
+        { "no brackets",                " k=<no brackets>" },
+        { "<outer brackets swallowed>", " k=<outer brackets swallowed>" },
+        { "inner <brackets> kept",      " k=<inner <brackets> kept>" },
+        { "<unclosed bracket kept",     " k=<<unclosed bracket kept>" },
+        { "unopened bracket kept>",     " k=<unopened bracket kept>>" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct buf buf = BUF_INITIALIZER;
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        buf_reset(&buf);
+        hidden_auditlog_push(&buf, "k", tests[i].value);
+
+        CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), tests[i].expect);
+    }
+
+    buf_free(&buf);
+}
+
 /* vim: set ft=c: */
