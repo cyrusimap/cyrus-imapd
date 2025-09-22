@@ -69,6 +69,7 @@
 #endif
 
 #include "assert.h"
+#include "auditlog.h"
 #include "xmalloc.h"
 #include "global.h"
 #include "util.h"
@@ -207,9 +208,7 @@ EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
     assert(dkey->date != NULL);
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
       dkey->to, dkey->id, dkey->date, action);
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s uniqueid-or-scope=<%s> date=<%s>",
-               session_id(), action, dkey->id, dkey->to, dkey->date);
+    auditlog_duplicate(action, dkey);
 }
 
 EXPORTED void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
