@@ -204,6 +204,24 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_finish(&buf);
 }
 
+EXPORTED void auditlog_proxy(const char *userid, const char *status)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char rsessionid[MAX_SESSIONID_SIZE];
+
+    if (!config_auditlog) return;
+
+    parse_sessionid(status, rsessionid);
+
+    auditlog_begin(&buf, "proxy");
+
+    if (userid)
+        auditlog_push(&buf, "userid", userid);
+    auditlog_push(&buf, "remote", rsessionid);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_quota(const char *action,
                              const char *root,
                              const quota_t *oldquotas,
