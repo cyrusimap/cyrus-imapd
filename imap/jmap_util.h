@@ -203,7 +203,8 @@ extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
 extern void jmap_set_emailid(struct conversations_state *cstate,
                              const struct message_guid *guid,
-                             uint64_t nanosec, struct timespec *ts,
+                             uint64_t nanosec,
+                             const struct timespec *ts,
                              char *emailid);
 
 #define JMAP_MAILBOXID_PREFIX 'P'

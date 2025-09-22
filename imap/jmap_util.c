@@ -1309,7 +1309,8 @@ EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
 
 EXPORTED void jmap_set_emailid(struct conversations_state *cstate,
                                const struct message_guid *guid,
-                               uint64_t nanosec, struct timespec *ts,
+                               uint64_t nanosec,
+                               const struct timespec *ts,
                                char *emailid)
 {
     // initialize a struct buf with char emailid[JMAP_MAX_EMAILID_SIZE]
