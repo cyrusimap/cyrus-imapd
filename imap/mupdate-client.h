@@ -45,6 +45,11 @@
 
 #include <sasl/sasl.h>
 
+enum {
+    /* MUPDATE capabilities */
+    CAPA_MAILBOXEXT          = (1 << 3),
+};
+
 #define FNAME_MUPDATE_TARGET_SOCK "/socket/mupdate.target"
 
 typedef struct mupdate_handle_s mupdate_handle;
@@ -59,7 +64,7 @@ void mupdate_disconnect(mupdate_handle **h);
 /* activate a mailbox */
 int mupdate_activate(mupdate_handle *handle,
                      const char *mailbox, const char *location,
-                     const char *acl);
+                     const char *acl, const char *jmapid);
 
 /* reserve a piece of namespace */
 int mupdate_reserve(mupdate_handle *handle,
@@ -82,6 +87,7 @@ struct mupdate_mailboxdata {
     const char *mailbox;
     const char *location;
     const char *acl;
+    const char *jmapid;
     enum mbtype t;
 };
 
@@ -111,5 +117,9 @@ int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 
 /* ping a local slave */
 void kick_mupdate(void);
+
+/* parse extended mailbox args in ACTIVATE command and MAILBOX response */
+int mupdate_parse_mailbox_extargs(struct protstream *pin,
+                                  struct dlist **extargs);
 
 #endif

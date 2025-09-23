@@ -92,6 +92,7 @@ enum settype {
 struct mbent {
     char *mailbox;
     char *location;
+    char *jmapid;
     enum settype t;
     struct mbent *next; /* used for queue */
     char acl[1];
