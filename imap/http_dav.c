@@ -7290,7 +7290,8 @@ int meth_put(struct transaction_t *txn, void *params)
         syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
-        return HTTP_SERVER_ERROR;
+        ret = HTTP_SERVER_ERROR;
+        goto done;
     }
 
     /* Open the DAV DB corresponding to the mailbox */
