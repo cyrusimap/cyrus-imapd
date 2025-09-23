@@ -175,6 +175,7 @@ static struct protocol_t lmtp_protocol =
           { "STARTTLS", CAPA_STARTTLS },
           { "PIPELINING", CAPA_PIPELINING },
           { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+          { "TRACE", CAPA_TRACE },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -244,7 +245,9 @@ int service_init(int argc __attribute__((unused)),
     unsigned options =
         config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO) ? NAMESPACE_OPTION_UTF8 : 0;
     if ((r = mboxname_init_namespace(&lmtpd_namespace, options))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog(LOG_ERR, "mboxname_init_namespace failed",
+                         "error=<%s>",
+                         error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -326,8 +329,8 @@ int service_main(int argc, char **argv,
 
     if (config_iolog) {
         read_io_count(io_count_stop);
-        syslog(LOG_INFO,
-               "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
+        xsyslog(LOG_INFO, "LMTP session stats",
+               "read_bytes=<%d> wrote_bytes=<%d>",
                 io_count_stop->io_read_count - io_count_start->io_read_count,
                 io_count_stop->io_write_count - io_count_start->io_write_count);
         free (io_count_start);
@@ -651,11 +654,13 @@ int deliver_mailbox(FILE *f,
                 else if (mode & TARGET_FUZZY) target = "fuzzy";
                 else if (mode & TARGET_SET) target = "set";
 
-                syslog(LOG_INFO, "Delivered: sessionid=<%s>"
-                       " action=<%s> target=<%s>"
-                       " messageid=%s userid=<%s> mailbox=<%s> uniqueid=<%s>",
-                       session_id(), action, target, id, user,
-                       mailbox_name(mailbox), mailbox_uniqueid(mailbox));
+                xsyslog(LOG_INFO, "Delivered",
+                                  "action=<%s> target=<%s>"
+                                  " messageid=%s userid=<%s> mailbox=<%s>"
+                                  " uniqueid=<%s>",
+                                  action, target, id, user,
+                                  mailbox_name(mailbox),
+                                  mailbox_uniqueid(mailbox));
                 if (dupelim && id)
                     duplicate_mark(&dkey, time(NULL), as.baseuid);
             }
@@ -1227,8 +1232,9 @@ static int verify_user(const mbname_t *origmbname,
         }
     }
 
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
-                  error_message(r));
+    if (r) xsyslog(LOG_DEBUG, "verify_user failed",
+                              "user=<%s> error=<%s>",
+                              mbname_userid(mbname), error_message(r));
 
 done:
     mbname_free(&mbname);

@@ -1,9 +1,28 @@
-#include "config.h"
 #include "cunit/unit.h"
-#include "util.h"
+#include "lib/util.h"
+
+#include "lib/sessionid.h"
+#include "lib/libconfig.h"
+
 #include <syslog.h>
 #include <limits.h>
 #include <errno.h>
+
+#define DBDIR "test-xsyslogev-dbdir"
+
+static int set_up(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
 
 static void test_lf_c(void)
 {
@@ -294,6 +313,37 @@ static void test_mixed(void)
         lf_raw("second", "%.01f", 2.1),
         lf_s("third", "hi there")
     );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_session_id(void)
+{
+    char match[32 + MAX_SESSIONID_SIZE];
+
+    /* need basic configuration for session_new_id() */
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    session_new_id();
+    snprintf(match, sizeof(match), " sessionid=%s ", session_id());
+
+    CU_SYSLOG_MATCH_SUBSTR(match);
+    xsyslog_ev(LOG_ERR, "session id test",
+                        lf_d("first", 1));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    config_reset();
+    system("rm -rf " DBDIR);
+}
+
+static void test_trace_id(void)
+{
+    trace_set_id("sometraceid", 0);
+
+    CU_SYSLOG_MATCH_SUBSTR(" r.tid=sometraceid ");
+    xsyslog_ev(LOG_ERR, "trace id test",
+                        lf_d("first", 1));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 

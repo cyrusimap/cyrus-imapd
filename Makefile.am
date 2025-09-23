@@ -649,6 +649,7 @@ cunit_TESTS = \
     cunit/rfc822tok.testc \
     cunit/search_expr.testc \
     cunit/seqset.testc \
+    cunit/sessionid.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
     cunit/xsyslog_ev.testc
@@ -834,6 +835,7 @@ noinst_HEADERS += \
     lib/md5.h \
     lib/prot.h \
     lib/ptrarray.h \
+    lib/sessionid.h \
     lib/slowio.h \
     lib/util.h \
     lib/vparse.h \
@@ -1551,6 +1553,7 @@ lib_libcyrus_min_la_SOURCES = \
     lib/mpool.c \
     lib/proc.c \
     lib/retry.c \
+    lib/sessionid.c \
     lib/setproctitle.c \
     lib/slowio.c \
     lib/smallarrayu64.c \
@@ -1584,7 +1587,8 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(GCOV_LIBS) $(LIBCAP_LIBS)
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(SSL_LIBS) \
+                             $(GCOV_LIBS) $(LIBCAP_LIBS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 # n.b. the order of the -m arguments to mkchartable.pl is important,

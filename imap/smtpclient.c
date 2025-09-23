@@ -158,7 +158,7 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
             xsyslog(LOG_ERR,
                     "smtpclient_open: can not determine EHLO hostname, "
                     "either client_bind/client_bind_name or servername option must be set",
-                    "sessionid=<%s>", session_id());
+                    NULL);
             return IMAP_INTERNAL;
         }
         if (smtp_protocol.type == TYPE_STD &&
@@ -167,7 +167,7 @@ EXPORTED int smtpclient_open(smtpclient_t **smp)
         }
         else {
             xsyslog(LOG_ERR, "smtpclient_open: unexpected smtp_protocol value",
-                    "sessionid=<%s>", session_id());
+                             NULL);
             return IMAP_INTERNAL;
         }
     }
