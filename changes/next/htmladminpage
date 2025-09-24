@@ -1,0 +1,16 @@
+Description:
+
+The CalDAVHTML administration page allows editing the
+CY:calendar-scheduling property.
+
+Documentation:
+
+In docsrc/imap/download/installation/http/caldav.rst .
+
+Config changes:
+
+None
+
+Upgrade instructions:
+
+None
