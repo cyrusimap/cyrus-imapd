@@ -5041,26 +5041,12 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     const char *archivefname = mailbox_archive_fname(mailbox, uid);
 
     if (cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd) == 0) {
-        if (config_auditlog) {
-            xsyslog(LOG_NOTICE, "auditlog: unlink",
-                    "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> sysflags=<%s>",
-                    session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    uid, flagstr);
-        }
+        auditlog_message_uid("remove-spool", mailbox, uid, flagstr);
     }
 
     if (strcmp(spoolfname, archivefname)) {
         if (cyrus_unlink_fdptr(archivefname, &mailbox->archive_dirfd) == 0) {
-            if (config_auditlog) {
-                xsyslog(LOG_NOTICE, "auditlog: unlinkarchive",
-                        "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                        " uid=<%u> sysflags=<%s>",
-                        session_id(), mailbox_name(mailbox),
-                        mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                        uid, flagstr);
-            }
+            auditlog_message_uid("remove-archive", mailbox, uid, flagstr);
         }
     }
 }
