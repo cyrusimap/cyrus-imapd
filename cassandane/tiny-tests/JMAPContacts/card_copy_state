@@ -28,7 +28,6 @@ sub test_card_copy_state
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     my $card =  {
-        "addressBookIds" => { "Default" => JSON::true },
         name => { full => "foo bar" },
     };
 

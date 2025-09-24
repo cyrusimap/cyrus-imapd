@@ -103,7 +103,6 @@ sub test_card_copy
     my $blobid = $res->{blobId};
 
     my $card =  {
-        addressBookIds => { Default => JSON::true },
         name => { full => "foo bar" },
 #        "avatar" => {
 #            "blobId" => $blobid,
@@ -205,7 +204,8 @@ return;
     );
     $other3Jmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
-        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/contacts',
+        'urn:ietf:params:jmap:contacts',
     ]);
 
     # avatar
@@ -218,7 +218,7 @@ return;
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     xlog $self, "move card $cardId with different avatar";
-    $res = $jmap->CallMethods([['Contact/copy', {
+    $res = $jmap->CallMethods([['ContactCard/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other3',
         create => {
@@ -240,11 +240,11 @@ return;
     $copiedCardId = $res->[0][1]{created}{"1"}{id};
 
     $res = $jmap->CallMethods([
-        ['Contact/get', {
+        ['ContactCard/get', {
             accountId => 'other3',
             ids => [$copiedCardId],
         }, 'R1'],
-        ['Contact/get', {
+        ['ContactCard/get', {
             accountId => undef,
             ids => [$cardId],
         }, 'R2'],
