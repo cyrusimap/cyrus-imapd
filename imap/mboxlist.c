@@ -1475,15 +1475,8 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
 
         if (r) goto done;
 
-        if (config_auditlog && (!old || strcmpsafe(old->acl, mbentry->acl))) {
-            /* XXX is there a difference between "" and NULL? */
-            xsyslog(LOG_NOTICE, "auditlog: acl",
-                                "mailbox=<%s> uniqueid=<%s> jmapid=<%s> "
-                                "mbtype=<%s> oldacl=<%s> acl=<%s> "
-                                "foldermodseq=<" MODSEQ_FMT ">",
-                    name, mbentry->uniqueid, mbentry->jmapid,
-                    mboxlist_mbtype_to_string(mbentry->mbtype),
-                    old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
+        if (!old || strcmpsafe(old->acl, mbentry->acl)) {
+            auditlog_acl(name, old, mbentry);
         }
     }
     else if (old) {

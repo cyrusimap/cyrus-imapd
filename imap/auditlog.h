@@ -51,6 +51,9 @@
 
 #include <stdint.h>
 
+extern void auditlog_acl(const char *mboxname,
+                         const mbentry_t *oldmbentry,
+                         const mbentry_t *mbentry);
 extern void auditlog_client(const char *action,
                             const char *userid,
                             const char *client);

@@ -118,6 +118,28 @@ HIDDEN void hidden_auditlog_finish(struct buf *buf)
  * Public API
  */
 
+EXPORTED void auditlog_acl(const char *mboxname,
+                           const mbentry_t *oldmbentry,
+                           const mbentry_t *mbentry)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, "acl");
+
+    /* XXX convert mboxname to consistent namespace? */
+    auditlog_push(&buf, "mailbox", mboxname);
+    auditlog_push(&buf, "uniqueid", mbentry->uniqueid);
+    auditlog_push(&buf, "jmapid", mbentry->jmapid);
+    auditlog_push(&buf, "mbtype", mboxlist_mbtype_to_string(mbentry->mbtype));
+    auditlog_push(&buf, "oldacl", oldmbentry ? oldmbentry->acl : "NONE");
+    auditlog_push(&buf, "acl", mbentry->acl);
+    buf_printf(&buf, " foldermodseq=<" MODSEQ_FMT ">", mbentry->foldermodseq);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_client(const char *action,
                               const char *userid,
                               const char *client)
