@@ -268,6 +268,26 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_finish(&buf);
 }
 
+EXPORTED void auditlog_message_uid(const char *action,
+                                   const struct mailbox *mailbox,
+                                   uint32_t uid,
+                                   const char *flagstr)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&buf, action);
+
+    auditlog_push(&buf, "mailbox", mailbox_name(mailbox));
+    auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
+    auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
+    buf_printf(&buf, " uid=<%" PRIu32 ">", uid);
+    auditlog_push(&buf, "sysflags", flagstr);
+
+    auditlog_finish(&buf);
+}
+
 EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
 {
     struct buf buf = BUF_INITIALIZER;

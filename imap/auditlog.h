@@ -70,6 +70,10 @@ extern void auditlog_message(const char *action,
                              struct mailbox *mailbox,
                              const struct index_record *record,
                              const char *message_id);
+extern void auditlog_message_uid(const char *action,
+                                 const struct mailbox *mailbox,
+                                 uint32_t uid,
+                                 const char *flagstr);
 extern void auditlog_modseq(const struct mailbox *mailbox);
 extern void auditlog_proxy(const char *userid, const char *status);
 extern void auditlog_quota(const char *action,
