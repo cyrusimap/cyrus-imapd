@@ -1265,8 +1265,11 @@ EXPORTED char *search_expr_firstmailbox(const search_expr_t *e)
  *
  * The callback function 'cb' is called one or more times with up to two
  * expression trees which have just been detached from the original expression
- * tree.  Both of these trees will be in DNF and will be at most a
- * conjuctive node, i.e. no disjunctions.
+ * tree.
+ *
+ * If at least one of the 'mboxname' or 'indexed' arguments is not
+ * NULL, then both of the search expression trees will be in DNF and
+ * will be at most a conjunctive node, i.e. no disjunctions.
  *
  * The 'indexed' tree, if not NULL, contains all the indexed search terms.
  * The 'scan' tree will never be NULL, although it may be a trivial tree

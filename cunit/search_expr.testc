@@ -1361,6 +1361,18 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(or (and (le size 123) (fuzzymatch subject \"TUMBLR\")) (and (ge size 456) (fuzzymatch subject \"MLKSHK\")))",
              "indexed (fuzzymatch subject \"TUMBLR\") (le size 123)\n"
              "indexed (fuzzymatch subject \"MLKSHK\") (ge size 456)\n");
+
+    /* a disjunctive node of indexed matches is split into multiple
+     * indexed callbacks */
+    TESTCASE("(or (fuzzymatch subject \"ETSY\") (fuzzymatch subject \"KLAK\"))",
+             "indexed (fuzzymatch subject \"ETSY\") (true)\n"
+             "indexed (fuzzymatch subject \"KLAK\") (true)\n");
+    TESTCASE("(or (fuzzymatch subject \"ETSY\") (fuzzymatch body \"KLAK\"))",
+             "indexed (fuzzymatch subject \"ETSY\") (true)\n"
+             "indexed (fuzzymatch body \"KLAK\") (true)\n");
+    TESTCASE("(or (fuzzymatch body \"ETSY\") (fuzzymatch body \"KLAK\"))",
+             "indexed (fuzzymatch body \"ETSY\") (true)\n"
+             "indexed (fuzzymatch body \"KLAK\") (true)\n");
 }
 #undef TESTCASE
 
