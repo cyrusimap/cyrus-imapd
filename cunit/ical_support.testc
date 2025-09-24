@@ -134,18 +134,31 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
 
     struct buf buf = BUF_INITIALIZER;
     unsigned i;
+    fputs("\n", stderr);
     for (i = 0; i < n_tcs; i++) {
         const struct testcase *tc = &tcs[i];
+        fprintf(stderr, "%s: STARTING test %u <%s>\n", __func__, i, tc->desc);
         buf_setcstr(&buf, tc->icalstr);
         icalcomponent *ical = ical_string_as_icalcomponent(&buf);
         CU_ASSERT_PTR_NOT_NULL(ical);
         unsigned _recurring = 0;
         struct icalperiodtype span = icalrecurrenceset_get_utc_timespan(ical,
                 ICAL_VEVENT_COMPONENT, NULL, &_recurring, NULL, NULL);
+        fprintf(stderr, "%s: got span.start: <%s>\n",
+                        __func__,
+                        icaltime_as_ical_string(span.start));
+        fprintf(stderr, "%s: got span.end: <%s>\n",
+                        __func__,
+                        icaltime_as_ical_string(span.end));
+        fprintf(stderr, "%s: got span.duration: <%s>\n",
+                        __func__,
+                        icaldurationtype_as_ical_string(span.duration));
+        CU_ASSERT_EQUAL(1, icalperiodtype_is_valid_period(span));
         CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.start), tc->start);
         CU_ASSERT_STRING_EQUAL(icaltime_as_ical_string(span.end), tc->end);
         CU_ASSERT_EQUAL(_recurring, tc->recurring);
         icalcomponent_free(ical);
+        fprintf(stderr, "%s: FINISHED test %u <%s>\n", __func__, i, tc->desc);
     }
     buf_free(&buf);
 
