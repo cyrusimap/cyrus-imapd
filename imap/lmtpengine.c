@@ -67,6 +67,7 @@
 #include <sasl/saslutil.h>
 
 #include "assert.h"
+#include "auditlog.h"
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
@@ -1725,7 +1726,7 @@ static void pushmsg(struct protstream *in, struct protstream *out,
 int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 {
     int j, code, r = 0;
-    char buf[8192], rsessionid[MAX_SESSIONID_SIZE];
+    char buf[8192];
     int onegood;
     const char *traceid = trace_id();
 
@@ -1740,11 +1741,7 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     if (!ISGOOD(code)) {
         goto failall;
     }
-
-    if (config_auditlog) {
-        parse_sessionid(buf, rsessionid);
-        syslog(LOG_NOTICE, "auditlog: proxy sessionid=<%s> remote=<%s>", session_id(), rsessionid);
-    }
+    auditlog_proxy(NULL, buf);
 
     /* forward traceid if remote supports it */
     if (traceid && CAPA(conn, CAPA_TRACE)) {
