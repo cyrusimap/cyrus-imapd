@@ -5446,11 +5446,263 @@ static int expand_cb(icalcomponent *comp,
     return 1;
 }
 
+#define SECS_PER_DAY (24 * 60 * 60)
+
+/* Determine if the number of recurrences to expand is less than the max limit */
+static int allow_expand(icalcomponent *ical,
+                        struct icalperiodtype range, int limit)
+{
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    icalproperty *prop =
+        icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+
+    if (!prop) return 1;
+
+    struct icalrecurrencetype *rrule = icalproperty_get_rrule(prop);
+    struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+    struct icaltimetype start = range.start;
+    struct icaltimetype end = range.end;
+
+    if (icaltime_compare(range.end, dtstart) <= 0) return 1;
+
+    if (rrule->count) {
+syslog(LOG_INFO, "XXXXXXXX  rrule->count: %d", rrule->count);
+        if (rrule->count <= limit) return 1;
+
+        /* Calculate number of recurrences between DTSTART and end of range */
+        start = dtstart;
+    }
+    else {
+        /* Calculate number of recurrences between
+           MAX(DTSTART, start of_range) and MIN(UNTIL, end of range) */
+        if (icaltime_compare(dtstart, range.start) > 0) start = dtstart;
+        if (!icaltime_is_null_time(rrule->until) &&
+            icaltime_compare(rrule->until, range.end) < 0)
+            end = rrule->until;
+    }
+    struct icaldurationtype dur = icaltime_subtract(end, start);
+
+syslog(LOG_INFO, "XXXXXXXX  %d %u %u %u %u %u", dur.is_neg, dur.days, dur.weeks, dur.hours, dur.minutes, dur.seconds);
+
+    if (dur.is_neg) return 1;
+
+    float nrecur = 1, period = 0, total = INT_MAX;
+    float days = dur.days +
+        (dur.hours + (dur.minutes + (dur.seconds / 60.) / 60.)) / 24.;
+    short byweekno   = rrule->by[ICAL_BY_WEEK_NO].size;
+    short bymonth    = rrule->by[ICAL_BY_MONTH].size;
+    short bymonthday = rrule->by[ICAL_BY_MONTH_DAY].size;
+    short byyearday  = rrule->by[ICAL_BY_YEAR_DAY].size;
+    short byday      = rrule->by[ICAL_BY_DAY].size;
+    short byhour     = rrule->by[ICAL_BY_HOUR].size;
+    short byminute   = rrule->by[ICAL_BY_MINUTE].size;
+    short bysecond   = rrule->by[ICAL_BY_SECOND].size;
+    short bysetpos   = rrule->by[ICAL_BY_SET_POS].size;
+
+    switch (rrule->freq) {
+    case ICAL_YEARLY_RECURRENCE:
+    case ICAL_MONTHLY_RECURRENCE:
+    case ICAL_WEEKLY_RECURRENCE:
+    case ICAL_DAILY_RECURRENCE:
+        switch (rrule->freq) {
+        case ICAL_YEARLY_RECURRENCE:
+            period = 365 * rrule->interval;
+
+            if (bysetpos)       nrecur = bysetpos;
+            else if (byyearday) nrecur = byyearday;
+            else if (byweekno) {
+                nrecur = byweekno;
+
+                if (byday) nrecur *= byday;
+            }
+            else if (bymonth) {
+                nrecur = bymonth;
+
+                if (bymonthday) nrecur *= bymonthday;
+                else if (byday) nrecur *= 4 * byday;
+            }
+            else if (byday) nrecur = 52 * byday;
+            break;
+
+        case ICAL_MONTHLY_RECURRENCE:
+            period = 30 * rrule->interval;
+
+            if (bymonth) {
+                nrecur = bymonth;
+                period = 365;
+            }
+
+            if (bysetpos)        nrecur = bysetpos;
+            else if (bymonthday) nrecur *= bymonthday;
+            else if (byday)      nrecur *= 4 * byday;
+            break;
+
+        case ICAL_WEEKLY_RECURRENCE:
+            period = 7 * rrule->interval;
+
+            if (bymonth) {
+                nrecur = (30 / period) * bymonth;
+                period = 365;
+            }
+
+            if (bysetpos)   nrecur = bysetpos;
+            else if (byday) nrecur *= byday;
+            break;
+
+        case ICAL_DAILY_RECURRENCE:
+            period = rrule->interval;
+
+            if (bymonth) {
+                if (bymonthday) nrecur = bymonthday * bymonth;
+                else {
+                    nrecur = (30 / period) * bymonth;
+
+                    if (byday) nrecur *= byday / 7.;
+                }
+                period = 365;
+            }
+            else if (bymonthday) {
+                nrecur = bymonthday;
+                period = 30;
+            }
+            else if (byday) {
+                nrecur = byday;
+                period = 7;
+            }
+
+            if (bysetpos) nrecur = bysetpos;
+            break;
+
+        default:
+            /* should never get here */
+            break;
+        }
+
+        if (!bysetpos && !icaltime_is_date(dtstart)) {
+            if (byhour)   nrecur *= byhour;
+            if (byminute) nrecur *= byminute;
+            if (bysecond) nrecur *= bysecond;
+        }
+        break;
+
+    case ICAL_HOURLY_RECURRENCE:
+    case ICAL_MINUTELY_RECURRENCE:
+    case ICAL_SECONDLY_RECURRENCE:
+        if (byyearday) {
+            nrecur = byyearday;
+            period = 365;
+        }
+        else if (bymonth) {
+            if (bymonthday) nrecur = bymonthday;
+            else {
+                nrecur = 30 * bymonth;
+
+                if (byday) nrecur *= byday / 7.;
+            }
+            period = 365;
+        }
+        else if (bymonthday) {
+            nrecur = bymonthday;
+            period = 30;
+        }
+        else if (byday) {
+            nrecur = byday;
+            period = 7;
+        }
+
+        switch (rrule->freq) {
+        case ICAL_HOURLY_RECURRENCE:
+            if (byhour) {
+                nrecur *= byhour;
+                if (!period) period = 1;
+            }
+            else if (!period)
+                period = rrule->interval / 24.;
+
+            if (byminute) nrecur *= byminute;
+            if (bysecond) nrecur *= bysecond;
+            break;
+
+        case ICAL_MINUTELY_RECURRENCE:
+            if (byhour || byminute) {
+                short nrecur_per_hour;
+
+                if (byhour) {
+                    nrecur_per_hour = 60;
+                    nrecur *= byhour;
+                    if (!period) period = 1;
+                }
+                if (byminute) {
+                    nrecur_per_hour = byminute;
+                    if (!period) period = 1 / 24.;
+                }
+
+                nrecur *= nrecur_per_hour;
+            }
+            else if (!period)
+                period = rrule->interval / (24 * 60.);
+
+            if (bysecond) nrecur *= bysecond;
+            break;
+
+        case ICAL_SECONDLY_RECURRENCE:
+            if (byhour) {
+                nrecur *= byhour * (byminute ? byminute : 60);
+                if (!period) period = 1;
+            }
+            else if (byminute) {
+                nrecur *= byminute;
+                if (!period) period = 1 / 24.;
+            }
+            else {
+                nrecur *= rrule->interval;
+                if (!period) period = rrule->interval / (24 * 60.);
+            }
+
+            if (bysecond) nrecur *= bysecond;
+            break;
+
+        default:
+            /* should never get here */
+            break;
+        }
+
+        if (bysetpos) nrecur = bysetpos;
+        break;
+
+    default:
+        /* should never get here */
+        break;
+    }
+
+    total = nrecur * (days / period);
+syslog(LOG_INFO, "XXXXXXXX  nrecur: %f  days: %f  period: %f  total: %f", nrecur, days, period, total);
+    if (rrule->count) {
+        /* Calculate number of COUNT recurrences used
+           between DTSTART and start of range
+           (assume even distribution of the recurrences */
+        time_t dtstart_t = icaltime_as_timet(dtstart);
+        time_t start_t = icaltime_as_timet(range.start);
+        time_t end_t = icaltime_as_timet(range.end);
+syslog(LOG_INFO, "XXXXXXXX  %ld  %ld  %ld", dtstart_t, start_t, end_t);
+        float used = total *
+            (MAX(start_t, dtstart_t) - dtstart_t) / (float) (end_t - dtstart_t);
+        total = MIN(total, (float) rrule->count) - used;
+syslog(LOG_INFO, "XXXXXXXX  used: %f  total: %f", used, total);
+    }
+
+    return ((int) total <= limit);
+}
+
 /* Expand recurrences of ical in range.
    NOTE: expand_cb() is destructive of ical as it builds expanded_ical */
 static icalcomponent *expand_caldata(icalcomponent **ical,
                                      struct icalperiodtype range)
 {
+    if (!allow_expand(*ical, range,
+                      config_getint(IMAPOPT_CALDAV_MAX_EXPANDED_INSTANCES)))
+        return NULL;
+
     icalcomponent *expanded_ical =
         icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
                             icalproperty_new_version("2.0"),
@@ -5747,6 +5999,7 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
 
             if (partial->expand) {
                 fctx->obj = expand_caldata(&ical, partial->range);
+                if (!fctx->obj) return HTTP_UNPROCESSABLE;
             }
             else limit_caldata(ical, &partial->range);
         }
