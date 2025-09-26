@@ -9008,7 +9008,9 @@ EXPORTED struct dlist *mailbox_acl_to_dlist(const char *aclstr)
         else
             val = xstrdup(q);
 
-        dlist_setatom(al, name, val);
+        // don't write the same ACL name twice
+        if (!dlist_getchild(al, name))
+            dlist_setatom(al, name, val);
 
         free(name);
         free(val);
