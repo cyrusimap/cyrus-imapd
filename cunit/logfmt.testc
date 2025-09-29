@@ -1,9 +1,132 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
-static void test_stub(void)
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+static void test_logfmt_escape1(void)
 {
-    /* XXX add tests */
+    /*
+     * Escaping rules are, for now:
+     * \x21 \x23-x7E: do not force quoting and remain as is
+     *                (except 3D '=' and 5C '\')
+     * existing special cases ([\\ \n \r "]) force quoting and become two chars
+     * literal space forces quoting and remains space
+     * any other character forces quoting and remains self for now
+     */
+    static const struct {
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { NULL,                 "~null~" },
+        { "",                   "\"\"" }, /* empty string is quoted */
+        { "basic",              "basic" }, /* basic string isn't quoted */
+        { "equals=equals",      "\"equals=equals\"" },
+        { "back\\slash",        "\"back\\\\slash\"" },
+        { "new\nline",          "\"new\\nline\"" },
+        { "carriage\rreturn",   "\"carriage\\rreturn\"" },
+        { "double\"quote",      "\"double\\\"quote\"" },
+        { " ",                  "\" \"" },
+        { "space space",        "\"space space\"" },
+        { "tab\ttab",           "\"tab\ttab\"" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        char *actual;
+
+        actual = logfmt_escape(tests[i].value);
+        if (tests[i].expect) {
+            CU_ASSERT_STRING_EQUAL(actual, tests[i].expect);
+        }
+        else {
+            CU_ASSERT_PTR_NULL(actual);
+        }
+
+        free(actual);
+    }
+}
+
+#define CU_ASSERT_STRING_QUOTED(actual) do {                            \
+    const char *_a = (actual);                                          \
+    size_t len = strlen(_a);                                            \
+    bool is_quoted = len > 0 && _a[0] == '"' && _a[len - 1] == '"';     \
+    CU_assertFormatImplementation(is_quoted, __LINE__, __FILE__,        \
+        "", CU_FALSE, "CU_ASSERT_STRING_QUOTED(%s=%s)",                 \
+        #actual, _a);                                                   \
+} while (0)
+
+#define CU_ASSERT_CHAR_ESCAPED(actual, expect) do {                     \
+    const char *_a = (actual);                                          \
+    int _e = (expect);                                                  \
+    bool has_backslash = (_a[0] == '\\');                               \
+    bool is_right_char = (_a[1] == _e);                                 \
+    CU_assertFormatImplementation(has_backslash && is_right_char,       \
+        __LINE__, __FILE__, "", CU_FALSE,                               \
+        "CU_ASSERT_CHAR_ESCAPED(%s=\"%.2s\", %s=%x)",                   \
+        #actual, _a, #expect, _e);                                      \
+} while (0)
+
+static void test_logfmt_escape2(void)
+{
+    #define EXPECT_QUOTED   (UINT8_C(1) << 0)
+    #define EXPECT_ESCAPED  (UINT8_C(1) << 1)
+    #define XX              UINT8_C(0)
+    #define QX              (EXPECT_QUOTED)
+    #define QE              (EXPECT_QUOTED | EXPECT_ESCAPED)
+    static const uint8_t lookup[128] = {
+    /*  _0  _1  _2  _3  _4  _5  _6  _7  _8  _9  _a  _b  _c  _d  _e  _f       */
+        XX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QE, XX, XX, QE, XX, XX, /* 0 */
+        XX, QX, QX, XX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, /* 1 */
+        QX, XX, QE, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 2 */
+        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QX, XX, XX, /* 3 */
+        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 4 */
+        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QE, XX, XX, XX, /* 5 */
+        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 6 */
+        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QX, /* 7 */
+    };
+    int n_tests = sizeof(lookup) / sizeof(lookup[0]);
+    int i;
+
+    for (i = 1; i < n_tests; i++) {
+        const bool expect_quoted = (lookup[i] & EXPECT_QUOTED);
+        const bool expect_escaped = (lookup[i] & EXPECT_ESCAPED);
+        char value[32], *actual;
+
+        snprintf(value, sizeof(value), "x%cy", i);
+        actual = logfmt_escape(value);
+
+        if (expect_quoted) {
+            CU_ASSERT_STRING_QUOTED(actual);
+        }
+        else {
+            CU_ASSERT_NOT_EQUAL(actual[0], '"');
+        }
+
+        CU_ASSERT_EQUAL(actual[0 + expect_quoted], 'x');
+
+        if (expect_escaped) {
+            switch (i) {
+            case '\n':
+                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, 'n');
+                break;
+            case '\r':
+                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, 'r');
+                break;
+            default:
+                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, i);
+                break;
+            }
+        }
+        else {
+            CU_ASSERT_NOT_EQUAL(actual[1 + expect_quoted], '\\');
+        }
+
+        CU_ASSERT_EQUAL(actual[2 + expect_quoted + expect_escaped], 'y');
+        free(actual);
+    }
 }
 
 /* vim: set ft=c: */

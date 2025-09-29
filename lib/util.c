@@ -75,6 +75,7 @@
 #include "assert.h"
 #include "byteorder.h"
 #include "libconfig.h"
+#include "logfmt.h"
 #include "map.h"
 #include "retry.h"
 #include "sessionid.h"
@@ -1528,114 +1529,26 @@ EXPORTED char *modseqtoa(modseq_t modseq)
     return buf_release(&buf);
 }
 
-static char *_xsyslog_ev_escape(const char *val)
-{
-    struct buf buf = BUF_INITIALIZER;
-    int needs_escaping = 0;
-    size_t orig_len, escaped_len;
-    const char *p;
-
-    if (val == NULL) {
-        buf_setcstr(&buf, "~null~");
-        return buf_release(&buf);
-    }
-
-    buf_setcstr(&buf, val);
-
-    escaped_len = orig_len = buf_len(&buf);
-
-    // Make sure the empty string is visible
-    if (orig_len == 0) {
-        buf_setcstr(&buf, "\"\"");
-        return buf_release(&buf);
-    }
-
-    for (p = buf_cstring(&buf); *p; p++) {
-        switch ((unsigned char) *p) {
-        case '\\':
-        case '\"':
-        case '\n':
-        case '\r':
-            ++escaped_len;  // add 1 for the backslash
-
-        // FALL THROUGH
-        case 0x00 ... 0x09:
-        case 0x11 ... 0x12:
-        case 0x14 ... 0x20:
-        case 0x3D:
-        case 0x7F ... 0xFF:
-            needs_escaping = 1;
-            break;
-        }
-    }
-
-    if (needs_escaping) {
-        char *q;
-
-        escaped_len += 2;  // add 2 for surrounding DQUOTEs
-
-        buf_truncate(&buf, escaped_len);  // grow the buffer to escaped length
-
-        // we can now build the escaped value in place, tail to head
-        q = (char *) buf_base(&buf) + escaped_len - 1;
-        *q-- = '\"';  // closing DQUOTE
-
-        for (p = buf_base(&buf) + orig_len - 1; p >= buf_base(&buf); p--) {
-            char c = *p;
-
-            switch (c) {
-            case '\\':
-            case '\"':
-                needs_escaping = 1;
-                break;
-
-            case '\n':
-                needs_escaping = 1;
-                c = 'n';
-                break;
-
-            case '\r':
-                needs_escaping = 1;
-                c = 'r';
-                break;
-
-            default:
-                needs_escaping = 0;
-                break;
-            }
-
-            *q-- = c;
-
-            if (needs_escaping) *q-- = '\\';
-        }
-
-        assert(q == buf_base(&buf));
-        *q = '\"';  // opening DQUOTE
-    }
-
-    return buf_release(&buf);
-}
-
 EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
                           logfmt_arg_list *arg)
 {
     static struct buf buf = BUF_INITIALIZER;
     const char *traceid = trace_id();
 
-    char *escaped = _xsyslog_ev_escape(event);
+    char *escaped = logfmt_escape(event);
     buf_setcstr(&buf, "event=");
     buf_appendcstr(&buf, escaped);
     free(escaped);
 
     if (session_have_id()) {
-        char *escaped_sid = _xsyslog_ev_escape(session_id());
+        char *escaped_sid = logfmt_escape(session_id());
         buf_appendmap(&buf, " sessionid=", 11);
         buf_appendcstr(&buf, escaped_sid);
         free(escaped_sid);
     }
 
     if (traceid) {
-        char *escaped_tid = _xsyslog_ev_escape(traceid);
+        char *escaped_tid = logfmt_escape(traceid);
         buf_appendmap(&buf, " r.tid=", 7);
         buf_appendcstr(&buf, escaped_tid);
         free(escaped_tid);
@@ -1659,21 +1572,21 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         case LF_LLX: buf_printf(&buf, "%llx", arg->data[i].llu); break;
         case LF_F:   buf_printf(&buf, "%f",   arg->data[i].f);   break;
         case LF_M: {
-            char *escaped_errno = _xsyslog_ev_escape(strerror(saved_errno));
+            char *escaped_errno = logfmt_escape(strerror(saved_errno));
             buf_appendcstr(&buf, escaped_errno);
             free(escaped_errno);
             break;
         }
 
         case LF_S: {
-            char *escaped_s = _xsyslog_ev_escape(arg->data[i].s);
+            char *escaped_s = logfmt_escape(arg->data[i].s);
             buf_appendcstr(&buf, escaped_s);
             free(escaped_s);
             break;
         }
 
         case LF_RAW: {
-            char *escaped_raw = _xsyslog_ev_escape(arg->data[i].s);
+            char *escaped_raw = logfmt_escape(arg->data[i].s);
             buf_appendcstr(&buf, escaped_raw);
             free(escaped_raw);
             free((char *)arg->data[i].s);

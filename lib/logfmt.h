@@ -42,4 +42,6 @@
 #ifndef INCLUDED_LOGFMT_H
 #define INCLUDED_LOGFMT_H
 
+extern char *logfmt_escape(const char *val);
+
 #endif
