@@ -128,4 +128,58 @@ static void test_logfmt_escape2(void)
     }
 }
 
+static void test_logfmt_push(void)
+{
+    static const struct {
+        const char *event;
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { NULL,    NULL,    "event=~null~ k=~null~"   },
+        { NULL,    "",      "event=~null~ k=\"\""     },
+        { "",      NULL,    "event=\"\" k=~null~"     },
+        { "",      "",      "event=\"\" k=\"\""       },
+        { "a",     "b",     "event=a k=b"             },
+        { "a",     "\"b\"", "event=a k=\"\\\"b\\\"\"" },
+        { "\"a\"", "b",     "event=\"\\\"a\\\"\" k=b" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        logfmt_begin(&lf, tests[i].event);
+        logfmt_push(&lf, "k", tests[i].value);
+        CU_ASSERT_STRING_EQUAL(logfmt_cstring(&lf), tests[i].expect);
+    }
+
+    logfmt_finish(&lf);
+}
+
+static void test_logfmt_push_fmt(void)
+{
+    static const struct {
+        const char *event;
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { NULL,    "",      "event=~null~ k=\"\""     },
+        { "",      "",      "event=\"\" k=\"\""       },
+        { "a",     "b",     "event=a k=b"             },
+        { "a",     "\"b\"", "event=a k=\"\\\"b\\\"\"" },
+        { "\"a\"", "b",     "event=\"\\\"a\\\"\" k=b" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        logfmt_begin(&lf, tests[i].event);
+        logfmt_push_fmt(&lf, "k", "%s", tests[i].value);
+        CU_ASSERT_STRING_EQUAL(logfmt_cstring(&lf), tests[i].expect);
+    }
+
+    logfmt_finish(&lf);
+}
+
 /* vim: set ft=c: */
