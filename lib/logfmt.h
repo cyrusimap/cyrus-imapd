@@ -42,6 +42,26 @@
 #ifndef INCLUDED_LOGFMT_H
 #define INCLUDED_LOGFMT_H
 
+#include "buf.h"
+
+struct logfmt
+{
+    struct buf msg;
+};
+#define LOGFMT_INITIALIZER (struct logfmt){ 0 }
+
 extern char *logfmt_escape(const char *val);
+
+extern void logfmt_init(struct logfmt *lf, const char *event);
+extern void logfmt_fini(struct logfmt *lf);
+const char *logfmt_cstring(const struct logfmt *lf);
+
+extern void logfmt_push(struct logfmt *lf, const char *key, const char *value);
+
+__attribute__((format(printf, 3, 4)))
+extern void logfmt_pushf(struct logfmt *lf, const char *key,
+                         const char *valuefmt, ...);
+
+extern void logfmt_push_session(struct logfmt *lf);
 
 #endif
