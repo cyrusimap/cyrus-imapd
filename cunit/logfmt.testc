@@ -1,0 +1,9 @@
+#include "cunit/unit.h"
+#include "lib/logfmt.h"
+
+static void test_stub(void)
+{
+    /* XXX add tests */
+}
+
+/* vim: set ft=c: */
