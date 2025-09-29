@@ -41,7 +41,12 @@
  */
 #include <config.h>
 
+#include "lib/assert.h"
 #include "lib/logfmt.h"
+
+#include <stdarg.h>
+#include <stdlib.h>
+#include <syslog.h>
 
 /* visible for testing; probably don't call this directly */
 EXPORTED char *logfmt_escape(const char *val)
@@ -130,4 +135,50 @@ EXPORTED char *logfmt_escape(const char *val)
     }
 
     return buf_release(&buf);
+}
+
+EXPORTED void logfmt_begin(struct logfmt *lf, const char *event)
+{
+    buf_reset(&lf->msg);
+    logfmt_push(lf, "event", event);
+}
+
+EXPORTED const char *logfmt_cstring(const struct logfmt *lf)
+{
+    return buf_cstring(&lf->msg);
+}
+
+EXPORTED void logfmt_finish(struct logfmt *lf)
+{
+    buf_free(&lf->msg);
+}
+
+EXPORTED void logfmt_push(struct logfmt *lf,
+                          const char *key,
+                          const char *value)
+{
+    char *escaped;
+
+    assert(key && *key);
+
+    escaped = logfmt_escape(value);
+    if (buf_len(&lf->msg))
+        buf_putc(&lf->msg, ' ');
+    buf_printf(&lf->msg, "%s=%s", key, escaped);
+    free(escaped);
+}
+
+EXPORTED void logfmt_push_fmt(struct logfmt *lf, const char *key,
+                              const char *valuefmt, ...)
+{
+    struct buf formatted = BUF_INITIALIZER;
+    va_list args;
+
+    va_start(args, valuefmt);
+    buf_vprintf(&formatted, valuefmt, args);
+    va_end(args);
+
+    logfmt_push(lf, key, buf_cstring(&formatted));
+
+    buf_free(&formatted);
 }
