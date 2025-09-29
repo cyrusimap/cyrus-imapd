@@ -2257,6 +2257,11 @@ static char *_xsyslog_ev_escape(const char *val)
     size_t orig_len, escaped_len;
     const char *p;
 
+    if (val == NULL) {
+        buf_setcstr(&buf, "~null~");
+        return buf_release(&buf);
+    }
+
     buf_setcstr(&buf, val);
 
     escaped_len = orig_len = buf_len(&buf);

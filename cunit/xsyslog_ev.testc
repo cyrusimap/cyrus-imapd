@@ -270,6 +270,11 @@ static void test_lf_s(void)
     xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "\\"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
+    // null
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=~null~");
+    xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", NULL));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
     // no quoting or escaping
     struct buf str = BUF_INITIALIZER;
     int iter;
