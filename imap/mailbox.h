@@ -580,11 +580,15 @@ enum {
 
 /*
  * This structure maintains a list of FLAG_ to the string literal mapping.
+ * The defines are validated at compile time in mailbox.c
  */
 struct MsgFlagMap {
     const char *code;
     MsgFlags flag;
 };
+#define N_MSGFLAGMAP (11)
+#define FLAGMAPSTR_MAXLEN (1 + 3 * N_MSGFLAGMAP)
+extern void flags_to_str(const struct index_record *record, char *flagstr);
 
 unsigned mailbox_cached_header(const char *s);
 unsigned mailbox_cached_header_inline(const char *text);

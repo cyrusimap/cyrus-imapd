@@ -58,6 +58,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
+#include "auditlog.h"
 #include "auth.h"
 #include "duplicate.h"
 #include "global.h"
@@ -901,10 +902,8 @@ static int sieve_redirect(void *ac, void *ic,
                           "message-id=%s target=<%s>",
                           m->id ? m->id : "<nomsgid>",
                           rc->addr);
-        if (config_auditlog)
-            syslog(LOG_NOTICE,
-                   "auditlog: redirect sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
-                   session_id(), m->id ? m->id : "<nomsgid>", rc->addr, ctx->userid);
+        auditlog_sieve("redirect",
+                       ctx->userid, m->id, NULL, rc->addr, NULL, NULL);
         return SIEVE_OK;
     } else {
         if (res == -1) {
@@ -930,9 +929,7 @@ static int sieve_discard(void *ac __attribute__((unused)),
     xsyslog(LOG_INFO, "sieve discard",
                       "message-id=%s",
                       md->id ? md->id : "<nomsgid>");
-    if (config_auditlog)
-        syslog(LOG_NOTICE, "auditlog: discard sessionid=<%s> message-id=%s",
-               session_id(), md->id ? md->id : "<nomsgid>");
+    auditlog_sieve("discard", NULL, md->id, NULL, NULL, NULL, NULL);
 
     return SIEVE_OK;
 }
@@ -982,11 +979,8 @@ static int sieve_reject(void *ac, void *ic,
         xsyslog(LOG_INFO, "sieve LMTP reject",
                           "message-id=%s",
                           md->id ? md->id : "<nomsgid>");
-        if (config_auditlog)
-            syslog(LOG_NOTICE,
-                   "auditlog: LMTP reject sessionid=<%s> message-id=%s userid=<%s>",
-                   session_id(), md->id ? md->id : "<nomsgid>", ctx->userid);
-
+        auditlog_sieve("LMTP reject",
+                       ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
 
@@ -1001,10 +995,8 @@ static int sieve_reject(void *ac, void *ic,
                           "userid=<%s> message-id=%s",
                           mbname_userid(sd->mbname),
                           md->id ? md->id : "<nomsgid>");
-        if (config_auditlog)
-            syslog(LOG_NOTICE,
-                   "auditlog: discard-reject sessionid=<%s> message-id=%s userid=<%s>",
-                   session_id(), md->id ? md->id : "<nomsgid>", ctx->userid);
+        auditlog_sieve("discard-reject",
+                       ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
 
@@ -1018,11 +1010,8 @@ static int sieve_reject(void *ac, void *ic,
                           "message-id=%s target=<%s>",
                           md->id ? md->id : "<nomsgid>",
                           md->return_path);
-        if (config_auditlog)
-            syslog(LOG_NOTICE,
-                   "auditlog: reject sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
-                   session_id(), md->id ? md->id : "<nomsgid>", md->return_path,
-                   ctx->userid);
+        auditlog_sieve("reject",
+                       ctx->userid, md->id, NULL, md->return_path, NULL, NULL);
         return SIEVE_OK;
     } else {
         if (res == -1) {
@@ -1752,12 +1741,9 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
                       m->id ? m->id : "<nomsgid>",
                       buf_cstring(&cal->outcome),
                       buf_cstring(&cal->reason));
-    if (config_auditlog)
-        syslog(LOG_NOTICE,
-               "auditlog: processed iMIP sessionid=<%s> message-id=%s"
-               " outcome=%s errstr='%s'",
-               session_id(), m->id ? m->id : "<nomsgid>",
-               buf_cstring(&cal->outcome), buf_cstring(&cal->reason));
+    auditlog_imip(m->id,
+                  buf_cstring(&cal->outcome),
+                  buf_cstringnull_ifempty(&cal->reason));
 
     strarray_fini(&sched_addresses);
     if (parts) {
@@ -2146,13 +2132,9 @@ static int send_response(void *ac, void *ic,
                           "in.msgid=%s out.msgid=%s from=%s to=<%s>",
                           md->id ? md->id : "", outmsgid,
                           buf_cstring(&fromaddr), src->addr);
-        if (config_auditlog) {
-            xsyslog(LOG_NOTICE, "auditlog: vacation response",
-                    "userid=<%s> in.msgid=%s out.msgid=%s from=%s to=<%s>",
-                    ctx->userid, md->id ? md->id : "",
-                    outmsgid, buf_cstring(&fromaddr), src->addr);
-        }
-
+        auditlog_sieve("vacation response",
+                       ctx->userid, md->id, outmsgid,
+                       NULL, buf_cstring(&fromaddr), src->addr);
         buf_free(&fromaddr);
 
         ret = SIEVE_OK;

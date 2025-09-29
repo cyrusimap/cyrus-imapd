@@ -77,6 +77,7 @@
 
 #include "annotate.h"
 #include "assert.h"
+#include "auditlog.h"
 #include "bsearch.h"
 #ifdef WITH_DAV
 #include "caldav_db.h"
@@ -179,11 +180,14 @@ static struct MsgFlagMap msgflagmap[] = {
     {"EX", (int)FLAG_INTERNAL_EXPUNGED}
     /* ZZ -> invalid file found on disk */
 };
+_Static_assert(N_MSGFLAGMAP == sizeof(msgflagmap) / sizeof(msgflagmap[0]),
+               "N_MSGFLAGMAP has the wrong value");
 /* The length of the msgflagmap list * 2 +
  * Total number of separators possible
  * = 33 bytes
  */
-#define FLAGMAPSTR_MAXLEN (1 + 3 *(sizeof(msgflagmap) / sizeof(struct MsgFlagMap)))
+_Static_assert(FLAGMAPSTR_MAXLEN == 1 + 3 * N_MSGFLAGMAP,
+               "FLAGMAPSTR_MAXLEN has the wrong value");
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int _mailbox_index_repack(struct mailbox *mailbox,
@@ -233,7 +237,7 @@ static inline void flags_to_str_internal(uint32_t flags, char *flagstr)
     }
 }
 
-static void flags_to_str(struct index_record *record, char *flagstr)
+EXPORTED void flags_to_str(const struct index_record *record, char *flagstr)
 {
     uint32_t flags = record->system_flags | record->internal_flags;
 
@@ -2341,51 +2345,19 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         return IMAP_IOERROR;
     }
 
-    /* audit logging */
-    if (config_auditlog) {
-        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        char flagstr[FLAGMAPSTR_MAXLEN];
-        char emailid[JMAP_MAX_EMAILID_SIZE];
-        char threadid[JMAP_THREADID_SIZE];
+    if (change->flags & CHANGE_ISAPPEND)
+        auditlog_message("append", mailbox, record, change->msgid);
 
-        jmap_set_emailid(cstate, &record->guid,
-                         0, &record->internaldate, emailid);
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+        && !(change->flags & CHANGE_WASEXPUNGED))
+    {
+        auditlog_message("expunge", mailbox, record, NULL);
+    }
 
-        jmap_set_threadid(cstate, record->cid, threadid);
-
-        flags_to_str(record, flagstr);
-        if (change->flags & CHANGE_ISAPPEND)
-            /* note: messageid doesn't have <> wrappers because it already includes them */
-            xsyslog(LOG_NOTICE, "auditlog: append",
-                    "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> modseq=<" MODSEQ_FMT "> sysflags=<%s> guid=<%s>"
-                    " emailid=<%s> cid=<%s> messageid=%s size=<" UINT64_FMT">",
-                    session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    record->uid, record->modseq, flagstr,
-                    message_guid_encode(&record->guid), emailid, threadid,
-                    change->msgid, record->size);
-
-        if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
-            xsyslog(LOG_NOTICE, "auditlog: expunge",
-                    "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> modseq=<" MODSEQ_FMT "> sysflags=<%s> guid=<%s>"
-                    " emailid=<%s> cid=<%s> size=<" UINT64_FMT ">",
-                    session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    record->uid, record->modseq, flagstr,
-                    message_guid_encode(&record->guid), emailid, threadid,
-                    record->size);
-
-        if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
-            xsyslog(LOG_NOTICE, "auditlog: unlink",
-                    "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> modseq=<" MODSEQ_FMT "> sysflags=<%s> guid=<%s>"
-                    " emailid=<%s>",
-                    session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    record->uid, record->modseq, flagstr,
-                    message_guid_encode(&record->guid), emailid);
+    if ((record->internal_flags & FLAG_INTERNAL_UNLINKED)
+        && !(change->flags & CHANGE_WASUNLINKED))
+    {
+        auditlog_message("unlink", mailbox, record, NULL);
     }
 
     return 0;
@@ -3324,17 +3296,9 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
         return IMAP_IOERROR;
     }
 
-    if (config_auditlog && mailbox->modseq_dirty)
-        xsyslog(LOG_NOTICE, "auditlog: modseq",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                " highestmodseq=<" MODSEQ_FMT
-                "> deletedmodseq=<" MODSEQ_FMT "> crcs=<%u/%u>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                mailbox->i.highestmodseq, mailbox->i.deletedmodseq,
-                mailbox->i.synccrcs.basic, mailbox->i.synccrcs.annot);
-
     if (mailbox->modseq_dirty) {
+        auditlog_modseq(mailbox);
+
         struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_MODSEQ);
         mboxevent_extract_mailbox(mboxevent, mailbox);
         mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox_name(mailbox), 0);
@@ -4926,27 +4890,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     r = _store_change(mailbox, record, changeflags);
     if (r) return r;
 
-    if (config_auditlog) {
-        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-        char oldflags[FLAGMAPSTR_MAXLEN], sysflags[FLAGMAPSTR_MAXLEN];
-        char emailid[JMAP_MAX_EMAILID_SIZE];
-        char threadid[JMAP_THREADID_SIZE];
-
-        jmap_set_emailid(cstate, &record->guid,
-                         0, &record->internaldate, emailid);
-        jmap_set_threadid(cstate, record->cid, threadid);
-
-        flags_to_str(&oldrecord, oldflags);
-        flags_to_str(record, sysflags);
-        xsyslog(LOG_NOTICE, "auditlog: touched",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                " uid=<%u> guid=<%s> emailid=<%s> cid=<%s>"
-                " modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                record->uid, message_guid_encode(&record->guid), emailid, threadid,
-                record->modseq, oldflags, sysflags);
-    }
+    auditlog_message("touched", mailbox, record, NULL);
 
     /* expunged tracking */
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED &&
@@ -5097,26 +5041,12 @@ EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const c
     const char *archivefname = mailbox_archive_fname(mailbox, uid);
 
     if (cyrus_unlink_fdptr(spoolfname, &mailbox->spool_dirfd) == 0) {
-        if (config_auditlog) {
-            xsyslog(LOG_NOTICE, "auditlog: unlink",
-                    "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> sysflags=<%s>",
-                    session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    uid, flagstr);
-        }
+        auditlog_message_uid("remove-spool", mailbox, uid, flagstr);
     }
 
     if (strcmp(spoolfname, archivefname)) {
         if (cyrus_unlink_fdptr(archivefname, &mailbox->archive_dirfd) == 0) {
-            if (config_auditlog) {
-                xsyslog(LOG_NOTICE, "auditlog: unlinkarchive",
-                        "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                        " uid=<%u> sysflags=<%s>",
-                        session_id(), mailbox_name(mailbox),
-                        mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                        uid, flagstr);
-            }
+            auditlog_message_uid("remove-archive", mailbox, uid, flagstr);
         }
     }
 }
@@ -6026,26 +5956,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             continue;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
-        if (config_auditlog) {
-            struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-            char flagstr[FLAGMAPSTR_MAXLEN];
-            flags_to_str(&copyrecord, flagstr);
-            char emailid[JMAP_MAX_EMAILID_SIZE];
-            char threadid[JMAP_THREADID_SIZE];
-
-            jmap_set_emailid(cstate, &copyrecord.guid,
-                             0, &copyrecord.internaldate, emailid);
-            jmap_set_threadid(cstate, copyrecord.cid, threadid);
-
-            xsyslog(LOG_NOTICE, "auditlog:",
-                    "action=<%s> sessionid=<%s>"
-                    " mailbox=<%s> uniqueid=<%s> mboxid=<%s>"
-                    " uid=<%u> guid=<%s> emailid=<%s> cid=<%s> sysflags=<%s>",
-                    action, session_id(), mailbox_name(mailbox),
-                    mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                    copyrecord.uid, message_guid_encode(&copyrecord.guid),
-                    emailid, threadid, flagstr);
-        }
+        auditlog_message(action, mailbox, &copyrecord, NULL);
     }
 
     if (myiter) mailbox_iter_done(&myiter);
@@ -6526,13 +6437,7 @@ EXPORTED int mailbox_create(const char *name,
     r = mailbox_commit(mailbox);
     if (r) goto done;
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: create",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s>"
-                " mboxid=<%s> uidvalidity=<%u>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox),
-                mailbox->i.uidvalidity);
+    auditlog_mailbox("create", NULL, mailbox, NULL);
 
 done:
     mbname_free(&mbname);
@@ -6788,11 +6693,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 
     syslog(LOG_NOTICE, "Deleted mailbox %s", mailbox_name(mailbox));
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: delete",
-                "sessionid=<%s> mailbox=<%s> uniqueid=<%s> mboxid=<%s>",
-                session_id(), mailbox_name(mailbox),
-                mailbox_uniqueid(mailbox), mailbox_jmapid(mailbox));
+    auditlog_mailbox("delete", NULL, mailbox, NULL);
 
     proc_killmbox(mailbox_name(mailbox));
 
@@ -7303,12 +7204,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_commit(newmailbox);
     if (r) goto fail;
 
-    if (config_auditlog)
-        xsyslog(LOG_NOTICE, "auditlog: rename",
-                "sessionid=<%s> oldmailbox=<%s> newmailbox=<%s>"
-                " uniqueid=<%s> mboxid=<%s>",
-                session_id(), mailbox_name(oldmailbox), newname,
-                mailbox_uniqueid(newmailbox), mailbox_jmapid(newmailbox));
+    auditlog_mailbox("rename", oldmailbox, newmailbox, NULL);
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);

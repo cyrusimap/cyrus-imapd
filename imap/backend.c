@@ -65,6 +65,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
+#include "auditlog.h"
 #include "backend.h"
 #include "global.h"
 #include "iptostring.h"
@@ -851,11 +852,10 @@ static int backend_login(struct backend *ret, const char *userid,
                 post_parse_capability(ret);
             }
 
-            if (!(strcmp(prot->service, "imap") &&
-                 (strcmp(prot->service, "pop3")))) {
-                char rsessionid[MAX_SESSIONID_SIZE];
-                parse_sessionid(my_status, rsessionid);
-                syslog(LOG_NOTICE, "auditlog: proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
+            if (!(strcmp(prot->service, "imap")
+                && (strcmp(prot->service, "pop3"))))
+            {
+                auditlog_proxy(userid, my_status);
             }
         }
 
