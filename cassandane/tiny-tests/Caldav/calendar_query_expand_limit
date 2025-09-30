@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_query_expand_limit
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $Cal = $CalDAV->GetCalendar($CalendarId);
+
+    xlog $self, "Load a recurring resource";
+    my $desc = "X" x 1000;
+    my $uuid = "851e34f4-23fc-4b69-9e90-67468336e53c";
+    my $href = "$CalendarId/$uuid.ics";
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//YourApp//NONSGML v1.0//EN
+BEGIN:VEVENT
+UID:$uuid
+DTSTAMP:20250903T123446Z
+DTSTART;TZID=Europe/Rome:20250903T144500
+DTEND;TZID=Europe/Rome:20250903T144600
+SUMMARY:Quick Repeat Event
+DESCRIPTION:$desc
+RRULE:FREQ=HOURLY
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Perform calendar-query";
+    my $xml = <<EOF;
+<c:calendar-query xmlns:d="DAV:"
+                  xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop>
+    <c:calendar-data>
+      <c:expand start="20250103T000000Z" end="20501205T010101Z"/>
+    </c:calendar-data>
+  </d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="20250103T000000Z" end="20501205T000000Z"/>
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>
+EOF
+
+    my $res = $CalDAV->Request('REPORT',
+                               "/dav/calendars/user/cassandane/$CalendarId",
+                               $xml, Depth => 1, 'Content-Type' => 'text/xml');
+
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(1, scalar @$responses);
+
+    my $propstat = $responses->[0]{'{DAV:}propstat'};
+    $self->assert_equals(1, scalar @$propstat);
+
+    $self->assert(exists $propstat->[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'});
+    $self->assert_str_equals('HTTP/1.1 422 Unprocessable Content',
+                             $propstat->[0]{'{DAV:}status'}{content});
+}
