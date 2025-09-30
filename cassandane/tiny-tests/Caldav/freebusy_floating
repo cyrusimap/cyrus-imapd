@@ -23,7 +23,7 @@ sub test_freebusy_floating
         summary => 'waterfall2',
     });
 
-    my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
+    my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId, AlwaysRange => 1);
 
     $self->assert_str_equals('2015-01-01T01:00:00', $data->[0]{start});
     $self->assert_str_equals('2015-02-01T01:00:00', $data->[1]{start});
@@ -47,7 +47,7 @@ EOF
                                "/dav/calendars/user/cassandane/". $CalendarId,
                                $xml, 'Content-Type' => 'text/xml');
 
-    ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
+    ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId, AlwaysRange => 1);
 
     $self->assert_str_equals('2015-01-01T17:00:00', $data->[0]{start});
     $self->assert_str_equals('2015-02-01T17:00:00', $data->[1]{start});

@@ -8007,8 +8007,10 @@ static int report_fb_query(struct transaction_t *txn,
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     memset(&fbfilter, 0, sizeof(struct freebusy_filter));
-    fbfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
-    fbfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    /* time-range is mandatory, so start with invalid values
+       so we catch if one or both is missing in the request */
+    fbfilter.end = icaltime_null_date();
+    fbfilter.start = icaltime_null_date();
     fctx->filter_crit = &fbfilter;
 
     /* Parse children element of report */
@@ -8029,12 +8031,12 @@ static int report_fb_query(struct transaction_t *txn,
                     fbfilter.end = icaltime_from_string((char *) end);
                     xmlFree(end);
                 }
-
-                if (!is_valid_timerange(fbfilter.start, fbfilter.end)) {
-                    return HTTP_BAD_REQUEST;
-                }
             }
         }
+    }
+
+    if (!is_valid_timerange(fbfilter.start, fbfilter.end)) {
+        return HTTP_BAD_REQUEST;
     }
 
     fctx->depth++;

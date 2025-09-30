@@ -73,7 +73,7 @@ EOF
 
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
-    my ($Data) = $CalDAV->GetFreeBusy($CalendarId);
+    my ($Data) = $CalDAV->GetFreeBusy($CalendarId, AlwaysRange => 1);
 
     $self->assert(@$Data > 50);
     $self->assert_str_equals("Etc/UTC", $Data->[0]{timeZone});
