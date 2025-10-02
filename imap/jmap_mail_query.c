@@ -148,8 +148,10 @@ static mbentry_t *_get_sharedaddressbook(const char *userid,
 
     strarray_t patterns = STRARRAY_INITIALIZER;
     struct buf pattern = BUF_INITIALIZER;
-    buf_setcstr(&pattern, "user");
-    buf_putc(&pattern, namespace->hier_sep);
+
+    assert(namespace->hier_sep && namespace->prefix[NAMESPACE_USER][0]);
+
+    buf_setcstr(&pattern, namespace->prefix[NAMESPACE_USER]);
     buf_putc(&pattern, '*');
     buf_putc(&pattern, namespace->hier_sep);
     buf_appendcstr(&pattern, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
