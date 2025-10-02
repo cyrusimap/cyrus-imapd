@@ -858,52 +858,52 @@ static const jmap_property_t mailbox_props[] = {
     {
         "isCollapsed",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "hidden",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "sort",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "identityRef",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "autoLearn",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "learnAsSpam",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "autoPurge",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "purgeOlderThanDays",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "onlyPurgeDeleted",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "suppressDuplicates",
         JMAP_MAIL_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "shareWith",
@@ -1877,6 +1877,7 @@ struct mboxset_args {
     int overwrite_acl;
     char *color;
     int show_as_label;
+    bool has_ext_props; // request is setting externally-stored properties
     json_t *jargs; // original JSON arguments
 };
 
@@ -1902,6 +1903,19 @@ static void _mboxset_args_parse(json_t *jargs,
     args->sortorder = -1;
     args->overwrite_acl = 1;
     args->jargs = json_incref(jargs);
+
+    if (!is_create) {
+        /* Any externally-stored properties? */
+        const char *key;
+        json_t *val;
+        json_object_foreach(jargs, key, val) {
+            const jmap_property_t *prop = jmap_property_find(key, mailbox_props);
+            if (prop && (prop->flags & JMAP_PROP_EXTERNAL)) {
+                args->has_ext_props = true;
+                break;
+            }
+        }
+    }
 
     /* id */
     json_t *jid = json_object_get(jargs, "id");
@@ -2790,9 +2804,15 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0, 0);
     }
-    if (!r && (args->shareWith || args->is_seenshared >= 0)) {
+    if (!r && (args->shareWith || args->is_seenshared >= 0 || args->has_ext_props)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
+
+        /* Do we need to bump modseq for externally-stored props?
+           Changing shareWith will cancel the need to forcibly bump
+           the modseq.
+        */
+        bool bump_modseq = args->has_ext_props;
 
         r = mailbox_open_iwl(mboxname, &mbox);
         if (r) goto done;
@@ -2800,19 +2820,26 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         if (args->shareWith) {
             r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl,
                     _mbox_sharewith_to_rights);
+            bump_modseq = false;
         }
 
-        if (!r && args->is_seenshared >= 0) {
-            newopts = mbox->i.options;
-            if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
-            else newopts &= ~OPT_IMAP_SHAREDSEEN;
+        if (!r) {
+            if (args->is_seenshared >= 0) {
+                newopts = mbox->i.options;
+                if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
+                else newopts &= ~OPT_IMAP_SHAREDSEEN;
 
-            /* only mark dirty if there's been a change */
-            if (mbox->i.options != newopts) {
-                mailbox_index_dirty(mbox);
-                mailbox_modseq_dirty(mbox);
-                mbox->i.options = newopts;
-                mboxlist_update_foldermodseq(mailbox_name(mbox), mbox->i.highestmodseq);
+                /* only mark dirty if there's been a change */
+                if (mbox->i.options != newopts) {
+                    mailbox_index_dirty(mbox);
+                    mbox->i.options = newopts;
+                    bump_modseq = true;
+                }
+            }
+
+            if (bump_modseq) {
+                mboxlist_update_foldermodseq(mailbox_name(mbox),
+                                             mailbox_modseq_dirty(mbox));
             }
         }
         mailbox_close(&mbox);

@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_extendedprops
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create calendar
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                '1' => {
+                    name => 'A',
+                    color => 'blue',
+                }
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{created}{1});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    # set externally-stored FM property
+    $res = $jmap->CallMethods([
+        ['Calendar/set',
+            { update => {
+                $id => {
+                    isEventsPublic => JSON::true,
+                }
+            }
+        }, "R1"],
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
+}

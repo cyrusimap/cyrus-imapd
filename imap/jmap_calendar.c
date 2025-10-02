@@ -940,32 +940,32 @@ static const jmap_property_t calendar_props[] = {
     {
         "syncedFrom",
         JMAP_CALENDARS_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "isEventsPublic",
         JMAP_CALENDARS_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "isFreeBusyPublic",
         JMAP_CALENDARS_EXTENSION,
-        0
+        JMAP_PROP_EXTERNAL
     },
     {
         "eventsUrl",
         JMAP_CALENDARS_EXTENSION,
-        JMAP_PROP_SERVER_SET
+        JMAP_PROP_SERVER_SET | JMAP_PROP_EXTERNAL
     },
     {
         "freeBusyUrl",
         JMAP_CALENDARS_EXTENSION,
-        JMAP_PROP_SERVER_SET
+        JMAP_PROP_SERVER_SET | JMAP_PROP_EXTERNAL
     },
     {
         "calDavUrl",
         JMAP_CALENDARS_EXTENSION,
-        JMAP_PROP_SERVER_SET
+        JMAP_PROP_SERVER_SET | JMAP_PROP_EXTERNAL
     },
     {
         "mailboxUniqueId",
@@ -1201,6 +1201,7 @@ struct setcalendar_props {
     int isVisible;
     int isSubscribed;
     int transp;
+    bool has_ext_props; // request is setting externally-stored properties
     json_t *participant_identities;
     struct {
         json_t *With;
@@ -1276,6 +1277,17 @@ static void setcalendar_parseprops(jmap_req_t *req,
         props->share.overwrite_acl = 1;
         props->transp = -1;
         props->comp_types = -1;
+
+        /* Any externally-stored properties? */
+        const char *key;
+        json_t *val;
+        json_object_foreach(arg, key, val) {
+            const jmap_property_t *prop = jmap_property_find(key, calendar_props);
+            if (prop && (prop->flags & JMAP_PROP_EXTERNAL)) {
+                props->has_ext_props = true;
+                break;
+            }
+        }
     }
 
     /* name */
@@ -1556,6 +1568,12 @@ static int setcalendar_writeprops(jmap_req_t *req,
     struct buf val = BUF_INITIALIZER;
     int r;
 
+    /* Do we need to bump modseq for externally-stored props?
+       Any other property change will cancel the need to forcibly bump
+       the modseq.
+    */
+    bool bump_modseq = props->has_ext_props;
+
     r = mailbox_get_annotate_state(mbox, 0, &astate);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open annotations %s: %s",
@@ -1573,6 +1591,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     displayname_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
     /* description */
     if (!r && props->desc) {
@@ -1585,6 +1604,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     description_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
     /* color */
     if (!r && props->color) {
@@ -1597,6 +1617,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     color_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
     /* sortOrder */
     if (!r && props->sortOrder >= 0) {
@@ -1609,6 +1630,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     sortOrder_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
     /* isVisible */
     if (!r && props->isVisible >= 0) {
@@ -1621,6 +1643,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     visible_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
 
     /* participantIdentities */
@@ -1646,6 +1669,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
 
         strarray_fini(&new);
         strarray_fini(&old);
+        bump_modseq = false;
     }
 
     /* isSubscribed */
@@ -1664,6 +1688,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     invite_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
 
     /* includeInAvailability */
@@ -1687,6 +1712,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                    transp_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
 
     /* timeZone */
@@ -1700,6 +1726,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     tzid_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
 
     /* shareWith */
@@ -1711,6 +1738,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
             r = caldav_update_shareacls(userid);
             free(userid);
         }
+        bump_modseq = false;
     }
 
     /* supported components */
@@ -1724,6 +1752,7 @@ static int setcalendar_writeprops(jmap_req_t *req,
                     comp_annot, error_message(r));
         }
         buf_reset(&val);
+        bump_modseq = false;
     }
 
     /* defaultAlertsWithTime */
@@ -1746,6 +1775,13 @@ static int setcalendar_writeprops(jmap_req_t *req,
                         mailbox_name(mbox), error_message(r));
             }
         }
+        bump_modseq = false;
+    }
+
+    /* FM externally-stored properties */
+    if (!r && bump_modseq) {
+        mboxlist_update_foldermodseq(mailbox_name(mbox),
+                                     mailbox_modseq_dirty(mbox));
     }
 
     buf_free(&val);
