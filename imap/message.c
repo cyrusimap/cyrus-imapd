@@ -1226,7 +1226,7 @@ EXPORTED void message_parse_string(const char *hdr, char **hdrp)
     while ((he = strchr(he, '\n'))!=NULL) {
         if (he > *hdrp && he[-1] == '\r') {
             he--;
-            memmove(he, he+2, strlen(he+2)+1);
+            if (he) memmove(he, he+2, strlen(he+2)+1);
         }
         else {
             memmove(he, he+1, strlen(he+1)+1);
