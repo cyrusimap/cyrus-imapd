@@ -3437,6 +3437,9 @@ static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t, char *json)
 
         strarray_append(&capabilities, JMAP_URN_MAIL);
         strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
+        /* for matching email addresses in contacts */
+        strarray_append(&capabilities, JMAP_URN_CONTACTS);
+        strarray_append(&capabilities, JMAP_CONTACTS_EXTENSION);
 
         jmap_email_filter_parse(jquery, &parse_ctx);
 
