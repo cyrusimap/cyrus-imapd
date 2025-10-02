@@ -53,7 +53,12 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                                              jmap_email_filter_parse_ctx_t *ctx)
 {
     const char *field, *s = NULL;
-    int have_mail_extension = strarray_contains(ctx->capabilities, JMAP_MAIL_EXTENSION);
+    int have_mail_extension =
+        strarray_contains(ctx->capabilities, JMAP_MAIL_EXTENSION);
+    int have_contacts =
+        strarray_contains(ctx->capabilities, JMAP_URN_CONTACTS);
+    int have_contacts_extension =
+        strarray_contains(ctx->capabilities, JMAP_CONTACTS_EXTENSION);
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
@@ -134,7 +139,16 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
                 }
             }
         }
-        else if (have_mail_extension &&
+        else if (have_mail_extension && have_contacts &&
+                 (!strcmp(field, "fromContactCardUid") ||
+                  !strcmp(field, "toContactCardUid") ||
+                  !strcmp(field, "ccContactCardUid") ||
+                  !strcmp(field, "bccContactCardUid"))) {
+            if (!json_is_string(arg)) {
+                ctx->invalid_field(field, ctx->rock);
+            }
+        }
+        else if (have_mail_extension && have_contacts_extension &&
                  (!strcmp(field, "fromContactGroupId") ||
                   !strcmp(field, "toContactGroupId") ||
                   !strcmp(field, "ccContactGroupId") ||
@@ -144,6 +158,7 @@ HIDDEN void jmap_email_filtercondition_parse(json_t *filter,
             }
         }
         else if (have_mail_extension &&
+                 (have_contacts || have_contacts_extension) &&
                  (!strcmp(field, "fromAnyContact") ||
                   !strcmp(field, "toAnyContact") ||
                   !strcmp(field, "ccAnyContact") ||
