@@ -64,6 +64,12 @@
 #ifndef JMAP_MAIL_EXTENSION
 #define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
 #endif
+#ifndef JMAP_URN_CONTACTS
+#define JMAP_URN_CONTACTS            "urn:ietf:params:jmap:contacts"
+#endif
+#ifndef JMAP_CONTACTS_EXTENSION
+#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
+#endif
 
 static int _email_threadkeyword_is_valid(const char *keyword)
 {
@@ -166,18 +172,24 @@ static mbentry_t *_get_sharedaddressbook(const char *userid,
     return res;
 }
 
+enum { CF_GROUP = 0, CF_ANY, CF_CARD };
+
 static const struct contactfilters_t {
     const char *field;
-    int isany;
+    unsigned type;
 } contactfilters[] = {
-  { "fromContactGroupId", 0 },
-  { "toContactGroupId", 0 },
-  { "ccContactGroupId", 0 },
-  { "bccContactGroupId", 0 },
-  { "fromAnyContact", 1 },
-  { "toAnyContact", 1 },
-  { "ccAnyContact", 1 },
-  { "bccAnyContact", 1 },
+  { "fromContactCardUid", CF_CARD  },
+  { "toContactCardUid",   CF_CARD  },
+  { "ccContactCardUid",   CF_CARD  },
+  { "bccContactCardUid",  CF_CARD  },
+  { "fromContactGroupId", CF_GROUP },
+  { "toContactGroupId",   CF_GROUP },
+  { "ccContactGroupId",   CF_GROUP },
+  { "bccContactGroupId",  CF_GROUP },
+  { "fromAnyContact",     CF_ANY   },
+  { "toAnyContact",       CF_ANY   },
+  { "ccAnyContact",       CF_ANY   },
+  { "bccAnyContact",      CF_ANY   },
   { NULL, 0 }
 };
 
@@ -194,7 +206,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
         if (!arg) continue;
-        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        const char *groupid = (c->type == CF_ANY) ?
+            (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
         if (!groupid) continue; // avoid looking up if invalid!
         havefield = 1;
         break;
@@ -232,7 +245,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
         if (!arg) continue;
-        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        const char *groupid = (c->type == CF_ANY) ?
+            (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
         if (!groupid) continue;
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
@@ -241,7 +255,10 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         strarray_t *members = NULL;
         if (!cfilter->addrbook ||
             !mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
-            members = carddav_getgroup(cfilter->carddavdb, mbentry, groupid, othermb);
+            members = carddav_getemails(cfilter->carddavdb, mbentry, groupid,
+                                        (c->type == CF_GROUP) ?
+                                        CARDDAV_KIND_GROUP : CARDDAV_KIND_ANY,
+                                        othermb);
         }
         mboxlist_entry_free(&mbentry);
         if (!members) {
@@ -1048,25 +1065,32 @@ static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
-             json_string_value(json_object_get(filter, "fromContactGroupId"))))
-    {
+             json_string_value(json_object_get(filter, "fromContactCardUid"))) ||
+        (match =
+             json_string_value(json_object_get(filter, "fromContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_FROM, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "toContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "toContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_TO, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "ccContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "ccContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_CC, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "bccContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "bccContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_BCC, xdb, cfilter);
@@ -1685,6 +1709,9 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     /* Parse filter */
     strarray_append(&capabilities, JMAP_URN_MAIL);
     strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
+    /* for matching email addresses in contacts */
+    strarray_append(&capabilities, JMAP_URN_CONTACTS);
+    strarray_append(&capabilities, JMAP_CONTACTS_EXTENSION);
     jmap_email_filter_parse(jfilter, &parse_ctx);
 
     /* Gather contactgroup ids */
