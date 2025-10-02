@@ -81,4 +81,17 @@ sub test_mailbox_set_extendedprops
     $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSeenShared});
     $self->assert_str_equals('#ABCDEF', $res->[0][1]{list}[1]{color});
     $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{showAsLabel});
+
+    # set externally-stored FM property
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    hidden => 0,
+                },
+            }
+        }, "R1"]
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$mboxIdA});
+    $self->assert_str_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
 }
