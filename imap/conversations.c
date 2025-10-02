@@ -369,6 +369,11 @@ EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *st
     return count;
 }
 
+EXPORTED int open_conversations_exist(void)
+{
+    return open_conversations ? 1 : 0;
+}
+
 EXPORTED int conversations_open_path_version(const char *fname,
                                              const char *userid, int shared,
                                              struct conversations_state **statep,

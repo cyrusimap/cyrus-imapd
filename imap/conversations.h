@@ -237,6 +237,8 @@ extern void conversations_set_suffix(const char *suff);
 extern char *conversations_getmboxpath(const char *mboxname);
 extern char *conversations_getuserpath(const char *username);
 
+extern int open_conversations_exist(void);
+
 #define conversations_open_path(p, u, sh, sp) \
     conversations_open_path_version(p, u, sh, sp, 0)
 extern int conversations_open_path_version(const char *path,

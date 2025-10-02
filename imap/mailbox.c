@@ -246,7 +246,9 @@ EXPORTED void flags_to_str(const struct index_record *record, char *flagstr)
 
 EXPORTED int open_mailboxes_exist()
 {
-    return open_mailboxes ? 1 : 0;
+    if (open_mailboxes) return 1;
+    if (open_conversations_exist()) return 1;
+    return 0;
 }
 
 EXPORTED int open_mailboxes_namelocked(const char *userid)
