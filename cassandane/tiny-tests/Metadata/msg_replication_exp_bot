@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_msg_replication_exp_bot
-    :needs_component_replication
+    :needs_component_replication :NoReplicaOnly
 {
     my ($self) = @_;
 

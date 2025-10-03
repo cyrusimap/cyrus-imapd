@@ -2,6 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_replication_repair_zero_msgs
+    :NoReplicaOnly
 {
     my ($self) = @_;
 
