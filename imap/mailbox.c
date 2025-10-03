@@ -75,6 +75,7 @@
 # endif
 #endif
 
+#include "acl.h"
 #include "annotate.h"
 #include "assert.h"
 #include "auditlog.h"
@@ -6148,6 +6149,12 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox,
     return r;
 }
 
+// returns:
+// 0 for "not internal seen" (e.g. use per-user .seen database)
+// 1 for "owned by the user"
+// 2 for "shared to everyone" (OPT SHAREDSEEN)
+// 3 for "user is nobody"
+// 4 for "user is admin
 EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *userid)
 {
     /* old mailboxes don't have internal seen at all */
@@ -6156,14 +6163,18 @@ EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *us
 
     /* shared seen - everyone's state is internal */
     if (mailbox->i.options & OPT_IMAP_SHAREDSEEN)
-        return 1;
+        return 2;
 
     /* no username => use internal as well */
     if (!userid)
-        return 1;
+        return 3;
+
+    /* any system user => use internal as well */
+    if (is_system_user(userid))
+        return 4;
 
     /* otherwise the owner's seen state is internal */
-    return mboxname_userownsmailbox(userid, mailbox_name(mailbox));
+    return mboxname_userownsmailbox(userid, mailbox_name(mailbox)) ? 1 : 0;
 }
 
 /*

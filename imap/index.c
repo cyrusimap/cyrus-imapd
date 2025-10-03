@@ -561,9 +561,11 @@ static int index_writeseen(struct index_state *state)
 
     /* already handled! Just update the header fields */
     if (state->internalseen) {
-        mailbox->i.recenttime.tv_sec = time(0);
-        if (mailbox->i.recentuid < state->last_uid)
+        /* only update recentuid for the owner or if it's a sharedseen folder */
+        if (state->internalseen <= 2 && mailbox->i.recentuid < state->last_uid) {
             mailbox->i.recentuid = state->last_uid;
+            mailbox->i.recenttime.tv_sec = time(0);
+        }
         return 0;
     }
 
