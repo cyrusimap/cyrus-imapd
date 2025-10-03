@@ -22,7 +22,8 @@ sub test_cardgroup_set_create
     my $name = 'The Doe Family';
     my $member1 = "urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af";
     my $member2 = "urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519";
-    my $id = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $urn = "urn:uuid:$uid";
 
     my $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -30,7 +31,7 @@ sub test_cardgroup_set_create
                 "1" => {
                     '@type' => 'Card',
                     version => '1.0',
-                    uid => $id,
+                    uid => $urn,
                     kind => 'group',
                     name => { full => $name },
                     members => {
@@ -53,9 +54,22 @@ sub test_cardgroup_set_create
 
     $self->assert_matches(qr/VERSION:4.0/, $card);
     $self->assert_matches(qr/KIND:GROUP/, $card);
-    $self->assert_matches(qr/UID:$id/, $card);
+    $self->assert_matches(qr/UID:$urn/, $card);
     $self->assert_matches(qr/FN:$name/, $card);
     $self->assert_matches(qr/MEMBER:$member1/, $card);
     $self->assert_matches(qr/MEMBER:$member2/, $card);
+    $self->assert_does_not_match(qr/N:;/, $card);
+
+    $res = $carddav->Request('GET', $href, '');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/VERSION:3.0/, $card);
+    $self->assert_matches(qr/X-ADDRESSBOOKSERVER-KIND:group/i, $card);
+    $self->assert_matches(qr/UID:$uid/, $card);
+    $self->assert_matches(qr/FN:$name/, $card);
+    $self->assert_matches(qr/X-ADDRESSBOOKSERVER-MEMBER:$member1/, $card);
+    $self->assert_matches(qr/X-ADDRESSBOOKSERVER-MEMBER:$member2/, $card);
     $self->assert_does_not_match(qr/N:;/, $card);
 }
