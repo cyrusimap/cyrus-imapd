@@ -20,7 +20,7 @@
 #include "bitvector.h"
 #include "bloom.h"
 #include "bsearch.h"
-/* #include "charset.h" */  /* XXX bogus: needs util.h for struct buf */
+#include "charset.h"
 /* #include "command.h" */  /* XXX bogus: needs prot.h for struct protstream */
 #include "cyr_qsort_r.h"
 #include "cyrusdb.h"
@@ -142,6 +142,16 @@ void test_bsearch(void)
     puts("bsearch ok");
 }
 
+void test_charset(void)
+{
+    charset_t charset;
+
+    charset = charset_lookupname("us-ascii");
+    charset_free(&charset);
+
+    puts("charset ok");
+}
+
 static int cmp QSORT_R_COMPAR_ARGS(const void *a, const void *b,
                                    void *thunk __attribute__((unused)))
 {
@@ -243,6 +253,7 @@ int main(int argc, char **argv)
     test_bitvector();
     test_bloom();
     test_bsearch();
+    test_charset();
     test_cyr_qsort_r();
     test_cyrusdb();
     test_glob();
