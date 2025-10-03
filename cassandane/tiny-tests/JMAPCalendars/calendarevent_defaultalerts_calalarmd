@@ -11,6 +11,11 @@ sub test_calendarevent_defaultalerts_calalarmd
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
 
+    if ($now->hour >= 1 && $now->hour <= 4) {
+      # Get us away from DST cutover which breaks the test
+      $now->add(DateTime::Duration->new(hours => 4));
+    }
+
     xlog $self, "Create calendar without default alarms";
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
