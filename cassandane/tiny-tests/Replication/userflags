@@ -5,6 +5,7 @@ use Cassandane::Tiny;
 # Test replication of user-defined flags
 #
 sub test_userflags
+    :NoReplicaOnly
 {
     my ($self) = @_;
 

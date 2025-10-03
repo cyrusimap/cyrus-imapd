@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_rolling_retry_wait_limit
-    :CSyncReplication :NoStartInstances :min_version_3_5
+    :CSyncReplication :NoStartInstances :min_version_3_5 :NoReplicaOnly
 {
     my ($self) = @_;
     my $maxwait = 20;

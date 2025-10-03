@@ -5,6 +5,7 @@ use Cassandane::Tiny;
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain_masterexpunge
+    :NoReplicaOnly
 {
     my ($self) = @_;
 
