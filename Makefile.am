@@ -631,6 +631,7 @@ cunit_TESTS = \
     cunit/imapurl.testc \
     cunit/imparse.testc \
     cunit/libconfig.testc \
+    cunit/logfmt.testc \
     cunit/mailbox.testc \
     cunit/master-cronevent.testc \
     cunit/master-event.testc \
@@ -833,6 +834,7 @@ noinst_HEADERS += \
     lib/byteorder.h \
     lib/gai.h \
     lib/libconfig.h \
+    lib/logfmt.h \
     lib/md5.h \
     lib/prot.h \
     lib/ptrarray.h \
@@ -1553,6 +1555,7 @@ lib_libcyrus_min_la_SOURCES = \
     lib/hashset.c \
     lib/hashu64.c \
     lib/libconfig.c \
+    lib/logfmt.c \
     lib/mpool.c \
     lib/proc.c \
     lib/retry.c \
