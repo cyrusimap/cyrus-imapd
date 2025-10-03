@@ -6170,7 +6170,7 @@ EXPORTED int mailbox_internal_seen(const struct mailbox *mailbox, const char *us
         return 3;
 
     /* any system user => use internal as well */
-    if (is_system_user(userid))
+    if (is_system_user(userid) && config_getswitch(IMAPOPT_ADMINS_GET_INTERNAL_SEEN))
         return 4;
 
     /* otherwise the owner's seen state is internal */
