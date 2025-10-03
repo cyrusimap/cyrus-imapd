@@ -56,6 +56,7 @@
 #include "msgrecord.h"
 #include "ptrarray.h"
 #include "strarray.h"
+#include <stdbool.h>
 
 #define JMAP_INT_MAX    9007199254740991LL  /*  2^53-1 */
 #define JMAP_INT_MIN    (-JMAP_INT_MAX)     /* -2^53+1 */
