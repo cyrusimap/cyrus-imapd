@@ -15,6 +15,7 @@
 
 #include "arrayu64.h"
 #include "assert.h"
+#include "buf.h"
 #include "dynarray.h"
 #include "hash.h"
 #include "hashset.h"
@@ -63,6 +64,16 @@ void test_arrayu64(void)
     arrayu64_fini(&a);
 
     puts("arrayu64 ok");
+}
+
+void test_buf(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_appendcstr(&buf, "hello");
+    buf_free(&buf);
+
+    puts("buf ok");
 }
 
 void test_dynarray(void)
@@ -275,6 +286,7 @@ int main(int argc, char **argv)
     config_read(alt_config, 0);
 
     test_arrayu64();
+    test_buf();
     test_dynarray();
     test_hash();
     test_hashset();

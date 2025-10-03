@@ -1,11 +1,12 @@
-#include "config.h"
+#include "buf.h"
 #include "cunit/unit.h"
-#include "prot.h"
-#include "xmalloc.h"
-#include "util.h"
-#include "retry.h"
+
 #include "map.h"
+#include "prot.h"
+#include "retry.h"
 #include "util.h"
+#include "xmalloc.h"
+
 #include <sys/mman.h>
 
 static void test_simple(void)
