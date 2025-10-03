@@ -13,6 +13,10 @@ sub test_recurring_absolute_trigger
 
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
+    if ($now->hour >= 1 && $now->hour <= 4) {
+      # Get us away from DST cutover which breaks the test
+      $now->add(DateTime::Duration->new(hours => 4));
+    }
     # bump everything forward so a slow run (say: valgrind)
     # doesn't cause things to magically fire...
     $now->add(DateTime::Duration->new(seconds => 300));
