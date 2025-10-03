@@ -51,9 +51,9 @@
 #define SIEVE_OK (0)
 
 #include "arrayu64.h"
-#include "strarray.h"
+#include "buf.h"
 #include "hash.h"
-#include "util.h"
+#include "strarray.h"
 #include "sieve/sieve_err.h"
 
 /* external sieve types */
