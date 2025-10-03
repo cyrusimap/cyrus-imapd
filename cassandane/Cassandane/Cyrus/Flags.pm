@@ -190,18 +190,24 @@ sub test_seen
 # doing body fetches.
 #
 sub test_seen_otheruser
+    :NoAltNamespace
 {
     my ($self) = @_;
 
     # no particular reason to use an admin rather than just another user,
     # but it's easy
+    $self->{instance}->create_user("otheruser");
     my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user.cassandane", otheruser => 'lrswipkxtecdn');
 
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
-    $self->{adminstore}->set_fetch_attributes(qw(uid flags));
+
+    my $otherstore = $self->{instance}->get_service('imap')->create_store(username => 'otheruser');
+    my $othertalk = $otherstore->get_client(username => 'otheruser');
+    $otherstore->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Add two messages";
     my %msg;
@@ -213,38 +219,39 @@ sub test_seen_otheruser
     $msg{B}->set_attributes(id => 2,
                             uid => 2,
                             flags => []);
-    $self->check_messages(\%msg);
+    $self->check_messages(\%msg, $self->{store});
 
     # select AFTER creating messages so we don't get \Recent
-    $admintalk->select('user.cassandane');
-    $admintalk->unselect();
-    $admintalk->select('user.cassandane');
+    $othertalk->select('user.cassandane');
+    $othertalk->unselect();
+    $othertalk->select('user.cassandane');
+    $otherstore->set_folder('user.cassandane');
 
     xlog $self, "Set \\Seen on message A";
     my $res = $talk->store('1', '+flags', '(\\Seen)');
     $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
-    $self->check_messages(\%msg, store => $self->{adminstore});
+    $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => ['\\Seen']);
-    $self->check_messages(\%msg);
+    $self->check_messages(\%msg, store => $self->{store});
 
-    xlog $self, "Set \\Seen on message A as admin";
-    $res = $admintalk->store('1', '+flags', '(\\Seen)');
+    xlog $self, "Set \\Seen on message A as otheruser";
+    $res = $othertalk->store('1', '+flags', '(\\Seen)');
     $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
-    $self->check_messages(\%msg, store => $self->{adminstore});
-    $self->check_messages(\%msg);
+    $self->check_messages(\%msg, store => $otherstore);
+    $self->check_messages(\%msg, store => $self->{store});
 
     xlog $self, "Clear \\Seen on message A";
     $res = $talk->store('1', '-flags', '(\\Seen)');
     $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
-    $self->check_messages(\%msg, store => $self->{adminstore});
+    $self->check_messages(\%msg, store => $otherstore);
     $msg{A}->set_attribute(flags => []);
-    $self->check_messages(\%msg);
+    $self->check_messages(\%msg, store => $self->{store});
 
-    xlog $self, "Clear \\Seen on message A as admin";
-    $res = $admintalk->store('1', '-flags', '(\\Seen)');
+    xlog $self, "Clear \\Seen on message A as otheruser";
+    $res = $othertalk->store('1', '-flags', '(\\Seen)');
     $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
-    $self->check_messages(\%msg, store => $self->{adminstore});
-    $self->check_messages(\%msg);
+    $self->check_messages(\%msg, store => $otherstore);
+    $self->check_messages(\%msg, store => $self->{store});
 }
 
 # https://github.com/cyrusimap/cyrus-imapd/issues/3240
