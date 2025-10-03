@@ -776,6 +776,7 @@ include_HEADERS = \
     lib/bitvector.h \
     lib/bloom.h \
     lib/bsearch.h \
+    lib/buf.h \
     lib/charset.h \
     lib/command.h \
     lib/crc32.h \
@@ -1543,6 +1544,7 @@ BUILT_SOURCES += lib/cron-lex.c lib/cron-parse.c lib/cron-parse.h
 lib_libcyrus_min_la_SOURCES = \
     lib/arrayu64.c \
     lib/assert.c \
+    lib/buf.c \
     lib/bufarray.c \
     lib/byteorder.c \
     lib/cron.c \
