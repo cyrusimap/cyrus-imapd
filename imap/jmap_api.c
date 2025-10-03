@@ -852,19 +852,19 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         /* Call the message processor. */
         r = mp->proc(&req);
 
-        /* Finalize request context */
-        jmap_finireq(&req);
-
         if (r) {
             conversations_abort(&req.cstate);
             user_nslock_release(&user_nslock);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
+            jmap_finireq(&req);
             json_decref(args);
             goto done;
         }
         conversations_commit(&req.cstate);
         user_nslock_release(&user_nslock);
+
+        jmap_finireq(&req);
 
         // run any notification updates after conversations are released
         dav_run_notifications();
