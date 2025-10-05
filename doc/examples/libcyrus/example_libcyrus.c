@@ -30,6 +30,7 @@
 #include "imparse.h"
 #include "iostat.h"
 #include "iptostring.h"
+#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "lsort.h"
 #include "mappedfile.h"
@@ -51,10 +52,6 @@
 #include <sysexits.h>
 #include <time.h>
 #include <unistd.h>
-
-/* XXX lib/libconfig.h is not installed, have to provide our own prototypes */
-extern void config_read(const char *alt_config, const int config_need_data);
-extern const char *config_dir;
 
 void fatal(const char *s, int code)
 {

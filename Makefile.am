@@ -795,6 +795,7 @@ include_HEADERS = \
     lib/imparse.h \
     lib/iostat.h \
     lib/iptostring.h \
+    lib/libconfig.h \
     lib/libcyr_cfg.h \
     lib/lsort.h \
     lib/map.h \
@@ -833,7 +834,6 @@ noinst_HEADERS += \
     lib/bufarray.h \
     lib/byteorder.h \
     lib/gai.h \
-    lib/libconfig.h \
     lib/md5.h \
     lib/prot.h \
     lib/ptrarray.h \

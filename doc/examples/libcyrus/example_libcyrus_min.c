@@ -21,6 +21,7 @@
 #include "hashset.h"
 #include "hashu64.h"
 #include "imapopts.h"
+#include "libconfig.h"
 #include "mpool.h"
 #include "proc.h"
 #include "retry.h"
@@ -262,9 +263,6 @@ void test_xsha1(void)
 
     puts("xsha1 ok");
 }
-
-/* XXX lib/libconfig.h is not installed, have to provide our own prototype */
-extern void config_read(const char *alt_config, const int config_need_data);
 
 int main(int argc, char **argv)
 {
