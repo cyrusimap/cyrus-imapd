@@ -827,7 +827,9 @@ include_HEADERS = \
 nodist_include_HEADERS = \
     lib/imapopts.h
 
-nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_include_HEADERS = \
+    imap/message_guid.h \
+    sieve/sieve_interface.h
 nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS += \
@@ -1029,7 +1031,6 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/mboxname.c \
     imap/mboxname.h \
     imap/message_guid.c \
-    imap/message_guid.h \
     imap/message.c \
     imap/message.h \
     imap/message_priv.h \
