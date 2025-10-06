@@ -50,29 +50,28 @@
 #include <syslog.h>
 
 /* visible for testing; probably don't call this directly */
-EXPORTED char *logfmt_escape(const char *val)
+EXPORTED void logfmt_escape(struct buf *buf, const char *val)
 {
-    struct buf buf = BUF_INITIALIZER;
     int needs_escaping = 0;
     size_t orig_len, escaped_len;
     const char *p;
 
     if (val == NULL) {
-        buf_setcstr(&buf, "~null~");
-        return buf_release(&buf);
+        buf_setcstr(buf, "~null~");
+        return;
     }
 
-    buf_setcstr(&buf, val);
+    buf_setcstr(buf, val);
 
-    escaped_len = orig_len = buf_len(&buf);
+    escaped_len = orig_len = buf_len(buf);
 
     // Make sure the empty string is visible
     if (orig_len == 0) {
-        buf_setcstr(&buf, "\"\"");
-        return buf_release(&buf);
+        buf_setcstr(buf, "\"\"");
+        return;
     }
 
-    for (p = buf_cstring(&buf); *p; p++) {
+    for (p = buf_cstring(buf); *p; p++) {
         switch ((unsigned char) *p) {
         case '\\':
         case '\"':
@@ -96,13 +95,13 @@ EXPORTED char *logfmt_escape(const char *val)
 
         escaped_len += 2;  // add 2 for surrounding DQUOTEs
 
-        buf_truncate(&buf, escaped_len);  // grow the buffer to escaped length
+        buf_truncate(buf, escaped_len);  // grow the buffer to escaped length
 
         // we can now build the escaped value in place, tail to head
-        q = (char *) buf_base(&buf) + escaped_len - 1;
+        q = (char *) buf_base(buf) + escaped_len - 1;
         *q-- = '\"';  // closing DQUOTE
 
-        for (p = buf_base(&buf) + orig_len - 1; p >= buf_base(&buf); p--) {
+        for (p = buf_base(buf) + orig_len - 1; p >= buf_base(buf); p--) {
             char c = *p;
 
             switch (c) {
@@ -131,22 +130,22 @@ EXPORTED char *logfmt_escape(const char *val)
             if (needs_escaping) *q-- = '\\';
         }
 
-        assert(q == buf_base(&buf));
+        assert(q == buf_base(buf));
         *q = '\"';  // opening DQUOTE
     }
-
-    return buf_release(&buf);
 }
 
 EXPORTED void logfmt_init(struct logfmt *lf, const char *event)
 {
     buf_reset(&lf->msg);
+    buf_reset(&lf->scratch);
     logfmt_push(lf, "event", event);
 }
 
 EXPORTED void logfmt_fini(struct logfmt *lf)
 {
     buf_free(&lf->msg);
+    buf_free(&lf->scratch);
 }
 
 EXPORTED const char *logfmt_cstring(const struct logfmt *lf)
@@ -158,15 +157,14 @@ EXPORTED void logfmt_push(struct logfmt *lf,
                           const char *key,
                           const char *value)
 {
-    char *escaped;
-
     assert(key && *key);
 
-    escaped = logfmt_escape(value);
     if (buf_len(&lf->msg))
         buf_putc(&lf->msg, ' ');
-    buf_printf(&lf->msg, "%s=%s", key, escaped);
-    free(escaped);
+
+    logfmt_escape(&lf->scratch, value);
+    buf_printf(&lf->msg, "%s=%s", key, buf_cstring(&lf->scratch));
+    buf_reset(&lf->scratch);
 }
 
 EXPORTED void logfmt_pushf(struct logfmt *lf, const char *key,
