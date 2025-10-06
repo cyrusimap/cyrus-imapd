@@ -1530,7 +1530,7 @@ EXPORTED char *modseqtoa(modseq_t modseq)
 }
 
 EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
-                          logfmt_arg_list *arg)
+                          xsyslog_ev_arg_list *arg)
 {
     static struct logfmt lf = LOGFMT_INITIALIZER;
     struct buf errbuf = BUF_INITIALIZER;
