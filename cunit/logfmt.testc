@@ -1,9 +1,28 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
+#include "libconfig.h"
+#include "sessionid.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#define DBDIR "test-logfmt-dbdir"
+
+static int set_up(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+    return 0;
+}
 
 static void test_logfmt_escape1(void)
 {
@@ -181,6 +200,59 @@ static void test_logfmt_push_fmt(void)
     }
 
     logfmt_finish(&lf);
+}
+
+static void test_logfmt_push_session(void)
+{
+    static const struct {
+        bool with_session_id;
+        bool with_trace_id;
+    } tests[] = {
+        { false, false },
+        { false, true  },
+        { true,  false },
+        { true,  true },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    unsigned i;
+
+    /* need basic configuration for session_new_id() */
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    for (i = 0; i < n_tests; i++) {
+        char match[32 + MAX_SESSIONID_SIZE] = {0};
+
+        if (tests[i].with_session_id) {
+            session_new_id();
+            snprintf(match, sizeof(match), " sessionid=%s ", session_id());
+        }
+
+        if (tests[i].with_trace_id) {
+            trace_set_id("sometraceid", 0);
+        }
+
+        logfmt_begin(&lf, "test_logfmt_push_session");
+        logfmt_push_session(&lf);
+        logfmt_push(&lf, "key", "value");
+
+        if (tests[i].with_session_id)
+            CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), match));
+        else
+            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " sessionid="));
+
+        if (tests[i].with_trace_id)
+            CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf),
+                                          " r.tid=sometraceid "));
+        else
+            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " r.tid="));
+
+        logfmt_finish(&lf);
+        session_clear_id();
+        trace_set_id(NULL, 0);
+    }
 }
 
 /* vim: set ft=c: */

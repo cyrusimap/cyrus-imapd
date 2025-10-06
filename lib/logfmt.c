@@ -43,6 +43,7 @@
 
 #include "lib/assert.h"
 #include "lib/logfmt.h"
+#include "lib/sessionid.h"
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -181,4 +182,17 @@ EXPORTED void logfmt_push_fmt(struct logfmt *lf, const char *key,
     logfmt_push(lf, key, buf_cstring(&formatted));
 
     buf_free(&formatted);
+}
+
+EXPORTED void logfmt_push_session(struct logfmt *lf)
+{
+    const char *traceid = trace_id();
+
+    if (session_have_id()) {
+        logfmt_push(lf, "sessionid", session_id());
+    }
+
+    if (traceid) {
+        logfmt_push(lf, "r.tid", traceid);
+    }
 }

@@ -1534,17 +1534,9 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
 {
     static struct logfmt lf = LOGFMT_INITIALIZER;
     struct buf errbuf = BUF_INITIALIZER;
-    const char *traceid = trace_id();
 
     logfmt_begin(&lf, event);
-
-    if (session_have_id()) {
-        logfmt_push(&lf, "sessionid", session_id());
-    }
-
-    if (traceid) {
-        logfmt_push(&lf, "r.tid", traceid);
-    }
+    logfmt_push_session(&lf);
 
     for (size_t i = 0; i < arg->nmemb; i++) {
         const char *name = arg->data[i].name;

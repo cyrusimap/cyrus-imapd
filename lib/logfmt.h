@@ -60,5 +60,6 @@ extern void logfmt_push(struct logfmt *lf, const char *key, const char *value);
 extern void logfmt_push_fmt(struct logfmt *lf, const char *key,
                             const char *valuefmt, ...)
     __attribute__((format(printf, 3, 4)));
+extern void logfmt_push_session(struct logfmt *lf);
 
 #endif
