@@ -119,4 +119,18 @@ extern void config_toggle_debug(void);
 /* what it really means when a byte size option treats 0 as "unlimited" */
 #define BYTESIZE_UNLIMITED (INT_MAX)
 
+/* Examine the name of a file, and return a single character
+ * (as an int) that can be used as the name of a hash
+ * directory.  Caller is responsible for skipping any prefix
+ * of the name.
+ */
+extern int dir_hash_c(const char *name, int full);
+
+/*
+ * Like dir_hash_c() but builds the result as a single-byte
+ * C string in the provided buffer, and returns the buffer,
+ * which is sometimes more convenient.
+ */
+extern char *dir_hash_b(const char *name, int full, char buf[2]);
+
 #endif /* INCLUDED_LIBCONFIG_H */

@@ -87,6 +87,7 @@
 #include "cyrusdb.h"
 #include "hash.h"
 #include "map.h"
+#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"
 #include "util.h"
