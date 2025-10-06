@@ -26,14 +26,6 @@ static int tear_down(void)
 
 static void test_logfmt_escape1(void)
 {
-    /*
-     * Escaping rules are, for now:
-     * \x21 \x23-x7E: do not force quoting and remain as is
-     *                (except 3D '=' and 5C '\')
-     * existing special cases ([\\ \n \r "]) force quoting and become two chars
-     * literal space forces quoting and remains space
-     * any other character forces quoting and remains self for now
-     */
     static const struct {
         const char *value;
         const char *expect;
@@ -48,7 +40,7 @@ static void test_logfmt_escape1(void)
         { "double\"quote",      "\"double\\\"quote\"" },
         { " ",                  "\" \"" },
         { "space space",        "\"space space\"" },
-        { "tab\ttab",           "\"tab\ttab\"" },
+        { "tab\ttab",           "\"tab\\ttab\"" },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
@@ -68,7 +60,7 @@ static void test_logfmt_escape1(void)
     }
 }
 
-#define CU_ASSERT_STRING_QUOTED(actual) do {                            \
+#define ASSERT_STRING_QUOTED(actual) do {                               \
     const char *_a = (actual);                                          \
     size_t len = strlen(_a);                                            \
     bool is_quoted = len > 0 && _a[0] == '"' && _a[len - 1] == '"';     \
@@ -77,7 +69,7 @@ static void test_logfmt_escape1(void)
         #actual, _a);                                                   \
 } while (0)
 
-#define CU_ASSERT_CHAR_ESCAPED(actual, expect) do {                     \
+#define ASSERT_CHAR_BACKSLASHED(actual, expect) do {                    \
     const char *_a = (actual);                                          \
     int _e = (expect);                                                  \
     bool has_backslash = (_a[0] == '\\');                               \
@@ -90,61 +82,89 @@ static void test_logfmt_escape1(void)
 
 static void test_logfmt_escape2(void)
 {
-    #define EXPECT_QUOTED   (UINT8_C(1) << 0)
-    #define EXPECT_ESCAPED  (UINT8_C(1) << 1)
-    #define XX              UINT8_C(0)
-    #define QX              (EXPECT_QUOTED)
-    #define QE              (EXPECT_QUOTED | EXPECT_ESCAPED)
-    static const uint8_t lookup[128] = {
+    #define EXPECT_DQUOTES   (UINT8_C(1) << 0)
+    #define EXPECT_BACKSLASH (UINT8_C(1) << 1)
+    #define EXPECT_HEX       (UINT8_C(1) << 2)
+    #define OK               UINT8_C(0)
+    #define QQ               (EXPECT_DQUOTES)
+    #define BS               (EXPECT_DQUOTES | EXPECT_BACKSLASH)
+    #define HX               (EXPECT_DQUOTES | EXPECT_HEX)
+    static const uint8_t lookup[256] = {
     /*  _0  _1  _2  _3  _4  _5  _6  _7  _8  _9  _a  _b  _c  _d  _e  _f       */
-        XX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QE, XX, XX, QE, XX, XX, /* 0 */
-        XX, QX, QX, XX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, QX, /* 1 */
-        QX, XX, QE, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 2 */
-        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QX, XX, XX, /* 3 */
-        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 4 */
-        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QE, XX, XX, XX, /* 5 */
-        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, /* 6 */
-        XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, QX, /* 7 */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, BS, BS, HX, HX, BS, HX, HX, /* 0 */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* 1 */
+        QQ, OK, BS, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, /* 2 */
+        OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, QQ, OK, OK, /* 3 */
+        OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, /* 4 */
+        OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, BS, OK, OK, OK, /* 5 */
+        OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, /* 6 */
+        OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, OK, HX, /* 7 */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* 8 */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* 9 */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* a */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* b */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* c */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* d */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* e */
+        HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, HX, /* f */
     };
     int n_tests = sizeof(lookup) / sizeof(lookup[0]);
     int i;
 
     for (i = 1; i < n_tests; i++) {
-        const bool expect_quoted = (lookup[i] & EXPECT_QUOTED);
-        const bool expect_escaped = (lookup[i] & EXPECT_ESCAPED);
+        const bool expect_dquotes = (lookup[i] & EXPECT_DQUOTES);
+        const bool expect_backslash = (lookup[i] & EXPECT_BACKSLASH);
+        const bool expect_hex = (lookup[i] & EXPECT_HEX);
         char value[32];
         struct buf actual = BUF_INITIALIZER;
 
-        snprintf(value, sizeof(value), "x%cy", i);
+        snprintf(value, sizeof(value), "Q%cE", i);
         logfmt_escape(&actual, value);
 
-        if (expect_quoted) {
-            CU_ASSERT_STRING_QUOTED(buf_cstring(&actual));
+        if (expect_dquotes) {
+            ASSERT_STRING_QUOTED(buf_cstring(&actual));
         }
         else {
             CU_ASSERT_NOT_EQUAL(actual.s[0], '"');
         }
 
-        CU_ASSERT_EQUAL(actual.s[0 + expect_quoted], 'x');
+        CU_ASSERT_EQUAL(actual.s[0 + expect_dquotes], 'Q');
 
-        if (expect_escaped) {
+        if (expect_backslash) {
             switch (i) {
             case '\n':
-                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, 'n');
+                ASSERT_CHAR_BACKSLASHED(actual.s + 1 + expect_dquotes, 'n');
                 break;
             case '\r':
-                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, 'r');
+                ASSERT_CHAR_BACKSLASHED(actual.s + 1 + expect_dquotes, 'r');
+                break;
+            case '\t':
+                ASSERT_CHAR_BACKSLASHED(actual.s + 1 + expect_dquotes, 't');
                 break;
             default:
-                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, i);
+                ASSERT_CHAR_BACKSLASHED(actual.s + 1 + expect_dquotes, i);
                 break;
             }
         }
+        else if (expect_hex) {
+            char match[32];
+            snprintf(match, sizeof(match), "%sQ\\x{%2.2x}E%s",
+                     expect_dquotes ? "\"" : "",
+                     i,
+                     expect_dquotes ? "\"" : "");
+
+            CU_ASSERT_STRING_EQUAL(buf_cstring(&actual), match);
+        }
         else {
-            CU_ASSERT_NOT_EQUAL(actual.s[1 + expect_quoted], '\\');
+            CU_ASSERT_NOT_EQUAL(actual.s[1 + expect_dquotes], '\\');
         }
 
-        CU_ASSERT_EQUAL(actual.s[2 + expect_quoted + expect_escaped], 'y');
+        CU_ASSERT_EQUAL(actual.s[expect_dquotes
+                                 + 1 /* Q */
+                                 + expect_backslash
+                                 + 5 * expect_hex
+                                 + 1],
+                        'E');
         buf_free(&actual);
     }
 }
