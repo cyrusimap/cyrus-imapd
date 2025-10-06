@@ -46,93 +46,114 @@
 #include "lib/sessionid.h"
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include <syslog.h>
 
 /* visible for testing; probably don't call this directly */
 EXPORTED void logfmt_escape(struct buf *buf, const char *val)
 {
-    int needs_escaping = 0;
-    size_t orig_len, escaped_len;
-    const char *p;
+    bool need_dquotes = false;
+    const unsigned char *p;
 
     if (val == NULL) {
         buf_setcstr(buf, "~null~");
         return;
     }
 
-    buf_setcstr(buf, val);
-
-    escaped_len = orig_len = buf_len(buf);
-
-    // Make sure the empty string is visible
-    if (orig_len == 0) {
+    if (!val[0]) {
         buf_setcstr(buf, "\"\"");
         return;
     }
 
-    for (p = buf_cstring(buf); *p; p++) {
-        switch ((unsigned char) *p) {
-        case '\\':
-        case '\"':
-        case '\n':
-        case '\r':
-            ++escaped_len;  // add 1 for the backslash
+    /* event = pair *(WSP pair)
+     * pair  = key "=" value
+     * okchr = %x21 / %x23-3c / %x3e-5b / %x5d-7e ; graphic ASCII, less: \ " = DEL
+     * key   = 1*(okchr)
+     * value = key / quoted
+     *
+     * quoted = DQUOTE *( escaped / quoted-ok / okchr / eightbit ) DQUOTE
+     * escaped         = escaped-special / escaped-hex
+     * escaped-special = "\\" / "\n" / "\r" / "\t" / ("\" DQUOTE)
+     * escaped-hex     = "\x{" 2HEXDIG "}" ; lowercase forms okay also
+     * quoted-ok       = SP / "="
+     * eightbit        = %x80-ff
+     */
 
-        // FALL THROUGH
-        case 0x00 ... 0x09:
-        case 0x11 ... 0x12:
-        case 0x14 ... 0x20:
-        case 0x3D:
-        case 0x7F ... 0xFF:
-            needs_escaping = 1;
+    /* partial first pass to see whether we'll need to quote */
+    for (p = (const unsigned char *) val; *p && !need_dquotes; p++) {
+        switch (*p) {
+        case 0x21:
+        case 0x23 ... 0x3C:
+        case 0x3E ... 0x5B:
+        case 0X5D ... 0x7E:
+            /* okchr doesn't need quotes */
+            break;
+        default:
+            /* but anything else does */
+            need_dquotes = true;
             break;
         }
     }
 
-    if (needs_escaping) {
-        char *q;
+    /* build escaped string forward */
+    buf_reset(buf);
+    buf_ensure(buf, strlen(val) + 2 * need_dquotes);
+    if (need_dquotes) buf_putc(buf, '\"');
 
-        escaped_len += 2;  // add 2 for surrounding DQUOTEs
+    for (p = (const unsigned char *) val; *p; p++) {
+        switch (*p) {
+        /* okchr and quoted-ok */
+        case ' ': /* 0x20 */
+        case 0x21:
+        case 0x23 ... 0x3C:
+        case '=': /* 0x3D */
+        case 0x3E ... 0x5B:
+        case 0X5D ... 0x7E:
+            buf_putc(buf, *p);
+            break;
 
-        buf_truncate(buf, escaped_len);  // grow the buffer to escaped length
+        /* escaped-special */
+        case '\t': /* 0x09 */
+            buf_appendmap(buf, "\\t", 2);
+            break;
+        case '\n': /* 0x0A */
+            buf_appendmap(buf, "\\n", 2);
+            break;
+        case '\r': /* 0x0D */
+            buf_appendmap(buf, "\\r", 2);
+            break;
+        case '\"': /* 0x22 */
+            buf_appendmap(buf, "\\\"", 2);
+            break;
+        case '\\': /* 0x5C */
+            buf_appendmap(buf, "\\\\", 2);
+            break;
 
-        // we can now build the escaped value in place, tail to head
-        q = (char *) buf_base(buf) + escaped_len - 1;
-        *q-- = '\"';  // closing DQUOTE
+        /* escaped-hex */
+        case 0x00 ... 0x08:
+        case 0x0B ... 0x0C:
+        case 0x0E ... 0x1F:
+        case 0x7F:
+            buf_printf(buf, "\\x{%2.2x}", *p);
+            break;
 
-        for (p = buf_base(buf) + orig_len - 1; p >= buf_base(buf); p--) {
-            char c = *p;
+        /* eightbit */
+        case 0x80 ... 0xFF:
+            /* XXX unicode will require different behaviour here... */
+            buf_printf(buf, "\\x{%2.2x}", *p);
+            break;
 
-            switch (c) {
-            case '\\':
-            case '\"':
-                needs_escaping = 1;
-                break;
-
-            case '\n':
-                needs_escaping = 1;
-                c = 'n';
-                break;
-
-            case '\r':
-                needs_escaping = 1;
-                c = 'r';
-                break;
-
-            default:
-                needs_escaping = 0;
-                break;
-            }
-
-            *q-- = c;
-
-            if (needs_escaping) *q-- = '\\';
+        default:
+            /* every case should be covered above! if we've missed any,
+             * test_logfmt_escape2 in logfmt.testc will trip this
+             */
+            abort();
         }
-
-        assert(q == buf_base(buf));
-        *q = '\"';  // opening DQUOTE
     }
+
+    if (need_dquotes) buf_putc(buf, '\"');
 }
 
 EXPORTED void logfmt_init(struct logfmt *lf, const char *event)
