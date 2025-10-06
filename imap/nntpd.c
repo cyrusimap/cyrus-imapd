@@ -1959,9 +1959,11 @@ static void cmd_authinfo_user(char *user)
 
     if (!(p = canonify_userid(user, NULL, NULL))) {
         prot_printf(nntp_out, "481 Invalid user\r\n");
-        syslog(LOG_NOTICE,
-               "badlogin: %s plaintext %s invalid user",
-               nntp_clienthost, beautify_string(user));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", nntp_clienthost),
+                   lf_s("u.username", beautify_string(user)),
+                   lf_s("login.mech", "plaintext"),
+                   lf_s("error", "invalid user"));
     }
     else {
         nntp_userid = xstrdup(p);
@@ -1998,12 +2000,18 @@ static void cmd_authinfo_pass(char *pass)
         if (allowanonymous) {
             pass = beautify_string(pass);
             if (strlen(pass) > 500) pass[500] = '\0';
-            syslog(LOG_NOTICE, "login: %s anonymous %s",
-                   nntp_clienthost, pass);
+            xsyslog_ev(LOG_NOTICE, "login.good",
+                       lf_s("r.clienthost", nntp_clienthost),
+                       lf_s("u.username", ""),
+                       lf_c("login.anonymous", 1),
+                       lf_s("login.mech", "plaintext"),
+                       lf_s("login.password", pass));
         }
         else {
-            syslog(LOG_NOTICE, "badlogin: %s anonymous login refused",
-                   nntp_clienthost);
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                       lf_s("r.clienthost", nntp_clienthost),
+                       lf_s("login.mech", "plaintext"),
+                       lf_s("error", "anonymous login refused"));
             prot_printf(nntp_out, "481 Invalid login\r\n");
             return;
         }
@@ -2013,8 +2021,11 @@ static void cmd_authinfo_pass(char *pass)
                             strlen(nntp_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) [%s]",
-               nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
+        xsyslog_ev(LOG_NOTICE, "login.bad",
+                   lf_s("r.clienthost", nntp_clienthost),
+                   lf_s("u.username", nntp_userid),
+                   lf_s("login.mech", "plaintext"),
+                   lf_s("error", sasl_errdetail(nntp_saslconn)));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
@@ -2026,9 +2037,11 @@ static void cmd_authinfo_pass(char *pass)
         return;
     }
     else {
-        syslog(LOG_NOTICE, "login: %s %s plaintext%s %s", nntp_clienthost,
-               nntp_userid, nntp_starttls_done ? "+TLS" : "",
-               "User logged in");
+        xsyslog_ev(LOG_NOTICE, "login.good",
+                   lf_s("r.clienthost", nntp_clienthost),
+                   lf_s("u.username", nntp_userid),
+                   lf_s("login.mech", "plaintext"),
+                   lf_c("login.tls", nntp_starttls_done ? 1 : 0));
 
         prot_printf(nntp_out, "281 User logged in\r\n");
 
@@ -2154,8 +2167,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
             if (sasl_result != SASL_NOUSER)
                 sasl_getprop(nntp_saslconn, SASL_USERNAME, (const void **) &userid);
 
-            syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
-                   nntp_clienthost, mech, userid, sasl_errdetail(nntp_saslconn));
+            xsyslog_ev(LOG_NOTICE, "login.bad",
+                       lf_s("r.clienthost", nntp_clienthost),
+                       lf_s("u.username", userid),
+                       lf_s("login.mech", mech),
+                       lf_s("error", sasl_errdetail(nntp_saslconn)));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
@@ -2242,8 +2258,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         return;
     }
 
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
-           mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
+    xsyslog_ev(LOG_NOTICE, "login.good",
+               lf_s("r.clienthost", nntp_clienthost),
+               lf_s("u.username", nntp_userid),
+               lf_s("login.mech", mech),
+               lf_c("login.tls", nntp_starttls_done ? 1 : 0));
 
     if (success_data) {
         prot_printf(nntp_out, "283 %s\r\n", success_data);

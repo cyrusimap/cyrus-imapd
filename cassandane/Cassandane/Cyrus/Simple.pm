@@ -231,9 +231,9 @@ sub test_toggleable_debug_logging
 
     # find our imapd pid from syslog
     my $loginpat = qr{
-        \bimap\[(\d+)\]:\slogin:
-        \s\S+\s\[[\d\.]+\]\scassandane\splaintext
-        \sUser\slogged\sin
+        \bimap\[(\d+)\]:\sevent=login\.good
+        .+
+        u\.username=cassandane
     }x;
     my @logins = $self->{instance}->getsyslog($loginpat);
     $self->assert_num_equals(1, scalar @logins);
