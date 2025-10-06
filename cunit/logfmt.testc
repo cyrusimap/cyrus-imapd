@@ -54,17 +54,17 @@ static void test_logfmt_escape1(void)
     unsigned i;
 
     for (i = 0; i < n_tests; i++) {
-        char *actual;
+        struct buf actual = BUF_INITIALIZER;
 
-        actual = logfmt_escape(tests[i].value);
+        logfmt_escape(&actual, tests[i].value);
         if (tests[i].expect) {
-            CU_ASSERT_STRING_EQUAL(actual, tests[i].expect);
+            CU_ASSERT_STRING_EQUAL(buf_cstring(&actual), tests[i].expect);
         }
         else {
-            CU_ASSERT_PTR_NULL(actual);
+            CU_ASSERT_EQUAL(buf_len(&actual), 0);
         }
 
-        free(actual);
+        buf_free(&actual);
     }
 }
 
@@ -112,39 +112,40 @@ static void test_logfmt_escape2(void)
     for (i = 1; i < n_tests; i++) {
         const bool expect_quoted = (lookup[i] & EXPECT_QUOTED);
         const bool expect_escaped = (lookup[i] & EXPECT_ESCAPED);
-        char value[32], *actual;
+        char value[32];
+        struct buf actual = BUF_INITIALIZER;
 
         snprintf(value, sizeof(value), "x%cy", i);
-        actual = logfmt_escape(value);
+        logfmt_escape(&actual, value);
 
         if (expect_quoted) {
-            CU_ASSERT_STRING_QUOTED(actual);
+            CU_ASSERT_STRING_QUOTED(buf_cstring(&actual));
         }
         else {
-            CU_ASSERT_NOT_EQUAL(actual[0], '"');
+            CU_ASSERT_NOT_EQUAL(actual.s[0], '"');
         }
 
-        CU_ASSERT_EQUAL(actual[0 + expect_quoted], 'x');
+        CU_ASSERT_EQUAL(actual.s[0 + expect_quoted], 'x');
 
         if (expect_escaped) {
             switch (i) {
             case '\n':
-                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, 'n');
+                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, 'n');
                 break;
             case '\r':
-                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, 'r');
+                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, 'r');
                 break;
             default:
-                CU_ASSERT_CHAR_ESCAPED(actual + 1 + expect_quoted, i);
+                CU_ASSERT_CHAR_ESCAPED(actual.s + 1 + expect_quoted, i);
                 break;
             }
         }
         else {
-            CU_ASSERT_NOT_EQUAL(actual[1 + expect_quoted], '\\');
+            CU_ASSERT_NOT_EQUAL(actual.s[1 + expect_quoted], '\\');
         }
 
-        CU_ASSERT_EQUAL(actual[2 + expect_quoted + expect_escaped], 'y');
-        free(actual);
+        CU_ASSERT_EQUAL(actual.s[2 + expect_quoted + expect_escaped], 'y');
+        buf_free(&actual);
     }
 }
 

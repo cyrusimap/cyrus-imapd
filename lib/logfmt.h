@@ -47,10 +47,14 @@
 struct logfmt
 {
     struct buf msg;
+    struct buf scratch;
 };
-#define LOGFMT_INITIALIZER (struct logfmt){ 0 }
+#define LOGFMT_INITIALIZER (struct logfmt){     \
+    .msg = BUF_INITIALIZER,                     \
+    .scratch = BUF_INITIALIZER,                 \
+}
 
-extern char *logfmt_escape(const char *val);
+extern void logfmt_escape(struct buf *buf, const char *val);
 
 extern void logfmt_init(struct logfmt *lf, const char *event);
 extern void logfmt_fini(struct logfmt *lf);
