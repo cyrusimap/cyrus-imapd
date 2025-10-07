@@ -25,7 +25,7 @@ sub test_freebusy
         summary => 'waterfall2',
     });
 
-    my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId);
+    my ($data, $errors) = $CalDAV->GetFreeBusy($CalendarId, AlwaysRange => 1);
 
     $self->assert_str_equals('2015-01-01T12:00:00', $data->[0]{start});
     $self->assert_str_equals('2015-02-01T17:00:00', $data->[1]{start});

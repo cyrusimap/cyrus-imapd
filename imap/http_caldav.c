@@ -8007,13 +8007,35 @@ static int report_fb_query(struct transaction_t *txn,
     if (!mime) return HTTP_NOT_ACCEPTABLE;
 
     memset(&fbfilter, 0, sizeof(struct freebusy_filter));
-    fbfilter.start = icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
-    fbfilter.end = icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    fbfilter.end = icaltime_null_time();
+    fbfilter.start = icaltime_null_time();
     fctx->filter_crit = &fbfilter;
 
-    /* Parse children element of report */
+    /* Parse children element of report
+     *
+     * RFC 5545, Section 7.10:
+     *
+     * The request body MUST be a CALDAV:free-busy-query XML element (see
+     * Section 9.11), which MUST contain exactly one CALDAV:time-range
+     * XML element, as defined in Section 9.9.
+     */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
+            /*
+             * RFC 4791, Section 9.9:
+             *
+             * The "start" attribute specifies the inclusive start of the time
+             * range, and the "end" attribute specifies the non-inclusive end of
+             * the time range.  Both attributes MUST be specified as "date with
+             * UTC time" value.  Time ranges open at one end can be specified by
+             * including only one attribute; however, at least one attribute MUST
+             * always be present in the CALDAV:time-range element.  If either the
+             * "start" or "end" attribute is not specified in the CALDAV:time-
+             * range XML element, assume "-infinity" and "+infinity" as their
+             * value, respectively.  If both "start" and "end" are present, the
+             * value of the "end" attribute MUST be greater than the value of the
+             * "start" attribute.
+             */
             if (!xmlStrcmp(node->name, BAD_CAST "time-range") &&
                 !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CALDAV)) {
                 xmlChar *start, *end;
@@ -8029,12 +8051,24 @@ static int report_fb_query(struct transaction_t *txn,
                     fbfilter.end = icaltime_from_string((char *) end);
                     xmlFree(end);
                 }
-
-                if (!is_valid_timerange(fbfilter.start, fbfilter.end)) {
-                    return HTTP_BAD_REQUEST;
-                }
             }
         }
+    }
+
+    if (icaltime_is_null_time(fbfilter.start)) {
+        if (icaltime_is_null_time(fbfilter.end))
+            return HTTP_BAD_REQUEST;
+
+        fbfilter.start =
+            icaltime_from_timet_with_zone(caldav_epoch, 0, utc_zone);
+    }
+    else if (icaltime_is_null_time(fbfilter.end)) {
+        fbfilter.end =
+            icaltime_from_timet_with_zone(caldav_eternity, 0, utc_zone);
+    }
+
+    if (!is_valid_timerange(fbfilter.start, fbfilter.end)) {
+        return HTTP_BAD_REQUEST;
     }
 
     fctx->depth++;

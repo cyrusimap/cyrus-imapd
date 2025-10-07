@@ -33,7 +33,7 @@ EOF
     $CalDAV->Request('PUT', '/dav/calendars/user/cassandane/Default/test.ics',
         $ical, 'Content-Type' => 'text/calendar');
 
-    my ($data, $errors) = $CalDAV->GetFreeBusy('Default');
+    my ($data, $errors) = $CalDAV->GetFreeBusy('Default', AlwaysRange => 1);
     $self->assert_str_equals('2023-01-01T16:00:00', $data->[0]{start});
     $self->assert_str_equals('PT1H', $data->[0]{duration});
     $self->assert_str_equals('2023-12-31T16:00:00', $data->[1]{start});

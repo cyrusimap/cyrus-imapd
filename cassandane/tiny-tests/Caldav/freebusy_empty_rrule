@@ -39,7 +39,7 @@ EOF
     });
     $self->assert_num_equals(201, $res->{status});
 
-    my ($data, $errors) = $CalDAV->GetFreeBusy('Default');
+    my ($data, $errors) = $CalDAV->GetFreeBusy('Default', AlwaysRange => 1);
 
     $self->assert_num_equals(0, scalar @$data);
 }

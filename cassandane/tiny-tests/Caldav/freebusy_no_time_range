@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_freebusy_no_time_range
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalId);
+
+    $CalDAV->NewEvent($CalId, {
+        timeZone => 'Etc/UTC',
+        start => '2015-01-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall',
+    });
+
+    $CalDAV->NewEvent($CalId, {
+        timeZone => 'America/New_York',
+        start => '2015-02-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall2',
+    });
+
+    my $xml = <<EOF;
+<C:free-busy-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+</C:free-busy-query>
+EOF
+
+    my %Headers = (
+      'Authorization' => $CalDAV->auth_header(),
+      'Content-Type' => 'text/xml',
+      'Depth' => 0,
+    );
+
+    my $res = $CalDAV->{ua}->request('REPORT', $CalDAV->request_url($CalId), {
+        headers => \%Headers,
+        content => $xml,
+    });
+    $self->assert_num_equals(400, $res->{status});
+
+    $xml = <<EOF;
+<C:free-busy-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <C:time-range/>
+</C:free-busy-query>
+EOF
+
+    $res = $CalDAV->{ua}->request('REPORT', $CalDAV->request_url($CalId), {
+        headers => \%Headers,
+        content => $xml,
+    });
+    $self->assert_num_equals(400, $res->{status});
+
+    $xml = <<EOF;
+<C:free-busy-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+    <C:time-range start='19700101T000000Z'/>
+</C:free-busy-query>
+EOF
+
+    $res = $CalDAV->{ua}->request('REPORT', $CalDAV->request_url($CalId), {
+        headers => \%Headers,
+        content => $xml,
+    });
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_matches(qr|FREEBUSY:20150101T120000Z/20150101T130000Z\r\n|,
+                          $res->{content});
+    $self->assert_matches(qr|FREEBUSY:20150201T170000Z/20150201T180000Z\r\n|,
+                          $res->{content});
+}
