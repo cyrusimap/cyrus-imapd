@@ -76,6 +76,7 @@
 
 #include "auditlog.h"
 #include "imapd.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "version.h"
@@ -1244,9 +1245,7 @@ static void cmd_apop(char *response)
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("error", sasl_errdetail(popd_saslconn)));
+        loginlog_bad(popd_clienthost, popd_saslconn, NULL);
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -1319,19 +1318,15 @@ static void cmd_user(char *user)
              (popd_namespace.hier_sep == '.' && (dot = strchr(userbuf, '.')) &&
               !(config_virtdomains &&  /* allow '.' in dom.ain */
                 (domain = strchr(userbuf, '@')) && (dot > domain))) ||
-             strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER) {
+             strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER)
+    {
         prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", beautify_string(user)),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", "invalid user"));
+        loginlog_bad(popd_clienthost, popd_saslconn, NULL);
     }
     else {
         popd_userid = xstrdup(userbuf);
         prot_printf(popd_out, "+OK Name is a valid mailbox\r\n");
     }
-
 }
 
 static void cmd_pass(char *pass)
@@ -1354,9 +1349,8 @@ static void cmd_pass(char *pass)
                        lf_s("login.password", pass));
         }
         else {
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", popd_clienthost),
-                       lf_s("error", "anonymous login refused"));
+            loginlog_bad_full(popd_clienthost, NULL, NULL,
+                              popd_userid, NULL, "anonymous login refused");
             prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
             return;
         }
@@ -1366,11 +1360,8 @@ static void cmd_pass(char *pass)
                             strlen(popd_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", popd_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", sasl_errdetail(popd_saslconn)));
+        loginlog_bad(popd_clienthost, popd_saslconn, NULL);
+
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
@@ -1549,7 +1540,6 @@ static void cmd_auth(char *arg)
 
     if (r) {
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -1565,21 +1555,7 @@ static void cmd_auth(char *arg)
             break;
         default:
             /* failed authentication */
-            if (authtype) {
-                if (sasl_result != SASL_NOUSER)
-                    sasl_getprop(popd_saslconn, SASL_USERNAME,
-                                 (const void **) &userid);
-
-                xsyslog_ev(LOG_NOTICE, "login.bad",
-                           lf_s("r.clienthost", popd_clienthost),
-                           lf_s("u.username", userid),
-                           lf_s("login.mech", authtype),
-                           lf_s("error", sasl_errstring(sasl_result, NULL, NULL)));
-            } else {
-                xsyslog_ev(LOG_NOTICE, "login.bad",
-                           lf_s("r.clienthost", popd_clienthost),
-                           lf_s("login.mech", authtype));
-            }
+            loginlog_bad(popd_clienthost, popd_saslconn, NULL);
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {

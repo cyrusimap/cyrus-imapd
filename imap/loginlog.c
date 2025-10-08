@@ -39,5 +39,47 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include <config.h>
+
 #include "imap/loginlog.h"
 
+#include "lib/logfmt.h"
+
+#include <syslog.h>
+
+EXPORTED void loginlog_bad_full(const char *clienthost,
+                                sasl_conn_t *saslconn,
+                                const char *scheme,
+                                const char *override_username,
+                                const char *override_mech,
+                                const char *override_error)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    const char *username = override_username;
+    const char *mech = override_mech;
+    const char *error = override_error;
+
+    if (saslconn) {
+        if (!username)
+            sasl_getprop(saslconn, SASL_USERNAME, (const void **) &username);
+
+        if (!mech)
+            sasl_getprop(saslconn, SASL_MECHNAME, (const void **) &mech);
+
+        if (!error)
+            error = sasl_errdetail(saslconn);
+    }
+
+    logfmt_begin(&lf, "login.bad");
+
+    logfmt_push(&lf, "r.clienthost", clienthost);
+    logfmt_push(&lf, "u.username", username);
+
+    logfmt_push(&lf, "login.mech", mech);
+    logfmt_push(&lf, "login.scheme", scheme);
+
+    logfmt_push(&lf, "error", error);
+
+    syslog(LOG_NOTICE, "%s", logfmt_cstring(&lf));
+    logfmt_finish(&lf);
+}

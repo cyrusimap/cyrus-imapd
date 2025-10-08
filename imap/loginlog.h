@@ -42,4 +42,15 @@
 #ifndef INCLUDED_LOGINLOG_H
 #define INCLUDED_LOGINLOG_H
 
+#include <sasl/sasl.h>
+
+extern void loginlog_bad_full(const char *clienthost,
+                              sasl_conn_t *saslconn,
+                              const char *scheme,
+                              const char *override_username,
+                              const char *override_mech,
+                              const char *override_error);
+#define loginlog_bad(clienthost, saslconn, scheme)  \
+    loginlog_bad_full((clienthost), (saslconn), (scheme), NULL, NULL, NULL)
+
 #endif
