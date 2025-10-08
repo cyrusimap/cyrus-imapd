@@ -631,6 +631,7 @@ cunit_TESTS = \
     cunit/imapurl.testc \
     cunit/imparse.testc \
     cunit/libconfig.testc \
+    cunit/loginlog.testc \
     cunit/logfmt.testc \
     cunit/mailbox.testc \
     cunit/master-cronevent.testc \
@@ -1020,6 +1021,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/jmap_util.h \
     imap/json_support.c \
     imap/json_support.h \
+    imap/loginlog.c \
+    imap/loginlog.h \
     imap/mailbox.c \
     imap/mailbox.h \
     imap/mbdump.c \

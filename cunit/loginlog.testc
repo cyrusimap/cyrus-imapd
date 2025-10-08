@@ -1,0 +1,8 @@
+#include "cunit/unit.h"
+#include "imap/loginlog.h"
+
+static void test_stub(void)
+{
+}
+
+/* vim: set ft=c: */
