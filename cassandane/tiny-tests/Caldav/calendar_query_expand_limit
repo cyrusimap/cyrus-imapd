@@ -1,61 +1,119 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendar_query_expand_limit
+my sub uuid
 {
-    my ($self) = @_;
+    require Data::GUID;
+    Data::GUID->new->as_string;
+}
 
-    my $CalDAV = $self->{caldav};
+my sub range
+{
+    my (%duration_args) = @_;
+    my $start = DateTime->new(
+      time_zone => 'UTC',
+      year  => 2025,
+      month => 1,
+      day   => 1,
+    );
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
-    $self->assert_not_null($CalendarId);
+    my sub icalfmt {
+      my $utc = $_[0]->clone->set_time_zone('UTC');
+      return $utc->ymd('') . 'T' . $utc->hms('') . 'Z';
+    }
 
-    my $Cal = $CalDAV->GetCalendar($CalendarId);
+    my $end = $start->clone->add( DateTime::Duration->new(%duration_args) );
 
-    xlog $self, "Load a recurring resource";
-    my $desc = "X" x 1000;
-    my $uuid = "851e34f4-23fc-4b69-9e90-67468336e53c";
-    my $href = "$CalendarId/$uuid.ics";
-    my $event = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//YourApp//NONSGML v1.0//EN
-BEGIN:VEVENT
-UID:$uuid
-DTSTAMP:20250903T123446Z
-DTSTART;TZID=Europe/Rome:20250903T144500
-DTEND;TZID=Europe/Rome:20250903T144600
-SUMMARY:Quick Repeat Event
-DESCRIPTION:$desc
-RRULE:FREQ=HOURLY
-END:VEVENT
-END:VCALENDAR
-EOF
+    return [ icalfmt($start), icalfmt($end) ];
+}
 
-    $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
+my sub event
+{
+    my ($rrule) = @_;
 
-    xlog $self, "Perform calendar-query";
-    my $xml = <<EOF;
-<c:calendar-query xmlns:d="DAV:"
-                  xmlns:c="urn:ietf:params:xml:ns:caldav">
-  <d:prop>
-    <c:calendar-data>
-      <c:expand start="20250103T000000Z" end="20501205T010101Z"/>
-    </c:calendar-data>
-  </d:prop>
-  <c:filter>
-    <c:comp-filter name="VCALENDAR">
-      <c:comp-filter name="VEVENT">
-        <c:time-range start="20250103T000000Z" end="20501205T000000Z"/>
-      </c:comp-filter>
-    </c:comp-filter>
-  </c:filter>
-</c:calendar-query>
-EOF
+    my $uuid = uuid();
 
-    my $res = $CalDAV->Request('REPORT',
-                               "/dav/calendars/user/cassandane/$CalendarId",
+    my $event = <<~"EOF";
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//YourApp//NONSGML v1.0//EN
+    BEGIN:VEVENT
+    UID:$uuid
+    DTSTAMP:20250903T123446Z
+    DTSTART;TZID=UTC:20250101T000000
+    DTEND;TZID=UTC:20250101T000500
+    SUMMARY:Quick Repeat Event ($uuid)
+    RRULE:$rrule
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    return {
+        uid => $uuid,
+        ical => $event,
+    };
+}
+
+sub _new_calendar
+{
+    my ($self, $name, $event_specs) = @_;
+
+    my $caldav = $self->{caldav};
+
+    my $calendar_id = $caldav->NewCalendar({ name => $name});
+    $self->assert_not_null($calendar_id);
+
+    my @events;
+    for my $event_spec (@$event_specs) {
+        my $event = event($event_spec);
+
+        my $uid = $event->{uid};
+        my $href = "$calendar_id/$uid.ics";
+
+        $caldav->Request('PUT', $href, $event->{ical}, 'Content-Type' => 'text/calendar');
+
+        push @events, $event;
+    }
+
+    return {
+        id     => $calendar_id,
+        events => \@events,
+    };
+}
+
+sub _report_for
+{
+    my ($self, $calendar_id, $range) = @_;
+
+    my $xml = <<~"EOF";
+    <c:calendar-query xmlns:d="DAV:"
+                      xmlns:c="urn:ietf:params:xml:ns:caldav">
+      <d:prop>
+        <c:calendar-data>
+          <c:expand start="$range->[0]" end="$range->[1]"/>
+        </c:calendar-data>
+      </d:prop>
+      <c:filter>
+        <c:comp-filter name="VCALENDAR">
+          <c:comp-filter name="VEVENT">
+            <c:time-range start="$range->[0]" end="$range->[1]"/>
+          </c:comp-filter>
+        </c:comp-filter>
+      </c:filter>
+    </c:calendar-query>
+    EOF
+
+    my $caldav = $self->{caldav};
+    my $res = $caldav->Request('REPORT',
+                               "/dav/calendars/user/cassandane/$calendar_id",
                                $xml, Depth => 1, 'Content-Type' => 'text/xml');
+}
+
+sub _assert_report_failure
+{
+    my ($self, $calendar, $range) = @_;
+
+    my $res = $self->_report_for($calendar->{id}, $range);
 
     my $responses = $res->{'{DAV:}response'};
     $self->assert_equals(1, scalar @$responses);
@@ -66,4 +124,67 @@ EOF
     $self->assert(exists $propstat->[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'});
     $self->assert_str_equals('HTTP/1.1 422 Unprocessable Content',
                              $propstat->[0]{'{DAV:}status'}{content});
+}
+
+sub _assert_report_count
+{
+    my ($self, $calendar, $range, $want_count) = @_;
+
+    my $res = $self->_report_for($calendar->{id}, $range);
+
+    use Data::Printer;
+    p $res;
+
+    my $responses = $res->{'{DAV:}response'};
+    $self->assert_equals(1, scalar @$responses);
+
+    my $propstat = $responses->[0]{'{DAV:}propstat'};
+    $self->assert_equals(1, scalar @$propstat);
+
+    my $CAL_DATA_KEY = q<{urn:ietf:params:xml:ns:caldav}calendar-data>;
+    $self->assert(exists $propstat->[0]{'{DAV:}prop'}{$CAL_DATA_KEY});
+
+    my $data = $propstat->[0]{'{DAV:}prop'}{$CAL_DATA_KEY}{content};
+
+    # Stupid Perl, sorry. -- rjbs, 2025-10-08
+    my $have_count = () = $data =~ /BEGIN:VEVENT/gm;
+    $self->assert_num_equals($want_count, $have_count);
+}
+
+sub test_calendar_query_expand_limit
+{
+    my ($self) = @_;
+
+    my @test_specs = (
+      # description    rrule            range                  count/undef
+      [ 'hourly/year', 'FREQ=HOURLY'   => range(years => 1),   undef ],
+      [ 'secly/5s',    'FREQ=SECONDLY' => range(seconds => 5),     5 ],
+      [ 'secly/hour',  'FREQ=SECONDLY' => range(hours => 1),   undef ],
+      [ 'daily/year',  'FREQ=DAILY'    => range(years => 1),     365 ],
+      [ 'daily/week',  'FREQ=DAILY'    => range(weeks => 1),       7 ],
+      [ 'daily/10yr',  'FREQ=DAILY'    => range(years => 10),  undef ],
+
+      # "First and weekday of month", equates to 2/mo
+      [ '2dpm/1yr',    'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1',
+                                          range(years => 1),      24 ],
+      [ '2dpm/50yr',   'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=1,-1',
+                                          range(years => 50),  undef ],
+    );
+
+    for my $test_spec (@test_specs) {
+        my ($desc, $ev_specs, $range, $count) = @$test_spec;
+        $ev_specs = [ $ev_specs ] unless ref $ev_specs;
+
+        xlog $self, "begin subtest $desc";
+
+        my $calendar = $self->_new_calendar($desc, $ev_specs);
+
+        if (defined $count) {
+            $self->_assert_report_count($calendar, $range, $count);
+        } else {
+            $self->_assert_report_failure($calendar, $range);
+        }
+
+        xlog $self, "end subtest $desc";
+    }
 }
