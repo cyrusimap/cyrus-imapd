@@ -4887,8 +4887,8 @@ static int apply_propfilter(struct prop_filter *propfilter,
     return pass;
 }
 
-static void in_range(icalcomponent *comp __attribute__((unused)),
-                     struct icaltime_span *span __attribute__((unused)),
+static void in_range(const icalcomponent *comp __attribute__((unused)),
+                     const struct icaltime_span *span __attribute__((unused)),
                      void *rock)
 {
     int *pass = (int *) rock;

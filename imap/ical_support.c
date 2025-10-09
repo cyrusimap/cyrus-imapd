@@ -1452,10 +1452,13 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
 
 
 /* icalcomponent_foreach_recurrence() callback to find earliest/latest time */
-static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
+static void utc_timespan_cb(const icalcomponent *comp, const struct icaltime_span *span, void *rock)
 {
     struct icalperiodtype *period = (struct icalperiodtype *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_mydtstart(comp));
+    // XXX libical 4 changed callback pointer arguments to const,
+    // but we can't call icalcomponent_get_timezone on a const pointer.
+    // This needs more work upstream.
+    int is_date = icaltime_is_date(icalcomponent_get_mydtstart((icalcomponent*)comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icaltimetype start =
         icaltime_from_timet_with_zone(span->start, is_date, utc);
@@ -1973,7 +1976,7 @@ static void apply_patch_property(struct path_segment_t *path_seg,
     }
 }
 
-static void create_override(icalcomponent *master, struct icaltime_span *span,
+static void create_override(const icalcomponent *master, const struct icaltime_span *span,
                             void *rock)
 {
     icalcomponent *new;
