@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_changes_cads
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "get email state";
+    my $res = $jmap->CallMethods([['Email/get', { ids => []}, "R1"]]);
+    my $state = $res->[0][1]->{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "Generate an email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog $self, "Get email id";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ida = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($ida);
+
+    xlog $self, "delete email $ida";
+    $res = $jmap->CallMethods([['Email/set', {destroy => [ $ida ] }, "R1"]]);
+    $self->assert_str_equals($ida, $res->[0][1]->{destroyed}[0]);
+
+    xlog $self, "get email updates";
+    $res = $jmap->CallMethods([['Email/changes', {
+        sinceState => $state
+    }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    xlog $self, "get email updates";
+    $res = $jmap->CallMethods([['Email/changes', {
+        includeCADs => JSON::true,
+        sinceState => $state
+    }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
+}

@@ -5618,7 +5618,8 @@ done:
     return 0;
 }
 
-static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
+static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
+                           bool include_cads, json_t **err)
 {
     int r = 0;
 
@@ -5690,7 +5691,11 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
          */
         switch (rock.status) {
         default:
-            break; /* all messages were created AND deleted since previous state! */
+            /* all messages were created AND deleted since previous state! */
+            if (!include_cads) break;
+
+            GCC_FALLTHROUGH
+
         case 1:
             /* only expunged messages exist */
             json_array_append_new(changes->destroyed, json_string(email_id));
@@ -5724,23 +5729,41 @@ done:
     emailsearch_fini(&search);
 }
 
+static int _changes_args_parse(jmap_req_t *req __attribute__((unused)),
+                               struct jmap_parser *parser __attribute__((unused)),
+                               const char *key,
+                               json_t *arg,
+                               void *rock)
+{
+    bool *include_cads = rock;
+    int r = 0;
+
+    if (!strcmp(key, "includeCADs") && json_is_boolean(arg)) {
+        *include_cads = !!json_boolean_value(arg);
+        r = 1;
+    }
+
+    return r;
+}
+
 static int jmap_email_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes =
         { .prefixed_state = USER_COMPACT_EMAILIDS(req->cstate) };
+    bool include_cads = 0;
 
     /* Parse request */
     json_t *err = NULL;
     jmap_changes_parse(req, &parser, req->counters.maildeletedmodseq,
-                       NULL, NULL, &changes, &err);
+                       &_changes_args_parse, &include_cads, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
 
     /* Search for updates */
-    _email_changes(req, &changes, &err);
+    _email_changes(req, &changes, include_cads, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
