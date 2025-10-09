@@ -87,8 +87,6 @@ extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
 extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                   const char *name);
 
-extern void vcardproperty_add_type_parameter(vcardproperty *prop,
-                                             vcardenumarray_element *type);
 #endif /* HAVE_LIBICALVCARD */
 
 #endif /* VCARD_SUPPORT_H */

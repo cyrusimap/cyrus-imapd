@@ -2609,7 +2609,7 @@ static json_t *participant_from_ical(icalproperty *prop,
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDTO_PARAMETER)) {
 
-            char *uri = normalized_uri(icalparameter_get_delegatedto(param));
+            char *uri = normalized_uri(icalparameter_get_delegatedto_nth(param, 0));
             const char *to_id = hash_lookup(uri, id_by_uri);
             free(uri);
             if (to_id) json_object_set_new(delegatedTo, to_id, json_true());
@@ -2627,7 +2627,7 @@ static json_t *participant_from_ical(icalproperty *prop,
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDFROM_PARAMETER)) {
 
-            char *uri = normalized_uri(icalparameter_get_delegatedfrom(param));
+            char *uri = normalized_uri(icalparameter_get_delegatedfrom_nth(param, 0));
             const char *from_id = hash_lookup(uri, id_by_uri);
             free(uri);
             if (from_id) json_object_set_new(delegatedFrom, from_id, json_true());
@@ -2645,7 +2645,7 @@ static json_t *participant_from_ical(icalproperty *prop,
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_MEMBER_PARAMETER)) {
 
-            char *uri = normalized_uri(icalparameter_get_member(param));
+            char *uri = normalized_uri(icalparameter_get_member_nth(param, 0));
             const char *id = hash_lookup(uri, id_by_uri);
             char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
             if (!id) id = sha1hexstr(uri, keybuf);
@@ -3341,7 +3341,7 @@ virtuallocations_from_ical(icalcomponent *comp)
              param;
              param = icalproperty_get_next_parameter(prop, ICAL_FEATURE_PARAMETER)) {
 
-            switch (icalparameter_get_feature(param)) {
+            switch (icalparameter_get_feature_nth(param, 0)) {
             case ICAL_FEATURE_AUDIO:
                 json_object_set_new(features, "audio", json_true());
                 break;

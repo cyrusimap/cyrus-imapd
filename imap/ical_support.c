@@ -1452,10 +1452,13 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
 
 
 /* icalcomponent_foreach_recurrence() callback to find earliest/latest time */
-static void utc_timespan_cb(icalcomponent *comp, struct icaltime_span *span, void *rock)
+static void utc_timespan_cb(const icalcomponent *comp, const struct icaltime_span *span, void *rock)
 {
     struct icalperiodtype *period = (struct icalperiodtype *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_mydtstart(comp));
+    // XXX libical 4 changed callback pointer arguments to const,
+    // but we can't call icalcomponent_get_timezone on a const pointer.
+    // This needs more work upstream.
+    int is_date = icaltime_is_date(icalcomponent_get_mydtstart((icalcomponent*)comp));
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct icaltimetype start =
         icaltime_from_timet_with_zone(span->start, is_date, utc);
@@ -1826,20 +1829,14 @@ static void apply_patch_parameter(struct path_segment_t *path_seg,
         case ICAL_MEMBER_PARAMETER:
             /* Multi-valued parameter */
             if (path_seg->data) {
-                /* Check if entire parameter value == single value */
-                const char *single = (const char *) path_seg->data;
-                const char *param_val = icalparameter_get_value_as_string(param);
-
-                if (strcmp(param_val, single)) {
-                    /* Not an exact match, try to remove single value */
-                    char *newval = remove_single_value(param_val, single);
-                    if (newval) {
-                        *num_changes += 1;
-                        icalparameter_set_member(param, newval);
-                        free(newval);
-                    }
-                    continue;
-                }
+                icalstrarray *member = icalparameter_get_member(param);
+                size_t old_size = icalstrarray_size(member);
+                icalstrarray_remove(member, path_seg->data);
+                size_t new_size = icalstrarray_size(member);
+                if (old_size != new_size) *num_changes += 1;
+                if (!icalstrarray_size(member))
+                    icalproperty_remove_parameter_by_ref(parent, param);
+                continue;
             }
             break;
 
@@ -1979,7 +1976,7 @@ static void apply_patch_property(struct path_segment_t *path_seg,
     }
 }
 
-static void create_override(icalcomponent *master, struct icaltime_span *span,
+static void create_override(const icalcomponent *master, const struct icaltime_span *span,
                             void *rock)
 {
     icalcomponent *new;
