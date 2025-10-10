@@ -3118,14 +3118,9 @@ static void cmd_login(char *tag, char *user)
 
     if (is_userid_anonymous(canon_user)) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
-            passwd = beautify_string(passwd);
             if (strlen(passwd) > 500) passwd[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", imapd_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("login.password", passwd));
+            loginlog_anon(imapd_clienthost, "plaintext",
+                          imapd_starttls_done, passwd);
             reply = "Anonymous access granted";
             imapd_userid = xstrdup("anonymous");
         }

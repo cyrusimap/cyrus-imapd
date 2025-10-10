@@ -1348,13 +1348,8 @@ static void cmd_pass(char *pass)
 
     if (!strcmp(popd_userid, "anonymous")) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
-            pass = beautify_string(pass);
             if (strlen(pass) > 500) pass[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", popd_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.password", pass));
+            loginlog_anon(popd_clienthost, NULL, popd_starttls_done, pass);
         }
         else {
             loginlog_bad(popd_clienthost, popd_userid, NULL, NULL,

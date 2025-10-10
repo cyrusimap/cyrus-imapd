@@ -44,6 +44,11 @@
 
 #include <stdbool.h>
 
+extern void loginlog_anon(const char *clienthost,
+                          const char *mech,
+                          bool tls,
+                          const char *password);
+
 extern void loginlog_bad(const char *clienthost,
                          const char *username,
                          const char *mech,

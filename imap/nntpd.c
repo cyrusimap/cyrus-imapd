@@ -1995,14 +1995,8 @@ static void cmd_authinfo_pass(char *pass)
 
     if (!strcmp(nntp_userid, "anonymous")) {
         if (allowanonymous) {
-            pass = beautify_string(pass);
-            if (strlen(pass) > 500) pass[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", nntp_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("login.password", pass));
+            loginlog_anon(nntp_clienthost, "plaintext",
+                          nntp_starttls_done, pass);
         }
         else {
             loginlog_bad(nntp_clienthost, nntp_userid, "plaintext", NULL,
