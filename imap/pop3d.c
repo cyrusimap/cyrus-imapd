@@ -1280,12 +1280,10 @@ static void cmd_apop(char *response)
     }
     popd_userid = xstrdup((const char *) canon_user);
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", popd_clienthost),
-               lf_s("u.username", popd_userid),
-               lf_s("pop.folder", popd_subfolder ? popd_subfolder : ""),
-               lf_c("login.tls", popd_starttls_done ? 1 : 0));
+    loginlog_good_full(popd_clienthost, popd_saslconn, NULL,
+                       NULL, NULL,
+                       &(loginlog_extras){ .popsubfolder = popd_subfolder,
+                                           .is_tls = popd_starttls_done });
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1342,11 +1340,10 @@ static void cmd_pass(char *pass)
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
             pass = beautify_string(pass);
             if (strlen(pass) > 500) pass[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", popd_clienthost),
-                       lf_s("u.username", ""),
-                       lf_c("login.anonymous", 1),
-                       lf_s("login.password", pass));
+            loginlog_good_full(popd_clienthost, NULL, NULL,
+                               "", NULL,
+                               &(loginlog_extras) { .is_anonymous = true,
+                                                    .anonpassword = pass });
         }
         else {
             loginlog_bad_full(popd_clienthost, NULL, NULL,
@@ -1397,13 +1394,10 @@ static void cmd_pass(char *pass)
         }
         popd_userid = xstrdup((const char *) val);
 
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("session_id", session_id()),
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", popd_userid),
-                   lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
-                   lf_s("login.mech", "plaintext"),
-                   lf_c("login.tls", popd_starttls_done ? 1 : 0));
+        loginlog_good_full(popd_clienthost, popd_saslconn, NULL,
+                           NULL, NULL,
+                           &(loginlog_extras){ .is_tls = popd_starttls_done,
+                                               .popsubfolder = popd_subfolder });
 
         if ((!popd_starttls_done) &&
             (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
@@ -1611,13 +1605,10 @@ static void cmd_auth(char *arg)
         popd_userid = xstrdup(canon_user);
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", popd_clienthost),
-               lf_s("u.username", popd_userid),
-               lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
-               lf_s("login.mech", authtype),
-               lf_c("login.tls", popd_starttls_done ? 1 : 0));
+    loginlog_good_full(popd_clienthost, popd_saslconn, NULL,
+                       popd_userid, NULL,
+                       &(loginlog_extras) { .popsubfolder = popd_subfolder,
+                                            .is_tls = popd_starttls_done });
 
     if (!openinbox()) {
         sasl_getprop(popd_saslconn, SASL_SSF, &val);
