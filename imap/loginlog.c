@@ -76,7 +76,10 @@ EXPORTED void loginlog_bad_full(const char *clienthost,
     logfmt_push(&lf, "u.username", username);
 
     logfmt_push(&lf, "login.mech", mech);
-    logfmt_push(&lf, "login.scheme", scheme);
+
+    /* only log scheme if it's set */
+    if (scheme)
+        logfmt_push(&lf, "login.scheme", scheme);
 
     logfmt_push(&lf, "error", error);
 
