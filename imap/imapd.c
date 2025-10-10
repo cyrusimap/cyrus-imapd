@@ -7571,7 +7571,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
     if (!r && !localonly && delete_user) {
         if (!isadmin) {
-            r = IMAP_PERMISSION_DENIED;
+            r = IMAP_MAILBOX_NOTSUPPORTED;
         }
         else {
             const char *userid = mbname_userid(mbname);
