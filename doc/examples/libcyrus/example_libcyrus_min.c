@@ -15,11 +15,13 @@
 
 #include "arrayu64.h"
 #include "assert.h"
+#include "buf.h"
 #include "dynarray.h"
 #include "hash.h"
 #include "hashset.h"
 #include "hashu64.h"
 #include "imapopts.h"
+#include "libconfig.h"
 #include "mpool.h"
 #include "proc.h"
 #include "retry.h"
@@ -63,6 +65,16 @@ void test_arrayu64(void)
     arrayu64_fini(&a);
 
     puts("arrayu64 ok");
+}
+
+void test_buf(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_appendcstr(&buf, "hello");
+    buf_free(&buf);
+
+    puts("buf ok");
 }
 
 void test_dynarray(void)
@@ -252,9 +264,6 @@ void test_xsha1(void)
     puts("xsha1 ok");
 }
 
-/* XXX lib/libconfig.h is not installed, have to provide our own prototype */
-extern void config_read(const char *alt_config, const int config_need_data);
-
 int main(int argc, char **argv)
 {
     const char *alt_config = NULL;
@@ -275,6 +284,7 @@ int main(int argc, char **argv)
     config_read(alt_config, 0);
 
     test_arrayu64();
+    test_buf();
     test_dynarray();
     test_hash();
     test_hashset();

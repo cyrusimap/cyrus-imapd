@@ -20,24 +20,25 @@
 #include "bitvector.h"
 #include "bloom.h"
 #include "bsearch.h"
-/* #include "charset.h" */  /* XXX bogus: needs util.h for struct buf */
+#include "charset.h"
 /* #include "command.h" */  /* XXX bogus: needs prot.h for struct protstream */
 #include "cyr_qsort_r.h"
 #include "cyrusdb.h"
 #include "glob.h"
-/* #include "imapurl.h" */  /* XXX bogus: needs util.h for struct buf */
+#include "imapurl.h"
 #include "imclient.h"
 #include "imparse.h"
 #include "iostat.h"
 #include "iptostring.h"
+#include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "lsort.h"
-/* #include "mappedfile.h" */ /* XXX bogus: needs util.h for struct buf */
+#include "mappedfile.h"
 #include "murmurhash2.h"
 #include "nonblock.h"
 #include "parseaddr.h"
 #include "procinfo.h"
-/* #include "rfc822tok.h" */ /* XXX bogus: needs util.h for struct buf */
+#include "rfc822tok.h"
 #include "seqset.h"
 #include "signals.h"
 /* #include "sqldb.h" */ /* XXX bogus: needs ptrarray.h */
@@ -50,10 +51,7 @@
 #include <stdlib.h>
 #include <sysexits.h>
 #include <time.h>
-
-/* XXX lib/libconfig.h is not installed, have to provide our own prototypes */
-extern void config_read(const char *alt_config, const int config_need_data);
-extern const char *config_dir;
+#include <unistd.h>
 
 void fatal(const char *s, int code)
 {
@@ -142,6 +140,16 @@ void test_bsearch(void)
     puts("bsearch ok");
 }
 
+void test_charset(void)
+{
+    charset_t charset;
+
+    charset = charset_lookupname("us-ascii");
+    charset_free(&charset);
+
+    puts("charset ok");
+}
+
 static int cmp QSORT_R_COMPAR_ARGS(const void *a, const void *b,
                                    void *thunk __attribute__((unused)))
 {
@@ -203,6 +211,21 @@ void test_glob(void)
     puts("glob ok");
 }
 
+void test_imapurl(void)
+{
+    const char src[] = "imap://joe@example.com/INBOX/;uid=20/"
+                       ";section=1.2;urlauth=submit+fred:internal"
+                       ":91354a473744909de610943775f92038";
+    struct imapurl url;
+    int r;
+
+    r = imapurl_fromURL(&url, src);
+    (void) r;
+
+    free(url.freeme);
+    puts("imapurl ok");
+}
+
 #if 0
 void test_imclient(void)
 {
@@ -218,6 +241,44 @@ void test_imclient(void)
      */
 }
 #endif
+
+void test_mappedfile(void)
+{
+    struct mappedfile *mf = NULL;
+    char fname[PATH_MAX];
+    int r;
+
+    snprintf(fname, sizeof(fname), "/tmp/%ld-example_libcyrus_mappedfile.junk",
+                                   (long) getpid());
+
+    r = mappedfile_open(&mf, fname, MAPPEDFILE_CREATE);
+
+    if (!r) {
+        r = mappedfile_close(&mf);
+        (void) r;
+
+        unlink(fname);
+    }
+
+    puts("mappedfile ok");
+}
+
+void test_rfc822tok(void)
+{
+    const char *str = "lorem ipsum dolor sit amet";
+    rfc822tok_t tok = RFC822TOK_INITIALIZER;
+    int t;
+    char *p;
+
+    rfc822tok_init(&tok, str, strlen(str), 0);
+
+    do {
+        t = rfc822tok_next(&tok, &p);
+    } while (t >= 0);
+
+    rfc822tok_fini(&tok);
+    puts("rfc822tok ok");
+}
 
 int main(int argc, char **argv)
 {
@@ -243,7 +304,11 @@ int main(int argc, char **argv)
     test_bitvector();
     test_bloom();
     test_bsearch();
+    test_charset();
     test_cyr_qsort_r();
     test_cyrusdb();
     test_glob();
+    test_imapurl();
+    test_mappedfile();
+    test_rfc822tok();
 }

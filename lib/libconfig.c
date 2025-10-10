@@ -1510,3 +1510,46 @@ EXPORTED int config_check_partitions(FILE *user_output)
     free_hash_table(&by_value, &wrap_strarray_free);
     return 0 - found_bad;
 }
+
+/* Examine the name of a file, and return a single character
+ * (as an int) that can be used as the name of a hash
+ * directory.  Stop before the first dot.  Caller is responsible
+ * for skipping any prefix of the name.
+ */
+EXPORTED int dir_hash_c(const char *name, int full)
+{
+    int c;
+
+    if (full) {
+        unsigned char *pt;
+        uint32_t n;
+        enum {
+            DIR_X = 3,
+            DIR_Y = 5,
+            DIR_P = 23,
+            DIR_A = 'A'
+        };
+
+        n = 0;
+        pt = (unsigned char *)name;
+        while (*pt && *pt != '.') {
+            n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
+            n &= UINT32_MAX;
+            ++pt;
+        }
+        c = DIR_A + (n % DIR_P);
+    }
+    else {
+        c = tolower(*name);
+        if (!Uisascii(c) || !Uislower(c)) c = 'q';
+    }
+
+    return c;
+}
+
+EXPORTED char *dir_hash_b(const char *name, int full, char buf[2])
+{
+    buf[0] = (char)dir_hash_c(name, full);
+    buf[1] = '\0';
+    return buf;
+}

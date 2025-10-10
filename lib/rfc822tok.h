@@ -43,7 +43,7 @@
 #ifndef __CYRUS__RFC822TOK_H__
 #define __CYRUS__RFC822TOK_H__
 
-#include "util.h"
+#include "buf.h"
 
 /* definitions for tokens returned */
 #define RFC822_ATOM             256

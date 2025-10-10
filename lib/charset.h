@@ -69,7 +69,7 @@
 #define MIME_MAX_HEADER_LENGTH 78
 #define MIME_MAX_LINE_LENGTH 998
 
-#include "util.h"
+#include "buf.h"
 #include "xsha1.h"
 
 #define charset_base64_len_unpadded(n) \
@@ -203,7 +203,7 @@ extern int charset_extract(int (*cb)(const struct buf *text, void *rock),
 
 /* Extract plain text from HTML, converting <p> and <br>
  * to newlines and trimming space left by HTML-only lines. */
-EXPORTED char *charset_extract_plain(const char *html);
+extern char *charset_extract_plain(const char *html);
 
 struct char_counts {
     size_t total;

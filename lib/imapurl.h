@@ -42,7 +42,7 @@
 #ifndef IMAPURL_H
 #define IMAPURL_H
 
-#include "util.h"
+#include "buf.h"
 
 struct imapurl {
     char *freeme;               /* copy of original URL + decoded mailbox;
