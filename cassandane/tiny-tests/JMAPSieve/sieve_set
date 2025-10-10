@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_sieve_set
-    :min_version_3_3 :JMAPExtensions
+    :min_version_3_3 :JMAPExtensions :MagicPlus :NoAltNamespace
 {
     my ($self) = @_;
 
@@ -157,4 +157,14 @@ EOF
     $self->assert_not_null($res->[1][1]{destroyed});
     $self->assert_null($res->[1][1]{notDestroyed});
     $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
+    my $talk = $self->{store}->get_client();
+    $talk->getacl("INBOX");
+
+    $talk->delete("INBOX");
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $imaptalk = $plusstore->get_client();
+    $res = $imaptalk->select("INBOX.#sieve");
+    $self->assert_str_equals("read-write", $res);
+
+
 }
