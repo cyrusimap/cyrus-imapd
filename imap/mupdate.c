@@ -74,14 +74,15 @@
 #include "mupdate-client.h"
 #include "telemetry.h"
 
-#include "strarray.h"
 #include "assert.h"
 #include "global.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mpool.h"
 #include "nonblock.h"
 #include "prot.h"
+#include "strarray.h"
 #include "tls.h"
 #include "util.h"
 #include "version.h"
@@ -1477,7 +1478,6 @@ static void cmd_authenticate(struct conn *C,
 
     if (r) {
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -1492,19 +1492,12 @@ static void cmd_authenticate(struct conn *C,
                         tag, errorstring ? errorstring : "");
             break;
         default:
+            loginlog_bad(C->clienthost, C->saslconn, NULL);
+
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
-
-            if (r != SASL_NOUSER)
-                sasl_getprop(C->saslconn, SASL_USERNAME, (const void **) &userid);
-
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", C->clienthost),
-                       lf_s("u.username", userid),
-                       lf_s("login.mech", mech),
-                       lf_s("error", sasl_errdetail(C->saslconn)));
 
             prot_printf(C->pout, "%s NO \"%s\"\r\n", tag,
                         sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),

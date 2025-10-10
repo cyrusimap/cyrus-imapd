@@ -84,6 +84,7 @@
 #include "imap/mupdate_err.h"
 
 #include "lmtpengine.h"
+#include "loginlog.h"
 #include "tls.h"
 #include "telemetry.h"
 
@@ -1074,7 +1075,6 @@ void lmtpmode(struct lmtp_func *func,
 
               if (r) {
                   const char *errorstring = NULL;
-                  const char *userid = "-notset-";
 
                   switch (r) {
                   case IMAP_SASL_CANCEL:
@@ -1095,14 +1095,7 @@ void lmtpmode(struct lmtp_func *func,
                           continue;
                       }
                       else {
-                          if (r != SASL_NOUSER)
-                              sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &userid);
-
-                          xsyslog_ev(LOG_NOTICE, "login.bad",
-                                     lf_s("r.clienthost", cd.clienthost),
-                                     lf_s("u.username", userid),
-                                     lf_s("login.mech", mech),
-                                     lf_s("error", sasl_errdetail(cd.conn)));
+                          loginlog_bad(cd.clienthost, cd.conn, NULL);
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
 
