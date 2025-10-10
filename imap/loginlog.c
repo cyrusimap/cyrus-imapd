@@ -44,8 +44,52 @@
 #include "imap/loginlog.h"
 
 #include "lib/logfmt.h"
+#include "lib/sessionid.h"
 
 #include <syslog.h>
+
+static void loginlog_good_begin(struct logfmt *lf,
+                                const char *clienthost,
+                                const char *username,
+                                const char *mech,
+                                bool tls)
+{
+    logfmt_init(lf, "login.good");
+    logfmt_push_session(lf);
+
+    logfmt_push(lf, "r.clienthost", clienthost);
+
+    if (username)
+        logfmt_push(lf, "u.username", username);
+
+    if (mech)
+        logfmt_push(lf, "login.mech", mech);
+
+    logfmt_push(lf, "login.tls", tls ? "1" : "0");
+}
+
+static void loginlog_good_finish(struct logfmt *lf)
+{
+    syslog(LOG_NOTICE, "%s", logfmt_cstring(lf));
+    logfmt_fini(lf);
+}
+
+EXPORTED void loginlog_anon(const char *clienthost,
+                            const char *mech,
+                            bool tls,
+                            const char *password)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    loginlog_good_begin(&lf, clienthost, NULL, mech, tls);
+
+    logfmt_push(&lf, "login.anonymous", "1");
+
+    if (password)
+        logfmt_push(&lf, "login.password", password);
+
+    loginlog_good_finish(&lf);
+}
 
 EXPORTED void loginlog_bad(const char *clienthost,
                            const char *username,
