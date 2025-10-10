@@ -7564,13 +7564,21 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         goto done;
     }
 
+    int isadmin = imapd_userisadmin || imapd_userisproxyadmin;
+
     /* was it a top-level user mailbox? delete all the child mailboxes first */
     /* localonly deletes are only per-mailbox */
     delete_user = mboxname_isusermailbox(mbname_intname(mbname), 1);
     if (!r && !localonly && delete_user) {
-        const char *userid = mbname_userid(mbname);
-        if (userid) {
-            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, MBOXTREE_INTERMEDIATES|MBOXTREE_SKIP_ROOT);
+        if (!isadmin) {
+            r = IMAP_PERMISSION_DENIED;
+        }
+        else {
+            const char *userid = mbname_userid(mbname);
+            if (userid) {
+                r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL,
+                                          MBOXTREE_INTERMEDIATES|MBOXTREE_SKIP_ROOT);
+            }
         }
     }
 
@@ -7578,8 +7586,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* local mailbox */
     if (!r) {
-        int isadmin = imapd_userisadmin || imapd_userisproxyadmin;
-
         if (mbname_isdeleted(mbname)) {
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        isadmin, imapd_userid,
