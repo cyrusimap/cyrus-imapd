@@ -3214,13 +3214,10 @@ static void cmd_login(char *tag, char *user)
         reply = replybuf;
         imapd_userid = xstrdup((const char *) val);
         prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("session_id", session_id()),
-                   lf_s("r.clienthost", imapd_clienthost),
-                   lf_s("u.username", imapd_userid),
-                   lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
-                   lf_s("login.mech", "plaintext"),
-                   lf_c("login.tls", imapd_starttls_done ? 1 : 0));
+        loginlog_good_full(imapd_clienthost, imapd_saslconn, NULL,
+                           NULL, NULL,
+                           &(loginlog_extras){ .is_tls = imapd_starttls_done,
+                                               .magicplus = imapd_magicplus });
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
@@ -3344,13 +3341,10 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         imapd_userid = xstrdup(canon_user);
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", imapd_clienthost),
-               lf_s("u.username", imapd_userid),
-               lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
-               lf_s("login.mech", authtype),
-               lf_c("login.tls", imapd_starttls_done ? 1 : 0));
+    loginlog_good_full(imapd_clienthost, imapd_saslconn, NULL,
+                       imapd_userid, NULL,
+                       &(loginlog_extras){ .magicplus = imapd_magicplus,
+                                           .is_tls = imapd_starttls_done });
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);
