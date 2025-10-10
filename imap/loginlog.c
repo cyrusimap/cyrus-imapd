@@ -44,8 +44,66 @@
 #include "imap/loginlog.h"
 
 #include "lib/logfmt.h"
+#include "lib/sessionid.h"
 
 #include <syslog.h>
+
+EXPORTED void loginlog_good_full(const char *clienthost,
+                                 sasl_conn_t *saslconn,
+                                 const char *scheme,
+                                 const char *override_username,
+                                 const char *override_mech,
+                                 loginlog_extras *extras)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    const char *username = override_username;
+    const char *mech = override_mech;
+
+    if (saslconn) {
+        if (!username)
+            sasl_getprop(saslconn, SASL_USERNAME, (const void **) &username);
+
+        if (!mech)
+            sasl_getprop(saslconn, SASL_MECHNAME, (const void **) &mech);
+    }
+
+    logfmt_begin(&lf, "login.good");
+    logfmt_push(&lf, "session_id", session_id());
+
+    logfmt_push(&lf, "r.clienthost", clienthost);
+    logfmt_push(&lf, "u.username", username);
+
+    /* only log anonymous login details if it was an anonymous login */
+    if (extras && extras->is_anonymous) {
+        logfmt_push(&lf, "login.anonymous", "1");
+        if (extras->anonpassword)
+            logfmt_push(&lf, "login.password", extras->anonpassword);
+    }
+
+    /* only log nopassword flag if it's true */
+    if (extras && extras->is_nopassword)
+        logfmt_push(&lf, "login.nopassword", "1");
+
+    /* only log magicplus if it's set */
+    if (extras && extras->magicplus)
+        logfmt_push(&lf, "login.magic", extras->magicplus);
+
+    logfmt_push(&lf, "login.mech", mech);
+
+    /* only log scheme if it's set */
+    if (scheme)
+        logfmt_push(&lf, "login.scheme", scheme);
+
+    /* always log tls flag */
+    logfmt_push(&lf, "login.tls", extras && extras->is_tls ? "1" : "0");
+
+    /* only log popsubfolder if it's set */
+    if (extras && extras->popsubfolder)
+        logfmt_push(&lf, "pop.subfolder", extras->popsubfolder);
+
+    syslog(LOG_NOTICE, "%s", logfmt_cstring(&lf));
+    logfmt_finish(&lf);
+}
 
 EXPORTED void loginlog_bad_full(const char *clienthost,
                                 sasl_conn_t *saslconn,

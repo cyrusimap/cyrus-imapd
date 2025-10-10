@@ -44,6 +44,25 @@
 
 #include <sasl/sasl.h>
 
+#include <stdbool.h>
+
+typedef struct
+{
+    bool is_anonymous;
+    bool is_nopassword;
+    bool is_tls;
+    const char *anonpassword;
+    const char *magicplus;
+    const char *popsubfolder;
+} loginlog_extras;
+
+extern void loginlog_good_full(const char *clienthost,
+                               sasl_conn_t *saslconn,
+                               const char *scheme,
+                               const char *override_username,
+                               const char *override_mech,
+                               loginlog_extras *extras);
+
 extern void loginlog_bad_full(const char *clienthost,
                               sasl_conn_t *saslconn,
                               const char *scheme,
