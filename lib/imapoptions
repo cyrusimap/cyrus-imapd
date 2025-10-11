@@ -134,6 +134,11 @@ are listed with ``<none>''.
    administrators to create top-level mailboxes visible to users,
    but not writable by users. */
 
+{ "admins_get_internal_seen", 0, SWITCH, "UNRELEASED" }
+/* If set, admin users see and set the internal seen state of mailboxes
+   rather than their own separate copy (NOTE: they still don't update
+   the RECENT timestamp unless the mailbox has SHAREDSEEN) as well. */
+
 { "afspts_localrealms", NULL, STRING, "2.3.17" }
 /* The list of realms which are to be treated as local, and thus stripped
    during identifier canonicalization (for the AFSPTS ptloader module).

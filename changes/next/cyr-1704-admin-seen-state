@@ -1,0 +1,29 @@
+Submitting a PR?  Create a file in this directory with the same name as your
+branch, and add the following details (you can use this file as a template).
+
+Description:
+
+A config option to allow admins to get and set the mailbox owner's \Seen flags.
+
+
+Documentation:
+
+There are no documentation changes
+
+
+Config changes:
+
+There is a new boolean option: `admins_get_internal_seen` - which, if set,
+means that admins always get and set the same \Seen flags as the mailbox owner.
+
+
+Upgrade instructions:
+
+If setting admins_get_internal_seen to true, ensure that any tools which access
+he user's mailbox as an admin are updated to use EXAMINE or FETCH .SILENT to avoid
+changing \Seen flags for the mailbox owner unexpectedly.
+
+
+GitHub issue:
+
+None
