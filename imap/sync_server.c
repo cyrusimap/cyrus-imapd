@@ -794,7 +794,7 @@ static void cmd_authenticate(char *mech, char *resp)
                lf_s("r.clienthost", sync_clienthost),
                lf_s("u.username", sync_userid),
                lf_s("login.mech", mech),
-               lf_c("login.tls", sync_starttls_done ? 1 : 0));
+               lf_d("login.tls", sync_starttls_done ? 1 : 0));
 
     sasl_getprop(sync_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);

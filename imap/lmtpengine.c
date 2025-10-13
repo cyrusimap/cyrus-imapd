@@ -1142,7 +1142,7 @@ void lmtpmode(struct lmtp_func *func,
                          lf_s("r.clienthost", cd.clienthost),
                          lf_s("u.username", user),
                          lf_s("login.mech", mech),
-                         lf_c("login.tls", cd.starttls_done ? 1 : 0));
+                         lf_d("login.tls", cd.starttls_done ? 1 : 0));
 
               cd.authenticated = DIDAUTH;
               prot_printf(pout, "235 Authenticated!\r\n");

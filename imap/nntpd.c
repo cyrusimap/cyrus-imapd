@@ -2003,7 +2003,7 @@ static void cmd_authinfo_pass(char *pass)
             xsyslog_ev(LOG_NOTICE, "login.good",
                        lf_s("r.clienthost", nntp_clienthost),
                        lf_s("u.username", ""),
-                       lf_c("login.anonymous", 1),
+                       lf_d("login.anonymous", 1),
                        lf_s("login.mech", "plaintext"),
                        lf_s("login.password", pass));
         }
@@ -2041,7 +2041,7 @@ static void cmd_authinfo_pass(char *pass)
                    lf_s("r.clienthost", nntp_clienthost),
                    lf_s("u.username", nntp_userid),
                    lf_s("login.mech", "plaintext"),
-                   lf_c("login.tls", nntp_starttls_done ? 1 : 0));
+                   lf_d("login.tls", nntp_starttls_done ? 1 : 0));
 
         prot_printf(nntp_out, "281 User logged in\r\n");
 
@@ -2262,7 +2262,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
                lf_s("r.clienthost", nntp_clienthost),
                lf_s("u.username", nntp_userid),
                lf_s("login.mech", mech),
-               lf_c("login.tls", nntp_starttls_done ? 1 : 0));
+               lf_d("login.tls", nntp_starttls_done ? 1 : 0));
 
     if (success_data) {
         prot_printf(nntp_out, "283 %s\r\n", success_data);
