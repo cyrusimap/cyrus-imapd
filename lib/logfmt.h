@@ -54,13 +54,18 @@ struct logfmt
     .scratch = BUF_INITIALIZER,                 \
 }
 
-extern void logfmt_escape(struct buf *buf, const char *val);
+extern void logfmt_escape_bytestring(struct buf *buf, const char *val);
+extern void logfmt_escape_utf8(struct buf *buf, const char *utf8val);
 
 extern void logfmt_init(struct logfmt *lf, const char *event);
 extern void logfmt_fini(struct logfmt *lf);
 const char *logfmt_cstring(const struct logfmt *lf);
 
 extern void logfmt_push(struct logfmt *lf, const char *key, const char *value);
+
+extern void logfmt_push_utf8(struct logfmt *lf,
+                             const char *key,
+                             const char *value);
 
 __attribute__((format(printf, 3, 4)))
 extern void logfmt_pushf(struct logfmt *lf, const char *key,
