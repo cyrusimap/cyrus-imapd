@@ -4085,7 +4085,7 @@ static int auth_success(struct transaction_t *txn, const char *userid)
                lf_s("r.clienthost", txn->conn->clienthost),
                lf_s("u.username", httpd_userid),
                lf_s("login.scheme", scheme->name),
-               lf_c("login.tls", txn->conn->tls_ctx ? 1 : 0));
+               lf_d("login.tls", txn->conn->tls_ctx ? 1 : 0));
 
     /* Recreate telemetry log entry for request (w/ credentials redacted) */
     assert(!buf_len(&txn->buf));

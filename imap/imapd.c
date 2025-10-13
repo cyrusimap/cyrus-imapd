@@ -3141,7 +3141,7 @@ static void cmd_login(char *tag, char *user)
             xsyslog_ev(LOG_NOTICE, "login.good",
                        lf_s("r.clienthost", imapd_clienthost),
                        lf_s("u.username", ""),
-                       lf_c("login.anonymous", 1),
+                       lf_d("login.anonymous", 1),
                        lf_s("login.mech", "plaintext"),
                        lf_s("login.password", passwd));
             reply = "Anonymous access granted";
@@ -3170,8 +3170,8 @@ static void cmd_login(char *tag, char *user)
                    lf_s("u.username", imapd_userid),
                    lf_s("login.mech", "plaintext"),
                    lf_s("login.magic", imapd_magicplus ? imapd_magicplus : ""),
-                   lf_c("login.nopassword", 1),
-                   lf_c("login.tls", imapd_starttls_done ? 1 : 0));
+                   lf_d("login.nopassword", 1),
+                   lf_d("login.tls", imapd_starttls_done ? 1 : 0));
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
                                  canon_user,
@@ -3229,7 +3229,7 @@ static void cmd_login(char *tag, char *user)
                    lf_s("u.username", imapd_userid),
                    lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
                    lf_s("login.mech", "plaintext"),
-                   lf_c("login.tls", imapd_starttls_done ? 1 : 0));
+                   lf_d("login.tls", imapd_starttls_done ? 1 : 0));
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
@@ -3367,7 +3367,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
                lf_s("u.username", imapd_userid),
                lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
                lf_s("login.mech", authtype),
-               lf_c("login.tls", imapd_starttls_done ? 1 : 0));
+               lf_d("login.tls", imapd_starttls_done ? 1 : 0));
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);

@@ -1286,7 +1286,7 @@ static void cmd_apop(char *response)
                lf_s("r.clienthost", popd_clienthost),
                lf_s("u.username", popd_userid),
                lf_s("pop.folder", popd_subfolder ? popd_subfolder : ""),
-               lf_c("login.tls", popd_starttls_done ? 1 : 0));
+               lf_d("login.tls", popd_starttls_done ? 1 : 0));
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1350,7 +1350,7 @@ static void cmd_pass(char *pass)
             xsyslog_ev(LOG_NOTICE, "login.good",
                        lf_s("r.clienthost", popd_clienthost),
                        lf_s("u.username", ""),
-                       lf_c("login.anonymous", 1),
+                       lf_d("login.anonymous", 1),
                        lf_s("login.password", pass));
         }
         else {
@@ -1412,7 +1412,7 @@ static void cmd_pass(char *pass)
                    lf_s("u.username", popd_userid),
                    lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
                    lf_s("login.mech", "plaintext"),
-                   lf_c("login.tls", popd_starttls_done ? 1 : 0));
+                   lf_d("login.tls", popd_starttls_done ? 1 : 0));
 
         if ((!popd_starttls_done) &&
             (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
@@ -1641,7 +1641,7 @@ static void cmd_auth(char *arg)
                lf_s("u.username", popd_userid),
                lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
                lf_s("login.mech", authtype),
-               lf_c("login.tls", popd_starttls_done ? 1 : 0));
+               lf_d("login.tls", popd_starttls_done ? 1 : 0));
 
     if (!openinbox()) {
         sasl_getprop(popd_saslconn, SASL_SSF, &val);

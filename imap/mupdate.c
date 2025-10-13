@@ -1528,7 +1528,7 @@ static void cmd_authenticate(struct conn *C,
                lf_s("r.clienthost", C->clienthost),
                lf_s("u.username", C->userid),
                lf_s("login.mech", mech),
-               lf_c("login.tls", C->tlsconn ? 1 : 0));
+               lf_d("login.tls", C->tlsconn ? 1 : 0));
 
     prot_printf(C->pout, "%s OK \"Authenticated\"\r\n", tag);
 

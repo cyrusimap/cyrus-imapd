@@ -895,7 +895,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
              lf_s("r.clienthost", sieved_clienthost),
              lf_s("u.username", username),
              lf_s("login.mech", mech),
-             lf_c("login.tls", starttls_done ? 1 : 0));
+             lf_d("login.tls", starttls_done ? 1 : 0));
 
   authenticated = 1;
 
