@@ -39,5 +39,37 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+#include <config.h>
+
 #include "imap/loginlog.h"
 
+#include "lib/logfmt.h"
+
+#include <syslog.h>
+
+EXPORTED void loginlog_bad(const char *clienthost,
+                           const char *username,
+                           const char *mech,
+                           const char *scheme,
+                           const char *error)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    logfmt_init(&lf, "login.bad");
+
+    logfmt_push(&lf, "r.clienthost", clienthost);
+    logfmt_push(&lf, "u.username", username);
+
+    /* only log mech if it's set */
+    if (mech)
+        logfmt_push(&lf, "login.mech", mech);
+
+    /* only log scheme if it's set */
+    if (scheme)
+        logfmt_push(&lf, "login.scheme", scheme);
+
+    logfmt_push(&lf, "error", error);
+
+    syslog(LOG_NOTICE, "%s", logfmt_cstring(&lf));
+    logfmt_fini(&lf);
+}
