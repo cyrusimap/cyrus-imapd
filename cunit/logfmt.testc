@@ -24,7 +24,7 @@ static int tear_down(void)
     return 0;
 }
 
-static void test_logfmt_escape1(void)
+static void test_logfmt_escape_bytestring1(void)
 {
     static const struct {
         const char *value;
@@ -48,7 +48,7 @@ static void test_logfmt_escape1(void)
     for (i = 0; i < n_tests; i++) {
         struct buf actual = BUF_INITIALIZER;
 
-        logfmt_escape(&actual, tests[i].value);
+        logfmt_escape_bytestring(&actual, tests[i].value);
         if (tests[i].expect) {
             CU_ASSERT_STRING_EQUAL(buf_cstring(&actual), tests[i].expect);
         }
@@ -80,7 +80,7 @@ static void test_logfmt_escape1(void)
         #actual, _a, #expect, _e);                                      \
 } while (0)
 
-static void test_logfmt_escape2(void)
+static void test_logfmt_escape_bytestring2(void)
 {
     #define EXPECT_DQUOTES   (UINT8_C(1) << 0)
     #define EXPECT_BACKSLASH (UINT8_C(1) << 1)
@@ -119,7 +119,7 @@ static void test_logfmt_escape2(void)
         struct buf actual = BUF_INITIALIZER;
 
         snprintf(value, sizeof(value), "Q%cE", i);
-        logfmt_escape(&actual, value);
+        logfmt_escape_bytestring(&actual, value);
 
         if (expect_dquotes) {
             ASSERT_STRING_QUOTED(buf_cstring(&actual));
@@ -169,6 +169,49 @@ static void test_logfmt_escape2(void)
     }
 }
 
+static void test_logfmt_escape_utf8(void)
+{
+    static const struct {
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { NULL,                 "~null~" },
+        { "",                   "\"\"" }, /* empty string is quoted */
+        { "basic",              "basic" }, /* basic string isn't quoted */
+        { "equals=equals",      "\"equals=equals\"" },
+        { "back\\slash",        "\"back\\\\slash\"" },
+        { "new\nline",          "\"new\\nline\"" },
+        { "carriage\rreturn",   "\"carriage\\rreturn\"" },
+        { "double\"quote",      "\"double\\\"quote\"" },
+        { " ",                  "\" \"" },
+        { "space space",        "\"space space\"" },
+        { "tab\ttab",           "\"tab\\ttab\"" },
+        { "snow☃man",           "\"snow☃man\"" },
+        { "vertical\vtab",      "\"vertical\\x{0b}tab\"" },
+        { "form\ffeed",         "\"form\\x{0c}feed\"" },
+        { "next\xc2\x85line",   "\"next\\x{c2}\\x{85}line\"" },
+        { "line\u2028sep",      "\"line\\x{e2}\\x{80}\\x{a8}sep\"" },
+        { "para\u2029sep",      "\"para\\x{e2}\\x{80}\\x{a9}sep\"" },
+        { "repl\ufffdchar",     "\"repl�char\"" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct buf actual = BUF_INITIALIZER;
+
+        logfmt_escape_utf8(&actual, tests[i].value);
+        if (tests[i].expect) {
+            CU_ASSERT_STRING_EQUAL(buf_cstring(&actual), tests[i].expect);
+        }
+        else {
+            CU_ASSERT_EQUAL(buf_len(&actual), 0);
+        }
+
+        buf_free(&actual);
+    }
+}
+
 static void test_logfmt_push(void)
 {
     static const struct {
@@ -183,6 +226,7 @@ static void test_logfmt_push(void)
         { "a",     "b",     "event=a k=b"             },
         { "a",     "\"b\"", "event=a k=\"\\\"b\\\"\"" },
         { "\"a\"", "b",     "event=\"\\\"a\\\"\" k=b" },
+        { "a",     "☃",     "event=a k=\"\\x{e2}\\x{98}\\x{83}\"" },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     struct logfmt lf = LOGFMT_INITIALIZER;
@@ -191,6 +235,35 @@ static void test_logfmt_push(void)
     for (i = 0; i < n_tests; i++) {
         logfmt_init(&lf, tests[i].event);
         logfmt_push(&lf, "k", tests[i].value);
+        CU_ASSERT_STRING_EQUAL(logfmt_cstring(&lf), tests[i].expect);
+    }
+
+    logfmt_fini(&lf);
+}
+
+static void test_logfmt_push_utf8(void)
+{
+    static const struct {
+        const char *event;
+        const char *value;
+        const char *expect;
+    } tests[] = {
+        { NULL,    NULL,    "event=~null~ k=~null~"   },
+        { NULL,    "",      "event=~null~ k=\"\""     },
+        { "",      NULL,    "event=\"\" k=~null~"     },
+        { "",      "",      "event=\"\" k=\"\""       },
+        { "a",     "b",     "event=a k=b"             },
+        { "a",     "\"b\"", "event=a k=\"\\\"b\\\"\"" },
+        { "\"a\"", "b",     "event=\"\\\"a\\\"\" k=b" },
+        { "a",     "☃",     "event=a k=\"☃\"" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        logfmt_init(&lf, tests[i].event);
+        logfmt_push_utf8(&lf, "k", tests[i].value);
         CU_ASSERT_STRING_EQUAL(logfmt_cstring(&lf), tests[i].expect);
     }
 
