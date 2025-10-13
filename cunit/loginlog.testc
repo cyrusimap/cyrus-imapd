@@ -1,8 +1,123 @@
 #include "cunit/unit.h"
 #include "imap/loginlog.h"
 
-static void test_stub(void)
+#include "lib/libconfig.h"
+#include "lib/sessionid.h"
+
+#include <stdlib.h>
+
+#define DBDIR "test-loginlog-dbdir"
+
+static int set_up(void)
 {
+    /* need basic configuration for session_new_id() */
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+    );
+
+    session_clear_id();
+    trace_set_id(NULL, 0);
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    session_clear_id();
+    trace_set_id(NULL, 0);
+
+    config_reset();
+    system("rm -rf " DBDIR);
+
+    return 0;
+}
+
+static void test_loginlog_bad(void)
+{
+    static const struct {
+        const char *clienthost;
+        const char *username;
+        const char *mech;
+        const char *scheme;
+        const char *error;
+    } tests[] = {
+        { NULL, NULL, NULL, NULL, NULL },
+        { "example.net", "cunit", "plaintext", NULL,     "bad" },
+        { "example.net", "cunit", NULL,        "scheme", "bad" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        unsigned pat_event = 0;
+        unsigned pat_clienthost = 0;
+        unsigned pat_username = 0;
+        unsigned pat_mech = 0;
+        unsigned pat_scheme = 0;
+        unsigned pat_error = 0;
+        char expect[32 + MAX_SESSIONID_SIZE] = {0};
+
+        pat_event = CU_SYSLOG_MATCH_SUBSTR("event=login.bad");
+
+        if (tests[i].clienthost) {
+            snprintf(expect, sizeof(expect), "r.clienthost=%s",
+                     tests[i].clienthost);
+            pat_clienthost = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+        else {
+            pat_clienthost = CU_SYSLOG_MATCH_SUBSTR("r.clienthost=~null~");
+        }
+
+        if (tests[i].username) {
+            snprintf(expect, sizeof(expect), "u.username=%s",
+                     tests[i].username);
+            pat_username = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+        else {
+            pat_username = CU_SYSLOG_MATCH_SUBSTR("u.username=~null~");
+        }
+
+        if (tests[i].mech) {
+            snprintf(expect, sizeof(expect), "login.mech=%s", tests[i].mech);
+            pat_mech = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+
+        if (tests[i].scheme) {
+            snprintf(expect, sizeof(expect), "login.scheme=%s", tests[i].scheme);
+            pat_mech = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+
+        if (tests[i].error) {
+            snprintf(expect, sizeof(expect), "error=%s", tests[i].error);
+            pat_error = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+        else {
+            pat_error = CU_SYSLOG_MATCH_SUBSTR("error=~null~");
+        }
+
+        loginlog_bad(tests[i].clienthost, tests[i].username,
+                     tests[i].mech, tests[i].scheme, tests[i].error);
+
+        if (pat_event)
+            CU_ASSERT_SYSLOG(pat_event, 1);
+
+        if (pat_clienthost)
+            CU_ASSERT_SYSLOG(pat_clienthost, 1);
+
+        if (pat_username)
+            CU_ASSERT_SYSLOG(pat_username, 1);
+
+        if (pat_mech)
+            CU_ASSERT_SYSLOG(pat_mech, 1);
+
+        if (pat_scheme)
+            CU_ASSERT_SYSLOG(pat_scheme, 1);
+
+        if (pat_error)
+            CU_ASSERT_SYSLOG(pat_error, 1);
+
+        CU_syslogMatchReset();
+    }
 }
 
 /* vim: set ft=c: */
