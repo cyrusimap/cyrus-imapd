@@ -71,6 +71,7 @@ extern void auditlog_mboxname(const char *action,
                               const char *mboxname);
 extern void auditlog_message(const char *action,
                              struct mailbox *mailbox,
+                             const struct index_record *oldrecord,
                              const struct index_record *record,
                              const char *message_id);
 extern void auditlog_message_uid(const char *action,

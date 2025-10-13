@@ -2348,18 +2348,18 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
     }
 
     if (change->flags & CHANGE_ISAPPEND)
-        auditlog_message("append", mailbox, record, change->msgid);
+        auditlog_message("append", mailbox, NULL, record, change->msgid);
 
     if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         && !(change->flags & CHANGE_WASEXPUNGED))
     {
-        auditlog_message("expunge", mailbox, record, NULL);
+        auditlog_message("expunge", mailbox, NULL, record, NULL);
     }
 
     if ((record->internal_flags & FLAG_INTERNAL_UNLINKED)
         && !(change->flags & CHANGE_WASUNLINKED))
     {
-        auditlog_message("unlink", mailbox, record, NULL);
+        auditlog_message("unlink", mailbox, NULL, record, NULL);
     }
 
     return 0;
@@ -4892,7 +4892,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     r = _store_change(mailbox, record, changeflags);
     if (r) return r;
 
-    auditlog_message("touched", mailbox, record, NULL);
+    auditlog_message("touched", mailbox, &oldrecord, record, NULL);
 
     /* expunged tracking */
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED &&
@@ -5958,7 +5958,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             continue;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 
-        auditlog_message(action, mailbox, &copyrecord, NULL);
+        auditlog_message(action, mailbox, NULL, &copyrecord, NULL);
     }
 
     if (myiter) mailbox_iter_done(&myiter);
