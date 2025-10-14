@@ -42,7 +42,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include "sieve_interface.h"
@@ -85,8 +85,9 @@ int main(int argc, char **argv)
         { 0, 0, 0, 0 },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -99,13 +100,14 @@ int main(int argc, char **argv)
     }
 
     if (usage_error || (argc - optind) < 2) {
-        fprintf(stderr, "Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
-               argv[0]);
+        fprintf(stderr,
+                "Syntax: %s [-C <altconfig>] <filename> <outputfile>\n",
+                argv[0]);
         exit(1);
     }
 
     instream = !strcmp(argv[optind], "-") ? stdin : fopen(argv[optind], "r");
-    if(instream == NULL) {
+    if (instream == NULL) {
         fprintf(stderr, "Unable to open %s for reading\n", argv[optind]);
         exit(1);
     }
@@ -113,10 +115,11 @@ int main(int argc, char **argv)
     /* Load configuration file. */
     config_read(alt_config, 0);
 
-    if(sieve_script_parse_only(instream, &err, &s) != SIEVE_OK) {
-        if(err) {
+    if (sieve_script_parse_only(instream, &err, &s) != SIEVE_OK) {
+        if (err) {
             fprintf(stderr, "Unable to parse script: %s\n", err);
-        } else {
+        }
+        else {
             fprintf(stderr, "Unable to parse script.\n");
         }
         sieve_script_free(&s);
@@ -125,7 +128,7 @@ int main(int argc, char **argv)
     }
 
     /* Now, generate the bytecode */
-    if(sieve_generate_bytecode(&bc, s) == -1) {
+    if (sieve_generate_bytecode(&bc, s) == -1) {
         fprintf(stderr, "bytecode generate failed\n");
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
@@ -134,7 +137,7 @@ int main(int argc, char **argv)
 
     /* Now, open the new file */
     fd = open(argv[++optind], O_CREAT | O_TRUNC | O_WRONLY, 0644);
-    if(fd < 0) {
+    if (fd < 0) {
         fprintf(stderr, "couldn't open bytecode output file\n");
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
@@ -142,7 +145,7 @@ int main(int argc, char **argv)
     }
 
     /* Now, emit the bytecode */
-    if(sieve_emit_bytecode(fd, bc) == -1) {
+    if (sieve_emit_bytecode(fd, bc) == -1) {
         fprintf(stderr, "bytecode emit failed\n");
         sieve_free_bytecode(&bc);
         sieve_script_free(&s);
@@ -161,7 +164,9 @@ EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }

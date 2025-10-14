@@ -6,12 +6,11 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include "grammar.h"
 #include "xmalloc.h"
-
 
 EXPORTED int sieve_is_identifier(char *s)
 {
@@ -21,9 +20,11 @@ EXPORTED int sieve_is_identifier(char *s)
     while (s && s[i]) {
         if (s[i] == '_' || (s[i] >= 'a' && s[i] <= 'z')
             || (s[i] >= 'A' && s[i] <= 'Z')
-            || (i && (s[i] >= '0' && s[i] <= '9'))) {
+            || (i && (s[i] >= '0' && s[i] <= '9')))
+        {
             i++;
-        } else {
+        }
+        else {
             return 0;
         }
     }
@@ -44,7 +45,9 @@ static int is_number(char *s)
 HIDDEN char *parse_string(const char *s, variable_list_t *vars)
 {
     /* protect against being called with no string - this is possible in some places */
-    if (!s) return NULL;
+    if (!s) {
+        return NULL;
+    }
 
     /*
      * variable-ref        =  "${" [namespace] variable-name "}"
@@ -61,16 +64,17 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
     int match_var;
     int fail = 0;
     strarray_append(&stringparts, s);
-    test_str = stringparts.data[stringparts.count-1];
+    test_str = stringparts.data[stringparts.count - 1];
     while (test_str && *test_str) {
         char *variable_ref_begin, *variable_ref_end;
         /* find the beginning of a variable-ref */
-        while (*test_str && *(test_str+1)
-               && !('$' == *test_str && '{' == *(test_str+1))) {
+        while (*test_str && *(test_str + 1)
+               && !('$' == *test_str && '{' == *(test_str + 1)))
+        {
             test_str++;
         }
         /* if we've reached the end of the string, we're done */
-        if (!(*test_str && *(test_str+1))) {
+        if (!(*test_str && *(test_str + 1))) {
             break;
         }
         /* save the beginning of the variable-ref */
@@ -101,7 +105,8 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
                 if (match_var >= variable->var->count) {
                     variable = NULL;
                 }
-            } else {
+            }
+            else {
                 variable = varlist_select(vars, test_str);
             }
             /* add the value of the requested variable to stringparts if
@@ -111,12 +116,13 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
                 char *temp;
                 if (is_match_var) {
                     temp = xstrdup(variable->var->data[match_var]);
-                } else {
+                }
+                else {
                     temp = strarray_join(variable->var, " ");
                 }
                 if (temp) {
                     strarray_append(&stringparts, temp);
-                    free (temp);
+                    free(temp);
                 }
             }
             /* continue search for variable-ref's after the current one */
@@ -124,9 +130,10 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
             /* add the remainder of the original string to stringparts */
             if (*test_str) {
                 strarray_append(&stringparts, test_str);
-                test_str = stringparts.data[stringparts.count-1];
+                test_str = stringparts.data[stringparts.count - 1];
             }
-        } else {
+        }
+        else {
             /* first check if this is a namespace, which we don't yet support.
                RFC 5229, Sieve: Variables Extension, Section 3. Interpretation of Strings:
                References to namespaces without a prior require statement for the
@@ -138,7 +145,8 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
                     *dot = '\0';
                     if (sieve_is_identifier(test_str)) {
                         fail = 1;
-                    } else {
+                    }
+                    else {
                         *dot = '.';
                     }
                 }
@@ -152,10 +160,13 @@ HIDDEN char *parse_string(const char *s, variable_list_t *vars)
         }
     }
     if ((test_str = strarray_join(&stringparts, ""))) {
-        strarray_appendm(varlist_select(vars, VL_PARSED_STRINGS)->var, test_str);
-    } else {
+        strarray_appendm(varlist_select(vars, VL_PARSED_STRINGS)->var,
+                         test_str);
+    }
+    else {
         test_str = xstrdup("");
-        strarray_appendm(varlist_select(vars, VL_PARSED_STRINGS)->var, test_str);
+        strarray_appendm(varlist_select(vars, VL_PARSED_STRINGS)->var,
+                         test_str);
     }
     strarray_fini(&stringparts);
 
