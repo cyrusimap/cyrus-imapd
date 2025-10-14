@@ -44,9 +44,10 @@
 
 #include "buf.h"
 
-struct imapurl {
-    char *freeme;               /* copy of original URL + decoded mailbox;
-                                   caller must free() */
+struct imapurl
+{
+    char *freeme; /* copy of original URL + decoded mailbox;
+                     caller must free() */
 
     /* RFC 2192 */
     const char *user;
@@ -60,7 +61,8 @@ struct imapurl {
     unsigned long start_octet;
     unsigned long octet_count;
     /* URLAUTH */
-    struct {
+    struct
+    {
         const char *access;
         const char *mech;
         const char *token;

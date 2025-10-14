@@ -1,10 +1,11 @@
 #ifndef __CYRUS_HASHSET_H__
 #define __CYRUS_HASHSET_H__
 
-#include <stddef.h>           /* For size_t */
-#include <stdint.h>           /* For uint32_t */
+#include <stddef.h> /* For size_t */
+#include <stdint.h> /* For uint32_t */
 
-struct hashset {
+struct hashset
+{
     uint32_t starts[65536];
     size_t bytesize;
     size_t recsize;
@@ -22,7 +23,7 @@ int hashset_add(struct hashset *hs, const void *data);
 int hashset_exists(struct hashset *hs, const void *data);
 
 // XXX: add iterator and foreacher
-//void hashset_foreach(struct hashset *hs, int (*)(void *, void *), void *rock);
+// void hashset_foreach(struct hashset *hs, int (*)(void *, void *), void *rock);
 
 void hashset_free(struct hashset **hsp);
 
