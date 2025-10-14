@@ -45,7 +45,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <signal.h>
 #include <sysexits.h>
@@ -78,14 +78,13 @@
 # endif
 #endif
 
-
 #define FNAME_PROCDIR "/proc"
 
 /* n.b. setproctitle might come from setproctitle.c, or might come from a
  * system library
  */
 extern void setproctitle(const char *fmt, ...)
-                         __attribute__((format(printf, 1, 2)));
+    __attribute__((format(printf, 1, 2)));
 
 static char *proc_getpath(pid_t pid, int isnew)
 {
@@ -94,16 +93,19 @@ static char *proc_getpath(pid_t pid, int isnew)
     if (config_getstring(IMAPOPT_PROC_PATH)) {
         const char *procpath = config_getstring(IMAPOPT_PROC_PATH);
 
-        if (procpath[0] != '/')
+        if (procpath[0] != '/') {
             fatal("proc path must be fully qualified", EX_CONFIG);
+        }
 
-        if (strlen(procpath) < 2)
+        if (strlen(procpath) < 2) {
             fatal("proc path must not be '/'", EX_CONFIG);
+        }
 
         buf_setcstr(&buf, procpath);
 
-        if (buf.s[buf.len-1] != '/')
+        if (buf.s[buf.len - 1] != '/') {
             buf_putc(&buf, '/');
+        }
     }
     else {
         buf_setcstr(&buf, config_dir);
@@ -111,11 +113,13 @@ static char *proc_getpath(pid_t pid, int isnew)
         buf_putc(&buf, '/');
     }
 
-    if (pid)
+    if (pid) {
         buf_printf(&buf, "%u", pid);
+    }
 
-    if (isnew)
+    if (isnew) {
         buf_appendcstr(&buf, ".new");
+    }
 
     return buf_release(&buf);
 }
@@ -125,7 +129,8 @@ static char *proc_getdir(void)
     return proc_getpath(0, 0);
 }
 
-struct proc_handle {
+struct proc_handle
+{
     pid_t pid;
     char *fname;
 };
@@ -152,13 +157,15 @@ EXPORTED int proc_register(struct proc_handle **handlep,
     else {
         handle = xmalloc(sizeof *handle);
         handle_is_new = 1;
-        if (!pid) pid = getpid();
+        if (!pid) {
+            pid = getpid();
+        }
         handle->pid = pid;
-        handle->fname = proc_getpath(pid, /*isnew*/0);
+        handle->fname = proc_getpath(pid, /*isnew*/ 0);
         *handlep = handle;
     }
 
-    newfname = proc_getpath(pid, /*isnew*/1);
+    newfname = proc_getpath(pid, /*isnew*/ 1);
 
     procfile = fopen(newfname, "w+");
     if (!procfile) {
@@ -178,13 +185,28 @@ EXPORTED int proc_register(struct proc_handle **handlep,
         }
     }
 
-    if (!servicename) servicename = "";
-    if (!clienthost) clienthost = "";
-    if (!userid) userid = "";
-    if (!mailbox) mailbox = "";
-    if (!cmd) cmd = "";
-    fprintf(procfile, "%s\t%s\t%s\t%s\t%s\n",
-                      servicename, clienthost, userid, mailbox, cmd);
+    if (!servicename) {
+        servicename = "";
+    }
+    if (!clienthost) {
+        clienthost = "";
+    }
+    if (!userid) {
+        userid = "";
+    }
+    if (!mailbox) {
+        mailbox = "";
+    }
+    if (!cmd) {
+        cmd = "";
+    }
+    fprintf(procfile,
+            "%s\t%s\t%s\t%s\t%s\n",
+            servicename,
+            clienthost,
+            userid,
+            mailbox,
+            cmd);
     fclose(procfile);
 
     if (cyrus_rename(newfname, handle->fname)) {
@@ -228,10 +250,11 @@ EXPORTED void proc_cleanup(struct proc_handle **handlep)
 /* used by master to remove proc files after service processes crash */
 EXPORTED void proc_force_cleanup(pid_t pid)
 {
-    char *fname = proc_getpath(pid, /*isnew*/0);
+    char *fname = proc_getpath(pid, /*isnew*/ 0);
 
-    if (fname)
+    if (fname) {
         xunlink(fname);
+    }
     free(fname);
 }
 
@@ -242,7 +265,7 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
     char *path = NULL;
     int fd = -1;
 
-    path = proc_getpath(pid, /*isnew*/0);
+    path = proc_getpath(pid, /*isnew*/ 0);
 
     fd = open(path, O_RDONLY, 0);
     if (fd != -1) {
@@ -256,29 +279,38 @@ static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
         char *mailbox = NULL;
         char *cmd = NULL;
 
-        if (fstat(fd, &sbuf))
+        if (fstat(fd, &sbuf)) {
             goto done;
-        if (!S_ISREG(sbuf.st_mode))
+        }
+        if (!S_ISREG(sbuf.st_mode)) {
             goto done;
+        }
 
         /* grab a copy of the file contents */
-        buf = xmalloc(sbuf.st_size+1);
+        buf = xmalloc(sbuf.st_size + 1);
         n = retry_read(fd, buf, sbuf.st_size);
-        if (n != sbuf.st_size)
+        if (n != sbuf.st_size) {
             goto done;
+        }
 
         buf[sbuf.st_size] = '\0';
 
         /* remove any endline characters */
         p = strchr(buf, '\r');
-        if (p) *p = '\0';
+        if (p) {
+            *p = '\0';
+        }
         p = strchr(buf, '\n');
-        if (p) *p = '\0';
+        if (p) {
+            *p = '\0';
+        }
 
         /* parse the fields */
         service = buf;
         host = strchr(service, '\t');
-        if (!host) goto done;
+        if (!host) {
+            goto done;
+        }
         *host++ = '\0';
         user = strchr(host, '\t');
         if (user) {
@@ -320,17 +352,25 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
     if (dirp) {
         while ((dirent = readdir(dirp)) != NULL) {
             p = dirent->d_name;
-            if (*p == '.') continue; /* dot files */
+            if (*p == '.') {
+                continue; /* dot files */
+            }
             len = strlen(p);
-            if (len > 4 && !strcmp(p + len - 4, ".new")) continue; /* temporary new file */
+            if (len > 4 && !strcmp(p + len - 4, ".new")) {
+                continue; /* temporary new file */
+            }
             pid = strtoul(p, &end, 10);
             if (pid == 0 || end == NULL || *end || end == p) {
-                syslog(LOG_ERR, "IOERROR: bogus filename \"%s/%s\" in proc_foreach",
-                                path, p);
+                syslog(LOG_ERR,
+                       "IOERROR: bogus filename \"%s/%s\" in proc_foreach",
+                       path,
+                       p);
                 continue;
             }
             r = proc_foreach_helper(pid, func, rock);
-            if (r) break;
+            if (r) {
+                break;
+            }
         }
         closedir(dirp);
     }
@@ -347,19 +387,24 @@ static int procusage_cb(pid_t pid __attribute__((unused)),
                         const char *cmd __attribute__((unused)),
                         void *rock)
 {
-    struct proc_limits *limitsp = (struct proc_limits *)rock;
+    struct proc_limits *limitsp = (struct proc_limits *) rock;
 
     /* we only count logged in sessions */
-    if (!userid) return 0;
+    if (!userid) {
+        return 0;
+    }
 
     /* only check for logins to the particular protocol */
-    if (limitsp->servicename && strcmp(servicename, limitsp->servicename))
+    if (limitsp->servicename && strcmp(servicename, limitsp->servicename)) {
         return 0;
+    }
 
-    if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost))
+    if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost)) {
         limitsp->host++;
-    if (limitsp->userid && !strcmp(userid, limitsp->userid))
+    }
+    if (limitsp->userid && !strcmp(userid, limitsp->userid)) {
         limitsp->user++;
+    }
 
     return 0;
 }
@@ -369,20 +414,26 @@ EXPORTED int proc_checklimits(struct proc_limits *limitsp)
     limitsp->maxhost = config_getint(IMAPOPT_MAXLOGINS_PER_HOST);
     limitsp->maxuser = config_getint(IMAPOPT_MAXLOGINS_PER_USER);
 
-    if (!limitsp->maxuser && !limitsp->maxhost)
+    if (!limitsp->maxuser && !limitsp->maxhost) {
         return 0;
+    }
 
     limitsp->host = 0;
     limitsp->user = 0;
     proc_foreach(procusage_cb, limitsp);
 
-    if (limitsp->maxhost && limitsp->host >= limitsp->maxhost) return 1;
-    if (limitsp->maxuser && limitsp->user >= limitsp->maxuser) return 1;
+    if (limitsp->maxhost && limitsp->host >= limitsp->maxhost) {
+        return 1;
+    }
+    if (limitsp->maxuser && limitsp->user >= limitsp->maxuser) {
+        return 1;
+    }
 
     return 0;
 }
 
-struct prockill_data {
+struct prockill_data
+{
     const char *servicename;
     const char *clienthost;
     const char *userid;
@@ -401,36 +452,43 @@ static int prockill_cb(pid_t pid,
                        const char *cmd,
                        void *rock)
 {
-    struct prockill_data *dat = (struct prockill_data *)rock;
+    struct prockill_data *dat = (struct prockill_data *) rock;
     pid_t mypid = getpid();
 
     /* don't kill myself */
-    if (mypid == pid)
+    if (mypid == pid) {
         return 0;
+    }
 
-    if (dat->servicename && strcmpsafe(servicename, dat->servicename))
+    if (dat->servicename && strcmpsafe(servicename, dat->servicename)) {
         return 0;
+    }
 
-    if (dat->clienthost && strcmpsafe(clienthost, dat->clienthost))
+    if (dat->clienthost && strcmpsafe(clienthost, dat->clienthost)) {
         return 0;
+    }
 
-    if (dat->userid && strcmpsafe(userid, dat->userid))
+    if (dat->userid && strcmpsafe(userid, dat->userid)) {
         return 0;
+    }
 
-    if (dat->mboxname && strcmpsafe(mboxname, dat->mboxname))
+    if (dat->mboxname && strcmpsafe(mboxname, dat->mboxname)) {
         return 0;
+    }
 
-    if (dat->cmd && strcmpsafe(cmd, dat->cmd))
+    if (dat->cmd && strcmpsafe(cmd, dat->cmd)) {
         return 0;
+    }
 
-    if (dat->sig)
+    if (dat->sig) {
         kill(pid, dat->sig);
-    else
+    }
+    else {
         kill(pid, SIGTERM);
+    }
 
     return 0;
 }
-
 
 EXPORTED void proc_killuser(const char *userid)
 {
@@ -474,16 +532,32 @@ EXPORTED void proc_killusercmd(const char *userid, const char *cmd, int sig)
 
 /* n.b. proc_settitle_init() is defined in setproctitle.c */
 
-EXPORTED void proc_settitle(const char *servicename, const char *clienthost,
-                            const char *userid, const char *mailbox,
+EXPORTED void proc_settitle(const char *servicename,
+                            const char *clienthost,
+                            const char *userid,
+                            const char *mailbox,
                             const char *cmd)
 {
-    if (!servicename) servicename = "";
-    if (!clienthost) clienthost = "";
-    if (!userid) userid = "";
-    if (!mailbox) mailbox = "";
-    if (!cmd) cmd = "";
+    if (!servicename) {
+        servicename = "";
+    }
+    if (!clienthost) {
+        clienthost = "";
+    }
+    if (!userid) {
+        userid = "";
+    }
+    if (!mailbox) {
+        mailbox = "";
+    }
+    if (!cmd) {
+        cmd = "";
+    }
 
     setproctitle("%s: %s %s %s %s",
-                 servicename, clienthost, userid, mailbox, cmd);
+                 servicename,
+                 clienthost,
+                 userid,
+                 mailbox,
+                 cmd);
 }
