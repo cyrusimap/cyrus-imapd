@@ -48,14 +48,16 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
-
 #include "libconfig.h"
 #include "partlist.h"
 #include "util.h"
 #include "xmalloc.h"
 
-
-#define FREE(var) if (var) { free(var); (var) = NULL; }
+#define FREE(var)                                                              \
+    if (var) {                                                                 \
+        free(var);                                                             \
+        (var) = NULL;                                                          \
+    }
 
 static void partlist_bump_action(partlist_t *part_list);
 static int partlist_selectpart_index(partlist_t *part_list);
@@ -63,15 +65,15 @@ static void partlist_compute_quota(partlist_t *part_list);
 static void partlist_fill(const char *key, const char *value, void *rock);
 static void partition_filldata(partlist_t *part_list, int idx);
 
-typedef struct partlist_conf {
-    partlist_t  *part_list;
-    const char  *key_prefix;
-    size_t      excluded_count;
-    const char  **excluded_item;
+typedef struct partlist_conf
+{
+    partlist_t *part_list;
+    const char *key_prefix;
+    size_t excluded_count;
+    const char **excluded_item;
 } partlist_conf_t;
 
 static partlist_t *partlist_local = NULL;
-
 
 EXPORTED partmode_t partlist_getmode(const char *mode)
 {
@@ -92,11 +94,14 @@ EXPORTED partmode_t partlist_getmode(const char *mode)
     }
 }
 
-
-EXPORTED void partlist_initialize(partlist_t *part_list, cb_part_filldata filldata,
-                         const char *key_prefix, const char *key_value,
-                         const char *excluded, partmode_t mode,
-                         int soft_usage_limit, int reinit)
+EXPORTED void partlist_initialize(partlist_t *part_list,
+                                  cb_part_filldata filldata,
+                                  const char *key_prefix,
+                                  const char *key_value,
+                                  const char *excluded,
+                                  partmode_t mode,
+                                  int soft_usage_limit,
+                                  int reinit)
 {
     partlist_conf_t part_list_conf;
     char *excluded_parts = NULL;
@@ -121,8 +126,11 @@ EXPORTED void partlist_initialize(partlist_t *part_list, cb_part_filldata fillda
         excluded_parts = xstrdup(excluded);
         item = strtok_r(excluded_parts, " ,\t", &lasts);
         while (item) {
-            part_list_conf.excluded_item = (const char **)xrealloc(part_list_conf.excluded_item, (part_list_conf.excluded_count+1) * sizeof(const char *));
-            part_list_conf.excluded_item[part_list_conf.excluded_count++] = item;
+            part_list_conf.excluded_item = (const char **) xrealloc(
+                part_list_conf.excluded_item,
+                (part_list_conf.excluded_count + 1) * sizeof(const char *));
+            part_list_conf.excluded_item[part_list_conf.excluded_count++] =
+                item;
             item = strtok_r(NULL, " ,\t", &lasts);
         }
     }
@@ -151,7 +159,6 @@ EXPORTED void partlist_initialize(partlist_t *part_list, cb_part_filldata fillda
     partlist_compute_quota(part_list);
 }
 
-
 EXPORTED void partlist_free(partlist_t *part_list)
 {
     int i;
@@ -168,15 +175,15 @@ EXPORTED void partlist_free(partlist_t *part_list)
     part_list->size = -1;
 }
 
-
 static void partlist_bump_action(partlist_t *part_list)
 {
-    if ((part_list->reinit > 0) && (part_list->reinit_counter++ >= part_list->reinit)) {
+    if ((part_list->reinit > 0)
+        && (part_list->reinit_counter++ >= part_list->reinit))
+    {
         partlist_compute_quota(part_list);
         part_list->reinit_counter = 1;
     }
 }
-
 
 static int partlist_getavailable(partlist_t *part_list)
 {
@@ -197,14 +204,12 @@ static int partlist_getavailable(partlist_t *part_list)
     return count;
 }
 
-
 static const char *partlist_select_item(partlist_t *part_list)
 {
     int idx = partlist_selectpart_index(part_list);
 
     return (idx == -1 ? NULL : part_list->items[idx].item);
 }
-
 
 EXPORTED const char *partlist_select_value(partlist_t *part_list)
 {
@@ -222,7 +227,9 @@ EXPORTED int partlist_foreach(partlist_t *part_list,
     for (i = 0; i < part_list->size; i++) {
         r = proc(&part_list->items[i], rock);
 
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return r;
@@ -246,7 +253,8 @@ static int partlist_selectpart_index(partlist_t *part_list)
 
     partlist_bump_action(part_list);
 
-    if ((part_list->mode == PART_SELECT_MODE_RANDOM) || part_list->force_random) {
+    if ((part_list->mode == PART_SELECT_MODE_RANDOM) || part_list->force_random)
+    {
         do_random = 1;
     }
     else {
@@ -269,7 +277,7 @@ static int partlist_selectpart_index(partlist_t *part_list)
             break;
 
         case PART_SELECT_MODE_FREESPACE_PERCENT_MOST:
-            for (i = 0 ;i < part_list->size; i++) {
+            for (i = 0; i < part_list->size; i++) {
                 if (part_list->items[i].quota == 0.) {
                     continue;
                 }
@@ -284,7 +292,7 @@ static int partlist_selectpart_index(partlist_t *part_list)
         case PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED:
         case PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED_DELTA:
             /* random in [0,100[ */
-            val = 100. * ((double)rand() / (RAND_MAX + 1.));
+            val = 100. * ((double) rand() / (RAND_MAX + 1.));
 
             for (i = 0; i < part_list->size; i++) {
                 sq += part_list->items[i].quota;
@@ -319,7 +327,6 @@ static int partlist_selectpart_index(partlist_t *part_list)
     return ret;
 }
 
-
 static void partlist_compute_quota(partlist_t *part_list)
 {
     int i;
@@ -347,9 +354,11 @@ static void partlist_compute_quota(partlist_t *part_list)
     for (i = 0; i < part_list->size; i++) {
         part_list->filldata(part_list, i);
 
-        if ((mode == PART_SELECT_MODE_FREESPACE_MOST) || (mode == PART_SELECT_MODE_FREESPACE_PERCENT_MOST)) {
+        if ((mode == PART_SELECT_MODE_FREESPACE_MOST)
+            || (mode == PART_SELECT_MODE_FREESPACE_PERCENT_MOST))
+        {
             id = part_list->items[i].id;
-            for (j = i-1; j >= 0; j--) {
+            for (j = i - 1; j >= 0; j--) {
                 if (id == part_list->items[j].id) {
                     /* duplicate id, keep only the first of its kind */
                     part_list->items[i].quota = 0.;
@@ -365,11 +374,12 @@ static void partlist_compute_quota(partlist_t *part_list)
 
         percent_available = -1.;
         if (part_list->items[i].total > 0) {
-            percent_available = (part_list->items[i].available * (double)100. / part_list->items[i].total);
+            percent_available = (part_list->items[i].available * (double) 100.
+                                 / part_list->items[i].total);
         }
 
         /* ensure we got a consistent value */
-        if ((percent_available<0.) || (percent_available>100.)) {
+        if ((percent_available < 0.) || (percent_available > 100.)) {
             /* fallback to random mode */
             part_list->force_random = 1;
             break;
@@ -405,7 +415,9 @@ static void partlist_compute_quota(partlist_t *part_list)
         if (part_list->force_random) {
             part_list->items[i].quota = 50.0;
         }
-        else if (soft_quota_limit_use && (part_list->items[i].quota <= soft_quota_limit)) {
+        else if (soft_quota_limit_use
+                 && (part_list->items[i].quota <= soft_quota_limit))
+        {
             /* entry is below limit, make sure not to select it */
             part_list->items[i].quota = 0.;
         }
@@ -434,35 +446,40 @@ static void partlist_compute_quota(partlist_t *part_list)
         return;
     }
 
-    if ((mode == PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED) || (mode == PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED_DELTA)) {
+    if ((mode == PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED)
+        || (mode == PART_SELECT_MODE_FREESPACE_PERCENT_WEIGHTED_DELTA))
+    {
         /* normalize */
         for (i = 0; i < part_list->size; i++) {
             quota_total += part_list->items[i].quota;
         }
         if (quota_total != 0) {
             for (i = 0; i < part_list->size; i++) {
-                part_list->items[i].quota = (part_list->items[i].quota * 100.) / quota_total;
+                part_list->items[i].quota =
+                    (part_list->items[i].quota * 100.) / quota_total;
             }
         }
     }
 }
 
-
 static void partlist_fill(const char *key, const char *value, void *rock)
 {
-    partlist_conf_t *part_list_conf = (partlist_conf_t *)rock;
+    partlist_conf_t *part_list_conf = (partlist_conf_t *) rock;
     partlist_t *part_list = part_list_conf->part_list;
-    size_t key_prefix_len = (part_list_conf->key_prefix ? strlen(part_list_conf->key_prefix) : 0);
+    size_t key_prefix_len =
+        (part_list_conf->key_prefix ? strlen(part_list_conf->key_prefix) : 0);
     unsigned i;
 
     if (key_prefix_len) {
-        if ((strncmp(part_list_conf->key_prefix, key, key_prefix_len) != 0) || (strlen(key) <= key_prefix_len)) {
+        if ((strncmp(part_list_conf->key_prefix, key, key_prefix_len) != 0)
+            || (strlen(key) <= key_prefix_len))
+        {
             return;
         }
     }
 
     for (i = 0; i < part_list_conf->excluded_count; i++) {
-        if (!strcmp(key+key_prefix_len, (part_list_conf->excluded_item)[i])) {
+        if (!strcmp(key + key_prefix_len, (part_list_conf->excluded_item)[i])) {
             return;
         }
     }
@@ -476,7 +493,6 @@ static void partlist_fill(const char *key, const char *value, void *rock)
 
     part_list->size++;
 }
-
 
 /**
  * \brief Fills partition data.
@@ -500,7 +516,9 @@ static void partition_filldata(partlist_t *part_list, int idx)
 
         if (errno == ENOENT) {
             /* try to create path */
-            if ((cyrus_mkdir(item->value, 0755) == -1) || (mkdir(item->value, 0755) == -1)) {
+            if ((cyrus_mkdir(item->value, 0755) == -1)
+                || (mkdir(item->value, 0755) == -1))
+            {
                 syslog(LOG_ERR, "IOERROR: creating %s: %m", item->value);
                 return;
             }
@@ -517,15 +535,16 @@ static void partition_filldata(partlist_t *part_list, int idx)
 
     if (stat.f_blocks <= 0) {
         /* error retrieving statvfs info */
-        syslog(LOG_ERR, "IOERROR: statvfs[%s]: non-positive number of blocks", item->value);
+        syslog(LOG_ERR,
+               "IOERROR: statvfs[%s]: non-positive number of blocks",
+               item->value);
         return;
     }
 
     item->id = stat.f_fsid;
-    item->available = (uint64_t)(stat.f_bavail * (stat.f_frsize / 1024.));
-    item->total = (uint64_t)(stat.f_blocks * (stat.f_frsize / 1024.));
+    item->available = (uint64_t) (stat.f_bavail * (stat.f_frsize / 1024.));
+    item->total = (uint64_t) (stat.f_blocks * (stat.f_frsize / 1024.));
 }
-
 
 static void partlist_local_init(void)
 {
@@ -543,10 +562,8 @@ static void partlist_local_init(void)
         config_getstring(IMAPOPT_PARTITION_SELECT_EXCLUDE),
         partlist_getmode(config_getstring(IMAPOPT_PARTITION_SELECT_MODE)),
         config_getint(IMAPOPT_PARTITION_SELECT_SOFT_USAGE_LIMIT),
-        config_getint(IMAPOPT_PARTITION_SELECT_USAGE_REINIT)
-    );
+        config_getint(IMAPOPT_PARTITION_SELECT_USAGE_REINIT));
 }
-
 
 HIDDEN const char *partlist_local_select(void)
 {
@@ -555,13 +572,14 @@ HIDDEN const char *partlist_local_select(void)
         partlist_local_init();
     }
 
-    return (char *)partlist_select_item(partlist_local);
+    return (char *) partlist_select_item(partlist_local);
 }
 
-
-HIDDEN const char *partlist_local_find_freespace_most(int percent, uint64_t *available,
-                                               uint64_t *total, uint64_t *tavailable,
-                                               uint64_t *ttotal)
+HIDDEN const char *partlist_local_find_freespace_most(int percent,
+                                                      uint64_t *available,
+                                                      uint64_t *total,
+                                                      uint64_t *tavailable,
+                                                      uint64_t *ttotal)
 {
     const char *item = NULL;
     unsigned long id;
@@ -578,10 +596,18 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent, uint64_t *ava
         partlist_local_init();
     }
 
-    if (available) *available = 0;
-    if (total) *total = 0;
-    if (tavailable) *tavailable = 0;
-    if (ttotal) *ttotal = 0;
+    if (available) {
+        *available = 0;
+    }
+    if (total) {
+        *total = 0;
+    }
+    if (tavailable) {
+        *tavailable = 0;
+    }
+    if (ttotal) {
+        *ttotal = 0;
+    }
 
     partlist_bump_action(partlist_local);
 
@@ -591,7 +617,7 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent, uint64_t *ava
         }
 
         id = partlist_local->items[i].id;
-        for (j = i-1; j >= 0; j--) {
+        for (j = i - 1; j >= 0; j--) {
             if (id == partlist_local->items[j].id) {
                 /* duplicate id */
                 break;
@@ -605,34 +631,47 @@ HIDDEN const char *partlist_local_find_freespace_most(int percent, uint64_t *ava
         available_tmp = partlist_local->items[i].available;
         total_tmp = partlist_local->items[i].total;
 
-        if (tavailable) *tavailable += available_tmp;
-        if (ttotal) *ttotal += total_tmp;
+        if (tavailable) {
+            *tavailable += available_tmp;
+        }
+        if (ttotal) {
+            *ttotal += total_tmp;
+        }
 
         if (percent) {
             percent_available = 0.;
             if (total_tmp > 0) {
-                percent_available = (available_tmp * (double)100. / total_tmp);
+                percent_available = (available_tmp * (double) 100. / total_tmp);
             }
-            if ((percent_available > percent_available_max) && (percent_available <= 100.)) {
+            if ((percent_available > percent_available_max)
+                && (percent_available <= 100.))
+            {
                 percent_available_max = percent_available;
                 item = partlist_local->items[i].item;
-                if (available) *available = available_tmp;
-                if (total) *total = total_tmp;
+                if (available) {
+                    *available = available_tmp;
+                }
+                if (total) {
+                    *total = total_tmp;
+                }
             }
         }
         else {
             if (available_tmp > available_max) {
                 available_max = available_tmp;
                 item = partlist_local->items[i].item;
-                if (available) *available = available_tmp;
-                if (total) *total = total_tmp;
+                if (available) {
+                    *available = available_tmp;
+                }
+                if (total) {
+                    *total = total_tmp;
+                }
             }
         }
     }
 
     return item;
 }
-
 
 EXPORTED void partlist_local_done(void)
 {

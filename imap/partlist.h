@@ -42,20 +42,20 @@
 
 #include "config.h"
 
-
-typedef struct partitem {
+typedef struct partitem
+{
     /** Item name */
-    char        *item;
+    char *item;
     /** Item value */
-    char        *value;
+    char *value;
     /** Item underlying id (filesystem id) */
     unsigned long id;
     /** Item available space (KiB) */
-    uint64_t     available;
+    uint64_t available;
     /** Item total space (KiB) */
-    uint64_t     total;
+    uint64_t total;
     /** Item selection data */
-    double      quota;
+    double quota;
 } partitem_t;
 
 typedef enum partmode {
@@ -81,23 +81,24 @@ struct partlist;
  */
 typedef void (*cb_part_filldata)(struct partlist *part_list, int idx);
 
-typedef struct partlist {
+typedef struct partlist
+{
     /** Data callback */
-    cb_part_filldata        filldata;
+    cb_part_filldata filldata;
     /** Number of items */
-    int                     size;
+    int size;
     /** Items */
-    partitem_t              *items;
+    partitem_t *items;
     /** Mode */
-    partmode_t              mode;
+    partmode_t mode;
     /** Whether to actually use random mode */
-    int                     force_random;
+    int force_random;
     /** Usage limit */
-    int                     soft_usage_limit;
+    int soft_usage_limit;
     /** Reinit limit */
-    int                     reinit;
+    int reinit;
     /** Reinit counter */
-    int                     reinit_counter;
+    int reinit_counter;
 } partlist_t;
 
 /**
@@ -117,10 +118,14 @@ extern partmode_t partlist_getmode(const char *mode);
  * @param in soft_usage_limit usage limit
  * @param in reinit         reinit items data after given amount of operations
  */
-extern void partlist_initialize(partlist_t *part_list, cb_part_filldata filldata,
-                         const char *key_prefix, const char *key_value,
-                         const char *excluded, partmode_t mode,
-                         int soft_usage_limit, int reinit);
+extern void partlist_initialize(partlist_t *part_list,
+                                cb_part_filldata filldata,
+                                const char *key_prefix,
+                                const char *key_value,
+                                const char *excluded,
+                                partmode_t mode,
+                                int soft_usage_limit,
+                                int reinit);
 
 /**
  * \brief Frees items list.
@@ -165,8 +170,10 @@ const char *partlist_local_select(void);
  * @param out ttotal     total number of KiB on server
  * @return partition, or NULL if none found
  */
-const char *partlist_local_find_freespace_most(int percent, uint64_t *available,
-                                               uint64_t *total, uint64_t *tavailable,
+const char *partlist_local_find_freespace_most(int percent,
+                                               uint64_t *available,
+                                               uint64_t *total,
+                                               uint64_t *tavailable,
                                                uint64_t *ttotal);
 
 /**
