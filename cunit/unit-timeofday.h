@@ -51,7 +51,6 @@ extern void time_push_fixed(time_t fixed);
 extern void time_pop(void);
 extern void time_restore(void);
 
-
 extern int real_gettimeofday(struct timeval *, ...);
 extern time_t real_time(time_t *tp);
 extern unsigned int real_sleep(unsigned int seconds);
