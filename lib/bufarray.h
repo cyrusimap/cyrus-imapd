@@ -50,14 +50,15 @@
 #include <sys/types.h>
 #include "util.h"
 
-typedef struct {
+typedef struct
+{
     size_t alloc;
     size_t count;
     struct buf **items;
 } bufarray_t;
 
 #define BUFARRAY_INITIALIZER { 0, 0, NULL }
-#define bufarray_init(ba)   (memset((ba), 0, sizeof(bufarray_t)))
+#define bufarray_init(ba) (memset((ba), 0, sizeof(bufarray_t)))
 void bufarray_fini(bufarray_t *);
 
 bufarray_t *bufarray_new(void);

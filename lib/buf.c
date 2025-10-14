@@ -52,11 +52,11 @@
 #include <string.h>
 
 /* predeclarations to avoid including util.h */
-extern char *lcase(char* str);
-extern char *ucase (char *str);
+extern char *lcase(char *str);
+extern char *ucase(char *str);
 
 #ifndef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
+# define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 #ifdef HAVE_DECLARE_OPTIMIZE
@@ -65,16 +65,21 @@ static inline size_t roundup(size_t size)
 #endif
 static inline size_t roundup(size_t size)
 {
-    if (size < 32)
+    if (size < 32) {
         return 32;
-    if (size < 64)
+    }
+    if (size < 64) {
         return 64;
-    if (size < 128)
+    }
+    if (size < 128) {
         return 128;
-    if (size < 256)
+    }
+    if (size < 256) {
         return 256;
-    if (size < 512)
+    }
+    if (size < 512) {
         return 512;
+    }
     return ((size * 2) & ~1023);
 }
 
@@ -86,8 +91,9 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 
     assert(newlen); /* we never alloc zero bytes */
 
-    if (buf->alloc >= newlen)
+    if (buf->alloc >= newlen) {
         return;
+    }
 
     if (buf->alloc) {
         buf->alloc = roundup(newlen);
@@ -107,7 +113,7 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
         /* can release MMAP now, we've copied the data out */
         if (buf->flags & BUF_MMAP) {
             size_t len = buf->len; /* don't wipe the length, we still need it */
-            map_free((const char **)&buf->s, &len);
+            map_free((const char **) &buf->s, &len);
             buf->flags &= ~BUF_MMAP;
         }
 
@@ -117,7 +123,7 @@ EXPORTED void _buf_ensure(struct buf *buf, size_t n)
 
 EXPORTED const char *buf_cstring(const struct buf *buf)
 {
-    struct buf *backdoor = (struct buf*)buf;
+    struct buf *backdoor = (struct buf *) buf;
     buf_ensure(backdoor, 1);
     backdoor->s[backdoor->len] = '\0';
     return buf->s;
@@ -125,19 +131,25 @@ EXPORTED const char *buf_cstring(const struct buf *buf)
 
 EXPORTED const char *buf_cstringnull(const struct buf *buf)
 {
-    if (!buf->s) return NULL;
+    if (!buf->s) {
+        return NULL;
+    }
     return buf_cstring(buf);
 }
 
 EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
 {
-    if (!buf->len) return NULL;
+    if (!buf->len) {
+        return NULL;
+    }
     return buf_cstring(buf);
 }
 
 EXPORTED const char *buf_cstring_or_empty(const struct buf *buf)
 {
-    if (!buf->s) return "";
+    if (!buf->s) {
+        return "";
+    }
     return buf_cstring(buf);
 }
 
@@ -150,7 +162,7 @@ EXPORTED char *buf_newcstring(struct buf *buf)
 
 EXPORTED char *buf_release(struct buf *buf)
 {
-    char *ret = (char *)buf_cstring(buf);
+    char *ret = (char *) buf_cstring(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf_free(buf);
@@ -159,7 +171,7 @@ EXPORTED char *buf_release(struct buf *buf)
 
 EXPORTED char *buf_releasenull(struct buf *buf)
 {
-    char *ret = (char *)buf_cstringnull(buf);
+    char *ret = (char *) buf_cstringnull(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf_free(buf);
@@ -185,8 +197,9 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
 
     buf_reset(buf);
     while ((c = fgetc(fp)) != EOF) {
-        if (c == '\n')
+        if (c == '\n') {
             break;
+        }
         buf_putc(buf, c);
     }
     /* ensure trailing NULL */
@@ -216,8 +229,9 @@ EXPORTED inline const char *buf_base(const struct buf *buf)
 
 EXPORTED void buf_reset(struct buf *buf)
 {
-    if (buf->flags & BUF_MMAP)
-        map_free((const char **)&buf->s, &buf->len);
+    if (buf->flags & BUF_MMAP) {
+        map_free((const char **) &buf->s, &buf->len);
+    }
     buf->len = 0;
     buf->flags = 0;
 }
@@ -226,9 +240,11 @@ EXPORTED void buf_truncate(struct buf *buf, ssize_t len)
 {
     if (len < 0) {
         len = buf->len + len;
-        if (len < 0) len = 0;
+        if (len < 0) {
+            len = 0;
+        }
     }
-    if ((size_t)len > buf->alloc) {
+    if ((size_t) len > buf->alloc) {
         /* grow the buffer and zero-fill the new bytes */
         size_t more = len - buf->len;
         buf_ensure(buf, more);
@@ -277,12 +293,14 @@ EXPORTED void buf_appendoverlap(struct buf *buf, const char *str)
     size_t matchlen = strlen(str);
     if (matchlen < buf_len(buf)) {
         t += buf_len(buf) - matchlen;
-    } else {
+    }
+    else {
         matchlen = buf_len(buf);
     }
 
     while (*t && matchlen && strncasecmp(t, str, matchlen)) {
-        t++; matchlen--;
+        t++;
+        matchlen--;
     }
 
     if (*t && matchlen) {
@@ -294,13 +312,13 @@ EXPORTED void buf_appendoverlap(struct buf *buf, const char *str)
 EXPORTED void buf_appendbit32(struct buf *buf, uint32_t num)
 {
     uint32_t item = htonl(num);
-    buf_appendmap(buf, (char *)&item, 4);
+    buf_appendmap(buf, (char *) &item, 4);
 }
 
 EXPORTED void buf_appendbit64(struct buf *buf, uint64_t num)
 {
     uint64_t item = htonll(num);
-    buf_appendmap(buf, (char *)&item, 8);
+    buf_appendmap(buf, (char *) &item, 8);
 }
 
 EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
@@ -315,20 +333,25 @@ EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
 /* This is like buf_appendmap() but attempts an optimisation where the
  * first append to an empty buf results in a read-only pointer to the
  * data at 'base' instead of a writable copy. */
-EXPORTED void buf_cowappendmap(struct buf *buf, const char *base, unsigned int len)
+EXPORTED void buf_cowappendmap(struct buf *buf,
+                               const char *base,
+                               unsigned int len)
 {
-    if (!buf->s)
+    if (!buf->s) {
         buf_init_ro(buf, base, len);
-    else
+    }
+    else {
         buf_appendmap(buf, base, len);
+    }
 }
 
 /* This is like buf_cowappendmap() but takes over the given map 'base',
  * which is a malloc()ed C string buffer of at least 'len' bytes. */
 EXPORTED void buf_cowappendfree(struct buf *buf, char *base, unsigned int len)
 {
-    if (!buf->s)
+    if (!buf->s) {
         buf_initm(buf, base, len);
+    }
     else {
         buf_appendmap(buf, base, len);
         free(base);
@@ -354,8 +377,8 @@ EXPORTED void buf_vprintf(struct buf *buf, const char *fmt, va_list args)
 
     if (n >= room) {
         /* woops, we guessed wrong...retry with enough space */
-        buf_ensure(buf, n+1);
-        n = vsnprintf(buf->s + buf->len, n+1, fmt, ap);
+        buf_ensure(buf, n + 1);
+        n = vsnprintf(buf->s + buf->len, n + 1, fmt, ap);
     }
     va_end(ap);
 
@@ -376,9 +399,12 @@ EXPORTED void buf_replace_buf(struct buf *buf,
                               size_t length,
                               const struct buf *replace)
 {
-    if (offset > buf->len) return;
-    if (offset + length > buf->len)
+    if (offset > buf->len) {
+        return;
+    }
+    if (offset + length > buf->len) {
         length = buf->len - offset;
+    }
 
     /* we need buf to be a writable C string now please */
     buf_cstring(buf);
@@ -394,8 +420,9 @@ EXPORTED void buf_replace_buf(struct buf *buf,
                 buf->len - offset - length + 1);
         buf->len += (replace->len - length);
     }
-    if (replace->len)
+    if (replace->len) {
         memcpy(buf->s + offset, replace->s, replace->len);
+    }
 }
 
 /**
@@ -404,7 +431,8 @@ EXPORTED void buf_replace_buf(struct buf *buf,
  * instances of @match.
  * Returns: the number of substitutions made.
  */
-EXPORTED int buf_replace_all(struct buf *buf, const char *match,
+EXPORTED int buf_replace_all(struct buf *buf,
+                             const char *match,
                              const char *replace)
 {
     int n = 0;
@@ -455,7 +483,8 @@ EXPORTED int buf_replace_char(struct buf *buf, char match, char replace)
  * in the replace text.
  * Returns: the number of substitutions made (0 or 1)
  */
-EXPORTED int buf_replace_one_re(struct buf *buf, const regex_t *preg,
+EXPORTED int buf_replace_one_re(struct buf *buf,
+                                const regex_t *preg,
                                 const char *replace)
 {
     struct buf replace_buf = BUF_INITIALIZER;
@@ -481,7 +510,8 @@ EXPORTED int buf_replace_one_re(struct buf *buf, const regex_t *preg,
  * in the replace text.
  * Returns: the number of substitutions made.
  */
-EXPORTED int buf_replace_all_re(struct buf *buf, const regex_t *preg,
+EXPORTED int buf_replace_all_re(struct buf *buf,
+                                const regex_t *preg,
                                 const char *replace)
 {
     int n = 0;
@@ -505,7 +535,9 @@ EXPORTED int buf_replace_all_re(struct buf *buf, const regex_t *preg,
 }
 #endif
 
-EXPORTED void buf_insert(struct buf *dst, unsigned int off, const struct buf *src)
+EXPORTED void buf_insert(struct buf *dst,
+                         unsigned int off,
+                         const struct buf *src)
 {
     buf_replace_buf(dst, off, 0, src);
 }
@@ -518,8 +550,10 @@ EXPORTED void buf_insertcstr(struct buf *dst, unsigned int off, const char *str)
     buf_free(&str_buf);
 }
 
-EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
-                            const char *base, int len)
+EXPORTED void buf_insertmap(struct buf *dst,
+                            unsigned int off,
+                            const char *base,
+                            int len)
 {
     struct buf map_buf = BUF_INITIALIZER;
     buf_init_ro(&map_buf, base, len);
@@ -543,14 +577,17 @@ EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
     size_t len = MIN(a->len, b->len);
     int r = 0;
 
-    if (len)
+    if (len) {
         r = memcmp(a->s, b->s, len);
+    }
 
     if (!r) {
-        if (a->len < b->len)
+        if (a->len < b->len) {
             r = -1;
-        else if (a->len > b->len)
+        }
+        else if (a->len > b->len) {
             r = 1;
+        }
     }
 
     return r;
@@ -564,7 +601,7 @@ EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
 EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
 {
     buf_free(buf);
-    buf->s = (char *)base;
+    buf->s = (char *) base;
     buf->len = len;
 }
 
@@ -594,7 +631,7 @@ EXPORTED void buf_initmcstr(struct buf *buf, char *str)
 EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
 {
     buf_free(buf);
-    buf->s = (char *)str;
+    buf->s = (char *) str;
     buf->len = (str ? strlen(str) : 0);
 }
 
@@ -603,23 +640,36 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
  * This buf is CoW, and if written to the data will be freed
  * using map_free().
  */
-EXPORTED void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
-                            const char *fname, size_t size, const char *mboxname)
+EXPORTED void buf_refresh_mmap(struct buf *buf,
+                               int onceonly,
+                               int fd,
+                               const char *fname,
+                               size_t size,
+                               const char *mboxname)
 {
     assert(!buf->alloc);
     buf->flags = BUF_MMAP;
-    map_refresh(fd, onceonly, (const char **)&buf->s, &buf->len,
-                size, fname, mboxname);
+    map_refresh(fd,
+                onceonly,
+                (const char **) &buf->s,
+                &buf->len,
+                size,
+                fname,
+                mboxname);
 }
 
 EXPORTED void buf_free(struct buf *buf)
 {
-    if (!buf) return;
+    if (!buf) {
+        return;
+    }
 
-    if (buf->alloc)
+    if (buf->alloc) {
         free(buf->s);
-    else if (buf->flags & BUF_MMAP)
-        map_free((const char **)&buf->s, &buf->len);
+    }
+    else if (buf->flags & BUF_MMAP) {
+        map_free((const char **) &buf->s, &buf->len);
+    }
     buf->alloc = 0;
     buf->s = NULL;
     buf->len = 0;
@@ -637,8 +687,9 @@ EXPORTED int buf_findchar(const struct buf *buf, unsigned int off, int c)
 {
     const char *p;
 
-    if (off < buf->len && (p = memchr(buf->s + off, c, buf->len - off)))
+    if (off < buf->len && (p = memchr(buf->s + off, c, buf->len - off))) {
         return (p - buf->s);
+    }
     return -1;
 }
 
@@ -654,29 +705,35 @@ EXPORTED int buf_findline(const struct buf *buf, const char *line)
     const char *p;
     const char *end = buf->s + buf->len;
 
-    if (!line) return -1;
+    if (!line) {
+        return -1;
+    }
 
     /* find the length of the first line in the text at 'line' */
     p = strchr(line, '\n');
-    linelen = (p ? (size_t)(p - line) : strlen(line));
-    if (linelen == 0) return -1;
+    linelen = (p ? (size_t) (p - line) : strlen(line));
+    if (linelen == 0) {
+        return -1;
+    }
 
-    for (p = buf->s ;
-         (p = (const char *)memmem(p, end-p, line, linelen)) != NULL ;
-         p++) {
+    for (p = buf->s;
+         (p = (const char *) memmem(p, end - p, line, linelen)) != NULL;
+         p++)
+    {
 
         /* check the found string is at line boundaries */
-        if (p > buf->s && p[-1] != '\n')
+        if (p > buf->s && p[-1] != '\n') {
             continue;
-        if ((p+linelen) < end && p[linelen] != '\n')
+        }
+        if ((p + linelen) < end && p[linelen] != '\n') {
             continue;
+        }
 
         return (p - buf->s);
     }
 
     return -1;
 }
-
 
 EXPORTED const char *buf_lcase(struct buf *buf)
 {
@@ -699,12 +756,12 @@ EXPORTED const char *buf_tocrlf(struct buf *buf)
     buf_cstring(buf);
 
     for (i = 0; i < buf->len; i++) {
-        if (buf->s[i] == '\r' && buf->s[i+1] != '\n') {
+        if (buf->s[i] == '\r' && buf->s[i + 1] != '\n') {
             /* bare \r: add a \n after it */
-            buf_insertcstr(buf, i+1, "\n");
+            buf_insertcstr(buf, i + 1, "\n");
         }
         else if (buf->s[i] == '\n') {
-            if (i == 0 || buf->s[i-1] != '\r') {
+            if (i == 0 || buf->s[i - 1] != '\r') {
                 buf_insertcstr(buf, i, "\r");
             }
         }
@@ -717,19 +774,37 @@ EXPORTED void buf_trim(struct buf *buf)
 {
     size_t i;
     for (i = 0; i < buf->len; i++) {
-        if (buf->s[i] == ' ') continue;
-        if (buf->s[i] == '\t') continue;
-        if (buf->s[i] == '\r') continue;
-        if (buf->s[i] == '\n') continue;
+        if (buf->s[i] == ' ') {
+            continue;
+        }
+        if (buf->s[i] == '\t') {
+            continue;
+        }
+        if (buf->s[i] == '\r') {
+            continue;
+        }
+        if (buf->s[i] == '\n') {
+            continue;
+        }
         break;
     }
-    if (i) buf_remove(buf, 0, i);
+    if (i) {
+        buf_remove(buf, 0, i);
+    }
 
     for (i = buf->len; i > 1; i--) {
-        if (buf->s[i-1] == ' ') continue;
-        if (buf->s[i-1] == '\t') continue;
-        if (buf->s[i-1] == '\r') continue;
-        if (buf->s[i-1] == '\n') continue;
+        if (buf->s[i - 1] == ' ') {
+            continue;
+        }
+        if (buf->s[i - 1] == '\t') {
+            continue;
+        }
+        if (buf->s[i - 1] == '\r') {
+            continue;
+        }
+        if (buf->s[i - 1] == '\n') {
+            continue;
+        }
         break;
     }
     if (i != buf->len) {
