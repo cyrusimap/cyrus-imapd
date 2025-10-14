@@ -47,13 +47,14 @@
 #include <sysexits.h>
 #include "xmalloc.h"
 
-
 EXPORTED void *xmalloc(size_t size)
 {
     void *ret;
 
     ret = malloc(size);
-    if (ret != NULL) return ret;
+    if (ret != NULL) {
+        return ret;
+    }
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
     return 0; /*NOTREACHED*/
@@ -76,7 +77,9 @@ EXPORTED void *xrealloc(void *ptr, size_t size)
     void *ret;
 
     ret = realloc(ptr, size);
-    if (ret != NULL) return ret;
+    if (ret != NULL) {
+        return ret;
+    }
 
     fatal("Virtual memory exhausted", EX_TEMPFAIL);
     return 0; /*NOTREACHED*/
@@ -86,15 +89,16 @@ EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
 {
     void *ret = xrealloc(ptr, new_size);
 
-    if (orig_size < new_size)
+    if (orig_size < new_size) {
         memset(ret + orig_size, 0, new_size - orig_size);
+    }
 
     return ret;
 }
 
-EXPORTED char *xstrdup(const char* str)
+EXPORTED char *xstrdup(const char *str)
 {
-    char *p = xmalloc(strlen(str)+1);
+    char *p = xmalloc(strlen(str) + 1);
     strcpy(p, str);
     return p;
 }
@@ -111,10 +115,12 @@ EXPORTED char *xstrdupnull(const char *str)
     return str ? xstrdup(str) : NULL;
 }
 
-EXPORTED char *xstrndup(const char* str, size_t len)
+EXPORTED char *xstrndup(const char *str, size_t len)
 {
-    char *p = xmalloc(len+1);
-    if (len) strncpy(p, str, len);
+    char *p = xmalloc(len + 1);
+    if (len) {
+        strncpy(p, str, len);
+    }
     p[len] = '\0';
     return p;
 }

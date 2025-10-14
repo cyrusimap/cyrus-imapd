@@ -43,7 +43,8 @@
 #ifndef INCLUDED_WILDMAT_H
 #define INCLUDED_WILDMAT_H
 
-struct wildmat {
+struct wildmat
+{
     char *pat;
     int not;
 };
