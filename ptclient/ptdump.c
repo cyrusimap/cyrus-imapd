@@ -51,20 +51,23 @@
 #include "libconfig.h"
 
 static int dump_cb(void *rockp __attribute__((unused)),
-                     const char *key, size_t keylen,
-                     const char *data,
-                     size_t datalen __attribute__((unused)))
+                   const char *key,
+                   size_t keylen,
+                   const char *data,
+                   size_t datalen __attribute__((unused)))
 {
-    struct auth_state *authstate = (struct auth_state *)data;
+    struct auth_state *authstate = (struct auth_state *) data;
     int i;
 
     printf("user: ");
     fwrite(key, keylen, 1, stdout);
     printf(" time: %d groups: %d\n",
-           (unsigned)authstate->mark, (unsigned)authstate->ngroups);
+           (unsigned) authstate->mark,
+           (unsigned) authstate->ngroups);
 
-    for (i=0; i < authstate->ngroups; i++)
-        printf("  %s\n",authstate->groups[i].id);
+    for (i = 0; i < authstate->ngroups; i++) {
+        printf("  %s\n", authstate->groups[i].id);
+    }
 
     return 0;
 }
@@ -86,15 +89,17 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
         default:
-            fprintf(stderr,"usage: [-C filename]"
+            fprintf(stderr,
+                    "usage: [-C filename]"
                     "\n\t-C <filename>\tAlternate Config File"
                     "\n");
             exit(-1);
@@ -113,13 +118,14 @@ int main(int argc, char *argv[])
     }
 
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
-    if(r != CYRUSDB_OK) {
-        fprintf(stderr,"error opening %s (%s)", fname,
-               cyrusdb_strerror(r));
+    if (r != CYRUSDB_OK) {
+        fprintf(stderr, "error opening %s (%s)", fname, cyrusdb_strerror(r));
         exit(1);
     }
 
-    if (tofree) free(tofree);
+    if (tofree) {
+        free(tofree);
+    }
 
     /* iterate through db, printing entries */
     cyrusdb_foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
