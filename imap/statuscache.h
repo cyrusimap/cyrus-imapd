@@ -51,20 +51,32 @@
 #define STATUSCACHE_VERSION 10
 
 /* fill a statuscache entry */
-extern void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sdata);
-extern void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdata);
-extern void status_fill_seen(const char *userid, struct statusdata *sdata,
-                             unsigned numrecent, unsigned numunseen);
+extern void status_fill_mbentry(const mbentry_t *mbentry,
+                                struct statusdata *sdata);
+extern void status_fill_mailbox(struct mailbox *mailbox,
+                                struct statusdata *sdata);
+extern void status_fill_seen(const char *userid,
+                             struct statusdata *sdata,
+                             unsigned numrecent,
+                             unsigned numunseen);
 
 /* lookup a single statuscache entry or open the mailbox and calculate it */
-extern int status_lookup_mboxname(const char *mboxname, const char *userid,
-                                  unsigned statusitems, struct statusdata *sdata);
-extern int status_lookup_mbname(const mbname_t *mbname, const char *userid,
-                                unsigned statusitems, struct statusdata *sdata);
-extern int status_lookup_mbentry(const mbentry_t *mbentry, const char *userid,
-                                 unsigned statusitems, struct statusdata *sdata);
-extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
-                                 unsigned statusitems, struct statusdata *sdata);
+extern int status_lookup_mboxname(const char *mboxname,
+                                  const char *userid,
+                                  unsigned statusitems,
+                                  struct statusdata *sdata);
+extern int status_lookup_mbname(const mbname_t *mbname,
+                                const char *userid,
+                                unsigned statusitems,
+                                struct statusdata *sdata);
+extern int status_lookup_mbentry(const mbentry_t *mbentry,
+                                 const char *userid,
+                                 unsigned statusitems,
+                                 struct statusdata *sdata);
+extern int status_lookup_mailbox(struct mailbox *mailbox,
+                                 const char *userid,
+                                 unsigned statusitems,
+                                 struct statusdata *sdata);
 
 /* invalidate (delete) statuscache entry for the mailbox,
    optionally writing the data for one user in the same transaction */
