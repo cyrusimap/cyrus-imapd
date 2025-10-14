@@ -57,8 +57,7 @@ extern void auditlog_acl(const char *mboxname,
 extern void auditlog_client(const char *action,
                             const char *userid,
                             const char *client);
-extern void auditlog_duplicate(const char *action,
-                               const duplicate_key_t *dkey);
+extern void auditlog_duplicate(const char *action, const duplicate_key_t *dkey);
 extern void auditlog_imip(const char *message_id,
                           const char *outcome,
                           const char *errstr);

@@ -60,10 +60,11 @@ extern void attachextract_destroy(void);
 /**
  * Identifies the content type of attachment data.
  */
-struct attachextract_record {
-    const char *type;          // MIME content type
-    const char *subtype;       // MIME subtype
-    struct message_guid guid;  // content guid of undecoded data
+struct attachextract_record
+{
+    const char *type;         // MIME content type
+    const char *subtype;      // MIME subtype
+    struct message_guid guid; // content guid of undecoded data
 };
 
 /**
@@ -74,7 +75,8 @@ struct attachextract_record {
  * Returns 0 on success or an IMAP error.
  */
 extern int attachextract_extract(const struct attachextract_record *record,
-                                 const struct buf *data, int encoding,
+                                 const struct buf *data,
+                                 int encoding,
                                  struct buf *text);
 
 /**

@@ -59,7 +59,8 @@
 
 #include "attachextract.h"
 
-struct extractor_ctx {
+struct extractor_ctx
+{
     struct protstream *clientin;
     char *hostname;
     char *path;
@@ -75,7 +76,9 @@ static struct extractor_ctx *global_extractor = NULL;
 
 static void extractor_disconnect(struct extractor_ctx *ext)
 {
-    if (!ext) return;
+    if (!ext) {
+        return;
+    }
 
     struct backend *be = ext->be;
     syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
@@ -89,15 +92,17 @@ static void extractor_disconnect(struct extractor_ctx *ext)
     backend_disconnect(be);
 
     /* remove the timeout */
-    if (be->timeout) prot_removewaitevent(be->clientin, be->timeout);
+    if (be->timeout) {
+        prot_removewaitevent(be->clientin, be->timeout);
+    }
     be->timeout = NULL;
     be->clientin = NULL;
 }
 
-static struct prot_waitevent *
-extractor_idle_timeout_cb(struct protstream *s __attribute__((unused)),
-                          struct prot_waitevent *ev __attribute__((unused)),
-                          void *rock)
+static struct prot_waitevent *extractor_idle_timeout_cb(
+    struct protstream *s __attribute__((unused)),
+    struct prot_waitevent *ev __attribute__((unused)),
+    void *rock)
 {
     struct extractor_ctx *ext = rock;
 
@@ -134,10 +139,11 @@ static const struct tls_alpn_t http_alpn_map[] = {
     { "",         NULL, NULL },
 };
 
-static struct protocol_t http =
-{ "http", "HTTP", http_alpn_map, TYPE_SPEC,
-  { .spec = { &login, &ping, &logout } }
-};
+static struct protocol_t http = { "http",
+                                  "HTTP",
+                                  http_alpn_map,
+                                  TYPE_SPEC,
+                                  { .spec = { &login, &ping, &logout } } };
 
 static int extractor_connect(struct extractor_ctx *ext)
 {
@@ -164,11 +170,12 @@ static int extractor_connect(struct extractor_ctx *ext)
 
     // clean up any existing connection
     extractor_disconnect(ext);
-    be = ext->be = backend_connect(be, ext->hostname,
-                                   &http, NULL, NULL, NULL, -1);
+    be = ext->be =
+        backend_connect(be, ext->hostname, &http, NULL, NULL, NULL, -1);
 
     if (!be) {
-        syslog(LOG_ERR, "extract_connect: failed to connect to %s",
+        syslog(LOG_ERR,
+               "extract_connect: failed to connect to %s",
                ext->hostname);
         return IMAP_IOERROR;
     }
@@ -180,7 +187,9 @@ static int extractor_connect(struct extractor_ctx *ext)
         /* set idle timeout */
         be->clientin = ext->clientin;
         be->timeout = prot_addwaitevent(ext->clientin,
-                now + attachextract_idle_timeout, extractor_idle_timeout_cb, ext);
+                                        now + attachextract_idle_timeout,
+                                        extractor_idle_timeout_cb,
+                                        ext);
     }
 
     return 0;
@@ -209,25 +218,30 @@ static int extractor_httpreq(struct extractor_ctx *ext,
 
     // Prepare request
     buf_printf(&req_buf,
-            "%s %s %s\r\n"
-            "Host: %.*s\r\n"
-            "User-Agent: Cyrus/%s\r\n"
-            "Connection: Keep-Alive\r\n"
-            "Keep-Alive: timeout=%u\r\n"
-            "Accept: text/plain\r\n"
-            "X-Truncate-Length: " SIZE_T_FMT "\r\n",
-            method, url, HTTP_VERSION,
-            (int) hostlen, ext->hostname, CYRUS_VERSION,
-            attachextract_idle_timeout, config_search_maxsize);
+               "%s %s %s\r\n"
+               "Host: %.*s\r\n"
+               "User-Agent: Cyrus/%s\r\n"
+               "Connection: Keep-Alive\r\n"
+               "Keep-Alive: timeout=%u\r\n"
+               "Accept: text/plain\r\n"
+               "X-Truncate-Length: " SIZE_T_FMT "\r\n",
+               method,
+               url,
+               HTTP_VERSION,
+               (int) hostlen,
+               ext->hostname,
+               CYRUS_VERSION,
+               attachextract_idle_timeout,
+               config_search_maxsize);
 
     if (req_body) {
         buf_printf(&req_buf,
-                "Content-Type: %s\r\n",
-                req_ctype ? req_ctype : "application/octet-stream");
+                   "Content-Type: %s\r\n",
+                   req_ctype ? req_ctype : "application/octet-stream");
 
         buf_printf(&req_buf,
-                "Content-Length: " SIZE_T_FMT "\r\n",
-                buf_len(req_body));
+                   "Content-Length: " SIZE_T_FMT "\r\n",
+                   buf_len(req_body));
     }
 
     buf_appendcstr(&req_buf, "\r\n");
@@ -236,7 +250,9 @@ static int extractor_httpreq(struct extractor_ctx *ext,
     do {
         // Connect to backend
         r = extractor_connect(ext);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
 
         struct backend *be = ext->be;
 
@@ -245,11 +261,13 @@ static int extractor_httpreq(struct extractor_ctx *ext,
 
         r = prot_putbuf(be->out, &req_buf);
 
-        if (!r && req_body)
+        if (!r && req_body) {
             r = prot_putbuf(be->out, req_body);
+        }
 
-        if (!r)
+        if (!r) {
             r = prot_flush(be->out);
+        }
 
         if (r == EOF) {
             r = IMAP_IOERROR;
@@ -269,14 +287,18 @@ static int extractor_httpreq(struct extractor_ctx *ext,
 
         do {
             r = http_read_response(be,
-                    !strcmp(method, "GET") ? METH_GET : METH_PUT,
-                    res_statuscode, &res_hdrs, res_body, &res_err);
+                                   !strcmp(method, "GET") ? METH_GET : METH_PUT,
+                                   res_statuscode,
+                                   &res_hdrs,
+                                   res_body,
+                                   &res_err);
         } while (*res_statuscode < 200 && !r);
 
         // Reconnect if the socket is closed
-        if (r == HTTP_BAD_GATEWAY &&
-                be->in->eof && prev_bytes_in == be->in->bytes_in &&
-                time(NULL) < be->in->timeout_mark) {
+        if (r == HTTP_BAD_GATEWAY && be->in->eof
+            && prev_bytes_in == be->in->bytes_in
+            && time(NULL) < be->in->timeout_mark)
+        {
             xsyslog(LOG_DEBUG,
                     "no bytes read from socket - retrying",
                     "method=<%s> url=<%s>", method, url);
@@ -284,11 +306,11 @@ static int extractor_httpreq(struct extractor_ctx *ext,
             retry++;
         }
         // Reconnect if the connection expired
-        else if (r == HTTP_TIMEOUT &&
-                (res_hdrs &&
-                 (hdr = spool_getheader(res_hdrs, "Connection")) &&
-                 !strcasecmpsafe(hdr[0], "close") &&
-                 time(NULL) < be->in->timeout_mark)) {
+        else if (r == HTTP_TIMEOUT
+                 && (res_hdrs && (hdr = spool_getheader(res_hdrs, "Connection"))
+                     && !strcasecmpsafe(hdr[0], "close")
+                     && time(NULL) < be->in->timeout_mark))
+        {
             xsyslog(LOG_DEBUG,
                     "keep-alive connection got closed - retrying",
                     "method=<%s> url=<%s>", method, url);
@@ -304,20 +326,24 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                         method, url, res_err, error_message(r));
                 *res_statuscode = 599;
             }
-            else xsyslog(
+            else {
+                xsyslog(
                     (*res_statuscode == 200 || *res_statuscode == 201 ||
                      *res_statuscode == 404) ? LOG_DEBUG : LOG_WARNING,
                     "got HTTP response", "method=<%s> url=<%s> statuscode=<%d>",
                     method, url, *res_statuscode);
+            }
 
             if (*res_statuscode == 200 || *res_statuscode == 201) {
                 /* Abide by server's timeout, if any */
                 const char *p;
-                if (res_hdrs &&
-                        (hdr = spool_getheader(res_hdrs, "Keep-Alive")) &&
-                        (p = strstr(hdr[0], "timeout="))) {
-                    int timeout = atoi(p+8);
-                    if (be->timeout) be->timeout->mark = time(NULL) + timeout;
+                if (res_hdrs && (hdr = spool_getheader(res_hdrs, "Keep-Alive"))
+                    && (p = strstr(hdr[0], "timeout=")))
+                {
+                    int timeout = atoi(p + 8);
+                    if (be->timeout) {
+                        be->timeout->mark = time(NULL) + timeout;
+                    }
                 }
             }
             retry = 0;
@@ -342,8 +368,8 @@ done:
     return r;
 }
 
-
-static void generate_record_id(struct buf *id, const struct attachextract_record *rec)
+static void generate_record_id(struct buf *id,
+                               const struct attachextract_record *rec)
 {
     // encode content guid
     buf_putc(id, 'G');
@@ -354,12 +380,14 @@ static void generate_record_id(struct buf *id, const struct attachextract_record
     const char *types[2] = { rec->type, rec->subtype };
     for (int i = 0; i < 2; i++) {
 
-        if (i) buf_putc(id, '_');
+        if (i) {
+            buf_putc(id, '_');
+        }
 
         for (const char *s = types[i]; *s; s++) {
-            if (('a' <= *s && *s <= 'z') ||
-                ('A' <= *s && *s <= 'Z') ||
-                ('0' <= *s && *s <= '9')) {
+            if (('a' <= *s && *s <= 'z') || ('A' <= *s && *s <= 'Z')
+                || ('0' <= *s && *s <= '9'))
+            {
                 buf_putc(id, TOLOWER(*s));
             }
             else {
@@ -409,7 +437,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
 
     if (attachextract_cachedir) {
         generate_record_id(&buf, axrec);
-        cachefname = strconcat(attachextract_cachedir, "/", buf_cstring(&buf), NULL);
+        cachefname =
+            strconcat(attachextract_cachedir, "/", buf_cstring(&buf), NULL);
         buf_reset(&buf);
     }
     else if (attachextract_cacheonly) {
@@ -428,7 +457,12 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         int fd = open(cachefname, O_RDONLY);
         if (fd != -1) {
             struct buf cache_data = BUF_INITIALIZER;
-            buf_refresh_mmap(&cache_data, 1, fd, cachefname, MAP_UNKNOWN_LEN, NULL);
+            buf_refresh_mmap(&cache_data,
+                             1,
+                             fd,
+                             cachefname,
+                             MAP_UNKNOWN_LEN,
+                             NULL);
             buf_copy(text, &cache_data);
             buf_free(&cache_data);
             close(fd);
@@ -464,7 +498,9 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         goto gotdata;
     }
 
-    if (statuscode == 599) goto done;
+    if (statuscode == 599) {
+        goto done;
+    }
 
     // otherwise we're going to try three times to PUT this request to the server!
 
@@ -485,9 +521,16 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         }
 
         /* Send attachment to service for text extraction */
-        r = extractor_httpreq(ext, "PUT", guidstr, ctype, data,
-                &statuscode, &body);
-        if (r == IMAP_IOERROR) goto done;
+        r = extractor_httpreq(ext,
+                              "PUT",
+                              guidstr,
+                              ctype,
+                              data,
+                              &statuscode,
+                              &body);
+        if (r == IMAP_IOERROR) {
+            goto done;
+        }
 
         if (statuscode == 200 || statuscode == 201) {
             // we got a result, yay
@@ -539,14 +582,18 @@ gotdata:
                             "tempfname=<%s> cachefname=<%s>",
                             tempfname, cachefname);
                 }
-                else xsyslog(LOG_DEBUG, "wrote to cache",
+                else {
+                    xsyslog(LOG_DEBUG, "wrote to cache",
                             "cachefname=<%s>", cachefname);
+                }
             }
 
             xunlink(tempfname);
         }
-        else xsyslog(LOG_WARNING, "could not create temp file",
+        else {
+            xsyslog(LOG_WARNING, "could not create temp file",
                     "tempfname=<%s>", tempfname);
+        }
         free(tempfname);
     }
 
@@ -567,40 +614,50 @@ EXPORTED void attachextract_init(struct protstream *clientin)
 
     /* Read config */
     attachextract_idle_timeout =
-        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_IDLE_TIMEOUT, 's');
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_IDLE_TIMEOUT,
+                           's');
 
     attachextract_request_timeout =
-        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT, 's');
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT,
+                           's');
 
-    if (attachextract_idle_timeout < attachextract_request_timeout)
+    if (attachextract_idle_timeout < attachextract_request_timeout) {
         attachextract_idle_timeout = attachextract_request_timeout;
+    }
 
     const char *exturl =
-         config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    if (!exturl) return;
+        config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
+    if (!exturl) {
+        return;
+    }
 
     /* Initialize extractor URL */
     char scheme[6], server[100], path[256], *p;
     unsigned https, port;
 
     /* Parse URL (cheesy parser without having to use libxml2) */
-    int n = sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]",
-                   scheme, server, path);
-    if (n != 3 ||
-        strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
+    int n = sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]", scheme, server, path);
+    if (n != 3 || strncmp(lcase(scheme), "http", 4)
+        || (scheme[4] && scheme[4] != 's'))
+    {
         syslog(LOG_ERR,
-               "extract_attachment: unexpected non-HTTP URL %s", exturl);
+               "extract_attachment: unexpected non-HTTP URL %s",
+               exturl);
         return;
     }
 
     /* Normalize URL parts */
     https = (scheme[4] == 's');
-    if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
+    if (*(p = path + strlen(path) - 1) == '/') {
+        *p = '\0';
+    }
     if ((p = strrchr(server, ':'))) {
         *p++ = '\0';
         port = atoi(p);
     }
-    else port = https ? 443 : 80;
+    else {
+        port = https ? 443 : 80;
+    }
 
     /* Build servername, port, and options */
     struct buf buf = BUF_INITIALIZER;
@@ -618,7 +675,9 @@ EXPORTED void attachextract_destroy(void)
 
     syslog(LOG_DEBUG, "extractor_destroy(%p)", ext);
 
-    if (!ext) return;
+    if (!ext) {
+        return;
+    }
 
     extractor_disconnect(ext);
     free(ext->be);
