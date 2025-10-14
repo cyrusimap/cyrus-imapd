@@ -48,21 +48,21 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 
-struct auth_mech *auth_mechs[] = {
-    &auth_unix,
-    &auth_pts,
-    &auth_mboxgroups,
+struct auth_mech *auth_mechs[] = { &auth_unix,
+                                   &auth_pts,
+                                   &auth_mboxgroups,
 #ifdef HAVE_GSSAPI_H
-    &auth_krb5,
+                                   &auth_krb5,
 #endif
-    NULL };
+                                   NULL };
 
 static struct auth_mech *auth_fromname(void)
 {
     static struct auth_mech *auth;
 
-    if (auth)
+    if (auth) {
         return auth;
+    }
 
     const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
 
@@ -73,12 +73,15 @@ static struct auth_mech *auth_fromname(void)
     }
 
     char errbuf[1024];
-    snprintf(errbuf, sizeof(errbuf),
-             "Authorization mechanism %s not supported", name);
+    snprintf(errbuf,
+             sizeof(errbuf),
+             "Authorization mechanism %s not supported",
+             name);
     fatal(errbuf, EX_CONFIG);
 }
 
-EXPORTED int auth_memberof(const struct auth_state *auth_state, const char *identifier)
+EXPORTED int auth_memberof(const struct auth_state *auth_state,
+                           const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 
@@ -103,7 +106,9 @@ EXPORTED void auth_freestate(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 
-    if (auth_state) auth->freestate(auth_state);
+    if (auth_state) {
+        auth->freestate(auth_state);
+    }
 }
 
 EXPORTED strarray_t *auth_groups(const struct auth_state *auth_state)
@@ -117,5 +122,7 @@ EXPORTED void auth_refresh(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 
-    if (auth->refresh) auth->refresh(auth_state);
+    if (auth->refresh) {
+        auth->refresh(auth_state);
+    }
 }

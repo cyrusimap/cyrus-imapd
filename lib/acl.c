@@ -60,14 +60,19 @@ EXPORTED int cyrus_acl_checkstr(const char *str, char **errstr)
     const char *p;
 
     /* ignore leading plus/minus */
-    if (*str == '-' || *str == '+') str++;
+    if (*str == '-' || *str == '+') {
+        str++;
+    }
 
     for (p = str; *p; p++) {
         if (strchr(rights, *p) == NULL) {
             struct buf errbuf = BUF_INITIALIZER;
 
-            syslog(LOG_DEBUG, "%s: unrecognised right '%c' in string \"%s\"",
-                              __func__, *p, str);
+            syslog(LOG_DEBUG,
+                   "%s: unrecognised right '%c' in string \"%s\"",
+                   __func__,
+                   *p,
+                   str);
 
             buf_printf(&errbuf, "The %c right is not supported", *p);
             *errstr = buf_release(&errbuf);
@@ -103,48 +108,103 @@ EXPORTED int cyrus_acl_strtomask(const char *str, int *mask)
         int nomatch = 0;
 
         switch (*p) {
-            case 'l': result |= ACL_LOOKUP; break;
-            case 'r': result |= ACL_READ; break;
-            case 's': result |= ACL_SETSEEN; break;
-            case 'w': result |= ACL_WRITE; break;
-            case 'i': result |= ACL_INSERT; break;
-            case 'p': result |= ACL_POST; break;
-            case 'c': /* legacy CREATE macro - build member rights */
-                legacy_create = ACL_CREATE; break;
-            case 'k': result |= ACL_CREATE; break;
-            case 'x': result |= ACL_DELETEMBOX; break;
-            case 't': result |= ACL_DELETEMSG; break;
-            case 'e': result |= ACL_EXPUNGE; break;
-            case 'd': /* legacy DELETE macro - build member rights */
-                legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
-            case 'a': result |= ACL_ADMIN; break;
-            case 'n': result |= ACL_ANNOTATEMSG; break;
-            case '0': result |= ACL_USER0; break;
-            case '1': result |= ACL_USER1; break;
-            case '2': result |= ACL_USER2; break;
-            case '3': result |= ACL_USER3; break;
-            case '4': result |= ACL_USER4; break;
-            case '5': result |= ACL_USER5; break;
-            case '6': result |= ACL_USER6; break;
-            case '7': result |= ACL_USER7; break;
-            case '8': result |= ACL_USER8; break;
-            case '9': result |= ACL_USER9; break;
-            default: nomatch = 1; break;
+        case 'l':
+            result |= ACL_LOOKUP;
+            break;
+        case 'r':
+            result |= ACL_READ;
+            break;
+        case 's':
+            result |= ACL_SETSEEN;
+            break;
+        case 'w':
+            result |= ACL_WRITE;
+            break;
+        case 'i':
+            result |= ACL_INSERT;
+            break;
+        case 'p':
+            result |= ACL_POST;
+            break;
+        case 'c': /* legacy CREATE macro - build member rights */
+            legacy_create = ACL_CREATE;
+            break;
+        case 'k':
+            result |= ACL_CREATE;
+            break;
+        case 'x':
+            result |= ACL_DELETEMBOX;
+            break;
+        case 't':
+            result |= ACL_DELETEMSG;
+            break;
+        case 'e':
+            result |= ACL_EXPUNGE;
+            break;
+        case 'd': /* legacy DELETE macro - build member rights */
+            legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE);
+            break;
+        case 'a':
+            result |= ACL_ADMIN;
+            break;
+        case 'n':
+            result |= ACL_ANNOTATEMSG;
+            break;
+        case '0':
+            result |= ACL_USER0;
+            break;
+        case '1':
+            result |= ACL_USER1;
+            break;
+        case '2':
+            result |= ACL_USER2;
+            break;
+        case '3':
+            result |= ACL_USER3;
+            break;
+        case '4':
+            result |= ACL_USER4;
+            break;
+        case '5':
+            result |= ACL_USER5;
+            break;
+        case '6':
+            result |= ACL_USER6;
+            break;
+        case '7':
+            result |= ACL_USER7;
+            break;
+        case '8':
+            result |= ACL_USER8;
+            break;
+        case '9':
+            result |= ACL_USER9;
+            break;
+        default:
+            nomatch = 1;
+            break;
         }
 
         if (*p == *deleteright) {
             switch (*deleteright) {
             case 'c': /* legacy CREATE macro - build member rights */
-                legacy_create |= ACL_DELETEMBOX; break;
+                legacy_create |= ACL_DELETEMBOX;
+                break;
             case 'd': /* legacy DELETE macro - build member rights */
-                legacy_delete |= ACL_DELETEMBOX; break;
-            default: result |= ACL_DELETEMBOX; break;
+                legacy_delete |= ACL_DELETEMBOX;
+                break;
+            default:
+                result |= ACL_DELETEMBOX;
+                break;
             }
         }
         else if (nomatch) {
             /* unrecognised right character, bad! */
-            syslog(LOG_INFO, "%s: ACL string \"%s\" contains unrecognised right '%c'",
-                             __func__, str, *p);
+            syslog(LOG_INFO,
+                   "%s: ACL string \"%s\" contains unrecognised right '%c'",
+                   __func__,
+                   str,
+                   *p);
             r = IMAP_INVALID_RIGHTS;
         }
     }
@@ -153,8 +213,12 @@ EXPORTED int cyrus_acl_strtomask(const char *str, int *mask)
        member rights, then we add all of the member rights for the macro.
        Otherwise, we ignore the legacy macro.
     */
-    if (!(result & legacy_create)) result |= legacy_create;
-    if (!(result & legacy_delete)) result |= legacy_delete;
+    if (!(result & legacy_create)) {
+        result |= legacy_create;
+    }
+    if (!(result & legacy_delete)) {
+        result |= legacy_delete;
+    }
 
     *mask = result;
     return r;
@@ -170,21 +234,46 @@ EXPORTED char *cyrus_acl_masktostr(int acl, char *str)
     int legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE);
 
     switch (*deleteright) {
-    case 'c': legacy_create |= ACL_DELETEMBOX; break;
-    case 'd': legacy_delete |= ACL_DELETEMBOX; break;
-    default: /* XXX  we have backwards compatibility problems */ break;
+    case 'c':
+        legacy_create |= ACL_DELETEMBOX;
+        break;
+    case 'd':
+        legacy_delete |= ACL_DELETEMBOX;
+        break;
+    default: /* XXX  we have backwards compatibility problems */
+        break;
     }
 
-    if (acl & ACL_LOOKUP) *pos++ = 'l';
-    if (acl & ACL_READ) *pos++ = 'r';
-    if (acl & ACL_SETSEEN) *pos++ = 's';
-    if (acl & ACL_WRITE) *pos++ = 'w';
-    if (acl & ACL_INSERT) *pos++ = 'i';
-    if (acl & ACL_POST) *pos++ = 'p';
-    if (acl & ACL_CREATE) *pos++ = 'k';
-    if (acl & ACL_DELETEMBOX) *pos++ = 'x';
-    if (acl & ACL_DELETEMSG) *pos++ = 't';
-    if (acl & ACL_EXPUNGE) *pos++ = 'e';
+    if (acl & ACL_LOOKUP) {
+        *pos++ = 'l';
+    }
+    if (acl & ACL_READ) {
+        *pos++ = 'r';
+    }
+    if (acl & ACL_SETSEEN) {
+        *pos++ = 's';
+    }
+    if (acl & ACL_WRITE) {
+        *pos++ = 'w';
+    }
+    if (acl & ACL_INSERT) {
+        *pos++ = 'i';
+    }
+    if (acl & ACL_POST) {
+        *pos++ = 'p';
+    }
+    if (acl & ACL_CREATE) {
+        *pos++ = 'k';
+    }
+    if (acl & ACL_DELETEMBOX) {
+        *pos++ = 'x';
+    }
+    if (acl & ACL_DELETEMSG) {
+        *pos++ = 't';
+    }
+    if (acl & ACL_EXPUNGE) {
+        *pos++ = 'e';
+    }
     if (acl & legacy_create) {
         /* legacy CREATE macro member right(s) - add macro */
         *pos++ = 'c';
@@ -193,18 +282,42 @@ EXPORTED char *cyrus_acl_masktostr(int acl, char *str)
         /* legacy DELETE macro member right(s) - add macro */
         *pos++ = 'd';
     }
-    if (acl & ACL_ADMIN) *pos++ = 'a';
-    if (acl & ACL_ANNOTATEMSG) *pos++ = 'n';
-    if (acl & ACL_USER0) *pos++ = '0';
-    if (acl & ACL_USER1) *pos++ = '1';
-    if (acl & ACL_USER2) *pos++ = '2';
-    if (acl & ACL_USER3) *pos++ = '3';
-    if (acl & ACL_USER4) *pos++ = '4';
-    if (acl & ACL_USER5) *pos++ = '5';
-    if (acl & ACL_USER6) *pos++ = '6';
-    if (acl & ACL_USER7) *pos++ = '7';
-    if (acl & ACL_USER8) *pos++ = '8';
-    if (acl & ACL_USER9) *pos++ = '9';
+    if (acl & ACL_ADMIN) {
+        *pos++ = 'a';
+    }
+    if (acl & ACL_ANNOTATEMSG) {
+        *pos++ = 'n';
+    }
+    if (acl & ACL_USER0) {
+        *pos++ = '0';
+    }
+    if (acl & ACL_USER1) {
+        *pos++ = '1';
+    }
+    if (acl & ACL_USER2) {
+        *pos++ = '2';
+    }
+    if (acl & ACL_USER3) {
+        *pos++ = '3';
+    }
+    if (acl & ACL_USER4) {
+        *pos++ = '4';
+    }
+    if (acl & ACL_USER5) {
+        *pos++ = '5';
+    }
+    if (acl & ACL_USER6) {
+        *pos++ = '6';
+    }
+    if (acl & ACL_USER7) {
+        *pos++ = '7';
+    }
+    if (acl & ACL_USER8) {
+        *pos++ = '8';
+    }
+    if (acl & ACL_USER9) {
+        *pos++ = '9';
+    }
     *pos = '\0';
 
     return (str);

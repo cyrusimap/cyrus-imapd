@@ -47,12 +47,13 @@
 
 struct auth_state;
 
-struct auth_mech {
+struct auth_mech
+{
     const char *name;
 
     const char *(*canonifyid)(const char *identifier, size_t len);
     int (*memberof)(const struct auth_state *auth_state,
-             const char *identifier);
+                    const char *identifier);
     struct auth_state *(*newstate)(const char *identifier);
     void (*freestate)(struct auth_state *auth_state);
     strarray_t *(*groups)(const struct auth_state *auth_state);
@@ -77,8 +78,7 @@ extern void register_mboxgroups_cb(int (*l)(const char *, strarray_t *));
 /* len: length of id, or 0 to do strlen(identifier) */
 const char *auth_canonifyid(const char *identifier, size_t len);
 
-int auth_memberof(const struct auth_state *auth_state,
-         const char *identifier);
+int auth_memberof(const struct auth_state *auth_state, const char *identifier);
 struct auth_state *auth_newstate(const char *identifier);
 void auth_freestate(struct auth_state *auth_state);
 strarray_t *auth_groups(const struct auth_state *auth_state);

@@ -43,12 +43,11 @@
 #ifndef INCLUDED_ASSERT_H
 #define INCLUDED_ASSERT_H
 
-__attribute__((noreturn))
-void assertionfailed(const char *file, int line, const char *expr);
+__attribute__((noreturn)) void assertionfailed(const char *file,
+                                               int line,
+                                               const char *expr);
 
-#define assert(expr)                                                \
-    ((expr)                                                         \
-     ? (void)(0)                                                    \
-     : assertionfailed(__FILE__, __LINE__, #expr))
+#define assert(expr)                                                           \
+    ((expr) ? (void) (0) : assertionfailed(__FILE__, __LINE__, #expr))
 
 #endif /* INCLUDED_ASSERT_H */
