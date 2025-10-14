@@ -105,9 +105,11 @@ EXPORTED void schedule_event(struct event *evt)
 {
     struct event *ptr;
 
-    if (!evt->name)
-        fatal("Serious software bug found: schedule_event() called on unnamed event!",
+    if (!evt->name) {
+        fatal("Serious software bug found: schedule_event() called on unnamed "
+              "event!",
               EX_SOFTWARE);
+    }
 
     if (!schedule || timesub(&schedule->mark, &evt->mark) < 0.0) {
         evt->next = schedule;
@@ -117,7 +119,8 @@ EXPORTED void schedule_event(struct event *evt)
     }
     for (ptr = schedule;
          ptr->next && timesub(&evt->mark, &ptr->next->mark) <= 0.0;
-         ptr = ptr->next) ;
+         ptr = ptr->next)
+        ;
 
     /* insert evt */
     evt->next = ptr->next;
@@ -138,7 +141,7 @@ EXPORTED void reschedule_event(struct event *evt, struct timeval now)
         unsigned skipped = 0;
         do {
             mark += period;
-            skipped ++;
+            skipped++;
         } while (mark <= now_s);
         xsyslog(LOG_WARNING, "periodic event behind schedule",
                              "name=<%s> period=<" TIME_T_FMT "> skipped=<%u>",

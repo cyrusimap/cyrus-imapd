@@ -46,7 +46,8 @@
 
 #include "lib/strarray.h"
 
-struct event {
+struct event
+{
     char *name;
     struct timeval mark;
     time_t period;

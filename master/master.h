@@ -7,36 +7,37 @@
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
 #include "strarray.h"
 
-struct service {
-    char *name;                 /* name of service */
-    char *listen;               /* port/socket to listen to */
-    char *proto;                /* protocol to accept */
-    strarray_t *exec;           /* command (with args) to execute */
-    int babysit;                /* babysit this service? */
+struct service
+{
+    char *name;       /* name of service */
+    char *listen;     /* port/socket to listen to */
+    char *proto;      /* protocol to accept */
+    strarray_t *exec; /* command (with args) to execute */
+    int babysit;      /* babysit this service? */
 
     /* multiple address family support */
-    int associate;              /* are we primary or additional instance? */
-    int family;                 /* address family */
-    const char *familyname;     /* address family name */
+    int associate;          /* are we primary or additional instance? */
+    int family;             /* address family */
+    const char *familyname; /* address family name */
 
     /* communication info */
-    int socket;                 /* client/child communication channel */
-    int stat[2];                /* master/child communication channel */
+    int socket;  /* client/child communication channel */
+    int stat[2]; /* master/child communication channel */
 
     /* limits */
-    int desired_workers;        /* num child processes to have ready */
-    int max_workers;            /* max num child processes to spawn */
-    rlim_t maxfds;              /* max num file descriptors to use */
-    unsigned int maxforkrate;   /* max rate to spawn children */
+    int desired_workers;      /* num child processes to have ready */
+    int max_workers;          /* max num child processes to spawn */
+    rlim_t maxfds;            /* max num file descriptors to use */
+    unsigned int maxforkrate; /* max rate to spawn children */
 
     /* stats */
-    int ready_workers;          /* num child processes ready for service */
-    int nforks;                 /* num child processes spawned */
-    int nactive;                /* num children servicing clients */
-    int nconnections;           /* num connections made to children */
-    double forkrate;            /* rate at which we're spawning children */
-    int nreadyfails;            /* number of failures in READY state */
-    time_t lastreadyfail;       /* timestamp of last failure in READY state */
+    int ready_workers;    /* num child processes ready for service */
+    int nforks;           /* num child processes spawned */
+    int nactive;          /* num children servicing clients */
+    int nconnections;     /* num connections made to children */
+    double forkrate;      /* rate at which we're spawning children */
+    int nreadyfails;      /* number of failures in READY state */
+    time_t lastreadyfail; /* timestamp of last failure in READY state */
 
     /* fork rate computation */
     struct timeval last_interval_start;

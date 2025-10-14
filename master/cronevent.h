@@ -47,7 +47,8 @@
 #include <stdbool.h>
 
 /* unit tests need to know this struct */
-struct cronevent_details {
+struct cronevent_details
+{
     char *name;
     strarray_t exec;
 };
@@ -58,9 +59,9 @@ extern void cronevent_add(const char *name,
                           bool ignore_err);
 extern void cronevent_clear(void);
 
-typedef void (cronevent_spawn_fn)(const char *name,
-                                  const strarray_t *exec,
-                                  void *rock);
+typedef void(cronevent_spawn_fn)(const char *name,
+                                 const strarray_t *exec,
+                                 void *rock);
 extern void cronevent_poll_due(struct timeval now,
                                cronevent_spawn_fn *spawner,
                                void *rock);
