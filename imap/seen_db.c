@@ -49,7 +49,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -77,10 +77,11 @@ enum {
     SEEN_DEBUG = 0
 };
 
-struct seen {
-    char *user;                 /* what user is this for? */
+struct seen
+{
+    char *user; /* what user is this for? */
     struct db *db;
-    struct txn *tid;            /* outstanding txn, if any */
+    struct txn *tid; /* outstanding txn, if any */
 };
 
 #define DB (config_seenstate_db)
@@ -95,9 +96,7 @@ EXPORTED char *seen_getpath(const char *userid)
     return fname;
 }
 
-EXPORTED int seen_open(const char *user,
-              int flags,
-              struct seen **seendbptr)
+EXPORTED int seen_open(const char *user, int flags, struct seen **seendbptr)
 {
     struct seen *seendb = NULL;
     char *fname = NULL;
@@ -116,12 +115,16 @@ EXPORTED int seen_open(const char *user,
 
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
-    if (flags & SEEN_CREATE) cyrus_mkdir(fname, 0755);
+    if (flags & SEEN_CREATE) {
+        cyrus_mkdir(fname, 0755);
+    }
     r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &seendb->db);
     if (r) {
         if (!(flags & SEEN_SILENT)) {
             int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
-            syslog(level, "DBERROR: opening %s: %s", fname,
+            syslog(level,
+                   "DBERROR: opening %s: %s",
+                   fname,
                    cyrusdb_strerror(r));
         }
         r = r == CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_IOERROR;
@@ -139,14 +142,15 @@ EXPORTED int seen_open(const char *user,
     return r;
 }
 
-struct seendata_rock {
+struct seendata_rock
+{
     seenproc_t *f;
     void *rock;
 };
 
 EXPORTED void seen_freedata(struct seendata *sd)
 {
-    free (sd->seenuids);
+    free(sd->seenuids);
 }
 
 static void parse_data(const char *data, int datalen, struct seendata *sd)
@@ -159,13 +163,20 @@ static void parse_data(const char *data, int datalen, struct seendata *sd)
 
     memset(sd, 0, sizeof(struct seendata));
 
-    version = strtol(data, &p, 10); data = p;
+    version = strtol(data, &p, 10);
+    data = p;
     assert(version == SEEN_VERSION);
 
-    sd->lastread = strtol(data, &p, 10); data = p;
-    sd->lastuid = strtoll(data, &p, 10); data = p;
-    sd->lastchange = strtol(data, &p, 10); data = p;
-    while (p < dend && Uisspace(*p)) { p++; } data = p;
+    sd->lastread = strtol(data, &p, 10);
+    data = p;
+    sd->lastuid = strtoll(data, &p, 10);
+    data = p;
+    sd->lastchange = strtol(data, &p, 10);
+    data = p;
+    while (p < dend && Uisspace(*p)) {
+        p++;
+    }
+    data = p;
     uidlen = dend - data;
     sd->seenuids = xmalloc(uidlen + 1);
     memcpy(sd->seenuids, data, uidlen);
@@ -173,13 +184,13 @@ static void parse_data(const char *data, int datalen, struct seendata *sd)
 }
 
 static int foreach_proc(void *rock,
-                 const char *key,
-                 size_t keylen,
-                 const char *data,
-                 size_t datalen)
+                        const char *key,
+                        size_t keylen,
+                        const char *data,
+                        size_t datalen)
 {
     struct seendata sd = SEENDATA_INITIALIZER;
-    struct seendata_rock *sr = (struct seendata_rock *)rock;
+    struct seendata_rock *sr = (struct seendata_rock *) rock;
     char *name = xstrndup(key, keylen);
     int r;
 
@@ -198,11 +209,19 @@ EXPORTED int seen_foreach(struct seen *seendb, seenproc_t *f, void *rock)
     struct seendata_rock sdrock;
     sdrock.f = f;
     sdrock.rock = rock;
-    return cyrusdb_foreach(seendb->db, "", 0, NULL, foreach_proc, &sdrock, NULL);
+    return cyrusdb_foreach(seendb->db,
+                           "",
+                           0,
+                           NULL,
+                           foreach_proc,
+                           &sdrock,
+                           NULL);
 }
 
-static int seen_readit(struct seen *seendb, const char *uniqueid,
-                       struct seendata *sd, int rw)
+static int seen_readit(struct seen *seendb,
+                       const char *uniqueid,
+                       struct seendata *sd,
+                       int rw)
 {
     int r;
     const char *data;
@@ -210,18 +229,29 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
 
     assert(seendb && uniqueid);
     if (rw || seendb->tid) {
-        r = cyrusdb_fetchlock(seendb->db, uniqueid, strlen(uniqueid),
-                          &data, &datalen, &seendb->tid);
-    } else {
-        r = cyrusdb_fetch(seendb->db, uniqueid, strlen(uniqueid),
-                      &data, &datalen, NULL);
+        r = cyrusdb_fetchlock(seendb->db,
+                              uniqueid,
+                              strlen(uniqueid),
+                              &data,
+                              &datalen,
+                              &seendb->tid);
+    }
+    else {
+        r = cyrusdb_fetch(seendb->db,
+                          uniqueid,
+                          strlen(uniqueid),
+                          &data,
+                          &datalen,
+                          NULL);
     }
     switch (r) {
     case 0:
         break;
     case CYRUSDB_AGAIN:
-        syslog(LOG_DEBUG, "deadlock in seen database for '%s/%s'",
-               seendb->user, uniqueid);
+        syslog(LOG_DEBUG,
+               "deadlock in seen database for '%s/%s'",
+               seendb->user,
+               uniqueid);
         return IMAP_AGAIN;
         break;
     case CYRUSDB_NOTFOUND:
@@ -230,16 +260,18 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
         return 0;
         break;
     default:
-        syslog(LOG_ERR, "DBERROR: error fetching txn %s",
-               cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error fetching txn %s", cyrusdb_strerror(r));
         return IMAP_IOERROR;
         break;
     }
 
     parse_data(data, datalen, sd);
     if (sd->seenuids[0] && !imparse_issequence(sd->seenuids)) {
-        syslog(LOG_ERR, "DBERROR: invalid sequence <%s> for %s %s - nuking",
-               sd->seenuids, seendb->user, uniqueid);
+        syslog(LOG_ERR,
+               "DBERROR: invalid sequence <%s> for %s %s - nuking",
+               sd->seenuids,
+               seendb->user,
+               uniqueid);
         free(sd->seenuids);
         sd->seenuids = xstrdup("");
     }
@@ -247,27 +279,34 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
     return 0;
 }
 
-EXPORTED int seen_read(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_read(struct seen *seendb,
+                       const char *uniqueid,
+                       struct seendata *sd)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_read %s (%s)",
-               seendb->user, uniqueid);
+        syslog(LOG_DEBUG, "seen_db: seen_read %s (%s)", seendb->user, uniqueid);
     }
 
     return seen_readit(seendb, uniqueid, sd, 0);
 }
 
-EXPORTED int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_lockread(struct seen *seendb,
+                           const char *uniqueid,
+                           struct seendata *sd)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_lockread %s (%s)",
-               seendb->user, uniqueid);
+        syslog(LOG_DEBUG,
+               "seen_db: seen_lockread %s (%s)",
+               seendb->user,
+               uniqueid);
     }
 
     return seen_readit(seendb, uniqueid, sd, 1);
 }
 
-EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_write(struct seen *seendb,
+                        const char *uniqueid,
+                        struct seendata *sd)
 {
     int sz = strlen(sd->seenuids) + 50;
     char *data = xmalloc(sz);
@@ -277,17 +316,28 @@ EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seenda
     assert(seendb && uniqueid);
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_write %s (%s)",
-               seendb->user, uniqueid);
+        syslog(LOG_DEBUG,
+               "seen_db: seen_write %s (%s)",
+               seendb->user,
+               uniqueid);
     }
 
-    snprintf(data, sz, "%d " TIME_T_FMT " %u " TIME_T_FMT " %s", SEEN_VERSION,
-            sd->lastread, sd->lastuid,
-            sd->lastchange, sd->seenuids);
+    snprintf(data,
+             sz,
+             "%d " TIME_T_FMT " %u " TIME_T_FMT " %s",
+             SEEN_VERSION,
+             sd->lastread,
+             sd->lastuid,
+             sd->lastchange,
+             sd->seenuids);
     datalen = strlen(data);
 
-    r = cyrusdb_store(seendb->db, uniqueid, strlen(uniqueid),
-                  data, datalen, &seendb->tid);
+    r = cyrusdb_store(seendb->db,
+                      uniqueid,
+                      strlen(uniqueid),
+                      data,
+                      datalen,
+                      &seendb->tid);
     switch (r) {
     case CYRUSDB_OK:
         break;
@@ -295,7 +345,8 @@ EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seenda
         r = IMAP_AGAIN;
         break;
     default:
-        syslog(LOG_ERR, "DBERROR: error updating database: %s",
+        syslog(LOG_ERR,
+               "DBERROR: error updating database: %s",
                cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         break;
@@ -313,7 +364,9 @@ EXPORTED int seen_close(struct seen **seendbptr)
     struct seen *seendb = *seendbptr;
     int r;
 
-    if (!seendb) return 0;
+    if (!seendb) {
+        return 0;
+    }
 
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_close(%s)", seendb->user);
@@ -321,20 +374,23 @@ EXPORTED int seen_close(struct seen **seendbptr)
 
     if (seendb->tid) {
         if (SEEN_DEBUG) {
-            syslog(LOG_DEBUG, "seen_db: committing changes for %s", seendb->user);
+            syslog(LOG_DEBUG,
+                   "seen_db: committing changes for %s",
+                   seendb->user);
         }
         r = cyrusdb_commit(seendb->db, seendb->tid);
         if (r != CYRUSDB_OK) {
-            syslog(LOG_ERR, "DBERROR: error committing seen txn; "
-                   "seen state lost: %s", cyrusdb_strerror(r));
+            syslog(LOG_ERR,
+                   "DBERROR: error committing seen txn; "
+                   "seen state lost: %s",
+                   cyrusdb_strerror(r));
         }
         seendb->tid = NULL;
     }
 
     r = cyrusdb_close(seendb->db);
     if (r) {
-        syslog(LOG_ERR, "DBERROR: error closing: %s",
-               cyrusdb_strerror(r));
+        syslog(LOG_ERR, "DBERROR: error closing: %s", cyrusdb_strerror(r));
         r = IMAP_IOERROR;
     }
     free(seendb->user);
@@ -348,8 +404,10 @@ EXPORTED int seen_close(struct seen **seendbptr)
 HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)",
-               userid, mailbox_uniqueid(mailbox));
+        syslog(LOG_DEBUG,
+               "seen_db: seen_create_mailbox(%s, %s)",
+               userid,
+               mailbox_uniqueid(mailbox));
     }
 
     /* noop */
@@ -363,17 +421,25 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
     const char *uniqueid = mailbox_uniqueid(mailbox);
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s, %s)",
-               userid, uniqueid);
+        syslog(LOG_DEBUG,
+               "seen_db: seen_delete_mailbox(%s, %s)",
+               userid,
+               uniqueid);
     }
 
     /* noop */
-    if (!userid)
+    if (!userid) {
         return 0;
+    }
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r) r = cyrusdb_delete(seendb->db, uniqueid, strlen(uniqueid),
-                           &seendb->tid, 1);
+    if (!r) {
+        r = cyrusdb_delete(seendb->db,
+                           uniqueid,
+                           strlen(uniqueid),
+                           &seendb->tid,
+                           1);
+    }
     seen_close(&seendb);
 
     return r;
@@ -382,8 +448,7 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 int seen_create_user(const char *user)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_create_user(%s)",
-               user);
+        syslog(LOG_DEBUG, "seen_db: seen_create_user(%s)", user);
     }
 
     /* we'll be lazy here and create this when needed */
@@ -396,12 +461,12 @@ HIDDEN int seen_delete_user(const char *user)
     int r = 0;
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_delete_user(%s)",
-               user);
+        syslog(LOG_DEBUG, "seen_db: seen_delete_user(%s)", user);
     }
 
-    if (xunlink(fname) == -1)
+    if (xunlink(fname) == -1) {
         r = IMAP_IOERROR;
+    }
 
     free(fname);
     return r;
@@ -414,8 +479,10 @@ HIDDEN int seen_rename_user(const char *olduser, const char *newuser)
     int r = 0;
 
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_rename_user(%s, %s)",
-               olduser, newuser);
+        syslog(LOG_DEBUG,
+               "seen_db: seen_rename_user(%s, %s)",
+               olduser,
+               newuser);
     }
 
     cyrus_mkdir(newfname, 0755);
@@ -430,15 +497,21 @@ HIDDEN int seen_rename_user(const char *olduser, const char *newuser)
     return r;
 }
 
-HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
-              struct mailbox *newmailbox)
+HIDDEN int seen_copy(const char *userid,
+                     struct mailbox *oldmailbox,
+                     struct mailbox *newmailbox)
 {
     if (SEEN_DEBUG) {
-        syslog(LOG_DEBUG, "seen_db: seen_copy %s (%s => %s)",
-               userid ? userid : "", mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox));
+        syslog(LOG_DEBUG,
+               "seen_db: seen_copy %s (%s => %s)",
+               userid ? userid : "",
+               mailbox_uniqueid(oldmailbox),
+               mailbox_uniqueid(newmailbox));
     }
 
-    if (userid && strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox))) {
+    if (userid
+        && strcmp(mailbox_uniqueid(oldmailbox), mailbox_uniqueid(newmailbox)))
+    {
         int r;
         struct seen *seendb = NULL;
         struct seendata sd = SEENDATA_INITIALIZER;
@@ -446,8 +519,12 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
         r = seen_open(userid, SEEN_SILENT, &seendb);
 
         /* just be silent if it's missing */
-        if (!r) r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
-        if (!r) r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
+        if (!r) {
+            r = seen_lockread(seendb, mailbox_uniqueid(oldmailbox), &sd);
+        }
+        if (!r) {
+            r = seen_write(seendb, mailbox_uniqueid(newmailbox), &sd);
+        }
 
         seen_close(&seendb);
         seen_freedata(&sd);
@@ -468,11 +545,11 @@ EXPORTED int seen_done(void)
 
 EXPORTED int seen_compare(struct seendata *a, struct seendata *b)
 {
-    if (a->lastuid == b->lastuid &&
-        a->lastread == b->lastread &&
-        a->lastchange == b->lastchange &&
-        !strcmp(a->seenuids, b->seenuids))
+    if (a->lastuid == b->lastuid && a->lastread == b->lastread
+        && a->lastchange == b->lastchange && !strcmp(a->seenuids, b->seenuids))
+    {
         return 1;
+    }
 
     return 0;
 }
@@ -481,11 +558,13 @@ EXPORTED int seen_compare(struct seendata *a, struct seendata *b)
  * last change times, and ensure that the database uses the newer of
  * the two */
 static int seen_merge_cb(void *rockp,
-                         const char *key, size_t keylen,
-                         const char *newdata, size_t newlen)
+                         const char *key,
+                         size_t keylen,
+                         const char *newdata,
+                         size_t newlen)
 {
     int r = 0;
-    struct seen *seendb = (struct seen *)rockp;
+    struct seen *seendb = (struct seen *) rockp;
     struct seendata oldsd, newsd;
     char *uniqueid = xstrndup(key, keylen);
     int dirty = 0;
@@ -497,8 +576,12 @@ static int seen_merge_cb(void *rockp,
     }
     else {
         seen_freedata(&oldsd);
-        if (newsd.lastuid > oldsd.lastuid) dirty = 1;
-        if (newsd.lastread > oldsd.lastread) dirty = 1;
+        if (newsd.lastuid > oldsd.lastuid) {
+            dirty = 1;
+        }
+        if (newsd.lastread > oldsd.lastread) {
+            dirty = 1;
+        }
     }
 
     if (dirty) {
@@ -524,11 +607,17 @@ HIDDEN int seen_merge(struct seen *seendb, const char *newfile)
     r = cyrusdb_open(DB, newfile, 0, &newdb);
     /* if it doesn't exist, there's nothing
      * to do, so abort without an error */
-    if (r == CYRUSDB_NOTFOUND) return 0;
+    if (r == CYRUSDB_NOTFOUND) {
+        return 0;
+    }
 
-    if (!r) r = cyrusdb_foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
+    if (!r) {
+        r = cyrusdb_foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
+    }
 
-    if (newdb) cyrusdb_close(newdb);
+    if (newdb) {
+        cyrusdb_close(newdb);
+    }
 
     return r;
 }

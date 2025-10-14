@@ -76,7 +76,7 @@
 
 #include <config.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <stdio.h>
 #include <string.h>
@@ -160,7 +160,7 @@ void shut_down(int code)
     exit(code);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
     if (recurse_code) {
@@ -170,7 +170,9 @@ EXPORTED void fatal(const char* s, int code)
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -183,7 +185,9 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r, opt;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     signals_set_shutdown(&shut_down);
@@ -199,12 +203,14 @@ int service_init(int argc, char **argv, char **envp)
     }
 
     while ((opt = getopt(argc, argv, "p")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'p':
             skipplus = 1;
             break;
         default:
-            syslog(LOG_ERR, "usage: smmapd [-C <alt_config>] [-U uses] [-T timeout] [-D] [-p]");
+            syslog(LOG_ERR,
+                   "usage: smmapd [-C <alt_config>] [-U uses] [-T timeout] "
+                   "[-D] [-p]");
             exit(EX_USAGE);
         }
     }
@@ -230,7 +236,9 @@ int service_main(int argc __attribute__((unused)),
 
     smmapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
-    if (begin_handling() != 0) shut_down(0);
+    if (begin_handling() != 0) {
+        shut_down(0);
+    }
 
     /* prepare for new connection */
     smmapd_reset();
@@ -240,14 +248,15 @@ int service_main(int argc __attribute__((unused)),
 static int check_quotas(const char *name)
 {
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
-    char root[MAX_MAILBOX_NAME+1];
+    char root[MAX_MAILBOX_NAME + 1];
 
     /* just check the quotas we care about */
     qdiffs[QUOTA_STORAGE] = 0;
     qdiffs[QUOTA_MESSAGE] = 1;
 
-    if (!quota_findroot(root, sizeof(root), name))
+    if (!quota_findroot(root, sizeof(root), name)) {
         return 0; /* no root, fine */
+    }
 
     return quota_check_useds(root, qdiffs);
 }
@@ -259,8 +268,12 @@ static int verify_user(const char *key, struct auth_state *authstate)
 
     mbname_t *mbname = mbname_from_recipient(key, &map_namespace);
 
-    if (skipplus) mbname_set_boxes(mbname, NULL);
-    if (forcedowncase) mbname_downcaseuser(mbname);
+    if (skipplus) {
+        mbname_set_boxes(mbname, NULL);
+    }
+    if (forcedowncase) {
+        mbname_downcaseuser(mbname);
+    }
 
     /* see if it is a shared mailbox address */
     if (!strcmpsafe(mbname_userid(mbname), BB)) {
@@ -268,7 +281,7 @@ static int verify_user(const char *key, struct auth_state *authstate)
         mbname_set_domain(mbname, NULL);
     }
 
-    char msg[MAX_MAILBOX_PATH+1];
+    char msg[MAX_MAILBOX_PATH + 1];
     if (userdeny(mbname_userid(mbname), config_ident, msg, sizeof(msg))) {
         prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,", 9 + strlen(msg), msg);
         mbname_free(&mbname);
@@ -287,22 +300,24 @@ static int verify_user(const char *key, struct auth_state *authstate)
         mboxlist_entry_free(&mbentry);
         r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     if (!mbname_userid(mbname)) {
         long aclcheck = ACL_POST;
         int access = cyrus_acl_myrights(authstate, mbentry->acl);
 
         if ((access & aclcheck) != aclcheck) {
-            r = (access & ACL_LOOKUP) ?
-                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+            r = (access & ACL_LOOKUP) ? IMAP_PERMISSION_DENIED
+                                      : IMAP_MAILBOX_NONEXISTENT;
             goto done;
         }
     }
 
     if ((mbentry->mbtype & MBTYPE_REMOTE)) {
         struct hostent *hp;
-        struct sockaddr_in sin,sfrom;
+        struct sockaddr_in sin, sfrom;
         char buf[2048];
         int soc, rc;
         socklen_t x;
@@ -316,40 +331,58 @@ static int verify_user(const char *key, struct auth_state *authstate)
          * (assume under quota)
          */
 
-        syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
-               mbname_userid(mbname), mbentry->server);
+        syslog(LOG_ERR,
+               "verify_user(%s) proxying to host %s",
+               mbname_userid(mbname),
+               mbentry->server);
 
         hp = gethostbyname(mbentry->server);
-        if (hp == (struct hostent*) 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
-                   mbname_userid(mbname), mbentry->server);
+        if (hp == (struct hostent *) 0) {
+            syslog(LOG_ERR,
+                   "verify_user(%s) failed: can't find host %s",
+                   mbname_userid(mbname),
+                   mbentry->server);
             goto done;
         }
 
         soc = socket(PF_INET, SOCK_STREAM, 0);
         if (soc < 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   mbname_userid(mbname), mbentry->server);
+            syslog(LOG_ERR,
+                   "verify_user(%s) failed: can't connect to %s",
+                   mbname_userid(mbname),
+                   mbentry->server);
             goto done;
         }
-        memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
+        memcpy(&sin.sin_addr.s_addr, hp->h_addr, hp->h_length);
         sin.sin_family = AF_INET;
 
         /* XXX port should be configurable */
         sin.sin_port = htons(12345);
 
-        if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) {
-            syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s",
-                   mbname_userid(mbname), mbentry->server);
+        if (connect(soc, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+            syslog(LOG_ERR,
+                   "verify_user(%s) failed: can't connect to %s",
+                   mbname_userid(mbname),
+                   mbentry->server);
             close(soc);
             goto done;
         }
 
-        snprintf(buf,sizeof(buf),SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
-        sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
+        snprintf(buf,
+                 sizeof(buf),
+                 SIZE_T_FMT ":cyrus %s,%c",
+                 strlen(key) + 6,
+                 key,
+                 4);
+        sendto(soc, buf, strlen(buf), 0, (struct sockaddr *) &sin, sizeof(sin));
 
         x = sizeof(sfrom);
-        rc = recvfrom(soc,buf,sizeof(buf)-1,0,(struct sockaddr *)&sfrom,&x);
+        rc = recvfrom(soc,
+                      buf,
+                      sizeof(buf) - 1,
+                      0,
+                      (struct sockaddr *) &sfrom,
+                      &x);
 
         close(soc);
 
@@ -361,15 +394,19 @@ static int verify_user(const char *key, struct auth_state *authstate)
         mboxlist_entry_free(&mbentry);
         mbname_free(&mbname);
 
-        return -1;   /* tell calling function we already replied */
+        return -1; /* tell calling function we already replied */
     }
 
     r = check_quotas(mbname_intname(mbname));
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", mbname_userid(mbname),
-                  error_message(r));
+    if (r) {
+        syslog(LOG_DEBUG,
+               "verify_user(%s) failed: %s",
+               mbname_userid(mbname),
+               error_message(r));
+    }
     mbname_free(&mbname);
 
     return r;
@@ -379,7 +416,7 @@ done:
  * begin_handling: handle requests on a single connection.
  * returns non-zero if requested to stop handling new connections (SIGHUP)
  */
-#define MAXREQUEST 1024         /* XXX  is this reasonable? */
+#define MAXREQUEST 1024 /* XXX  is this reasonable? */
 
 static int begin_handling(void)
 {
@@ -388,7 +425,7 @@ static int begin_handling(void)
     while ((c = prot_getc(map_in)) != EOF) {
         int r = 0, len = 0;
         struct auth_state *authstate = NULL;
-        char request[MAXREQUEST+1];
+        char request[MAXREQUEST + 1];
         char *key = NULL;
         const char *errstring = NULL;
 
@@ -437,19 +474,23 @@ static int begin_handling(void)
 
         case 0:
             auditlog_client("ok", key, smmapd_clienthost);
-            prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3+strlen(key), key);
+            prot_printf(map_out, SIZE_T_FMT ":OK %s,", 3 + strlen(key), key);
             break;
 
         case IMAP_MAILBOX_NONEXISTENT:
             auditlog_client("nonexistent", key, smmapd_clienthost);
-            prot_printf(map_out, SIZE_T_FMT ":NOTFOUND %s,",
-                        9+strlen(error_message(r)), error_message(r));
+            prot_printf(map_out,
+                        SIZE_T_FMT ":NOTFOUND %s,",
+                        9 + strlen(error_message(r)),
+                        error_message(r));
             break;
 
         case IMAP_QUOTA_EXCEEDED:
             auditlog_client("overquota", key, smmapd_clienthost);
             if (!config_getswitch(IMAPOPT_LMTP_OVER_QUOTA_PERM_FAILURE)) {
-                prot_printf(map_out, SIZE_T_FMT ":TEMP %s,", strlen(error_message(r))+5,
+                prot_printf(map_out,
+                            SIZE_T_FMT ":TEMP %s,",
+                            strlen(error_message(r)) + 5,
                             error_message(r));
                 break;
             }
@@ -457,13 +498,20 @@ static int begin_handling(void)
 
         default:
             auditlog_client("failed", key, smmapd_clienthost);
-            if (errstring)
-                prot_printf(map_out, SIZE_T_FMT ":PERM %s (%s),",
-                            5+strlen(error_message(r))+3+strlen(errstring),
-                            error_message(r), errstring);
-            else
-                prot_printf(map_out, SIZE_T_FMT ":PERM %s,",
-                            5+strlen(error_message(r)), error_message(r));
+            if (errstring) {
+                prot_printf(map_out,
+                            SIZE_T_FMT ":PERM %s (%s),",
+                            5 + strlen(error_message(r)) + 3
+                                + strlen(errstring),
+                            error_message(r),
+                            errstring);
+            }
+            else {
+                prot_printf(map_out,
+                            SIZE_T_FMT ":PERM %s,",
+                            5 + strlen(error_message(r)),
+                            error_message(r));
+            }
             break;
         }
     }
