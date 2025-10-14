@@ -42,7 +42,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <assert.h>
@@ -69,46 +69,46 @@ static char *DBNAME;
 static char *BACKEND;
 static const char *BENCHMARKS;
 static int NUMRECS = 1000;
-static int new_db = 0;          /* set to 1 if we created a new db */
+static int new_db = 0; /* set to 1 if we created a new db */
 static size_t VALLEN = 0;
 
-#define ALLBENCHMARKS "writeseq,writeseqtxn,writerandom,writerandomtxn,write100k"
+#define ALLBENCHMARKS                                                          \
+    "writeseq,writeseqtxn,writerandom,writerandomtxn,write100k"
 
 enum {
-        BATCHED,
-        NOTBATCHED,
-        SEQUENTIAL,
-        RANDOM,
+    BATCHED,
+    NOTBATCHED,
+    SEQUENTIAL,
+    RANDOM,
 };
 
 static struct option long_options[] = {
-        {"benchmarks", required_argument, NULL, 'b'},
-        {"db", required_argument, NULL, 'd'},
-        {"backend", required_argument, NULL, 't'},
-        {"numrecs", optional_argument, NULL, 'n'},
-        {"help", no_argument, NULL, 'h'},
-        {NULL, 0, NULL, 0}
+    { "benchmarks", required_argument, NULL, 'b' },
+    { "db",         required_argument, NULL, 'd' },
+    { "backend",    required_argument, NULL, 't' },
+    { "numrecs",    optional_argument, NULL, 'n' },
+    { "help",       no_argument,       NULL, 'h' },
+    { NULL,         0,                 NULL, 0   }
 };
 
 EXPORTED void fatal(const char *message, int code)
 {
-  static int recurse_code = 0;
+    static int recurse_code = 0;
 
-  if (recurse_code) {
+    if (recurse_code) {
+        exit(code);
+    }
+
+    recurse_code = code;
+    fprintf(stderr, "fatal error: %s\n", message);
     exit(code);
-  }
-
-  recurse_code = code;
-  fprintf(stderr, "fatal error: %s\n", message);
-  exit(code);
 }
 
 static char *create_tmp_dir_name(void)
 {
-    static const char charset[] =
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789";
+    static const char charset[] = "abcdefghijklmnopqrstuvwxyz"
+                                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                  "0123456789";
     static const int num_chars = 62;
     uint64_t value;
     struct timeval tv;
@@ -119,11 +119,12 @@ static char *create_tmp_dir_name(void)
     struct stat sb;
 
     gettimeofday(&tv, NULL);
-    value = ((size_t)(tv.tv_usec << 16)) ^ tv.tv_sec ^ getpid();
+    value = ((size_t) (tv.tv_usec << 16)) ^ tv.tv_sec ^ getpid();
 
     tmpdir = getenv("TMPDIR");
-    if (!tmpdir)
+    if (!tmpdir) {
         tmpdir = "/tmp";
+    }
 
     snprintf(path, sizeof(path), "%s/zsbench-XXXXXX", tmpdir);
 
@@ -154,19 +155,20 @@ static char *create_tmp_dir_name(void)
         value += 9999;
     }
 
-    if (!ret)
+    if (!ret) {
         return xstrdup(path);
-    else
+    }
+    else {
         return NULL;
+    }
 }
 
 static char *generate_random_string(char *str, size_t length)
 {
-    static const char charset[] =
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789"
-        "!@#$%^&*()-=_+|{}[];<>,./?:";
+    static const char charset[] = "abcdefghijklmnopqrstuvwxyz"
+                                  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                  "0123456789"
+                                  "!@#$%^&*()-=_+|{}[];<>,./?:";
 
     if (length) {
         --length;
@@ -200,8 +202,9 @@ static int recursive_rm_cb(const char *path,
 {
     int ret = remove(path);
 
-    if (ret)
+    if (ret) {
         perror(path);
+    }
 
     return ret;
 }
@@ -217,10 +220,9 @@ int recursive_rm(const char *path __attribute__((__unused__)))
 }
 #endif
 
-
 static void cleanup_db_dir(void)
 {
-        recursive_rm(DBNAME);
+    recursive_rm(DBNAME);
 }
 static uint64_t get_time_now(void)
 {
@@ -230,28 +232,34 @@ static uint64_t get_time_now(void)
     return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
-
 static void usage(const char *progname)
 {
     printf("Usage: %s [OPTION]... [DB]...\n", progname);
 
-    printf("  -b, --benchmarks     comma separated list of benchmarks to run\n");
+    printf(
+        "  -b, --benchmarks     comma separated list of benchmarks to run\n");
     printf("                       [will run all the benchmarks by default]\n");
     printf("                       Available benchmarks:\n");
-    printf("                       * writeseq       - write values in sequential key order\n");
-    printf("                       * writeseqtxn    - write values in sequential key order in separate transactions\n");
-    printf("                       * writerandom    - write values in random key order\n");
-    printf("                       * writerandomtxn - write values in random key order in separate transactions\n");
-    printf("                       * write100k      - write values 100K long in random key order\n");
+    printf("                       * writeseq       - write values in "
+           "sequential key order\n");
+    printf("                       * writeseqtxn    - write values in "
+           "sequential key order in separate transactions\n");
+    printf("                       * writerandom    - write values in random "
+           "key order\n");
+    printf("                       * writerandomtxn - write values in random "
+           "key order in separate transactions\n");
+    printf("                       * write100k      - write values 100K long "
+           "in random key order\n");
     printf("\n");
     printf("  -d, --db             the db to run the benchmarks on\n");
     printf("                       (if not provided, will create a new db)\n");
-    printf("  -t, --backend        type of the db backend to run benchmarks on\n");
+    printf(
+        "  -t, --backend        type of the db backend to run benchmarks on\n");
     printf("                       Available Cyrus DB's: twom, twoskip \n");
-    printf("  -n, --numrecs        number of records to write[default: 1000]\n");
+    printf(
+        "  -n, --numrecs        number of records to write[default: 1000]\n");
     printf("  -h, --help           display this help and exit\n");
 }
-
 
 static void print_environment(void)
 {
@@ -272,8 +280,9 @@ static void print_environment(void)
             struct buf key = BUF_INITIALIZER;
             struct buf val = BUF_INITIALIZER;
 
-            if (sep == NULL)
+            if (sep == NULL) {
                 continue;
+            }
 
             buf_setmap(&key, line, (sep - 1 - line));
             buf_trim(&key);
@@ -285,7 +294,8 @@ static void print_environment(void)
                 ++num_cpus;
                 buf_truncate(&cpu_type, 0);
                 buf_setcstr(&cpu_type, val.s);
-            } else if (strcmp("cache size", key.s) == 0) {
+            }
+            else if (strcmp("cache size", key.s) == 0) {
                 buf_truncate(&cache_size, 0);
                 buf_setcstr(&cache_size, val.s);
             }
@@ -298,8 +308,7 @@ static void print_environment(void)
 
         const char *ctype = buf_cstring(&cpu_type);
         const char *csize = buf_cstring(&cache_size);
-        fprintf(stderr, "CPU:            %d * %s",
-                num_cpus, ctype);
+        fprintf(stderr, "CPU:            %d * %s", num_cpus, ctype);
         fprintf(stderr, "CPUCache:       %s", csize);
 
         buf_free(&cpu_type);
@@ -332,19 +341,23 @@ static size_t do_write(int txnmode, int insmode)
         char *val;
         int k;
 
-        k = (insmode == SEQUENTIAL) ? i : ((time(NULL) *  i) % NUMRECS);
+        k = (insmode == SEQUENTIAL) ? i : ((time(NULL) * i) % NUMRECS);
 
         snprintf(key, sizeof(key), "%016d", k);
         keylen = strlen(key);
         vallen = VALLEN ? VALLEN : keylen * 2;
         val = random_string(vallen);
 
-        ret = cyrusdb_store(db, key, keylen, val, vallen,
+        ret = cyrusdb_store(db,
+                            key,
+                            keylen,
+                            val,
+                            vallen,
                             (txnmode == BATCHED) ? &txn : NULL);
         assert(ret == CYRUSDB_OK);
 
         if (txnmode == BATCHED) {
-                assert(txn != NULL);
+            assert(txn != NULL);
         }
 
         bytes += (keylen + vallen);
@@ -368,31 +381,36 @@ static size_t do_write(int txnmode, int insmode)
     return bytes;
 }
 
-static int parse_options(int argc, char **argv, const struct option *options __attribute__((unused)))
+static int parse_options(int argc,
+                         char **argv,
+                         const struct option *options __attribute__((unused)))
 {
     int option;
     int option_index;
 
-    while ((option = getopt_long(argc, argv, "d:b:n:t:h?",
-                                 long_options, &option_index)) != -1) {
+    while (
+        (option =
+             getopt_long(argc, argv, "d:b:n:t:h?", long_options, &option_index))
+        != -1)
+    {
         switch (option) {
-            case 'b':
-                BENCHMARKS = optarg;
-                break;
-            case 'd':
-                DBNAME = optarg;
-                break;
-            case 't':
-                BACKEND = optarg;
-                break;
-            case 'n':
-                NUMRECS = atoi(optarg);
-                break;
-            case 'h':
-                GCC_FALLTHROUGH
-            case '?':
-                usage(basename(argv[0]));
-                exit(option == 'h');
+        case 'b':
+            BENCHMARKS = optarg;
+            break;
+        case 'd':
+            DBNAME = optarg;
+            break;
+        case 't':
+            BACKEND = optarg;
+            break;
+        case 'n':
+            NUMRECS = atoi(optarg);
+            break;
+        case 'h':
+            GCC_FALLTHROUGH
+        case '?':
+            usage(basename(argv[0]));
+            exit(option == 'h');
         }
     }
 
@@ -417,39 +435,54 @@ static int run_benchmarks(void)
             bytes = do_write(NOTBATCHED, SEQUENTIAL);
             finish = get_time_now();
 
-            fprintf(stderr, "writeseq        : %zu bytes written in %" PRIu64 " μs.\n",
-                    bytes, (finish - start));
-        } else if (strcmp(benchname, "writeseqtxn") == 0) {
+            fprintf(stderr,
+                    "writeseq        : %zu bytes written in %" PRIu64 " μs.\n",
+                    bytes,
+                    (finish - start));
+        }
+        else if (strcmp(benchname, "writeseqtxn") == 0) {
             start = get_time_now();
             bytes = do_write(BATCHED, SEQUENTIAL);
             finish = get_time_now();
 
-            fprintf(stderr, "writeseqtxn     : %zu bytes written in %" PRIu64 " μs.\n",
-                    bytes, (finish - start));
-        } else if (strcmp(benchname, "writerandom") == 0) {
+            fprintf(stderr,
+                    "writeseqtxn     : %zu bytes written in %" PRIu64 " μs.\n",
+                    bytes,
+                    (finish - start));
+        }
+        else if (strcmp(benchname, "writerandom") == 0) {
             start = get_time_now();
             bytes = do_write(NOTBATCHED, RANDOM);
             finish = get_time_now();
 
-            fprintf(stderr, "writerandom     : %zu bytes written in %" PRIu64 " μs.\n",
-                    bytes, (finish - start));
-        } else if (strcmp(benchname, "writerandomtxn") == 0) {
+            fprintf(stderr,
+                    "writerandom     : %zu bytes written in %" PRIu64 " μs.\n",
+                    bytes,
+                    (finish - start));
+        }
+        else if (strcmp(benchname, "writerandomtxn") == 0) {
             start = get_time_now();
             bytes = do_write(BATCHED, RANDOM);
             finish = get_time_now();
 
-            fprintf(stderr, "writerandomtxn  : %zu bytes written in %" PRIu64 " μs.\n",
-                    bytes, (finish - start));
-        } else if (strcmp(benchname, "write100k") == 0) {
+            fprintf(stderr,
+                    "writerandomtxn  : %zu bytes written in %" PRIu64 " μs.\n",
+                    bytes,
+                    (finish - start));
+        }
+        else if (strcmp(benchname, "write100k") == 0) {
             VALLEN = 100 * 1000;
             start = get_time_now();
             bytes = do_write(NOTBATCHED, RANDOM);
             finish = get_time_now();
 
-            fprintf(stderr, "write100k       : %zu bytes written in %" PRIu64 " μs.\n",
-                    bytes, (finish - start));
+            fprintf(stderr,
+                    "write100k       : %zu bytes written in %" PRIu64 " μs.\n",
+                    bytes,
+                    (finish - start));
             VALLEN = 0;
-        } else {
+        }
+        else {
             fprintf(stderr, "Unknown benchmark '%s'\n", benchname);
         }
 
@@ -480,10 +513,12 @@ int main(int argc, char *argv[])
         goto done;
     }
 
-    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0 ||
-        strncmp(BACKEND, "twom", strlen("twom")) == 0) {
+    if (strncmp(BACKEND, "twoskip", strlen("twoskip")) == 0
+        || strncmp(BACKEND, "twom", strlen("twom")) == 0)
+    {
         fprintf(stderr, "Running benchmarks for `%s` backend\n", BACKEND);
-    } else {
+    }
+    else {
         fprintf(stderr, "%s is not a valid CyrusDB backend. ", BACKEND);
         fprintf(stderr, "Choose between `twom` or `twoskip`.\n");
         ret = EXIT_FAILURE;
@@ -500,7 +535,8 @@ int main(int argc, char *argv[])
         DBNAME = create_tmp_dir_name();
         assert(DBNAME != NULL);
         printf("Creating a new DB: %s\n", DBNAME);
-    } else {
+    }
+    else {
         printf("Using existing DB: %s\n", DBNAME);
     }
 
@@ -511,6 +547,6 @@ int main(int argc, char *argv[])
         DBNAME = NULL;
     }
 
- done:
+done:
     exit(ret);
 }
