@@ -48,7 +48,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
@@ -90,7 +90,6 @@ static int action_proc(struct transaction_t *txn);
 static int action_df(struct transaction_t *txn);
 static int action_conf(struct transaction_t *txn);
 
-
 /* Namespace for admin service */
 // clang-format off
 struct namespace_t namespace_admin = {
@@ -126,17 +125,19 @@ struct namespace_t namespace_admin = {
 };
 // clang-format on
 
-
 static void admin_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_admin.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_ADMIN;
 
-    if (!namespace_admin.enabled) return;
+    if (!namespace_admin.enabled) {
+        return;
+    }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
 
-static const struct action_t {
+static const struct action_t
+{
     const char *name;
     const char *desc;
     int (*func)(struct transaction_t *txn);
@@ -145,9 +146,8 @@ static const struct action_t {
     { "proc", "Currently Running Services", &action_proc },
     { "df",   "Spool Partition Disk Usage", &action_df   },
     { "conf", "Cyrus Configuration File",   &action_conf },
-    { NULL, NULL, NULL }
+    { NULL,   NULL,                         NULL         }
 };
-
 
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn,
@@ -159,10 +159,14 @@ static int meth_get(struct transaction_t *txn,
     char *p;
     int i;
 
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+    if (!httpd_userid) {
+        return HTTP_UNAUTHORIZED;
+    }
 
     /* Admins only */
-    if (!(httpd_userisadmin || httpd_userisproxyadmin)) return HTTP_FORBIDDEN;
+    if (!(httpd_userisadmin || httpd_userisproxyadmin)) {
+        return HTTP_FORBIDDEN;
+    }
 
     /* Make a working copy of target path */
     strlcpy(tgt->path, txn->req_uri->path, sizeof(tgt->path));
@@ -170,25 +174,33 @@ static int meth_get(struct transaction_t *txn,
 
     /* Skip namespace */
     p += strlen(namespace_admin.prefix);
-    if (*p == '/') *p++ = '\0';
+    if (*p == '/') {
+        *p++ = '\0';
+    }
 
     /* Check if we're in murder space */
     len = strcspn(p, "/");
     if (config_mupdate_server && len == 6 && !strncmp(p, "murder", len)) {
         p += len;
-        if (!*p || !*++p) return action_murder(txn);
+        if (!*p || !*++p) {
+            return action_murder(txn);
+        }
 
         /* Get backend server */
         len = strcspn(p, "/");
         tgt->userid = xstrndup(p, len);
         p += len;
-        if (*p == '/') *p++ = '\0';
+        if (*p == '/') {
+            *p++ = '\0';
+        }
     }
 
     /* Get collection (action) */
     tgt->collection = p;
     p += strcspn(p, "/");
-    if (*p == '/') *p++ = '\0';
+    if (*p == '/') {
+        *p++ = '\0';
+    }
 
     /* Find the matching action */
     for (i = 0; actions[i].name; i++) {
@@ -198,23 +210,32 @@ static int meth_get(struct transaction_t *txn,
         }
     }
 
-    if (!action) return HTTP_NOT_FOUND;
+    if (!action) {
+        return HTTP_NOT_FOUND;
+    }
 
     else if (tgt->userid && !config_getstring(IMAPOPT_PROXYSERVERS)) {
         /* Proxy to backend */
         struct backend *be;
 
         be = proxy_findserver(tgt->userid,
-                              &http_protocol, httpd_userid,
-                              &backend_cached, NULL, NULL, httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+                              &http_protocol,
+                              httpd_userid,
+                              &backend_cached,
+                              NULL,
+                              NULL,
+                              httpd_in);
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
 
-    else return action(txn);
+    else {
+        return action(txn);
+    }
 }
-
 
 /* Perform a murder action */
 static int action_murder(struct transaction_t *txn)
@@ -232,13 +253,19 @@ static int action_murder(struct transaction_t *txn)
         /* Add HTML header */
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
+        buf_printf_markup(&resp,
+                          level++,
+                          "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
-        buf_printf_markup(&resp, level, "<title>%s</title>",
+        buf_printf_markup(&resp,
+                          level,
+                          "<title>%s</title>",
                           "Available Backend Servers");
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
-        buf_printf_markup(&resp, level, "<h2>%s</h2>",
+        buf_printf_markup(&resp,
+                          level,
+                          "<h2>%s</h2>",
                           "Error: Can not generate a list of backend servers "
                           "without <tt>serverlist</tt> option being set "
                           "in <tt>imapd.conf</tt>");
@@ -258,8 +285,11 @@ static int action_murder(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
-               sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
+               compile_time,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
@@ -276,10 +306,12 @@ static int action_murder(struct transaction_t *txn)
         /* Fill in Etag,  Last-Modified, Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = mtime;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -291,26 +323,39 @@ static int action_murder(struct transaction_t *txn)
     if (txn->resp_body.lastmod > lastmod) {
         /* Add HTML header */
         const char *sep =
-            txn->req_uri->path[strlen(txn->req_uri->path)-1] == '/' ? "" : "/";
+            txn->req_uri->path[strlen(txn->req_uri->path) - 1] == '/' ? ""
+                                                                      : "/";
         char *server;
         tok_t tok;
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
+        buf_printf_markup(&resp,
+                          level++,
+                          "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
-        buf_printf_markup(&resp, level, "<title>%s</title>",
+        buf_printf_markup(&resp,
+                          level,
+                          "<title>%s</title>",
                           "Available Backend Servers");
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
-        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
-                          "Available Backend Servers", config_servername);
+        buf_printf_markup(&resp,
+                          level,
+                          "<h2>%s @ %s</h2>",
+                          "Available Backend Servers",
+                          config_servername);
 
         /* Add servers */
-        tok_init(&tok, serverlist, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        tok_init(&tok, serverlist, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         while ((server = tok_next(&tok))) {
-            buf_printf_markup(&resp, level, "<p><a href=\"%s%s%s\">%s</a>",
-                              txn->req_uri->path, sep, server, server);
+            buf_printf_markup(&resp,
+                              level,
+                              "<p><a href=\"%s%s%s\">%s</a>",
+                              txn->req_uri->path,
+                              sep,
+                              server,
+                              server);
         }
         tok_fini(&tok);
 
@@ -328,7 +373,6 @@ static int action_murder(struct transaction_t *txn)
 
     return 0;
 }
-
 
 /* Perform a menu action */
 static int action_menu(struct transaction_t *txn)
@@ -359,10 +403,12 @@ static int action_menu(struct transaction_t *txn)
         /* Fill in Etag,  Last-Modified, Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = compile_time;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -374,22 +420,32 @@ static int action_menu(struct transaction_t *txn)
     if (txn->resp_body.lastmod > lastmod) {
         /* Add HTML header */
         const char *sep =
-            txn->req_uri->path[strlen(txn->req_uri->path)-1] == '/' ? "" : "/";
+            txn->req_uri->path[strlen(txn->req_uri->path) - 1] == '/' ? ""
+                                                                      : "/";
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
+        buf_printf_markup(&resp,
+                          level++,
+                          "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[0].desc);
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
-        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
-                          actions[0].desc, config_servername);
+        buf_printf_markup(&resp,
+                          level,
+                          "<h2>%s @ %s</h2>",
+                          actions[0].desc,
+                          config_servername);
 
         /* Add actions */
         for (i = 1; actions[i].name; i++) {
-            buf_printf_markup(&resp, level, "<p><a href=\"%s%s%s\">%s</a>",
-                              txn->req_uri->path, sep, actions[i].name,
+            buf_printf_markup(&resp,
+                              level,
+                              "<p><a href=\"%s%s%s\">%s</a>",
+                              txn->req_uri->path,
+                              sep,
+                              actions[i].name,
                               actions[i].desc);
         }
 
@@ -408,7 +464,6 @@ static int action_menu(struct transaction_t *txn)
     return 0;
 }
 
-
 /* Perform a proc action */
 static int action_proc(struct transaction_t *txn)
 {
@@ -419,20 +474,21 @@ static int action_proc(struct transaction_t *txn)
     struct strlist *param;
     struct tm tnow;
     char key = 0;
-    struct proc_columns {
+    struct proc_columns
+    {
         char key;
         const char *name;
     } columns[] = {
-        { 'P', "PID" },
-        { 'S', "Service" },
-        { 'Q', "State" },
-        { 'T', "Start" },
-        { 'V', "VmSize" },
-        { 'H', "Client" },
-        { 'U', "User" },
+        { 'P', "PID"      },
+        { 'S', "Service"  },
+        { 'Q', "State"    },
+        { 'T', "Start"    },
+        { 'V', "VmSize"   },
+        { 'H', "Client"   },
+        { 'U', "User"     },
         { 'R', "Resource" },
-        { 'C', "Command" },
-        { 0, NULL}
+        { 'C', "Command"  },
+        { 0,   NULL       }
     };
 
     localtime_r(&now, &tnow);
@@ -454,7 +510,9 @@ static int action_proc(struct transaction_t *txn)
         for (i = 0; columns[i].key; i++) {
             if (Ukey == columns[i].key) {
                 key = *param->s;
-                if (isupper((int) key)) columns[i].key = tolower((int) key);
+                if (isupper((int) key)) {
+                    columns[i].key = tolower((int) key);
+                }
                 break;
             }
         }
@@ -469,28 +527,44 @@ static int action_proc(struct transaction_t *txn)
     /* Get and sort info for running processes */
     proc_foreach(add_procinfo, &piarray);
 
-    cyr_qsort_r(piarray.data, piarray.count, sizeof(struct proc_info *),
-                &sort_procinfo, &key);
+    cyr_qsort_r(piarray.data,
+                piarray.count,
+                sizeof(struct proc_info *),
+                &sort_procinfo,
+                &key);
 
     /* Send HTML header */
     buf_reset(body);
     buf_printf_markup(body, level, HTML_DOCTYPE);
     buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
     buf_printf_markup(body, level++, "<head>");
-    buf_printf_markup(body, level, "<meta http-equiv=\"%s\" content=\"%s\">",
-                      "Refresh", "1");
+    buf_printf_markup(body,
+                      level,
+                      "<meta http-equiv=\"%s\" content=\"%s\">",
+                      "Refresh",
+                      "1");
     buf_printf_markup(body, level, "<title>%s</title>", actions[1].desc);
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
-    buf_printf_markup(body, level, "<h2>%s @ %s</h2>",
-                      actions[1].desc, config_servername);
+    buf_printf_markup(body,
+                      level,
+                      "<h2>%s @ %s</h2>",
+                      actions[1].desc,
+                      config_servername);
     buf_printf_markup(body, level++, "<table border cellpadding=5>");
-    buf_printf_markup(body, level, "<caption><b>%.*s</b></caption>",
-                      24 /* clip LF */, asctime(&tnow));
+    buf_printf_markup(body,
+                      level,
+                      "<caption><b>%.*s</b></caption>",
+                      24 /* clip LF */,
+                      asctime(&tnow));
     buf_printf_markup(body, level++, "<tr>");
     for (i = 0; columns[i].key; i++) {
-        buf_printf_markup(body, level, "<th><a href=\"%s?sort=%c\">%s</a></th>",
-                          txn->req_uri->path, columns[i].key, columns[i].name);
+        buf_printf_markup(body,
+                          level,
+                          "<th><a href=\"%s?sort=%c\">%s</a></th>",
+                          txn->req_uri->path,
+                          columns[i].key,
+                          columns[i].name);
     }
     buf_printf_markup(body, --level, "</tr>");
 
@@ -515,20 +589,31 @@ static int action_proc(struct transaction_t *txn)
 
             localtime_r(&pinfo->start, &start);
             if (start.tm_yday != tnow.tm_yday) {
-                buf_printf_markup(body, level, "<td>%s %02d</td>",
-                                  monthname[start.tm_mon], start.tm_mday);
+                buf_printf_markup(body,
+                                  level,
+                                  "<td>%s %02d</td>",
+                                  monthname[start.tm_mon],
+                                  start.tm_mday);
             }
             else {
-                buf_printf_markup(body, level, "<td>%02d:%02d</td>",
-                                  start.tm_hour, start.tm_min);
+                buf_printf_markup(body,
+                                  level,
+                                  "<td>%02d:%02d</td>",
+                                  start.tm_hour,
+                                  start.tm_min);
             }
-        } else {
+        }
+        else {
             buf_printf_markup(body, level, "<td></td>");
         }
 
         if (pinfo->vmsize) {
-            buf_printf_markup(body, level, "<td>%lu</td>", pinfo->vmsize/1024);
-        } else {
+            buf_printf_markup(body,
+                              level,
+                              "<td>%lu</td>",
+                              pinfo->vmsize / 1024);
+        }
+        else {
             buf_printf_markup(body, level, "<td></td>");
         }
 
@@ -552,17 +637,17 @@ static int action_proc(struct transaction_t *txn)
     /* End of output */
     write_body(0, txn, NULL, 0);
 
- done:
+done:
     return 0;
 }
-
 
 /* Perform a disk usage action */
 /*
  * config_foreachoverflowstring() callback function to find partition-
  * options and print filesystem stats
  */
-struct part_rock {
+struct part_rock
+{
     const char *defpart;
     unsigned meta;
     struct buf *body;
@@ -580,32 +665,49 @@ static void get_part_stats(const char *key, const char *val, void *rock)
     long blocks_percent_used;
 
     if (prock->meta) {
-        if (strncmp("meta", key, 4)) return;
+        if (strncmp("meta", key, 4)) {
+            return;
+        }
         key += 4;
     }
-    if (strncmp("partition-", key, 10)) return;
+    if (strncmp("partition-", key, 10)) {
+        return;
+    }
 
-    part = key+10;
+    part = key + 10;
     path = val;
 
-    if (statvfs(path, &s)) return;
+    if (statvfs(path, &s)) {
+        return;
+    }
 
     blocks_used = s.f_blocks - s.f_bfree;
-    blocks_percent_used = (long)
-        (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
+    blocks_percent_used =
+        (long) (blocks_used * 100.0 / (blocks_used + s.f_bavail) + 0.5);
 
     buf_printf_markup(body, level++, "<tr>");
-    if (prock->defpart && !strcmp(part, prock->defpart))
+    if (prock->defpart && !strcmp(part, prock->defpart)) {
         buf_printf_markup(body, level, "<td><i>%s</i></td>", part);
-    else
+    }
+    else {
         buf_printf_markup(body, level, "<td>%s</td>", part);
-    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
+    }
+    buf_printf_markup(body,
+                      level,
+                      "<td align=\"right\">%ld</td>",
                       (long) (s.f_blocks * (s.f_frsize / 1024.0)));
-    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
-                      (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)));
-    buf_printf_markup(body, level, "<td align=\"right\">%ld</td>",
+    buf_printf_markup(
+        body,
+        level,
+        "<td align=\"right\">%ld</td>",
+        (long) ((s.f_blocks - s.f_bfree) * (s.f_frsize / 1024.0)));
+    buf_printf_markup(body,
+                      level,
+                      "<td align=\"right\">%ld</td>",
                       (long) (s.f_bavail * (s.f_frsize / 1024.0)));
-    buf_printf_markup(body, level, "<td align=\"right\">%ld%%</td>",
+    buf_printf_markup(body,
+                      level,
+                      "<td align=\"right\">%ld%%</td>",
                       blocks_percent_used);
     buf_printf_markup(body, level, "<td>%s</td>", path);
     buf_printf_markup(body, --level, "</tr>");
@@ -628,8 +730,11 @@ static int action_df(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
-               sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
+               compile_time,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
@@ -646,10 +751,12 @@ static int action_df(struct transaction_t *txn)
         /* Fill in Etag,  Last-Modified, Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = mtime;
-        txn->resp_body.maxage = 600;  /* 10 min */
+        txn->resp_body.maxage = 600; /* 10 min */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -664,13 +771,18 @@ static int action_df(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
+        buf_printf_markup(&resp,
+                          level++,
+                          "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[2].desc);
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
-        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
-                          actions[2].desc, config_servername);
+        buf_printf_markup(&resp,
+                          level,
+                          "<h2>%s @ %s</h2>",
+                          actions[2].desc,
+                          config_servername);
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
         buf_printf_markup(&resp, level++, "<tr>");
         buf_printf_markup(&resp, level, "<th>Partition</th>");
@@ -702,8 +814,8 @@ static int action_df(struct transaction_t *txn)
     return 0;
 }
 
-
-struct service_item {
+struct service_item
+{
     char *prefix;
     int prefixlen;
     struct service_item *next;
@@ -713,9 +825,9 @@ static void add_service(const char *name,
                         struct entry *e __attribute__((unused)),
                         void *rock)
 {
-    struct service_item **ksp = (struct service_item **)rock;
+    struct service_item **ksp = (struct service_item **) rock;
     struct service_item *knew = xmalloc(sizeof(struct service_item));
-    knew->prefix = strconcat(name, "_", (char *)NULL);
+    knew->prefix = strconcat(name, "_", (char *) NULL);
     knew->prefixlen = strlen(knew->prefix);
     knew->next = *ksp;
     *ksp = knew;
@@ -734,8 +846,9 @@ static int known_regular(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (!strcmp(imapopts[i].optname, key))
+        if (!strcmp(imapopts[i].optname, key)) {
             return 1;
+        }
     }
 
     return 0;
@@ -746,33 +859,47 @@ static unsigned known_overflow(const char *key)
     const char *match;
 
     /* any SASL key is OK */
-    if (!strncmp(key, "sasl_", 5)) return OVER_SASL;
+    if (!strncmp(key, "sasl_", 5)) {
+        return OVER_SASL;
+    }
 
     /* any partition is OK */
-    if (!strncmp(key, "partition-", 10)) return OVER_PARTITION;
+    if (!strncmp(key, "partition-", 10)) {
+        return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
-    if (!strncmp(key, "metapartition-", 14) &&
-        config_getoverflowstring(key+4, NULL)) return OVER_PARTITION;
+    if (!strncmp(key, "metapartition-", 14)
+        && config_getoverflowstring(key + 4, NULL))
+    {
+        return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
-    if (!strncmp(key, "archivepartition-", 17) &&
-        config_getoverflowstring(key+7, NULL)) return OVER_PARTITION;
-
+    if (!strncmp(key, "archivepartition-", 17)
+        && config_getoverflowstring(key + 7, NULL))
+    {
+        return OVER_PARTITION;
+    }
 
     /* only valid if there's a partition with the same name */
-    if ((match = strstr(key, "searchpartition-")) &&
-        config_getoverflowstring(match+6, NULL)) return OVER_PARTITION;
+    if ((match = strstr(key, "searchpartition-"))
+        && config_getoverflowstring(match + 6, NULL))
+    {
+        return OVER_PARTITION;
+    }
 
     return OVER_UNKNOWN;
 }
 
-struct option_t {
+struct option_t
+{
     const char *key;
     const char *val;
 };
 
-struct conf_rock {
+struct conf_rock
+{
     struct service_item *known_services;
     ptrarray_t overflow[OVER_LAST];
 };
@@ -795,8 +922,9 @@ static void overflow_cb(const char *key, const char *val, void *rock)
     for (svc = crock->known_services; svc; svc = svc->next) {
         if (!strncmp(key, svc->prefix, svc->prefixlen)) {
             /* check if it's a known key */
-            if (known_regular(key+svc->prefixlen) ||
-                known_overflow(key+svc->prefixlen)) {
+            if (known_regular(key + svc->prefixlen)
+                || known_overflow(key + svc->prefixlen))
+            {
                 ptrarray_append(&crock->overflow[OVER_SERVICE], newopt);
                 return;
             }
@@ -813,53 +941,66 @@ static int optcmp(struct option_t **a, struct option_t **b)
 }
 
 static void print_imapopt(struct imapopt_s *imapopt,
-                          struct buf *resp, unsigned level)
+                          struct buf *resp,
+                          unsigned level)
 {
     const union config_value *val =
         imapopt->seen ? &imapopt->val : &imapopt->def;
     int i;
-    
+
     buf_printf_markup(resp, level++, "<tr>");
     buf_printf_markup(resp, level, "<td>%s</td>", imapopt->optname);
     buf_printf_markup(resp, level++, "<td>");
-    
+
     switch (imapopt->t) {
     case OPT_BITFIELD:
         for (i = 0; imapopt->enum_options[i].name; i++) {
-            buf_printf_markup(resp, level++,
+            buf_printf_markup(resp,
+                              level++,
                               "<input disabled type=checkbox "
                               "name=\"%s\" value=\"%s\" %s>",
                               imapopt->optname,
                               imapopts->enum_options[i].name,
-                              (val->x & (1<<i)) ? "checked" : "");
-            if (imapopt->def.x & (1<<i)) {
-                buf_printf_markup(resp, level--, "<b>%s</b>",
+                              (val->x & (1 << i)) ? "checked" : "");
+            if (imapopt->def.x & (1 << i)) {
+                buf_printf_markup(resp,
+                                  level--,
+                                  "<b>%s</b>",
                                   imapopt->enum_options[i].name);
             }
             else {
-                buf_printf_markup(resp, level--, "%s",
+                buf_printf_markup(resp,
+                                  level--,
+                                  "%s",
                                   imapopt->enum_options[i].name);
             }
- 
-            if (!((i+1) % 6)) buf_printf_markup(resp, level, "<br>");
+
+            if (!((i + 1) % 6)) {
+                buf_printf_markup(resp, level, "<br>");
+            }
         }
         break;
 
     case OPT_ENUM:
         for (i = 0; imapopt->enum_options[i].name; i++) {
-            buf_printf_markup(resp, level++,
-                              "<input disabled type=radio "
-                              "name=\"%s\" value=\"%s\" %s>",
-                              imapopt->optname,
-                              imapopt->enum_options[i].name,
-                              (val->e == imapopt->enum_options[i].val) ?
-                              "checked" : "");
+            buf_printf_markup(
+                resp,
+                level++,
+                "<input disabled type=radio "
+                "name=\"%s\" value=\"%s\" %s>",
+                imapopt->optname,
+                imapopt->enum_options[i].name,
+                (val->e == imapopt->enum_options[i].val) ? "checked" : "");
             if (imapopt->def.e == imapopt->enum_options[i].val) {
-                buf_printf_markup(resp, level--, "<b>%s</b>",
+                buf_printf_markup(resp,
+                                  level--,
+                                  "<b>%s</b>",
                                   imapopt->enum_options[i].name);
             }
             else {
-                buf_printf_markup(resp, level--, "%s",
+                buf_printf_markup(resp,
+                                  level--,
+                                  "%s",
                                   imapopt->enum_options[i].name);
             }
         }
@@ -870,8 +1011,11 @@ static void print_imapopt(struct imapopt_s *imapopt,
             buf_printf_markup(resp, level, "<b>%ld</b>", val->i);
         }
         else {
-            buf_printf_markup(resp, level, "%ld <sub><b>%ld</b></sub>",
-                              val->i, imapopt->def.i);
+            buf_printf_markup(resp,
+                              level,
+                              "%ld <sub><b>%ld</b></sub>",
+                              val->i,
+                              imapopt->def.i);
         }
         break;
 
@@ -881,15 +1025,18 @@ static void print_imapopt(struct imapopt_s *imapopt,
             char *freeme = NULL;
 
             if (!strncasecmp(defval, "{configdirectory}", 17)) {
-                freeme = strconcat(config_dir, defval+17, NULL);
+                freeme = strconcat(config_dir, defval + 17, NULL);
                 defval = freeme;
             }
             if (!imapopt->seen || !strcasecmp(val->s, defval)) {
                 buf_printf_markup(resp, level, "<b>%s</b>", defval);
             }
             else {
-                buf_printf_markup(resp, level, "%s <sub><b>%s</b></sub>",
-                                  val->s, defval);
+                buf_printf_markup(resp,
+                                  level,
+                                  "%s <sub><b>%s</b></sub>",
+                                  val->s,
+                                  defval);
             }
             free(freeme);
         }
@@ -897,7 +1044,7 @@ static void print_imapopt(struct imapopt_s *imapopt,
             tok_t tok;
             const char *str;
 
-            tok_init(&tok, val->s, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            tok_init(&tok, val->s, " \t", TOK_TRIMLEFT | TOK_TRIMRIGHT);
             while ((str = tok_next(&tok))) {
                 buf_printf_markup(resp, level, "%s<br>", str);
             }
@@ -907,33 +1054,40 @@ static void print_imapopt(struct imapopt_s *imapopt,
 
     case OPT_STRINGLIST:
         for (i = 0; imapopt->enum_options[i].name; i++) {
-            buf_printf_markup(resp, level++,
-                              "<input disabled type=radio "
-                              "name=\"%s\" value=\"%s\" %s>",
-                              imapopt->optname,
-                              imapopt->enum_options[i].name,
-                              (val->s &&
-                               !strcasecmp(val->s,
-                                           imapopt->enum_options[i].name)) ?
-                              "checked" : "");
-            if (imapopt->def.s &&
-                !strcasecmp(imapopt->def.s,
-                            imapopt->enum_options[i].name)) {
-                buf_printf_markup(resp, level--, "<b>%s</b>",
+            buf_printf_markup(
+                resp,
+                level++,
+                "<input disabled type=radio "
+                "name=\"%s\" value=\"%s\" %s>",
+                imapopt->optname,
+                imapopt->enum_options[i].name,
+                (val->s && !strcasecmp(val->s, imapopt->enum_options[i].name))
+                    ? "checked"
+                    : "");
+            if (imapopt->def.s
+                && !strcasecmp(imapopt->def.s, imapopt->enum_options[i].name))
+            {
+                buf_printf_markup(resp,
+                                  level--,
+                                  "<b>%s</b>",
                                   imapopt->enum_options[i].name);
             }
             else {
-                buf_printf_markup(resp, level--, "%s",
+                buf_printf_markup(resp,
+                                  level--,
+                                  "%s",
                                   imapopt->enum_options[i].name);
             }
         }
         break;
 
     case OPT_SWITCH:
-        buf_printf_markup(resp, level,
+        buf_printf_markup(resp,
+                          level,
                           "<input disabled type=checkbox "
                           "name=\"%s\" value=\"on\" %s> %s",
-                          imapopt->optname, val->b ? "checked" : "",
+                          imapopt->optname,
+                          val->b ? "checked" : "",
                           imapopt->def.b ? "<b>on</b>" : "on");
         break;
 
@@ -960,8 +1114,11 @@ static int action_conf(struct transaction_t *txn)
        and the config file size/mtime */
     assert(!buf_len(&txn->buf));
     stat(config_filename, &sbuf);
-    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT, compile_time,
-               sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
+               compile_time,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     message_guid_generate(&guid, buf_cstring(&txn->buf), buf_len(&txn->buf));
     etag = message_guid_encode(&guid);
@@ -978,10 +1135,12 @@ static int action_conf(struct transaction_t *txn)
         /* Fill in Etag,  Last-Modified, Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = mtime;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1001,19 +1160,27 @@ static int action_conf(struct transaction_t *txn)
 
         buf_reset(&resp);
         buf_printf_markup(&resp, level, HTML_DOCTYPE);
-        buf_printf_markup(&resp, level++, "<html style='color-scheme:dark light'>");
+        buf_printf_markup(&resp,
+                          level++,
+                          "<html style='color-scheme:dark light'>");
         buf_printf_markup(&resp, level++, "<head>");
         buf_printf_markup(&resp, level, "<title>%s</title>", actions[3].desc);
         buf_printf_markup(&resp, --level, "</head>");
         buf_printf_markup(&resp, level++, "<body>");
-        buf_printf_markup(&resp, level, "<h2>%s @ %s</h2>",
-                          actions[3].desc, config_servername);
+        buf_printf_markup(&resp,
+                          level,
+                          "<h2>%s @ %s</h2>",
+                          actions[3].desc,
+                          config_servername);
         buf_printf_markup(&resp, level++, "<table border cellpadding=5>");
-        buf_printf_markup(&resp, level, "<caption>Default values are shown in "
+        buf_printf_markup(&resp,
+                          level,
+                          "<caption>Default values are shown in "
                           "<b>bold</b> and are possibly "
                           "<b><sub>subscripted</sub></b></caption>");
         buf_printf_markup(&resp, level++, "<tr>");
-        buf_printf_markup(&resp, level,
+        buf_printf_markup(&resp,
+                          level,
                           "<th align=\"left\">Standard Options</th>");
         buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
         buf_printf_markup(&resp, --level, "</tr>");
@@ -1056,24 +1223,32 @@ static int action_conf(struct transaction_t *txn)
 
                 switch (k) {
                 case OVER_UNKNOWN:
-                    colname = "Unknown/Invalid Options"; break;
+                    colname = "Unknown/Invalid Options";
+                    break;
 
                 case OVER_SERVICE:
-                    colname = "Service-specific Options"; break;
+                    colname = "Service-specific Options";
+                    break;
 
                 case OVER_SASL:
-                    colname = "SASL Options"; break;
+                    colname = "SASL Options";
+                    break;
 
                 case OVER_PARTITION:
-                    colname = "Partition Options"; break;
+                    colname = "Partition Options";
+                    break;
                 }
 
-                buf_printf_markup(&resp, level,
+                buf_printf_markup(&resp,
+                                  level,
                                   "<tr><td colspan=2><br></td></tr>");
                 buf_printf_markup(&resp, level++, "<tr>");
-                buf_printf_markup(&resp, level,
-                                  "<th align=\"left\">%s</th>", colname);
-                buf_printf_markup(&resp, level,
+                buf_printf_markup(&resp,
+                                  level,
+                                  "<th align=\"left\">%s</th>",
+                                  colname);
+                buf_printf_markup(&resp,
+                                  level,
                                   "<th align=\"left\">Value</th>");
                 buf_printf_markup(&resp, --level, "</tr>");
 
@@ -1088,7 +1263,10 @@ static int action_conf(struct transaction_t *txn)
                     buf_printf_markup(&resp, level, "<td>%s</td>", opt->key);
 
                     buf_printf_markup(&resp, level++, "<td>");
-                    tok_init(&tok, opt->val, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+                    tok_init(&tok,
+                             opt->val,
+                             " \t",
+                             TOK_TRIMLEFT | TOK_TRIMRIGHT);
                     while ((val = tok_next(&tok))) {
                         buf_printf_markup(&resp, level, "%s<br>", val);
                     }
@@ -1104,26 +1282,31 @@ static int action_conf(struct transaction_t *txn)
 
         if (deprecated.count) {
             /* Add the deprecated options */
-            buf_printf_markup(&resp, level,
-                              "<tr><td colspan=2><br></td></tr>");
+            buf_printf_markup(&resp, level, "<tr><td colspan=2><br></td></tr>");
             buf_printf_markup(&resp, level++, "<tr>");
-            buf_printf_markup(&resp, level,
+            buf_printf_markup(&resp,
+                              level,
                               "<th align=\"left\">Deprecated Options</th>");
-            buf_printf_markup(&resp, level,
-                              "<th align=\"left\">History</th>");
+            buf_printf_markup(&resp, level, "<th align=\"left\">History</th>");
             buf_printf_markup(&resp, --level, "</tr>");
 
             for (i = 0; i < deprecated.count; i++) {
                 struct imapopt_s *imapopt = ptrarray_nth(&deprecated, i);
 
                 buf_printf_markup(&resp, level++, "<tr>");
-                buf_printf_markup(&resp, level, "<td>%s</td>",
+                buf_printf_markup(&resp,
+                                  level,
+                                  "<td>%s</td>",
                                   imapopt->optname);
                 buf_printf_markup(&resp, level++, "<td>");
-                buf_printf_markup(&resp, level, "Since %s",
+                buf_printf_markup(&resp,
+                                  level,
+                                  "Since %s",
                                   imapopt->deprecated_since);
                 if (imapopt->preferred_opt != IMAPOPT_ZERO) {
-                    buf_printf_markup(&resp, level, " in favor of <b>%s</b>",
+                    buf_printf_markup(&resp,
+                                      level,
+                                      " in favor of <b>%s</b>",
                                       imapopts[imapopt->preferred_opt].optname);
                 }
 
@@ -1135,13 +1318,13 @@ static int action_conf(struct transaction_t *txn)
 
         if (unset.count) {
             /* Add the unset options */
-            buf_printf_markup(&resp, level,
-                              "<tr><td colspan=2><br></td></tr>");
+            buf_printf_markup(&resp, level, "<tr><td colspan=2><br></td></tr>");
             buf_printf_markup(&resp, level++, "<tr>");
-            buf_printf_markup(&resp, level,
-                              "<th align=\"left\">Unset (Default) Options</th>");
-            buf_printf_markup(&resp, level,
-                              "<th align=\"left\">Value</th>");
+            buf_printf_markup(
+                &resp,
+                level,
+                "<th align=\"left\">Unset (Default) Options</th>");
+            buf_printf_markup(&resp, level, "<th align=\"left\">Value</th>");
             buf_printf_markup(&resp, --level, "</tr>");
 
             for (i = 0; i < unset.count; i++) {

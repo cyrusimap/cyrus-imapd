@@ -97,55 +97,88 @@ static void my_carddav_init(struct buf *serverinfo);
 static int my_carddav_auth(const char *userid);
 static void my_carddav_reset(void);
 static void my_carddav_shutdown(void);
-static unsigned long carddav_allow_cb(struct request_target_t*);
+static unsigned long carddav_allow_cb(struct request_target_t *);
 
-static int carddav_parse_path(const char *path, struct request_target_t *tgt,
+static int carddav_parse_path(const char *path,
+                              struct request_target_t *tgt,
                               const char **resultstr);
 
-static int carddav_copy(struct transaction_t *txn, void *obj,
-                        struct mailbox *mailbox, const char *resource,
-                        void *destdb, unsigned flags);
+static int carddav_copy(struct transaction_t *txn,
+                        void *obj,
+                        struct mailbox *mailbox,
+                        const char *resource,
+                        void *destdb,
+                        unsigned flags);
 
-static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                       struct index_record *record, void *data, void **obj,
+static int carddav_get(struct transaction_t *txn,
+                       struct mailbox *mailbox,
+                       struct index_record *record,
+                       void *data,
+                       void **obj,
                        struct mime_type_t *mime);
 
-static int carddav_put(struct transaction_t *txn, void *obj,
-                       struct mailbox *mailbox, const char *resource,
-                       void *destdb, unsigned flags);
+static int carddav_put(struct transaction_t *txn,
+                       void *obj,
+                       struct mailbox *mailbox,
+                       const char *resource,
+                       void *destdb,
+                       unsigned flags);
 
-static int carddav_import(struct transaction_t *txn, void *obj,
-                          struct mailbox *mailbox, void *destdb,
-                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags);
+static int carddav_import(struct transaction_t *txn,
+                          void *obj,
+                          struct mailbox *mailbox,
+                          void *destdb,
+                          xmlNodePtr root,
+                          xmlNsPtr *ns,
+                          unsigned flags);
 
-static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
+static int propfind_getcontenttype(const xmlChar *name,
+                                   xmlNsPtr ns,
                                    struct propfind_ctx *fctx,
-                                   xmlNodePtr prop, xmlNodePtr resp,
-                                   struct propstat propstat[], void *rock);
-static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
+                                   xmlNodePtr prop,
+                                   xmlNodePtr resp,
+                                   struct propstat propstat[],
+                                   void *rock);
+static int propfind_restype(const xmlChar *name,
+                            xmlNsPtr ns,
                             struct propfind_ctx *fctx,
-                            xmlNodePtr prop, xmlNodePtr resp,
-                            struct propstat propstat[], void *rock);
-static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
+                            xmlNodePtr prop,
+                            xmlNodePtr resp,
+                            struct propstat propstat[],
+                            void *rock);
+static int propfind_addrdata(const xmlChar *name,
+                             xmlNsPtr ns,
                              struct propfind_ctx *fctx,
-                             xmlNodePtr prop, xmlNodePtr resp,
-                             struct propstat propstat[], void *rock);
-static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
+                             xmlNodePtr prop,
+                             xmlNodePtr resp,
+                             struct propstat propstat[],
+                             void *rock);
+static int propfind_suppaddrdata(const xmlChar *name,
+                                 xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
-                                 xmlNodePtr prop, xmlNodePtr resp,
-                                 struct propstat propstat[], void *rock);
-static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+                                 xmlNodePtr prop,
+                                 xmlNodePtr resp,
+                                 struct propstat propstat[],
+                                 void *rock);
+static int propfind_maxsize(const xmlChar *name,
+                            xmlNsPtr ns,
                             struct propfind_ctx *fctx,
-                            xmlNodePtr prop, xmlNodePtr resp,
-                            struct propstat propstat[], void *rock);
-static int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+                            xmlNodePtr prop,
+                            xmlNodePtr resp,
+                            struct propstat propstat[],
+                            void *rock);
+static int propfind_addrgroups(const xmlChar *name,
+                               xmlNsPtr ns,
                                struct propfind_ctx *fctx,
-                               xmlNodePtr prop, xmlNodePtr resp,
-                               struct propstat propstat[], void *rock);
+                               xmlNodePtr prop,
+                               xmlNodePtr resp,
+                               struct propstat propstat[],
+                               void *rock);
 
 static int report_card_query(struct transaction_t *txn,
                              struct meth_params *rparams,
-                             xmlNodePtr inroot, struct propfind_ctx *fctx);
+                             xmlNodePtr inroot,
+                             struct propfind_ctx *fctx);
 
 #ifdef HAVE_LIBICALVCARD
 
@@ -175,22 +208,25 @@ static struct mime_type_t carddav_mime_types[] = {
 
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
-    { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf,
-      (void * (*)(const struct buf*)) &vcard_parse_buf,
-      (void (*)(void *)) &vparse_free_card, NULL, NULL
-    },
-    { "text/directory; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf,
-      (void * (*)(const struct buf*)) &vcard_parse_buf,
-      (void (*)(void *)) &vparse_free_card, NULL, NULL
-    },
-    { "text/vcard", "4.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf,
-      (void * (*)(const struct buf*)) &vcard_parse_buf,
-      (void (*)(void *)) &vparse_free_card, NULL, NULL
-    },
-    { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
+    { "text/vcard; charset=utf-8",
+     "3.0",                                  "vcf",
+     (struct buf * (*) (void *) ) & vcard_as_buf,
+     (void *(*) (const struct buf *) ) & vcard_parse_buf,
+     (void (*)(void *)) &vparse_free_card,
+     NULL,                                                                  NULL },
+    { "text/directory; charset=utf-8",
+     "3.0",                                  "vcf",
+     (struct buf * (*) (void *) ) & vcard_as_buf,
+     (void *(*) (const struct buf *) ) & vcard_parse_buf,
+     (void (*)(void *)) &vparse_free_card,
+     NULL,                                                                  NULL },
+    { "text/vcard",
+     "4.0",                                  "vcf",
+     (struct buf * (*) (void *) ) & vcard_as_buf,
+     (void *(*) (const struct buf *) ) & vcard_parse_buf,
+     (void (*)(void *)) &vparse_free_card,
+     NULL,                                                                  NULL },
+    { NULL,                            NULL, NULL,  NULL, NULL, NULL, NULL, NULL }
 };
 
 #endif /* HAVE_LIBICALVCARD */
@@ -396,7 +432,6 @@ static struct meth_params carddav_params = {
 };
 // clang-format on
 
-
 /* Namespace for Carddav collections */
 // clang-format off
 struct namespace_t namespace_addressbook = {
@@ -439,7 +474,9 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     namespace_addressbook.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CARDDAV;
 
-    if (!namespace_addressbook.enabled) return;
+    if (!namespace_addressbook.enabled) {
+        return;
+    }
 
     if (!config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) {
         fatal("Required 'addressbookprefix' option is not set", EX_CONFIG);
@@ -454,32 +491,45 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
     vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
-    if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
+    if (vcard_max_size <= 0) {
+        vcard_max_size = BYTESIZE_UNLIMITED;
+    }
 }
 
-
-static int _create_mailbox(const char *userid, const char *mailboxname, int type,
-                           const char *displayname, user_nslock_t **user_nslockp)
+static int _create_mailbox(const char *userid,
+                           const char *mailboxname,
+                           int type,
+                           const char *displayname,
+                           user_nslock_t **user_nslockp)
 {
     struct mailbox *mailbox = NULL;
 
     int r = mboxlist_lookup(mailboxname, NULL, NULL);
-    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+    if (r != IMAP_MAILBOX_NONEXISTENT) {
+        return r;
+    }
 
     if (!*user_nslockp) {
         *user_nslockp = user_nslock_lockmb_w(mailboxname);
         // maybe we lost the race on this one
         r = mboxlist_lookup(mailboxname, NULL, NULL);
-        if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+        if (r != IMAP_MAILBOX_NONEXISTENT) {
+            return r;
+        }
     }
 
     /* Create locally */
     mbentry_t mbentry = MBENTRY_INITIALIZER;
     mbentry.name = (char *) mailboxname;
     mbentry.mbtype = type;
-    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                               0/*isadmin*/, userid, httpd_authstate,
-                               0/*flags*/, displayname ? &mailbox : NULL);
+    r = mboxlist_createmailbox(&mbentry,
+                               0 /*options*/,
+                               0 /*highestmodseq*/,
+                               0 /*isadmin*/,
+                               userid,
+                               httpd_authstate,
+                               0 /*flags*/,
+                               displayname ? &mailbox : NULL);
 
     if (!r && displayname) {
         annotate_state_t *astate = NULL;
@@ -497,15 +547,18 @@ static int _create_mailbox(const char *userid, const char *mailboxname, int type
         mailbox_close(&mailbox);
     }
 
-    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                  mailboxname, error_message(r));
+    if (r) {
+        syslog(LOG_ERR,
+               "IOERROR: failed to create %s (%s)",
+               mailboxname,
+               error_message(r));
+    }
 
     return r;
 }
 
-
-
-EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
+EXPORTED int carddav_create_defaultaddressbook(const char *userid)
+{
     user_nslock_t *user_nslock = NULL;
 
     /* addressbook-home-set */
@@ -519,31 +572,46 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
 
         r = proxy_mlookup(inboxname, &mbentry, NULL, NULL);
         free(inboxname);
-        if (r == IMAP_MAILBOX_NONEXISTENT) r = IMAP_INVALID_USER;
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = IMAP_INVALID_USER;
+        }
         if (!r && mbentry->server) {
-            proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
-                             &backend_cached, NULL, NULL, httpd_in);
+            proxy_findserver(mbentry->server,
+                             &http_protocol,
+                             httpd_userid,
+                             &backend_cached,
+                             NULL,
+                             NULL,
+                             httpd_in);
             mboxlist_entry_free(&mbentry);
             goto done;
         }
         mboxlist_entry_free(&mbentry);
 
-        if (!r) r = _create_mailbox(userid, mbname_intname(mbname),
-                                    MBTYPE_ADDRESSBOOK, NULL,
-                                    &user_nslock);
+        if (!r) {
+            r = _create_mailbox(userid,
+                                mbname_intname(mbname),
+                                MBTYPE_ADDRESSBOOK,
+                                NULL,
+                                &user_nslock);
+        }
     }
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     /* Default addressbook */
     mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
     r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        r = _create_mailbox(userid, mbname_intname(mbname),
-                            MBTYPE_ADDRESSBOOK, "Personal",
+        r = _create_mailbox(userid,
+                            mbname_intname(mbname),
+                            MBTYPE_ADDRESSBOOK,
+                            "Personal",
                             &user_nslock);
     }
 
- done:
+done:
     user_nslock_release(&user_nslock);
     mbname_free(&mbname);
     return r;
@@ -551,8 +619,9 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
 
 static int my_carddav_auth(const char *userid)
 {
-    if (httpd_userisadmin || httpd_userisanonymous ||
-        global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS)) {
+    if (httpd_userisadmin || httpd_userisanonymous
+        || global_authisa(httpd_authstate, IMAPOPT_PROXYSERVERS))
+    {
         /* admin, anonymous, or proxy from frontend - won't have DAV database */
         return 0;
     }
@@ -565,8 +634,10 @@ static int my_carddav_auth(const char *userid)
     /* Auto-provision an addressbook for 'userid' */
     int r = carddav_create_defaultaddressbook(userid);
     if (r) {
-        syslog(LOG_ERR, "could not autoprovision addressbook for userid %s: %s",
-                userid, error_message(r));
+        syslog(LOG_ERR,
+               "could not autoprovision addressbook for userid %s: %s",
+               userid,
+               error_message(r));
         if (r == IMAP_INVALID_USER) {
             /* We successfully authenticated, but don't have a user INBOX.
                Assume that the user has yet to be fully provisioned,
@@ -574,18 +645,16 @@ static int my_carddav_auth(const char *userid)
             */
             return HTTP_UNAVAILABLE;
         }
-        
+
         return HTTP_SERVER_ERROR;
     }
     return 0;
 }
 
-
 static void my_carddav_reset(void)
 {
     // nothing
 }
-
 
 static void my_carddav_shutdown(void)
 {
@@ -594,26 +663,36 @@ static void my_carddav_shutdown(void)
 }
 
 /* Determine allowed methods in CardDAV namespace */
-static unsigned long carddav_allow_cb(struct request_target_t *tgt) {
+static unsigned long carddav_allow_cb(struct request_target_t *tgt)
+{
     unsigned long allow = calcarddav_allow_cb(tgt);
-    if (tgt->collection && !tgt->resource && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+    if (tgt->collection && !tgt->resource
+        && !strcmp(tgt->collection, DEFAULT_ADDRBOOK "/"))
+    {
         allow &= ~ALLOW_DELETE;
+    }
 
     return allow;
 }
 
 /* Parse request-target path in CardDAV namespace */
-static int carddav_parse_path(const char *path, struct request_target_t *tgt,
+static int carddav_parse_path(const char *path,
+                              struct request_target_t *tgt,
                               const char **resultstr)
 {
-    int r = calcarddav_parse_path(path, tgt,
+    int r = calcarddav_parse_path(path,
+                                  tgt,
                                   config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
                                   resultstr);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
-    if (!tgt->resource &&
-        !strncmpsafe(tgt->collection,
-                     DEFAULT_ADDRBOOK "/", strlen(DEFAULT_ADDRBOOK)+1)) {
+    if (!tgt->resource
+        && !strncmpsafe(tgt->collection,
+                        DEFAULT_ADDRBOOK "/",
+                        strlen(DEFAULT_ADDRBOOK) + 1))
+    {
         /* Can't delete default addressbook */
         tgt->allow &= ~ALLOW_DELETE;
     }
@@ -626,7 +705,8 @@ static int carddav_parse_path(const char *path, struct request_target_t *tgt,
 /* Store the vCard data in the specified addressbook/resource */
 static int carddav_store_resource(struct transaction_t *txn,
                                   vcardcomponent *vcard,
-                                  struct mailbox *mailbox, const char *resource,
+                                  struct mailbox *mailbox,
+                                  const char *resource,
                                   struct carddav_db *davdb)
 {
     vcardproperty *prop;
@@ -645,23 +725,27 @@ static int carddav_store_resource(struct transaction_t *txn,
     /* Fetch some important properties */
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
-         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
+         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY))
+    {
         const char *propval = vcardproperty_get_value_as_string(prop);
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            if (!version)
+            if (!version) {
                 version = xstrdup(propval);
+            }
             break;
 
         case VCARD_UID_PROPERTY:
-            if (!uid)
+            if (!uid) {
                 uid = xstrdup(propval);
+            }
             break;
 
         case VCARD_FN_PROPERTY:
-            if (!fullname)
+            if (!fullname) {
                 fullname = xstrdup(propval);
+            }
             break;
 
         default:
@@ -672,13 +756,15 @@ static int carddav_store_resource(struct transaction_t *txn,
     /* Check for an existing resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    const mbentry_t mbentry = { .name = (char *) mailbox_name(mailbox),
+                                .uniqueid =
+                                    (char *) mailbox_uniqueid(mailbox) };
     carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        int r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+        int r =
+            mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
         if (!r) {
             oldrecord = &record;
         }
@@ -711,15 +797,19 @@ static int carddav_store_resource(struct transaction_t *txn,
     struct message_guid uuid;
     message_guid_generate(&uuid, uid, strlen(uid));
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "<%s@%s>",
-               message_guid_encode(&uuid), config_servername);
+    buf_printf(&txn->buf,
+               "<%s@%s>",
+               message_guid_encode(&uuid),
+               config_servername);
     spool_replace_header(xstrdup("Message-ID"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
     spool_replace_header(xstrdup("Content-Type"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     buf_setcstr(&txn->buf, "attachment");
     charset_append_mime_param(&txn->buf,
@@ -727,17 +817,23 @@ static int carddav_store_resource(struct transaction_t *txn,
                               "filename",
                               resource);
     spool_replace_header(xstrdup("Content-Disposition"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
-    r = dav_store_resource(txn, buf_cstring(buf), 0,
-                           mailbox, oldrecord, cdata->dav.createdmodseq,
-                           NULL, NULL);
+    r = dav_store_resource(txn,
+                           buf_cstring(buf),
+                           0,
+                           mailbox,
+                           oldrecord,
+                           cdata->dav.createdmodseq,
+                           NULL,
+                           NULL);
     buf_destroy(buf);
 
-  done:
+done:
     free(version);
     free(uid);
     free(fullname);
@@ -745,12 +841,15 @@ static int carddav_store_resource(struct transaction_t *txn,
     return r;
 }
 
-static int carddav_copy(struct transaction_t *txn, void *obj,
-                        struct mailbox *mailbox, const char *resource,
-                        void *destdb, unsigned flags __attribute__((unused)))
+static int carddav_copy(struct transaction_t *txn,
+                        void *obj,
+                        struct mailbox *mailbox,
+                        const char *resource,
+                        void *destdb,
+                        unsigned flags __attribute__((unused)))
 {
-    struct carddav_db *db = (struct carddav_db *)destdb;
-    vcardcomponent *vcard = (vcardcomponent *)obj;
+    struct carddav_db *db = (struct carddav_db *) destdb;
+    vcardcomponent *vcard = (vcardcomponent *) obj;
 
     return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
@@ -760,7 +859,8 @@ static int carddav_copy(struct transaction_t *txn, void *obj,
 /* Store the vCard data in the specified addressbook/resource */
 static int carddav_store_resource(struct transaction_t *txn,
                                   struct vparse_card *vcard,
-                                  struct mailbox *mailbox, const char *resource,
+                                  struct mailbox *mailbox,
+                                  const char *resource,
                                   struct carddav_db *davdb)
 {
     struct vparse_entry *ventry;
@@ -780,29 +880,38 @@ static int carddav_store_resource(struct transaction_t *txn,
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
-        if (!strcasecmp(name, "version"))
+        if (!strcasecmp(name, "version")) {
             version = propval;
+        }
 
-        else if (!strcasecmp(name, "uid"))
+        else if (!strcasecmp(name, "uid")) {
             uid = propval;
+        }
 
-        else if (!strcasecmp(name, "fn"))
+        else if (!strcasecmp(name, "fn")) {
             fullname = propval;
+        }
     }
 
     /* Check for an existing resource */
     /* XXX  We can't assume that txn->req_tgt.mbentry is our target,
        XXX  because we may have been called as part of a COPY/MOVE */
-    const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
-                                .uniqueid = (char *)mailbox_uniqueid(mailbox) };
+    const mbentry_t mbentry = { .name = (char *) mailbox_name(mailbox),
+                                .uniqueid =
+                                    (char *) mailbox_uniqueid(mailbox) };
     carddav_lookup_resource(davdb, &mbentry, resource, &cdata, 0);
 
     if (cdata->dav.imap_uid) {
         /* Fetch index record for the resource */
-        int r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
+        int r =
+            mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
         if (!r) {
             oldrecord = &record;
         }
@@ -834,15 +943,19 @@ static int carddav_store_resource(struct transaction_t *txn,
     struct message_guid uuid;
     message_guid_generate(&uuid, uid, strlen(uid));
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, "<%s@%s>",
-               message_guid_encode(&uuid), config_servername);
+    buf_printf(&txn->buf,
+               "<%s@%s>",
+               message_guid_encode(&uuid),
+               config_servername);
     spool_replace_header(xstrdup("Message-ID"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
     spool_replace_header(xstrdup("Content-Type"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     buf_setcstr(&txn->buf, "attachment");
     charset_append_mime_param(&txn->buf,
@@ -850,24 +963,33 @@ static int carddav_store_resource(struct transaction_t *txn,
                               "filename",
                               resource);
     spool_replace_header(xstrdup("Content-Disposition"),
-                         buf_release(&txn->buf), txn->req_hdrs);
+                         buf_release(&txn->buf),
+                         txn->req_hdrs);
 
     spool_remove_header("Content-Description", txn->req_hdrs);
 
     /* Store the resource */
-    int r = dav_store_resource(txn, buf_cstring(buf), 0,
-                              mailbox, oldrecord, cdata->dav.createdmodseq,
-                              NULL, NULL);
+    int r = dav_store_resource(txn,
+                               buf_cstring(buf),
+                               0,
+                               mailbox,
+                               oldrecord,
+                               cdata->dav.createdmodseq,
+                               NULL,
+                               NULL);
     buf_destroy(buf);
     return r;
 }
 
-static int carddav_copy(struct transaction_t *txn, void *obj,
-                        struct mailbox *mailbox, const char *resource,
-                        void *destdb, unsigned flags __attribute__((unused)))
+static int carddav_copy(struct transaction_t *txn,
+                        void *obj,
+                        struct mailbox *mailbox,
+                        const char *resource,
+                        void *destdb,
+                        unsigned flags __attribute__((unused)))
 {
-    struct carddav_db *db = (struct carddav_db *)destdb;
-    struct vparse_card *vcard = (struct vparse_card *)obj;
+    struct carddav_db *db = (struct carddav_db *) destdb;
+    struct vparse_card *vcard = (struct vparse_card *) obj;
 
     return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
@@ -887,21 +1009,28 @@ static int export_addressbook(struct transaction_t *txn,
     struct buf attrib = BUF_INITIALIZER;
     const char *sep = "";
 
-    if (!mime) return HTTP_NOT_ACCEPTABLE;
+    if (!mime) {
+        return HTTP_NOT_ACCEPTABLE;
+    }
 
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        syslog(LOG_ERR,
+               "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name,
+               error_message(r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
 
     /* Check any preconditions */
-    sprintf(etag, "%u-%u-%u",
-            mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    sprintf(etag,
+            "%u-%u-%u",
+            mailbox->i.uidvalidity,
+            mailbox->i.last_uid,
+            mailbox->i.exists);
     precond = check_precond(txn, etag, mailbox->index_mtime);
 
     switch (precond) {
@@ -910,11 +1039,15 @@ static int export_addressbook(struct transaction_t *txn,
         /* Fill in ETag, Last-Modified, Expires, and Cache-Control */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = mailbox->index_mtime;
-        txn->resp_body.maxage = 3600;  /* 1 hr */
-        txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE;  /* don't use stale data */
-        if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
+        txn->resp_body.maxage = 3600;               /* 1 hr */
+        txn->flags.cc |= CC_MAXAGE | CC_REVALIDATE; /* don't use stale data */
+        if (httpd_userid) {
+            txn->flags.cc |= CC_PRIVATE;
+        }
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -930,10 +1063,14 @@ static int export_addressbook(struct transaction_t *txn,
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
-                                     httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(mailbox,
+                                     displayname_annot,
+                                     httpd_userid,
+                                     &attrib);
     /* fall back to last part of mailbox name */
-    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox_name(mailbox), '.') + 1);
+    if (r || !attrib.len) {
+        buf_setcstr(&attrib, strrchr(mailbox_name(mailbox), '.') + 1);
+    }
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
@@ -950,14 +1087,17 @@ static int export_addressbook(struct transaction_t *txn,
     txn->flags.cc |= CC_NOTRANSFORM;
 
     /* Begin (converted) vCard stream */
-    if (mime->begin_stream)
+    if (mime->begin_stream) {
         sep = mime->begin_stream(buf, mailbox, NULL, NULL, NULL, NULL);
-    else buf_reset(buf);
+    }
+    else {
+        buf_reset(buf);
+    }
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     unsigned want_ver = (mime->version[0] == '4') ? 4 : 3;
     struct mailbox_iter *iter =
-        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED|ITER_SKIP_DELETED);
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED | ITER_SKIP_DELETED);
 
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
@@ -975,8 +1115,8 @@ static int export_addressbook(struct transaction_t *txn,
 
             if (version != want_ver || want_ver == 4) {
                 vcardcomponent_transform(vcard,
-                                         want_ver == 4 ? VCARD_VERSION_40 :
-                                         VCARD_VERSION_30);
+                                         want_ver == 4 ? VCARD_VERSION_40
+                                                       : VCARD_VERSION_30);
             }
 
             if (r++ && *sep) {
@@ -992,7 +1132,7 @@ static int export_addressbook(struct transaction_t *txn,
 
             vcardcomponent_free(vcard);
         }
-#else /* !HAVE_LIBICALVCARD */
+#else  /* !HAVE_LIBICALVCARD */
         struct vparse_card *vcard;
 
         /* Map and parse existing vCard resource */
@@ -1004,8 +1144,12 @@ static int export_addressbook(struct transaction_t *txn,
             unsigned version = (ventry && ventry->v.value[0] == '4') ? 4 : 3;
 
             if (version != want_ver || want_ver == 4) {
-                if (want_ver == 4) vcard_to_v4(vcard);
-                else vcard_to_v3(vcard);
+                if (want_ver == 4) {
+                    vcard_to_v4(vcard);
+                }
+                else {
+                    vcard_to_v3(vcard);
+                }
             }
 
             if (r++ && *sep) {
@@ -1035,34 +1179,35 @@ static int export_addressbook(struct transaction_t *txn,
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-  done:
+done:
     buf_free(&attrib);
     mailbox_close(&mailbox);
 
     return ret;
 }
 
-
 /*
  * mboxlist_findall() callback function to list addressbooks
  */
 
-struct addr_info {
+struct addr_info
+{
     char shortname[MAX_MAILBOX_NAME];
     char displayname[MAX_MAILBOX_NAME];
-    char* description;
+    char *description;
     unsigned flags;
 };
 
 enum {
-    ADDR_IS_DEFAULT =    (1<<0),
-    ADDR_CAN_DELETE =    (1<<1),
-    ADDR_CAN_ADMIN =     (1<<2),
-    ADDR_IS_PUBLIC =     (1<<3),
-    ADDR_CAN_PROPCOL =   (1<<4)
+    ADDR_IS_DEFAULT = (1 << 0),
+    ADDR_CAN_DELETE = (1 << 1),
+    ADDR_CAN_ADMIN = (1 << 2),
+    ADDR_IS_PUBLIC = (1 << 3),
+    ADDR_CAN_PROPCOL = (1 << 4)
 };
 
-struct list_addr_rock {
+struct list_addr_rock
+{
     struct addr_info *addr;
     unsigned len;
     unsigned alloc;
@@ -1080,29 +1225,39 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     struct buf temp = BUF_INITIALIZER;
 
-    if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
+    if (!defaultlen) {
+        defaultlen = strlen(DEFAULT_ADDRBOOK);
+    }
 
     /* Make sure it is an addressbook */
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) {
+        goto done;
+    }
 
     /* Make sure it is readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
-    if ((rights & DACL_READ) != DACL_READ) goto done;
+    if ((rights & DACL_READ) != DACL_READ) {
+        goto done;
+    }
 
     shortname = strrchr(mbentry->name, '.') + 1;
     len = strlen(shortname);
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
-                                    httpd_userid, &temp);
+    r = annotatemore_lookupmask_mbe(mbentry,
+                                    displayname_annot,
+                                    httpd_userid,
+                                    &temp);
     /* fall back to the last part of the mailbox name */
-    if (r || !temp.len) buf_setcstr(&temp, shortname);
+    if (r || !temp.len) {
+        buf_setcstr(&temp, shortname);
+    }
 
     /* Make sure we have room in our array */
     if (lrock->len == lrock->alloc) {
         lrock->alloc += 100;
-        lrock->addr = xrealloc(lrock->addr,
-                              lrock->alloc * sizeof(struct addr_info));
+        lrock->addr =
+            xrealloc(lrock->addr, lrock->alloc * sizeof(struct addr_info));
     }
 
     /* Add our addressbook to the array */
@@ -1110,8 +1265,11 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     strlcpy(addr->shortname, shortname, MAX_MAILBOX_NAME);
     strlcpy(addr->displayname, buf_cstring(&temp), MAX_MAILBOX_NAME);
     buf_reset(&temp);
-    annotatemore_lookupmask_mbe(mbentry, DAV_ANNOT_NS "<" XML_NS_CARDDAV ">addressbook-description",
-                                httpd_userid, &temp);
+    annotatemore_lookupmask_mbe(mbentry,
+                                DAV_ANNOT_NS "<" XML_NS_CARDDAV
+                                             ">addressbook-description",
+                                httpd_userid,
+                                &temp);
     addr->description = buf_release(&temp);
     addr->flags = 0;
 
@@ -1160,7 +1318,6 @@ static int addr_compare(const void *a, const void *b)
     return strcmp(c1->displayname, c2->displayname);
 }
 
-
 /* Create a HTML document listing all addressbooks available to the user */
 static int list_addressbooks(struct transaction_t *txn)
 {
@@ -1181,13 +1338,19 @@ static int list_addressbooks(struct transaction_t *txn)
     free(mboxlist);
     lastmod = MAX(compile_time, sbuf.st_mtime);
     assert(!buf_len(&txn->buf));
-    buf_printf(&txn->buf, TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
-               compile_time, sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               TIME_T_FMT "-" TIME_T_FMT "-" OFF_T_FMT,
+               compile_time,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     /* stat() config file for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               "-" TIME_T_FMT "-" OFF_T_FMT,
+               sbuf.st_mtime,
+               sbuf.st_size);
     etag = buf_cstring(&txn->buf);
 
     /* Check any preconditions */
@@ -1201,7 +1364,9 @@ static int list_addressbooks(struct transaction_t *txn)
         txn->resp_body.lastmod = lastmod;
         txn->flags.cc |= CC_REVALIDATE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -1226,20 +1391,28 @@ static int list_addressbooks(struct transaction_t *txn)
     buf_printf_markup(body, level, HTML_DOCTYPE);
     buf_printf_markup(body, level++, "<html style='color-scheme:dark light'>");
     buf_printf_markup(body, level++, "<head>");
-    buf_printf_markup(body, level, "<title>%s</title>", "Available Addressbooks");
+    buf_printf_markup(body,
+                      level,
+                      "<title>%s</title>",
+                      "Available Addressbooks");
     buf_printf_markup(body, level++, "<script type=\"text/javascript\">");
     buf_appendcstr(body, "//<![CDATA[\n");
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
     /* format string comes from http_cal_abook_admin_js.h */
-    buf_printf(body, http_cal_abook_admin_js,
-               CYRUS_VERSION, http_cal_abook_admin_js_len);
+    buf_printf(body,
+               http_cal_abook_admin_js,
+               CYRUS_VERSION,
+               http_cal_abook_admin_js_len);
 #pragma GCC diagnostic pop
     buf_appendcstr(body, "//]]>\n");
     buf_printf_markup(body, --level, "</script>");
     buf_printf_markup(body, level++, "<noscript>");
-    buf_printf_markup(body, level, "<i>*** %s ***</i>",
-                      "JavaScript required to create/modify/delete addressbooks");
+    buf_printf_markup(
+        body,
+        level,
+        "<i>*** %s ***</i>",
+        "JavaScript required to create/modify/delete addressbooks");
     buf_printf_markup(body, --level, "</noscript>");
     buf_printf_markup(body, --level, "</head>");
     buf_printf_markup(body, level++, "<body>");
@@ -1257,19 +1430,22 @@ static int list_addressbooks(struct transaction_t *txn)
         buf_printf_markup(body, level++, "<table cellpadding=5>");
         buf_printf_markup(body, level++, "<tr>");
         buf_printf_markup(body, level, "<td align=right>Name:</td>");
-        buf_printf_markup(body, level,
+        buf_printf_markup(body,
+                          level,
                           "<td><input name=name size=30 maxlength=40></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, level++, "<tr>");
         buf_printf_markup(body, level, "<td align=right>Description:</td>");
-        buf_printf_markup(body, level,
+        buf_printf_markup(body,
+                          level,
                           "<td><input name=desc size=75 maxlength=120></td>");
         buf_printf_markup(body, --level, "</tr>");
 
         buf_printf_markup(body, level++, "<tr>");
         buf_printf_markup(body, level, "<td></td>");
-        buf_printf_markup(body, level,
+        buf_printf_markup(body,
+                          level,
                           "<td><br><input type=button value='Create'"
                           " onclick='createCollection()'>"
                           " <input type=reset></td>");
@@ -1294,20 +1470,27 @@ static int list_addressbooks(struct transaction_t *txn)
 
     memset(&lrock, 0, sizeof(struct list_addr_rock));
     mboxlist_mboxtree(txn->req_tgt.mbentry->name,
-                      list_addr_cb, &lrock, MBOXTREE_SKIP_ROOT);
+                      list_addr_cb,
+                      &lrock,
+                      MBOXTREE_SKIP_ROOT);
 
     /* Sort addressbooks by displayname */
     qsort(lrock.addr, lrock.len, sizeof(struct addr_info), &addr_compare);
     buf_printf_markup(body, level, "<thead>");
-    buf_printf_markup(body, level, "<tr><th colspan='2'>Name</th><th colspan='2'>Description</th><th>HTTPS link</th><th>Actions</th><th>Public</th></tr>"
-);
+    buf_printf_markup(body,
+                      level,
+                      "<tr><th colspan='2'>Name</th><th "
+                      "colspan='2'>Description</th><th>HTTPS "
+                      "link</th><th>Actions</th><th>Public</th></tr>");
     buf_printf_markup(body, level, "</thead><tbody>");
     charset_t utf8 = charset_lookupname("utf-8");
 
     /* Add available addressbooks with action items */
     for (i = 0; i < lrock.len; i++) {
         struct addr_info *addr = &lrock.addr[i];
-        char *temp = charset_convert(addr->displayname, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        char *temp = charset_convert(addr->displayname,
+                                     utf8,
+                                     CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
 
         /* Send a body chunk once in a while */
         if (buf_len(body) > PROT_BUFSIZE) {
@@ -1316,50 +1499,80 @@ static int list_addressbooks(struct transaction_t *txn)
         }
 
         /* Addressbook name */
-        buf_printf_markup(body, level++, "<tr id='%i' data-url='%s'>", i, addr->shortname);
-        if (addr->flags & ADDR_CAN_PROPCOL)
-            buf_printf_markup(body, level, "<td>%s%s%s</td><td><button onclick='changeDisplayname(%i)'>✎</button></td>",
+        buf_printf_markup(body,
+                          level++,
+                          "<tr id='%i' data-url='%s'>",
+                          i,
+                          addr->shortname);
+        if (addr->flags & ADDR_CAN_PROPCOL) {
+            buf_printf_markup(body,
+                              level,
+                              "<td>%s%s%s</td><td><button "
+                              "onclick='changeDisplayname(%i)'>✎</button></td>",
                               (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
                               temp,
-                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "", i);
-        else
-            buf_printf_markup(body, level, "<td colspan='2'>%s%s%s</td>",
+                              (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "",
+                              i);
+        }
+        else {
+            buf_printf_markup(body,
+                              level,
+                              "<td colspan='2'>%s%s%s</td>",
                               (addr->flags & ADDR_IS_DEFAULT) ? "<b>" : "",
                               temp,
                               (addr->flags & ADDR_IS_DEFAULT) ? "</b>" : "");
+        }
         free(temp);
 
         /* Addressbook description */
-        temp = charset_convert(addr->description, utf8, CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
+        temp = charset_convert(addr->description,
+                               utf8,
+                               CHARSET_KEEPCASE | CHARSET_ESCAPEHTML);
         free(addr->description);
-        if (addr->flags & ADDR_CAN_PROPCOL)
-            buf_printf_markup(body, level, "<td>%s</td><td><button onclick='changeDescription(%i)'>✎</button></td>",
-                              temp, i);
-        else
+        if (addr->flags & ADDR_CAN_PROPCOL) {
+            buf_printf_markup(body,
+                              level,
+                              "<td>%s</td><td><button "
+                              "onclick='changeDescription(%i)'>✎</button></td>",
+                              temp,
+                              i);
+        }
+        else {
             buf_printf_markup(body, level, "<td colspan='2'>%s</td>", temp);
+        }
         free(temp);
 
         /* Download link */
-        buf_printf_markup(body, level, "<td><a href=\"%s%s\">Download</a></td>",
-                          txn->req_tgt.path, addr->shortname);
+        buf_printf_markup(body,
+                          level,
+                          "<td><a href=\"%s%s\">Download</a></td>",
+                          txn->req_tgt.path,
+                          addr->shortname);
 
         /* Delete button */
-        if (addr->flags & ADDR_IS_DEFAULT)
+        if (addr->flags & ADDR_IS_DEFAULT) {
             buf_printf_markup(body, level, "<td>Default Addressbook</td>");
-        else if (addr->flags & ADDR_CAN_DELETE)
-            buf_printf_markup(body, level,
+        }
+        else if (addr->flags & ADDR_CAN_DELETE) {
+            buf_printf_markup(body,
+                              level,
                               "<td><input type=button value='Delete'"
-                              " onclick='deleteCollection(%i)'></td>", i);
-        else
+                              " onclick='deleteCollection(%i)'></td>",
+                              i);
+        }
+        else {
             buf_printf_markup(body, level, "<td></td>");
+        }
 
         /* Public (shared) checkbox */
-        buf_printf_markup(body, level,
+        buf_printf_markup(body,
+                          level,
                           "<td><input type=checkbox%s%s"
                           " onclick='share(%i, this.checked)'>"
                           "Public</td>",
                           (addr->flags & ADDR_CAN_ADMIN) ? "" : " disabled",
-                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "", i);
+                          (addr->flags & ADDR_IS_PUBLIC) ? " checked" : "",
+                          i);
 
         buf_printf_markup(body, --level, "</tr>");
     }
@@ -1378,20 +1591,23 @@ static int list_addressbooks(struct transaction_t *txn)
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-  done:
+done:
     return ret;
 }
-
 
 #ifdef HAVE_LIBICALVCARD
 
 /* Perform a GET/HEAD request on a CardDAV resource */
-static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                       struct index_record *record, void *data, void **obj,
+static int carddav_get(struct transaction_t *txn,
+                       struct mailbox *mailbox,
+                       struct index_record *record,
+                       void *data,
+                       void **obj,
                        struct mime_type_t *mime)
 {
-    if (!(txn->req_tgt.collection || txn->req_tgt.userid))
+    if (!(txn->req_tgt.collection || txn->req_tgt.userid)) {
         return HTTP_NO_CONTENT;
+    }
 
     if (record && record->uid) {
         /* GET on a resource */
@@ -1402,8 +1618,8 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
             /* Translate between vCard versions */
             *obj = record_to_vcard_x(mailbox, record);
             vcardcomponent_transform(*obj,
-                                     want_ver == 4 ? VCARD_VERSION_40 :
-                                     VCARD_VERSION_30);
+                                     want_ver == 4 ? VCARD_VERSION_40
+                                                   : VCARD_VERSION_30);
         }
 
         return HTTP_CONTINUE;
@@ -1414,9 +1630,15 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, httpd_userid,
-                              &backend_cached, NULL, NULL, httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+                              &http_protocol,
+                              httpd_userid,
+                              &backend_cached,
+                              NULL,
+                              NULL,
+                              httpd_in);
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -1427,8 +1649,9 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         /* Download an entire addressbook collection */
         return export_addressbook(txn, mime);
     }
-    else if (txn->req_tgt.userid &&
-             config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
+    else if (txn->req_tgt.userid
+             && config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN))
+    {
         /* GET a list of addressbook under addressbook-home-set */
         return list_addressbooks(txn);
     }
@@ -1437,7 +1660,6 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
     return HTTP_NO_CONTENT;
 }
 
-
 /* Perform a COPY/MOVE/PUT request
  *
  * preconditions:
@@ -1445,12 +1667,15 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int carddav_put(struct transaction_t *txn, void *obj,
-                       struct mailbox *mailbox, const char *resource,
-                       void *destdb, unsigned flags __attribute__((unused)))
+static int carddav_put(struct transaction_t *txn,
+                       void *obj,
+                       struct mailbox *mailbox,
+                       const char *resource,
+                       void *destdb,
+                       unsigned flags __attribute__((unused)))
 {
-    struct carddav_db *db = (struct carddav_db *)destdb;
-    vcardcomponent *vcard = (vcardcomponent *)obj;
+    struct carddav_db *db = (struct carddav_db *) destdb;
+    vcardcomponent *vcard = (vcardcomponent *) obj;
     char *uid = NULL, *fullname = NULL;
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
@@ -1469,8 +1694,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             if (!strcasecmp(param->attribute, "version")) {
                 want_ver = param->value;
 
-                if (strcmp(want_ver, "3.0") &&
-                    strcmp(want_ver, "4.0")) {
+                if (strcmp(want_ver, "3.0") && strcmp(want_ver, "4.0")) {
                     txn->error.precond = CARDDAV_SUPP_DATA;
                     txn->error.desc =
                         "Unsupported version= specified in Content-Type";
@@ -1505,7 +1729,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             if (profile && strcasecmp(profile, "vcard")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
                 txn->error.desc = "Only profile=vcard is accepted"
-                    " for Content-type 'text/directory'";
+                                  " for Content-type 'text/directory'";
                 goto done;
             }
 
@@ -1544,13 +1768,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     vcardproperty *prop;
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
-         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
+         prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY))
+    {
         const char *propval = vcardproperty_get_value_as_string(prop);
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            if (strcmp(propval, "3.0") &&
-                strcmp(propval, "4.0")) {
+            if (strcmp(propval, "3.0") && strcmp(propval, "4.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
                 txn->error.desc = "Unsupported vCard version";
                 goto done;
@@ -1564,13 +1788,15 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             break;
 
         case VCARD_UID_PROPERTY:
-            if (!uid)
+            if (!uid) {
                 uid = xstrdup(propval);
+            }
             break;
 
         case VCARD_FN_PROPERTY:
-            if (!fullname)
+            if (!fullname) {
                 fullname = xstrdup(propval);
+            }
             break;
 
         default:
@@ -1592,19 +1818,24 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
-    
+
     const char *olduid = cdata->vcard_uid;
     const char *newuid = uid;
-    while (!strncmp(newuid, "urn:uuid:", 9)) newuid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
+    while (!strncmp(newuid, "urn:uuid:", 9)) {
+        newuid += 9;
+    }
+    while (!strncmpsafe(olduid, "urn:uuid:", 9)) {
+        olduid += 9;
+    }
     if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
         const char *mboxname;
         mbentry_t *mbentry = NULL;
 
-        if (cdata->dav.mailbox_byname)
+        if (cdata->dav.mailbox_byname) {
             mboxname = cdata->dav.mailbox;
+        }
         else {
             mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
             mboxname = mbentry->name;
@@ -1612,9 +1843,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         owner = mboxname_to_userid(mboxname);
 
         assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        buf_printf(&txn->buf,
+                   "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX,
+                   owner,
+                   strrchr(mboxname, '.') + 1,
+                   cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         mboxlist_entry_free(&mbentry);
         free(owner);
@@ -1623,14 +1858,16 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-  done:
+done:
     param_free(&params);
     free(uid);
     free(fullname);
     free(subtype);
     free(type);
 
-    if (txn->error.precond) return HTTP_FORBIDDEN;
+    if (txn->error.precond) {
+        return HTTP_FORBIDDEN;
+    }
 
     int ret = carddav_store_resource(txn, vcard, mailbox, resource, db);
 
@@ -1644,9 +1881,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 }
 
 /* Perform a bulk import */
-static int carddav_import(struct transaction_t *txn, void *obj,
-                          struct mailbox *mailbox, void *destdb,
-                          xmlNodePtr xmlroot, xmlNsPtr *ns, unsigned flags)
+static int carddav_import(struct transaction_t *txn,
+                          void *obj,
+                          struct mailbox *mailbox,
+                          void *destdb,
+                          xmlNodePtr xmlroot,
+                          xmlNsPtr *ns,
+                          unsigned flags)
 {
     vcardcomponent *root = obj, *vcard;
     xmlBufferPtr xmlbuf = NULL;
@@ -1697,12 +1938,17 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         }
 
         /* Append a unique resource name to URL and perform a PUT */
-        txn->req_tgt.reslen =
-            snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - baselen,
-                     "%s.vcf", resource);
+        txn->req_tgt.reslen = snprintf(txn->req_tgt.resource,
+                                       MAX_MAILBOX_PATH - baselen,
+                                       "%s.vcf",
+                                       resource);
 
-        r = carddav_put(txn, vcard, mailbox,
-                       txn->req_tgt.resource, destdb, flags);
+        r = carddav_put(txn,
+                        vcard,
+                        mailbox,
+                        txn->req_tgt.resource,
+                        destdb,
+                        flags);
 
         switch (r) {
         case HTTP_OK:
@@ -1712,26 +1958,33 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             xml_add_href(resp, NULL, txn->req_tgt.path);
 
             node = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
-            xmlNewChild(node, ns[NS_DAV], BAD_CAST "status",
+            xmlNewChild(node,
+                        ns[NS_DAV],
+                        BAD_CAST "status",
                         BAD_CAST http_statusline(VER_1_1, HTTP_OK));
 
             node = xmlNewChild(node, ns[NS_DAV], BAD_CAST "prop", NULL);
 
             if (txn->resp_body.etag) {
                 /* Add DAV:getetag property */
-                xmlNewTextChild(node, ns[NS_DAV], BAD_CAST "getetag",
+                xmlNewTextChild(node,
+                                ns[NS_DAV],
+                                BAD_CAST "getetag",
                                 BAD_CAST txn->resp_body.etag);
             }
 
             if ((flags & PREFER_REP) && myuid /* we added a UID */) {
                 /* Add CARDDAV:addressbook-data property */
                 struct buf *vcardbuf = vcard_as_buf_x(vcard);
-                xmlNodePtr cdata = xmlNewChild(node, ns[NS_CARDDAV],
-                                               BAD_CAST "addressbook-data", NULL);
+                xmlNodePtr cdata = xmlNewChild(node,
+                                               ns[NS_CARDDAV],
+                                               BAD_CAST "addressbook-data",
+                                               NULL);
 
-                xmlAddChild(cdata, xmlNewCDataBlock(xmlroot->doc,
-                                                    BAD_CAST buf_cstring(vcardbuf),
-                                                    buf_len(vcardbuf)));
+                xmlAddChild(cdata,
+                            xmlNewCDataBlock(xmlroot->doc,
+                                             BAD_CAST buf_cstring(vcardbuf),
+                                             buf_len(vcardbuf)));
                 buf_free(vcardbuf);
             }
 
@@ -1741,7 +1994,9 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             /* Failure: Add DAV:href, DAV:status, and DAV:error elements */
             xml_add_href(resp, NULL, NULL);
 
-            xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
+            xmlNewChild(resp,
+                        ns[NS_DAV],
+                        BAD_CAST "status",
                         BAD_CAST http_statusline(VER_1_1, r));
 
             node = xml_add_error(resp, &txn->error, ns);
@@ -1753,8 +2008,12 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 
         /* Add DAV:response element for this resource to output buffer.
            Only output the xmlBuffer every PROT_BUFSIZE bytes */
-        xml_partial_response((xmlBufferLength(xmlbuf) > PROT_BUFSIZE) ? txn : NULL,
-                             xmlroot->doc, resp, 1, &xmlbuf);
+        xml_partial_response((xmlBufferLength(xmlbuf) > PROT_BUFSIZE) ? txn
+                                                                      : NULL,
+                             xmlroot->doc,
+                             resp,
+                             1,
+                             &xmlbuf);
 
         /* Remove DAV:response element from root (no need to keep in memory) */
         xmlReplaceNode(resp, NULL);
@@ -1763,9 +2022,10 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         /* Clear the buffer used for constructing href */
         buf_reset(&txn->buf);
 
-    } while (root &&
-             (vcard = vcardcomponent_get_next_component(root,
-                                                        VCARD_VCARD_COMPONENT)));
+    } while (
+        root
+        && (vcard = vcardcomponent_get_next_component(root,
+                                                      VCARD_VCARD_COMPONENT)));
 
     /* End XML response */
     xml_partial_response(txn, xmlroot->doc, NULL /* end */, 0, &xmlbuf);
@@ -1777,12 +2037,16 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 #else /* !HAVE_LIBICALVCARD */
 
 /* Perform a GET/HEAD request on a CardDAV resource */
-static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
-                       struct index_record *record, void *data, void **obj,
+static int carddav_get(struct transaction_t *txn,
+                       struct mailbox *mailbox,
+                       struct index_record *record,
+                       void *data,
+                       void **obj,
                        struct mime_type_t *mime)
 {
-    if (!(txn->req_tgt.collection || txn->req_tgt.userid))
+    if (!(txn->req_tgt.collection || txn->req_tgt.userid)) {
         return HTTP_NO_CONTENT;
+    }
 
     if (record && record->uid) {
         /* GET on a resource */
@@ -1792,8 +2056,12 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
             *obj = record_to_vcard(mailbox, record);
-            if (want_ver == 4) vcard_to_v4(*obj);
-            else vcard_to_v3(*obj);
+            if (want_ver == 4) {
+                vcard_to_v4(*obj);
+            }
+            else {
+                vcard_to_v3(*obj);
+            }
         }
 
         return HTTP_CONTINUE;
@@ -1804,9 +2072,15 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, httpd_userid,
-                              &backend_cached, NULL, NULL, httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+                              &http_protocol,
+                              httpd_userid,
+                              &backend_cached,
+                              NULL,
+                              NULL,
+                              httpd_in);
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -1817,8 +2091,9 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
         /* Download an entire addressbook collection */
         return export_addressbook(txn, mime);
     }
-    else if (txn->req_tgt.userid &&
-             config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN)) {
+    else if (txn->req_tgt.userid
+             && config_getswitch(IMAPOPT_CARDDAV_ALLOWADDRESSBOOKADMIN))
+    {
         /* GET a list of addressbook under addressbook-home-set */
         return list_addressbooks(txn);
     }
@@ -1827,7 +2102,6 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
     return HTTP_NO_CONTENT;
 }
 
-
 /* Perform a COPY/MOVE/PUT request
  *
  * preconditions:
@@ -1835,12 +2109,15 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
  *   CARDDAV:no-uid-conflict (DAV:href)
  *   CARDDAV:max-resource-size
  */
-static int carddav_put(struct transaction_t *txn, void *obj,
-                       struct mailbox *mailbox, const char *resource,
-                       void *destdb, unsigned flags __attribute__((unused)))
+static int carddav_put(struct transaction_t *txn,
+                       void *obj,
+                       struct mailbox *mailbox,
+                       const char *resource,
+                       void *destdb,
+                       unsigned flags __attribute__((unused)))
 {
-    struct carddav_db *db = (struct carddav_db *)destdb;
-    struct vparse_card *vcard = (struct vparse_card *)obj;
+    struct carddav_db *db = (struct carddav_db *) destdb;
+    struct vparse_card *vcard = (struct vparse_card *) obj;
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
     const char *want_ver = NULL;
@@ -1857,8 +2134,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             if (!strcasecmp(param->attribute, "version")) {
                 want_ver = param->value;
 
-                if (strcmp(want_ver, "3.0") &&
-                    strcmp(want_ver, "4.0")) {
+                if (strcmp(want_ver, "3.0") && strcmp(want_ver, "4.0")) {
                     txn->error.precond = CARDDAV_SUPP_DATA;
                     txn->error.desc =
                         "Unsupported version= specified in Content-Type";
@@ -1893,7 +2169,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             if (profile && strcasecmp(profile, "vcard")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
                 txn->error.desc = "Only profile=vcard is accepted"
-                    " for Content-type 'text/directory'";
+                                  " for Content-type 'text/directory'";
                 goto done;
             }
 
@@ -1910,10 +2186,9 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Validate the vCard data */
-    if (!vcard ||
-        !vcard->objects ||
-        !vcard->objects->type ||
-        strcasecmp(vcard->objects->type, "vcard")) {
+    if (!vcard || !vcard->objects || !vcard->objects->type
+        || strcasecmp(vcard->objects->type, "vcard"))
+    {
         txn->error.precond = CARDDAV_VALID_DATA;
         txn->error.desc = "Resource is not a vCard object";
         goto done;
@@ -1932,12 +2207,17 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         if (!strcasecmp(name, "version")) {
-            if (strcmp(ventry->v.value, "3.0") &&
-                strcmp(ventry->v.value, "4.0")) {
+            if (strcmp(ventry->v.value, "3.0")
+                && strcmp(ventry->v.value, "4.0"))
+            {
                 txn->error.precond = CARDDAV_SUPP_DATA;
                 txn->error.desc = "Unsupported vCard version";
                 goto done;
@@ -1950,11 +2230,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
             }
         }
 
-        else if (!strcasecmp(name, "uid"))
+        else if (!strcasecmp(name, "uid")) {
             uid = propval;
+        }
 
-        else if (!strcasecmp(name, "fn"))
+        else if (!strcasecmp(name, "fn")) {
             fullname = propval;
+        }
     }
 
     if (!uid) {
@@ -1971,18 +2253,23 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
-    
+
     const char *olduid = cdata->vcard_uid;
-    while (!strncmp(uid, "urn:uuid:", 9)) uid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
+    while (!strncmp(uid, "urn:uuid:", 9)) {
+        uid += 9;
+    }
+    while (!strncmpsafe(olduid, "urn:uuid:", 9)) {
+        olduid += 9;
+    }
     if (cdata->dav.imap_uid && strcmpsafe(olduid, uid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
         const char *mboxname;
         mbentry_t *mbentry = NULL;
 
-        if (cdata->dav.mailbox_byname)
+        if (cdata->dav.mailbox_byname) {
             mboxname = cdata->dav.mailbox;
+        }
         else {
             mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
             mboxname = mbentry->name;
@@ -1990,9 +2277,13 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         owner = mboxname_to_userid(mboxname);
 
         assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        buf_printf(&txn->buf,
+                   "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX,
+                   owner,
+                   strrchr(mboxname, '.') + 1,
+                   cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         mboxlist_entry_free(&mbentry);
         free(owner);
@@ -2001,21 +2292,26 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-  done:
+done:
     param_free(&params);
     free(subtype);
     free(type);
 
-    if (txn->error.precond) return HTTP_FORBIDDEN;
+    if (txn->error.precond) {
+        return HTTP_FORBIDDEN;
+    }
 
     return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
 
-
 /* Perform a bulk import */
-static int carddav_import(struct transaction_t *txn, void *obj,
-                          struct mailbox *mailbox, void *destdb,
-                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags)
+static int carddav_import(struct transaction_t *txn,
+                          void *obj,
+                          struct mailbox *mailbox,
+                          void *destdb,
+                          xmlNodePtr root,
+                          xmlNsPtr *ns,
+                          unsigned flags)
 {
     struct vparse_card *vcard = obj;
     xmlBufferPtr xmlbuf = NULL;
@@ -2023,17 +2319,15 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 
     if (!root) {
         /* Validate the vCard data */
-        if (!vcard ||
-            !vcard->objects ||
-            !vcard->objects->type ||
-            strcasecmp(vcard->objects->type, "vcard")) {
+        if (!vcard || !vcard->objects || !vcard->objects->type
+            || strcasecmp(vcard->objects->type, "vcard"))
+        {
             txn->error.precond = CARDDAV_VALID_DATA;
             return HTTP_FORBIDDEN;
         }
 
         return 0;
     }
-
 
     /* Setup for appending resource name to request path */
     baselen = strlen(txn->req_tgt.path);
@@ -2072,12 +2366,17 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         }
 
         /* Append a unique resource name to URL and perform a PUT */
-        txn->req_tgt.reslen =
-            snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - baselen,
-                     "%s.vcf", resource);
+        txn->req_tgt.reslen = snprintf(txn->req_tgt.resource,
+                                       MAX_MAILBOX_PATH - baselen,
+                                       "%s.vcf",
+                                       resource);
 
-        r = carddav_put(txn, vcard, mailbox,
-                       txn->req_tgt.resource, destdb, flags);
+        r = carddav_put(txn,
+                        vcard,
+                        mailbox,
+                        txn->req_tgt.resource,
+                        destdb,
+                        flags);
 
         switch (r) {
         case HTTP_OK:
@@ -2087,26 +2386,33 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             xml_add_href(resp, NULL, txn->req_tgt.path);
 
             node = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
-            xmlNewChild(node, ns[NS_DAV], BAD_CAST "status",
+            xmlNewChild(node,
+                        ns[NS_DAV],
+                        BAD_CAST "status",
                         BAD_CAST http_statusline(VER_1_1, HTTP_OK));
 
             node = xmlNewChild(node, ns[NS_DAV], BAD_CAST "prop", NULL);
 
             if (txn->resp_body.etag) {
                 /* Add DAV:getetag property */
-                xmlNewTextChild(node, ns[NS_DAV], BAD_CAST "getetag",
+                xmlNewTextChild(node,
+                                ns[NS_DAV],
+                                BAD_CAST "getetag",
                                 BAD_CAST txn->resp_body.etag);
             }
 
             if ((flags & PREFER_REP) && myuid /* we added a UID */) {
                 /* Add CARDDAV:addressbook-data property */
                 struct buf *vcardbuf = vcard_as_buf(this);
-                xmlNodePtr cdata = xmlNewChild(node, ns[NS_CARDDAV],
-                                               BAD_CAST "addressbook-data", NULL);
+                xmlNodePtr cdata = xmlNewChild(node,
+                                               ns[NS_CARDDAV],
+                                               BAD_CAST "addressbook-data",
+                                               NULL);
 
-                xmlAddChild(cdata, xmlNewCDataBlock(root->doc,
-                                                    BAD_CAST buf_cstring(vcardbuf),
-                                                    buf_len(vcardbuf)));
+                xmlAddChild(cdata,
+                            xmlNewCDataBlock(root->doc,
+                                             BAD_CAST buf_cstring(vcardbuf),
+                                             buf_len(vcardbuf)));
                 buf_free(vcardbuf);
             }
 
@@ -2116,7 +2422,9 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             /* Failure: Add DAV:href, DAV:status, and DAV:error elements */
             xml_add_href(resp, NULL, NULL);
 
-            xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
+            xmlNewChild(resp,
+                        ns[NS_DAV],
+                        BAD_CAST "status",
                         BAD_CAST http_statusline(VER_1_1, r));
 
             node = xml_add_error(resp, &txn->error, ns);
@@ -2128,8 +2436,12 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 
         /* Add DAV:response element for this resource to output buffer.
            Only output the xmlBuffer every PROT_BUFSIZE bytes */
-        xml_partial_response((xmlBufferLength(xmlbuf) > PROT_BUFSIZE) ? txn : NULL,
-                             root->doc, resp, 1, &xmlbuf);
+        xml_partial_response((xmlBufferLength(xmlbuf) > PROT_BUFSIZE) ? txn
+                                                                      : NULL,
+                             root->doc,
+                             resp,
+                             1,
+                             &xmlbuf);
 
         /* Remove DAV:response element from root (no need to keep in memory) */
         xmlReplaceNode(resp, NULL);
@@ -2152,9 +2464,9 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 
 #endif /* HAVE_LIBICALVCARD */
 
-
 /* Callback to fetch DAV:getcontenttype */
-static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
+static int propfind_getcontenttype(const xmlChar *name,
+                                   xmlNsPtr ns,
                                    struct propfind_ctx *fctx,
                                    xmlNodePtr prop __attribute__((unused)),
                                    xmlNodePtr resp __attribute__((unused)),
@@ -2163,15 +2475,20 @@ static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
 {
     buf_setcstr(&fctx->buf, "text/vcard; charset=utf-8");
 
-    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+    xml_add_prop(HTTP_OK,
+                 fctx->ns[NS_DAV],
+                 &propstat[PROPSTAT_OK],
+                 name,
+                 ns,
+                 BAD_CAST buf_cstring(&fctx->buf),
+                 0);
 
     return 0;
 }
 
-
 /* Callback to fetch DAV:resourcetype */
-static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
+static int propfind_restype(const xmlChar *name,
+                            xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop __attribute__((unused)),
                             xmlNodePtr resp,
@@ -2180,8 +2497,9 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
 {
     if (!propstat) {
         /* Prescreen "property" request */
-        if (fctx->req_tgt->collection ||
-            (fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2) {
+        if (fctx->req_tgt->collection
+            || (fctx->req_tgt->userid && fctx->depth >= 1) || fctx->depth >= 2)
+        {
             /* Add namespaces for possible resource types */
             ensure_ns(fctx->ns, NS_CARDDAV, fctx->root, XML_NS_CARDDAV, "C");
         }
@@ -2189,23 +2507,32 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         return 0;
     }
 
-    xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-                                   &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+    xmlNodePtr node = xml_add_prop(HTTP_OK,
+                                   fctx->ns[NS_DAV],
+                                   &propstat[PROPSTAT_OK],
+                                   name,
+                                   ns,
+                                   NULL,
+                                   0);
 
     if (!fctx->record) {
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
         if (fctx->req_tgt->collection) {
-            ensure_ns(fctx->ns, NS_CARDDAV,
-                      resp ? resp->parent: node, XML_NS_CARDDAV, "C");
-            xmlNewChild(node, fctx->ns[NS_CARDDAV],
-                        BAD_CAST "addressbook", NULL);
+            ensure_ns(fctx->ns,
+                      NS_CARDDAV,
+                      resp ? resp->parent : node,
+                      XML_NS_CARDDAV,
+                      "C");
+            xmlNewChild(node,
+                        fctx->ns[NS_CARDDAV],
+                        BAD_CAST "addressbook",
+                        NULL);
         }
     }
 
     return 0;
 }
-
 
 #ifdef HAVE_LIBICALVCARD
 
@@ -2214,7 +2541,9 @@ static void prune_properties(vcardcomponent *vcard, strarray_t *partial)
     vcardproperty *prop, *next;
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
-         prop; prop = next) {
+         prop;
+         prop = next)
+    {
         const char *prop_name = vcardproperty_get_property_name(prop);
 
         next = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY);
@@ -2227,7 +2556,8 @@ static void prune_properties(vcardcomponent *vcard, strarray_t *partial)
 }
 
 /* Callback to prescreen/fetch CARDDAV:address-data */
-static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
+static int propfind_addrdata(const xmlChar *name,
+                             xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop,
                              xmlNodePtr resp __attribute__((unused)),
@@ -2256,7 +2586,8 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
         /* Check for and parse child elements of CARDDAV:address-data */
         for (node = xmlFirstElementChild(prop); node;
-             node = xmlNextElementSibling(node)) {
+             node = xmlNextElementSibling(node))
+        {
 
             if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
                 xmlChar *name = xmlGetProp(node, BAD_CAST "name");
@@ -2272,15 +2603,24 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         vcardcomponent *vcard = NULL;
         unsigned want_ver;
 
-        if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+        if (fctx->txn->meth != METH_REPORT) {
+            return HTTP_FORBIDDEN;
+        }
 
-        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
+        if (!out_type->content_type) {
+            return HTTP_BAD_MEDIATYPE;
+        }
 
-        if (!fctx->record) return HTTP_NOT_FOUND;
+        if (!fctx->record) {
+            return HTTP_NOT_FOUND;
+        }
 
-        if (!fctx->msg_buf.len)
+        if (!fctx->msg_buf.len) {
             mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
-        if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
+        }
+        if (!fctx->msg_buf.len) {
+            return HTTP_SERVER_ERROR;
+        }
 
         data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
@@ -2291,18 +2631,22 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string_x(data);
+            }
 
             vcardcomponent_transform(vcard,
-                                     want_ver == 4 ? VCARD_VERSION_40 :
-                                     VCARD_VERSION_30);
+                                     want_ver == 4 ? VCARD_VERSION_40
+                                                   : VCARD_VERSION_30);
         }
 
         if (strarray_size(partial)) {
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string_x(data);
+            }
             prune_properties(vcard, partial);
         }
 
@@ -2313,8 +2657,15 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         }
     }
 
-    return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
-                            &out_type, data, datalen);
+    return propfind_getdata(name,
+                            ns,
+                            fctx,
+                            prop,
+                            propstat,
+                            carddav_mime_types,
+                            &out_type,
+                            data,
+                            datalen);
 }
 
 #else /* !HAVE_LIBICALVCARD */
@@ -2338,7 +2689,8 @@ static void prune_properties(struct vparse_card *vcard, strarray_t *partial)
 }
 
 /* Callback to prescreen/fetch CARDDAV:address-data */
-static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
+static int propfind_addrdata(const xmlChar *name,
+                             xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop,
                              xmlNodePtr resp __attribute__((unused)),
@@ -2367,10 +2719,12 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
 
         /* Check for and parse child elements of CARDDAV:address-data */
         for (node = xmlFirstElementChild(prop); node;
-             node = xmlNextElementSibling(node)) {
+             node = xmlNextElementSibling(node))
+        {
 
-            if (!xmlStrcmp(node->name, BAD_CAST "prop") &&
-                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "prop")
+                && !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV))
+            {
                 xmlChar *name = xmlGetProp(node, BAD_CAST "name");
                 if (name) {
                     strarray_add_case(partial, (const char *) name);
@@ -2384,15 +2738,24 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         struct vparse_card *vcard = NULL;
         unsigned want_ver;
 
-        if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
+        if (fctx->txn->meth != METH_REPORT) {
+            return HTTP_FORBIDDEN;
+        }
 
-        if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
+        if (!out_type->content_type) {
+            return HTTP_BAD_MEDIATYPE;
+        }
 
-        if (!fctx->record) return HTTP_NOT_FOUND;
+        if (!fctx->record) {
+            return HTTP_NOT_FOUND;
+        }
 
-        if (!fctx->msg_buf.len)
+        if (!fctx->msg_buf.len) {
             mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
-        if (!fctx->msg_buf.len) return HTTP_SERVER_ERROR;
+        }
+        if (!fctx->msg_buf.len) {
+            return HTTP_SERVER_ERROR;
+        }
 
         data = buf_cstring(&fctx->msg_buf) + fctx->record->header_size;
         datalen = fctx->record->size - fctx->record->header_size;
@@ -2403,17 +2766,25 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string(data);
+            }
 
-            if (want_ver == 4) vcard_to_v4(vcard);
-            else vcard_to_v3(vcard);
+            if (want_ver == 4) {
+                vcard_to_v4(vcard);
+            }
+            else {
+                vcard_to_v3(vcard);
+            }
         }
 
         if (strarray_size(partial)) {
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
+            if (!vcard) {
+                vcard = fctx->obj = vcard_parse_string(data);
+            }
             prune_properties(vcard->objects, partial);
         }
 
@@ -2426,15 +2797,22 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
         }
     }
 
-    return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
-                            &out_type, data, datalen);
+    return propfind_getdata(name,
+                            ns,
+                            fctx,
+                            prop,
+                            propstat,
+                            carddav_mime_types,
+                            &out_type,
+                            data,
+                            datalen);
 }
 
 #endif /* HAVE_LIBICALVCARD */
 
-
 /* Callback to fetch CARDDAV:addressbook-home-set */
-int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
+int propfind_abookhome(const xmlChar *name,
+                       xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop,
                        xmlNodePtr resp __attribute__((unused)),
@@ -2445,27 +2823,45 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     // XXX - should we be using httpd_userid here?
     const char *userid = fctx->req_tgt->userid;
 
-    if (!(namespace_addressbook.enabled && userid))
+    if (!(namespace_addressbook.enabled && userid)) {
         return HTTP_NOT_FOUND;
+    }
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
+    node = xml_add_prop(HTTP_OK,
+                        fctx->ns[NS_DAV],
+                        &propstat[PROPSTAT_OK],
+                        name,
+                        ns,
+                        NULL,
+                        0);
 
     buf_reset(&fctx->buf);
     if (strchr(userid, '@') || !httpd_extradomain) {
-        buf_printf(&fctx->buf, "%s/%s/%s/", namespace_addressbook.prefix,
-                   USER_COLLECTION_PREFIX, userid);
+        buf_printf(&fctx->buf,
+                   "%s/%s/%s/",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX,
+                   userid);
     }
     else {
-        buf_printf(&fctx->buf, "%s/%s/%s@%s/", namespace_addressbook.prefix,
-                   USER_COLLECTION_PREFIX, userid, httpd_extradomain);
+        buf_printf(&fctx->buf,
+                   "%s/%s/%s@%s/",
+                   namespace_addressbook.prefix,
+                   USER_COLLECTION_PREFIX,
+                   userid,
+                   httpd_extradomain);
     }
 
     if ((fctx->mode == PROPFIND_EXPAND) && xmlFirstElementChild(prop)) {
         /* Return properties for this URL */
-        expand_property(prop, fctx, &namespace_addressbook, buf_cstring(&fctx->buf),
-                        &carddav_parse_path, carddav_props, node, 0);
-
+        expand_property(prop,
+                        fctx,
+                        &namespace_addressbook,
+                        buf_cstring(&fctx->buf),
+                        &carddav_parse_path,
+                        carddav_props,
+                        node,
+                        0);
     }
     else {
         /* Return just the URL */
@@ -2475,9 +2871,9 @@ int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-
 /* Callback to fetch CARDDAV:supported-address-data */
-static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
+static int propfind_suppaddrdata(const xmlChar *name,
+                                 xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop __attribute__((unused)),
                                  xmlNodePtr resp __attribute__((unused)),
@@ -2487,25 +2883,38 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     struct mime_type_t *mime;
 
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
+    node = xml_add_prop(HTTP_OK,
+                        fctx->ns[NS_DAV],
+                        &propstat[PROPSTAT_OK],
+                        name,
+                        ns,
+                        NULL,
+                        0);
 
     for (mime = carddav_mime_types; mime->content_type; mime++) {
-        xmlNodePtr type = xmlNewChild(node, fctx->ns[NS_CARDDAV],
-                                      BAD_CAST "address-data-type", NULL);
+        xmlNodePtr type = xmlNewChild(node,
+                                      fctx->ns[NS_CARDDAV],
+                                      BAD_CAST "address-data-type",
+                                      NULL);
 
         /* Trim any charset from content-type */
         buf_reset(&fctx->buf);
-        buf_printf(&fctx->buf, "%.*s",
-                   (int) strcspn(mime->content_type, ";"), mime->content_type);
+        buf_printf(&fctx->buf,
+                   "%.*s",
+                   (int) strcspn(mime->content_type, ";"),
+                   mime->content_type);
 
-        xmlNewProp(type, BAD_CAST "content-type",
+        xmlNewProp(type,
+                   BAD_CAST "content-type",
                    BAD_CAST buf_cstring(&fctx->buf));
 
-        if (mime->version)
+        if (mime->version) {
             xmlNewProp(type, BAD_CAST "version", BAD_CAST mime->version);
+        }
     }
 
     buf_reset(&fctx->buf);
@@ -2514,26 +2923,34 @@ static int propfind_suppaddrdata(const xmlChar *name, xmlNsPtr ns,
 }
 
 /* Callback to fetch CARDDAV:max-resource-size */
-static int propfind_maxsize(const xmlChar *name, xmlNsPtr ns,
+static int propfind_maxsize(const xmlChar *name,
+                            xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop __attribute__((unused)),
                             xmlNodePtr resp __attribute__((unused)),
                             struct propstat propstat[],
                             void *rock __attribute__((unused)))
 {
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%" PRIi64, vcard_max_size);
-    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+    xml_add_prop(HTTP_OK,
+                 fctx->ns[NS_DAV],
+                 &propstat[PROPSTAT_OK],
+                 name,
+                 ns,
+                 BAD_CAST buf_cstring(&fctx->buf),
+                 0);
 
     return 0;
 }
 
-
 /* Callback to fetch CY:address-groups */
-int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
+int propfind_addrgroups(const xmlChar *name,
+                        xmlNsPtr ns,
                         struct propfind_ctx *fctx,
                         xmlNodePtr prop __attribute__((unused)),
                         xmlNodePtr resp __attribute__((unused)),
@@ -2547,7 +2964,9 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
     xmlNodePtr node;
     int i;
 
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* If we're here via report_sync_col then we don't have a db handle yet, so
      * lets just manage this ourselves */
@@ -2557,26 +2976,39 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
         goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry,
-                                fctx->req_tgt->resource, &cdata, 0);
-    if (r)
+    r = carddav_lookup_resource(davdb,
+                                fctx->req_tgt->mbentry,
+                                fctx->req_tgt->resource,
+                                &cdata,
+                                0);
+    if (r) {
         goto done;
+    }
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_CYRUS], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
+    node = xml_add_prop(HTTP_OK,
+                        fctx->ns[NS_CYRUS],
+                        &propstat[PROPSTAT_OK],
+                        name,
+                        ns,
+                        NULL,
+                        0);
 
     groups = carddav_getuid_groups(davdb, cdata->vcard_uid);
-    if (groups == NULL)
+    if (groups == NULL) {
         goto done;
+    }
 
     for (i = 0; i < strarray_size(groups); i++) {
         const char *group_uid = strarray_nth(groups, i);
 
-        xmlNodePtr group = xmlNewChild(node, fctx->ns[NS_CYRUS],
-                                       BAD_CAST "address-group", NULL);
+        xmlNodePtr group = xmlNewChild(node,
+                                       fctx->ns[NS_CYRUS],
+                                       BAD_CAST "address-group",
+                                       NULL);
         xmlAddChild(group,
                     xmlNewCDataBlock(fctx->root->doc,
-                                     BAD_CAST group_uid, strlen(group_uid)));
+                                     BAD_CAST group_uid,
+                                     strlen(group_uid)));
     }
 
     strarray_free(groups);
@@ -2586,22 +3018,29 @@ done:
     return r;
 }
 
-
-struct cardquery_filter {
-    unsigned allof : 1;
+struct cardquery_filter
+{
+    unsigned allof:1;
     struct prop_filter *prop;
 };
 
 #ifdef HAVE_LIBICALVCARD
 
-static int apply_paramfilter(struct param_filter *paramfilter, vcardproperty *prop)
+static int apply_paramfilter(struct param_filter *paramfilter,
+                             vcardproperty *prop)
 {
     const char *value =
         vcardproperty_get_parameter_as_string(prop, (char *) paramfilter->name);
 
-    if (!value) return paramfilter->not_defined;
-    if (paramfilter->not_defined) return 0;
-    if (!paramfilter->match) return 1;
+    if (!value) {
+        return paramfilter->not_defined;
+    }
+    if (paramfilter->not_defined) {
+        return 0;
+    }
+    if (!paramfilter->match) {
+        return 1;
+    }
 
     return dav_apply_textmatch(BAD_CAST value, paramfilter->match);
 }
@@ -2651,26 +3090,35 @@ static int apply_propfilter(struct prop_filter *propfilter,
                 mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
             }
             if (fctx->msg_buf.len) {
-                vcard = fctx->obj =
-                    vcard_parse_string_x(buf_cstring(&fctx->msg_buf) +
-                                         fctx->record->header_size);
+                vcard = fctx->obj = vcard_parse_string_x(
+                    buf_cstring(&fctx->msg_buf) + fctx->record->header_size);
             }
-            if (!vcard) return 0;
+            if (!vcard) {
+                return 0;
+            }
         }
 
         prop = vcardcomponent_get_first_property(vcard, propfilter->kind);
 
         if (prop && propfilter->kind == VCARD_X_PROPERTY) {
-            while (strcasecmpsafe((char *) propfilter->name,
-                                  vcardproperty_get_x_name(prop)) &&
-                   (prop = vcardcomponent_get_next_property(vcard,
-                                                            VCARD_X_PROPERTY)));
+            while (
+                strcasecmpsafe((char *) propfilter->name,
+                               vcardproperty_get_x_name(prop))
+                && (prop = vcardcomponent_get_next_property(vcard,
+                                                            VCARD_X_PROPERTY)))
+                ;
         }
     }
 
-    if (!prop) return propfilter->not_defined;
-    if (propfilter->not_defined) return 0;
-    if (!(propfilter->match || propfilter->param)) return 1;
+    if (!prop) {
+        return propfilter->not_defined;
+    }
+    if (propfilter->not_defined) {
+        return 0;
+    }
+    if (!(propfilter->match || propfilter->param)) {
+        return 1;
+    }
 
     /* Test each instance of this property (logical OR) */
     do {
@@ -2682,47 +3130,53 @@ static int apply_propfilter(struct prop_filter *propfilter,
             /* Skip property if name doesn't match */
             continue;
         }
-    
+
         pass = propfilter->allof;
 
         /* Apply each text-match, breaking if allof fails or anyof succeeds */
-        for (match = propfilter->match;
-             match && (pass == propfilter->allof);
-             match = match->next) {
+        for (match = propfilter->match; match && (pass == propfilter->allof);
+             match = match->next)
+        {
 
             int n = 0;
             const char *text;
             vcardstrarray *array = NULL;
 
-            if (vcardproperty_is_multivalued(propfilter->kind) &&
-                !vcardproperty_is_structured(propfilter->kind)) {
+            if (vcardproperty_is_multivalued(propfilter->kind)
+                && !vcardproperty_is_structured(propfilter->kind))
+            {
                 array = vcardproperty_get_nickname(prop);
                 text = vcardstrarray_element_at(array, n);
             }
             else {
-                text = vcardvalue_as_vcard_string(vcardproperty_get_value(prop));
+                text =
+                    vcardvalue_as_vcard_string(vcardproperty_get_value(prop));
             }
 
             /* Test each value of this property (logical OR) */
             do {
                 pass = dav_apply_textmatch(BAD_CAST text, match);
 
-            } while (!pass &&
-                     array && (text = vcardstrarray_element_at(array, ++n)));
+            } while (!pass && array
+                     && (text = vcardstrarray_element_at(array, ++n)));
         }
 
         /* Apply each param-filter, breaking if allof fails or anyof succeeds */
         for (paramfilter = propfilter->param;
              paramfilter && (pass == propfilter->allof);
-             paramfilter = paramfilter->next) {
+             paramfilter = paramfilter->next)
+        {
 
             pass = apply_paramfilter(paramfilter, prop);
         }
 
-    } while (!pass && !myprop &&
-             (prop = vcardcomponent_get_next_property(vcard, propfilter->kind)));
+    } while (
+        !pass && !myprop
+        && (prop = vcardcomponent_get_next_property(vcard, propfilter->kind)));
 
-    if (myprop) vcardproperty_free(myprop);
+    if (myprop) {
+        vcardproperty_free(myprop);
+    }
 
     return pass;
 }
@@ -2740,11 +3194,21 @@ typedef enum vcardproperty_kind {
 
 static unsigned vcardproperty_string_to_kind(const char *str)
 {
-    if (!strcasecmp(str, "FN")) return VCARD_FN_PROPERTY;
-    else if (!strcasecmp(str, "N")) return VCARD_N_PROPERTY;
-    else if (!strcasecmp(str, "NICKNAME")) return VCARD_NICKNAME_PROPERTY;
-    else if (!strcasecmp(str, "UID")) return VCARD_UID_PROPERTY;
-    else return VCARD_ANY_PROPERTY;
+    if (!strcasecmp(str, "FN")) {
+        return VCARD_FN_PROPERTY;
+    }
+    else if (!strcasecmp(str, "N")) {
+        return VCARD_N_PROPERTY;
+    }
+    else if (!strcasecmp(str, "NICKNAME")) {
+        return VCARD_NICKNAME_PROPERTY;
+    }
+    else if (!strcasecmp(str, "UID")) {
+        return VCARD_UID_PROPERTY;
+    }
+    else {
+        return VCARD_ANY_PROPERTY;
+    }
 }
 
 static int apply_paramfilter(struct param_filter *paramfilter,
@@ -2753,9 +3217,15 @@ static int apply_paramfilter(struct param_filter *paramfilter,
     struct vparse_param *param =
         vparse_get_param(prop, (char *) paramfilter->name);
 
-    if (!param) return paramfilter->not_defined;
-    if (paramfilter->not_defined) return 0;
-    if (!paramfilter->match) return 1;
+    if (!param) {
+        return paramfilter->not_defined;
+    }
+    if (paramfilter->not_defined) {
+        return 0;
+    }
+    if (!paramfilter->match) {
+        return 1;
+    }
 
     return dav_apply_textmatch(BAD_CAST param->value, paramfilter->match);
 }
@@ -2773,11 +3243,15 @@ static int apply_propfilter(struct prop_filter *propfilter,
     if (!propfilter->param) {
         switch (propfilter->kind) {
         case VCARD_FN_PROPERTY:
-            if (cdata->fullname) myprop.v.value = (char *) cdata->fullname;
+            if (cdata->fullname) {
+                myprop.v.value = (char *) cdata->fullname;
+            }
             break;
 
         case VCARD_N_PROPERTY:
-            if (cdata->name) myprop.v.value = (char *) cdata->name;
+            if (cdata->name) {
+                myprop.v.value = (char *) cdata->name;
+            }
             break;
 
         case VCARD_NICKNAME_PROPERTY:
@@ -2787,19 +3261,25 @@ static int apply_propfilter(struct prop_filter *propfilter,
                     myprop.v.values =
                         strarray_split(cdata->nickname, ",", STRARRAY_TRIM);
                 }
-                else myprop.v.value = (char *) cdata->nickname;
+                else {
+                    myprop.v.value = (char *) cdata->nickname;
+                }
             }
             break;
 
         case VCARD_UID_PROPERTY:
-            if (cdata->vcard_uid) myprop.v.value = (char *) cdata->vcard_uid;
+            if (cdata->vcard_uid) {
+                myprop.v.value = (char *) cdata->vcard_uid;
+            }
             break;
 
         default:
             break;
         }
 
-        if (myprop.v.value) prop = &myprop;
+        if (myprop.v.value) {
+            prop = &myprop;
+        }
     }
 
     if (propfilter->param || (propfilter->kind == VCARD_ANY_PROPERTY)) {
@@ -2809,19 +3289,27 @@ static int apply_propfilter(struct prop_filter *propfilter,
                 mailbox_map_record(fctx->mailbox, fctx->record, &fctx->msg_buf);
             }
             if (fctx->msg_buf.len) {
-                vcard = fctx->obj =
-                    vcard_parse_string(buf_cstring(&fctx->msg_buf) +
-                                       fctx->record->header_size);
+                vcard = fctx->obj = vcard_parse_string(
+                    buf_cstring(&fctx->msg_buf) + fctx->record->header_size);
             }
-            if (!vcard) return 0;
+            if (!vcard) {
+                return 0;
+            }
         }
 
-        prop = vparse_get_entry(vcard->objects, NULL, (char *) propfilter->name);
+        prop =
+            vparse_get_entry(vcard->objects, NULL, (char *) propfilter->name);
     }
 
-    if (!prop) return propfilter->not_defined;
-    if (propfilter->not_defined) return 0;
-    if (!(propfilter->match || propfilter->param)) return 1;
+    if (!prop) {
+        return propfilter->not_defined;
+    }
+    if (propfilter->not_defined) {
+        return 0;
+    }
+    if (!(propfilter->match || propfilter->param)) {
+        return 1;
+    }
 
     /* Test each instance of this property (logical OR) */
     do {
@@ -2832,13 +3320,13 @@ static int apply_propfilter(struct prop_filter *propfilter,
             /* Skip property if name doesn't match */
             continue;
         }
-    
+
         pass = propfilter->allof;
 
         /* Apply each text-match, breaking if allof fails or anyof succeeds */
-        for (match = propfilter->match;
-             match && (pass == propfilter->allof);
-             match = match->next) {
+        for (match = propfilter->match; match && (pass == propfilter->allof);
+             match = match->next)
+        {
 
             int n = 0;
             const char *text;
@@ -2860,8 +3348,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
             do {
                 pass = dav_apply_textmatch(BAD_CAST text, match);
 
-            } while (!pass &&
-                     array && (text = strarray_nth(array, ++n)));
+            } while (!pass && array && (text = strarray_nth(array, ++n)));
 
             free(freeme);
         }
@@ -2869,36 +3356,45 @@ static int apply_propfilter(struct prop_filter *propfilter,
         /* Apply each param-filter, breaking if allof fails or anyof succeeds */
         for (paramfilter = propfilter->param;
              paramfilter && (pass == propfilter->allof);
-             paramfilter = paramfilter->next) {
+             paramfilter = paramfilter->next)
+        {
 
             pass = apply_paramfilter(paramfilter, prop);
         }
 
-    } while (!pass && (prop = prop->next));  /* XXX  No API to fetch next prop */
+    } while (!pass && (prop = prop->next)); /* XXX  No API to fetch next prop */
 
-    if (myprop.multivaluesep) strarray_free(myprop.v.values);
+    if (myprop.multivaluesep) {
+        strarray_free(myprop.v.values);
+    }
 
     return pass;
 }
 
 #endif /* HAVE_LIBICALVCARD */
 
-static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
+static int parse_cardfilter(xmlNodePtr root,
+                            struct cardquery_filter *filter,
                             struct error_t *error)
 {
     xmlChar *attr;
     xmlNodePtr node;
-    struct filter_profile_t profile =
-        { 0 /* anyof */, COLLATION_UNICODE,
-          CARDDAV_SUPP_FILTER, CARDDAV_SUPP_COLLATION,
-          vcardproperty_string_to_kind, VCARD_NO_PROPERTY,
-          NULL /* param_string_to_kind */, 0 /* no_param_value */,
-          NULL /* parse_propfilter */ };
+    struct filter_profile_t profile = { 0 /* anyof */,
+                                        COLLATION_UNICODE,
+                                        CARDDAV_SUPP_FILTER,
+                                        CARDDAV_SUPP_COLLATION,
+                                        vcardproperty_string_to_kind,
+                                        VCARD_NO_PROPERTY,
+                                        NULL /* param_string_to_kind */,
+                                        0 /* no_param_value */,
+                                        NULL /* parse_propfilter */ };
 
     /* Parse elements of filter */
     attr = xmlGetProp(root, BAD_CAST "test");
     if (attr) {
-        if (!xmlStrcmp(attr, BAD_CAST "allof")) filter->allof = 1;
+        if (!xmlStrcmp(attr, BAD_CAST "allof")) {
+            filter->allof = 1;
+        }
         else if (xmlStrcmp(attr, BAD_CAST "anyof")) {
             error->precond = CARDDAV_SUPP_FILTER;
             error->desc = "Unsupported test";
@@ -2908,15 +3404,19 @@ static int parse_cardfilter(xmlNodePtr root, struct cardquery_filter *filter,
     }
 
     for (node = xmlFirstElementChild(root); node && !error->precond;
-         node = xmlNextElementSibling(node)) {
+         node = xmlNextElementSibling(node))
+    {
 
-        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter") &&
-            !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
+        if (!xmlStrcmp(node->name, BAD_CAST "prop-filter")
+            && !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV))
+        {
             struct prop_filter *prop = NULL;
 
             dav_parse_propfilter(node, &prop, &profile, error);
             if (prop) {
-                if (filter->prop) prop->next = filter->prop;
+                if (filter->prop) {
+                    prop->next = filter->prop;
+                }
                 filter->prop = prop;
             }
         }
@@ -2942,11 +3442,14 @@ static int apply_cardfilter(struct propfind_ctx *fctx, void *data)
     int pass = 1;
 
     for (propfilter = cardfilter->prop; propfilter;
-         propfilter = propfilter->next) {
+         propfilter = propfilter->next)
+    {
 
         pass = apply_propfilter(propfilter, cdata, fctx);
         /* If allof fails or anyof succeeds, we're done */
-        if (pass != cardfilter->allof) break;
+        if (pass != cardfilter->allof) {
+            break;
+        }
     }
 
     return pass;
@@ -2964,8 +3467,10 @@ static void free_cardfilter(struct cardquery_filter *cardfilter)
 }
 
 static int report_card_query(struct transaction_t *txn,
-                             struct meth_params *rparams __attribute__((unused)),
-                             xmlNodePtr inroot, struct propfind_ctx *fctx)
+                             struct meth_params *rparams
+                             __attribute__((unused)),
+                             xmlNodePtr inroot,
+                             struct propfind_ctx *fctx)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -2984,11 +3489,16 @@ static int report_card_query(struct transaction_t *txn,
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
         if (node->type == XML_ELEMENT_NODE) {
-            if (!xmlStrcmp(node->name, BAD_CAST "filter") &&
-                !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV)) {
+            if (!xmlStrcmp(node->name, BAD_CAST "filter")
+                && !xmlStrcmp(node->ns->href, BAD_CAST XML_NS_CARDDAV))
+            {
                 ret = parse_cardfilter(node, &cardfilter, &txn->error);
-                if (ret) goto done;
-                else fctx->filter = apply_cardfilter;
+                if (ret) {
+                    goto done;
+                }
+                else {
+                    fctx->filter = apply_cardfilter;
+                }
             }
         }
     }
@@ -3008,24 +3518,30 @@ static int report_card_query(struct transaction_t *txn,
         else {
             /* Add responses for all contained addressbook collections */
             mboxlist_mboxtree(txn->req_tgt.mbentry->name,
-                              propfind_by_collection, fctx,
+                              propfind_by_collection,
+                              fctx,
                               MBOXTREE_SKIP_ROOT);
 
             /* Add responses for all shared addressbook collections */
             mboxlist_usersubs(txn->req_tgt.userid,
-                              propfind_by_collection, fctx,
+                              propfind_by_collection,
+                              fctx,
                               MBOXTREE_SKIP_PERSONAL);
         }
     }
 
     /* End XML response */
-    xml_partial_response(txn, fctx->root->doc, NULL /* end */, 0, &fctx->xmlbuf);
+    xml_partial_response(txn,
+                         fctx->root->doc,
+                         NULL /* end */,
+                         0,
+                         &fctx->xmlbuf);
     xmlBufferFree(fctx->xmlbuf);
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-  done:
+done:
     /* Free filter structure */
     free_cardfilter(&cardfilter);
 
