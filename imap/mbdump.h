@@ -57,12 +57,16 @@
  * (note that this assumes server LITERAL+ support, but we don't care since
  * this is a Cyrus-only extension)
  */
-extern int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
+extern int dump_mailbox(const char *tag,
+                        struct mailbox *mailbox,
+                        uint32_t uid_start,
                         int oldversion,
-                        struct protstream *pin, struct protstream *pout,
+                        struct protstream *pin,
+                        struct protstream *pout,
                         struct auth_state *auth_state);
 extern int undump_mailbox(const char *mbname,
-                          struct protstream *pin, struct protstream *pout,
+                          struct protstream *pin,
+                          struct protstream *pout,
                           struct auth_state *auth_state);
 
 #endif
