@@ -45,10 +45,10 @@
 #include <errno.h>
 
 #ifdef NEED_SYS_ERRLIST
-extern char const * const sys_errlist[];
+extern char const *const sys_errlist[];
 extern int sys_nerr;
 #endif
 
 #if defined(__STDC__) && !defined(HDR_HAS_PERROR) && !defined(_WINDOWS)
-void perror (const char *);
+void perror(const char *);
 #endif
