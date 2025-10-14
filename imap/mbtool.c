@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -114,14 +114,15 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "new-uniqueid", no_argument, NULL, 'r' },
+        { "new-uniqueid",           no_argument, NULL, 'r' },
         { "normalize-internaldate", no_argument, NULL, 't' },
 
-        { 0, 0, 0, 0 },
+        { 0,                        0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -129,12 +130,20 @@ int main(int argc, char **argv)
             break;
 
         case 'r':
-            if (cmd == 0) cmd = CMD_REID;
-            else usage();
+            if (cmd == 0) {
+                cmd = CMD_REID;
+            }
+            else {
+                usage();
+            }
             break;
         case 't':
-            if (cmd == 0) cmd = CMD_TIME;
-            else usage();
+            if (cmd == 0) {
+                cmd = CMD_TIME;
+            }
+            else {
+                usage();
+            }
             break;
 
         default:
@@ -143,15 +152,21 @@ int main(int argc, char **argv)
     }
 
     /* must provide a command */
-    if (!cmd) usage();
+    if (!cmd) {
+        usage();
+    }
 
     /* must provide some mailboxes */
-    if (optind == argc) usage();
+    if (optind == argc) {
+        usage();
+    }
 
     cyrus_init(alt_config, "mbtool", 0, 0);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&mbtool_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&mbtool_namespace,
+                                     NAMESPACE_OPTION_ADMIN)))
+    {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -171,8 +186,10 @@ static void usage(void)
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    mbtool [options] {-r|-t} mailbox...\n");
     fprintf(stderr, "\nCommands:\n");
-    fprintf(stderr, "    -r    create new unique IDs for specified mailboxes\n");
-    fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
+    fprintf(stderr,
+            "    -r    create new unique IDs for specified mailboxes\n");
+    fprintf(stderr,
+            "    -t    normalise internaldates in specified mailboxes\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
     exit(EX_USAGE);
@@ -185,8 +202,8 @@ static int do_timestamp(const mbname_t *mbname)
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
-    char olddate[RFC5322_DATETIME_MAX+1];
-    char newdate[RFC5322_DATETIME_MAX+1];
+    char olddate[RFC5322_DATETIME_MAX + 1];
+    char newdate[RFC5322_DATETIME_MAX + 1];
 
     signals_poll();
 
@@ -198,19 +215,26 @@ static int do_timestamp(const mbname_t *mbname)
 
     /* Open/lock header */
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* 1 day is close enough */
         if (llabs(record->internaldate.tv_sec - record->gmtime.tv_sec) < 86400)
+        {
             continue;
+        }
 
         struct index_record copyrecord = *record;
 
-        time_to_rfc5322(copyrecord.internaldate.tv_sec, olddate, sizeof(olddate));
+        time_to_rfc5322(copyrecord.internaldate.tv_sec,
+                        olddate,
+                        sizeof(olddate));
         time_to_rfc5322(copyrecord.gmtime.tv_sec, newdate, sizeof(newdate));
         printf("  %u: %s => %s\n", copyrecord.uid, olddate, newdate);
 
@@ -218,10 +242,12 @@ static int do_timestamp(const mbname_t *mbname)
         copyrecord.internaldate.tv_sec = copyrecord.gmtime.tv_sec;
 
         r = mailbox_rewrite_index_record(mailbox, &copyrecord);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
- done:
+done:
     mailbox_iter_done(&iter);
     mailbox_close(&mailbox);
 
@@ -241,7 +267,9 @@ static int do_reid(const mbname_t *mbname)
     const char *name = mbname_intname(mbname);
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (mailbox_mbtype(mailbox) & MBTYPE_LEGACY_DIRS) {
         mailbox_make_uniqueid(mailbox);
@@ -252,7 +280,9 @@ static int do_reid(const mbname_t *mbname)
     }
 
     r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     free(mbentry->uniqueid);
     mbentry->uniqueid = xstrdup(mailbox_uniqueid(mailbox));
@@ -266,19 +296,24 @@ done:
     return r;
 }
 
-
 int do_cmd(struct findall_data *data, void *rock)
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
-    int *valp = (int *)rock;
+    int *valp = (int *) rock;
 
-    if (*valp == CMD_TIME)
+    if (*valp == CMD_TIME) {
         return do_timestamp(data->mbname);
+    }
 
-    if (*valp == CMD_REID)
+    if (*valp == CMD_REID) {
         return do_reid(data->mbname);
+    }
 
     return 0;
 }

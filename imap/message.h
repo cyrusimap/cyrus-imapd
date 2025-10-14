@@ -57,7 +57,8 @@
 /*
  * Parsed form of a body-part
  */
-struct body {
+struct body
+{
     /* Content-* header information */
     char *type;
     char *subtype;
@@ -70,9 +71,9 @@ struct body {
     struct param *disposition_params;
     struct param *language;
     char *location;
-    int charset_enc;            /* encoding in binary bodystructure */
-    char *charset_id;           /* charset in binary bodystructure */
-    char *part_id;               /* IMAP part identifier of a subpart */
+    int charset_enc;  /* encoding in binary bodystructure */
+    char *charset_id; /* charset in binary bodystructure */
+    char *part_id;    /* IMAP part identifier of a subpart */
 
     /* Location/size information */
     uint32_t header_offset;
@@ -81,16 +82,16 @@ struct body {
     uint32_t content_offset;
     uint32_t content_size;
     uint32_t content_lines;
-    uint32_t boundary_size;         /* Size of terminating boundary */
+    uint32_t boundary_size; /* Size of terminating boundary */
     uint32_t boundary_lines;
 
     /* Content guid - sha1 of binary content */
     struct message_guid content_guid;
 
-    int numparts;               /* For multipart types */
-    struct body *subpart;       /* For message/rfc822 and multipart types */
+    int numparts;         /* For multipart types */
+    struct body *subpart; /* For message/rfc822 and multipart types */
 
-    uint32_t filesize;          /* to make sure that things match up! */
+    uint32_t filesize; /* to make sure that things match up! */
 
     /*
      * Other header information.
@@ -130,21 +131,25 @@ struct body {
 };
 
 /* List of Content-type parameters */
-struct param {
+struct param
+{
     struct param *next;
     char *attribute;
     char *value;
 };
 extern void param_free(struct param **paramp);
 
-extern int message_copy_strict(struct protstream *from, FILE *to,
-                               unsigned size, int allow_null);
+extern int message_copy_strict(struct protstream *from,
+                               FILE *to,
+                               unsigned size,
+                               int allow_null);
 
 extern int message_parse(const char *fname, struct index_record *record);
 extern int message_create_record(struct index_record *record,
                                  const struct body *body);
 
-struct message_content {
+struct message_content
+{
     struct buf map;
     struct body *body; /* parsed body structure */
 #ifdef WITH_JMAP
@@ -153,26 +158,30 @@ struct message_content {
 };
 
 #ifdef WITH_JMAP
-#define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL, NULL }
+# define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL, NULL }
 #else
-#define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL }
+# define MESSAGE_CONTENT_INITIALIZER { BUF_INITIALIZER, NULL }
 #endif
 
 /* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
-struct bodypart {
+struct bodypart
+{
     char section[128];
     const char *decoded_body;
 };
 
-
 extern void parse_cached_envelope(char *env, char *tokens[], int tokens_size);
 
-extern int message_parse_mapped(const char *msg_base, unsigned long msg_len,
-                                struct body *body, const char *efname);
-extern int message_parse_binary_file(FILE *infile, struct body **body,
+extern int message_parse_mapped(const char *msg_base,
+                                unsigned long msg_len,
+                                struct body *body,
+                                const char *efname);
+extern int message_parse_binary_file(FILE *infile,
+                                     struct body **body,
                                      const char *efname);
 extern int message_parse_file(FILE *infile,
-                              const char **msg_base, size_t *msg_len,
+                              const char **msg_base,
+                              size_t *msg_len,
                               struct body **body,
                               const char *efname);
 extern int message_parse_file_buf(FILE *infile,
@@ -180,26 +189,37 @@ extern int message_parse_file_buf(FILE *infile,
                                   struct body **body,
                                   const char *efname);
 extern void message_parse_string(const char *hdr, char **hdrp);
-extern void message_pruneheader(char *buf, const strarray_t *headers,
+extern void message_pruneheader(char *buf,
+                                const strarray_t *headers,
                                 const strarray_t *headers_not);
 extern void message_fetch_part(struct message_content *msg,
                                const char **content_types,
                                struct bodypart ***parts);
 extern void message_write_nstring(struct buf *buf, const char *s);
-extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned int len);
-extern void message_write_body(struct buf *buf, const struct body *body,
-                                  int newformat);
+extern void message_write_nstring_map(struct buf *buf,
+                                      const char *s,
+                                      unsigned int len);
+extern void message_write_body(struct buf *buf,
+                               const struct body *body,
+                               int newformat);
 extern void message_write_xdrstring(struct buf *buf, const struct buf *s);
-extern int message_write_cache(struct index_record *record, const struct body *body);
+extern int message_write_cache(struct index_record *record,
+                               const struct body *body);
 
 extern int message_create_record(struct index_record *message_index,
                                  const struct body *body);
 extern void message_free_body(struct body *body);
 
-extern void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp);
-extern void message_parse_disposition(const char *hdr, char **hdpr, struct param **paramp);
+extern void message_parse_type(const char *hdr,
+                               char **typep,
+                               char **subtypep,
+                               struct param **paramp);
+extern void message_parse_disposition(const char *hdr,
+                                      char **hdpr,
+                                      struct param **paramp);
 
-extern void message_parse_charset_params(const struct param *params, charset_t *c_ptr);
+extern void message_parse_charset_params(const struct param *params,
+                                         charset_t *c_ptr);
 
 extern void message_parse_received_date(const char *hdr, char **hdrp);
 
@@ -211,16 +231,22 @@ extern char *parse_nstring(char **str);
 extern void message_read_bodystructure(const struct index_record *record,
                                        struct body **body);
 
-extern int message_update_conversations(struct conversations_state *, struct mailbox *, struct index_record *, conversation_t **);
+extern int message_update_conversations(struct conversations_state *,
+                                        struct mailbox *,
+                                        struct index_record *,
+                                        conversation_t **);
 extern char *message_extract_convsubject(const struct index_record *record);
 
 /* Call proc for each header in headers, which must contain valid
  * MIME header bytes. Header keys and values passed to the callback
  * are zero-terminated strings. Header values are not unfolded and
  * omit the terminated CR LF sequence. */
-extern int message_foreach_header(const char *headers, size_t len,
-                   int (*proc)(const char *key, const char *val, void *rock),
-                   void *rock);
+extern int message_foreach_header(const char *headers,
+                                  size_t len,
+                                  int (*proc)(const char *key,
+                                              const char *val,
+                                              void *rock),
+                                  void *rock);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 /* New message API */
@@ -229,13 +255,12 @@ typedef struct message message_t;
 struct mailbox;
 
 /* Flags for use as the 'flags' argument to message_get_field(). */
-enum message_format
-{
+enum message_format {
     /* Original raw octets from the on-the-wire RFC 5322 format,
      * including folding and RFC 2047 encoding of non-ASCII characters.
      * The result may point into a mapping and not be NUL-terminated,
      * use buf_cstring() if necessary.  */
-    MESSAGE_RAW=        1,
+    MESSAGE_RAW = 1,
     /* Unfolded and RFC 2047 decoded */
     MESSAGE_DECODED,
     /* Unfolded, RFC 2047 decoded, and HTML-escaped */
@@ -243,47 +268,46 @@ enum message_format
     /* Unfolded, RFC 2047 decoded, and search-normalised */
     MESSAGE_SEARCH,
 
-#define _MESSAGE_FORMAT_MASK    (0x7)
+#define _MESSAGE_FORMAT_MASK (0x7)
 
     /* This flag can be OR'd into the format argument to request that
      * the field name and a colon ':' are left in the result.  Normally
      * only the field value is returned.  This is useful when calling
      * multiple times with MESSAGE_APPEND, to accumulate multiple headers
      * in the buffer. */
-    MESSAGE_FIELDNAME=          (1<<5),
+    MESSAGE_FIELDNAME = (1 << 5),
 
     /* This flag can be OR'd into the format argument to request that
      * all the fields of the given name are returned.  Normally only
      * the first is returned, which is faster. */
     /* XXX this flag is not implemented, but is effectively always set! */
-    MESSAGE_MULTIPLE=           (1<<6),
+    MESSAGE_MULTIPLE = (1 << 6),
 
     /* This flag can be OR'd into the format argument to request that
      * results be appended to the buffer; normally the buffer is reset
      * first. */
-    MESSAGE_APPEND=             (1<<7),
+    MESSAGE_APPEND = (1 << 7),
 
     /* This flag can be OR'd into the format argument to request that
      * leading and trailing space be trimmed from the buffer */
-    MESSAGE_TRIM=               (1<<8),
+    MESSAGE_TRIM = (1 << 8),
 
     /* This flag can be OR'd into the format argument to request that
      * only the last field of the given name is returned
      * (by parsing the header block top to bottom).
      * Normally ALL the values of the named header are returned. */
-    MESSAGE_LAST=               (1<<9),
+    MESSAGE_LAST = (1 << 9),
 
     /* This flag can be OR'd into the format argument to request that
      * only the first field of the given name is returned
      * (by parsing the header block top to bottom).
      * Normally ALL the values of the named header are returned. */
-    MESSAGE_FIRST=              (1<<10),
+    MESSAGE_FIRST = (1 << 10),
 };
 
-enum message_indexflags
-{
-    MESSAGE_SEEN=               (1<<0),
-    MESSAGE_RECENT=             (1<<1),
+enum message_indexflags {
+    MESSAGE_SEEN = (1 << 0),
+    MESSAGE_RECENT = (1 << 1),
 };
 
 extern message_t *message_new(void);
@@ -296,10 +320,12 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          const struct index_record *,
                                          uint32_t msgno,
                                          uint32_t indexflags);
-__attribute__((malloc, nonnull, returns_nonnull, warn_unused_result))
-extern message_t *message_new_from_filename(const char *filename);
-extern void message_set_from_data(const char *base, size_t len,
-                                  message_t *m);
+__attribute__((malloc,
+               nonnull,
+               returns_nonnull,
+               warn_unused_result)) extern message_t *
+message_new_from_filename(const char *filename);
+extern void message_set_from_data(const char *base, size_t len, message_t *m);
 extern void message_set_from_mailbox(struct mailbox *mailbox,
                                      unsigned int recno,
                                      message_t *m);
@@ -317,8 +343,10 @@ extern int message_get_indexversion(message_t *m, uint32_t *versionp);
 extern message_t *message_ref(message_t *m);
 extern void message_unref(message_t **m);
 
-extern int message_get_field(message_t *m, const char *name,
-                             int format, struct buf *buf);
+extern int message_get_field(message_t *m,
+                             const char *name,
+                             int format,
+                             struct buf *buf);
 extern int message_get_cachebody(message_t *m, const struct body **bodyp);
 extern int message_get_body(message_t *m, struct buf *buf);
 extern int message_get_headers(message_t *m, struct buf *buf);
@@ -356,17 +384,21 @@ extern int message_get_indexflags(message_t *m, uint32_t *);
 extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
 extern int message_get_fname(message_t *m, const char **fnamep);
-extern int message_foreach_section(message_t *m,
-                   int (*proc)(int isbody, charset_t charset, int encoding,
-                               const char *type, const char *subtype,
-                               const struct param *type_params,
-                               const char *disposition,
-                               const struct param *disposition_params,
-                               const struct message_guid *content_guid,
-                               const char *part,
-                               struct buf *data,
-                               void *rock),
-                   void *rock);
+extern int message_foreach_section(
+    message_t *m,
+    int (*proc)(int isbody,
+                charset_t charset,
+                int encoding,
+                const char *type,
+                const char *subtype,
+                const struct param *type_params,
+                const char *disposition,
+                const struct param *disposition_params,
+                const struct message_guid *content_guid,
+                const char *part,
+                struct buf *data,
+                void *rock),
+    void *rock);
 extern int message_get_leaf_types(message_t *m, strarray_t *types);
 extern int message_get_types(message_t *m, strarray_t *types);
 
@@ -387,8 +419,8 @@ extern const struct message_guid *msg_guid(const message_t *m);
 /* Find a message-id looking thingy in a string.  Returns a pointer to the
  * alloc'd id and the remaining string is returned in the **loc parameter.
  */
-#define MESSAGE_ITER_MSGID_FLAG_DEFAULT                  (0)
-#define MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET       (1<<0)
+#define MESSAGE_ITER_MSGID_FLAG_DEFAULT (0)
+#define MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET (1 << 0)
 extern char *message_iter_msgid(char *str, unsigned flags, char **rem);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
