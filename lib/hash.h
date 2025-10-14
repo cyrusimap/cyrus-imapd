@@ -2,12 +2,12 @@
 #ifndef HASH__H
 #define HASH__H
 
-#include <stddef.h>           /* For size_t     */
+#include <stddef.h> /* For size_t     */
 #include <stdint.h>
 #include "mpool.h"
 #include "strarray.h"
 
-#define HASH_TABLE_INITIALIZER {0, 0, 0, 0, NULL, NULL}
+#define HASH_TABLE_INITIALIZER { 0, 0, 0, 0, NULL, NULL }
 
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
@@ -16,7 +16,8 @@
 ** if there was one.
 */
 
-typedef struct bucket {
+typedef struct bucket
+{
     char *key;
     void *data;
     struct bucket *next;
@@ -31,7 +32,8 @@ typedef struct bucket {
 ** times as many nodes have been inserted as the table was created with.
 */
 
-typedef struct hash_table {
+typedef struct hash_table
+{
     size_t size;
     size_t count;
     uint32_t seed;
@@ -45,8 +47,7 @@ typedef struct hash_table {
 ** the table's size to 0, and the pointer to the table to NULL.
 */
 
-hash_table *construct_hash_table(hash_table *table, size_t size,
-                                 int use_mpool);
+hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool);
 
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
@@ -54,14 +55,14 @@ hash_table *construct_hash_table(hash_table *table, size_t size,
 ** associated data.
 */
 
-void *hash_insert(const char *key,void *data,hash_table *table);
+void *hash_insert(const char *key, void *data, hash_table *table);
 
 /*
 ** Returns a pointer to the data associated with a key.  If the key has
 ** not been inserted in the table, returns NULL.
 */
 
-void *hash_lookup(const char *key,hash_table *table);
+void *hash_lookup(const char *key, hash_table *table);
 
 /*
 ** Deletes an entry from the table.  Returns a pointer to the data that
@@ -70,7 +71,7 @@ void *hash_lookup(const char *key,hash_table *table);
 */
 /* Warning: use this function judiciously if you are using memory pools,
  * since it will leak memory until you get rid of the entire hash table */
-void *hash_del(const char *key,hash_table *table);
+void *hash_del(const char *key, hash_table *table);
 
 /*
 ** Goes through a hash table and calls the function passed to it
@@ -81,10 +82,13 @@ void *hash_del(const char *key,hash_table *table);
 ** sorted order.  It's slower but consistent
 */
 
-void hash_enumerate(hash_table *table,void (*func)(const char *,void *,void *),
+void hash_enumerate(hash_table *table,
+                    void (*func)(const char *, void *, void *),
                     void *rock);
-void hash_enumerate_sorted(hash_table *table,void (*func)(const char *,void *,void *),
-                    void *rock, strarray_cmp_fn_t *cmp);
+void hash_enumerate_sorted(hash_table *table,
+                           void (*func)(const char *, void *, void *),
+                           void *rock,
+                           strarray_cmp_fn_t *cmp);
 
 /* gets all the keys from the hashtable */
 strarray_t *hash_keys(const hash_table *table);

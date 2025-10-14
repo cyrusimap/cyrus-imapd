@@ -43,8 +43,7 @@
 #include <config.h>
 #include <unistd.h>
 
-int
-getdtablesize ()
+int getdtablesize()
 {
-        return(sysconf(_SC_OPEN_MAX));
+    return (sysconf(_SC_OPEN_MAX));
 }
