@@ -125,25 +125,24 @@ typedef struct _SquatIndex SquatIndex;
 typedef struct _SquatSearchIndex SquatSearchIndex;
 
 typedef long long SquatInt64;
-typedef int       SquatInt32;
+typedef int SquatInt32;
 
 /* All SQUAT index files start with this magic 8 bytes */
 extern char const squat_index_file_header[8]; /* "SQUAT 1\n" */
 
 /* SQUAT return values */
-#define SQUAT_OK           1
-#define SQUAT_ERR          2
+#define SQUAT_OK 1
+#define SQUAT_ERR 2
 #define SQUAT_LAST_BUILTIN SQUAT_ERR
 
 /* SQUAT error codes */
-#define SQUAT_ERR_OK                         1
+#define SQUAT_ERR_OK 1
 /* was SQUAT_ERR_OUT_OF_MEMORY */
-#define SQUAT_ERR_SYSERR                     3   /* check errno */
-#define SQUAT_ERR_INVALID_INDEX_FILE         4
-#define SQUAT_ERR_SEARCH_STRING_TOO_SHORT    5
+#define SQUAT_ERR_SYSERR 3 /* check errno */
+#define SQUAT_ERR_INVALID_INDEX_FILE 4
+#define SQUAT_ERR_SEARCH_STRING_TOO_SHORT 5
 #define SQUAT_ERR_SEARCH_STRING_INVALID_CHAR 6
 int squat_get_last_error(void);
-
 
 /***************************************
    INDEX CONSTRUCTION API
@@ -152,34 +151,38 @@ int squat_get_last_error(void);
 /* You can get reports about the progress of index creation using a
    "stats callback" function. Your callback function is called every
    time an event occurs. */
-#define SQUAT_STATS_COMPLETED_DOC          1 /* Finished processing a document */
-#define SQUAT_STATS_COMPLETED_INITIAL_CHAR 2 /* Indexed all words
-                                                beginning with a given
-                                                byte */
+#define SQUAT_STATS_COMPLETED_DOC 1 /* Finished processing a document */
+#define SQUAT_STATS_COMPLETED_INITIAL_CHAR                                     \
+    2           /* Indexed all words                                           \
+                   beginning with a given                                      \
+                   byte */
 typedef union { /* An event report */
-  struct {
-    int type;   /* the type of the event, a SQUAT_STATS_ constant */
-  } generic;
-  struct {      /* data for a COMPLETED_DOC event, issued during
-                   squat_index_close_document */
-    int type;
-    int const* num_unique_words; /* num_unique_words[i] gives the
-                                    number of unique words in this
-                                    source document beginning with the
-                                    byte i */
-  } completed_doc;
-  struct {      /* data for a COMPLETED_INITIAL_CHAR event, issued
-                   during squat_index_finish */
-    int type;
-    int completed_char;     /* We've just finished processing all
+    struct
+    {
+        int type; /* the type of the event, a SQUAT_STATS_ constant */
+    } generic;
+    struct
+    { /* data for a COMPLETED_DOC event, issued during
+         squat_index_close_document */
+        int type;
+        int const *num_unique_words; /* num_unique_words[i] gives the
+                                        number of unique words in this
+                                        source document beginning with the
+                                        byte i */
+    } completed_doc;
+    struct
+    { /* data for a COMPLETED_INITIAL_CHAR event, issued
+         during squat_index_finish */
+        int type;
+        int completed_char; /* We've just finished processing all
                                words beginning with this byte */
-    int num_words;          /* How many unique words over all
+        int num_words;      /* How many unique words over all
                                documents start with this byte */
-    int temp_file_size;     /* The size of the temporary file that was
+        int temp_file_size; /* The size of the temporary file that was
                                used for this byte */
-  } completed_initial_char;
+    } completed_initial_char;
 } SquatStatsEvent;
-typedef void (* SquatStatsCallback)(void* closure, SquatStatsEvent* params);
+typedef void (*SquatStatsCallback)(void *closure, SquatStatsEvent *params);
 
 /* Create a SQUAT index. The index is dumped into 'fd', which should
    be an empty file opened for writing.
@@ -193,62 +196,62 @@ typedef void (* SquatStatsCallback)(void* closure, SquatStatsEvent* params);
    obligated to call "squat_index_destroy" or "squat_index_finish" on
    the index.
 */
-#define SQUAT_OPTION_TMP_PATH    0x01  /* The tmp_path options field is valid. */
-#define SQUAT_OPTION_VALID_CHARS 0x02  /* The valid_chars options field is valid. */
-#define SQUAT_OPTION_STATISTICS  0x04  /* The stats_callback* options
-                                          fields are valid. */
-typedef struct {
-  int option_mask;                   /* Which options fields have been
-                                        initialized? */
-  char const* tmp_path;              /* A directory where all
-                                        temporary files will be
-                                        created. Must not have any
-                                        trailing slash. */
-  char const* valid_chars;           /* A null-terminated string
-                                        containing the characters
-                                        which can appear in search
-                                        strings. (Sorry, if you use
-                                        this option, the null
-                                        character is never allowed in
-                                        search strings.) If you try to
-                                        use any other bytes in a
-                                        search string, you will get an
-                                        error. If you know in advance
-                                        that certain bytes cannot
-                                        appear in search strings, you
-                                        can improve performance using
-                                        this option (especially if
-                                        those bytes do occur in source
-                                        documents). */
-  SquatStatsCallback stats_callback; /* See above */
-  void* stats_callback_closure;      /* Private data passed down into
-                                        the callback function */
+#define SQUAT_OPTION_TMP_PATH 0x01 /* The tmp_path options field is valid. */
+#define SQUAT_OPTION_VALID_CHARS                                               \
+    0x02 /* The valid_chars options field is valid. */
+#define SQUAT_OPTION_STATISTICS                                                \
+    0x04 /* The stats_callback* options                                        \
+            fields are valid. */
+typedef struct
+{
+    int option_mask;                   /* Which options fields have been
+                                          initialized? */
+    char const *tmp_path;              /* A directory where all
+                                          temporary files will be
+                                          created. Must not have any
+                                          trailing slash. */
+    char const *valid_chars;           /* A null-terminated string
+                                          containing the characters
+                                          which can appear in search
+                                          strings. (Sorry, if you use
+                                          this option, the null
+                                          character is never allowed in
+                                          search strings.) If you try to
+                                          use any other bytes in a
+                                          search string, you will get an
+                                          error. If you know in advance
+                                          that certain bytes cannot
+                                          appear in search strings, you
+                                          can improve performance using
+                                          this option (especially if
+                                          those bytes do occur in source
+                                          documents). */
+    SquatStatsCallback stats_callback; /* See above */
+    void *stats_callback_closure;      /* Private data passed down into
+                                          the callback function */
 } SquatOptions;
-SquatIndex* squat_index_init(int fd, SquatOptions const* options);
-
+SquatIndex *squat_index_init(int fd, SquatOptions const *options);
 
 /* Start adding a new document to the index. The name is a
    null-terminated UTF8 string which is associated with the document.
    Call this after successfully calling squat_index_init or
    squat_index_close_document.
 */
-int         squat_index_open_document(SquatIndex* index, char const* name);
-
+int squat_index_open_document(SquatIndex *index, char const *name);
 
 /* Notify SQUAT about some more data in the current document. This
    function can be called as many times as desired until all the data
    in the document has been fed into SQUAT. Call this after
    successfully calling squat_index_open_document or
    squat_index_append_document. */
-int         squat_index_append_document(SquatIndex* index, char const* data,
-               int data_len);
-
+int squat_index_append_document(SquatIndex *index,
+                                char const *data,
+                                int data_len);
 
 /* Notify SQUAT that the current document has ended.
    Call this after successfully calling squat_index_open_document or
    squat_index_append_document. */
-int         squat_index_close_document(SquatIndex* index);
-
+int squat_index_close_document(SquatIndex *index);
 
 /* Notify SQUAT that there are no more documents. SQUAT will finish
    generating the index. It is the client's responsibility to close
@@ -257,24 +260,23 @@ int         squat_index_close_document(SquatIndex* index);
    Call this after successfully calling squat_index_init or
    squat_index_close_document. */
 
-int         squat_index_finish(SquatIndex* index);
+int squat_index_finish(SquatIndex *index);
 
 /* Notify SQUAT that something has gone wrong and index construction
    must be aborted. It is the client's responsibility to close and/or
    remove the original index file. All SQUAT resources associated with
    the index are released whether this call succeeds or fails.
    Call this anytime. */
-int         squat_index_destroy(SquatIndex* index);
+int squat_index_destroy(SquatIndex *index);
 
+typedef int (*SquatScanCallback)(void *closure, char *name, int doc_ID);
 
-typedef int (* SquatScanCallback)(void* closure, char *name, int doc_ID);
+int squat_scan(SquatSearchIndex *index,
+               char first_char,
+               SquatScanCallback handler,
+               void *closure);
 
-int         squat_scan(SquatSearchIndex* index, char first_char,
-                       SquatScanCallback handler,
-                       void* closure);
-
-int         squat_count_docs(SquatSearchIndex* index, char first_char,
-                             int *counter);
+int squat_count_docs(SquatSearchIndex *index, char first_char, int *counter);
 
 /***************************************
    INDEX SEARCH API
@@ -286,28 +288,31 @@ int         squat_count_docs(SquatSearchIndex* index, char first_char,
    This function mmaps the entire index file. If there is not enough
    virtual address space available it will fail with SQUAT_ERR_SYSERR.
 */
-SquatSearchIndex* squat_search_open(int fd);
+SquatSearchIndex *squat_search_open(int fd);
 
 /* Get a list of the documents included in the index.
    The callback function is called once for each document. The
    callback function returns one of the following results to control
    the progress of the operation. Call this after successfully calling
    squat_search_open, squat_search_list_docs, or squat_search_execute. */
-#define SQUAT_CALLBACK_CONTINUE   1  /* return this from the callback
-                                        function to continue with the
-                                        operation. */
-#define SQUAT_CALLBACK_ABORT      2  /* return this from the callback
-                                        function to abort the current
-                                        operation and return to the
-                                        client. */
-typedef struct {
-  char const* doc_name;  /* The UTF8 name of the document. */
-  SquatInt64  size;      /* The total size of the document in bytes. */
+#define SQUAT_CALLBACK_CONTINUE                                                \
+    1 /* return this from the callback                                         \
+         function to continue with the                                         \
+         operation. */
+#define SQUAT_CALLBACK_ABORT                                                   \
+    2 /* return this from the callback                                         \
+         function to abort the current                                         \
+         operation and return to the                                           \
+         client. */
+typedef struct
+{
+    char const *doc_name; /* The UTF8 name of the document. */
+    SquatInt64 size;      /* The total size of the document in bytes. */
 } SquatListDoc;
-typedef int (* SquatListDocCallback)(void* closure, SquatListDoc const* doc);
-int               squat_search_list_docs(SquatSearchIndex* index,
-                    SquatListDocCallback handler, void* closure);
-
+typedef int (*SquatListDocCallback)(void *closure, SquatListDoc const *doc);
+int squat_search_list_docs(SquatSearchIndex *index,
+                           SquatListDocCallback handler,
+                           void *closure);
 
 /* Get a list of the documents that may include the given search string.
    The callback function is called once for each possibly-matching
@@ -315,21 +320,21 @@ int               squat_search_list_docs(SquatSearchIndex* index,
    control the progress of the operation. Call this after successfully
    calling squat_search_open, squat_search_list_docs, or
    squat_search_execute. */
-typedef int (* SquatSearchResultCallback)(void* closure, char const* doc_name);
-int               squat_search_execute(SquatSearchIndex* index, char const* data,
-                    int data_len, SquatSearchResultCallback handler, void* closure);
-
+typedef int (*SquatSearchResultCallback)(void *closure, char const *doc_name);
+int squat_search_execute(SquatSearchIndex *index,
+                         char const *data,
+                         int data_len,
+                         SquatSearchResultCallback handler,
+                         void *closure);
 
 /* Release the SQUAT resources associated with an index. The resources
    are released whether this call succeeds or fails.
    Call this anytime. */
-int               squat_search_close(SquatSearchIndex* index);
+int squat_search_close(SquatSearchIndex *index);
 
+typedef int (*SquatDocChooserCallback)(void *closure, SquatListDoc const *doc);
 
-typedef int (* SquatDocChooserCallback)(void* closure,
-                                        SquatListDoc const* doc);
-
-int squat_index_add_existing(SquatIndex* index,
+int squat_index_add_existing(SquatIndex *index,
                              SquatSearchIndex *old_index,
                              SquatDocChooserCallback choose_existing,
                              void *closure);

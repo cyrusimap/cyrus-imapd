@@ -107,14 +107,15 @@
 
 /* A simple write-buffering module which avoids copying of the output data. */
 
-typedef struct {
+typedef struct
+{
     struct buf buf;         /* The extending malloc'ed buffer */
     int fd;                 /* The fd to write to. */
     int total_output_bytes; /* How much data have we written out
                                through this buffer in total? */
 } SquatWriteBuffer;
 
-static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
+static int init_write_buffer(SquatWriteBuffer *b, int buf_size, int fd)
 {
     buf_ensure(&b->buf, buf_size);
     b->fd = fd;
@@ -128,7 +129,7 @@ static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
 static char *prepare_buffered_write(SquatWriteBuffer *b, int len)
 {
     if (b->buf.len + len >= b->buf.alloc) {
-        if (write(b->fd, b->buf.s, b->buf.len) != (long)b->buf.len) {
+        if (write(b->fd, b->buf.s, b->buf.len) != (long) b->buf.len) {
             squat_set_last_error(SQUAT_ERR_SYSERR);
             return NULL;
         }
@@ -154,7 +155,7 @@ static void complete_buffered_write(SquatWriteBuffer *b, char *ptr)
 static int flush_and_reset_buffered_writes(SquatWriteBuffer *b)
 {
     if (b->buf.len) {
-        if (write(b->fd, b->buf.s, b->buf.len) != (long)b->buf.len) {
+        if (write(b->fd, b->buf.s, b->buf.len) != (long) b->buf.len) {
             squat_set_last_error(SQUAT_ERR_SYSERR);
             return SQUAT_ERR;
         }
@@ -171,7 +172,8 @@ static int flush_and_reset_buffered_writes(SquatWriteBuffer *b)
 
 /* A circular linked list of document IDs, stored in increasing order
    of document ID. */
-typedef struct _WordDocEntry {
+typedef struct _WordDocEntry
+{
     struct _WordDocEntry *next;
     int doc_ID;
 } WordDocEntry;
@@ -180,129 +182,134 @@ typedef struct _WordDocEntry {
    256 words with trailing byte 'i', docs[i] is NULL if the word does
    not occur in any document, otherwise it is the head of a linked
    list of document IDs for the documents which contain the word. */
-typedef struct {
-  short first_valid_entry;  /* We record the first and last valid
-                               entries in the array below. These could
-                               be computed by just scanning the array,
-                               but it turns out that in practice such
-                               array scanning dominates the CPU
-                               consumption of the indexer. We get
-                               major speedup by maintaining these
-                               entries on the fly. */
-  short last_valid_entry;
-  WordDocEntry* docs[256];  /* Pointers to the document ID lists for
-                               each of the 256 words rooted at this
-                               part of the trie. Each non-NULL pointer
-                               points to the LAST element of the
-                               linked list (i.e. the entry with the
-                               highest document ID). This means we can
-                               efficiently add to the end of the
-                               linked list, and also efficiently get
-                               to the start of the linked list (the
-                               element with lowest document ID)
-                               (because it's circular). */
+typedef struct
+{
+    short first_valid_entry; /* We record the first and last valid
+                                entries in the array below. These could
+                                be computed by just scanning the array,
+                                but it turns out that in practice such
+                                array scanning dominates the CPU
+                                consumption of the indexer. We get
+                                major speedup by maintaining these
+                                entries on the fly. */
+    short last_valid_entry;
+    WordDocEntry *docs[256]; /* Pointers to the document ID lists for
+                                each of the 256 words rooted at this
+                                part of the trie. Each non-NULL pointer
+                                points to the LAST element of the
+                                linked list (i.e. the entry with the
+                                highest document ID). This means we can
+                                efficiently add to the end of the
+                                linked list, and also efficiently get
+                                to the start of the linked list (the
+                                element with lowest document ID)
+                                (because it's circular). */
 } SquatWordTableLeafDocs;
 
 /* These form the leaves of the "per document" tries. For each of the
    256 words with trailing byte 'i', presence[i >> 3] & (1 << (i & 7))
    is 1 if the word occurs in the document, otherwise 0. */
-typedef struct {
-  short first_valid_entry;  /* We record the first and last valid
-                               entries in the bit vector below. These
-                               could be computed by just scanning the
-                               array, but we get significant speedup
-                               by maintaining them here. */
-  short last_valid_entry;
-  char presence[32];
+typedef struct
+{
+    short first_valid_entry; /* We record the first and last valid
+                                entries in the bit vector below. These
+                                could be computed by just scanning the
+                                array, but we get significant speedup
+                                by maintaining them here. */
+    short last_valid_entry;
+    char presence[32];
 } SquatWordTableLeafPresence;
 
 /* This is an entry in a trie. */
 typedef union _SquatWordTableEntry {
-  struct _SquatWordTable* table;   /* This is a branch node */
+    struct _SquatWordTable *table; /* This is a branch node */
 
-  /* These variants are used for leaves of "per document" tries.
-     They are distinguished by the value of the low bit. */
-  SquatWordTableLeafPresence* leaf_presence;    /* low bit is 0 */
-  int leaf_presence_singleton;                  /* low bit is 1 */
+    /* These variants are used for leaves of "per document" tries.
+       They are distinguished by the value of the low bit. */
+    SquatWordTableLeafPresence *leaf_presence; /* low bit is 0 */
+    int leaf_presence_singleton;               /* low bit is 1 */
 
-  /* This variant is used for leaves of "all document" tries. */
-  SquatWordTableLeafDocs* leaf_docs;
+    /* This variant is used for leaves of "all document" tries. */
+    SquatWordTableLeafDocs *leaf_docs;
 } SquatWordTableEntry;
 
 /* This is a trie branch node. */
-typedef struct _SquatWordTable {
-  short first_valid_entry;   /* We record the first and last valid
+typedef struct _SquatWordTable
+{
+    short first_valid_entry; /* We record the first and last valid
                                 entries in the array below, as in the
                                 above data structures. */
-  short last_valid_entry;
-  SquatWordTableEntry entries[256];
+    short last_valid_entry;
+    SquatWordTableEntry entries[256];
 } SquatWordTable;
 
 /* Map docIDs in existing index to docIDs in the new index.
  * n.b. docIDs start at one.  Index zero in this map is always
  * zero.
  */
-struct doc_ID_map {
+struct doc_ID_map
+{
     int *map;
     int alloc;
     int max;
     int new;
 };
 
-struct _SquatIndex {
-  char* tmp_path;                     /* Saved tmp_path option, with
-                                         the temporary filename
-                                         pattern appended */
-  SquatWriteBuffer out;               /* The buffer for the index file itself */
-  char* doc_ID_list;                  /* A buffer where we hold the
-                                         encoded array that maps from
-                                         a document ID to the offset
-                                         of the document record within
-                                         the index file. */
-  int doc_ID_list_size;               /* The allocated size of the
-                                         above buffer, measured in
-                                         multiples of
-                                         sizeof(SquatInt32) (i.e., 4) */
-  int current_doc_ID;                 /* The current document
-                                         ID. Document IDs are numbered
-                                         starting at zero and
-                                         incremented by 1 every time
-                                         we finish processing a source
-                                         document. */
-  int current_doc_len;                /* The total number of bytes
-                                         processed in the current
-                                         source document. */
-  SquatWordTable *doc_word_table;     /* The root of the trie being
-                                         built for the current
-                                         document or for the current
-                                         initial byte. */
-  char runover_buf[SQUAT_WORD_SIZE];  /* holds the last runover_len
-                                         bytes of the current source
-                                         document */
-  int runover_len;
-  WordDocEntry* word_doc_allocator;   /* A preallocated buffer of
-                                         WordDocEntries; this pointer
-                                         is bumped up one every
-                                         allocation */
-  unsigned char valid_char_bits[32];  /* Saved valid_char_bits option */
-  SquatStatsCallback stats_callback;  /* Saved stats_callback option */
-  void* stats_callback_closure;
+struct _SquatIndex
+{
+    char *tmp_path;                 /* Saved tmp_path option, with
+                                       the temporary filename
+                                       pattern appended */
+    SquatWriteBuffer out;           /* The buffer for the index file itself */
+    char *doc_ID_list;              /* A buffer where we hold the
+                                       encoded array that maps from
+                                       a document ID to the offset
+                                       of the document record within
+                                       the index file. */
+    int doc_ID_list_size;           /* The allocated size of the
+                                       above buffer, measured in
+                                       multiples of
+                                       sizeof(SquatInt32) (i.e., 4) */
+    int current_doc_ID;             /* The current document
+                                       ID. Document IDs are numbered
+                                       starting at zero and
+                                       incremented by 1 every time
+                                       we finish processing a source
+                                       document. */
+    int current_doc_len;            /* The total number of bytes
+                                       processed in the current
+                                       source document. */
+    SquatWordTable *doc_word_table; /* The root of the trie being
+                                       built for the current
+                                       document or for the current
+                                       initial byte. */
+    char runover_buf[SQUAT_WORD_SIZE]; /* holds the last runover_len
+                                          bytes of the current source
+                                          document */
+    int runover_len;
+    WordDocEntry *word_doc_allocator;  /* A preallocated buffer of
+                                          WordDocEntries; this pointer
+                                          is bumped up one every
+                                          allocation */
+    unsigned char valid_char_bits[32]; /* Saved valid_char_bits option */
+    SquatStatsCallback stats_callback; /* Saved stats_callback option */
+    void *stats_callback_closure;
 
-  SquatSearchIndex* old_index;        /* Link to old index in incremental */
-  struct doc_ID_map doc_ID_map;       /* Map doc_IDs in old index to new */
-  SquatDocChooserCallback select_doc; /* Decide whether we want doc in new */
-  void *select_doc_closure;           /* Data for handler */
+    SquatSearchIndex *old_index;        /* Link to old index in incremental */
+    struct doc_ID_map doc_ID_map;       /* Map doc_IDs in old index to new */
+    SquatDocChooserCallback select_doc; /* Decide whether we want doc in new */
+    void *select_doc_closure;           /* Data for handler */
 
-  /* put the big structures at the end */
+    /* put the big structures at the end */
 
-  SquatWriteBuffer index_buffers[256]; /* Buffers for the temporary
-                                          files, one for each first
-                                          byte of words occurring in
-                                          the source documents */
-  int total_num_words[256];  /* total number of words starting with
-                                given char */
-  int doc_words[256];        /* number of words in current document
-                                starting with given char */
+    SquatWriteBuffer index_buffers[256]; /* Buffers for the temporary
+                                            files, one for each first
+                                            byte of words occurring in
+                                            the source documents */
+    int total_num_words[256];            /* total number of words starting with
+                                            given char */
+    int doc_words[256];                  /* number of words in current document
+                                            starting with given char */
 };
 
 /* ====================================================================== */
@@ -313,14 +320,16 @@ struct _SquatIndex {
  */
 
 /* Copy existing document details verbatim from old to new index */
-static int squat_index_copy_document(SquatIndex *index, char const *name,
+static int squat_index_copy_document(SquatIndex *index,
+                                     char const *name,
                                      SquatInt64 size)
 {
     char *buf;
     int r = squat_index_open_document(index, name);
 
-    if (r != SQUAT_OK)
+    if (r != SQUAT_OK) {
         return (r);
+    }
 
     squat_set_last_error(SQUAT_ERR_OK);
     if ((buf = prepare_buffered_write(&index->out, 10)) == NULL) {
@@ -345,8 +354,9 @@ static void doc_ID_map_init(struct doc_ID_map *doc_ID_map)
 
 static void doc_ID_map_free(struct doc_ID_map *doc_ID_map)
 {
-    if (doc_ID_map->map)
+    if (doc_ID_map->map) {
         free(doc_ID_map->map);
+    }
 
     memset(doc_ID_map, 0, sizeof(struct doc_ID_map));
 }
@@ -370,10 +380,11 @@ static void doc_ID_map_add(struct doc_ID_map *doc_ID_map, int exists)
     }
 
     if (exists) {
-        doc_ID_map->map[++ doc_ID_map->max] = ++ doc_ID_map->new;
+        doc_ID_map->map[++doc_ID_map->max] = ++doc_ID_map->new;
     }
     else {
-        doc_ID_map->map[++ doc_ID_map->max] = 0; /* Does not exist in new index */
+        doc_ID_map->map[++doc_ID_map->max] =
+            0; /* Does not exist in new index */
     }
 }
 
@@ -415,7 +426,8 @@ static int copy_docIDs(void *closure, SquatListDoc const *doc)
 }
 
 /* Comes later */
-static int add_word_to_trie(SquatIndex* index, char const* word_ptr,
+static int add_word_to_trie(SquatIndex *index,
+                            char const *word_ptr,
                             int doc_ID);
 
 static int add_word_callback(void *closure, char *name, int doc_ID)
@@ -424,8 +436,9 @@ static int add_word_callback(void *closure, char *name, int doc_ID)
     struct doc_ID_map *doc_ID_map = &index->doc_ID_map;
 
     /* Find doc_ID in the new index which corresponds to this old doc_ID */
-    if ((doc_ID = doc_ID_map_lookup(doc_ID_map, doc_ID)) == 0)
+    if ((doc_ID = doc_ID_map_lookup(doc_ID_map, doc_ID)) == 0) {
         return SQUAT_ERR;
+    }
 
     add_word_to_trie(index, name + 1, doc_ID);
 
@@ -449,8 +462,7 @@ int squat_index_add_existing(SquatIndex *index,
 /* Initially, before we see a document, there are no words for the document. */
 static SquatWordTable *word_table_new(void)
 {
-    SquatWordTable *ret =
-        (SquatWordTable *) xzmalloc(sizeof(SquatWordTable));
+    SquatWordTable *ret = (SquatWordTable *) xzmalloc(sizeof(SquatWordTable));
 
     /* Initially there are no valid entries. Set things up so that
        the obvious tests will set first_valid_entry and
@@ -472,34 +484,38 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
     index = (SquatIndex *) xzmalloc(sizeof(SquatIndex));
 
     /* Copy processed options into the SquatIndex */
-    if (options != NULL
-        && (options->option_mask & SQUAT_OPTION_TMP_PATH) != 0) {
+    if (options != NULL && (options->option_mask & SQUAT_OPTION_TMP_PATH) != 0)
+    {
         tmp_path = options->tmp_path;
-    } else {
+    }
+    else {
         tmp_path = "/tmp";
     }
-    index->tmp_path = strconcat(tmp_path, "/squatXXXXXX", (char *)NULL);
+    index->tmp_path = strconcat(tmp_path, "/squatXXXXXX", (char *) NULL);
 
-    if (options != NULL &&
-        (options->option_mask & SQUAT_OPTION_VALID_CHARS) != 0) {
+    if (options != NULL
+        && (options->option_mask & SQUAT_OPTION_VALID_CHARS) != 0)
+    {
         int i;
 
         memset(index->valid_char_bits, 0, sizeof(index->valid_char_bits));
         for (i = 0; options->valid_chars[i] != 0; i++) {
-            int ch = (unsigned char)options->valid_chars[i];
+            int ch = (unsigned char) options->valid_chars[i];
 
             index->valid_char_bits[ch >> 3] |= 1 << (ch & 7);
         }
-    } else {
-        memset(index->valid_char_bits, 255,
-               sizeof(index->valid_char_bits));
+    }
+    else {
+        memset(index->valid_char_bits, 255, sizeof(index->valid_char_bits));
     }
 
-    if (options != NULL &&
-        (options->option_mask & SQUAT_OPTION_STATISTICS) != 0) {
+    if (options != NULL
+        && (options->option_mask & SQUAT_OPTION_STATISTICS) != 0)
+    {
         index->stats_callback = options->stats_callback;
         index->stats_callback_closure = options->stats_callback_closure;
-    } else {
+    }
+    else {
         index->stats_callback = NULL;
     }
 
@@ -510,7 +526,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     index->doc_ID_list_size = 1000;
     index->doc_ID_list =
-        (char *)xmalloc(index->doc_ID_list_size * sizeof(SquatInt32));
+        (char *) xmalloc(index->doc_ID_list_size * sizeof(SquatInt32));
 
     /* Use a 128K write buffer for the main index file */
     if (init_write_buffer(&index->out, 128 * 1024, fd) != SQUAT_OK) {
@@ -531,7 +547,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     memset(index->total_num_words, 0, sizeof(index->total_num_words));
 
-    index->old_index = NULL;    /* Until we are given one */
+    index->old_index = NULL; /* Until we are given one */
     doc_ID_map_init(&index->doc_ID_map);
 
     return index;
@@ -542,10 +558,10 @@ cleanup_out_buffer:
 cleanup_doc_ID_list:
     free(index->doc_ID_list);
 
-/*cleanup_tmp_path:*/
+    /*cleanup_tmp_path:*/
     free(index->tmp_path);
 
-/*cleanup_index:*/
+    /*cleanup_index:*/
     free(index);
     return NULL;
 }
@@ -553,8 +569,7 @@ cleanup_doc_ID_list:
 /* Initialize a write buffer for a temporary file. We generate the
    temporary file name here. The file is unlinked right away so if we
    crash, the temporary file doesn't need to be cleaned up. */
-static int init_write_buffer_to_temp(SquatIndex *index,
-                                     SquatWriteBuffer *b)
+static int init_write_buffer_to_temp(SquatIndex *index, SquatWriteBuffer *b)
 {
     char *tmp_path = xstrdup(index->tmp_path);
     int fd = mkstemp(tmp_path);
@@ -593,16 +608,16 @@ int squat_index_open_document(SquatIndex *index, char const *name)
     /* Grow the document ID array as necessary */
     if (index->current_doc_ID >= index->doc_ID_list_size) {
         int new_size = index->doc_ID_list_size * 2;
-        index->doc_ID_list = xzrealloc(index->doc_ID_list,
-                                       index->doc_ID_list_size * sizeof(SquatInt32),
-                                       new_size * sizeof(SquatInt32));
+        index->doc_ID_list =
+            xzrealloc(index->doc_ID_list,
+                      index->doc_ID_list_size * sizeof(SquatInt32),
+                      new_size * sizeof(SquatInt32));
         index->doc_ID_list_size = new_size;
     }
 
     /* Store the offset of the new document record into the array */
     squat_encode_32(index->doc_ID_list + index->current_doc_ID * 4,
-                    index->out.total_output_bytes -
-                    sizeof(SquatDiskHeader));
+                    index->out.total_output_bytes - sizeof(SquatDiskHeader));
 
     /* Now write the new document name out to the file. Later we will
        write the document length right after this. Nobody writes to the
@@ -635,7 +650,8 @@ static void word_table_delete(SquatWordTable *t, int depth)
                 word_table_delete(e->table, depth);
             }
         }
-    } else {
+    }
+    else {
         unsigned i;
 
         /* this happens to work whether the leaf entries are leaf_presence
@@ -644,7 +660,8 @@ static void word_table_delete(SquatWordTable *t, int depth)
             SquatWordTableEntry *e = &(t->entries[i]);
 
             if (e->leaf_presence != NULL
-                && ((unsigned long)e->leaf_presence & 1) == 0) {
+                && ((unsigned long) e->leaf_presence & 1) == 0)
+            {
                 free(e->leaf_presence);
             }
         }
@@ -673,7 +690,8 @@ static int set_presence_bit(SquatWordTableLeafPresence *p, int ch)
     if ((*ptr & mask) == 0) {
         *ptr |= mask;
         return SQUAT_ADD_NEW_WORD;
-    } else {
+    }
+    else {
         return SQUAT_OK;
     }
 }
@@ -683,7 +701,9 @@ static int set_presence_bit(SquatWordTableLeafPresence *p, int ch)
    the presence or absence of a word, not the actual document.
    We return SQUAT_ADD_NEW_WORD if this is the first occurrence of the
    word in the trie. */
-static int add_to_table(SquatIndex *index, char const *data, int data_len,
+static int add_to_table(SquatIndex *index,
+                        char const *data,
+                        int data_len,
                         WordDocEntry *word_entry)
 {
     SquatWordTable *t = index->doc_word_table;
@@ -692,7 +712,7 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
 
     while (data_len > 2) {
         /* Follow the branch node down to the next level of the trie. */
-        ch = (unsigned char)data[0];
+        ch = (unsigned char) data[0];
         /* Maintain the valid_entry variables so that we don't have to
            perform expensive scans of the 256-element arrays
            later. Surprisingly, this optimization really matters! */
@@ -706,15 +726,16 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
         e = t->entries + ch;
         t = e->table;
         /* Allocate the next branch node if it doesn't already exist. */
-        if (t == NULL)
+        if (t == NULL) {
             e->table = t = word_table_new();
+        }
 
         data++;
         data_len--;
     }
 
     /* Follow the branch node down to the leaf level */
-    ch = (unsigned char)data[0];
+    ch = (unsigned char) data[0];
     if (ch < t->first_valid_entry) {
         t->first_valid_entry = ch;
     }
@@ -723,11 +744,11 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
     }
     e = t->entries + ch;
 
-    ch = (unsigned char)data[1];
+    ch = (unsigned char) data[1];
 
     if (word_entry == NULL) {
         /* We are in "per document" mode. */
-        if (((unsigned long)e->leaf_presence & 1) != 0) {
+        if (((unsigned long) e->leaf_presence & 1) != 0) {
             /* We currently have a singleton here. */
             int oldch = e->leaf_presence_singleton >> 1;
 
@@ -739,8 +760,8 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
                 SquatWordTableLeafPresence *p;
 
                 /* Make an empty bit vector. */
-                p = (SquatWordTableLeafPresence *)
-                    xmalloc(sizeof(SquatWordTableLeafPresence));
+                p = (SquatWordTableLeafPresence *) xmalloc(
+                    sizeof(SquatWordTableLeafPresence));
                 p->first_valid_entry = 256;
                 p->last_valid_entry = 0;
                 memset(p->presence, 0, sizeof(p->presence));
@@ -748,29 +769,34 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
 
                 /* Update the bit vector */
                 set_presence_bit(p, ch);
-                return set_presence_bit(p, oldch);      /* will always be SQUAT_ADD_NEW_WORD */
+                return set_presence_bit(
+                    p,
+                    oldch); /* will always be SQUAT_ADD_NEW_WORD */
             }
-        } else if (e->leaf_presence == NULL) {
+        }
+        else if (e->leaf_presence == NULL) {
             /* There's nothing here. Let's make a singleton. */
             /* this next step might be necessary if sizeof(void*) >
                sizeof(int). We make sure that the low bit of the pointer in
                leaf_presence is definitely 1. */
-            e->leaf_presence = (void *)1;
+            e->leaf_presence = (void *) 1;
             e->leaf_presence_singleton = (ch << 1) | 1;
             return SQUAT_ADD_NEW_WORD;
-        } else {
+        }
+        else {
             /* We already have the bit vector, so let's just set another bit in it. */
             return set_presence_bit(e->leaf_presence, ch);
         }
-    } else {
+    }
+    else {
         /* We are in "all documents" mode. */
         SquatWordTableLeafDocs *docs = e->leaf_docs;
         WordDocEntry **entry_ptr;
 
         /* Make a new leaf table if we don't already have one. */
         if (docs == NULL) {
-            docs = (SquatWordTableLeafDocs *)
-                xmalloc(sizeof(SquatWordTableLeafDocs));
+            docs = (SquatWordTableLeafDocs *) xmalloc(
+                sizeof(SquatWordTableLeafDocs));
             docs->first_valid_entry = 256;
             docs->last_valid_entry = 0;
             memset(docs->docs, 0, sizeof(docs->docs));
@@ -788,20 +814,21 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
                 docs->last_valid_entry = ch;
             }
             /* Create the linked list with the single element 'word_entry'. */
-            word_entry->next = word_entry;      /* make it circular */
+            word_entry->next = word_entry; /* make it circular */
             *entry_ptr = word_entry;
             return SQUAT_ADD_NEW_WORD;
-        } else {
+        }
+        else {
             /* Just add the document to the linked list. word_entry will be
                the new last element since the document IDs are strictly
                increasing as we build the trie from its temporary file. */
-            word_entry->next = (*entry_ptr)->next;      /* (*entry_ptr)->next is
-                                                           (still) the first
-                                                           element of the list */
-            (*entry_ptr)->next = word_entry;    /* the old last element's
-                                                   next now points to the
-                                                   new last element. */
-            *entry_ptr = word_entry;    /* save the new last element */
+            word_entry->next = (*entry_ptr)->next; /* (*entry_ptr)->next is
+                                                      (still) the first
+                                                      element of the list */
+            (*entry_ptr)->next = word_entry;       /* the old last element's
+                                                      next now points to the
+                                                      new last element. */
+            *entry_ptr = word_entry; /* save the new last element */
         }
     }
 
@@ -810,8 +837,7 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
 
 /* Add 'doc_ID' to the list of document IDs for word 'word_ptr'
    in the "all documents" trie. */
-static int add_word_to_trie(SquatIndex * index, char const *word_ptr,
-                            int doc_ID)
+static int add_word_to_trie(SquatIndex *index, char const *word_ptr, int doc_ID)
 {
     WordDocEntry *word_entry = index->word_doc_allocator++;
 
@@ -829,7 +855,7 @@ static int add_word_to_table(SquatIndex *index, char const *data)
 
     /* Just ignore the word if it uses an invalid character. */
     for (i = 0; i < SQUAT_WORD_SIZE; i++) {
-        int ch = (unsigned char)data[i];
+        int ch = (unsigned char) data[i];
 
         if ((index->valid_char_bits[ch >> 3] & (1 << (ch & 7))) == 0) {
             /* this word contains an invalid character and need not be indexed,
@@ -842,14 +868,16 @@ static int add_word_to_table(SquatIndex *index, char const *data)
     if (r == SQUAT_ADD_NEW_WORD) {
         /* Remember how many unique words in this document started with
            the given first character. */
-        index->doc_words[(unsigned char)data[0]]++;
+        index->doc_words[(unsigned char) data[0]]++;
         return SQUAT_OK;
-    } else {
+    }
+    else {
         return r;
     }
 }
 
-int squat_index_append_document(SquatIndex * index, char const *data,
+int squat_index_append_document(SquatIndex *index,
+                                char const *data,
                                 int data_len)
 {
     int i;
@@ -873,7 +901,8 @@ int squat_index_append_document(SquatIndex * index, char const *data,
         if (index->runover_len - i + data_len >= SQUAT_WORD_SIZE) {
             /* Yep. Build the complete word into 'buf' and then add it. */
             memcpy(buf, index->runover_buf + i, index->runover_len - i);
-            memcpy(buf + index->runover_len - i, data,
+            memcpy(buf + index->runover_len - i,
+                   data,
                    SQUAT_WORD_SIZE - (index->runover_len - i));
             if (add_word_to_table(index, buf) != SQUAT_OK) {
                 return SQUAT_ERR;
@@ -903,12 +932,13 @@ int squat_index_append_document(SquatIndex * index, char const *data,
     /* Copy data from the old runover buffer into its new position in
        the new runover buffer */
     memmove(index->runover_buf,
-            index->runover_buf + index->runover_len -
-            (new_runover - new_runover_data),
+            index->runover_buf + index->runover_len
+                - (new_runover - new_runover_data),
             new_runover - new_runover_data);
     /* Copy data from the new text into the new runover buffer */
     memcpy(index->runover_buf + new_runover - new_runover_data,
-           data + data_len - new_runover_data, new_runover_data);
+           data + data_len - new_runover_data,
+           new_runover_data);
     index->runover_len = new_runover;
 
     /* Tracking how much data we've seen for this document in total */
@@ -939,8 +969,11 @@ static int output_word(SquatWriteBuffer *b, char const *word)
    leading up to 'word'. This function clears the word data after
    writing it out. This makes it ready to handle the next document
    without reallocating everything. */
-static int write_words(SquatIndex *index, SquatWriteBuffer *b,
-                       SquatWordTable *t, int len, char *word)
+static int write_words(SquatIndex *index,
+                       SquatWriteBuffer *b,
+                       SquatWordTable *t,
+                       int len,
+                       char *word)
 {
     if (len == 2) {
         /* Handle a branch node that refers to leaves. */
@@ -949,17 +982,17 @@ static int write_words(SquatIndex *index, SquatWriteBuffer *b,
         for (i = t->first_valid_entry; i <= t->last_valid_entry; i++) {
             SquatWordTableEntry *e = t->entries + i;
 
-            word[0] = (char)i;
+            word[0] = (char) i;
 
-            if (((unsigned long)e->leaf_presence & 1) != 0) {
+            if (((unsigned long) e->leaf_presence & 1) != 0) {
                 /* Got a singleton at this branch point. Just output the single word. */
-                word[1] = (char)(e->leaf_presence_singleton >> 1);
-                e->leaf_presence = NULL;        /* clear the leaf out */
-                if (output_word(b, word - (SQUAT_WORD_SIZE - 3)) !=
-                    SQUAT_OK) {
+                word[1] = (char) (e->leaf_presence_singleton >> 1);
+                e->leaf_presence = NULL; /* clear the leaf out */
+                if (output_word(b, word - (SQUAT_WORD_SIZE - 3)) != SQUAT_OK) {
                     return SQUAT_ERR;
                 }
-            } else if (e->leaf_presence != NULL) {
+            }
+            else if (e->leaf_presence != NULL) {
                 /* Got a bit vector array which we have to scan. */
                 /* The following code is performance critical. It can dominate
                    the performance of the entire indexer. That's why we need
@@ -969,20 +1002,20 @@ static int write_words(SquatIndex *index, SquatWriteBuffer *b,
                 int last_byte = p->last_valid_entry >> 3;
 
                 for (i = p->first_valid_entry >> 3; i <= last_byte; i++) {
-                    if ((unsigned)i >= VECTOR_SIZE(p->presence)) {
+                    if ((unsigned) i >= VECTOR_SIZE(p->presence)) {
                         return SQUAT_ERR;
-                    } else {
-                        int bits = (unsigned char)p->presence[i];
+                    }
+                    else {
+                        int bits = (unsigned char) p->presence[i];
                         int j;
 
                         for (j = 0; bits > 0; j++, bits >>= 1) {
                             if ((bits & 1) != 0) {
                                 /* Output a word for each bit that is set */
-                                word[1] = (char)(i * 8 + j);
-                                if (output_word
-                                    (b,
-                                     word - (SQUAT_WORD_SIZE - 3)) !=
-                                    SQUAT_OK) {
+                                word[1] = (char) (i * 8 + j);
+                                if (output_word(b, word - (SQUAT_WORD_SIZE - 3))
+                                    != SQUAT_OK)
+                                {
                                     return SQUAT_ERR;
                                 }
                             }
@@ -993,7 +1026,8 @@ static int write_words(SquatIndex *index, SquatWriteBuffer *b,
                 e->leaf_presence = NULL;
             }
         }
-    } else {
+    }
+    else {
         /* Handle an interior branch node. A simple matter of recursion. */
         int i;
 
@@ -1001,9 +1035,9 @@ static int write_words(SquatIndex *index, SquatWriteBuffer *b,
             SquatWordTable *new_t = t->entries[i].table;
 
             if (new_t != NULL) {
-                word[0] = (char)i;
-                if (write_words(index, b, new_t, len - 1, word + 1)
-                    != SQUAT_OK) {
+                word[0] = (char) i;
+                if (write_words(index, b, new_t, len - 1, word + 1) != SQUAT_OK)
+                {
                     return SQUAT_ERR;
                 }
             }
@@ -1052,9 +1086,9 @@ int squat_index_close_document(SquatIndex *index)
             if (index->index_buffers[i].fd < 0) {
                 /* This is the first document that used a word starting with this byte.
                    We need to create the temporary file. */
-                if (init_write_buffer_to_temp
-                    (index, index->index_buffers + i)
-                    != SQUAT_OK) {
+                if (init_write_buffer_to_temp(index, index->index_buffers + i)
+                    != SQUAT_OK)
+                {
                     return SQUAT_ERR;
                 }
             }
@@ -1066,8 +1100,7 @@ int squat_index_close_document(SquatIndex *index)
                the list of words themselves, SQUAT_WORD_SIZE-1 bytes
                each. Very simple format for the temporary files. We could
                compress them more but why bother? */
-            write_ptr =
-                prepare_buffered_write(index->index_buffers + i, 20);
+            write_ptr = prepare_buffered_write(index->index_buffers + i, 20);
             if (write_ptr == NULL) {
                 return SQUAT_ERR;
             }
@@ -1076,10 +1109,13 @@ int squat_index_close_document(SquatIndex *index)
             complete_buffered_write(index->index_buffers + i, write_ptr);
 
             cur_offset = index->index_buffers[i].total_output_bytes;
-            if (write_words(index, index->index_buffers + i,
+            if (write_words(index,
+                            index->index_buffers + i,
                             index->doc_word_table->entries[i].table,
-                            SQUAT_WORD_SIZE - 1, word_buf)
-                != SQUAT_OK) {
+                            SQUAT_WORD_SIZE - 1,
+                            word_buf)
+                != SQUAT_OK)
+            {
                 return SQUAT_ERR;
             }
             /* Make sure that we actually output the exact number of words
@@ -1101,19 +1137,21 @@ int squat_index_close_document(SquatIndex *index)
    file. It's dumped as a presence table (telling us which branches
    are non-NULL) followed by a list of relative file offsets in
    I-format pointing to the subtries for the non-NULL branches. */
-static int dump_word_table_offsets(SquatIndex *index, SquatWordTable *t,
+static int dump_word_table_offsets(SquatIndex *index,
+                                   SquatWordTable *t,
                                    int *offset_buf)
 {
     int start_present = t->first_valid_entry;
     int end_present = t->last_valid_entry;
     char *buf;
-    int present_count;          /* We store here the actual number of present branches */
+    int present_count; /* We store here the actual number of present branches */
 
     if (start_present > end_present) {
         /* There are no non-empty branches so just write an empty presence table */
         if ((buf = prepare_buffered_write(&index->out, 2)) == NULL) {
             return SQUAT_ERR;
-        } else {
+        }
+        else {
             buf[0] = buf[1] = 0;
             complete_buffered_write(&index->out, buf + 2);
             return SQUAT_OK;
@@ -1128,26 +1166,28 @@ static int dump_word_table_offsets(SquatIndex *index, SquatWordTable *t,
     if (end_present == start_present && end_present >= 32) {
         if ((buf = prepare_buffered_write(&index->out, 1)) == NULL) {
             return SQUAT_ERR;
-        } else {
-            *buf++ = (char)end_present;
+        }
+        else {
+            *buf++ = (char) end_present;
             present_count = 1;
         }
-    } else {
+    }
+    else {
         /* We're going to use the presence bit vector format. */
         int first_byte = start_present >> 3;
         int byte_count = (end_present >> 3) - first_byte + 1;
 
-        if ((buf =
-             prepare_buffered_write(&index->out,
-                                    2 + byte_count)) == NULL) {
+        if ((buf = prepare_buffered_write(&index->out, 2 + byte_count)) == NULL)
+        {
             return SQUAT_ERR;
-        } else {
+        }
+        else {
             int i;
 
-            *buf++ = (char)first_byte;
-            *buf++ = (char)byte_count - 1;      /* subtract 1 to avoid ambiguity
-                                                   over the value '32' (we
-                                                   wouldn't use 0 anyway) */
+            *buf++ = (char) first_byte;
+            *buf++ = (char) byte_count - 1; /* subtract 1 to avoid ambiguity
+                                               over the value '32' (we
+                                               wouldn't use 0 anyway) */
             /* Clear the vector */
             memset(buf, 0, byte_count);
             present_count = 0;
@@ -1164,11 +1204,11 @@ static int dump_word_table_offsets(SquatIndex *index, SquatWordTable *t,
     complete_buffered_write(&index->out, buf);
 
     /* Now we write out the actual offset table in I-format. */
-    if ((buf =
-         prepare_buffered_write(&index->out,
-                                10 * present_count)) == NULL) {
+    if ((buf = prepare_buffered_write(&index->out, 10 * present_count)) == NULL)
+    {
         return SQUAT_ERR;
-    } else {
+    }
+    else {
         int i;
 
         for (i = start_present; i <= end_present; i++) {
@@ -1200,22 +1240,24 @@ static int dump_doc_list_present_bits(SquatIndex *index,
     if (end_present == start_present && end_present >= 32) {
         if ((buf = prepare_buffered_write(&index->out, 1)) == NULL) {
             return SQUAT_ERR;
-        } else {
-            *buf++ = (char)end_present;
         }
-    } else {
+        else {
+            *buf++ = (char) end_present;
+        }
+    }
+    else {
         int first_byte = start_present >> 3;
         int byte_count = (end_present >> 3) - first_byte + 1;
 
-        if ((buf =
-             prepare_buffered_write(&index->out,
-                                    2 + byte_count)) == NULL) {
+        if ((buf = prepare_buffered_write(&index->out, 2 + byte_count)) == NULL)
+        {
             return SQUAT_ERR;
-        } else {
+        }
+        else {
             int i;
 
-            *buf++ = (char)first_byte;
-            *buf++ = (char)byte_count - 1;
+            *buf++ = (char) first_byte;
+            *buf++ = (char) byte_count - 1;
             memset(buf, 0, byte_count);
             for (i = start_present; i <= end_present; i++) {
                 if (docs->docs[i] != NULL) {
@@ -1231,8 +1273,7 @@ static int dump_doc_list_present_bits(SquatIndex *index,
 }
 
 /* Write out the document lists for an "all documents" trie leaf. */
-static int dump_doc_list_docs(SquatIndex *index,
-                              SquatWordTableLeafDocs *docs)
+static int dump_doc_list_docs(SquatIndex *index, SquatWordTableLeafDocs *docs)
 {
     int i;
     WordDocEntry **doc_list = docs->docs;
@@ -1241,11 +1282,12 @@ static int dump_doc_list_docs(SquatIndex *index,
         if (doc_list[i] != NULL) {
             WordDocEntry *first_doc;
             WordDocEntry *doc;
-            int run_size = 0;   /* Bytes required to store the doclist for this word */
+            int run_size =
+                0; /* Bytes required to store the doclist for this word */
             int last_doc_ID;
             int run_seq_delta = 0;
             int run_seq_count;
-            int doc_count = 0;  /* number of documents containing this word */
+            int doc_count = 0; /* number of documents containing this word */
             char *buf;
 
             doc = first_doc = doc_list[i]->next;
@@ -1256,16 +1298,16 @@ static int dump_doc_list_docs(SquatIndex *index,
             do {
                 if (doc->doc_ID == last_doc_ID + 1 && run_seq_count > 0) {
                     run_seq_count++;
-                } else {
+                }
+                else {
                     if (run_seq_count > 0) {
                         if (run_seq_count > 1) {
+                            run_size += squat_count_encode_I(run_seq_count << 1)
+                                        + squat_count_encode_I(run_seq_delta);
+                        }
+                        else {
                             run_size +=
-                                squat_count_encode_I(run_seq_count << 1)
-                                + squat_count_encode_I(run_seq_delta);
-                        } else {
-                            run_size +=
-                                squat_count_encode_I((run_seq_delta << 1) |
-                                                     1);
+                                squat_count_encode_I((run_seq_delta << 1) | 1);
                         }
                     }
                     run_seq_count = 1;
@@ -1278,22 +1320,25 @@ static int dump_doc_list_docs(SquatIndex *index,
             if (run_seq_count > 0) {
                 if (run_seq_count > 1) {
                     run_size += squat_count_encode_I(run_seq_count << 1)
-                        + squat_count_encode_I(run_seq_delta);
-                } else {
-                    run_size +=
-                        squat_count_encode_I((run_seq_delta << 1) | 1);
+                                + squat_count_encode_I(run_seq_delta);
+                }
+                else {
+                    run_size += squat_count_encode_I((run_seq_delta << 1) | 1);
                 }
             }
 
             /* reserve more than enough space in the buffer */
-            if ((buf = prepare_buffered_write(&index->out, 10 + run_size)) == NULL) {
+            if ((buf = prepare_buffered_write(&index->out, 10 + run_size))
+                == NULL)
+            {
                 return SQUAT_ERR;
             }
 
             /* If there's only one document, use singleton document format */
             if (doc_count == 1) {
                 buf = squat_encode_I(buf, (doc->doc_ID << 1) | 1);
-            } else {
+            }
+            else {
                 /* Store the entire document list, with its size first. */
                 buf = squat_encode_I(buf, run_size << 1);
 
@@ -1301,21 +1346,18 @@ static int dump_doc_list_docs(SquatIndex *index,
                 run_seq_count = 0;
                 /* This logic should mirror the logic above that counts the bytes. */
                 do {
-                    if (doc->doc_ID == last_doc_ID + 1
-                        && run_seq_count > 0) {
+                    if (doc->doc_ID == last_doc_ID + 1 && run_seq_count > 0) {
                         run_seq_count++;
-                    } else {
+                    }
+                    else {
                         if (run_seq_count > 0) {
                             if (run_seq_count > 1) {
-                                buf =
-                                    squat_encode_I(buf,
-                                                   run_seq_count << 1);
+                                buf = squat_encode_I(buf, run_seq_count << 1);
                                 buf = squat_encode_I(buf, run_seq_delta);
-                            } else {
-                                buf =
-                                    squat_encode_I(buf,
-                                                   (run_seq_delta << 1) |
-                                                   1);
+                            }
+                            else {
+                                buf = squat_encode_I(buf,
+                                                     (run_seq_delta << 1) | 1);
                             }
                         }
                         run_seq_count = 1;
@@ -1328,9 +1370,9 @@ static int dump_doc_list_docs(SquatIndex *index,
                     if (run_seq_count > 1) {
                         buf = squat_encode_I(buf, run_seq_count << 1);
                         buf = squat_encode_I(buf, run_seq_delta);
-                    } else {
-                        buf =
-                            squat_encode_I(buf, (run_seq_delta << 1) | 1);
+                    }
+                    else {
+                        buf = squat_encode_I(buf, (run_seq_delta << 1) | 1);
                     }
                 }
             }
@@ -1345,11 +1387,13 @@ static int dump_doc_list_docs(SquatIndex *index,
 /* Write an "all documents" subtrie to the index file.
    'result_offset' is an absolute offset within the file where this
    subtrie was stored. We free the trie leaves as we go. */
-static int write_trie_word_data(SquatIndex *index, SquatWordTable *t,
-                                int len, int *result_offset)
+static int write_trie_word_data(SquatIndex *index,
+                                SquatWordTable *t,
+                                int len,
+                                int *result_offset)
 {
     int i;
-    int offsets[256];           /* Collect the offsets of the subtries in this array. */
+    int offsets[256]; /* Collect the offsets of the subtries in this array. */
     int off;
     SquatWordTableEntry *entries = t->entries;
     int r;
@@ -1361,18 +1405,20 @@ static int write_trie_word_data(SquatIndex *index, SquatWordTable *t,
             SquatWordTable *new_t = entries[i].table;
 
             if (new_t != NULL) {
-                if (write_trie_word_data
-                    (index, new_t, len - 1, offsets + i)
-                    != SQUAT_OK) {
+                if (write_trie_word_data(index, new_t, len - 1, offsets + i)
+                    != SQUAT_OK)
+                {
                     return SQUAT_ERR;
                 }
                 free(entries[i].table);
                 entries[i].table = NULL;
-            } else {
+            }
+            else {
                 offsets[i] = 0;
             }
         }
-    } else {
+    }
+    else {
         /* Leaf case */
         for (i = t->first_valid_entry; i <= t->last_valid_entry; i++) {
             SquatWordTableLeafDocs *leaf_docs = entries[i].leaf_docs;
@@ -1380,14 +1426,15 @@ static int write_trie_word_data(SquatIndex *index, SquatWordTable *t,
             if (leaf_docs != NULL) {
                 offsets[i] = index->out.total_output_bytes;
 
-                if (dump_doc_list_present_bits(index, leaf_docs) !=
-                    SQUAT_OK
-                    || dump_doc_list_docs(index, leaf_docs) != SQUAT_OK) {
+                if (dump_doc_list_present_bits(index, leaf_docs) != SQUAT_OK
+                    || dump_doc_list_docs(index, leaf_docs) != SQUAT_OK)
+                {
                     return SQUAT_ERR;
                 }
                 free(entries[i].leaf_docs);
                 entries[i].leaf_docs = NULL;
-            } else {
+            }
+            else {
                 offsets[i] = 0;
             }
         }
@@ -1418,7 +1465,8 @@ static int write_trie_word_data(SquatIndex *index, SquatWordTable *t,
 /* Dump out a complete trie for the given initial byte from its temporary file.
    The absolute offset of the trie's root table within the file is
    returned in 'result_offset'. */
-static int dump_index_trie_words(SquatIndex *index, int first_char,
+static int dump_index_trie_words(SquatIndex *index,
+                                 int first_char,
                                  int *result_offset)
 {
     SquatSearchIndex *old_index = index->old_index;
@@ -1430,15 +1478,15 @@ static int dump_index_trie_words(SquatIndex *index, int first_char,
     char const *word_ptr;
     int existing = 0;
 
-    if (old_index &&
-        squat_count_docs(old_index, first_char, &existing) != SQUAT_OK) {
+    if (old_index
+        && squat_count_docs(old_index, first_char, &existing) != SQUAT_OK)
+    {
         return (SQUAT_ERR);
     }
 
     /* Allocate all the necessary document-ID linked list entries at once. */
     doc_table =
-        (WordDocEntry *) xmalloc(sizeof(WordDocEntry) *
-                                 (num_words + existing));
+        (WordDocEntry *) xmalloc(sizeof(WordDocEntry) * (num_words + existing));
     index->word_doc_allocator = doc_table;
 
     /* Send existing trie across first as those leafs have lowest doc IDs */
@@ -1452,8 +1500,7 @@ static int dump_index_trie_words(SquatIndex *index, int first_char,
 
     /* mmap the temporary file. */
     word_list_ptr =
-        mmap(NULL, buf->total_output_bytes, PROT_READ, MAP_SHARED, buf->fd,
-             0);
+        mmap(NULL, buf->total_output_bytes, PROT_READ, MAP_SHARED, buf->fd, 0);
     if (word_list_ptr == MAP_FAILED) {
         squat_set_last_error(SQUAT_ERR_SYSERR);
         r = SQUAT_ERR;
@@ -1464,14 +1511,13 @@ static int dump_index_trie_words(SquatIndex *index, int first_char,
     /* Scan through the file */
     while (num_words > 0) {
         /* For each document, add all its words to the trie with this document ID */
-        int doc_ID = (int)squat_decode_I(&word_ptr);
-        int doc_words = (int)squat_decode_I(&word_ptr);
+        int doc_ID = (int) squat_decode_I(&word_ptr);
+        int doc_words = (int) squat_decode_I(&word_ptr);
 
         num_words -= doc_words;
 
         while (doc_words > 0) {
-            if (add_word_to_trie(index, word_ptr, doc_ID)
-                != SQUAT_OK) {
+            if (add_word_to_trie(index, word_ptr, doc_ID) != SQUAT_OK) {
                 r = SQUAT_ERR;
                 goto cleanup_map;
             }
@@ -1484,12 +1530,15 @@ static int dump_index_trie_words(SquatIndex *index, int first_char,
     assert(word_ptr - word_list_ptr == buf->total_output_bytes);
 
     /* Now dump the trie to the index file. */
-    r = write_trie_word_data(index, index->doc_word_table,
-                             SQUAT_WORD_SIZE - 1, result_offset);
+    r = write_trie_word_data(index,
+                             index->doc_word_table,
+                             SQUAT_WORD_SIZE - 1,
+                             result_offset);
 
 cleanup_map:
-    if (munmap((void *)word_list_ptr, buf->total_output_bytes) != 0
-        && r == SQUAT_OK) {
+    if (munmap((void *) word_list_ptr, buf->total_output_bytes) != 0
+        && r == SQUAT_OK)
+    {
         squat_set_last_error(SQUAT_ERR_SYSERR);
         r = SQUAT_ERR;
     }
@@ -1509,13 +1558,16 @@ static int dump_index_trie_words_no_file(SquatIndex *index,
     int r = SQUAT_OK;
     int existing = 0;
 
-    if (!old_index)
-        return (SQUAT_OK);      /* Should never happen? */
+    if (!old_index) {
+        return (SQUAT_OK); /* Should never happen? */
+    }
 
-    if (squat_count_docs(old_index, first_char, &existing) != SQUAT_OK)
+    if (squat_count_docs(old_index, first_char, &existing) != SQUAT_OK) {
         return (SQUAT_ERR);
-    if (existing == 0)
+    }
+    if (existing == 0) {
         return (SQUAT_OK);
+    }
 
     /* Allocate all the necessary document-ID linked list entries at once. */
     doc_table = (WordDocEntry *) xmalloc(sizeof(WordDocEntry) * existing);
@@ -1530,8 +1582,10 @@ static int dump_index_trie_words_no_file(SquatIndex *index,
 
     if (index->word_doc_allocator > doc_table) {
         /* Now dump the trie to the index file. */
-        r = write_trie_word_data(index, index->doc_word_table,
-                                 SQUAT_WORD_SIZE - 1, result_offset);
+        r = write_trie_word_data(index,
+                                 index->doc_word_table,
+                                 SQUAT_WORD_SIZE - 1,
+                                 result_offset);
     }
 
 cleanup:
@@ -1573,9 +1627,10 @@ static int index_close_internal(SquatIndex *index, int OK)
     doc_list_offset = sizeof(SquatDiskHeader);
     doc_ID_list_offset = index->out.total_output_bytes + 1;
     if ((buf = prepare_buffered_write(&index->out,
-                                      SQUAT_SAFETY_ZONE +
-                                      ((index->current_doc_ID +
-                                        1) * 4))) == NULL) {
+                                      SQUAT_SAFETY_ZONE
+                                          + ((index->current_doc_ID + 1) * 4)))
+        == NULL)
+    {
         r = SQUAT_ERR;
         goto cleanup;
     }
@@ -1594,12 +1649,12 @@ static int index_close_internal(SquatIndex *index, int OK)
 
             event.generic.type = SQUAT_STATS_COMPLETED_INITIAL_CHAR;
             event.completed_initial_char.completed_char = i;
-            event.completed_initial_char.num_words =
-                index->total_num_words[i];
+            event.completed_initial_char.num_words = index->total_num_words[i];
             if (index->index_buffers[i].fd >= 0) {
                 event.completed_initial_char.temp_file_size =
                     index->index_buffers[i].total_output_bytes;
-            } else {
+            }
+            else {
                 event.completed_initial_char.temp_file_size = 0;
             }
             index->stats_callback(index->stats_callback_closure, &event);
@@ -1609,9 +1664,9 @@ static int index_close_internal(SquatIndex *index, int OK)
             /* We have to flush the temporary file output buffer before we try to use
                the temporary file. */
             if (flush_and_reset_buffered_writes(index->index_buffers + i)
-                != SQUAT_OK
-                || dump_index_trie_words(index, i,
-                                         offset_buf + i) != SQUAT_OK) {
+                    != SQUAT_OK
+                || dump_index_trie_words(index, i, offset_buf + i) != SQUAT_OK)
+            {
                 r = SQUAT_ERR;
                 goto cleanup;
             }
@@ -1623,11 +1678,13 @@ static int index_close_internal(SquatIndex *index, int OK)
             }
             index->index_buffers[i].fd = -1;
             buf_free(&index->index_buffers[i].buf);
-        } else if (index->old_index) {
+        }
+        else if (index->old_index) {
             /* Only needed if incremental updates going on */
             /* Just copy across existing trie if nothing new to merge in */
-            if (dump_index_trie_words_no_file(index, i, offset_buf + i) !=
-                SQUAT_OK) {
+            if (dump_index_trie_words_no_file(index, i, offset_buf + i)
+                != SQUAT_OK)
+            {
                 r = SQUAT_ERR;
                 goto cleanup;
             }
@@ -1642,7 +1699,7 @@ static int index_close_internal(SquatIndex *index, int OK)
         if (offset_buf[i] != 0) {
             offset_buf[i] = word_list_offset - offset_buf[i];
 
-            if ((int)i < index->doc_word_table->first_valid_entry) {
+            if ((int) i < index->doc_word_table->first_valid_entry) {
                 index->doc_word_table->first_valid_entry = i;
             }
             index->doc_word_table->last_valid_entry = i;
@@ -1651,15 +1708,16 @@ static int index_close_internal(SquatIndex *index, int OK)
 
     /* Dump out the offset buffer at last. */
     if (dump_word_table_offsets(index, index->doc_word_table, offset_buf)
-        != SQUAT_OK) {
+        != SQUAT_OK)
+    {
         r = SQUAT_ERR;
         goto cleanup;
     }
 
     /* finally, write trailing zeroes and the header ... now that we know
        we initialized the file with no errors */
-    if ((buf =
-         prepare_buffered_write(&index->out, SQUAT_SAFETY_ZONE)) == NULL) {
+    if ((buf = prepare_buffered_write(&index->out, SQUAT_SAFETY_ZONE)) == NULL)
+    {
         r = SQUAT_ERR;
         goto cleanup;
     }
@@ -1673,10 +1731,10 @@ static int index_close_internal(SquatIndex *index, int OK)
     }
 
     /* Blat out the header */
-    if ((header = (SquatDiskHeader *) prepare_buffered_write(&index->out,
-                                                             sizeof
-                                                             (SquatDiskHeader)))
-        == NULL) {
+    if ((header = (SquatDiskHeader *)
+             prepare_buffered_write(&index->out, sizeof(SquatDiskHeader)))
+        == NULL)
+    {
         r = SQUAT_ERR;
         goto cleanup;
     }
@@ -1684,9 +1742,10 @@ static int index_close_internal(SquatIndex *index, int OK)
     squat_encode_64(header->doc_list_offset, doc_list_offset);
     squat_encode_64(header->doc_ID_list_offset, doc_ID_list_offset);
     squat_encode_64(header->word_list_offset, word_list_offset);
-    memcpy(header->valid_char_bits, index->valid_char_bits,
+    memcpy(header->valid_char_bits,
+           index->valid_char_bits,
            sizeof(header->valid_char_bits));
-    complete_buffered_write(&index->out, (char *)(header + 1));
+    complete_buffered_write(&index->out, (char *) (header + 1));
 
     /* Flush out the header */
     if (flush_and_reset_buffered_writes(&index->out) != SQUAT_OK) {
@@ -1702,8 +1761,9 @@ cleanup:
     /* If we're bailing out because of an error, we might not have
        released all the temporary file resources. */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
-        if (index->index_buffers[i].fd >= 0)
+        if (index->index_buffers[i].fd >= 0) {
             close(index->index_buffers[i].fd);
+        }
         buf_free(&index->index_buffers[i].buf);
     }
     free(index->tmp_path);
