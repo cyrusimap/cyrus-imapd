@@ -1,12 +1,20 @@
-BasedOnStyle: LLVM
 AlignAfterOpenBracket: Align
 AlignArrayOfStructures: Left
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
 AllowShortBlocksOnASingleLine: Empty
-AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: false
-AllowShortLoopsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+BasedOnStyle: LLVM
 BinPackArguments: false
 BinPackParameters: false
+BitFieldColonSpacing: None
+BreakBeforeTernaryOperators: true
+ForEachMacros: [json_object_foreach, json_object_foreach_safe, json_array_foreach, search_folder_foreach]
+PPIndentWidth: 1
+ReflowComments: IndentOnly
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterCaseLabel:  false
@@ -27,12 +35,11 @@ BraceWrapping:
   SplitEmptyFunction: true
   SplitEmptyRecord: true
   SplitEmptyNamespace: true
+BreakBeforeBinaryOperators: NonAssignment
+Cpp11BracedListStyle: false
+IndentPPDirectives: AfterHash
 IndentWidth:     4
 InsertBraces: true
-SpaceAfterCStyleCast: true
-IndentPPDirectives: AfterHash
 PenaltyReturnTypeOnItsOwnLine: 1000
-BitFieldColonSpacing: None
-Cpp11BracedListStyle: false
-AllowShortEnumsOnASingleLine: false
-BreakBeforeBinaryOperators: NonAssignment
+SpaceAfterCStyleCast: true
+WhitespaceSensitiveMacros: [xsyslog, xsyslog_ev]
