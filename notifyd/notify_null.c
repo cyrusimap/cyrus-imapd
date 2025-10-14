@@ -46,7 +46,7 @@
 
 #include <string.h>
 
-char* notify_null(const char *class __attribute__((unused)),
+char *notify_null(const char *class __attribute__((unused)),
                   const char *priority __attribute__((unused)),
                   const char *user __attribute__((unused)),
                   const char *mailbox __attribute__((unused)),
