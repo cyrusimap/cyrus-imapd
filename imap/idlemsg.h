@@ -50,7 +50,7 @@
 
 /* socket to communicate with the idled */
 #define FNAME_IDLE_SOCK_DIR "/socket"
-#define FNAME_IDLE_SOCK FNAME_IDLE_SOCK_DIR"/idle"
+#define FNAME_IDLE_SOCK FNAME_IDLE_SOCK_DIR "/idle"
 
 int idle_make_server_address(struct sockaddr_un *);
 int idle_make_client_address(struct sockaddr_un *);
