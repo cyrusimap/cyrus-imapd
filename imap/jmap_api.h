@@ -58,37 +58,38 @@
 #include "strarray.h"
 #include <stdbool.h>
 
-#define JMAP_INT_MAX    9007199254740991LL  /*  2^53-1 */
-#define JMAP_INT_MIN    (-JMAP_INT_MAX)     /* -2^53+1 */
+#define JMAP_INT_MAX 9007199254740991LL /*  2^53-1 */
+#define JMAP_INT_MIN (-JMAP_INT_MAX)    /* -2^53+1 */
 
-#define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
-#define JMAP_URN_CORE_INFO  "urn:ietf:params:jmap:core:backendInfo"
-#define JMAP_URN_BLOB       "urn:ietf:params:jmap:blob"
-#define JMAP_URN_QUOTA      "urn:ietf:params:jmap:quota"
-#define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
+#define JMAP_URN_CORE "urn:ietf:params:jmap:core"
+#define JMAP_URN_CORE_INFO "urn:ietf:params:jmap:core:backendInfo"
+#define JMAP_URN_BLOB "urn:ietf:params:jmap:blob"
+#define JMAP_URN_QUOTA "urn:ietf:params:jmap:quota"
+#define JMAP_URN_MAIL "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
-#define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
-#define JMAP_URN_SIEVE      "urn:ietf:params:jmap:sieve"
-#define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
-#define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
-#define JMAP_URN_CONTACTS   "urn:ietf:params:jmap:contacts"
-#define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
+#define JMAP_URN_VACATION "urn:ietf:params:jmap:vacationresponse"
+#define JMAP_URN_SIEVE "urn:ietf:params:jmap:sieve"
+#define JMAP_URN_WEBSOCKET "urn:ietf:params:jmap:websocket"
+#define JMAP_URN_MDN "urn:ietf:params:jmap:mdn"
+#define JMAP_URN_CONTACTS "urn:ietf:params:jmap:contacts"
+#define JMAP_URN_CALENDARS "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
-#define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
+#define JMAP_URN_CALENDAR_PREFERENCES                                          \
+    "urn:ietf:params:jmap:calendars:preferences"
 
-#define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
-#define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
-#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
-#define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
-#define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
-#define JMAP_PERFORMANCE_EXTENSION   "https://cyrusimap.org/ns/jmap/performance"
-#define JMAP_DEBUG_EXTENSION         "https://cyrusimap.org/ns/jmap/debug"
-#define JMAP_QUOTA_EXTENSION         "https://cyrusimap.org/ns/jmap/quota"
-#define JMAP_BACKUP_EXTENSION        "https://cyrusimap.org/ns/jmap/backup"
-#define JMAP_NOTES_EXTENSION         "https://cyrusimap.org/ns/jmap/notes"
-#define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
-#define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
-#define JMAP_ADMIN_EXTENSION         "https://cyrusimap.org/ns/jmap/admin"
+#define JMAP_CORE_EXTENSION "https://cyrusimap.org/ns/jmap/core"
+#define JMAP_BLOB_EXTENSION "https://cyrusimap.org/ns/jmap/blob"
+#define JMAP_CONTACTS_EXTENSION "https://cyrusimap.org/ns/jmap/contacts"
+#define JMAP_CALENDARS_EXTENSION "https://cyrusimap.org/ns/jmap/calendars"
+#define JMAP_MAIL_EXTENSION "https://cyrusimap.org/ns/jmap/mail"
+#define JMAP_PERFORMANCE_EXTENSION "https://cyrusimap.org/ns/jmap/performance"
+#define JMAP_DEBUG_EXTENSION "https://cyrusimap.org/ns/jmap/debug"
+#define JMAP_QUOTA_EXTENSION "https://cyrusimap.org/ns/jmap/quota"
+#define JMAP_BACKUP_EXTENSION "https://cyrusimap.org/ns/jmap/backup"
+#define JMAP_NOTES_EXTENSION "https://cyrusimap.org/ns/jmap/notes"
+#define JMAP_SIEVE_EXTENSION "https://cyrusimap.org/ns/jmap/sieve"
+#define JMAP_USERCOUNTERS_EXTENSION "https://cyrusimap.org/ns/jmap/usercounters"
+#define JMAP_ADMIN_EXTENSION "https://cyrusimap.org/ns/jmap/admin"
 
 enum {
     MAX_SIZE_REQUEST = 0,
@@ -101,61 +102,65 @@ enum {
     MAX_CONCURRENT_UPLOAD,
     MAX_SIZE_BLOB_SET,
     MAX_CATENATE_ITEMS,
-    JMAP_NUM_LIMITS  /* MUST be last */
+    JMAP_NUM_LIMITS /* MUST be last */
 };
 
 /* JMAP Mail (RFC 8621) privileges */
-#define JACL_READITEMS      (ACL_READ|ACL_LOOKUP)
-#define JACL_ADDITEMS       ACL_INSERT
-#define JACL_REMOVEITEMS    (ACL_DELETEMSG|ACL_EXPUNGE)
-#define JACL_SETSEEN        ACL_SETSEEN
-#define JACL_SETKEYWORDS    ACL_WRITE
-#define JACL_CREATECHILD    ACL_CREATE
-#define JACL_DELETE         ACL_DELETEMBOX
-#define JACL_RENAME         (JACL_CREATECHILD|JACL_DELETE)
-#define JACL_SUBMIT         ACL_POST
+#define JACL_READITEMS (ACL_READ | ACL_LOOKUP)
+#define JACL_ADDITEMS ACL_INSERT
+#define JACL_REMOVEITEMS (ACL_DELETEMSG | ACL_EXPUNGE)
+#define JACL_SETSEEN ACL_SETSEEN
+#define JACL_SETKEYWORDS ACL_WRITE
+#define JACL_CREATECHILD ACL_CREATE
+#define JACL_DELETE ACL_DELETEMBOX
+#define JACL_RENAME (JACL_CREATECHILD | JACL_DELETE)
+#define JACL_SUBMIT ACL_POST
 
 /* JMAP Calendar (draft-ietf-jmap-calendars) privileges */
-#define JACL_READFB         ACL_USER9      /* Keep sync'd with DACL_READFB */
-#define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
-#define JACL_WRITEOWN       ACL_USER6
-#define JACL_UPDATEPRIVATE  ACL_USER5
-#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA|JACL_REMOVEITEMS)
+#define JACL_READFB ACL_USER9 /* Keep sync'd with DACL_READFB */
+#define JACL_RSVP ACL_USER7   /* Keep sync'd with DACL_REPLY */
+#define JACL_WRITEOWN ACL_USER6
+#define JACL_UPDATEPRIVATE ACL_USER5
+#define JACL_WRITEALL                                                          \
+    (JACL_ADDITEMS | JACL_UPDATEITEMS | JACL_SETSEEN | JACL_SETMETADATA        \
+     | JACL_REMOVEITEMS)
 
 /* Cyrus-specific privileges */
-#define JACL_LOOKUP         ACL_LOOKUP
-#define JACL_ADMIN_MAILBOX   (ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD)
+#define JACL_LOOKUP ACL_LOOKUP
+#define JACL_ADMIN_MAILBOX (ACL_ADMIN | JACL_DELETE | JACL_CREATECHILD)
 #define JACL_ADMIN_ADDRBOOK ACL_ADMIN
 #define JACL_ADMIN_CALENDAR ACL_ADMIN
-#define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
-#define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
-#define JACL_SETMETADATA    (JACL_SETKEYWORDS|JACL_SETPROPERTIES)
-#define JACL_WRITE          (JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA)
-#define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
-                             |ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD|JACL_READFB|JACL_RSVP)
+#define JACL_SETPROPERTIES ACL_ANNOTATEMSG
+#define JACL_UPDATEITEMS (JACL_ADDITEMS | JACL_REMOVEITEMS)
+#define JACL_SETMETADATA (JACL_SETKEYWORDS | JACL_SETPROPERTIES)
+#define JACL_WRITE (JACL_UPDATEITEMS | JACL_SETSEEN | JACL_SETMETADATA)
+#define JACL_ALL                                                               \
+    (JACL_READITEMS | JACL_WRITE | JACL_RENAME | JACL_SUBMIT | ACL_ADMIN       \
+     | JACL_DELETE | JACL_CREATECHILD | JACL_READFB | JACL_RSVP)
 
-
-typedef struct {
+typedef struct
+{
     hash_table methods;
     json_t *server_capabilities;
     int64_t limits[JMAP_NUM_LIMITS];
     // internal state
     ptrarray_t getblob_handlers; // array of jmap_getblob_handler
-    ptrarray_t event_handlers; // array of (malloced) jmap_handlers
+    ptrarray_t event_handlers;   // array of (malloced) jmap_handlers
 } jmap_settings_t;
 
-typedef struct jmap_req {
-    const char           *method;
-    const char           *userid;
-    const char           *accountid;
+typedef struct jmap_req
+{
+    const char *method;
+    const char *userid;
+    const char *accountid;
     struct conversations_state *cstate;
-    struct auth_state    *authstate;
-    json_t               *args;
-    json_t               *response;
-    const char           *tag;
+    struct auth_state *authstate;
+    json_t *args;
+    json_t *response;
+    const char *tag;
     struct transaction_t *txn;
     struct mboxname_counters counters;
-    jmap_settings_t      *settings;
+    jmap_settings_t *settings;
 
     double real_start;
     double user_start;
@@ -184,47 +189,56 @@ typedef struct jmap_req {
  * HTTP status on error.
  * Return zero if the next blob handler should be called.
  */
-typedef struct {
-    const char *from_accountid;  // input to the handler
-    const char *blobid;          // input to the handler
-    const char *accept_mime;     // input to the handler
-    unsigned decode : 1;         // input to the handler
-    struct buf blob;             // output from the handler
-    struct buf content_type;     // output from the handler
-    struct buf encoding;         // output from the handler
-    const char *errstr;          // output from the handler
-    struct mailbox **mboxp;      // output from the handler
-    struct index_record *recordp;// output from the handler
+typedef struct
+{
+    const char *from_accountid;   // input to the handler
+    const char *blobid;           // input to the handler
+    const char *accept_mime;      // input to the handler
+    unsigned decode:1;            // input to the handler
+    struct buf blob;              // output from the handler
+    struct buf content_type;      // output from the handler
+    struct buf encoding;          // output from the handler
+    const char *errstr;           // output from the handler
+    struct mailbox **mboxp;       // output from the handler
+    struct index_record *recordp; // output from the handler
 } jmap_getblob_context_t;
 
 void jmap_getblob_ctx_init(jmap_getblob_context_t *ctx,
-                           const char *from_accountid, const char *blobid,
-                           const char *accept_mime, unsigned decode);
+                           const char *from_accountid,
+                           const char *blobid,
+                           const char *accept_mime,
+                           unsigned decode);
 void jmap_getblob_ctx_reset(jmap_getblob_context_t *ctx);
 void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx);
 
 typedef int jmap_getblob_handler(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 enum jmap_handler_event {
-    JMAP_HANDLE_SHUTDOWN      = (1 << 0), /* executed when httpd is shutdown. req is NULL */
-    JMAP_HANDLE_CLOSE_CONN    = (1 << 1), /* executed when connection is closed. req is NULL */
-    JMAP_HANDLE_BEFORE_METHOD = (1 << 2)  /* executed before each method call. req is set */
+    JMAP_HANDLE_SHUTDOWN =
+        (1 << 0), /* executed when httpd is shutdown. req is NULL */
+    JMAP_HANDLE_CLOSE_CONN =
+        (1 << 1), /* executed when connection is closed. req is NULL */
+    JMAP_HANDLE_BEFORE_METHOD =
+        (1 << 2) /* executed before each method call. req is set */
 };
 
-struct jmap_handler {
+struct jmap_handler
+{
     int eventmask;
-    void(*handler)(enum jmap_handler_event event, jmap_req_t* req, void *rock);
+    void (*handler)(enum jmap_handler_event event, jmap_req_t *req, void *rock);
     void *rock;
 };
 
 enum jmap_method_flags {
-    JMAP_READ_WRITE  = (1 << 0),  /* user can change state with this method */
-    JMAP_NEED_CSTATE = (1 << 1),  /* conv.db is required for this method
-                                     (lock type determined by r/w flag) */
-    JMAP_NO_USERLOCK = (1 << 2)   /* action touches many users, it will do its own locking */
+    JMAP_READ_WRITE = (1 << 0),  /* user can change state with this method */
+    JMAP_NEED_CSTATE = (1 << 1), /* conv.db is required for this method
+                                    (lock type determined by r/w flag) */
+    JMAP_NO_USERLOCK =
+        (1 << 2) /* action touches many users, it will do its own locking */
 };
 
-typedef struct {
+typedef struct
+{
     const char *name;
     const char *capability;
     int (*proc)(struct jmap_req *req);
@@ -232,9 +246,11 @@ typedef struct {
 } jmap_method_t;
 
 extern int jmap_error_response(struct transaction_t *txn,
-                               long code, json_t **res);
+                               long code,
+                               json_t **res);
 extern int jmap_api(struct transaction_t *txn,
-                    const json_t *jreq, json_t **res,
+                    const json_t *jreq,
+                    json_t **res,
                     jmap_settings_t *settings);
 
 extern int jmap_initreq(jmap_req_t *req);
@@ -260,7 +276,8 @@ extern void jmap_core_capabilities(json_t *account_capabilities);
 extern void jmap_blob_capabilities(json_t *account_capabilities);
 extern void jmap_quota_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities,
-                                   const char *accountid, int mayCreateTopLevel);
+                                   const char *accountid,
+                                   int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
@@ -281,10 +298,13 @@ extern void jmap_admin_capabilities(json_t *account_capabilities);
 extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 
 /* Request-scoped mailbox cache */
-extern int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
-                                     struct mailbox **mboxp, int rw);
+extern int jmap_openmbox_by_uniqueid(jmap_req_t *req,
+                                     const char *id,
+                                     struct mailbox **mboxp,
+                                     int rw);
 extern int jmap_mboxlist_lookup(const char *name,
-                                mbentry_t **entryptr, struct txn **tid);
+                                mbentry_t **entryptr,
+                                struct txn **tid);
 
 /* Adds a JMAP sub request to be processed after req has
  * finished. Method must be a regular JMAP method name,
@@ -292,44 +312,58 @@ extern int jmap_mboxlist_lookup(const char *name,
  * is NULL, the subrequest will use the same client id
  * as req. The args argument will be unreferenced after
  * completion. */
-extern void jmap_add_subreq(jmap_req_t *req, const char *method,
-                            json_t *args, const char *client_id);
+extern void jmap_add_subreq(jmap_req_t *req,
+                            const char *method,
+                            json_t *args,
+                            const char *client_id);
 
 /* Creation ids */
 extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);
 extern const char *jmap_id_string_value(jmap_req_t *req, json_t *item);
-extern void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id);
+extern void jmap_add_id(jmap_req_t *req,
+                        const char *creation_id,
+                        const char *id);
 
 /* Request-scoped cache of mailbox rights for authenticated user */
 
-extern int  jmap_myrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry);
-extern int  jmap_hasrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry,
-                           int rights);
-extern int  jmap_myrights(jmap_req_t *req, const char *mboxname);
-extern int  jmap_hasrights(jmap_req_t *req, const char *mboxname, int rights);
-extern int  jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid);
-extern int  jmap_hasrights_mboxid(jmap_req_t *req, const char *mboxid, int rights);
+extern int jmap_myrights_mbentry(jmap_req_t *req, const mbentry_t *mbentry);
+extern int jmap_hasrights_mbentry(jmap_req_t *req,
+                                  const mbentry_t *mbentry,
+                                  int rights);
+extern int jmap_myrights(jmap_req_t *req, const char *mboxname);
+extern int jmap_hasrights(jmap_req_t *req, const char *mboxname, int rights);
+extern int jmap_myrights_mboxid(jmap_req_t *req, const char *mboxid);
+extern int jmap_hasrights_mboxid(jmap_req_t *req,
+                                 const char *mboxid,
+                                 int rights);
 extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
-extern int  jmap_mbtype(jmap_req_t *req, const char *mboxname);
+extern int jmap_mbtype(jmap_req_t *req, const char *mboxname);
 
 /* Blob services */
-extern int jmap_findblob(jmap_req_t *req, const char *accountid,
+extern int jmap_findblob(jmap_req_t *req,
+                         const char *accountid,
                          const char *blobid,
-                         struct mailbox **mbox, msgrecord_t **mr,
-                         struct body **body, const struct body **part,
+                         struct mailbox **mbox,
+                         msgrecord_t **mr,
+                         struct body **body,
+                         const struct body **part,
                          struct buf *blob);
-extern int jmap_findblob_exact(jmap_req_t *req, const char *accountid,
+extern int jmap_findblob_exact(jmap_req_t *req,
+                               const char *accountid,
                                const char *blobid,
-                               struct mailbox **mbox, msgrecord_t **mr,
+                               struct mailbox **mbox,
+                               msgrecord_t **mr,
                                struct buf *blob);
 
-#define JMAP_MODSEQ_RELOAD (1<<0)
-#define JMAP_MODSEQ_FOLDER (1<<1)
+#define JMAP_MODSEQ_RELOAD (1 << 0)
+#define JMAP_MODSEQ_FOLDER (1 << 1)
 extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
 
 #define JMAP_STATE_STRING_PREFIX 'J'
-extern char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
-                               int mbtype, int flags);
+extern char *jmap_state_string(jmap_req_t *req,
+                               modseq_t modseq,
+                               int mbtype,
+                               int flags);
 
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);
@@ -340,31 +374,33 @@ extern void jmap_ok(jmap_req_t *req, json_t *res);
 extern void jmap_error(jmap_req_t *req, json_t *err);
 
 extern int jmap_parse_strings(json_t *arg,
-                              struct jmap_parser *parser, const char *prop);
+                              struct jmap_parser *parser,
+                              const char *prop);
 
-typedef struct jmap_property {
+typedef struct jmap_property
+{
     const char *name;
     const char *capability;
     unsigned flags;
 } jmap_property_t;
 
 enum {
-    JMAP_PROP_SERVER_SET = (1<<0),
-    JMAP_PROP_IMMUTABLE  = (1<<1),
-    JMAP_PROP_SKIP_GET   = (1<<2), // skip in Foo/get if not requested by client
-    JMAP_PROP_ALWAYS_GET = (1<<3), // always include in Foo/get
-    JMAP_PROP_REJECT_GET = (1<<4), // reject as unknown in Foo/get
-    JMAP_PROP_REJECT_SET = (1<<5), // reject as unknown in Foo/set
-    JMAP_PROP_EXTERNAL   = (1<<6), // property is stored externally
+    JMAP_PROP_SERVER_SET = (1 << 0),
+    JMAP_PROP_IMMUTABLE = (1 << 1),
+    JMAP_PROP_SKIP_GET = (1 << 2), // skip in Foo/get if not requested by client
+    JMAP_PROP_ALWAYS_GET = (1 << 3), // always include in Foo/get
+    JMAP_PROP_REJECT_GET = (1 << 4), // reject as unknown in Foo/get
+    JMAP_PROP_REJECT_SET = (1 << 5), // reject as unknown in Foo/set
+    JMAP_PROP_EXTERNAL = (1 << 6),   // property is stored externally
 };
 
 extern const jmap_property_t *jmap_property_find(const char *name,
                                                  const jmap_property_t props[]);
 
-
 /* Foo/get */
 
-struct jmap_get {
+struct jmap_get
+{
     /* Request arguments */
     json_t *ids;
     json_t *properties;
@@ -376,25 +412,30 @@ struct jmap_get {
     json_t *not_found;
 };
 
-#define JMAP_GET_INITIALIZER {0}
+#define JMAP_GET_INITIALIZER { 0 }
 
-typedef int jmap_args_parse_cb(jmap_req_t *, struct jmap_parser *,
-                               const char *arg, json_t *val, void *);
+typedef int jmap_args_parse_cb(jmap_req_t *,
+                               struct jmap_parser *,
+                               const char *arg,
+                               json_t *val,
+                               void *);
 
-extern void jmap_get_parse(jmap_req_t *req, struct jmap_parser *parser,
+extern void jmap_get_parse(jmap_req_t *req,
+                           struct jmap_parser *parser,
                            const jmap_property_t valid_props[],
                            int allow_null_ids,
-                           jmap_args_parse_cb args_parse, void *args_rock,
+                           jmap_args_parse_cb args_parse,
+                           void *args_rock,
                            struct jmap_get *get,
                            json_t **err);
 
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
 
-
 /* Foo/set */
 
-struct jmap_set {
+struct jmap_set
+{
     /* Request arguments */
     const char *if_in_state;
     bool apply_empty_updates;
@@ -413,19 +454,22 @@ struct jmap_set {
     json_t *not_destroyed;
 };
 
-#define JMAP_SET_INITIALIZER {0}
+#define JMAP_SET_INITIALIZER { 0 }
 
-extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
+extern void jmap_set_parse(jmap_req_t *req,
+                           struct jmap_parser *parser,
                            const jmap_property_t valid_props[],
-                           jmap_args_parse_cb args_parse, void *args_rock,
-                           struct jmap_set *set, json_t **err);
+                           jmap_args_parse_cb args_parse,
+                           void *args_rock,
+                           struct jmap_set *set,
+                           json_t **err);
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
 
-
 /* Foo/changes */
 
-struct jmap_changes {
+struct jmap_changes
+{
     /* Request arguments */
     modseq_t since_modseq;
     size_t max_changes;
@@ -441,19 +485,22 @@ struct jmap_changes {
     json_t *destroyed;
 };
 
-#define JMAP_CHANGES_INITIALIZER {0}
+#define JMAP_CHANGES_INITIALIZER { 0 }
 
-extern void jmap_changes_parse(jmap_req_t *req, struct jmap_parser *parser,
+extern void jmap_changes_parse(jmap_req_t *req,
+                               struct jmap_parser *parser,
                                modseq_t minmodseq,
-                               jmap_args_parse_cb args_parse, void *args_rock,
-                               struct jmap_changes *changes, json_t **err);
+                               jmap_args_parse_cb args_parse,
+                               void *args_rock,
+                               struct jmap_changes *changes,
+                               json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 
-
 /* Foo/copy */
 
-struct jmap_copy {
+struct jmap_copy
+{
     /* Request arguments */
     const char *from_account_id;
     const char *if_from_in_state;
@@ -470,18 +517,21 @@ struct jmap_copy {
     json_t *not_created;
 };
 
-#define JMAP_COPY_INITIALIZER {0}
+#define JMAP_COPY_INITIALIZER { 0 }
 
-extern void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
-                            jmap_args_parse_cb args_parse, void *args_rock,
-                            struct jmap_copy *copy, json_t **err);
+extern void jmap_copy_parse(jmap_req_t *req,
+                            struct jmap_parser *parser,
+                            jmap_args_parse_cb args_parse,
+                            void *args_rock,
+                            struct jmap_copy *copy,
+                            json_t **err);
 extern void jmap_copy_fini(struct jmap_copy *copy);
 extern json_t *jmap_copy_reply(struct jmap_copy *copy);
 
-
 /* Foo/query */
 
-struct jmap_query {
+struct jmap_query
+{
     /* Request arguments */
     json_t *filter;
     json_t *sort;
@@ -503,66 +553,85 @@ struct jmap_query {
     json_t *ids;
 };
 
-#define JMAP_QUERY_INITIALIZER {0}
+#define JMAP_QUERY_INITIALIZER { 0 }
 
-enum jmap_filter_op   {
+enum jmap_filter_op {
     JMAP_FILTER_OP_NONE = 0,
     JMAP_FILTER_OP_AND,
     JMAP_FILTER_OP_OR,
     JMAP_FILTER_OP_NOT
 };
 
-typedef struct jmap_filter {
+typedef struct jmap_filter
+{
     enum jmap_filter_op op;
     ptrarray_t conditions;
 } jmap_filter;
 
-typedef void* jmap_buildfilter_cb(json_t* arg);
-typedef int   jmap_filtermatch_cb(void* cond, void* rock);
-typedef void  jmap_filterfree_cb(void* cond);
+typedef void *jmap_buildfilter_cb(json_t *arg);
+typedef int jmap_filtermatch_cb(void *cond, void *rock);
+typedef void jmap_filterfree_cb(void *cond);
 
 extern jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse);
 extern int jmap_filter_match(jmap_filter *f,
-                             jmap_filtermatch_cb *match, void *rock);
+                             jmap_filtermatch_cb *match,
+                             void *rock);
 extern void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond);
 
-typedef void jmap_filter_parse_cb(jmap_req_t *req, struct jmap_parser *parser,
-                                  json_t *filter, json_t *unsupported,
-                                  void *rock, json_t **err);
+typedef void jmap_filter_parse_cb(jmap_req_t *req,
+                                  struct jmap_parser *parser,
+                                  json_t *filter,
+                                  json_t *unsupported,
+                                  void *rock,
+                                  json_t **err);
 
-extern void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
-                              json_t *filter, json_t *unsupported,
-                              jmap_filter_parse_cb parse_condition, void *cond_rock,
+extern void jmap_filter_parse(jmap_req_t *req,
+                              struct jmap_parser *parser,
+                              json_t *filter,
+                              json_t *unsupported,
+                              jmap_filter_parse_cb parse_condition,
+                              void *cond_rock,
                               json_t **err /* fatal, non-parsing error */);
 
-struct jmap_comparator {
+struct jmap_comparator
+{
     const char *property;
     short is_ascending;
     const char *collation;
 };
 
-typedef int jmap_comparator_parse_cb(jmap_req_t *req, struct jmap_comparator *comp,
-                                     void *rock, json_t **err);
+typedef int jmap_comparator_parse_cb(jmap_req_t *req,
+                                     struct jmap_comparator *comp,
+                                     void *rock,
+                                     json_t **err);
 
-extern void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
-                                  json_t *jsort, json_t *unsupported,
-                                  jmap_comparator_parse_cb comp_cb, void *comp_rock,
+extern void jmap_comparator_parse(jmap_req_t *req,
+                                  struct jmap_parser *parser,
+                                  json_t *jsort,
+                                  json_t *unsupported,
+                                  jmap_comparator_parse_cb comp_cb,
+                                  void *comp_rock,
                                   json_t **err);
 
-extern void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
-                             jmap_args_parse_cb args_parse, void *args_rock,
-                             jmap_filter_parse_cb filter_cb, void *filter_rock,
-                             jmap_comparator_parse_cb comp_cb, void *comp_rock,
-                             struct jmap_query *query, json_t **err);
+extern void jmap_query_parse(jmap_req_t *req,
+                             struct jmap_parser *parser,
+                             jmap_args_parse_cb args_parse,
+                             void *args_rock,
+                             jmap_filter_parse_cb filter_cb,
+                             void *filter_rock,
+                             jmap_comparator_parse_cb comp_cb,
+                             void *comp_rock,
+                             struct jmap_query *query,
+                             json_t **err);
 
 extern void jmap_query_fini(struct jmap_query *query);
 
 extern json_t *jmap_query_reply(struct jmap_query *query);
 
-
 /* Foo/queryChanges */
 
-struct jmap_querychanges {
+struct jmap_querychanges
+{
     /* Request arguments */
     json_t *filter;
     json_t *sort;
@@ -578,13 +647,16 @@ struct jmap_querychanges {
     json_t *added;
 };
 
-#define JMAP_QUERYCHANGES_INITIALIZER {0}
+#define JMAP_QUERYCHANGES_INITIALIZER { 0 }
 
 extern void jmap_querychanges_parse(jmap_req_t *req,
                                     struct jmap_parser *parser,
-                                    jmap_args_parse_cb args_parse, void *args_rock,
-                                    jmap_filter_parse_cb filter_cb, void *filter_rock,
-                                    jmap_comparator_parse_cb comp_cb, void *sort_rock,
+                                    jmap_args_parse_cb args_parse,
+                                    void *args_rock,
+                                    jmap_filter_parse_cb filter_cb,
+                                    void *filter_rock,
+                                    jmap_comparator_parse_cb comp_cb,
+                                    void *sort_rock,
                                     struct jmap_querychanges *query,
                                     json_t **err);
 
@@ -592,10 +664,10 @@ extern void jmap_querychanges_fini(struct jmap_querychanges *query);
 
 extern json_t *jmap_querychanges_reply(struct jmap_querychanges *query);
 
-
 /* Foo/parse */
 
-struct jmap_parse {
+struct jmap_parse
+{
     /* Request arguments */
     const json_t *blob_ids;
 
@@ -605,35 +677,43 @@ struct jmap_parse {
     json_t *not_found;
 };
 
-#define JMAP_PARSE_INITIALIZER {0}
+#define JMAP_PARSE_INITIALIZER { 0 }
 
-extern void jmap_parse_parse(jmap_req_t *req, struct jmap_parser *parser,
-                                 jmap_args_parse_cb args_parse, void *args_rock,
-                                 struct jmap_parse *parse,
-                                 json_t **err);
+extern void jmap_parse_parse(jmap_req_t *req,
+                             struct jmap_parser *parser,
+                             jmap_args_parse_cb args_parse,
+                             void *args_rock,
+                             struct jmap_parse *parse,
+                             json_t **err);
 
 extern void jmap_parse_fini(struct jmap_parse *parse);
 
 extern json_t *jmap_parse_reply(struct jmap_parse *parse);
 
-
-extern json_t *jmap_get_sharewith(const mbentry_t *mbentry, json_t*(*tojmap)(int rights));
+extern json_t *jmap_get_sharewith(const mbentry_t *mbentry,
+                                  json_t *(*tojmap)(int rights));
 extern int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int overwrite,
-                              int (*patchrights)(int, json_t*));
+                              json_t *shareWith,
+                              int overwrite,
+                              int (*patchrights)(int, json_t *));
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
 extern void jmap_mbentry_cache_free(jmap_req_t *req);
-extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
-extern const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req, const char *id);
-extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
+extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req,
+                                                 const char *id);
+extern const mbentry_t *jmap_mbentry_by_uniqueid_all(jmap_req_t *req,
+                                                     const char *id);
+extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req,
+                                                const char *id);
 extern const mbentry_t *jmap_mbentry_by_mboxid(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_by_mboxid_copy(jmap_req_t *req, const char *id);
 extern mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav);
 
-extern int jmap_findmbox_role(jmap_req_t *req, const char *role,
+extern int jmap_findmbox_role(jmap_req_t *req,
+                              const char *role,
                               const mbentry_t **mbentryptr);
 
-extern void jmap_add_methods(jmap_method_t methods[], jmap_settings_t *settings);
+extern void jmap_add_methods(jmap_method_t methods[],
+                             jmap_settings_t *settings);
 
 #endif /* JMAP_API_H */
