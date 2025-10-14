@@ -45,15 +45,18 @@
 
 #include <config.h>
 
-extern int userdeny(const char *user, const char *service,
-                    char *msgbuf, size_t bufsiz);
-extern int denydb_set(const char *user, const char *service,
-                    const char *msg);
+extern int userdeny(const char *user,
+                    const char *service,
+                    char *msgbuf,
+                    size_t bufsiz);
+extern int denydb_set(const char *user, const char *service, const char *msg);
 extern int denydb_delete(const char *user);
 
 /* iterate the user deny db */
-typedef int (*denydb_proc_t)(const char *user, const char *services,
-                             const char *message, void *rock);
+typedef int (*denydb_proc_t)(const char *user,
+                             const char *services,
+                             const char *message,
+                             void *rock);
 extern int denydb_foreach(denydb_proc_t, void *rock);
 
 /* open the user deny db */

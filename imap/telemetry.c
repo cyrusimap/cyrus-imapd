@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <sys/time.h>
 #include <sys/types.h>
@@ -57,8 +57,10 @@
 #include "global.h"
 
 /* create telemetry log; return fd of log */
-EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
-                  struct protstream *pout, int usetimestamp)
+EXPORTED int telemetry_log(const char *userid,
+                           struct protstream *pin,
+                           struct protstream *pout,
+                           int usetimestamp)
 {
     char buf[1024];
     char buf2[1024];
@@ -72,20 +74,37 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
         gettimeofday(&tv, NULL);
 
         /* use sec.clocks */
-        snprintf(buf, sizeof(buf), "%s%s%s/%s-" TIME_T_FMT ".%.6lu",
-                 config_dir, FNAME_LOGDIR, userid, config_ident,
-                 tv.tv_sec, (unsigned long)tv.tv_usec);
+        snprintf(buf,
+                 sizeof(buf),
+                 "%s%s%s/%s-" TIME_T_FMT ".%.6lu",
+                 config_dir,
+                 FNAME_LOGDIR,
+                 userid,
+                 config_ident,
+                 tv.tv_sec,
+                 (unsigned long) tv.tv_usec);
     }
     else if (config_getswitch(IMAPOPT_TELEMETRY_BYSESSIONID)) {
         const char *sid = session_id();
         /* use pid */
-        snprintf(buf, sizeof(buf), "%s%s%s/%s-%s",
-                 config_dir, FNAME_LOGDIR, userid, config_ident, sid);
+        snprintf(buf,
+                 sizeof(buf),
+                 "%s%s%s/%s-%s",
+                 config_dir,
+                 FNAME_LOGDIR,
+                 userid,
+                 config_ident,
+                 sid);
     }
     else {
         /* use pid */
-        snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu",
-                 config_dir, FNAME_LOGDIR, userid, config_ident,
+        snprintf(buf,
+                 sizeof(buf),
+                 "%s%s%s/%s-%lu",
+                 config_dir,
+                 FNAME_LOGDIR,
+                 userid,
+                 config_ident,
                  (unsigned long) getpid());
     }
 
@@ -93,14 +112,20 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 
     if (fd != -1) {
         now = time(NULL);
-        snprintf(buf2, sizeof(buf2), "---------- %s %s\n",
-                 userid, ctime(&now));
+        snprintf(buf2, sizeof(buf2), "---------- %s %s\n", userid, ctime(&now));
         r = write(fd, buf2, strlen(buf2));
-        if (r < 0)
-            syslog(LOG_ERR, "IOERROR: unable to write to telemetry log %s: %m", buf);
+        if (r < 0) {
+            syslog(LOG_ERR,
+                   "IOERROR: unable to write to telemetry log %s: %m",
+                   buf);
+        }
 
-        if (pin) prot_setlog(pin, fd);
-        if (pout) prot_setlog(pout, fd);
+        if (pin) {
+            prot_setlog(pin, fd);
+        }
+        if (pout) {
+            prot_setlog(pout, fd);
+        }
     }
 
     return fd;
@@ -108,9 +133,9 @@ EXPORTED int telemetry_log(const char *userid, struct protstream *pin,
 
 EXPORTED void telemetry_rusage(char *userid)
 {
-    static struct rusage        previous;
-    struct rusage               current;
-    struct timeval              sys, user;
+    static struct rusage previous;
+    struct rusage current;
+    struct timeval sys, user;
 
     if (userid && *userid) {
         if (getrusage(RUSAGE_SELF, &current) != 0) {
@@ -136,9 +161,13 @@ EXPORTED void telemetry_rusage(char *userid)
          * Some systems provide significantly more data, but POSIX
          * guarantees user & sys CPU time.
          */
-        syslog(LOG_INFO, "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d", userid,
-               user.tv_sec, (int)user.tv_usec,
-               sys.tv_sec, (int)sys.tv_usec);
+        syslog(LOG_INFO,
+               "USAGE %s user: " TIME_T_FMT ".%.6d sys: " TIME_T_FMT ".%.6d",
+               userid,
+               user.tv_sec,
+               (int) user.tv_usec,
+               sys.tv_sec,
+               (int) sys.tv_usec);
 
         previous = current;
     }

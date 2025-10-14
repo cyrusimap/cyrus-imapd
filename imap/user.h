@@ -47,13 +47,14 @@
 #include "mboxname.h"
 #include "mboxlist.h"
 
-#define FNAME_SUBSSUFFIX     "sub"
+#define FNAME_SUBSSUFFIX "sub"
 #define FNAME_COUNTERSSUFFIX "counters"
 
-#define USER_COMPACT_EMAILIDS(cstate) \
+#define USER_COMPACT_EMAILIDS(cstate)                                          \
     (cstate && cstate->version >= 2 && cstate->compact_emailids)
 
-struct usernamespacelocks {
+struct usernamespacelocks
+{
     struct mboxlock *l1;
     struct mboxlock *l2;
 };
@@ -80,8 +81,10 @@ int user_deletedata(const mbentry_t *mbentry, int wipe_user);
 int user_renamedata(const char *olduser, const char *newuser);
 
 /* Rename ACL for 'olduser' to 'newuser' on mailbox 'name'. */
-int user_renameacl(const struct namespace *namespace, const char *name,
-                   const char *olduser, const char *newuser);
+int user_renameacl(const struct namespace *namespace,
+                   const char *name,
+                   const char *olduser,
+                   const char *newuser);
 
 /* Copy a quotaroot from mailbox 'oldname' to 'newname' */
 int user_copyquotaroot(const char *oldname, const char *newname);
@@ -101,8 +104,12 @@ char *user_hash_xapian_byname(const mbname_t *mbname, const char *root);
 char *user_hash_xapian_byid(const char *mboxid, const char *root);
 
 user_nslock_t *user_nslock_lock(const char *userid, int locktype);
-user_nslock_t *user_nslock_lockdouble(const char *userid1, const char *userid2, int locktype);
-user_nslock_t *user_nslock_bymboxname(const char *mboxname1, const char *mboxname2, int locktype);
+user_nslock_t *user_nslock_lockdouble(const char *userid1,
+                                      const char *userid2,
+                                      int locktype);
+user_nslock_t *user_nslock_bymboxname(const char *mboxname1,
+                                      const char *mboxname2,
+                                      int locktype);
 #define user_nslock_lock_w(u) user_nslock_lock(u, LOCK_EXCLUSIVE)
 #define user_nslock_lockmb_w(m) user_nslock_bymboxname(m, NULL, LOCK_EXCLUSIVE)
 void user_nslock_release(user_nslock_t **ptr);
@@ -114,6 +121,7 @@ int user_nslock_islockedmboxname(const char *mboxname);
 int user_run_with_lock(const char *userid, int (*cb)(void *), void *rock);
 
 int user_sharee_renameacls(const struct namespace *namespace,
-                           const char *olduser, const char *newuser);
+                           const char *olduser,
+                           const char *newuser);
 
 #endif
