@@ -63,7 +63,7 @@
 
 #include <sys/types.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <inttypes.h>
@@ -92,20 +92,24 @@
 #include "imap/mupdate_err.h"
 #include "lib/ptrarray.h"
 
-enum mboxop { DUMP,
-              M_POPULATE,
-              UNDUMP,
-              VERIFY,
-              FIX_KEYS,
-              NONE };
+enum mboxop {
+    DUMP,
+    M_POPULATE,
+    UNDUMP,
+    VERIFY,
+    FIX_KEYS,
+    NONE
+};
 
-struct dumprock {
+struct dumprock
+{
     const char *partition;
     int purge;
     const char *sep;
 };
 
-struct popmupdaterock {
+struct popmupdaterock
+{
     mupdate_handle *h;
 };
 
@@ -155,7 +159,8 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 
         next->next = del_head;
         del_head = next;
-    } else {
+    }
+    else {
         /* we both agree that it exists */
         /* throw it onto the back of the activate queue */
         /* we may or may not need to send an update */
@@ -164,8 +169,9 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
         next = xzmalloc(sizeof(struct mb_node));
         strlcpy(next->mailbox, mdata->mailbox, sizeof(next->mailbox));
         strlcpy(next->location, mdata->location, sizeof(next->location));
-        if (!strncmp(cmd, "MAILBOX", 7))
+        if (!strncmp(cmd, "MAILBOX", 7)) {
             next->acl = xstrdup(mdata->acl);
+        }
 
         *act_tail = next;
         act_tail = &(next->next);
@@ -178,12 +184,13 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
     struct popmupdaterock *rock = (struct popmupdaterock *) rockp;
     int r = 0;
 
-    if (mbentry->mbtype & MBTYPE_DELETED)
+    if (mbentry->mbtype & MBTYPE_DELETED) {
         return 0;
+    }
 
     /* realpart is 'hostname!partition' */
     char *realpart =
-        strconcat(config_servername, "!", mbentry->partition, (char *)NULL);
+        strconcat(config_servername, "!", mbentry->partition, (char *) NULL);
     int skip_flag = 0;
 
     /* If it is marked MBTYPE_MOVING, and it DOES match the entry,
@@ -209,7 +216,8 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
 
             if (warn_only) {
                 printf("Remove remote flag on: %s\n", mbentry->name);
-            } else {
+            }
+            else {
                 next = xzmalloc(sizeof(struct mb_node));
                 strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
                 next->next = unflag_head;
@@ -219,11 +227,11 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
             /* No need to update mupdate NOW, we'll get it when we
              * untag the mailbox */
             skip_flag = 1;
-        } else if (act_head->acl) {
-            if (
-                    !strcmp(realpart, act_head->location) &&
-                    !strcmp(mbentry->acl, act_head->acl)
-                ) {
+        }
+        else if (act_head->acl) {
+            if (!strcmp(realpart, act_head->location)
+                && !strcmp(mbentry->acl, act_head->acl))
+            {
 
                 /* Do not update if location does match, and there is an acl,
                  * and the acl matches */
@@ -233,11 +241,16 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
         }
 
         /* in any case, free the node. */
-        if (act_head->acl) free(act_head->acl);
+        if (act_head->acl) {
+            free(act_head->acl);
+        }
         tmp = act_head;
         act_head = act_head->next;
-        if (tmp) free(tmp);
-    } else {
+        if (tmp) {
+            free(tmp);
+        }
+    }
+    else {
         /* if they do not match, do an explicit MUPDATE find on the
          * mailbox, and if it is living somewhere else, delete the local
          * data, if it is NOT living somewhere else, recreate it in
@@ -246,8 +259,9 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
 
         /* if this is okay, we found it (so it is on another host, since
          * it wasn't in our list in this position) */
-        if (!local_authoritative &&
-            !mupdate_find(rock->h, mbentry->name, &mdata)) {
+        if (!local_authoritative
+            && !mupdate_find(rock->h, mbentry->name, &mdata))
+        {
             /* since it lives on another server, schedule it for a wipe */
             struct mb_node *next;
 
@@ -257,15 +271,24 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
              * if wrong, we'll end up removing the authoritative
              * mailbox.
              */
-            if (strcmp(realpart, mdata->location) == 0 ) {
-                if ( act_head ) {
-                    fprintf( stderr, "mupdate said: %s %s %s\n",
-                        act_head->mailbox, act_head->location, act_head->acl );
+            if (strcmp(realpart, mdata->location) == 0) {
+                if (act_head) {
+                    fprintf(stderr,
+                            "mupdate said: %s %s %s\n",
+                            act_head->mailbox,
+                            act_head->location,
+                            act_head->acl);
                 }
-                fprintf( stderr, "mailboxes.db said: %s %s %s\n",
-                        mbentry->name, realpart, mbentry->acl );
-                fprintf( stderr, "mupdate says: %s %s %s\n",
-                        mdata->mailbox, mdata->location, mdata->acl );
+                fprintf(stderr,
+                        "mailboxes.db said: %s %s %s\n",
+                        mbentry->name,
+                        realpart,
+                        mbentry->acl);
+                fprintf(stderr,
+                        "mupdate says: %s %s %s\n",
+                        mdata->mailbox,
+                        mdata->location,
+                        mdata->acl);
                 fatal("mupdate said not us before it said us", EX_SOFTWARE);
             }
 
@@ -275,24 +298,27 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
              * 2. Check everything.
              * Either way, this check is just wrong!
              */
-            if (config_mupdate_config !=
-                IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+            if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
                 /* But not for a unified configuration */
 
                 syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
 
                 if (warn_only) {
                     printf("Remove Local Mailbox: %s\n", mbentry->name);
-                } else {
+                }
+                else {
                     next = xzmalloc(sizeof(struct mb_node));
-                    strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
+                    strlcpy(next->mailbox,
+                            mbentry->name,
+                            sizeof(next->mailbox));
                     next->next = wipe_head;
                     wipe_head = next;
                 }
             }
 
             skip_flag = 1;
-        } else {
+        }
+        else {
             /* Check that it isn't flagged moving */
             if (mbentry->mbtype & MBTYPE_MOVING) {
                 /* it's flagged moving, we'll fix it later (and
@@ -303,9 +329,12 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
 
                 if (warn_only) {
                     printf("Remove remote flag on: %s\n", mbentry->name);
-                } else {
+                }
+                else {
                     next = xzmalloc(sizeof(struct mb_node));
-                    strlcpy(next->mailbox, mbentry->name, sizeof(next->mailbox));
+                    strlcpy(next->mailbox,
+                            mbentry->name,
+                            sizeof(next->mailbox));
                     next->next = unflag_head;
                     unflag_head = next;
                 }
@@ -335,18 +364,18 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
     if (r == MUPDATE_NOCONN) {
         fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
         r = IMAP_IOERROR;
-    } else if (r == MUPDATE_FAIL) {
+    }
+    else if (r == MUPDATE_FAIL) {
         fprintf(stderr,
                 "temporary failure storing '%s' (update continuing)\n",
                 mbentry->name);
         r = 0;
-    } else if (r) {
-        fprintf(
-                stderr,
+    }
+    else if (r) {
+        fprintf(stderr,
                 "error storing '%s' (update continuing): %s\n",
                 mbentry->name,
-                error_message(r)
-            );
+                error_message(r));
         r = 0;
     }
 
@@ -369,13 +398,14 @@ static int yes(void)
         while ((c = getchar()) != EOF) {
             if (c == '\n') {
                 break;
-            } else {
+            }
+            else {
                 answer = 0;
             }
         }
     }
 
-    return(answer);
+    return (answer);
 }
 
 /* Resyncing with mupdate:
@@ -389,7 +419,7 @@ static int yes(void)
  */
 static void do_pop_mupdate(void)
 {
-    struct popmupdaterock popmupdaterock = {0};
+    struct popmupdaterock popmupdaterock = { 0 };
     int ret;
     char buf[8192];
 
@@ -400,8 +430,8 @@ static void do_pop_mupdate(void)
     }
 
     /* now we need a list of what the remote thinks we have
-        * To generate it, ask for a prefix of '<our hostname>!',
-        * (to ensure we get exactly our hostname) */
+     * To generate it, ask for a prefix of '<our hostname>!',
+     * (to ensure we get exactly our hostname) */
     snprintf(buf, sizeof(buf), "%s!", config_servername);
     ret = mupdate_list(popmupdaterock.h, mupdate_list_cb, buf, NULL);
     if (ret) {
@@ -418,11 +448,11 @@ static void do_pop_mupdate(void)
 
         if (warn_only) {
             printf("Remove from MUPDATE: %s\n", me->mailbox);
-        } else {
+        }
+        else {
             ret = mupdate_delete(popmupdaterock.h, me->mailbox);
             if (ret) {
-                fprintf(stderr,
-                        "couldn't mupdate delete %s\n", me->mailbox);
+                fprintf(stderr, "couldn't mupdate delete %s\n", me->mailbox);
                 exit(1);
             }
         }
@@ -452,7 +482,7 @@ static void do_pop_mupdate(void)
         /* Reset the partition! */
         free(mbentry->server);
         mbentry->server = NULL;
-        mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
+        mbentry->mbtype &= ~(MBTYPE_MOVING | MBTYPE_REMOTE);
         ret = mboxlist_updatelock(mbentry, 1);
         if (ret) {
             fprintf(stderr,
@@ -462,8 +492,13 @@ static void do_pop_mupdate(void)
         }
 
         /* force a push to mupdate */
-        snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
-        ret = mupdate_activate(popmupdaterock.h, me->mailbox, buf, mbentry->acl);
+        snprintf(buf,
+                 sizeof(buf),
+                 "%s!%s",
+                 config_servername,
+                 mbentry->partition);
+        ret =
+            mupdate_activate(popmupdaterock.h, me->mailbox, buf, mbentry->acl);
         if (ret) {
             fprintf(stderr,
                     "couldn't perform mupdatepush to un-remote-flag %s\n",
@@ -480,9 +515,11 @@ static void do_pop_mupdate(void)
         int count = 0;
         struct mb_node *me;
 
-        for (me = wipe_head; me != NULL; me = me->next) count++;
+        for (me = wipe_head; me != NULL; me = me->next) {
+            count++;
+        }
 
-        if ( count > 0 ) {
+        if (count > 0) {
             fprintf(stderr, "OK to delete %d local mailboxes? ", count);
             if (!yes()) {
                 fprintf(stderr, "Cancelled!\n");
@@ -497,19 +534,32 @@ static void do_pop_mupdate(void)
 
         user_nslock_t *user_nslock = user_nslock_lockmb_w(me->mailbox);
 
-        if (!mboxlist_delayed_delete_isenabled() ||
-            mboxname_isdeletedmailbox(me->mailbox, NULL)) {
-            ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL,
-                    MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
-        } else {
-            ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL,
-                    MBOXLIST_DELETE_LOCALONLY|MBOXLIST_DELETE_FORCE);
+        if (!mboxlist_delayed_delete_isenabled()
+            || mboxname_isdeletedmailbox(me->mailbox, NULL))
+        {
+            ret = mboxlist_deletemailbox(me->mailbox,
+                                         1,
+                                         "",
+                                         NULL,
+                                         NULL,
+                                         MBOXLIST_DELETE_LOCALONLY
+                                             | MBOXLIST_DELETE_FORCE);
+        }
+        else {
+            ret = mboxlist_delayed_deletemailbox(me->mailbox,
+                                                 1,
+                                                 "",
+                                                 NULL,
+                                                 NULL,
+                                                 MBOXLIST_DELETE_LOCALONLY
+                                                     | MBOXLIST_DELETE_FORCE);
         }
 
         user_nslock_release(&user_nslock);
 
         if (ret) {
-            fprintf(stderr, "couldn't delete defunct mailbox %s\n",
+            fprintf(stderr,
+                    "couldn't delete defunct mailbox %s\n",
                     me->mailbox);
             exit(1);
         }
@@ -534,18 +584,21 @@ static json_t *acl_to_json(const char *aclstr)
         char *name, *val;
 
         q = strchr(p, '\t');
-        if (!q) break;
+        if (!q) {
+            break;
+        }
 
-        name = xstrndup(p, q-p);
+        name = xstrndup(p, q - p);
         q++;
 
         p = strchr(q, '\t');
         if (p) {
-            val = xstrndup(q, p-q);
+            val = xstrndup(q, p - q);
             p++;
         }
-        else
+        else {
             val = xstrdup(q);
+        }
 
         json_object_set_new(jacl, name, json_string(val));
 
@@ -565,8 +618,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     static struct buf buf = BUF_INITIALIZER;
 
     /* skip if we're limiting by partition and this one doesn't match */
-    if (d->partition && strcmpsafe(d->partition, mbentry->partition))
+    if (d->partition && strcmpsafe(d->partition, mbentry->partition)) {
         return 0;
+    }
 
     jobj = json_object();
 
@@ -599,7 +653,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     json_object_set_new(jobj, "foldermodseq", json_string(buf_cstring(&buf)));
 
     /* uint32_t mbtype; */
-    json_object_set_new(jobj, "mbtype",
+    json_object_set_new(
+        jobj,
+        "mbtype",
         json_string(mboxlist_mbtype_to_string(mbentry->mbtype)));
 
     /* char *partition; */
@@ -618,8 +674,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
     json_object_set_new(jobj, "jmapId", json_string(mbentry->jmapid));
 
     /* char *legacy_specialuse; */
-    json_object_set_new(jobj, "legacy_specialuse",
-                              json_string(mbentry->legacy_specialuse));
+    json_object_set_new(jobj,
+                        "legacy_specialuse",
+                        json_string(mbentry->legacy_specialuse));
 
     /* ptrarray_t name_history; */
     jname_history = json_array();
@@ -630,24 +687,29 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
         json_object_set_new(jhistitem, "name", json_string(histitem->name));
         buf_reset(&buf);
         buf_printf(&buf, TIME_T_FMT, histitem->mtime);
-        json_object_set_new(jhistitem, "mtime",
-                                       json_string(buf_cstring(&buf)));
+        json_object_set_new(jhistitem, "mtime", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
         buf_printf(&buf, "%" PRIu32, histitem->uidvalidity);
-        json_object_set_new(jhistitem, "uidvalidity",
-                                       json_string(buf_cstring(&buf)));
+        json_object_set_new(jhistitem,
+                            "uidvalidity",
+                            json_string(buf_cstring(&buf)));
         buf_reset(&buf);
         buf_printf(&buf, MODSEQ_FMT, histitem->createdmodseq);
-        json_object_set_new(jhistitem, "createdmodseq",
-                                       json_string(buf_cstring(&buf)));
+        json_object_set_new(jhistitem,
+                            "createdmodseq",
+                            json_string(buf_cstring(&buf)));
         buf_reset(&buf);
         buf_printf(&buf, MODSEQ_FMT, histitem->foldermodseq);
-        json_object_set_new(jhistitem, "foldermodseq",
-                                       json_string(buf_cstring(&buf)));
-        json_object_set_new(jhistitem, "mbtype",
+        json_object_set_new(jhistitem,
+                            "foldermodseq",
+                            json_string(buf_cstring(&buf)));
+        json_object_set_new(
+            jhistitem,
+            "mbtype",
             json_string(mboxlist_mbtype_to_string(histitem->mbtype)));
-        json_object_set_new(jhistitem, "partition",
-                                       json_string(histitem->partition));
+        json_object_set_new(jhistitem,
+                            "partition",
+                            json_string(histitem->partition));
 
         json_array_append_new(jname_history, jhistitem);
     }
@@ -665,8 +727,9 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 
     printf("%s%s", d->sep, output);
 
-    if (d->sep && !*d->sep)
+    if (d->sep && !*d->sep) {
         d->sep = ",\n";
+    }
 
     free(output);
     json_decref(jparent);
@@ -684,7 +747,9 @@ static void do_dump(const char *part, int purge, int intermediary)
 
     /* Dump Database */
     int flags = MBOXTREE_TOMBSTONES;
-    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+    if (intermediary) {
+        flags |= MBOXTREE_INTERMEDIATES;
+    }
 
     puts("{");
     mboxlist_allmbox("", &dump_cb, &d, flags);
@@ -700,30 +765,43 @@ static void do_undump_legacy(void)
         mbentry_t *newmbentry = mboxlist_entry_create();
         line++;
 
-        sscanf(buf, "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
+        sscanf(buf,
+               "%m[^\t]\t%d %ms %m[^>]>%ms " TIME_T_FMT " %" SCNu32
                " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
-               &newmbentry->name, &newmbentry->mbtype,
-               &newmbentry->partition, &newmbentry->acl, &newmbentry->uniqueid,
-               &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
-               &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+               &newmbentry->name,
+               &newmbentry->mbtype,
+               &newmbentry->partition,
+               &newmbentry->acl,
+               &newmbentry->uniqueid,
+               &newmbentry->mtime,
+               &newmbentry->uidvalidity,
+               &newmbentry->foldermodseq,
+               &newmbentry->createdmodseq,
+               &newmbentry->legacy_specialuse);
 
         if (!newmbentry->acl) {
-           /*
-            * This can be valid, e.g. for folders created by
-            *  0000 CREATE #calendars (TYPE CALENDAR)
-            *  0001 CREATE #addressbooks (TYPE ADDRESSBOOK)
-            *  0002 CREATE #calendars/Shared (TYPE CALENDAR)
-            *  0003 CREATE #addressbooks/Shared (TYPE ADDRESSBOOK)
-            * For these read the uniqueid, mtime, etc.
-            */
+            /*
+             * This can be valid, e.g. for folders created by
+             *  0000 CREATE #calendars (TYPE CALENDAR)
+             *  0001 CREATE #addressbooks (TYPE ADDRESSBOOK)
+             *  0002 CREATE #calendars/Shared (TYPE CALENDAR)
+             *  0003 CREATE #addressbooks/Shared (TYPE ADDRESSBOOK)
+             * For these read the uniqueid, mtime, etc.
+             */
             mboxlist_entry_free(&newmbentry);
             newmbentry = mboxlist_entry_create();
-            sscanf(buf, "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32
-                   " " MODSEQ_FMT " " MODSEQ_FMT " %m[^\n]\n",
-                   &newmbentry->name, &newmbentry->mbtype,
-                   &newmbentry->partition, &newmbentry->uniqueid,
-                   &newmbentry->mtime, &newmbentry->uidvalidity, &newmbentry->foldermodseq,
-                   &newmbentry->createdmodseq, &newmbentry->legacy_specialuse);
+            sscanf(buf,
+                   "%m[^\t]\t%d %ms >%ms " TIME_T_FMT " %" SCNu32 " " MODSEQ_FMT
+                   " " MODSEQ_FMT " %m[^\n]\n",
+                   &newmbentry->name,
+                   &newmbentry->mbtype,
+                   &newmbentry->partition,
+                   &newmbentry->uniqueid,
+                   &newmbentry->mtime,
+                   &newmbentry->uidvalidity,
+                   &newmbentry->foldermodseq,
+                   &newmbentry->createdmodseq,
+                   &newmbentry->legacy_specialuse);
         }
 
         if (!newmbentry->partition) {
@@ -752,10 +830,12 @@ static void do_undump_legacy(void)
         }
 
         /* generate a new entry */
-        int r = mboxlist_updatelock(newmbentry, /*localonly*/1);
+        int r = mboxlist_updatelock(newmbentry, /*localonly*/ 1);
         mboxlist_entry_free(&newmbentry);
 
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     return;
@@ -769,7 +849,7 @@ static void undump_name_history(ptrarray_t *name_history,
 
     /* XXX check lengths of mailbox and partition names */
 
-    json_array_foreach(jname_history, index, value) {
+    json_array_foreach (jname_history, index, value) {
         former_name_t *histitem;
         const char *tmp;
 
@@ -791,7 +871,8 @@ static void undump_name_history(ptrarray_t *name_history,
         }
 
         /* modseq_t createdmodseq; */
-        if ((tmp = json_string_value(json_object_get(value, "createdmodseq")))) {
+        if ((tmp = json_string_value(json_object_get(value, "createdmodseq"))))
+        {
             histitem->createdmodseq = atomodseq_t(tmp);
         }
 
@@ -827,7 +908,7 @@ static int do_undump(void)
         return -1;
     }
 
-    json_object_foreach(jmailboxes, key, value) {
+    json_object_foreach (jmailboxes, key, value) {
         mbentry_t *newmbentry = mboxlist_entry_create();
         const char *tmp;
         json_t *jtmp;
@@ -858,7 +939,8 @@ static int do_undump(void)
         }
 
         /* modseq_t createdmodseq; */
-        if ((tmp = json_string_value(json_object_get(value, "createdmodseq")))) {
+        if ((tmp = json_string_value(json_object_get(value, "createdmodseq"))))
+        {
             newmbentry->createdmodseq = atomodseq_t(tmp);
         }
         else {
@@ -914,17 +996,18 @@ static int do_undump(void)
             json_t *aclvalue;
             struct buf buf = BUF_INITIALIZER;
 
-            json_object_foreach(jtmp, aclkey, aclvalue) {
-                buf_printf(&buf, "%s\t%s\t",
-                                  aclkey,
-                                  json_string_value(aclvalue));
+            json_object_foreach (jtmp, aclkey, aclvalue) {
+                buf_printf(&buf,
+                           "%s\t%s\t",
+                           aclkey,
+                           json_string_value(aclvalue));
             }
             newmbentry->acl = buf_release(&buf);
         }
 
         /* char *uniqueid; */
         if ((tmp = json_string_value(json_object_get(value, "uniqueid")))) {
-           newmbentry->uniqueid = xstrdup(tmp);
+            newmbentry->uniqueid = xstrdup(tmp);
         }
         else {
             /* XXX could potentially infer this if the mailbox is on disk */
@@ -934,7 +1017,7 @@ static int do_undump(void)
 
         /* char *jmapid; */
         if ((tmp = json_string_value(json_object_get(value, "jmapId")))) {
-           newmbentry->jmapid = xstrdup(tmp);
+            newmbentry->jmapid = xstrdup(tmp);
         }
         else {
             /* XXX could potentially infer this if the mailbox is on disk */
@@ -943,7 +1026,9 @@ static int do_undump(void)
         }
 
         /* char *legacy_specialuse; */
-        if ((tmp = json_string_value(json_object_get(value, "legacy_specialuse")))) {
+        if ((tmp = json_string_value(
+                 json_object_get(value, "legacy_specialuse"))))
+        {
             newmbentry->legacy_specialuse = xstrdup(tmp);
         }
 
@@ -953,10 +1038,10 @@ static int do_undump(void)
         }
 
         /* generate a new entry */
-        mboxlist_updatelock(newmbentry, /*localonly*/1);
+        mboxlist_updatelock(newmbentry, /*localonly*/ 1);
         /* XXX should we auditlog something here? */
 
-skip:
+    skip:
         mboxlist_entry_free(&newmbentry);
     }
 
@@ -966,22 +1051,26 @@ skip:
 }
 
 enum {
-    ROOT =      (1<<0),
-    DOMAIN =    (1<<1),
-    MBOX =      (1<<2),
-    UUID =      (1<<3),
-    MATCHED =   (1<<4)
+    ROOT = (1 << 0),
+    DOMAIN = (1 << 1),
+    MBOX = (1 << 2),
+    UUID = (1 << 3),
+    MATCHED = (1 << 4)
 };
 
-struct found_data {
+struct found_data
+{
     int type;
     char mboxname[MAX_MAILBOX_BUFFER];
     char partition[MAX_MAILBOX_BUFFER];
-    char path[MAX_MAILBOX_PATH+1];
+    char path[MAX_MAILBOX_PATH + 1];
 };
 
-static void add_path(ptrarray_t *found, int type,
-              const char *name, const char *part, const char *path)
+static void add_path(ptrarray_t *found,
+                     int type,
+                     const char *name,
+                     const char *part,
+                     const char *path)
 {
     struct found_data *new;
 
@@ -996,13 +1085,15 @@ static void add_path(ptrarray_t *found, int type,
 }
 
 static void add_part(ptrarray_t *found,
-              const char *part, const char *path, int override)
+                     const char *part,
+                     const char *path,
+                     int override)
 {
     int i;
     struct found_data *entry;
 
     /* see if we already added a partition having this name */
-    for (i = 0; i < ptrarray_size(found); i++){
+    for (i = 0; i < ptrarray_size(found); i++) {
         entry = ptrarray_nth(found, i);
         if (!strcmp(entry->partition, part)) {
             /* found it */
@@ -1027,15 +1118,15 @@ static void get_partitions(const char *key, const char *value, void *rock)
 
     if (check_meta == -1) {
         /* see if cyrus.header might be contained in a metapartition */
-        check_meta = (config_metapartition_files &
-                      IMAP_ENUM_METAPARTITION_FILES_HEADER);
+        check_meta =
+            (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_HEADER);
     }
 
     if (!strncmp(key, "partition-", 10)) {
-        add_part(found, key+10, value, 0);
+        add_part(found, key + 10, value, 0);
     }
     else if (check_meta && !strncmp(key, "metapartition-", 14)) {
-        add_part(found, key+14, value, 1);
+        add_part(found, key + 14, value, 1);
     }
     /* skip any other overflow strings */
 }
@@ -1048,11 +1139,19 @@ static int compar_mbox(const void **v1, const void **v2)
     /* non-mailboxes get pushed to the end of the array,
        otherwise we do an ASCII sort */
     if (d1->type & MBOX) {
-        if (d2->type & MBOX) return strcmp(d1->mboxname, d2->mboxname);
-        else return -1;
+        if (d2->type & MBOX) {
+            return strcmp(d1->mboxname, d2->mboxname);
+        }
+        else {
+            return -1;
+        }
     }
-    else if (d2->type & MBOX) return 1;
-    else return 0;
+    else if (d2->type & MBOX) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
@@ -1064,14 +1163,24 @@ static int add_mbox_cb(const mbentry_t *mbentry, void *rockp)
 
     /* skip deleted mailboxes and mailboxes without partition
        as they cannot have a path in the filesystem */
-    if (mbentry->partition == NULL ||
-        mbentry->mbtype & MBTYPE_DELETED)
+    if (mbentry->partition == NULL || mbentry->mbtype & MBTYPE_DELETED) {
         return 0;
+    }
 
-    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS)
-        add_path(mboxes, MBOX, mbentry->name, mbentry->partition, mbentry->uniqueid);
-    else
-        add_path(mboxes, MBOX | UUID, mbentry->uniqueid, mbentry->partition, mbentry->name);
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        add_path(mboxes,
+                 MBOX,
+                 mbentry->name,
+                 mbentry->partition,
+                 mbentry->uniqueid);
+    }
+    else {
+        add_path(mboxes,
+                 MBOX | UUID,
+                 mbentry->uniqueid,
+                 mbentry->partition,
+                 mbentry->name);
+    }
 
     return 0;
 }
@@ -1088,28 +1197,36 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
 
         found_mailbox_entry = ptrarray_nth(mboxes, i);
 
-        if (found_mailbox_entry->type & UUID)
+        if (found_mailbox_entry->type & UUID) {
             mbname = found_mailbox_entry->path;
-        else
+        }
+        else {
             mbname = found_mailbox_entry->mboxname;
+        }
 
         // Walk the directories to see if the mailbox does have
         // paths on the filesystem.
         do {
             r = -1;
             found_path_entry = ptrarray_nth(found, *idx);
-            if (
-                    !(found_path_entry->type & MBOX) ||   /* end of mailboxes */
-                    (r = strcmp(found_mailbox_entry->mboxname, found_path_entry->mboxname)) < 0
-            ) {
-                printf("'%s' has a DB entry but no directory on partition '%s'\n",
-                        mbname, found_mailbox_entry->partition);
+            if (!(found_path_entry->type & MBOX) || /* end of mailboxes */
+                (r = strcmp(found_mailbox_entry->mboxname,
+                            found_path_entry->mboxname))
+                    < 0)
+            {
+                printf(
+                    "'%s' has a DB entry but no directory on partition '%s'\n",
+                    mbname,
+                    found_mailbox_entry->partition);
                 break;
             }
             else if (r == 0) {
                 if (found_path_entry->type & MATCHED) {
-                    printf("'%s' has an additional match to DB entry of mailbox '%s' on partition '%s'\n",
-                            found_path_entry->path, mbname, found_mailbox_entry->partition);
+                    printf("'%s' has an additional match to DB entry of "
+                           "mailbox '%s' on partition '%s'\n",
+                           found_path_entry->path,
+                           mbname,
+                           found_mailbox_entry->partition);
                 }
                 /* mark filesystem entry as matched */
                 found_path_entry->type |= MATCHED;
@@ -1121,12 +1238,13 @@ static void verify_mboxes(ptrarray_t *mboxes, ptrarray_t *found, int *idx)
     /* now report all unmatched mailboxes found in filesystem */
     for (i = 0; i < ptrarray_size(found); i++) {
         found_path_entry = ptrarray_nth(found, i);
-        if (!(found_path_entry->type & MBOX)) break;
+        if (!(found_path_entry->type & MBOX)) {
+            break;
+        }
         if (!(found_path_entry->type & MATCHED)) {
             printf("'%s' has a directory '%s' but no DB entry\n",
-                    found_path_entry->mboxname,
-                    found_path_entry->path
-                );
+                   found_path_entry->mboxname,
+                   found_path_entry->path);
         }
     }
 }
@@ -1153,13 +1271,14 @@ static void do_verify(void)
         struct dirent *dirent;
         char name[MAX_MAILBOX_BUFFER];
         char part[MAX_MAILBOX_BUFFER];
-        char path[MAX_MAILBOX_PATH+1];
+        char path[MAX_MAILBOX_PATH + 1];
         int type;
         struct found_data *entry = ptrarray_nth(found, i);
 
         if (config_hashimapspool && (entry->type & ROOT)) {
             /* need to add hashed directories */
-            int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
+            int config_fulldirhash =
+                libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
             char *tail;
             int j, c;
 
@@ -1167,7 +1286,8 @@ static void do_verify(void)
             if (config_fulldirhash) {
                 strcat(entry->path, "/A");
                 c = 'B';
-            } else {
+            }
+            else {
                 strcat(entry->path, "/a");
                 c = 'b';
             }
@@ -1195,24 +1315,27 @@ static void do_verify(void)
             add_path(found, type | UUID, name, part, path);
         }
 
-        if (!(dirp = opendir(entry->path))) continue;
+        if (!(dirp = opendir(entry->path))) {
+            continue;
+        }
         while ((dirent = readdir(dirp))) {
             const char *fname = FNAME_HEADER;
-            if (dirent->d_name[0] == '.') continue;
-            else if (!strcmp(dirent->d_name, fname+1)) {
+            if (dirent->d_name[0] == '.') {
+                continue;
+            }
+            else if (!strcmp(dirent->d_name, fname + 1)) {
                 /* XXX - check that it can be opened */
                 entry->type |= MBOX;
                 strcpy(name, entry->mboxname);
             }
-            else if (!strchr(dirent->d_name, '.') ||
-                     (entry->type & DOMAIN)) {
+            else if (!strchr(dirent->d_name, '.') || (entry->type & DOMAIN)) {
                 /* probably a directory, add it to the array */
                 type = 0;
                 strcpy(name, entry->mboxname);
 
-                if (config_virtdomains &&
-                    (entry->type == ROOT) &&
-                    !strcmp(dirent->d_name, "domain")) {
+                if (config_virtdomains && (entry->type == ROOT)
+                    && !strcmp(dirent->d_name, "domain"))
+                {
                     /* root domain directory */
                     type = DOMAIN | ROOT;
                 }
@@ -1228,7 +1351,9 @@ static void do_verify(void)
                 }
                 else {
                     /* possibly a mailbox directory */
-                    if (name[0] && !(entry->type & DOMAIN)) strcat(name, ".");
+                    if (name[0] && !(entry->type & DOMAIN)) {
+                        strcat(name, ".");
+                    }
                     strcat(name, dirent->d_name);
                 }
 
@@ -1271,19 +1396,25 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
     }
 
     // we are not the current record?  We don't need to process this.
-    if (strcmp(mbentry->name, byunqid->name))
+    if (strcmp(mbentry->name, byunqid->name)) {
         goto done;
+    }
 
     if (mbentry->jmapid) {
         mbname_t *mbname = mbname_from_intname(mbentry->name);
         const char *userid = mbname_userid(mbname);
 
-        if (!userid) userid = "";
+        if (!userid) {
+            userid = "";
+        }
 
         // already got a record, we're good!
-        int res = mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
+        int res =
+            mboxlist_lookup_by_jmapid(userid, mbentry->jmapid, NULL, NULL);
         mbname_free(&mbname);
-        if (!res) return 0;
+        if (!res) {
+            return 0;
+        }
 
         xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
                 "mboxname=<%s> jmapid=<%s>",
@@ -1292,7 +1423,9 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
     else {
         struct mailbox *mailbox = NULL;
         r = mailbox_open_from_mbe(byunqid, &mailbox);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
         struct buf jmapid = BUF_INITIALIZER;
 
         byunqid->foldermodseq = mailbox_modseq_dirty(mailbox);
@@ -1317,7 +1450,7 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
         }
     }
 
-    r = mboxlist_updatelock(byunqid, /*localonly*/1);
+    r = mboxlist_updatelock(byunqid, /*localonly*/ 1);
     if (r) {
         xsyslog(LOG_ERR, "failed to update mboxlist",
                 "mboxname=<%s> error=<%s>",
@@ -1334,7 +1467,9 @@ static void do_fix_keys(int intermediary)
 {
     int flags = MBOXTREE_TOMBSTONES;
 
-    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+    if (intermediary) {
+        flags |= MBOXTREE_INTERMEDIATES;
+    }
 
     mboxlist_allmbox("", &fix_cb, NULL, flags);
 }
@@ -1342,13 +1477,17 @@ static void do_fix_keys(int intermediary)
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-y] [-p partition] [-f filename]\n");
+    fprintf(stderr,
+            "  ctl_mboxlist [-C <alt_config>] -d [-x] [-y] [-p partition] [-f "
+            "filename]\n");
     fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
             "  ctl_mboxlist [-C <alt_config>] -u [-f filename] [-L]"
             "    [< mboxlist.dump]\n");
     fprintf(stderr, "MUPDATE populate:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
+    fprintf(
+        stderr,
+        "  ctl_mboxlist [-C <alt_config>] -m [-a] [-w] [-i] [-f filename]\n");
     fprintf(stderr, "VERIFY:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -v [-f filename]\n");
     fprintf(stderr, "FIX I/J keys:\n");
@@ -1372,25 +1511,26 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "legacy", no_argument, NULL, 'L' },
-        { "authoritative", no_argument, NULL, 'a' },
-        { "dump", no_argument, NULL, 'd' },
-        { "filename", required_argument, NULL, 'f' },
-        { "interactive", no_argument, NULL, 'i' },
-        { "fix-keys", no_argument, NULL, 'k' },
-        { "sync-mupdate", no_argument, NULL, 'm' },
-        { "partition", required_argument, NULL, 'p' },
-        { "undump", no_argument, NULL, 'u' },
-        { "verify", no_argument, NULL, 'v' },
-        { "warn-only", no_argument, NULL, 'w' },
-        { "remove-dumped", no_argument, NULL, 'x' },
-        { "include-intermediaries", no_argument, NULL, 'y' },
+        { "legacy",                 no_argument,       NULL, 'L' },
+        { "authoritative",          no_argument,       NULL, 'a' },
+        { "dump",                   no_argument,       NULL, 'd' },
+        { "filename",               required_argument, NULL, 'f' },
+        { "interactive",            no_argument,       NULL, 'i' },
+        { "fix-keys",               no_argument,       NULL, 'k' },
+        { "sync-mupdate",           no_argument,       NULL, 'm' },
+        { "partition",              required_argument, NULL, 'p' },
+        { "undump",                 no_argument,       NULL, 'u' },
+        { "verify",                 no_argument,       NULL, 'v' },
+        { "warn-only",              no_argument,       NULL, 'w' },
+        { "remove-dumped",          no_argument,       NULL, 'x' },
+        { "include-intermediaries", no_argument,       NULL, 'y' },
 
-        { 0, 0, 0, 0 },
+        { 0,                        0,                 0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -1404,29 +1544,46 @@ int main(int argc, char *argv[])
         case 'f':
             if (!mboxdb_fname) {
                 mboxdb_fname = optarg;
-            } else {
+            }
+            else {
                 usage();
             }
             break;
 
         case 'd':
-            if (op == NONE) op = DUMP;
-            else usage();
+            if (op == NONE) {
+                op = DUMP;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'u':
-            if (op == NONE) op = UNDUMP;
-            else usage();
+            if (op == NONE) {
+                op = UNDUMP;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'k':
-            if (op == NONE) op = FIX_KEYS;
-            else usage();
+            if (op == NONE) {
+                op = FIX_KEYS;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'm':
-            if (op == NONE) op = M_POPULATE;
-            else usage();
+            if (op == NONE) {
+                op = M_POPULATE;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'p':
@@ -1446,8 +1603,12 @@ int main(int argc, char *argv[])
             break;
 
         case 'v':
-            if (op == NONE) op = VERIFY;
-            else usage();
+            if (op == NONE) {
+                op = VERIFY;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'i':
@@ -1464,14 +1625,24 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (op != M_POPULATE && (local_authoritative || warn_only)) usage();
-    if (op != DUMP && partition) usage();
-    if (op != DUMP && dopurge) usage();
-    if (op != DUMP && dointermediary) usage();
-    if (op != UNDUMP && undump_legacy) usage();
+    if (op != M_POPULATE && (local_authoritative || warn_only)) {
+        usage();
+    }
+    if (op != DUMP && partition) {
+        usage();
+    }
+    if (op != DUMP && dopurge) {
+        usage();
+    }
+    if (op != DUMP && dointermediary) {
+        usage();
+    }
+    if (op != UNDUMP && undump_legacy) {
+        usage();
+    }
 
     cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
-    global_sasl_init(1,0,NULL);
+    global_sasl_init(1, 0, NULL);
 
     switch (op) {
     case M_POPULATE:
@@ -1484,7 +1655,9 @@ int main(int argc, char *argv[])
         mboxlist_close();
         mboxlist_done();
 
-        syslog(LOG_NOTICE, "done %spopulating mupdate", warn_only ? "test " : "");
+        syslog(LOG_NOTICE,
+               "done %spopulating mupdate",
+               warn_only ? "test " : "");
         break;
 
     case DUMP:
@@ -1522,7 +1695,6 @@ int main(int argc, char *argv[])
         mboxlist_close();
         mboxlist_done();
         break;
-
 
     case FIX_KEYS:
         mboxlist_init();

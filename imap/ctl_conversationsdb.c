@@ -42,7 +42,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -70,9 +70,20 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS };
+enum {
+    UNKNOWN,
+    DUMP,
+    UNDUMP,
+    ZERO,
+    BUILD,
+    RECALC,
+    AUDIT,
+    CHECKFOLDERS,
+    ZEROMODSEQ,
+    ENABLE_COMPACTIDS
+};
 
-static int recalc_repair  = 0;
+static int recalc_repair = 0;
 static int recalc_upgrade = 0;
 
 static int verbose = 0;
@@ -99,10 +110,12 @@ static int do_dump(const char *fname, const char *userid)
         return -1;
     }
 
-    r = conversations_open_path(fname, userid, 0/*shared*/, &state);
+    r = conversations_open_path(fname, userid, 0 /*shared*/, &state);
     if (r) {
-        fprintf(stderr, "Failed to open conversations database %s: %s\n",
-                fname, error_message(r));
+        fprintf(stderr,
+                "Failed to open conversations database %s: %s\n",
+                fname,
+                error_message(r));
         return -1;
     }
 
@@ -117,31 +130,40 @@ static int do_undump(const char *fname, const char *userid)
     struct conversations_state *state;
     int r;
 
-    r = conversations_open_path(fname, userid, 0/*shared*/, &state);
+    r = conversations_open_path(fname, userid, 0 /*shared*/, &state);
     if (r) {
-        fprintf(stderr, "Failed to open conversations database %s: %s\n",
-                fname, error_message(r));
+        fprintf(stderr,
+                "Failed to open conversations database %s: %s\n",
+                fname,
+                error_message(r));
         return -1;
     }
 
     r = conversations_truncate(state);
     if (r) {
-        fprintf(stderr, "Failed to truncate conversations database %s: %s\n",
-                fname, error_message(r));
+        fprintf(stderr,
+                "Failed to truncate conversations database %s: %s\n",
+                fname,
+                error_message(r));
         goto out;
     }
 
     r = conversations_undump(state, stdin);
     if (r) {
-        fprintf(stderr, "Failed to undump to conversations database %s: %s\n",
-                fname, error_message(r));
+        fprintf(stderr,
+                "Failed to undump to conversations database %s: %s\n",
+                fname,
+                error_message(r));
         goto out;
     }
 
     r = conversations_commit(&state);
-    if (r)
-        fprintf(stderr, "Failed to commit conversations database %s: %s\n",
-                fname, error_message(r));
+    if (r) {
+        fprintf(stderr,
+                "Failed to commit conversations database %s: %s\n",
+                fname,
+                error_message(r));
+    }
 
 out:
     conversations_abort(&state);
@@ -160,24 +182,29 @@ static int zero_cid_cb(const mbentry_t *mbentry,
         return 0;
     }
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* already zero, fine */
-        if (record->cid == NULLCONVERSATION)
+        if (record->cid == NULLCONVERSATION) {
             continue;
+        }
 
         /* if we're only doing some cids, check if this is one */
-        if (zerocids && !hashu64_lookup(record->cid, zerocids))
+        if (zerocids && !hashu64_lookup(record->cid, zerocids)) {
             continue;
+        }
 
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
         oldrecord.basecid = NULLCONVERSATION;
         oldrecord.internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) break;
+        if (r) {
+            break;
+        }
     }
 
     mailbox_iter_done(&iter);
@@ -190,7 +217,8 @@ static int delannot_cb(const char *mboxname,
                        const char *entry,
                        const char *userid,
                        const struct buf *value,
-                       const struct annotate_metadata *mdata __attribute__((unused)),
+                       const struct annotate_metadata *mdata
+                       __attribute__((unused)),
                        void *rock)
 {
     if (zerocids) {
@@ -201,29 +229,45 @@ static int delannot_cb(const char *mboxname,
         parsehex(value->s, NULL, 16, &valuecid);
 
         // if neither are being zeroed, leave them
-        if (!hashu64_lookup(keycid, zerocids) && !hashu64_lookup(valuecid, zerocids))
+        if (!hashu64_lookup(keycid, zerocids)
+            && !hashu64_lookup(valuecid, zerocids))
+        {
             return 0;
+        }
     }
-    return annotatemore_write(mboxname, entry, userid, (const struct buf *)rock);
+    return annotatemore_write(mboxname,
+                              entry,
+                              userid,
+                              (const struct buf *) rock);
 }
-
 
 static int do_zero(const char *userid)
 {
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) return r;
+    r = conversations_open_user(userid, 0 /*shared*/, &state);
+    if (r) {
+        return r;
+    }
 
     r = mboxlist_usermboxtree(userid, NULL, zero_cid_cb, NULL, 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     // remove all "newcid" mappings, since we've zeroed all the basecids already
     struct buf zerobuf = BUF_INITIALIZER;
-    r = annotatemore_findall_mboxname(state->annotmboxname, /*uid*/0, IMAP_ANNOT_NS "newcid/%",
-                                      /*modseq*/0, &delannot_cb, &zerobuf, /*flags*/0);
-    if (r) goto done;
+    r = annotatemore_findall_mboxname(state->annotmboxname,
+                                      /*uid*/ 0,
+                                      IMAP_ANNOT_NS "newcid/%",
+                                      /*modseq*/ 0,
+                                      &delannot_cb,
+                                      &zerobuf,
+                                      /*flags*/ 0);
+    if (r) {
+        goto done;
+    }
 
 done:
     conversations_commit(&state);
@@ -248,7 +292,8 @@ static int zero_modseq_cb(const mbentry_t *mbentry,
     mailbox->i.highestmodseq = 1;
     mailbox->i.deletedmodseq = 0;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
@@ -258,20 +303,24 @@ static int zero_modseq_cb(const mbentry_t *mbentry,
             oldrecord.modseq = 1;
             oldrecord.silentupdate = 1; // avoid bumping the highestmodseq!
             r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-            if (r) break;
+            if (r) {
+                break;
+            }
         }
     }
 
     mailbox_iter_done(&iter);
     mailbox_close(&mailbox);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (mbentry->createdmodseq > 1 || mbentry->foldermodseq > 1) {
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
         copy->createdmodseq = 1;
         copy->foldermodseq = 1;
-        r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
+        r = mboxlist_update_full(copy, /*localonly*/ 1, /*silent*/ 1);
         mboxlist_entry_free(&copy);
     }
 
@@ -285,21 +334,27 @@ static int do_zeromodseq(const char *userid)
     struct quota q;
     struct txn *txn = NULL;
 
-    int r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) return r;
+    int r = conversations_open_user(userid, 0 /*shared*/, &state);
+    if (r) {
+        return r;
+    }
 
     r = mboxlist_usermboxtree(userid, NULL, zero_modseq_cb, NULL, 0);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = conversations_zero_modseq(state);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     char *inboxname = mboxname_user_mbox(userid, NULL);
     quota_init(&q, inboxname);
     r = quota_read(&q, &txn, 1);
     if (!r) {
         q.modseq = 1;
-        r = quota_write(&q, /*silent*/1, &txn);
+        r = quota_write(&q, /*silent*/ 1, &txn);
     }
     quota_free(&q);
     if (!r) {
@@ -309,7 +364,7 @@ static int do_zeromodseq(const char *userid)
     }
     free(inboxname);
 
-  done:
+done:
     conversations_commit(&state);
     return r;
 }
@@ -319,12 +374,14 @@ static int build_cid_cb(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int r = 0;
     int loop = 1;
-    struct conversations_state *cstate = (struct conversations_state *)rock;
+    struct conversations_state *cstate = (struct conversations_state *) rock;
 
     while (!r && loop) {
         r = mailbox_open_iwl(mbentry->name, &mailbox);
         if (r) {
-            fprintf(stderr, "Failed to open mailbox %s, skipping\n", mbentry->name);
+            fprintf(stderr,
+                    "Failed to open mailbox %s, skipping\n",
+                    mbentry->name);
             return 0;
         }
 
@@ -332,27 +389,37 @@ static int build_cid_cb(const mbentry_t *mbentry, void *rock)
         loop = 0;
 
         // skip mailboxes without conversations (e.g. the submission folder)
-        if (!mailbox_has_conversations(mailbox)) break;
+        if (!mailbox_has_conversations(mailbox)) {
+            break;
+        }
 
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+        struct mailbox_iter *iter =
+            mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             /* already assigned, fine */
-            if (record->cid != NULLCONVERSATION)
+            if (record->cid != NULLCONVERSATION) {
                 continue;
+            }
 
             struct index_record oldrecord = *record;
             r = mailbox_cacherecord(mailbox, &oldrecord);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
 
             oldrecord.ignorelimits = 1;
 
             r = message_update_conversations(cstate, mailbox, &oldrecord, NULL);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
 
             r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-            if (r) goto done;
+            if (r) {
+                goto done;
+            }
 
             count++;
             /* batch so we don't lock for ages */
@@ -376,8 +443,10 @@ static int do_build(const char *userid)
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) return r;
+    r = conversations_open_user(userid, 0 /*shared*/, &state);
+    if (r) {
+        return r;
+    }
 
     r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, state, 0);
 
@@ -392,10 +461,13 @@ static int recalc_counts_cb(const mbentry_t *mbentry,
     int r;
 
     r = mailbox_open_iwl(mbentry->name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
-    if (verbose)
+    if (verbose) {
         printf("%s\n", mbentry->name);
+    }
 
     r = mailbox_add_conversations(mailbox, recalc_silent);
 
@@ -410,12 +482,15 @@ static int audit_counts_cb(const mbentry_t *mbentry,
     int r;
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
-    if (verbose)
+    if (verbose) {
         printf("%s\n", mbentry->name);
+    }
 
-    r = mailbox_add_conversations(mailbox, /*silent*/1);
+    r = mailbox_add_conversations(mailbox, /*silent*/ 1);
 
     mailbox_close(&mailbox);
     return r;
@@ -425,12 +500,17 @@ static int do_recalc(const char *userid)
 {
     struct conversations_state *state = NULL;
 
-    int r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) return r;
+    int r = conversations_open_user(userid, 0 /*shared*/, &state);
+    if (r) {
+        return r;
+    }
 
-    if (recalc_upgrade && !recalc_repair && state->version == CONVERSATIONS_VERSION) {
-        if (verbose)
+    if (recalc_upgrade && !recalc_repair
+        && state->version == CONVERSATIONS_VERSION)
+    {
+        if (verbose) {
             printf("%s already version %d, skipping\n", userid, state->version);
+        }
         conversations_commit(&state);
         return 0;
     }
@@ -439,13 +519,19 @@ static int do_recalc(const char *userid)
     int wipe = state->folders_byname;
 
     r = conversations_zero_counts(state, wipe, recalc_upgrade);
-    if (r) goto err;
+    if (r) {
+        goto err;
+    }
 
     r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
-    if (r) goto err;
+    if (r) {
+        goto err;
+    }
 
     r = conversations_cleanup_zero(state);
-    if (r) goto err;
+    if (r) {
+        goto err;
+    }
 
     conversations_commit(&state);
     return 0;
@@ -462,7 +548,9 @@ static int check_version_cb(const mbentry_t *mbentry,
     int r;
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (mailbox->i.minor_version < 20) {
         fprintf(stderr,
@@ -481,8 +569,10 @@ static int do_compactids(const char *userid, int enable)
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, 0/*shared*/, &state);
-    if (r) return r;
+    r = conversations_open_user(userid, 0 /*shared*/, &state);
+    if (r) {
+        return r;
+    }
 
     if (enable) {
         if (state->version < 2) {
@@ -495,11 +585,15 @@ static int do_compactids(const char *userid, int enable)
         }
 
         r = mboxlist_usermboxtree(userid, NULL, check_version_cb, NULL, 0);
-        if (r) goto err;
+        if (r) {
+            goto err;
+        }
     }
 
     r = conversations_enable_compactids(state, enable);
-    if (r) goto err;
+    if (r) {
+        goto err;
+    }
 
     /* bump modseq on INBOX so that compactids setting gets replicated */
     char *inbox = mboxname_user_mbox(userid, NULL);
@@ -507,7 +601,9 @@ static int do_compactids(const char *userid, int enable)
 
     r = mailbox_open_iwl(inbox, &mailbox);
     free(inbox);
-    if (r) goto err;
+    if (r) {
+        goto err;
+    }
 
     mailbox_modseq_dirty(mailbox);
     mailbox_close(&mailbox);
@@ -515,7 +611,7 @@ static int do_compactids(const char *userid, int enable)
     conversations_commit(&state);
     return 0;
 
- err:
+err:
     conversations_abort(&state);
     return r;
 }
@@ -525,13 +621,14 @@ struct cursor
     struct db *db;
     struct txn **txnp;
     struct buf buf;
-    const char *key; size_t keylen;
-    const char *data; size_t datalen;
+    const char *key;
+    size_t keylen;
+    const char *data;
+    size_t datalen;
     int err;
 };
 
-static void cursor_init(struct cursor *c,
-                        struct db *db, struct txn **txnp)
+static void cursor_init(struct cursor *c, struct db *db, struct txn **txnp)
 {
     memset(c, 0, sizeof(*c));
     c->db = db;
@@ -547,9 +644,12 @@ static int cursor_next(struct cursor *c)
 {
     if (!c->err) {
         c->err = cyrusdb_fetchnext(c->db,
-                                   c->key, c->keylen,
-                                   &c->key, &c->keylen,
-                                   &c->data, &c->datalen,
+                                   c->key,
+                                   c->keylen,
+                                   &c->key,
+                                   &c->keylen,
+                                   &c->data,
+                                   &c->datalen,
                                    c->txnp);
     }
     if (!c->err) {
@@ -560,30 +660,33 @@ static int cursor_next(struct cursor *c)
     return c->err;
 }
 
-static int blob_compare(const char *a, size_t alen,
-                        const char *b, size_t blen)
+static int blob_compare(const char *a, size_t alen, const char *b, size_t blen)
 {
     int d = memcmp(a, b, MIN(alen, blen));
-    if (!d)
+    if (!d) {
         d = alen - blen;
+    }
     return d;
 }
 
 static int next_diffable_record(struct cursor *c)
 {
-    for (;;)
-    {
+    for (;;) {
         int r = cursor_next(c);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         /* skip < records, they won't be in the
          * temp database and we don't care so much */
-        if (c->key[0] == '<')
+        if (c->key[0] == '<') {
             continue;
+        }
 
         /* Subject, not re-calculated */
-        if (c->key[0] == 'S')
+        if (c->key[0] == 'S') {
             continue;
+        }
 
         return 0;
     }
@@ -591,25 +694,34 @@ static int next_diffable_record(struct cursor *c)
 
 static void printer(const char *type, struct cursor *c)
 {
-    if (!verbose) return;
+    if (!verbose) {
+        return;
+    }
     static struct buf keybuf = BUF_INITIALIZER;
     static struct buf databuf = BUF_INITIALIZER;
     buf_reset(&keybuf);
     buf_reset(&databuf);
     size_t i;
     for (i = 0; i < c->keylen; i++) {
-        if (c->key[i] > 31 && c->data[i] < 127)
+        if (c->key[i] > 31 && c->data[i] < 127) {
             buf_putc(&keybuf, c->key[i]);
-        else
-            buf_printf(&keybuf, "<%d>", (int)c->key[i]);
+        }
+        else {
+            buf_printf(&keybuf, "<%d>", (int) c->key[i]);
+        }
     }
     for (i = 0; i < c->datalen; i++) {
-        if (c->data[i] > 31 && c->data[i] < 127)
+        if (c->data[i] > 31 && c->data[i] < 127) {
             buf_putc(&databuf, c->data[i]);
-        else
-            buf_printf(&databuf, "<%d>", (int)c->data[i]);
+        }
+        else {
+            buf_printf(&databuf, "<%d>", (int) c->data[i]);
+        }
     }
-    printf("%s: \"%s\" data \"%s\"\n", type, buf_cstring(&keybuf), buf_cstring(&databuf));
+    printf("%s: \"%s\" data \"%s\"\n",
+           type,
+           buf_cstring(&keybuf),
+           buf_cstring(&databuf));
 }
 
 static unsigned int diff_records(struct conversations_state *a,
@@ -630,14 +742,18 @@ static unsigned int diff_records(struct conversations_state *a,
     while (!ra || !rb) {
         keydelta = blob_compare(ca.key, ca.keylen, cb.key, cb.keylen);
         if (rb || keydelta < 0) {
-            if (ra) break;
+            if (ra) {
+                break;
+            }
             ndiffs++;
             printer("REALONLY", &ca);
             ra = next_diffable_record(&ca);
             continue;
         }
         if (ra || keydelta > 0) {
-            if (rb) break;
+            if (rb) {
+                break;
+            }
             ndiffs++;
             printer("TEMPONLY", &cb);
             rb = next_diffable_record(&cb);
@@ -680,19 +796,26 @@ static int fix_modseqs(struct conversations_state *a,
     while (!ra || !rb) {
         keydelta = blob_compare(ca.key, ca.keylen, cb.key, cb.keylen);
         if (rb || keydelta < 0) {
-            if (ra) break;
+            if (ra) {
+                break;
+            }
             if (ca.key[0] == 'F') {
                 conv_status_t status = CONV_STATUS_INIT;
                 /* need to add record if it's zero */
                 r = conversation_parsestatus(ca.data, ca.datalen, &status);
-                if (r) goto done;
+                if (r) {
+                    goto done;
+                }
                 if (status.threadexists == 0) {
                     r = conversation_storestatus(b, ca.key, ca.keylen, &status);
                     if (r) {
-                        fprintf(stderr, "Failed to store conversations "
-                                        "record \"%.*s\" to %s: %s, giving up\n",
-                                        (int)ca.keylen, ca.key,
-                                        b->path, error_message(r));
+                        fprintf(stderr,
+                                "Failed to store conversations "
+                                "record \"%.*s\" to %s: %s, giving up\n",
+                                (int) ca.keylen,
+                                ca.key,
+                                b->path,
+                                error_message(r));
                         goto done;
                     }
                 }
@@ -702,7 +825,9 @@ static int fix_modseqs(struct conversations_state *a,
             continue;
         }
         if (ra || keydelta > 0) {
-            if (rb) break;
+            if (rb) {
+                break;
+            }
             rb = cursor_next(&cb);
             continue;
         }
@@ -715,10 +840,13 @@ static int fix_modseqs(struct conversations_state *a,
             /* need to add record if it's zero */
             r = conversation_parsestatus(ca.data, ca.datalen, &statusa);
             if (r) {
-                fprintf(stderr, "Failed to parse conversations "
-                                "record \"%.*s\" in %s: %s\n",
-                                (int)ca.keylen, ca.key,
-                                a->path, error_message(r));
+                fprintf(stderr,
+                        "Failed to parse conversations "
+                        "record \"%.*s\" in %s: %s\n",
+                        (int) ca.keylen,
+                        ca.key,
+                        a->path,
+                        error_message(r));
                 /* There's no need to report failure to the caller - the
                  * record diffing passing that occurs after this will
                  * also pick up the same problem */
@@ -726,20 +854,26 @@ static int fix_modseqs(struct conversations_state *a,
             }
             r = conversation_parsestatus(cb.data, cb.datalen, &statusb);
             if (r) {
-                fprintf(stderr, "Failed to parse conversations "
-                                "record \"%.*s\" in %s: %s\n",
-                                (int)cb.keylen, cb.key,
-                                b->path, error_message(r));
+                fprintf(stderr,
+                        "Failed to parse conversations "
+                        "record \"%.*s\" in %s: %s\n",
+                        (int) cb.keylen,
+                        cb.key,
+                        b->path,
+                        error_message(r));
                 goto next;
             }
             if (statusa.threadmodseq > statusb.threadmodseq) {
                 statusb.threadmodseq = statusa.threadmodseq;
                 r = conversation_storestatus(b, cb.key, cb.keylen, &statusb);
                 if (r) {
-                    fprintf(stderr, "Failed to store conversations "
-                                    "record \"%.*s\" to %s: %s, giving up\n",
-                                    (int)cb.keylen, cb.key,
-                                    b->path, error_message(r));
+                    fprintf(stderr,
+                            "Failed to store conversations "
+                            "record \"%.*s\" to %s: %s, giving up\n",
+                            (int) cb.keylen,
+                            cb.key,
+                            b->path,
+                            error_message(r));
                     /* If we cannot write to the temp DB, something is
                      * drastically wrong and we need to report a failure */
                     goto done;
@@ -757,31 +891,39 @@ static int fix_modseqs(struct conversations_state *a,
 
             r = conversation_parse(ca.data, ca.datalen, &conva, CONV_WITHALL);
             if (r) {
-                fprintf(stderr, "Failed to parse conversations "
-                                "record \"%.*s\" in %s: %s\n",
-                                (int)ca.keylen, ca.key,
-                                a->path, error_message(r));
+                fprintf(stderr,
+                        "Failed to parse conversations "
+                        "record \"%.*s\" in %s: %s\n",
+                        (int) ca.keylen,
+                        ca.key,
+                        a->path,
+                        error_message(r));
                 goto next;
             }
             r = conversation_parse(cb.data, cb.datalen, &convb, CONV_WITHALL);
             if (r) {
-                fprintf(stderr, "Failed to parse conversations "
-                                "record \"%.*s\" in %s: %s\n",
-                                (int)cb.keylen, cb.key,
-                                b->path, error_message(r));
+                fprintf(stderr,
+                        "Failed to parse conversations "
+                        "record \"%.*s\" in %s: %s\n",
+                        (int) cb.keylen,
+                        cb.key,
+                        b->path,
+                        error_message(r));
                 conversation_fini(&conva);
                 goto next;
             }
 
             /* because expunged messages could have had higher modseqs,
              * we need to re-copy any higher modseqs in */
-            if (conva.modseq > convb.modseq)
+            if (conva.modseq > convb.modseq) {
                 convb.modseq = conva.modseq;
+            }
 
             for (foldera = conva.folders; foldera; foldera = foldera->next) {
                 folderb = conversation_get_folder(&convb, foldera->number, 1);
-                if (folderb->modseq < foldera->modseq)
+                if (folderb->modseq < foldera->modseq) {
                     folderb->modseq = foldera->modseq;
+                }
             }
 
             /* senders are timestamped, and the timestamp might be for a
@@ -790,9 +932,13 @@ static int fix_modseqs(struct conversations_state *a,
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_sender(&convb, sendera->name, sendera->route,
-                                           sendera->mailbox, sendera->domain,
-                                           sendera->lastseen, /*delta_count*/0);
+                conversation_update_sender(&convb,
+                                           sendera->name,
+                                           sendera->route,
+                                           sendera->mailbox,
+                                           sendera->domain,
+                                           sendera->lastseen,
+                                           /*delta_count*/ 0);
             }
 
             /* emails have modseqs, and the modseq might be for a deleted message */
@@ -800,9 +946,12 @@ static int fix_modseqs(struct conversations_state *a,
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_thread(&convb, &threada->guid,
+                conversation_update_thread(&convb,
+                                           &threada->guid,
                                            threada->nano_internaldate,
-                                           threada->createdmodseq, /*delta_exists*/0, /*force*/0);
+                                           threada->createdmodseq,
+                                           /*delta_exists*/ 0,
+                                           /*force*/ 0);
             }
 
             /* be nice to know if this is needed, but at least twoskip
@@ -814,32 +963,45 @@ static int fix_modseqs(struct conversations_state *a,
             conversation_fini(&convb);
 
             if (r) {
-                fprintf(stderr, "Failed to store conversations "
-                                "record \"%.*s\" to %s: %s, giving up\n",
-                                (int)cb.keylen, cb.key,
-                                b->path, error_message(r));
+                fprintf(stderr,
+                        "Failed to store conversations "
+                        "record \"%.*s\" to %s: %s, giving up\n",
+                        (int) cb.keylen,
+                        cb.key,
+                        b->path,
+                        error_message(r));
                 goto done;
             }
         }
         if (ca.key[0] == 'G') {
             // basecid might be different on the old record, so if they're both v3, then copy the data over
-            if (ca.datalen >= 33 && cb.datalen >= 33 && ca.data[0] == (char)0x83 && cb.data[0] == (char)0x83) {
-                if (memcmp(ca.data+25, cb.data+25, 8) && cb.datalen < 80) {
+            if (ca.datalen >= 33 && cb.datalen >= 33
+                && ca.data[0] == (char) 0x83 && cb.data[0] == (char) 0x83)
+            {
+                if (memcmp(ca.data + 25, cb.data + 25, 8) && cb.datalen < 80) {
                     memcpy(buf, cb.data, cb.datalen);
-                    memcpy(buf+25, ca.data+25, 8);
-                    r = cyrusdb_store(b->db, cb.key, cb.keylen, buf, cb.datalen, &b->txn);
+                    memcpy(buf + 25, ca.data + 25, 8);
+                    r = cyrusdb_store(b->db,
+                                      cb.key,
+                                      cb.keylen,
+                                      buf,
+                                      cb.datalen,
+                                      &b->txn);
                     if (r) {
-                         fprintf(stderr, "Failed to store conversations "
-                                         "record \"%.*s\" to %s: %s, giving up\n",
-                                         (int)cb.keylen, cb.key,
-                                         b->path, error_message(r));
+                        fprintf(stderr,
+                                "Failed to store conversations "
+                                "record \"%.*s\" to %s: %s, giving up\n",
+                                (int) cb.keylen,
+                                cb.key,
+                                b->path,
+                                error_message(r));
                         goto done;
                     }
                 }
             }
         }
 
-next:
+    next:
         ra = cursor_next(&ca);
         rb = cursor_next(&cb);
     }
@@ -858,10 +1020,12 @@ int do_checkfolders(const char *userid)
     strarray_t *copy1, *copy2;
 
     /* open the DB */
-    r = conversations_open_user(userid, 0/*shared*/, &state);
+    r = conversations_open_user(userid, 0 /*shared*/, &state);
     if (r) {
-        fprintf(stderr, "Cannot open conversations db %s: %s\n",
-                userid, error_message(r));
+        fprintf(stderr,
+                "Cannot open conversations db %s: %s\n",
+                userid,
+                error_message(r));
         goto out;
     }
 
@@ -896,15 +1060,19 @@ static int do_audit(const char *userid)
     struct conversations_state *state_real = NULL;
     unsigned int ndiffs = 0;
 
-    if (verbose)
+    if (verbose) {
         printf("User %s\n", userid);
+    }
 
-    if (verbose)
+    if (verbose) {
         printf("Pass 1: recalculate counts into temporary db\n");
+    }
 
     /* Generate a unique suffix for the temp db */
-    snprintf(temp_suffix, sizeof(temp_suffix),
-             "conversations.audit.%d", (int)getpid());
+    snprintf(temp_suffix,
+             sizeof(temp_suffix),
+             "conversations.audit.%d",
+             (int) getpid());
 
     /* Get the filenames */
     filename_real = conversations_getuserpath(userid);
@@ -919,23 +1087,32 @@ static int do_audit(const char *userid)
     xunlink(filename_temp);
     r = cyrusdb_copyfile(filename_real, filename_temp);
     if (r) {
-        fprintf(stderr, "Cannot make temp copy of conversations db %s: %s\n",
-                filename_real, error_message(r));
+        fprintf(stderr,
+                "Cannot make temp copy of conversations db %s: %s\n",
+                filename_real,
+                error_message(r));
         goto out;
     }
 
     /* Begin recalculating in the temp db */
-    r = conversations_open_path(filename_temp, userid, 0/*shared*/, &state_temp);
+    r = conversations_open_path(filename_temp,
+                                userid,
+                                0 /*shared*/,
+                                &state_temp);
     if (r) {
-        fprintf(stderr, "Cannot open conversations db %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Cannot open conversations db %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
-    r = conversations_zero_counts(state_temp, /*wipe*/0, /*do_upgrade*/0);
+    r = conversations_zero_counts(state_temp, /*wipe*/ 0, /*do_upgrade*/ 0);
     if (r) {
-        fprintf(stderr, "Failed to zero counts in %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Failed to zero counts in %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
@@ -949,15 +1126,19 @@ static int do_audit(const char *userid)
 
     r = mboxlist_usermboxtree(userid, NULL, audit_counts_cb, NULL, 0);
     if (r) {
-        fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Failed to recalculate counts in %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
     r = conversations_cleanup_zero(state_temp);
     if (r) {
-        fprintf(stderr, "Failed to cleanup zero counts in %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Failed to cleanup zero counts in %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
@@ -966,25 +1147,38 @@ static int do_audit(const char *userid)
 
     r = conversations_commit(&state_temp);
     if (r) {
-        fprintf(stderr, "Cannot commit conversations db %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Cannot commit conversations db %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
-    if (verbose)
+    if (verbose) {
         printf("Pass 2: find differences from recalculated to live dbs\n");
+    }
 
-    r = conversations_open_path(filename_temp, userid, 0/*shared*/, &state_temp);
+    r = conversations_open_path(filename_temp,
+                                userid,
+                                0 /*shared*/,
+                                &state_temp);
     if (r) {
-        fprintf(stderr, "Cannot open conversations db %s: %s\n",
-                filename_temp, error_message(r));
+        fprintf(stderr,
+                "Cannot open conversations db %s: %s\n",
+                filename_temp,
+                error_message(r));
         goto out;
     }
 
-    r = conversations_open_path(filename_real, userid, 0/*shared*/, &state_real);
+    r = conversations_open_path(filename_real,
+                                userid,
+                                0 /*shared*/,
+                                &state_real);
     if (r) {
-        fprintf(stderr, "Cannot open conversations db %s: %s\n",
-                filename_real, error_message(r));
+        fprintf(stderr,
+                "Cannot open conversations db %s: %s\n",
+                filename_real,
+                error_message(r));
         goto out;
     }
 
@@ -995,16 +1189,20 @@ static int do_audit(const char *userid)
     }
 
     ndiffs += diff_records(state_real, state_temp);
-    if (ndiffs)
+    if (ndiffs) {
         printf("%s is BROKEN (%u differences)\n", userid, ndiffs);
-    else if (verbose)
+    }
+    else if (verbose) {
         printf("%s is OK\n", userid);
+    }
 
 out:
-    if (state_temp)
+    if (state_temp) {
         conversations_abort(&state_temp);
-    if (state_real)
+    }
+    if (state_real) {
         conversations_abort(&state_real);
+    }
     conversations_set_suffix(NULL);
     conversations_set_directory(NULL);
     cyrusdb_unlink(config_conversations_db, filename_temp, 0);
@@ -1013,8 +1211,7 @@ out:
     return r;
 }
 
-static int usage(const char *name)
-    __attribute__((noreturn));
+static int usage(const char *name) __attribute__((noreturn));
 
 static int do_user(const char *userid, void *rock)
 {
@@ -1025,57 +1222,66 @@ static int do_user(const char *userid, void *rock)
 
     fname = conversations_getuserpath(userid);
     if (fname == NULL) {
-        fprintf(stderr, "Unable to get conversations database "
-                        "filename for userid \"%s\"\n",
-                        userid);
+        fprintf(stderr,
+                "Unable to get conversations database "
+                "filename for userid \"%s\"\n",
+                userid);
         return EX_USAGE;
     }
 
-    switch (mode)
-    {
+    switch (mode) {
     case DUMP:
-        if (do_dump(fname, userid))
+        if (do_dump(fname, userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case UNDUMP:
-        if (do_undump(fname, userid))
+        if (do_undump(fname, userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case ZERO:
-        if (do_zero(userid))
+        if (do_zero(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case ZEROMODSEQ:
-        if (do_zeromodseq(userid))
+        if (do_zeromodseq(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case BUILD:
-        if (do_build(userid))
+        if (do_build(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case RECALC:
-        if (do_recalc(userid))
+        if (do_recalc(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case AUDIT:
-        if (do_audit(userid))
+        if (do_audit(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case CHECKFOLDERS:
-        if (do_checkfolders(userid))
+        if (do_checkfolders(userid)) {
             r = EX_NOINPUT;
+        }
         break;
 
     case ENABLE_COMPACTIDS:
-        if (do_compactids(userid, *((int *) rock)))
+        if (do_compactids(userid, *((int *) rock))) {
             r = EX_NOINPUT;
+        }
         break;
 
     case UNKNOWN:
@@ -1113,32 +1319,33 @@ int main(int argc, char **argv)
     static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
 
     static const struct option long_options[] = {
-        { "audit", no_argument, NULL, 'A' },
+        { "audit",                   no_argument,       NULL, 'A' },
         /* n.b. no long option for -C */
-        { "check-folders", no_argument, NULL, 'F' },
-        { "clearmodseq", no_argument, NULL, 'M' },
-        { "update-counts", no_argument, NULL, 'R' },
-        { "split", no_argument, NULL, 'S' },
-        { "audit-temp-directory", required_argument, NULL, 'T' },
-        { "rebuild", no_argument, NULL, 'b' },
-        { "dump", no_argument, NULL, 'd' },
-        { "recursive", no_argument, NULL, 'r' },
-        { "undump", no_argument, NULL, 'u' },
-        { "upgrade", no_argument, NULL, 'U' },
-        { "verbose", no_argument, NULL, 'v' },
-        { "clear", no_argument, NULL, 'z' },
-        { "clearcid", required_argument, NULL, 'Z' },
+        { "check-folders",           no_argument,       NULL, 'F' },
+        { "clearmodseq",             no_argument,       NULL, 'M' },
+        { "update-counts",           no_argument,       NULL, 'R' },
+        { "split",                   no_argument,       NULL, 'S' },
+        { "audit-temp-directory",    required_argument, NULL, 'T' },
+        { "rebuild",                 no_argument,       NULL, 'b' },
+        { "dump",                    no_argument,       NULL, 'd' },
+        { "recursive",               no_argument,       NULL, 'r' },
+        { "undump",                  no_argument,       NULL, 'u' },
+        { "upgrade",                 no_argument,       NULL, 'U' },
+        { "verbose",                 no_argument,       NULL, 'v' },
+        { "clear",                   no_argument,       NULL, 'z' },
+        { "clearcid",                required_argument, NULL, 'Z' },
         { "enable-compact-emailids", required_argument, NULL, 'I' },
-        { 0, 0, 0, 0 },
+        { 0,                         0,                 0,    0   },
     };
 
-    while (-1 != (c = getopt_long(argc, argv,
-                                  short_options, long_options, NULL)))
+    while (-1
+           != (c = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (c) {
         case 'd':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = DUMP;
             break;
 
@@ -1147,20 +1354,23 @@ int main(int argc, char **argv)
             break;
 
         case 'u':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = UNDUMP;
             break;
 
         case 'z':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = ZERO;
             break;
 
         case 'Z':
-            if (mode != UNKNOWN && mode != ZERO)
+            if (mode != UNKNOWN && mode != ZERO) {
                 usage(argv[0]);
+            }
             mode = ZERO;
             if (!zerocids) {
                 zerocids = xzmalloc(sizeof(hashu64_table));
@@ -1170,57 +1380,67 @@ int main(int argc, char **argv)
             int i;
             for (i = 0; i < strarray_size(ids); i++) {
                 conversation_id_t cid = NULLCONVERSATION;
-                if (!conversation_id_decode(&cid, strarray_nth(ids, i)))
+                if (!conversation_id_decode(&cid, strarray_nth(ids, i))) {
                     usage(argv[0]);
-                if (cid)
-                    hashu64_insert(cid, (void*)1, zerocids);
+                }
+                if (cid) {
+                    hashu64_insert(cid, (void *) 1, zerocids);
+                }
             }
             strarray_free(ids);
             break;
 
         case 'M':
-            if (mode != UNKNOWN && mode != ZEROMODSEQ)
+            if (mode != UNKNOWN && mode != ZEROMODSEQ) {
                 usage(argv[0]);
+            }
             mode = ZEROMODSEQ;
             break;
 
         case 'b':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = BUILD;
             break;
 
         case 'R':
-            if (mode != UNKNOWN && mode != RECALC)
+            if (mode != UNKNOWN && mode != RECALC) {
                 usage(argv[0]);
+            }
             recalc_repair = 1;
             mode = RECALC;
             break;
 
         case 'A':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = AUDIT;
             break;
 
         case 'F':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
+            }
             mode = CHECKFOLDERS;
             break;
 
         case 'U':
-            if (mode != UNKNOWN && mode != RECALC)
+            if (mode != UNKNOWN && mode != RECALC) {
                 usage(argv[0]);
+            }
             recalc_upgrade = 1;
             mode = RECALC;
             break;
 
         case 'I':
-            if (mode != UNKNOWN)
+            if (mode != UNKNOWN) {
                 usage(argv[0]);
-            if (!strcmp(optarg, "1") ||
-                !strcasecmp(optarg, "on") || !strcasecmp(optarg, "yes")) {
+            }
+            if (!strcmp(optarg, "1") || !strcasecmp(optarg, "on")
+                || !strcasecmp(optarg, "yes"))
+            {
                 enable_compactids = 1;
             }
             mode = ENABLE_COMPACTIDS;
@@ -1249,15 +1469,19 @@ int main(int argc, char **argv)
         }
     }
 
-    if (mode == UNKNOWN)
+    if (mode == UNKNOWN) {
         usage(argv[0]);
+    }
 
-    if (optind == argc-1)
+    if (optind == argc - 1) {
         userid = argv[optind];
-    else if (recursive)
+    }
+    else if (recursive) {
         userid = "";
-    else
+    }
+    else {
         usage(argv[0]);
+    }
 
     cyrus_init(alt_config, "ctl_conversationsdb", 0, 0);
 
@@ -1286,28 +1510,42 @@ static int usage(const char *name)
     fprintf(stderr, "options are:\n");
     fprintf(stderr, "    -v             be more verbose\n");
     fprintf(stderr, "    -C altconfig   use altconfig instead of imapd.conf\n");
-    fprintf(stderr, "    -u             undump the conversations database from stdin\n");
-    fprintf(stderr, "    -d             dump the conversations database to stdout\n");
-    fprintf(stderr, "    -z             zero the conversations DB (make all NULLs)\n");
-    fprintf(stderr, "    -b             build conversations entries for any NULL records\n");
+    fprintf(
+        stderr,
+        "    -u             undump the conversations database from stdin\n");
+    fprintf(stderr,
+            "    -d             dump the conversations database to stdout\n");
+    fprintf(stderr,
+            "    -z             zero the conversations DB (make all NULLs)\n");
+    fprintf(stderr,
+            "    -b             build conversations entries for any NULL "
+            "records\n");
     fprintf(stderr, "    -R             recalculate all counts\n");
-    fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
+    fprintf(
+        stderr,
+        "    -U             upgrade to latest version of conversations.db\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
     fprintf(stderr, "    -F             check folder names\n");
-    fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes to enable\n");
-    fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");
+    fprintf(stderr,
+            "    -I switch      enable/disable compact emailids.  1/on/yes to "
+            "enable\n");
+    fprintf(stderr,
+            "    -T dir         store temporary data for audit in dir\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "    -r             recursive mode: username is a prefix\n");
+    fprintf(stderr,
+            "    -r             recursive mode: username is a prefix\n");
 
     exit(EX_USAGE);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "ctl_conversationsdb: %s\n", s);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }

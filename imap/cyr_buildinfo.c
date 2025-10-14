@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -65,8 +65,8 @@
 #include "master/masterconf.h"
 
 #ifdef USE_SIEVE
-#include "sieve/bytecode.h"
-#include "sieve/sieve_interface.h"
+# include "sieve/bytecode.h"
+# include "sieve/sieve_interface.h"
 #endif
 
 /* Make ld happy */
@@ -297,7 +297,9 @@ static json_t *buildinfo()
 #else
     json_object_set_new(search, "xapian", json_false());
 #endif
-    json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
+    json_object_set_new(search,
+                        "xapian_cjk_tokens",
+                        json_string(XAPIAN_CJK_TOKENS));
 
     /* iCalendar features */
 #ifdef HAVE_ICALPARSER_CTRL
@@ -308,42 +310,51 @@ static json_t *buildinfo()
 
     /* Internal version numbers */
 #ifdef USE_SIEVE
-    json_object_set_new(version, "BYTECODE_MIN_VERSION",
-                                 json_integer(BYTECODE_MIN_VERSION));
-    json_object_set_new(version, "BYTECODE_VERSION",
-                                 json_integer(BYTECODE_VERSION));
+    json_object_set_new(version,
+                        "BYTECODE_MIN_VERSION",
+                        json_integer(BYTECODE_MIN_VERSION));
+    json_object_set_new(version,
+                        "BYTECODE_VERSION",
+                        json_integer(BYTECODE_VERSION));
 #endif
-    json_object_set_new(version, "CONVERSATIONS_KEY_VERSION",
-                                 json_integer(CONVERSATIONS_KEY_VERSION));
-    json_object_set_new(version, "CONVERSATIONS_RECORD_VERSION",
-                                 json_integer(CONVERSATIONS_RECORD_VERSION));
-    json_object_set_new(version, "CONVERSATIONS_STATUS_VERSION",
-                                 json_integer(CONVERSATIONS_STATUS_VERSION));
-    json_object_set_new(version, "CONV_GUIDREC_BYNAME_VERSION",
-                                 json_integer(CONV_GUIDREC_BYNAME_VERSION));
-    json_object_set_new(version, "CONV_GUIDREC_VERSION",
-                                 json_integer(CONV_GUIDREC_VERSION));
-    json_object_set_new(version, "CYRUS_VERSION",
-                                 json_string(CYRUS_VERSION));
-    json_object_set_new(version, "MAILBOX_CACHE_MINOR_VERSION",
-                                 json_integer(MAILBOX_CACHE_MINOR_VERSION));
-    json_object_set_new(version, "MAILBOX_MINOR_VERSION",
-                                 json_integer(MAILBOX_MINOR_VERSION));
+    json_object_set_new(version,
+                        "CONVERSATIONS_KEY_VERSION",
+                        json_integer(CONVERSATIONS_KEY_VERSION));
+    json_object_set_new(version,
+                        "CONVERSATIONS_RECORD_VERSION",
+                        json_integer(CONVERSATIONS_RECORD_VERSION));
+    json_object_set_new(version,
+                        "CONVERSATIONS_STATUS_VERSION",
+                        json_integer(CONVERSATIONS_STATUS_VERSION));
+    json_object_set_new(version,
+                        "CONV_GUIDREC_BYNAME_VERSION",
+                        json_integer(CONV_GUIDREC_BYNAME_VERSION));
+    json_object_set_new(version,
+                        "CONV_GUIDREC_VERSION",
+                        json_integer(CONV_GUIDREC_VERSION));
+    json_object_set_new(version, "CYRUS_VERSION", json_string(CYRUS_VERSION));
+    json_object_set_new(version,
+                        "MAILBOX_CACHE_MINOR_VERSION",
+                        json_integer(MAILBOX_CACHE_MINOR_VERSION));
+    json_object_set_new(version,
+                        "MAILBOX_MINOR_VERSION",
+                        json_integer(MAILBOX_MINOR_VERSION));
 #ifdef USE_SIEVE
-    json_object_set_new(version, "SIEVE_VERSION",
-                                 json_string(SIEVE_VERSION));
+    json_object_set_new(version, "SIEVE_VERSION", json_string(SIEVE_VERSION));
 #endif
-    json_object_set_new(version, "STATUSCACHE_VERSION",
-                                 json_integer(STATUSCACHE_VERSION));
-    json_object_set_new(version, "ZONEINFO_VERSION",
-                                 json_integer(ZONEINFO_VERSION));
+    json_object_set_new(version,
+                        "STATUSCACHE_VERSION",
+                        json_integer(STATUSCACHE_VERSION));
+    json_object_set_new(version,
+                        "ZONEINFO_VERSION",
+                        json_integer(ZONEINFO_VERSION));
 
 #if defined __USE_FORTIFY_LEVEL && __USE_FORTIFY_LEVEL > 0
-    json_object_set_new(version, "FORTIFY_LEVEL",
-                                 json_integer(__USE_FORTIFY_LEVEL));
+    json_object_set_new(version,
+                        "FORTIFY_LEVEL",
+                        json_integer(__USE_FORTIFY_LEVEL));
 #else
-    json_object_set_new(version, "FORTIFY_LEVEL",
-                                 json_integer(0));
+    json_object_set_new(version, "FORTIFY_LEVEL", json_integer(0));
 #endif
 
     /* Whew ... */
@@ -361,18 +372,19 @@ static void format_flat(json_t *buildinfo, struct buf *buf)
     const char *key;
     json_t *val;
 
-    json_object_foreach(buildinfo, key, val) {
+    json_object_foreach (buildinfo, key, val) {
         buf_appendcstr(buf, key);
         if (json_typeof(val) == JSON_OBJECT) {
             buf_appendcstr(buf, ".");
             format_flat(val, buf);
             buf_truncate(buf, -1);
-        } else {
+        }
+        else {
             char *jval = json_dumps(val, JSON_ENCODE_ANY);
             buf_appendcstr(buf, "=");
             buf_appendcstr(buf, jval);
             printf("%s\n", buf_cstring(buf));
-            buf_truncate(buf, -strlen(jval)-1);
+            buf_truncate(buf, -strlen(jval) - 1);
             free(jval);
         }
         buf_truncate(buf, -strlen(key));
@@ -386,12 +398,13 @@ static void format_json(json_t *buildinfo, int fmt)
     int flags = JSON_PRESERVE_ORDER;
     char *dump;
 
-    if (fmt == FORMAT_PRETTY) flags |= JSON_INDENT(2);
+    if (fmt == FORMAT_PRETTY) {
+        flags |= JSON_INDENT(2);
+    }
     dump = json_dumps(buildinfo, flags);
     printf("%s\n", dump);
     free(dump);
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -410,8 +423,9 @@ int main(int argc, char *argv[])
     };
 
     /* Parse arguments */
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file. We don't care but don't bark for -C. */
@@ -422,30 +436,36 @@ int main(int argc, char *argv[])
         }
     }
     if (optind < argc) {
-        if (!strcmp(argv[optind], "pretty"))
+        if (!strcmp(argv[optind], "pretty")) {
             fmt = FORMAT_PRETTY;
-        else if (!strcmp(argv[optind], "dense"))
+        }
+        else if (!strcmp(argv[optind], "dense")) {
             fmt = FORMAT_DENSE;
-        else if (!strcmp(argv[optind], "flat"))
+        }
+        else if (!strcmp(argv[optind], "flat")) {
             fmt = FORMAT_FLAT;
-        else
+        }
+        else {
             usage();
+        }
     }
 
     /* Create and print the build configuration */
     bi = buildinfo();
-    if (!bi) exit(-2);
+    if (!bi) {
+        exit(-2);
+    }
     switch (fmt) {
-        case FORMAT_PRETTY:
-        case FORMAT_DENSE:
-            format_json(bi, fmt);
-            break;
-        case FORMAT_FLAT:
-            format_flat(bi, &buf);
-            break;
-        default:
-            /* should not happen */
-            exit(-3);
+    case FORMAT_PRETTY:
+    case FORMAT_DENSE:
+        format_json(bi, fmt);
+        break;
+    case FORMAT_FLAT:
+        format_flat(bi, &buf);
+        break;
+    default:
+        /* should not happen */
+        exit(-3);
     }
 
     /* All done */

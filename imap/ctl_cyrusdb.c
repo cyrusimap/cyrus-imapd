@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -89,20 +89,21 @@
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
-static struct cyrusdb {
+static struct cyrusdb
+{
     const char *name;
     const char **configptr;
     cyrusdb_archiver *archiver;
     int doarchive;
 } dblist[] = {
-    { FNAME_MBOXLIST,           &config_mboxlist_db,    NULL,   1 },
-    { FNAME_QUOTADB,            &config_quota_db,       NULL,   1 },
-    { FNAME_GLOBALANNOTATIONS,  &config_annotation_db,  NULL,   1 },
-    { FNAME_DELIVERDB,          &config_duplicate_db,   NULL,   0 },
-    { FNAME_TLSSESSIONS,        &config_tls_sessions_db,NULL,   0 },
-    { FNAME_PTSDB,              &config_ptscache_db,    NULL,   0 },
-    { FNAME_STATUSCACHEDB,      &config_statuscache_db, NULL,   0 },
-    { NULL,                     NULL,                   NULL,   0 }
+    { FNAME_MBOXLIST,          &config_mboxlist_db,     NULL, 1 },
+    { FNAME_QUOTADB,           &config_quota_db,        NULL, 1 },
+    { FNAME_GLOBALANNOTATIONS, &config_annotation_db,   NULL, 1 },
+    { FNAME_DELIVERDB,         &config_duplicate_db,    NULL, 0 },
+    { FNAME_TLSSESSIONS,       &config_tls_sessions_db, NULL, 0 },
+    { FNAME_PTSDB,             &config_ptscache_db,     NULL, 0 },
+    { FNAME_STATUSCACHEDB,     &config_statuscache_db,  NULL, 0 },
+    { NULL,                    NULL,                    NULL, 0 }
 };
 
 static int compdb(const void *v1, const void *v2)
@@ -111,7 +112,7 @@ static int compdb(const void *v1, const void *v2)
     struct cyrusdb *db2 = (struct cyrusdb *) v2;
 
     /* compare archive pointers for sort */
-    return ((char *)db1->archiver - (char *)db2->archiver);
+    return ((char *) db1->archiver - (char *) db2->archiver);
 }
 
 static void usage(void)
@@ -121,7 +122,8 @@ static void usage(void)
     exit(-1);
 }
 
-struct fix_rock {
+struct fix_rock
+{
     hash_table next_mboxnum_by_userid;
     struct buf jmapid;
     struct buf last_userid;
@@ -139,17 +141,21 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailboxlock(mbentry->name, 1, NULL, NULL, NULL,
+        r = mboxlist_deletemailboxlock(mbentry->name,
+                                       1,
+                                       NULL,
+                                       NULL,
+                                       NULL,
                                        MBOXLIST_DELETE_FORCE);
         if (r) {
             /* log the error */
             syslog(LOG_ERR,
                    "could not remove reserved mailbox '%s': %s",
-                   mbentry->name, error_message(r));
-        } else {
-            syslog(LOG_NOTICE,
-                   "removed reserved mailbox '%s'",
-                   mbentry->name);
+                   mbentry->name,
+                   error_message(r));
+        }
+        else {
+            syslog(LOG_NOTICE, "removed reserved mailbox '%s'", mbentry->name);
         }
         return 0;
     }
@@ -171,13 +177,14 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
         }
         mbentry_t *copy = mboxlist_entry_copy(mbentry);
         xzfree(copy->legacy_specialuse);
-        mboxlist_updatelock(copy, /*localonly*/1);
+        mboxlist_updatelock(copy, /*localonly*/ 1);
         mboxlist_entry_free(&copy);
     }
 
     /* make sure every local mbentry has a uniqueid, jmapid & J record!  */
-    if ((!mbentry->uniqueid || !mbentry->jmapid) &&
-        mbentry_is_local_mailbox(mbentry)) {
+    if ((!mbentry->uniqueid || !mbentry->jmapid)
+        && mbentry_is_local_mailbox(mbentry))
+    {
         struct mailbox *mailbox = NULL;
         mbentry_t *copy = NULL;
 
@@ -186,8 +193,11 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             /* XXX what does it mean if there's an mbentry, but the mailbox
              * XXX was not openable?
              */
-            syslog(LOG_INFO, "%s: mailbox_open_from_mbe %s returned %s",
-                              __func__, mbentry->name, error_message(r));
+            syslog(LOG_INFO,
+                   "%s: mailbox_open_from_mbe %s returned %s",
+                   __func__,
+                   mbentry->name,
+                   error_message(r));
             goto skip_uniqueid;
         }
 
@@ -206,7 +216,9 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             mbname_t *mbname = mbname_from_intname(mbentry->name);
             const char *userid = mbname_userid(mbname);
 
-            if (!userid) userid = "";
+            if (!userid) {
+                userid = "";
+            }
 
             if (strcmpnull(userid, buf_cstringnull(&frock->last_userid))) {
                 if (frock->next_mboxnum - 1 > frock->highestmodseq) {
@@ -214,19 +226,23 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                        bump highestmodseq to avoid JMAP ID conflicts */
                     mboxname_setmodseq(buf_cstring(&frock->last_mboxname),
                                        frock->next_mboxnum - 1,
-                                       0, MBOXMODSEQ_ISFOLDER);
+                                       0,
+                                       MBOXMODSEQ_ISFOLDER);
                 }
 
                 /* get new userid's highestmodseq */
                 struct mboxname_counters counters;
-                if (!mboxname_read_counters(mbentry->name, &counters))
+                if (!mboxname_read_counters(mbentry->name, &counters)) {
                     frock->highestmodseq = counters.highestmodseq;
-                else
+                }
+                else {
                     frock->highestmodseq = UINT64_MAX;
+                }
 
                 /* get start mboxnum from deleted hash, if exists */
                 uint64_t next_mboxnum =
-                    (uint64_t) hash_lookup(userid, &frock->next_mboxnum_by_userid);
+                    (uint64_t) hash_lookup(userid,
+                                           &frock->next_mboxnum_by_userid);
                 frock->next_mboxnum = next_mboxnum ? next_mboxnum : 1;
 
                 buf_setcstr(&frock->last_userid, userid);
@@ -244,7 +260,8 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 
             if (mbname_isdeleted(mbname)) {
                 /* mark start mboxnum of first active mailbox for user */
-                hash_insert(userid, (void *) frock->next_mboxnum,
+                hash_insert(userid,
+                            (void *) frock->next_mboxnum,
                             &frock->next_mboxnum_by_userid);
             }
 
@@ -265,7 +282,7 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                     copy->name, copy->jmapid);
         }
 
-        r = mboxlist_updatelock(copy, /*localonly*/1);
+        r = mboxlist_updatelock(copy, /*localonly*/ 1);
         if (r) {
             xsyslog(LOG_ERR, "failed to update mboxlist",
                              "mboxname=<%s> error=<%s>",
@@ -286,8 +303,7 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
         mailbox_close(&mailbox);
         mboxlist_entry_free(&copy);
 
-skip_uniqueid:
-        ;   /* hush "label at end of compound statement" warning */
+    skip_uniqueid:; /* hush "label at end of compound statement" warning */
     }
 
     return 0;
@@ -299,8 +315,12 @@ static void process_mboxlist(int *upgraded)
     mboxlist_upgrade(upgraded);
 
     /* run fixmbox across all mboxlist entries */
-    struct fix_rock frock = { HASH_TABLE_INITIALIZER, BUF_INITIALIZER,
-                              BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1,
+    struct fix_rock frock = { HASH_TABLE_INITIALIZER,
+                              BUF_INITIALIZER,
+                              BUF_INITIALIZER,
+                              BUF_INITIALIZER,
+                              UINT64_MAX,
+                              1,
                               config_getswitch(IMAPOPT_REPLICAONLY) };
     construct_hash_table(&frock.next_mboxnum_by_userid, 4096, 0);
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
@@ -319,26 +339,35 @@ static const char *dbfname(struct cyrusdb *db)
     const char *fname = NULL;
 
     /* find absolute path to db files in configuration */
-    if (!strcmp(db->name, FNAME_MBOXLIST))
+    if (!strcmp(db->name, FNAME_MBOXLIST)) {
         fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
-    else if (!strcmp(db->name, FNAME_QUOTADB))
+    }
+    else if (!strcmp(db->name, FNAME_QUOTADB)) {
         fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
-    else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS))
+    }
+    else if (!strcmp(db->name, FNAME_GLOBALANNOTATIONS)) {
         fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
-    else if (!strcmp(db->name, FNAME_DELIVERDB))
+    }
+    else if (!strcmp(db->name, FNAME_DELIVERDB)) {
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
-    else if (!strcmp(db->name, FNAME_TLSSESSIONS))
+    }
+    else if (!strcmp(db->name, FNAME_TLSSESSIONS)) {
         fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
-    else if (!strcmp(db->name, FNAME_PTSDB))
+    }
+    else if (!strcmp(db->name, FNAME_PTSDB)) {
         fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
-    else if (!strcmp(db->name, FNAME_STATUSCACHEDB))
+    }
+    else if (!strcmp(db->name, FNAME_STATUSCACHEDB)) {
         fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
+    }
 
     /* use default if no special path was found */
-    if (!fname)
+    if (!fname) {
         snprintf(buf, MAX_MAILBOX_PATH, "%s%s", config_dir, db->name);
-    else
+    }
+    else {
         snprintf(buf, MAX_MAILBOX_PATH, "%s", fname);
+    }
 
     return buf;
 }
@@ -351,23 +380,33 @@ static void check_convert(struct cyrusdb *db, const char *fname)
     int r;
 
     /* unable to detect current type, assume all is good */
-    if (!detectname) return;
+    if (!detectname) {
+        return;
+    }
 
     /* strip the -nosync from the name if present */
     xstrncpy(backendbuf, *db->configptr, 100);
     p = strstr(backendbuf, "-nosync");
-    if (p) *p = '\0';
+    if (p) {
+        *p = '\0';
+    }
 
     /* ignore files that are already the right type */
-    if (!strcmp(backendbuf, detectname)) return;
+    if (!strcmp(backendbuf, detectname)) {
+        return;
+    }
 
     /* otherwise we need to upgrade! */
-    syslog(LOG_NOTICE, "converting %s from %s to %s",
-           fname, detectname, *db->configptr);
+    syslog(LOG_NOTICE,
+           "converting %s from %s to %s",
+           fname,
+           detectname,
+           *db->configptr);
 
     r = cyrusdb_convert(fname, fname, detectname, *db->configptr);
-    if (r)
+    if (r) {
         syslog(LOG_NOTICE, "conversion failed %s", fname);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -375,7 +414,11 @@ int main(int argc, char *argv[])
     int opt, r = 0, r2 = 0;
     char *alt_config = NULL;
     int reserve_flag = 1;
-    enum { RECOVER, CHECKPOINT, NONE } op = NONE;
+    enum {
+        RECOVER,
+        CHECKPOINT,
+        NONE
+    } op = NONE;
     char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
     const char *msg = "";
@@ -387,14 +430,15 @@ int main(int argc, char *argv[])
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "checkpoint", no_argument, NULL, 'c' },
-        { "recover", no_argument, NULL, 'r' },
+        { "recover",    no_argument, NULL, 'r' },
         { "no-cleanup", no_argument, NULL, 'x' },
 
-        { 0, 0, 0, 0 },
+        { 0,            0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -404,14 +448,22 @@ int main(int argc, char *argv[])
         case 'r':
             libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
             msg = "recovering cyrus databases";
-            if (op == NONE) op = RECOVER;
-            else usage();
+            if (op == NONE) {
+                op = RECOVER;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'c':
             msg = "checkpointing cyrus databases";
-            if (op == NONE) op = CHECKPOINT;
-            else usage();
+            if (op == NONE) {
+                op = CHECKPOINT;
+            }
+            else {
+                usage();
+            }
             break;
 
         case 'x':
@@ -433,34 +485,38 @@ int main(int argc, char *argv[])
 
     /* create the name of the db directory */
     /* (used by backup directory names) */
-    dirname = strconcat(config_dir, FNAME_DBDIR, (char *)NULL);
+    dirname = strconcat(config_dir, FNAME_DBDIR, (char *) NULL);
 
     /* create the names of the backup directories */
-    backup1 = strconcat(dirname, ".backup1", (char *)NULL);
-    backup2 = strconcat(dirname, ".backup2", (char *)NULL);
+    backup1 = strconcat(dirname, ".backup1", (char *) NULL);
+    backup2 = strconcat(dirname, ".backup2", (char *) NULL);
 
     syslog(LOG_NOTICE, "%s", msg);
 
     /* detect backends */
-    for (i = 0; dblist[i].name != NULL; i++)
+    for (i = 0; dblist[i].name != NULL; i++) {
         dblist[i].archiver = cyrusdb_getarchiver(*dblist[i].configptr);
+    }
 
     /* sort dbenvs */
-    qsort(dblist, N(dblist)-1, sizeof(struct cyrusdb), &compdb);
+    qsort(dblist, N(dblist) - 1, sizeof(struct cyrusdb), &compdb);
 
     for (i = 0; dblist[i].name; i++) {
         const char *fname = dbfname(&dblist[i]);
 
-        if (op == RECOVER)
+        if (op == RECOVER) {
             check_convert(&dblist[i], fname);
+        }
 
         /* if we need to archive this db, add it to the list */
-        if (dblist[i].doarchive)
+        if (dblist[i].doarchive) {
             strarray_add(&files, fname);
+        }
 
         /* deal with each dbenv once */
-        if (dblist[i+1].archiver == dblist[i].archiver)
+        if (dblist[i + 1].archiver == dblist[i].archiver) {
             continue;
+        }
 
         r = r2 = 0;
         switch (op) {
@@ -480,8 +536,13 @@ int main(int argc, char *argv[])
 
                 if (dirp) {
                     while ((dirent = readdir(dirp)) != NULL) {
-                        if (dirent->d_name[0] == '.') continue;
-                        file = strconcat(backup2, "/", dirent->d_name, (char *)NULL);
+                        if (dirent->d_name[0] == '.') {
+                            continue;
+                        }
+                        file = strconcat(backup2,
+                                         "/",
+                                         dirent->d_name,
+                                         (char *) NULL);
                         xunlink(file);
                         free(file);
                     }
@@ -491,27 +552,30 @@ int main(int argc, char *argv[])
                 r2 = rmdir(backup2);
 
                 /* move db.backup1 to db.backup2 */
-                if (r2 == 0 || errno == ENOENT)
+                if (r2 == 0 || errno == ENOENT) {
                     r2 = cyrus_rename(backup1, backup2);
+                }
 
                 /* make a new db.backup1 */
-                if (r2 == 0 || errno == ENOENT)
+                if (r2 == 0 || errno == ENOENT) {
                     r2 = mkdir(backup1, 0755);
+                }
 
                 rotated = 1;
             }
 
             /* do the archive */
-            if (r2 == 0)
+            if (r2 == 0) {
                 r2 = dblist[i].archiver(&files, backup1);
-
-            if (r2) {
-                syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,
-                       cyrusdb_strerror(r2));
-                fprintf(stderr,
-                        "ctl_cyrusdb: unable to archive environment\n");
             }
 
+            if (r2) {
+                syslog(LOG_ERR,
+                       "DBERROR: archive %s: %s",
+                       dirname,
+                       cyrusdb_strerror(r2));
+                fprintf(stderr, "ctl_cyrusdb: unable to archive environment\n");
+            }
 
             break;
 
@@ -527,7 +591,9 @@ int main(int argc, char *argv[])
     if (op == RECOVER && reserve_flag) {
         int upgraded = 0;
         process_mboxlist(&upgraded);
-        if (upgraded) annotatemore_upgrade();
+        if (upgraded) {
+            annotatemore_upgrade();
+        }
     }
 
     free(dirname);
