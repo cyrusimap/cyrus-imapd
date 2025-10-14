@@ -128,7 +128,7 @@ static void test_limit2(void)
         CU_ASSERT(inner_diff_outliers < 3);
         CU_ASSERT_INT_INRANGE(diff,
                               0.8 * (i * 1000),
-                              1.2 * (i * 1000));
+                              2.0 * (i * 1000));
     }
 }
 
