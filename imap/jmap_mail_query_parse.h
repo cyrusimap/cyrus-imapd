@@ -50,18 +50,22 @@
 
 typedef struct jmap_email_filter_parse_context jmap_email_filter_parse_ctx_t;
 
-struct jmap_email_filter_parse_context {
+struct jmap_email_filter_parse_context
+{
     void (*validate_field)(const char *field, json_t *arg, void *rock);
     void (*invalid_field)(const char *field, void *rock);
-    void (*path_push_index)(const char *field, size_t index,
-                            const char *name, void *rock);
+    void (*path_push_index)(const char *field,
+                            size_t index,
+                            const char *name,
+                            void *rock);
     void (*path_pop)(void *rock);
     const strarray_t *capabilities;
     void *rock;
 };
 
-extern void jmap_email_filtercondition_parse(json_t *filter,
-                                             jmap_email_filter_parse_ctx_t *ctx);
+extern void jmap_email_filtercondition_parse(
+    json_t *filter,
+    jmap_email_filter_parse_ctx_t *ctx);
 
 extern void jmap_email_filter_parse(json_t *filter,
                                     jmap_email_filter_parse_ctx_t *ctx);
