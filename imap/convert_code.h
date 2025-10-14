@@ -43,7 +43,6 @@
 #ifndef CONVERT_CODE_H
 #define CONVERT_CODE_H
 
-
 int convert_code(int r);
 
 #endif /* CONVERT_CODE_H */
