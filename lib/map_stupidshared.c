@@ -55,26 +55,32 @@
 EXPORTED const char map_method_desc[] = "stupidshared";
 
 #ifndef MAP_FAILED
-#define MAP_FAILED ((void *)-1)
+# define MAP_FAILED ((void *) -1)
 #endif
 
 /*
  * Create/refresh mapping of file
  */
-void
-EXPORTED map_refresh(int fd, int onceonly, const char **base,
-                     size_t *len, size_t newlen, const char *name,
-                     const char *mboxname)
+void EXPORTED map_refresh(int fd,
+                          int onceonly,
+                          const char **base,
+                          size_t *len,
+                          size_t newlen,
+                          const char *name,
+                          const char *mboxname)
 {
-    (void)onceonly;
+    (void) onceonly;
     struct stat sbuf;
     int flags;
     char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            syslog(LOG_ERR,
+                   "IOERROR: fstating %s file%s%s: %m",
+                   name,
+                   mboxname ? " for " : "",
+                   mboxname ? mboxname : "");
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -82,9 +88,13 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     }
 
     /* Already mapped in */
-    if (*len >= newlen) return;
+    if (*len >= newlen) {
+        return;
+    }
 
-    if (*len) munmap((char *)*base, *len);
+    if (*len) {
+        munmap((char *) *base, *len);
+    }
 
     flags = MAP_SHARED;
 #ifdef MAP_FILE
@@ -94,10 +104,13 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
     flags |= MAP_VARIABLE;
 #endif
 
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, flags, fd, 0L);
-    if (*base == (char *)MAP_FAILED) {
-        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-               mboxname ? " for " : "", mboxname ? mboxname : "");
+    *base = (char *) mmap((caddr_t) 0, newlen, PROT_READ, flags, fd, 0L);
+    if (*base == (char *) MAP_FAILED) {
+        syslog(LOG_ERR,
+               "IOERROR: mapping %s file%s%s: %m",
+               name,
+               mboxname ? " for " : "",
+               mboxname ? mboxname : "");
         snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
         fatal(buf, EX_IOERR);
     }
@@ -109,10 +122,11 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 /*
  * Destroy mapping of file
  */
-void
-EXPORTED map_free(const char **base, size_t *len)
+void EXPORTED map_free(const char **base, size_t *len)
 {
-    if (*len) munmap((char *)*base, *len);
+    if (*len) {
+        munmap((char *) *base, *len);
+    }
     *base = 0;
     *len = 0;
 }

@@ -46,7 +46,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "cyr_lock.h"
@@ -69,39 +69,57 @@ EXPORTED double debug_locks_longer_than = 0.0;
  * string naming the action that failed.
  *
  */
-EXPORTED int lock_reopen_ex(int fd, const char *filename,
-                            struct stat *sbuf, const char **failaction,
+EXPORTED int lock_reopen_ex(int fd,
+                            const char *filename,
+                            struct stat *sbuf,
+                            const char **failaction,
                             int *changed)
 {
     int r;
     struct stat sbuffile, sbufspare;
     int newfd;
 
-    if (!sbuf) sbuf = &sbufspare;
+    if (!sbuf) {
+        sbuf = &sbufspare;
+    }
 
     for (;;) {
         r = flock(fd, LOCK_EX);
         if (r == -1) {
-            if (errno == EINTR) continue;
-            if (failaction) *failaction = "locking";
+            if (errno == EINTR) {
+                continue;
+            }
+            if (failaction) {
+                *failaction = "locking";
+            }
             return -1;
         }
 
         r = fstat(fd, sbuf);
-        if (!r) r = stat(filename, &sbuffile);
+        if (!r) {
+            r = stat(filename, &sbuffile);
+        }
         if (r == -1) {
-            if (failaction) *failaction = "stating";
+            if (failaction) {
+                *failaction = "stating";
+            }
             lock_unlock(fd, filename);
             return -1;
         }
 
-        if (sbuf->st_ino == sbuffile.st_ino) return 0;
+        if (sbuf->st_ino == sbuffile.st_ino) {
+            return 0;
+        }
 
-        if (changed) *changed = 1;
+        if (changed) {
+            *changed = 1;
+        }
 
         newfd = open(filename, O_RDWR);
         if (newfd == -1) {
-            if (failaction) *failaction = "opening";
+            if (failaction) {
+                *failaction = "opening";
+            }
             lock_unlock(fd, filename);
             return -1;
         }
@@ -119,17 +137,25 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
+EXPORTED int lock_setlock(int fd,
+                          int exclusive,
+                          int nonblock,
                           const char *filename __attribute__((unused)))
 {
     int r;
     int op = (exclusive ? LOCK_EX : LOCK_SH);
-    if (nonblock) op |= LOCK_NB;
+    if (nonblock) {
+        op |= LOCK_NB;
+    }
 
     for (;;) {
         r = flock(fd, op);
-        if (r != -1) return 0;
-        if (errno == EINTR) continue;
+        if (r != -1) {
+            return 0;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
         return -1;
     }
 }
@@ -143,10 +169,13 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
 
     for (;;) {
         r = flock(fd, LOCK_UN);
-        if (r != -1) return 0;
-        if (errno == EINTR) continue;
+        if (r != -1) {
+            return 0;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
         /* XXX help! */
         return -1;
     }
 }
-

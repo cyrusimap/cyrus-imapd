@@ -43,7 +43,7 @@
 #ifndef INCLUDED_MAP_H
 #define INCLUDED_MAP_H
 
-#define MAP_UNKNOWN_LEN ((unsigned long)-1)
+#define MAP_UNKNOWN_LEN ((unsigned long) -1)
 
 extern const char map_method_desc[];
 
@@ -60,9 +60,13 @@ extern const char map_method_desc[];
  *      of the file, and shouldn't be NULL, while mboxname is the name
  *      of the applicable mailbox (if any), and may be NULL
  */
-extern void map_refresh(int fd, int onceonly, const char **base,
-                        size_t *len, size_t newlen,
-                        const char *name, const char *mboxname);
+extern void map_refresh(int fd,
+                        int onceonly,
+                        const char **base,
+                        size_t *len,
+                        size_t newlen,
+                        const char *name,
+                        const char *mboxname);
 
 /* map_free will free a memory map allocated by map_refresh
  *

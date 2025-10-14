@@ -48,7 +48,8 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
-struct mappedfile {
+struct mappedfile
+{
     char *fname;
 
     /* obviously you will need 64 bit size_t for 64 bit files... */
@@ -67,15 +68,16 @@ struct mappedfile {
     struct timeval starttime;
 };
 
-#define MAPPEDFILE_CREATE (1<<0)
-#define MAPPEDFILE_RW     (1<<1)
+#define MAPPEDFILE_CREATE (1 << 0)
+#define MAPPEDFILE_RW (1 << 1)
 
 #define MF_UNLOCKED 0
 #define MF_READLOCKED 1
 #define MF_WRITELOCKED 2
 
 extern int mappedfile_open(struct mappedfile **mfp,
-                           const char *fname, int flags);
+                           const char *fname,
+                           int flags);
 extern int mappedfile_close(struct mappedfile **mfp);
 
 extern int mappedfile_readlock(struct mappedfile *mf);
@@ -84,13 +86,15 @@ extern int mappedfile_unlock(struct mappedfile *mf);
 
 extern int mappedfile_commit(struct mappedfile *mf);
 extern ssize_t mappedfile_pwrite(struct mappedfile *mf,
-                                 const void *base, size_t len,
+                                 const void *base,
+                                 size_t len,
                                  off_t offset);
 extern ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
                                     const struct buf *buf,
                                     off_t offset);
 extern ssize_t mappedfile_pwritev(struct mappedfile *mf,
-                                  const struct iovec *iov, int nio,
+                                  const struct iovec *iov,
+                                  int nio,
                                   off_t offset);
 extern int mappedfile_truncate(struct mappedfile *mf, off_t offset);
 
@@ -100,10 +104,9 @@ extern int mappedfile_rename(struct mappedfile *mf, const char *newname);
 #define mappedfile_isreadlocked(mf) ((mf)->lock_status == MF_READLOCKED)
 #define mappedfile_iswritelocked(mf) ((mf)->lock_status == MF_WRITELOCKED)
 #define mappedfile_iswritable(mf) (!!(mf)->is_rw)
-#define mappedfile_base(mf) ((const char *)((mf)->map_buf.s))
+#define mappedfile_base(mf) ((const char *) ((mf)->map_buf.s))
 #define mappedfile_size(mf) ((mf)->map_size)
-#define mappedfile_buf(mf) ((const struct buf *)(&((mf)->map_buf)))
-#define mappedfile_fname(mf) ((const char *)((mf)->fname))
-
+#define mappedfile_buf(mf) ((const struct buf *) (&((mf)->map_buf)))
+#define mappedfile_fname(mf) ((const char *) ((mf)->fname))
 
 #endif /* _MAPPEDFILE_H */

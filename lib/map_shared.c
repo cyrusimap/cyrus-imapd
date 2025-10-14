@@ -52,24 +52,31 @@
 #include "slowio.h"
 #include "xmalloc.h"
 
-#define SLOP (8*1024)
+#define SLOP (8 * 1024)
 
 EXPORTED const char map_method_desc[] = "shared";
 
 /*
  * Create/refresh mapping of file
  */
-EXPORTED void map_refresh(int fd, int onceonly, const char **base,
-                 size_t *len, size_t newlen,
-                 const char *name, const char *mboxname)
+EXPORTED void map_refresh(int fd,
+                          int onceonly,
+                          const char **base,
+                          size_t *len,
+                          size_t newlen,
+                          const char *name,
+                          const char *mboxname)
 {
     struct stat sbuf;
     char buf[256];
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            syslog(LOG_ERR,
+                   "IOERROR: fstating %s file%s%s: %m",
+                   name,
+                   mboxname ? " for " : "",
+                   mboxname ? mboxname : "");
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -77,33 +84,46 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
     }
 
     /* Already mapped in */
-    if (*len >= newlen) return;
+    if (*len >= newlen) {
+        return;
+    }
 
     if (*len) {
-        int r = munmap((char *)*base, *len);
+        int r = munmap((char *) *base, *len);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: unmapping %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            syslog(LOG_ERR,
+                   "IOERROR: unmapping %s file%s%s: %m",
+                   name,
+                   mboxname ? " for " : "",
+                   mboxname ? mboxname : "");
             snprintf(buf, sizeof(buf), "failed to munmap %s file", name);
             fatal(buf, EX_IOERR);
         }
     }
 
     if (!onceonly) {
-        newlen = (newlen + 2*SLOP - 1) & ~(SLOP-1);
+        newlen = (newlen + 2 * SLOP - 1) & ~(SLOP - 1);
     }
 
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
+    *base = (char *) mmap((caddr_t) 0,
+                          newlen,
+                          PROT_READ,
+                          MAP_SHARED
 #ifdef MAP_FILE
-| MAP_FILE
+                              | MAP_FILE
 #endif
 #ifdef MAP_VARIABLE
-| MAP_VARIABLE
+                              | MAP_VARIABLE
 #endif
-                         , fd, 0L);
-    if (*base == (char *)-1) {
-        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-               mboxname ? " for " : "", mboxname ? mboxname : "");
+                          ,
+                          fd,
+                          0L);
+    if (*base == (char *) -1) {
+        syslog(LOG_ERR,
+               "IOERROR: mapping %s file%s%s: %m",
+               name,
+               mboxname ? " for " : "",
+               mboxname ? mboxname : "");
         snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
         fatal(buf, EX_IOERR);
     }
@@ -118,7 +138,7 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
 EXPORTED void map_free(const char **base, size_t *len)
 {
     if (*len) {
-        int r = munmap((char *)*base, *len);
+        int r = munmap((char *) *base, *len);
         if (r) {
             syslog(LOG_ERR, "IOERROR: map_free");
             fatal("Failed to map_free", EX_IOERR);
