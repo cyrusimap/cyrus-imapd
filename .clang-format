@@ -41,5 +41,6 @@ IndentPPDirectives: AfterHash
 IndentWidth:     4
 InsertBraces: true
 PenaltyReturnTypeOnItsOwnLine: 1000
+SortIncludes: false
 SpaceAfterCStyleCast: true
 WhitespaceSensitiveMacros: [xsyslog, xsyslog_ev]
