@@ -50,14 +50,15 @@
 
 #define FNAME_DAVSUFFIX "dav" /* per-user DAV DB extension */
 
-#define DB_MBOXID_VERSION 11     /* first version with records by mboxid */
+#define DB_MBOXID_VERSION 11 /* first version with records by mboxid */
 
-struct dav_data {
+struct dav_data
+{
     unsigned rowid;
     time_t creationdate;
     const char *mailbox;
     const char *resource;
-    uint32_t imap_uid;          /* zero (0) until URL is mapped */
+    uint32_t imap_uid; /* zero (0) until URL is mapped */
     modseq_t modseq;
     modseq_t createdmodseq;
     const char *lock_token;
@@ -65,7 +66,7 @@ struct dav_data {
     const char *lock_ownerid;
     time_t lock_expire;
     int alive;
-    int mailbox_byname;         /* NOT stored in record - derived from db ver */
+    int mailbox_byname; /* NOT stored in record - derived from db ver */
 };
 
 /* Create filename corresponding to DAV DB for mailbox */
