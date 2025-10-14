@@ -41,7 +41,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <sys/types.h>
@@ -51,7 +51,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <signal.h>
 #include <fcntl.h>
@@ -70,13 +70,17 @@ static struct namespace calalarmd_namespace;
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
+    if (debugmode) {
+        fprintf(stderr, "dying with %s %d\n", msg, err);
+    }
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
 
-    if (err != EX_PROTOCOL && config_fatals_abort) abort();
+    if (err != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(err);
 }
@@ -128,7 +132,7 @@ int main(int argc, char **argv)
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime, NULL, /*dryrun*/0);
+        caldav_alarm_process(runattime, NULL, /*dryrun*/ 0);
         shut_down(0);
     }
 
@@ -160,7 +164,7 @@ int main(int argc, char **argv)
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0, &interval, /*dryrun*/0);
+        caldav_alarm_process(0, &interval, /*dryrun*/ 0);
         libcyrus_run_delayed();
         gettimeofday(&end, 0);
 
@@ -168,10 +172,11 @@ int main(int argc, char **argv)
 
         totaltime = timesub(&start, &end);
         tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
-        if (tosleep > 0)
+        if (tosleep > 0) {
             sleep(tosleep);
+        }
 
-        session_new_id();  // so we know which actions happened in the same run
+        session_new_id(); // so we know which actions happened in the same run
     }
 
     /* NOTREACHED */
