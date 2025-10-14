@@ -42,7 +42,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -62,35 +62,55 @@ static void init_comptags(comp_t *c)
 
 comp_t *canon_comptags(comp_t *c, sieve_script_t *parse_script)
 {
-    if (c->match == -1) c->match = B_IS;
-    if (c->collation == -1) c->collation = B_ASCIICASEMAP;
+    if (c->match == -1) {
+        c->match = B_IS;
+    }
+    if (c->collation == -1) {
+        c->collation = B_ASCIICASEMAP;
+    }
 
     /* i;ascii-numeric is only supported for IS, COUNT, and VALUE match-types */
     if (c->collation == B_ASCIINUMERIC) {
         const char *invalid_match = NULL;
 
         switch (c->match) {
-        case B_CONTAINS: invalid_match = ":contains"; break;
-        case B_MATCHES:  invalid_match = ":matches";  break;
-        case B_REGEX:    invalid_match = ":regex";    break;
+        case B_CONTAINS:
+            invalid_match = ":contains";
+            break;
+        case B_MATCHES:
+            invalid_match = ":matches";
+            break;
+        case B_REGEX:
+            invalid_match = ":regex";
+            break;
         }
 
         if (invalid_match) {
-            sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                         invalid_match, "i;ascii-numeric");
+            sieveerror_c(parse_script,
+                         SIEVE_MATCH_INCOMPAT,
+                         invalid_match,
+                         "i;ascii-numeric");
         }
     }
     else if (c->match == B_COUNT) {
         const char *invalid_collation;
 
         switch (c->collation) {
-        case B_OCTET:          invalid_collation = "i;octet";           break;
-        case B_UNICODECASEMAP: invalid_collation = "i;unicode-casemap"; break;
-        default:               invalid_collation = "i;ascii-casemap";   break;
+        case B_OCTET:
+            invalid_collation = "i;octet";
+            break;
+        case B_UNICODECASEMAP:
+            invalid_collation = "i;unicode-casemap";
+            break;
+        default:
+            invalid_collation = "i;ascii-casemap";
+            break;
         }
 
-        sieveerror_c(parse_script, SIEVE_MATCH_INCOMPAT,
-                     ":count", invalid_collation);
+        sieveerror_c(parse_script,
+                     SIEVE_MATCH_INCOMPAT,
+                     ":count",
+                     invalid_collation);
     }
 
     return c;
@@ -241,7 +261,7 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
 {
     commandlist_t *p = (commandlist_t *) xzmalloc(sizeof(commandlist_t));
     const char *capability = "";
-    unsigned long long  supported = SIEVE_CAPA_BASE;
+    unsigned long long supported = SIEVE_CAPA_BASE;
 
     p->type = type;
     p->next = NULL;
@@ -357,7 +377,9 @@ void free_testlist(testlist_t *tl)
     while (tl) {
         tl2 = tl->next;
 
-        if (tl->t) free_test(tl->t);
+        if (tl->t) {
+            free_test(tl->t);
+        }
 
         free(tl);
         tl = tl2;
@@ -366,7 +388,9 @@ void free_testlist(testlist_t *tl)
 
 void free_test(test_t *t)
 {
-    if (t == NULL) return;
+    if (t == NULL) {
+        return;
+    }
 
     switch (t->type) {
     case BC_ANYOF:

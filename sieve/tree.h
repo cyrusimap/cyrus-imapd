@@ -50,7 +50,7 @@
 #include "strarray.h"
 #include "arrayu64.h"
 
-#define MAX_CMD_ARGS 12  /* bump if required (currently vacation needs 11) */
+#define MAX_CMD_ARGS 12 /* bump if required (currently vacation needs 11) */
 
 /* abstract syntax tree for sieve */
 typedef struct Commandlist commandlist_t;
@@ -60,8 +60,9 @@ typedef struct Comp comp_t;
 typedef struct Zone zone_t;
 typedef struct CmdArg cmdarg_t;
 
-struct CmdArg {
-    unsigned char type;  /* argument data type */
+struct CmdArg
+{
+    unsigned char type; /* argument data type */
     union {
         int i;
         const char *s;
@@ -74,73 +75,84 @@ struct CmdArg {
 };
 
 enum argument_data_type {
-    AT_INT      = 'i',
-    AT_STR      = 's',
+    AT_INT = 'i',
+    AT_STR = 's',
     AT_STRARRAY = 'S',
     AT_ARRAYU64 = 'U',
-    AT_TEST     = 't',
+    AT_TEST = 't',
     AT_TESTLIST = 'T'
 };
 
-struct Comp {
+struct Comp
+{
     int match;
     int relation;
-    int collation;  /* only used where :comparator can be defined */
-    int index;      /* only used where index extension is defined */
+    int collation; /* only used where :comparator can be defined */
+    int index;     /* only used where index extension is defined */
 };
 
-struct Zone {
+struct Zone
+{
     int tag;
-    char *offset;   /* time-zone offset string (+/-hhmm) */
+    char *offset; /* time-zone offset string (+/-hhmm) */
 };
 
-struct Test {
+struct Test
+{
     unsigned type;
     int ignore_err;
     union {
-        test_t *t; /* not */
+        test_t *t;      /* not */
         strarray_t *sl; /* exists, ihave, valid_ext_list */
         testlist_t *tl; /* anyof, allof (bytecode generation only) */
-        struct { /* anyof, allof (bytecode parsing/eval only) */
+        struct
+        {                 /* anyof, allof (bytecode parsing/eval only) */
             int ntests;   /* number of tests */
             int endtests; /* offset to end of tests */
         } aa;
-        struct { /* it's a header or hasflag or string test */
+        struct
+        { /* it's a header or hasflag or string test */
             comp_t comp;
             strarray_t *sl;
             strarray_t *pl;
         } hhs;
-        struct { /* it's an address or envelope test */
+        struct
+        { /* it's an address or envelope test */
             comp_t comp;
             strarray_t *sl;
             strarray_t *pl;
             int addrpart;
         } ae;
-        struct { /* it's a body test */
+        struct
+        { /* it's a body test */
             comp_t comp;
             int transform;
             int offset;
             strarray_t *content_types;
             strarray_t *pl;
         } b;
-        struct { /* size */
+        struct
+        {          /* size */
             int t; /* tag */
             int n; /* param */
         } sz;
-        struct { /* it's a date test */
+        struct
+        { /* it's a date test */
             comp_t comp;
             zone_t zone;
             int date_part;
             char *header_name;
             strarray_t *kl;
         } dt;
-        struct { /* it's a mailbox or metadata or environment test */
+        struct
+        { /* it's a mailbox or metadata or environment test */
             comp_t comp;
             char *extname;
             char *keyname;
             strarray_t *keylist;
         } mm;
-        struct { /* it's a duplicate test */
+        struct
+        { /* it's a duplicate test */
             int idtype;
             char *idval;
             char *handle;
@@ -154,55 +166,65 @@ struct Test {
     cmdarg_t args[MAX_CMD_ARGS]; /* only used for precompilation */
 };
 
-struct Testlist {
+struct Testlist
+{
     test_t *t;
     testlist_t *next;
 };
 
-struct TargetMailbox {
+struct TargetMailbox
+{
     char *folder;
     char *specialuse;
     char *mailboxid;
 };
 
-struct Fileinto {
+struct Fileinto
+{
     struct TargetMailbox t;
     strarray_t *flags;
     int copy;
     int create;
 };
 
-struct Commandlist {
+struct Commandlist
+{
     unsigned type;
     union {
-        int jump; /* bytecode parsing/eval only */
+        int jump;  /* bytecode parsing/eval only */
         char *str; /* it's a reject or error action */
-        struct { /* it's an if statement */
+        struct
+        { /* it's an if statement */
             test_t *t;
             int testend; /* offset to end of test (bytecode parsing/eval only) */
             commandlist_t *do_then;
             commandlist_t *do_else;
         } i;
-        struct { /* it's an include action */
+        struct
+        { /* it's an include action */
             int location;
             int once;
             int optional;
             char *script;
         } inc;
-        struct { /* it's a set action */
+        struct
+        { /* it's a set action */
             unsigned modifiers;
             char *variable;
             char *value;
         } s;
-        struct { /* it's a keep action */
+        struct
+        { /* it's a keep action */
             strarray_t *flags;
         } k;
         struct Fileinto f; /* it's a fileinto action */
-        struct { /* it's a flag action */
+        struct
+        { /* it's a flag action */
             char *variable;
             strarray_t *flags;
         } fl;
-        struct { /* it's a redirect action */
+        struct
+        { /* it's a redirect action */
             char *address;
             int copy;
             int list;
@@ -212,7 +234,8 @@ struct Commandlist {
             char *dsn_notify;
             char *dsn_ret;
         } r;
-        struct { /* it's a vacation action */
+        struct
+        { /* it's a vacation action */
             char *subject;
             int seconds;
             strarray_t *addresses;
@@ -222,7 +245,8 @@ struct Commandlist {
             int mime;
             struct Fileinto fcc;
         } v;
-        struct { /* it's an (e)notify action */
+        struct
+        { /* it's an (e)notify action */
             char *method;
             char *id;
             char *from;
@@ -231,34 +255,40 @@ struct Commandlist {
             char *message;
             struct Fileinto fcc;
         } n;
-        struct { /* it's a denotify action */
+        struct
+        { /* it's a denotify action */
             comp_t comp;
             char *pattern;
             int priority;
         } d;
-        struct { /* it's an addheader action */
+        struct
+        { /* it's an addheader action */
             int index;
             char *name;
             char *value;
         } ah;
-        struct { /* it's a deleteheader action */
+        struct
+        { /* it's a deleteheader action */
             comp_t comp;
             char *name;
             strarray_t *values;
         } dh;
-        struct { /* it's a log action */
+        struct
+        { /* it's a log action */
             char *text;
         } l;
-        struct { /* it's a snooze action */
+        struct
+        { /* it's a snooze action */
             struct Fileinto f;
-            int is_mboxid;  /* only used for parsing pre- 0x1D scripts */
+            int is_mboxid; /* only used for parsing pre- 0x1D scripts */
             strarray_t *addflags;
             strarray_t *removeflags;
             unsigned char days;
             arrayu64_t *times;
             char *tzid;
         } sn;
-        struct { /* it's a processcalendar action */
+        struct
+        { /* it's a processcalendar action */
             int allow_public;
             int invites_only;
             int updates_only;

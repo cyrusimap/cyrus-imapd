@@ -12,13 +12,14 @@
 
 #include "strarray.h"
 
-typedef struct variable_list {
+typedef struct variable_list
+{
     char *name;
     strarray_t *var;
     struct variable_list *next;
 } variable_list_t;
 
-#define VARIABLE_LIST_INITIALIZER {NULL, NULL, NULL}
+#define VARIABLE_LIST_INITIALIZER { NULL, NULL, NULL }
 #define VL_PARSED_STRINGS "@@STRINGS_PARSED@@"
 #define VL_MATCH_VARS "@@MATCH_VARS@@"
 
