@@ -41,11 +41,11 @@
 
 #include "isieve.h"
 
-
-struct xscyrus {
+struct xscyrus
+{
     isieve_t *isieve;
 
-    char *errstr;               /* last error, if any */
+    char *errstr; /* last error, if any */
 
     char *class; /* needed by perl */
 };

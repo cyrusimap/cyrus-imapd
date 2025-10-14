@@ -48,18 +48,19 @@
  * imclient_send() finish callback).
  */
 
-struct xsccb {
-  SV *pcb;                      /* Perl callback PV */
-  SV *prock;                    /* Perl rock SV */
-  /* gack.  but otherwise we're in even more pain */
-  struct xscyrus *client;       /* client object, pre-Perlization */
-  int autofree;                 /* nonzero if callback should free it */
+struct xsccb
+{
+    SV *pcb;   /* Perl callback PV */
+    SV *prock; /* Perl rock SV */
+    /* gack.  but otherwise we're in even more pain */
+    struct xscyrus *client; /* client object, pre-Perlization */
+    int autofree;           /* nonzero if callback should free it */
 };
 
 #ifdef CYRPERL_INTERNAL
-#define rock_t struct xsccb *
+# define rock_t struct xsccb *
 #else
-#define rock_t void *
+# define rock_t void *
 #endif
 
 /*
@@ -67,28 +68,30 @@ struct xsccb {
  * callbacks without grotting around inside the struct imclient.
  */
 
-struct xscb {
-  struct xscb *prev;
-  char *name;
-  int flags;
-  struct xsccb *rock;
-  struct xscb *next;
+struct xscb
+{
+    struct xscb *prev;
+    char *name;
+    int flags;
+    struct xsccb *rock;
+    struct xscb *next;
 };
 
 #define NUM_SUPPORTED_CALLBACKS 4
 
-struct xscyrus {
-  struct imclient *imclient;
-  char *class;
-  struct xscb *cb;
-  int flags;
-  int authenticated;
-  int cnt;                      /* hack */
-  /* For holding per-connection information during authentication */
-  /* We need to initialize this when we create a new connection */
-  sasl_callback_t callbacks[NUM_SUPPORTED_CALLBACKS];
-  const char *username, *authname;
-  sasl_secret_t *password;
+struct xscyrus
+{
+    struct imclient *imclient;
+    char *class;
+    struct xscb *cb;
+    int flags;
+    int authenticated;
+    int cnt; /* hack */
+    /* For holding per-connection information during authentication */
+    /* We need to initialize this when we create a new connection */
+    sasl_callback_t callbacks[NUM_SUPPORTED_CALLBACKS];
+    const char *username, *authname;
+    sasl_secret_t *password;
 };
 
 /* C callback to invoke a Perl callback on behalf of imclient */
