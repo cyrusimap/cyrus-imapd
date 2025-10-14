@@ -52,14 +52,16 @@ static void real_closelog(void)
 static FILE *out = NULL;
 static int is_opened = 0;
 static char *myident = NULL;
-static char hostname[HOST_NAME_MAX + 1] = {0};
+static char hostname[HOST_NAME_MAX + 1] = { 0 };
 static pid_t pid = 0;
 
 EXPORTED void openlog(const char *ident, int option, int facility)
 {
     const char *syslog_fname;
 
-    if (is_opened) closelog();
+    if (is_opened) {
+        closelog();
+    }
 
     syslog_fname = getenv("CASSANDANE_SYSLOG_FNAME");
     if (syslog_fname) {
@@ -79,7 +81,9 @@ EXPORTED void closelog(void)
 {
     real_closelog();
 
-    if (out) fclose(out);
+    if (out) {
+        fclose(out);
+    }
     out = NULL;
     free(myident);
     myident = NULL;
@@ -90,23 +94,30 @@ EXPORTED void closelog(void)
 
 static void fake_vsyslog(int priority, const char *format, va_list ap)
 {
-    struct timeval now = {0};
-    char timestamp[16] = {0};
+    struct timeval now = { 0 };
+    char timestamp[16] = { 0 };
     int saved_errno = errno;
     int logmask;
 
-    if (!is_opened) return; /* no file to write to */
+    if (!is_opened) {
+        return; /* no file to write to */
+    }
 
     logmask = setlogmask(0); /* get the real syslog's current mask */
-    if (!(logmask & LOG_MASK(LOG_PRI(priority))))
+    if (!(logmask & LOG_MASK(LOG_PRI(priority)))) {
         return; /* do not want messages of this priority logged */
+    }
 
     gettimeofday(&now, NULL);
 
     strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now.tv_sec));
-    fprintf(out, "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
-                 timestamp, (intmax_t) now.tv_usec,
-                 hostname, myident, (intmax_t) pid);
+    fprintf(out,
+            "%s.%06" PRIdMAX " %s %s[%" PRIdMAX "]: ",
+            timestamp,
+            (intmax_t) now.tv_usec,
+            hostname,
+            myident,
+            (intmax_t) pid);
     errno = saved_errno;
 
     /* glibc handles %m in vfprintf() so we don't need to do

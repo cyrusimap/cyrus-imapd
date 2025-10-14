@@ -35,13 +35,13 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-*/
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-static const size_t default_alloc = 10 * 1024 * 1024;  /* 10MB */
+static const size_t default_alloc = 10 * 1024 * 1024; /* 10MB */
 
 int main(int argc, char **argv)
 {

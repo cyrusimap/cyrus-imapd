@@ -47,7 +47,7 @@
 #include <sys/poll.h>
 
 #ifndef __GNUC__
-#define __attribute__(x)
+# define __attribute__(x)
 #endif
 
 static const char *basename(const char *path)
@@ -58,14 +58,12 @@ static const char *basename(const char *path)
 
 static volatile int got_sigusr1 = 0;
 
-static void
-handle_sigusr1(int sig __attribute__((unused)))
+static void handle_sigusr1(int sig __attribute__((unused)))
 {
     got_sigusr1++;
 }
 
-static void
-usage(void)
+static void usage(void)
 {
     /* unusually, we complain to syslog about problems parsing
      * the commandline options; this is because this program
@@ -75,8 +73,7 @@ usage(void)
     exit(1);
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     const char *binary;
     pid_t pid;
@@ -86,58 +83,63 @@ main(int argc, char **argv)
     FILE *fp;
     char gdbx_filename[1024];
 
-    openlog("gdbtramp", LOG_PERROR|LOG_PID, LOG_LOCAL6);
+    openlog("gdbtramp", LOG_PERROR | LOG_PID, LOG_LOCAL6);
 
-    if (argc != 3)
+    if (argc != 3) {
         usage();
+    }
     binary = argv[1];
     pid = atoi(argv[2]);
-    if (pid <= 0)
+    if (pid <= 0) {
         usage();
-
+    }
 
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = handle_sigusr1;
-    if (sigaction(SIGUSR1, &sa, NULL) < 0)
-    {
+    if (sigaction(SIGUSR1, &sa, NULL) < 0) {
         syslog(LOG_ERR, "signal(SIGUSR1): %m");
         exit(1);
     }
 
     prog = strrchr(binary, '/');
-    if (prog)
+    if (prog) {
         prog++;
-    else
+    }
+    else {
         prog = binary;
+    }
 
-    snprintf(gdbx_filename, sizeof(gdbx_filename),
-             "/var/tmp/%s.x", basename(binary));
+    snprintf(gdbx_filename,
+             sizeof(gdbx_filename),
+             "/var/tmp/%s.x",
+             basename(binary));
 
     fp = fopen(gdbx_filename, "w");
-    if (!fp)
-    {
+    if (!fp) {
         syslog(LOG_ERR, "%s: %m", gdbx_filename);
         exit(1);
     }
     fprintf(fp, "# gdb commands file, written by gdbtramp\n");
     fprintf(fp, "file %s\n", binary);
-    fprintf(fp, "attach %d\n", (int)pid);
-    fprintf(fp, "shell kill -USR1 %d\n", (int)getpid());
-    fprintf(fp, "echo Please set some breakpoints and use the "
-                "\"continue\" command\\n\n");
+    fprintf(fp, "attach %d\n", (int) pid);
+    fprintf(fp, "shell kill -USR1 %d\n", (int) getpid());
+    fprintf(fp,
+            "echo Please set some breakpoints and use the "
+            "\"continue\" command\\n\n");
     fclose(fp);
 
-    syslog(LOG_ERR, "You have %d seconds to run gdb "
-                    "thus: >>>>   gdb -x %s",
-                    timeout_sec, gdbx_filename);
+    syslog(LOG_ERR,
+           "You have %d seconds to run gdb "
+           "thus: >>>>   gdb -x %s",
+           timeout_sec,
+           gdbx_filename);
     /* another, different, message just to make sure the syslogd
      * flushes the previous one to the logfile */
     syslog(LOG_ERR, "tick tick tick...");
 
     /* wait 30 seconds, expecting to be interrupted by a signal */
-    poll(NULL, 0, timeout_sec*1000);
-    if (!got_sigusr1)
-    {
+    poll(NULL, 0, timeout_sec * 1000);
+    if (!got_sigusr1) {
         syslog(LOG_ERR, "You're too slow!");
         exit(1);
     }
