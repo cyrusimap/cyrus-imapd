@@ -21,7 +21,7 @@
 #include "bloom.h"
 #include "bsearch.h"
 #include "charset.h"
-/* #include "command.h" */  /* XXX bogus: needs prot.h for struct protstream */
+/* #include "command.h" */ /* XXX bogus: needs prot.h for struct protstream */
 #include "cyr_qsort_r.h"
 #include "cyrusdb.h"
 #include "glob.h"
@@ -98,8 +98,9 @@ void test_bitvector(void)
     unsigned u;
 
     for (u = 0; u < 20; u++) {
-        if (u % 5 == 0 || u % 3 == 0)
+        if (u % 5 == 0 || u % 3 == 0) {
             bv_set(&bv, u);
+        }
     }
 
     str = bv_cstring(&bv);
@@ -150,7 +151,8 @@ void test_charset(void)
     puts("charset ok");
 }
 
-static int cmp QSORT_R_COMPAR_ARGS(const void *a, const void *b,
+static int cmp QSORT_R_COMPAR_ARGS(const void *a,
+                                   const void *b,
                                    void *thunk __attribute__((unused)))
 {
     return *(const int *) a - *(const int *) b;
@@ -187,9 +189,15 @@ void test_cyrusdb(void)
     snprintf(fname, sizeof(fname), "%s/%s", config_dir, "foo.db");
 
     r = cyrusdb_open(dbname, fname, CYRUSDB_CREATE, &db);
-    if (!r) r = cyrusdb_store(db, key, keylen, "foo", strlen("foo"), &tid);
-    if (!r) r = cyrusdb_fetch(db, key, keylen, &data, &datalen, &tid);
-    if (!r) r = cyrusdb_commit(db, tid);
+    if (!r) {
+        r = cyrusdb_store(db, key, keylen, "foo", strlen("foo"), &tid);
+    }
+    if (!r) {
+        r = cyrusdb_fetch(db, key, keylen, &data, &datalen, &tid);
+    }
+    if (!r) {
+        r = cyrusdb_commit(db, tid);
+    }
 
     r = cyrusdb_close(db);
     (void) r;
@@ -248,8 +256,10 @@ void test_mappedfile(void)
     char fname[PATH_MAX];
     int r;
 
-    snprintf(fname, sizeof(fname), "/tmp/%ld-example_libcyrus_mappedfile.junk",
-                                   (long) getpid());
+    snprintf(fname,
+             sizeof(fname),
+             "/tmp/%ld-example_libcyrus_mappedfile.junk",
+             (long) getpid());
 
     r = mappedfile_open(&mf, fname, MAPPEDFILE_CREATE);
 
@@ -286,7 +296,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
