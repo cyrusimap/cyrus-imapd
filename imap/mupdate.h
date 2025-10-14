@@ -61,7 +61,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/mupdate_err.h"
 
-struct mupdate_handle_s {
+struct mupdate_handle_s
+{
     sasl_callback_t *sasl_cb;
     struct backend *conn;
 
@@ -89,7 +90,8 @@ enum settype {
 
 /* mailbox name MUST be first, since it is the key */
 /* acl MUST be last, since it is what causes the variable size */
-struct mbent {
+struct mbent
+{
     char *mailbox;
     char *location;
     enum settype t;
@@ -108,7 +110,8 @@ void free_mbent(struct mbent *p);
 
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,
-               const char *cmd, void *context);
+               const char *cmd,
+               void *context);
 
 int mupdate_synchronize_remote(mupdate_handle *handle,
                                struct mbent_queue *remote_boxes,

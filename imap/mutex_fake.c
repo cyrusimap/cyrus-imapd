@@ -46,7 +46,7 @@
 
 EXPORTED void *cyrus_mutex_alloc(void)
 {
-    return (void *)0x1;
+    return (void *) 0x1;
 }
 
 EXPORTED int cyrus_mutex_lock(void *mutex __attribute__((unused)))

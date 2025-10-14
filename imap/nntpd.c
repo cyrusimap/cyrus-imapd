@@ -47,14 +47,13 @@
  * - figure out what to do with control messages when proxying
  */
 
-
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #ifdef HAVE_STDINT_H
-#include <stdint.h>
+# include <stdint.h>
 #endif
 #include <stdio.h>
 #include <string.h>
@@ -149,15 +148,15 @@ static unsigned nntp_exists = 0;
 static unsigned nntp_current = 0;
 static unsigned did_capabilities = 0;
 static int allowanonymous = 0;
-static int singleinstance = 1;  /* attempt single instance store */
+static int singleinstance = 1; /* attempt single instance store */
 
 static struct stagemsg *stage = NULL;
 static struct proc_handle *proc_handle = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
-    MODE_READ = (1<<0),
-    MODE_FEED = (1<<1)
+    MODE_READ = (1 << 0),
+    MODE_FEED = (1 << 1)
 };
 
 static unsigned nntp_capa = MODE_READ | MODE_FEED; /* general-purpose */
@@ -170,9 +169,11 @@ static void *nntp_tls_comp = NULL; /* TLS compression method, if any */
 static int nntp_compress_done = 0; /* have we done a successful compress? */
 
 /* the sasl proxy policy context */
-static struct proxy_context nntp_proxyctx = {
-    0, 1, &nntp_authstate, NULL, NULL
-};
+static struct proxy_context nntp_proxyctx = { 0,
+                                              1,
+                                              &nntp_authstate,
+                                              NULL,
+                                              NULL };
 
 /* for config.c */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -182,7 +183,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
  * these correspond to the last digit of the response code
  */
 enum {
-    ARTICLE_ALL  = 0,
+    ARTICLE_ALL = 0,
     ARTICLE_HEAD = 1,
     ARTICLE_BODY = 2,
     ARTICLE_STAT = 3
@@ -190,34 +191,46 @@ enum {
 
 /* values for post modes */
 enum {
-    POST_POST     = 0,
-    POST_IHAVE    = 1,
-    POST_CHECK    = 2,
+    POST_POST = 0,
+    POST_IHAVE = 1,
+    POST_CHECK = 2,
     POST_TAKETHIS = 3
 };
 
 /* response codes for each stage of posting */
-static struct {
+static struct
+{
     int ok, cont, no, fail;
-} post_codes[] = { { 240, 340, 440, 441 },
-                   { 235, 335, 435, 436 },
-                   {  -1, 238, 438,  -1 },
-                   { 239,  -1,  -1, 439 } };
+} post_codes[] = {
+    { 240, 340, 440, 441 },
+    { 235, 335, 435, 436 },
+    { -1,  238, 438, -1  },
+    { 239, -1,  -1,  439 }
+};
 
 static void cmdloop(void);
-static int open_group(const char *name, int has_prefix,
-                      struct backend **ret, int *postable);
+static int open_group(const char *name,
+                      int has_prefix,
+                      struct backend **ret,
+                      int *postable);
 static int getuserpass(struct protstream *in, struct buf *buf);
-static int parserange(char *str, uint32_t *uid, uint32_t *last,
-                      char **msgid, struct backend **be);
+static int parserange(char *str,
+                      uint32_t *uid,
+                      uint32_t *last,
+                      char **msgid,
+                      struct backend **be);
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt);
 static void cmd_article(int part, char *msgid, unsigned long uid);
 static void cmd_authinfo_user(char *user);
 static void cmd_authinfo_pass(char *pass);
 static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp);
 static void cmd_capabilities(char *keyword);
-static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
-                    unsigned long uid, unsigned long last);
+static void cmd_hdr(char *cmd,
+                    char *hdr,
+                    char *pat,
+                    char *msgid,
+                    unsigned long uid,
+                    unsigned long last);
 static void cmd_help(void);
 static void cmd_list(char *arg1, char *arg2);
 static void cmd_mode(char *arg);
@@ -230,21 +243,28 @@ static void cmd_starttls(int nntps);
 static void cmd_compress(char *alg);
 #endif
 static void usage(void);
-void shut_down(int code) __attribute__ ((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 
-extern int saslserver(sasl_conn_t *conn, const char *mech,
-                      const char *init_resp, const char *resp_prefix,
-                      const char *continuation, const char *empty_resp,
-                      struct protstream *pin, struct protstream *pout,
-                      int *sasl_result, char **success_data);
+extern int saslserver(sasl_conn_t *conn,
+                      const char *mech,
+                      const char *init_resp,
+                      const char *resp_prefix,
+                      const char *continuation,
+                      const char *empty_resp,
+                      struct protstream *pin,
+                      struct protstream *pout,
+                      int *sasl_result,
+                      char **success_data);
 
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, SASL_CB_PROC_PTR &mysasl_proxy_policy, (void*) &nntp_proxyctx },
-    { SASL_CB_CANON_USER, SASL_CB_PROC_PTR &mysasl_canon_user, NULL },
-    { SASL_CB_LIST_END, NULL, NULL }
+    { SASL_CB_GETOPT,       SASL_CB_PROC_PTR &mysasl_config,     NULL },
+    { SASL_CB_PROXY_POLICY,
+     SASL_CB_PROC_PTR &mysasl_proxy_policy,
+     (void *) &nntp_proxyctx                                          },
+    { SASL_CB_CANON_USER,   SASL_CB_PROC_PTR &mysasl_canon_user, NULL },
+    { SASL_CB_LIST_END,     NULL,                                NULL }
 };
 
 static char *nntp_parsesuccess(char *str, const char **status)
@@ -252,10 +272,12 @@ static char *nntp_parsesuccess(char *str, const char **status)
     char *success = NULL;
 
     if (!strncmp(str, "283 ", 4)) {
-        success = str+4;
+        success = str + 4;
     }
 
-    if (status) *status = NULL;
+    if (status) {
+        *status = NULL;
+    }
     return success;
 }
 
@@ -264,19 +286,33 @@ static const struct tls_alpn_t nntp_alpn_map[] = {
     { "",     NULL, NULL }
 };
 
-static struct protocol_t nntp_protocol =
-{ "nntp", "nntp", nntp_alpn_map, TYPE_STD,
-  { { { 0, "20" },
-      { "CAPABILITIES", NULL, ".", NULL,
-        CAPAF_ONE_PER_LINE,
-        { { "SASL", CAPA_AUTH },
-          { "STARTTLS", CAPA_STARTTLS },
-          { NULL, 0 } } },
-      { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess, 0 },
-      { NULL, NULL, NULL },
-      { "DATE", NULL, "111" },
-      { "QUIT", NULL, "205" } } }
+static struct protocol_t nntp_protocol = {
+    "nntp",
+    "nntp",
+    nntp_alpn_map,
+    TYPE_STD,
+    { { { 0, "20" },
+        { "CAPABILITIES",
+          NULL,
+          ".",
+          NULL,
+          CAPAF_ONE_PER_LINE,
+          { { "SASL", CAPA_AUTH },
+            { "STARTTLS", CAPA_STARTTLS },
+            { NULL, 0 } } },
+        { "STARTTLS", "382", "580", 0 },
+        { "AUTHINFO SASL",
+          512,
+          0,
+          "28",
+          "48",
+          "383 ",
+          "*",
+          &nntp_parsesuccess,
+          0 },
+        { NULL, NULL, NULL },
+        { "DATE", NULL, "111" },
+        { "QUIT", NULL, "205" } } }
 };
 
 static int read_response(struct backend *s, int force_notfatal, char **result)
@@ -287,8 +323,9 @@ static int read_response(struct backend *s, int force_notfatal, char **result)
 
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
         /* uh oh */
-        if (s == backend_current && !force_notfatal)
+        if (s == backend_current && !force_notfatal) {
             fatal("Lost connection to selected backend", EX_UNAVAILABLE);
+        }
         proxy_downserver(s);
         return IMAP_SERVER_UNAVAILABLE;
     }
@@ -306,8 +343,9 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
     do {
         if (!prot_fgets(buf, sizeof(buf), s->in)) {
             /* uh oh */
-            if (s == backend_current && !force_notfatal)
+            if (s == backend_current && !force_notfatal) {
                 fatal("Lost connection to selected backend", EX_UNAVAILABLE);
+            }
             proxy_downserver(s);
             return IMAP_SERVER_UNAVAILABLE;
         }
@@ -326,8 +364,9 @@ static void nntp_reset(void)
     proc_cleanup(&proc_handle);
 
     /* close local mailbox */
-    if (group_state)
+    if (group_state) {
         index_close(&group_state);
+    }
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -353,7 +392,9 @@ static void nntp_reset(void)
 
     nntp_in = nntp_out = NULL;
 
-    if (protin) protgroup_reset(protin);
+    if (protin) {
+        protgroup_reset(protin);
+    }
 
     if (tls_conn) {
         tls_reset_servertls(&tls_conn);
@@ -405,7 +446,9 @@ int service_init(int argc __attribute__((unused)),
 
     initialize_nntp_error_table();
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
     proc_settitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -415,16 +458,16 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
+    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX))) {
         snprintf(newsprefix, sizeof(newsprefix), "%s.", prefix);
+    }
 
     newsgroups = split_wildmats((char *) config_getstring(IMAPOPT_NEWSGROUPS),
                                 config_getstring(IMAPOPT_NEWSPREFIX));
 
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL) != 0) {
-        syslog(LOG_ERR,
-               "unable to init duplicate delivery database");
+        syslog(LOG_ERR, "unable to init duplicate delivery database");
         fatal("unable to init duplicate delivery database", EX_SOFTWARE);
     }
 
@@ -432,7 +475,7 @@ int service_init(int argc __attribute__((unused)),
     idle_init();
 
     while ((opt = getopt(argc, argv, "Hsrfp:")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'H': /* expect HAProxy protocol header */
             haproxy_protocol = 1;
             break;
@@ -441,8 +484,7 @@ int service_init(int argc __attribute__((unused)),
             nntps = 1;
             if (!tls_enabled()) {
                 syslog(LOG_ERR, "nntps: required OpenSSL options not present");
-                fatal("nntps: required OpenSSL options not present",
-                      EX_CONFIG);
+                fatal("nntps: required OpenSSL options not present", EX_CONFIG);
             }
             break;
 
@@ -482,7 +524,7 @@ int service_main(int argc __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
     const char *localip, *remoteip;
-    sasl_security_properties_t *secprops=NULL;
+    sasl_security_properties_t *secprops = NULL;
     int shutdown;
     char unavail[1024];
 
@@ -501,11 +543,18 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* other params should be filled in */
-    if (sasl_server_new("nntp", config_servername, NULL,
+    if (sasl_server_new("nntp",
+                        config_servername,
+                        NULL,
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
-                        NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
-        fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
+                        NULL,
+                        SASL_SUCCESS_DATA,
+                        &nntp_saslconn)
+        != SASL_OK)
+    {
+        fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
+    }
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
@@ -517,7 +566,9 @@ int service_main(int argc __attribute__((unused)),
 
         /* Create pre-authentication telemetry log based on client IP */
         strlcpy(hbuf, remoteip, NI_MAXHOST);
-        if ((p = strchr(hbuf, ';'))) *p = '\0';
+        if ((p = strchr(hbuf, ';'))) {
+            *p = '\0';
+        }
         nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
     }
 
@@ -525,20 +576,27 @@ int service_main(int argc __attribute__((unused)),
 
     /* Set inactivity timer */
     nntp_timeout = config_getduration(IMAPOPT_NNTPTIMEOUT, 'm');
-    if (nntp_timeout < 3 * 60) nntp_timeout = 3 * 60;
+    if (nntp_timeout < 3 * 60) {
+        nntp_timeout = 3 * 60;
+    }
     prot_settimeout(nntp_in, nntp_timeout);
     prot_setflushonread(nntp_in, nntp_out);
 
     /* we were connected on nntps port so we should do
        TLS negotiation immediatly */
-    if (nntps == 1) cmd_starttls(1);
+    if (nntps == 1) {
+        cmd_starttls(1);
+    }
 
     if ((shutdown = shutdown_file(unavail, sizeof(unavail)))) {
         prot_printf(nntp_out, "%u", 400);
-    } else {
+    }
+    else {
         prot_printf(nntp_out, "%u", (nntp_capa & MODE_READ) ? 200 : 201);
     }
-    if (config_serverinfo) prot_printf(nntp_out, " %s", config_servername);
+    if (config_serverinfo) {
+        prot_printf(nntp_out, " %s", config_servername);
+    }
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         prot_printf(nntp_out, " Cyrus NNTP %s", CYRUS_VERSION);
     }
@@ -547,7 +605,8 @@ int service_main(int argc __attribute__((unused)),
         shut_down(0);
     }
     else {
-        prot_printf(nntp_out, " server ready, posting %s\r\n",
+        prot_printf(nntp_out,
+                    " server ready, posting %s\r\n",
                     (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
     }
 
@@ -588,8 +647,9 @@ void shut_down(int code)
     proc_cleanup(&proc_handle);
 
     /* close local mailbox */
-    if (group_state)
+    if (group_state) {
         index_close(&group_state);
+    }
 
     /* close backend connections */
     for (i = 0; i < ptrarray_size(&backend_cached); i++) {
@@ -617,11 +677,15 @@ void shut_down(int code)
         prot_free(nntp_out);
     }
 
-    if (protin) protgroup_free(protin);
+    if (protin) {
+        protgroup_free(protin);
+    }
 
     tls_shutdown_serverengine();
 
-    if (newsgroups) free_wildmats(newsgroups);
+    if (newsgroups) {
+        free_wildmats(newsgroups);
+    }
     auth_freestate(newsmaster_authstate);
 
     saslprops_free(&saslprops);
@@ -631,7 +695,7 @@ void shut_down(int code)
     exit(code);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -645,10 +709,14 @@ EXPORTED void fatal(const char* s, int code)
         prot_printf(nntp_out, "400 Fatal error: %s\r\n", s);
         prot_flush(nntp_out);
     }
-    if (stage) append_removestage(stage);
+    if (stage) {
+        append_removestage(stage);
+    }
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
@@ -661,25 +729,36 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("nntp", config_servername, NULL,
+    ret = sasl_server_new("nntp",
+                          config_servername,
+                          NULL,
                           buf_cstringnull_ifempty(&saslprops.iplocalport),
                           buf_cstringnull_ifempty(&saslprops.ipremoteport),
-                          NULL, SASL_SUCCESS_DATA, conn);
-    if(ret != SASL_OK) return ret;
+                          NULL,
+                          SASL_SUCCESS_DATA,
+                          conn);
+    if (ret != SASL_OK) {
+        return ret;
+    }
 
     secprops = mysasl_secprops(0);
     ret = sasl_setprop(*conn, SASL_SEC_PROPS, secprops);
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* end of service_main initialization excepting SSF */
 
     /* If we have TLS/SSL info, set it */
-    if(saslprops.ssf) {
+    if (saslprops.ssf) {
         ret = saslprops_set_tls(&saslprops, *conn);
-    } else {
+    }
+    else {
         ret = sasl_setprop(*conn, SASL_SSF_EXTERNAL, &extprops_ssf);
     }
 
-    if(ret != SASL_OK) return ret;
+    if (ret != SASL_OK) {
+        return ret;
+    }
     /* End TLS/SSL Info */
 
     return SASL_OK;
@@ -694,22 +773,28 @@ static int is_newsgroup(const char *mbox)
     struct wildmat *wild;
 
     /* don't use personal mailboxes */
-    if (!mbox || !*mbox ||
-        (!strncasecmp(mbox, "INBOX", 5) && (!mbox[5] || mbox[5] == '.')) ||
-        !strncmp(mbox, "user.", 5) ||
-        strncmp(mbox, newsprefix, strlen(newsprefix))) return 0;
+    if (!mbox || !*mbox
+        || (!strncasecmp(mbox, "INBOX", 5) && (!mbox[5] || mbox[5] == '.'))
+        || !strncmp(mbox, "user.", 5)
+        || strncmp(mbox, newsprefix, strlen(newsprefix)))
+    {
+        return 0;
+    }
 
     /* check shared mailboxes against the 'newsgroups' wildmat */
     wild = newsgroups;
-    while (wild->pat && wildmat(mbox, wild->pat) != 1) wild++;
+    while (wild->pat && wildmat(mbox, wild->pat) != 1) {
+        wild++;
+    }
 
     /* if we don't have a match, or its a negative match, don't use it */
-    if (!wild->pat || wild->not) return 0;
+    if (!wild->pat || wild->not) {
+        return 0;
+    }
 
     /* otherwise, its usable */
     return 1;
 }
-
 
 /*
  * Top-level command loop parsing
@@ -729,43 +814,61 @@ static void cmdloop(void)
     for (;;) {
         /* Flush any buffered output */
         prot_flush(nntp_out);
-        if (backend_current) prot_flush(backend_current->out);
+        if (backend_current) {
+            prot_flush(backend_current->out);
+        }
 
         /* Check for shutdown file */
-        if (shutdown_file(buf, sizeof(buf)) ||
-            (nntp_userid &&
-             userdeny(nntp_userid, config_ident, buf, sizeof(buf)))) {
+        if (shutdown_file(buf, sizeof(buf))
+            || (nntp_userid
+                && userdeny(nntp_userid, config_ident, buf, sizeof(buf))))
+        {
             prot_printf(nntp_out, "400 %s\r\n", buf);
             shut_down(0);
         }
 
         signals_poll();
 
-        r = proc_register(&proc_handle, 0,
-                          config_ident, nntp_clienthost, nntp_userid,
-                          index_mboxname(group_state), NULL);
-        if (r) fatal("unable to register process", EX_IOERR);
-        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
-                      index_mboxname(group_state), NULL);
+        r = proc_register(&proc_handle,
+                          0,
+                          config_ident,
+                          nntp_clienthost,
+                          nntp_userid,
+                          index_mboxname(group_state),
+                          NULL);
+        if (r) {
+            fatal("unable to register process", EX_IOERR);
+        }
+        proc_settitle(config_ident,
+                      nntp_clienthost,
+                      nntp_userid,
+                      index_mboxname(group_state),
+                      NULL);
 
         libcyrus_run_delayed();
 
-        if (!proxy_check_input(protin, nntp_in, nntp_out,
+        if (!proxy_check_input(protin,
+                               nntp_in,
+                               nntp_out,
                                backend_current ? backend_current->in : NULL,
-                               NULL, PROT_NO_FD, NULL, 0)) {
+                               NULL,
+                               PROT_NO_FD,
+                               NULL,
+                               0))
+        {
             /* No input from client */
             continue;
         }
 
-        if (group_state &&
-            config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
+        if (group_state
+            && config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX))
+        {
             if (group_state->mailbox->i.options & OPT_MAILBOX_DELETED) {
                 /* Mailbox has been (re)moved */
                 syslog(LOG_WARNING,
                        "Newsgroup %s has been (re)moved out from under client",
                        group_state->mboxname);
-                prot_printf(nntp_out,
-                            "400 Newsgroup has been (re)moved\r\n");
+                prot_printf(nntp_out, "400 Newsgroup has been (re)moved\r\n");
                 shut_down(0);
             }
         }
@@ -774,7 +877,8 @@ static void cmdloop(void)
         c = getword(nntp_in, &cmd);
         if (c == EOF) {
             if ((err = prot_error(nntp_in)) != NULL
-                 && strcmp(err, PROT_EOF_STRING)) {
+                && strcmp(err, PROT_EOF_STRING))
+            {
                 syslog(LOG_WARNING, "%s, closing connection", err);
                 prot_printf(nntp_out, "400 %s\r\n", err);
             }
@@ -785,32 +889,49 @@ static void cmdloop(void)
             eatline(nntp_in, c);
             continue;
         }
-        if (Uislower(cmd.s[0]))
+        if (Uislower(cmd.s[0])) {
             cmd.s[0] = toupper((unsigned char) cmd.s[0]);
+        }
         for (p = &cmd.s[1]; *p; p++) {
-            if (Uisupper(*p)) *p = tolower((unsigned char) *p);
+            if (Uisupper(*p)) {
+                *p = tolower((unsigned char) *p);
+            }
         }
 
-        r = proc_register(&proc_handle, 0,
-                          config_ident, nntp_clienthost, nntp_userid,
-                          index_mboxname(group_state), cmd.s);
-        if (r) fatal("unable to register process", EX_IOERR);
-        proc_settitle(config_ident, nntp_clienthost, nntp_userid,
-                      index_mboxname(group_state), cmd.s);
+        r = proc_register(&proc_handle,
+                          0,
+                          config_ident,
+                          nntp_clienthost,
+                          nntp_userid,
+                          index_mboxname(group_state),
+                          cmd.s);
+        if (r) {
+            fatal("unable to register process", EX_IOERR);
+        }
+        proc_settitle(config_ident,
+                      nntp_clienthost,
+                      nntp_userid,
+                      index_mboxname(group_state),
+                      cmd.s);
 
         /* Ihave/Takethis only allowed for feeders */
-        if (!(nntp_capa & MODE_FEED) &&
-            strchr("IT", cmd.s[0])) goto noperm;
+        if (!(nntp_capa & MODE_FEED) && strchr("IT", cmd.s[0])) {
+            goto noperm;
+        }
 
         /* Body/Date/Group/Newgroups/Newnews/Next/Over/Post/Xhdr/Xover/Xpat
            only allowed for readers */
-        if (!(nntp_capa & MODE_READ) &&
-            strchr("BDGNOPX", cmd.s[0])) goto noperm;
+        if (!(nntp_capa & MODE_READ) && strchr("BDGNOPX", cmd.s[0])) {
+            goto noperm;
+        }
 
         /* Only Authinfo/Capabilities/Check/Head/Help/Ihave/List Active/
            Mode/Quit/Starttls/Stat/Takethis allowed when not logged in */
-        if (!nntp_authstate && !allowanonymous &&
-            !strchr("ACHILMQST", cmd.s[0])) goto nologin;
+        if (!nntp_authstate && !allowanonymous
+            && !strchr("ACHILMQST", cmd.s[0]))
+        {
+            goto nologin;
+        }
 
         /* In case a [LIST]GROUP fails or
            a retrieval by msgid makes us switch groups */
@@ -819,93 +940,142 @@ static void cmdloop(void)
         switch (cmd.s[0]) {
         case 'A':
             if (!strcmp(cmd.s, "Authinfo")) {
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* subcommand */
-                if (c == EOF) goto missingargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
 
                 lcase(arg1.s);
 
                 if (!strcmp(arg1.s, "user") || !strcmp(arg1.s, "pass")) {
-                    if (c != ' ') goto missingargs;
+                    if (c != ' ') {
+                        goto missingargs;
+                    }
                     c = getuserpass(nntp_in, &arg2); /* user/pass */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
 
-                    if (c == '\r') c = prot_getc(nntp_in);
-                    if (c != '\n') goto extraargs;
+                    if (c == '\r') {
+                        c = prot_getc(nntp_in);
+                    }
+                    if (c != '\n') {
+                        goto extraargs;
+                    }
 
-                    if (arg1.s[0] == 'u')
+                    if (arg1.s[0] == 'u') {
                         cmd_authinfo_user(arg2.s);
-                    else
+                    }
+                    else {
                         cmd_authinfo_pass(arg2.s);
+                    }
                 }
-                else if (!strcmp(arg1.s, "sasl") || !strcmp(arg1.s, "generic")) {
+                else if (!strcmp(arg1.s, "sasl") || !strcmp(arg1.s, "generic"))
+                {
                     arg2.len = arg3.len = 0;
 
                     /* mech name required for SASL but not GENERIC */
-                    if ((arg1.s[0] == 's') && (c != ' ')) goto missingargs;
+                    if ((arg1.s[0] == 's') && (c != ' ')) {
+                        goto missingargs;
+                    }
 
                     if (c == ' ') {
                         c = getword(nntp_in, &arg2); /* mech name */
-                        if (c == EOF) goto missingargs;
+                        if (c == EOF) {
+                            goto missingargs;
+                        }
 
                         if (c == ' ') {
                             c = getword(nntp_in, &arg3); /* init response */
-                            if (c == EOF) goto missingargs;
+                            if (c == EOF) {
+                                goto missingargs;
+                            }
                         }
                     }
 
-                    if (c == '\r') c = prot_getc(nntp_in);
-                    if (c != '\n') goto extraargs;
+                    if (c == '\r') {
+                        c = prot_getc(nntp_in);
+                    }
+                    if (c != '\n') {
+                        goto extraargs;
+                    }
 
-                    cmd_authinfo_sasl(arg1.s, arg2.len ? arg2.s : NULL,
+                    cmd_authinfo_sasl(arg1.s,
+                                      arg2.len ? arg2.s : NULL,
                                       arg3.len ? arg3.s : NULL);
                 }
-                else
+                else {
                     prot_printf(nntp_out,
                                 "501 Unrecognized AUTHINFO command\r\n");
+                }
             }
-            else if (!(nntp_capa & MODE_READ)) goto noperm;
-            else if (!nntp_authstate && !allowanonymous) goto nologin;
+            else if (!(nntp_capa & MODE_READ)) {
+                goto noperm;
+            }
+            else if (!nntp_authstate && !allowanonymous) {
+                goto nologin;
+            }
             else if (!strcmp(cmd.s, "Article")) {
                 char *msgid;
 
                 mode = ARTICLE_ALL;
 
-              article:
-                if (arg1.s) *arg1.s = 0;
+            article:
+                if (arg1.s) {
+                    *arg1.s = 0;
+                }
 
                 if (c == ' ') {
                     c = getword(nntp_in, &arg1); /* number/msgid (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (parserange(arg1.s, &uid, NULL, &msgid, &be) != -1) {
                     if (be) {
-                        if (arg1.s && *arg1.s)
+                        if (arg1.s && *arg1.s) {
                             prot_printf(be->out, "%s %s\r\n", cmd.s, arg1.s);
-                        else
+                        }
+                        else {
                             prot_printf(be->out, "%s\r\n", cmd.s);
+                        }
 
                         if (be != backend_current) {
                             r = read_response(be, 0, &result);
-                            if (r) goto noopengroup;
+                            if (r) {
+                                goto noopengroup;
+                            }
 
                             prot_printf(nntp_out, "%s", result);
-                            if (!strncmp(result, "22", 2) &&
-                                mode != ARTICLE_STAT) {
+                            if (!strncmp(result, "22", 2)
+                                && mode != ARTICLE_STAT)
+                            {
                                 pipe_to_end_of_response(be, 0);
                             }
                         }
                     }
-                    else
+                    else {
                         cmd_article(mode, msgid, uid);
+                    }
                 }
 
-                if (msgid) goto prevgroup;
+                if (msgid) {
+                    goto prevgroup;
+                }
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'B':
@@ -913,7 +1083,9 @@ static void cmdloop(void)
                 mode = ARTICLE_BODY;
                 goto article;
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'C':
@@ -922,30 +1094,48 @@ static void cmdloop(void)
 
                 if (c == ' ') {
                     c = getword(nntp_in, &arg1); /* keyword (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_capabilities(arg1.s);
             }
 #ifdef HAVE_ZLIB
             else if (!strcmp(cmd.s, "Compress")) {
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1);
-                if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_compress(arg1.s);
             }
 #endif /* HAVE_ZLIB */
-            else if (!(nntp_capa & MODE_FEED)) goto noperm;
+            else if (!(nntp_capa & MODE_FEED)) {
+                goto noperm;
+            }
             else if (!strcmp(cmd.s, "Check")) {
                 mode = POST_CHECK;
                 goto ihave;
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'D':
@@ -954,52 +1144,75 @@ static void cmdloop(void)
                 struct tm *my_tm = gmtime(&now);
                 char buf[15];
 
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", my_tm);
                 prot_printf(nntp_out, "111 %s\r\n", buf);
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'G':
             if (!strcmp(cmd.s, "Group")) {
                 arg2.len = 0; /* GROUP command (no range) */
 
-              group:
+            group:
 #define LISTGROUP (arg2.len)
 
-                if (!LISTGROUP && c != ' ') goto missingargs;
+                if (!LISTGROUP && c != ' ') {
+                    goto missingargs;
+                }
                 if (c == ' ') {
                     c = getword(nntp_in, &arg1); /* group */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
                 if (LISTGROUP && c == ' ') {
                     c = getword(nntp_in, &arg2); /* range (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 be = backend_current;
-                if (arg1.len &&
-                    (r = open_group(arg1.s, 0, &be, NULL))) goto nogroup;
+                if (arg1.len && (r = open_group(arg1.s, 0, &be, NULL))) {
+                    goto nogroup;
+                }
                 else if (be) {
                     prot_printf(be->out, "%s", cmd.s);
                     if (arg1.len) {
                         prot_printf(be->out, " %s", arg1.s);
-                        if (LISTGROUP) prot_printf(be->out, " %s", arg2.s);
+                        if (LISTGROUP) {
+                            prot_printf(be->out, " %s", arg2.s);
+                        }
                     }
                     prot_printf(be->out, "\r\n");
 
                     r = read_response(be, 0, &result);
-                    if (r) goto nogroup;
+                    if (r) {
+                        goto nogroup;
+                    }
 
                     prot_printf(nntp_out, "%s", result);
 
                     if (!strncmp(result, "211", 3)) {
-                        if (LISTGROUP) pipe_to_end_of_response(be, 0);
+                        if (LISTGROUP) {
+                            pipe_to_end_of_response(be, 0);
+                        }
 
                         if (backend_current && backend_current != be) {
                             /* remove backend_current from the protgroup */
@@ -1011,9 +1224,12 @@ static void cmdloop(void)
                         protgroup_insert(protin, backend_current->in);
                     }
                 }
-                else if (!group_state) goto noopengroup;
-                else if (LISTGROUP &&
-                         parserange(arg2.s, &uid, &last, NULL, NULL) != 0) {
+                else if (!group_state) {
+                    goto noopengroup;
+                }
+                else if (LISTGROUP
+                         && parserange(arg2.s, &uid, &last, NULL, NULL) != 0)
+                {
                     /* parserange() will handle error code -- do nothing */
                 }
                 else {
@@ -1026,12 +1242,14 @@ static void cmdloop(void)
                     nntp_exists = group_state->exists;
                     nntp_current = nntp_exists > 0;
 
-                    prot_printf(nntp_out, "211 %u %lu %lu %s\r\n",
+                    prot_printf(nntp_out,
+                                "211 %u %lu %lu %s\r\n",
                                 nntp_exists,
-                                nntp_exists ? index_getuid(group_state, 1) :
-                                group_state->last_uid+1,
-                                nntp_exists ? index_getuid(group_state, nntp_exists) :
-                                group_state->last_uid,
+                                nntp_exists ? index_getuid(group_state, 1)
+                                            : group_state->last_uid + 1,
+                                nntp_exists
+                                    ? index_getuid(group_state, nntp_exists)
+                                    : group_state->last_uid,
                                 group_state->mboxname + strlen(newsprefix));
 
                     if (LISTGROUP) {
@@ -1041,7 +1259,8 @@ static void cmdloop(void)
                         last_msgno = index_finduid(group_state, last, FIND_LE);
 
                         for (; msgno <= last_msgno; msgno++) {
-                            prot_printf(nntp_out, "%u\r\n",
+                            prot_printf(nntp_out,
+                                        "%u\r\n",
                                         index_getuid(group_state, msgno));
                         }
                         prot_printf(nntp_out, ".\r\n");
@@ -1049,7 +1268,9 @@ static void cmdloop(void)
                 }
 #undef LISTGROUP
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'H':
@@ -1058,40 +1279,67 @@ static void cmdloop(void)
                 goto article;
             }
             else if (!strcmp(cmd.s, "Help")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_help();
             }
-            else if (!(nntp_capa & MODE_READ)) goto noperm;
-            else if (!nntp_authstate && !allowanonymous) goto nologin;
+            else if (!(nntp_capa & MODE_READ)) {
+                goto noperm;
+            }
+            else if (!nntp_authstate && !allowanonymous) {
+                goto nologin;
+            }
             else if (!strcmp(cmd.s, "Hdr")) {
                 char *msgid;
 
-              hdr:
-                if (arg2.s) *arg2.s = 0;
+            hdr:
+                if (arg2.s) {
+                    *arg2.s = 0;
+                }
 
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* header */
-                if (c == EOF) goto missingargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
                 if (c == ' ') {
                     c = getword(nntp_in, &arg2); /* range (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (parserange(arg2.s, &uid, &last, &msgid, &be) != -1) {
                     if (be) {
-                        if (arg2.s && *arg2.s)
-                            prot_printf(be->out, "%s %s %s\r\n",
-                                        cmd.s, arg1.s, arg2.s);
-                        else
+                        if (arg2.s && *arg2.s) {
+                            prot_printf(be->out,
+                                        "%s %s %s\r\n",
+                                        cmd.s,
+                                        arg1.s,
+                                        arg2.s);
+                        }
+                        else {
                             prot_printf(be->out, "%s %s\r\n", cmd.s, arg1.s);
+                        }
 
                         if (be != backend_current) {
                             r = read_response(be, 0, &result);
-                            if (r) goto noopengroup;
+                            if (r) {
+                                goto noopengroup;
+                            }
 
                             prot_printf(nntp_out, "%s", result);
                             if (!strncmp(result, "22", 2)) { /* 221 or 225 */
@@ -1099,29 +1347,44 @@ static void cmdloop(void)
                             }
                         }
                     }
-                    else
+                    else {
                         cmd_hdr(cmd.s, arg1.s, NULL, msgid, uid, last);
+                    }
                 }
 
-                if (msgid) goto prevgroup;
+                if (msgid) {
+                    goto prevgroup;
+                }
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'I':
             if (!strcmp(cmd.s, "Ihave")) {
                 mode = POST_IHAVE;
 
-              ihave:
-                if (c != ' ') goto missingargs;
+            ihave:
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* msgid */
-                if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_post(arg1.s, mode);
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'L':
@@ -1129,30 +1392,50 @@ static void cmdloop(void)
                 arg1.len = arg2.len = 0;
                 if (c == ' ') {
                     c = getword(nntp_in, &arg1); /* subcommand (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                     if (c == ' ') {
                         c = getword(nntp_in, &arg2); /* argument (optional) */
-                        if (c == EOF) goto missingargs;
+                        if (c == EOF) {
+                            goto missingargs;
+                        }
                     }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
 
-                goto prevgroup;  /* In case we did LIST [ACTIVE] */
+                goto prevgroup; /* In case we did LIST [ACTIVE] */
             }
-            else if (!(nntp_capa & MODE_READ)) goto noperm;
-            else if (!nntp_authstate && !allowanonymous) goto nologin;
+            else if (!(nntp_capa & MODE_READ)) {
+                goto noperm;
+            }
+            else if (!nntp_authstate && !allowanonymous) {
+                goto nologin;
+            }
             else if (!strcmp(cmd.s, "Last")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (backend_current) {
                     prot_printf(backend_current->out, "LAST\r\n");
                 }
-                else if (!group_state) goto noopengroup;
-                else if (!nntp_current) goto nocurrent;
+                else if (!group_state) {
+                    goto noopengroup;
+                }
+                else if (!nntp_current) {
+                    goto nocurrent;
+                }
                 else if (nntp_current == 1) {
                     prot_printf(nntp_out,
                                 "422 No previous article in this group\r\n");
@@ -1160,33 +1443,48 @@ static void cmdloop(void)
                 else {
                     char *msgid = index_get_msgid(group_state, --nntp_current);
 
-                    prot_printf(nntp_out, "223 %u %s\r\n",
+                    prot_printf(nntp_out,
+                                "223 %u %s\r\n",
                                 index_getuid(group_state, nntp_current),
                                 msgid ? msgid : "<0>");
 
-                    if (msgid) free(msgid);
+                    if (msgid) {
+                        free(msgid);
+                    }
                 }
             }
             else if (!strcmp(cmd.s, "Listgroup")) {
-                arg1.len = 0;              /* group is optional */
-                buf_setcstr(&arg2, "1-");  /* default range is all */
-                buf_cstring(&arg2);        /* appends a '\0' */
+                arg1.len = 0;             /* group is optional */
+                buf_setcstr(&arg2, "1-"); /* default range is all */
+                buf_cstring(&arg2);       /* appends a '\0' */
                 goto group;
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'M':
             if (!strcmp(cmd.s, "Mode")) {
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* mode */
-                if (c == EOF) goto missingargs;
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_mode(arg1.s);
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'N':
@@ -1194,60 +1492,103 @@ static void cmdloop(void)
                 time_t tstamp;
 
                 arg3.len = 0;
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* date */
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg2); /* time */
-                if (c == EOF) goto missingargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
                 if (c == ' ') {
                     c = getword(nntp_in, &arg3); /* "GMT" (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
-                if ((tstamp = parse_datetime(arg1.s, arg2.s,
-                                             arg3.len ? arg3.s : NULL)) < 0)
+                if ((tstamp = parse_datetime(arg1.s,
+                                             arg2.s,
+                                             arg3.len ? arg3.s : NULL))
+                    < 0)
+                {
                     goto baddatetime;
+                }
 
                 cmd_newgroups(tstamp);
             }
             else if (!strcmp(cmd.s, "Newnews")) {
                 time_t tstamp;
 
-                if (!config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+                if (!config_getswitch(IMAPOPT_ALLOWNEWNEWS)) {
                     goto cmddisabled;
+                }
 
                 arg4.len = 0;
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* wildmat */
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg2); /* date */
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg3); /* time */
-                if (c == EOF) goto missingargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
                 if (c == ' ') {
                     c = getword(nntp_in, &arg4); /* "GMT" (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
-                if ((tstamp = parse_datetime(arg2.s, arg3.s,
-                                             arg4.len ? arg4.s : NULL)) < 0)
+                if ((tstamp = parse_datetime(arg2.s,
+                                             arg3.s,
+                                             arg4.len ? arg4.s : NULL))
+                    < 0)
+                {
                     goto baddatetime;
+                }
 
                 cmd_newnews(arg1.s, tstamp);
             }
             else if (!strcmp(cmd.s, "Next")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (backend_current) {
                     prot_printf(backend_current->out, "NEXT\r\n");
                 }
-                else if (!group_state) goto noopengroup;
-                else if (!nntp_current) goto nocurrent;
+                else if (!group_state) {
+                    goto noopengroup;
+                }
+                else if (!nntp_current) {
+                    goto nocurrent;
+                }
                 else if (nntp_current == nntp_exists) {
                     prot_printf(nntp_out,
                                 "421 No next article in this group\r\n");
@@ -1255,43 +1596,65 @@ static void cmdloop(void)
                 else {
                     char *msgid = index_get_msgid(group_state, ++nntp_current);
 
-                    prot_printf(nntp_out, "223 %u %s\r\n",
+                    prot_printf(nntp_out,
+                                "223 %u %s\r\n",
                                 index_getuid(group_state, nntp_current),
                                 msgid ? msgid : "<0>");
 
-                    if (msgid) free(msgid);
+                    if (msgid) {
+                        free(msgid);
+                    }
                 }
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'O':
             if (!strcmp(cmd.s, "Over")) {
                 char *msgid;
 
-              over:
-                if (arg1.s) *arg1.s = 0;
+            over:
+                if (arg1.s) {
+                    *arg1.s = 0;
+                }
 
                 if (c == ' ') {
                     c = getword(nntp_in, &arg1); /* range/msgid (optional) */
-                    if (c == EOF) goto missingargs;
+                    if (c == EOF) {
+                        goto missingargs;
+                    }
                 }
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 msgid = NULL;
-                if (parserange(arg1.s, &uid, &last,
+                if (parserange(arg1.s,
+                               &uid,
+                               &last,
                                /* XOVER doesn't accept message-id */
-                               (cmd.s[0] == 'X' ? NULL : &msgid), &be) != -1) {
+                               (cmd.s[0] == 'X' ? NULL : &msgid),
+                               &be)
+                    != -1)
+                {
                     if (be) {
-                        if (arg1.s && *arg1.s)
+                        if (arg1.s && *arg1.s) {
                             prot_printf(be->out, "%s %s\r\n", cmd.s, arg1.s);
-                        else
+                        }
+                        else {
                             prot_printf(be->out, "%s\r\n", cmd.s);
+                        }
 
                         if (be != backend_current) {
                             r = read_response(be, 0, &result);
-                            if (r) goto noopengroup;
+                            if (r) {
+                                goto noopengroup;
+                            }
 
                             prot_printf(nntp_out, "%s", result);
                             if (!strncmp(result, "224", 3)) {
@@ -1299,41 +1662,64 @@ static void cmdloop(void)
                             }
                         }
                     }
-                    else
+                    else {
                         cmd_over(msgid, uid, last);
+                    }
                 }
 
-                if (msgid) goto prevgroup;
+                if (msgid) {
+                    goto prevgroup;
+                }
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'P':
             if (!strcmp(cmd.s, "Post")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 cmd_post(NULL, POST_POST);
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'Q':
             if (!strcmp(cmd.s, "Quit")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 prot_printf(nntp_out, "205 Connection closing\r\n");
                 return;
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'S':
             if (!strcmp(cmd.s, "Starttls")) {
-                if (!tls_starttls_enabled()) goto badcmd;
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (!tls_starttls_enabled()) {
+                    goto badcmd;
+                }
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 /* XXX  discard any input pipelined after STARTTLS */
                 prot_flush(nntp_in);
@@ -1344,14 +1730,22 @@ static void cmdloop(void)
                 mode = ARTICLE_STAT;
                 goto article;
             }
-            else if (!nntp_authstate && !allowanonymous) goto nologin;
+            else if (!nntp_authstate && !allowanonymous) {
+                goto nologin;
+            }
             else if (!strcmp(cmd.s, "Slave")) {
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 prot_printf(nntp_out, "202 Slave status noted\r\n");
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'T':
@@ -1359,7 +1753,9 @@ static void cmdloop(void)
                 mode = POST_TAKETHIS;
                 goto ihave;
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         case 'X':
@@ -1372,32 +1768,51 @@ static void cmdloop(void)
             else if (!strcmp(cmd.s, "Xpat")) {
                 char *msgid;
 
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg1); /* header */
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
 
                 /* gobble extra whitespace (hack for Mozilla) */
-                while ((c = prot_getc(nntp_in)) == ' ');
+                while ((c = prot_getc(nntp_in)) == ' ')
+                    ;
                 prot_ungetc(c, nntp_in);
 
                 c = getword(nntp_in, &arg2); /* range */
-                if (c != ' ') goto missingargs;
+                if (c != ' ') {
+                    goto missingargs;
+                }
                 c = getword(nntp_in, &arg3); /* wildmat */
-                if (c == EOF) goto missingargs;
+                if (c == EOF) {
+                    goto missingargs;
+                }
 
                 /* XXX per RFC 2980, we can have multiple patterns */
 
-                if (c == '\r') c = prot_getc(nntp_in);
-                if (c != '\n') goto extraargs;
+                if (c == '\r') {
+                    c = prot_getc(nntp_in);
+                }
+                if (c != '\n') {
+                    goto extraargs;
+                }
 
                 if (parserange(arg2.s, &uid, &last, &msgid, &be) != -1) {
                     if (be) {
-                        prot_printf(be->out, "%s %s %s %s\r\n",
-                                    cmd.s, arg1.s, arg2.s, arg3.s);
+                        prot_printf(be->out,
+                                    "%s %s %s %s\r\n",
+                                    cmd.s,
+                                    arg1.s,
+                                    arg2.s,
+                                    arg3.s);
 
                         if (be != backend_current) {
                             r = read_response(be, 0, &result);
-                            if (r) goto noopengroup;
+                            if (r) {
+                                goto noopengroup;
+                            }
 
                             prot_printf(nntp_out, "%s", result);
                             if (!strncmp(result, "221", 3)) {
@@ -1405,70 +1820,77 @@ static void cmdloop(void)
                             }
                         }
                     }
-                    else
+                    else {
                         cmd_hdr(cmd.s, arg1.s, arg3.s, msgid, uid, last);
+                    }
                 }
 
-                if (msgid) goto prevgroup;
+                if (msgid) {
+                    goto prevgroup;
+                }
             }
-            else goto badcmd;
+            else {
+                goto badcmd;
+            }
             break;
 
         default:
-          badcmd:
+        badcmd:
             prot_printf(nntp_out, "500 Unrecognized command\r\n");
             eatline(nntp_in, c);
         }
 
         continue;
 
-      noperm:
+    noperm:
         prot_printf(nntp_out, "502 Permission denied\r\n");
         eatline(nntp_in, c);
         continue;
 
-      nologin:
+    nologin:
         prot_printf(nntp_out, "480 Authentication required\r\n");
         eatline(nntp_in, c);
         continue;
 
-      cmddisabled:
+    cmddisabled:
         prot_printf(nntp_out, "503 \"%s\" disabled\r\n", cmd.s);
         eatline(nntp_in, c);
         continue;
 
-      extraargs:
+    extraargs:
         prot_printf(nntp_out, "501 Unexpected extra argument\r\n");
         eatline(nntp_in, c);
         continue;
 
-      missingargs:
+    missingargs:
         prot_printf(nntp_out, "501 Missing argument\r\n");
         eatline(nntp_in, c);
         continue;
 
-      baddatetime:
+    baddatetime:
         prot_printf(nntp_out, "501 Bad date/time\r\n");
         continue;
 
-      nogroup:
-        prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
+    nogroup:
+        prot_printf(nntp_out,
+                    "411 No such newsgroup (%s)\r\n",
                     error_message(r));
 
-      prevgroup:
+    prevgroup:
         /* Return to previously selected group */
-        if (*curgroup &&
-            (!group_state || strcmp(curgroup, group_state->mboxname))) {
+        if (*curgroup
+            && (!group_state || strcmp(curgroup, group_state->mboxname)))
+        {
             open_group(curgroup, 1, NULL, NULL);
         }
 
         continue;
 
-      noopengroup:
+    noopengroup:
         prot_printf(nntp_out, "412 No newsgroup selected\r\n");
         continue;
 
-      nocurrent:
+    nocurrent:
         prot_printf(nntp_out, "420 Current article number is invalid\r\n");
         continue;
     }
@@ -1477,19 +1899,23 @@ static void cmdloop(void)
 /*
  * duplicate_find() callback function to fetch a message by msgid
  */
-struct findrock {
+struct findrock
+{
     const char *mailbox;
     unsigned long uid;
 };
 
 static int find_cb(const duplicate_key_t *dkey,
                    time_t mark __attribute__((unused)),
-                   unsigned long uid, void *rock)
+                   unsigned long uid,
+                   void *rock)
 {
     struct findrock *frock = (struct findrock *) rock;
 
     /* skip mailboxes that we don't serve as newsgroups */
-    if (!is_newsgroup(dkey->to)) return 0;
+    if (!is_newsgroup(dkey->to)) {
+        return 0;
+    }
 
     frock->mailbox = dkey->to;
     frock->uid = uid;
@@ -1503,14 +1929,20 @@ static int my_find_msgid(char *msgid, char **mailbox, uint32_t *uid)
 
     duplicate_find(msgid, find_cb, &frock);
 
-    if (!frock.mailbox) return 0;
+    if (!frock.mailbox) {
+        return 0;
+    }
 
     if (mailbox) {
-        if (!frock.mailbox[0]) return 0;
+        if (!frock.mailbox[0]) {
+            return 0;
+        }
         *mailbox = (char *) frock.mailbox;
     }
     if (uid) {
-        if (!frock.uid) return 0;
+        if (!frock.uid) {
+            return 0;
+        }
         *uid = frock.uid;
     }
 
@@ -1539,84 +1971,119 @@ static int getuserpass(struct protstream *in, struct buf *buf)
     }
 }
 
-static int parserange(char *str, uint32_t *uid, uint32_t *last,
-                      char **msgid, struct backend **ret)
+static int parserange(char *str,
+                      uint32_t *uid,
+                      uint32_t *last,
+                      char **msgid,
+                      struct backend **ret)
 {
     const char *p = NULL;
     char *mboxname;
     int r = 0;
 
     *uid = 0;
-    if (last) *last = 0;
-    if (msgid) *msgid = NULL;
-    if (ret) *ret = NULL;
+    if (last) {
+        *last = 0;
+    }
+    if (msgid) {
+        *msgid = NULL;
+    }
+    if (ret) {
+        *ret = NULL;
+    }
 
     if (!str || !*str) {
         /* no argument, use current article */
         if (backend_current) {
-            if (ret) *ret = backend_current;
+            if (ret) {
+                *ret = backend_current;
+            }
         }
-        else if (!group_state) goto noopengroup;
-        else if (!nntp_current) goto nocurrent;
+        else if (!group_state) {
+            goto noopengroup;
+        }
+        else if (!nntp_current) {
+            goto nocurrent;
+        }
         else {
             *uid = index_getuid(group_state, nntp_current);
-            if (last) *last = *uid;
+            if (last) {
+                *last = *uid;
+            }
         }
     }
     else if (*str == '<') {
         /* message-id, find server and/or mailbox */
-        if (!msgid) goto badrange;
-        if (!my_find_msgid(str, &mboxname, uid)) goto nomsgid;
+        if (!msgid) {
+            goto badrange;
+        }
+        if (!my_find_msgid(str, &mboxname, uid)) {
+            goto nomsgid;
+        }
 
         *msgid = str;
 
         /* open group if its different from our current one */
         if (!group_state || strcmp(mboxname, group_state->mboxname)) {
-            if ((r = open_group(mboxname, 1, ret, NULL))) goto nomsgid;
+            if ((r = open_group(mboxname, 1, ret, NULL))) {
+                goto nomsgid;
+            }
         }
     }
     else if (backend_current) {
-        if (ret) *ret = backend_current;
+        if (ret) {
+            *ret = backend_current;
+        }
     }
-    else if (!group_state) goto noopengroup;
-    else if (parseuint32(str, &p, uid) || uid == 0) goto badrange;
+    else if (!group_state) {
+        goto noopengroup;
+    }
+    else if (parseuint32(str, &p, uid) || uid == 0) {
+        goto badrange;
+    }
     else if (p && *p) {
         /* extra stuff, check for range */
-        if (!last || (*p != '-')) goto badrange;
-        if (*++p) {
-            if (parseuint32(p, NULL, last))
-                *last = 0;
+        if (!last || (*p != '-')) {
+            goto badrange;
         }
-        else
-            *last = UINT32_MAX;  /* open range -> use highest possible UID */
+        if (*++p) {
+            if (parseuint32(p, NULL, last)) {
+                *last = 0;
+            }
+        }
+        else {
+            *last = UINT32_MAX; /* open range -> use highest possible UID */
+        }
     }
 
-    if (last && !*last) *last = *uid;
+    if (last && !*last) {
+        *last = *uid;
+    }
 
     return 0;
 
-  noopengroup:
+noopengroup:
     prot_printf(nntp_out, "412 No newsgroup selected\r\n");
     return -1;
 
-  nocurrent:
+nocurrent:
     prot_printf(nntp_out, "420 Current article number is invalid\r\n");
     return -1;
 
-  nomsgid:
+nomsgid:
     prot_printf(nntp_out, "430 No article found with that message-id");
-    if (r) prot_printf(nntp_out, " (%s)", error_message(r));
+    if (r) {
+        prot_printf(nntp_out, " (%s)", error_message(r));
+    }
     prot_printf(nntp_out, "\r\n");
     return -1;
 
-  badrange:
+badrange:
     prot_printf(nntp_out, "501 Bad message-id, message number, or range\r\n");
     return -1;
 }
 
-static const int numdays[] = {
-    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
+static const int numdays[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 #define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
 
@@ -1633,17 +2100,23 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     memset(&tm, 0, sizeof(tm));
 
     /* check format of strings */
-    if ((datelen != 6 && datelen != 8) ||
-        strlen(timestr) != 6 || (gmt && strcasecmp(gmt, "GMT")))
+    if ((datelen != 6 && datelen != 8) || strlen(timestr) != 6
+        || (gmt && strcasecmp(gmt, "GMT")))
+    {
         return -1;
+    }
 
     /* convert datestr to ulong */
     d = strtoul(datestr, &p, 10);
-    if (d == ULONG_MAX || *p) return -1;
+    if (d == ULONG_MAX || *p) {
+        return -1;
+    }
 
     /* convert timestr to ulong */
     t = strtoul(timestr, &p, 10);
-    if (t == ULONG_MAX || *p) return -1;
+    if (t == ULONG_MAX || *p) {
+        return -1;
+    }
 
     /* populate the time struct */
     tm.tm_year = d / 10000;
@@ -1657,7 +2130,9 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     tm.tm_sec = t % 100;
 
     /* massage the year to years since 1900 */
-    if (tm.tm_year > 99) tm.tm_year -= 1900;
+    if (tm.tm_year > 99) {
+        tm.tm_year -= 1900;
+    }
     else {
         /*
          * guess century
@@ -1670,21 +2145,27 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
 
         current = gmt ? gmtime(&now) : localtime(&now);
         century = current->tm_year / 100;
-        if (tm.tm_year > current->tm_year % 100) century--;
+        if (tm.tm_year > current->tm_year % 100) {
+            century--;
+        }
         tm.tm_year += century * 100;
     }
 
     /* sanity check the date/time (including leap day and leap second) */
     leapday = tm.tm_mon == 1 && isleap(tm.tm_year + 1900);
-    if (tm.tm_year < 70 || tm.tm_mon < 0 || tm.tm_mon > 11 ||
-        tm.tm_mday < 1 || tm.tm_mday > (numdays[tm.tm_mon] + leapday) ||
-        tm.tm_hour > 23 || tm.tm_min > 59 || tm.tm_sec > 60)
+    if (tm.tm_year < 70 || tm.tm_mon < 0 || tm.tm_mon > 11 || tm.tm_mday < 1
+        || tm.tm_mday > (numdays[tm.tm_mon] + leapday) || tm.tm_hour > 23
+        || tm.tm_min > 59 || tm.tm_sec > 60)
+    {
         return -1;
+    }
 
     return (gmt ? mkgmtime(&tm) : mktime(&tm));
 }
 
-static int open_group(const char *name, int has_prefix, struct backend **ret,
+static int open_group(const char *name,
+                      int has_prefix,
+                      struct backend **ret,
                       int *postable /* used for LIST ACTIVE only */)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -1693,26 +2174,34 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
     struct backend *backend_next = NULL;
 
     /* close local group */
-    if (group_state)
+    if (group_state) {
         index_close(&group_state);
+    }
 
     if (!has_prefix) {
         snprintf(mailboxname, sizeof(mailboxname), "%s%s", newsprefix, name);
         name = mailboxname;
 
-        if (!is_newsgroup(name)) return IMAP_MAILBOX_NONEXISTENT;
+        if (!is_newsgroup(name)) {
+            return IMAP_MAILBOX_NONEXISTENT;
+        }
     }
 
-    if (!r) r = proxy_mlookup(name, &mbentry, NULL, NULL);
+    if (!r) {
+        r = proxy_mlookup(name, &mbentry, NULL, NULL);
+    }
 
     if (!r && mbentry->acl) {
         int myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl);
 
-        if (postable) *postable = myrights & ACL_POST;
+        if (postable) {
+            *postable = myrights & ACL_POST;
+        }
         if (!postable && /* allow limited 'r' for LIST ACTIVE */
-            !(myrights & ACL_READ)) {
-            r = (myrights & ACL_LOOKUP) ?
-                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+            !(myrights & ACL_READ))
+        {
+            r = (myrights & ACL_LOOKUP) ? IMAP_PERMISSION_DENIED
+                                        : IMAP_MAILBOX_NONEXISTENT;
         }
     }
 
@@ -1723,14 +2212,22 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
 
     if (mbentry->server) {
         /* remote group */
-        backend_next = proxy_findserver(mbentry->server, &nntp_protocol,
-                                        nntp_authstate ? nntp_userid : "anonymous",
-                                        &backend_cached, &backend_current,
-                                        NULL, nntp_in);
+        backend_next =
+            proxy_findserver(mbentry->server,
+                             &nntp_protocol,
+                             nntp_authstate ? nntp_userid : "anonymous",
+                             &backend_cached,
+                             &backend_current,
+                             NULL,
+                             nntp_in);
         mboxlist_entry_free(&mbentry);
-        if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
+        if (!backend_next) {
+            return IMAP_SERVER_UNAVAILABLE;
+        }
 
-        if (ret) *ret = backend_next;
+        if (ret) {
+            *ret = backend_next;
+        }
     }
     else {
         /* local group */
@@ -1741,13 +2238,19 @@ static int open_group(const char *name, int has_prefix, struct backend **ret,
         init.userid = nntp_authstate ? nntp_userid : NULL;
         init.authstate = nntp_authstate;
         r = index_open(name, &init, &group_state);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
-        if (ret) *ret = NULL;
+        if (ret) {
+            *ret = NULL;
+        }
     }
 
-    syslog(LOG_DEBUG, "open: user %s opened %s",
-           nntp_userid ? nntp_userid : "anonymous", name);
+    syslog(LOG_DEBUG,
+           "open: user %s opened %s",
+           nntp_userid ? nntp_userid : "anonymous",
+           name);
 
     return 0;
 }
@@ -1761,28 +2264,41 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     prot_printf(nntp_out, "VERSION 2\r\n");
     if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
         prot_printf(nntp_out,
-                    "IMPLEMENTATION Cyrus NNTP %s\r\n", CYRUS_VERSION);
+                    "IMPLEMENTATION Cyrus NNTP %s\r\n",
+                    CYRUS_VERSION);
     }
 
     /* add STARTTLS */
-    if (tls_starttls_enabled() && !nntp_starttls_done && !nntp_authstate)
+    if (tls_starttls_enabled() && !nntp_starttls_done && !nntp_authstate) {
         prot_printf(nntp_out, "STARTTLS\r\n");
+    }
 
     if (!nntp_tls_required) {
         /* check for SASL mechs */
-        sasl_listmech(nntp_saslconn, NULL, "SASL ", " ", "\r\n",
-                      &mechlist, NULL, &mechcount);
+        sasl_listmech(nntp_saslconn,
+                      NULL,
+                      "SASL ",
+                      " ",
+                      "\r\n",
+                      &mechlist,
+                      NULL,
+                      &mechcount);
 
         /* add the AUTHINFO variants */
         if (!nntp_authstate) {
-            prot_printf(nntp_out, "AUTHINFO%s%s\r\n",
-                        (nntp_starttls_done || (extprops_ssf > 1) ||
-                         config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) ?
-                        " USER" : "", mechcount ? " SASL" : "");
+            prot_printf(nntp_out,
+                        "AUTHINFO%s%s\r\n",
+                        (nntp_starttls_done || (extprops_ssf > 1)
+                         || config_getswitch(IMAPOPT_ALLOWPLAINTEXT))
+                            ? " USER"
+                            : "",
+                        mechcount ? " SASL" : "");
         }
 
         /* add the SASL mechs */
-        if (mechcount) prot_printf(nntp_out, "%s", mechlist);
+        if (mechcount) {
+            prot_printf(nntp_out, "%s", mechlist);
+        }
     }
 
 #ifdef HAVE_ZLIB
@@ -1796,8 +2312,9 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
         prot_printf(nntp_out, "READER\r\n");
         prot_printf(nntp_out, "POST\r\n");
-        if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
+        if (config_getswitch(IMAPOPT_ALLOWNEWNEWS)) {
             prot_printf(nntp_out, "NEWNEWS\r\n");
+        }
         prot_printf(nntp_out, "HDR\r\n");
         prot_printf(nntp_out, "OVER\r\n");
         prot_printf(nntp_out, "XPAT\r\n");
@@ -1810,9 +2327,11 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     }
 
     /* add the LIST variants */
-    prot_printf(nntp_out, "LIST ACTIVE%s\r\n",
-                ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) ?
-                " HEADERS NEWSGROUPS OVERVIEW.FMT" : "");
+    prot_printf(nntp_out,
+                "LIST ACTIVE%s\r\n",
+                ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous))
+                    ? " HEADERS NEWSGROUPS OVERVIEW.FMT"
+                    : "");
 
     prot_printf(nntp_out, ".\r\n");
 
@@ -1824,14 +2343,14 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
  */
 static int xref_cb(const duplicate_key_t *dkey,
                    time_t mark __attribute__((unused)),
-                   unsigned long uid, void *rock)
+                   unsigned long uid,
+                   void *rock)
 {
-    struct buf *buf = (struct buf *)rock;
+    struct buf *buf = (struct buf *) rock;
 
     /* skip mailboxes that we don't serve as newsgroups */
     if (is_newsgroup(dkey->to)) {
-        buf_printf(buf,
-                 " %s:%lu", dkey->to + strlen(newsprefix), uid);
+        buf_printf(buf, " %s:%lu", dkey->to + strlen(newsprefix), uid);
     }
 
     return 0;
@@ -1843,8 +2362,9 @@ static int xref_cb(const duplicate_key_t *dkey,
  */
 static void build_xref(const char *msgid, struct buf *buf, int body_only)
 {
-    if (!body_only)
+    if (!body_only) {
         buf_appendcstr(buf, "Xref: ");
+    }
     buf_appendcstr(buf, config_servername);
     duplicate_find(msgid, xref_cb, buf);
 }
@@ -1879,8 +2399,11 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
         msgid = index_get_msgid(group_state, msgno);
     }
 
-    prot_printf(nntp_out, "%u %lu %s\r\n",
-                220 + part, by_msgid ? 0 : uid, msgid ? msgid : "<0>");
+    prot_printf(nntp_out,
+                "%u %lu %s\r\n",
+                220 + part,
+                by_msgid ? 0 : uid,
+                msgid ? msgid : "<0>");
 
     if (part != ARTICLE_STAT) {
         char buf[4096];
@@ -1911,16 +2434,20 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
             }
 
             if (output) {
-                if (buf[0] == '.') prot_putc('.', nntp_out);
+                if (buf[0] == '.') {
+                    prot_putc('.', nntp_out);
+                }
                 do {
                     prot_printf(nntp_out, "%s", buf);
-                } while (buf[strlen(buf)-1] != '\n' &&
-                         fgets(buf, sizeof(buf), msgfile));
+                } while (buf[strlen(buf) - 1] != '\n'
+                         && fgets(buf, sizeof(buf), msgfile));
             }
         }
 
         /* Protect against messages not ending in CRLF */
-        if (buf[strlen(buf)-1] != '\n') prot_printf(nntp_out, "\r\n");
+        if (buf[strlen(buf) - 1] != '\n') {
+            prot_printf(nntp_out, "\r\n");
+        }
 
         prot_printf(nntp_out, ".\r\n");
 
@@ -1929,7 +2456,9 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
         prot_resettimeout(nntp_in);
     }
 
-    if (!by_msgid) free(msgid);
+    if (!by_msgid) {
+        free(msgid);
+    }
 
     fclose(msgfile);
 }
@@ -1944,11 +2473,13 @@ static void cmd_authinfo_user(char *user)
     }
 
     /* possibly disallow AUTHINFO USER */
-    if (nntp_tls_required ||
-        !(nntp_starttls_done || (extprops_ssf > 1) ||
-          config_getswitch(IMAPOPT_ALLOWPLAINTEXT))) {
-        prot_printf(nntp_out,
-                    "483 AUTHINFO USER command only available under a layer\r\n");
+    if (nntp_tls_required
+        || !(nntp_starttls_done || (extprops_ssf > 1)
+             || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)))
+    {
+        prot_printf(
+            nntp_out,
+            "483 AUTHINFO USER command only available under a layer\r\n");
         return;
     }
 
@@ -1979,11 +2510,14 @@ static void cmd_authinfo_pass(char *pass)
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
         r = ftruncate(nntp_logfd,
-                  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
-        if (!r)
+                      lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
+        if (!r) {
             r = write(nntp_logfd, "...\r\n", 5);
-        if (r < 0)
-            syslog(LOG_ERR, "IOERROR: cannot conceal password in telemetry log: %m");
+        }
+        if (r < 0) {
+            syslog(LOG_ERR,
+                   "IOERROR: cannot conceal password in telemetry log: %m");
+        }
     }
 
     if (nntp_authstate) {
@@ -1999,7 +2533,9 @@ static void cmd_authinfo_pass(char *pass)
     if (!strcmp(nntp_userid, "anonymous")) {
         if (allowanonymous) {
             pass = beautify_string(pass);
-            if (strlen(pass) > 500) pass[500] = '\0';
+            if (strlen(pass) > 500) {
+                pass[500] = '\0';
+            }
             xsyslog_ev(LOG_NOTICE, "login.good",
                        lf_s("r.clienthost", nntp_clienthost),
                        lf_s("u.username", ""),
@@ -2020,7 +2556,9 @@ static void cmd_authinfo_pass(char *pass)
                             nntp_userid,
                             strlen(nntp_userid),
                             pass,
-                            strlen(pass))!=SASL_OK) {
+                            strlen(pass))
+             != SASL_OK)
+    {
         xsyslog_ev(LOG_NOTICE, "login.bad",
                    lf_s("r.clienthost", nntp_clienthost),
                    lf_s("u.username", nntp_userid),
@@ -2047,13 +2585,16 @@ static void cmd_authinfo_pass(char *pass)
 
         /* nntp_authstate may have been set as a side effect
          * of sasl_checkpass() calling mysasl_proxy_policy */
-        if (nntp_authstate)
+        if (nntp_authstate) {
             auth_freestate(nntp_authstate);
+        }
 
         nntp_authstate = auth_newstate(nntp_userid);
 
         /* Close IP-based telemetry log and create new log based on userid */
-        if (nntp_logfd != -1) close(nntp_logfd);
+        if (nntp_logfd != -1) {
+            close(nntp_logfd);
+        }
         nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
     }
 }
@@ -2070,15 +2611,16 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 
     /* possibly disallow AUTHINFO SASL */
     if (nntp_tls_required) {
-        prot_printf(nntp_out,
-                    "483 AUTHINFO SASL command only available under a layer\r\n");
+        prot_printf(
+            nntp_out,
+            "483 AUTHINFO SASL command only available under a layer\r\n");
         return;
     }
 
     /* Conceal initial response in telemetry log */
     if (nntp_logfd != -1 && resp) {
         r = ftruncate(nntp_logfd,
-                  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(resp));
+                      lseek(nntp_logfd, -2, SEEK_CUR) - strlen(resp));
         r = write(nntp_logfd, "...\r\n", 5);
         r = 0;
     }
@@ -2104,10 +2646,16 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
             prot_printf(nntp_out, "281 List of mechanisms follows\r\n");
 
             /* CRLF separated, dot terminated */
-            if (sasl_listmech(nntp_saslconn, NULL,
-                              "", "\r\n", "\r\n",
+            if (sasl_listmech(nntp_saslconn,
+                              NULL,
+                              "",
+                              "\r\n",
+                              "\r\n",
                               &sasllist,
-                              NULL, &mechnum) == SASL_OK) {
+                              NULL,
+                              &mechnum)
+                == SASL_OK)
+            {
                 if (mechnum > 0) {
                     prot_printf(nntp_out, "%s", sasllist);
                 }
@@ -2117,13 +2665,29 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
             return;
         }
 
-        r = saslserver(nntp_saslconn, mech, resp, "AUTHINFO GENERIC ", "381 ",
-                       "", nntp_in, nntp_out, &sasl_result, &success_data);
+        r = saslserver(nntp_saslconn,
+                       mech,
+                       resp,
+                       "AUTHINFO GENERIC ",
+                       "381 ",
+                       "",
+                       nntp_in,
+                       nntp_out,
+                       &sasl_result,
+                       &success_data);
     }
     else {
         /* AUTHINFO SASL */
-        r = saslserver(nntp_saslconn, mech, resp, "", "383 ", "=",
-                       nntp_in, nntp_out, &sasl_result, &success_data);
+        r = saslserver(nntp_saslconn,
+                       mech,
+                       resp,
+                       "",
+                       "383 ",
+                       "=",
+                       nntp_in,
+                       nntp_out,
+                       &sasl_result,
+                       &success_data);
     }
 
     /* Restart any telemetry logging */
@@ -2137,8 +2701,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 
         switch (r) {
         case IMAP_SASL_CANCEL:
-            prot_printf(nntp_out,
-                        "481 Client canceled authentication\r\n");
+            prot_printf(nntp_out, "481 Client canceled authentication\r\n");
             break;
         case IMAP_SASL_PROTERR:
             errorstring = prot_error(nntp_in);
@@ -2164,8 +2727,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
                 code = 481;
             }
 
-            if (sasl_result != SASL_NOUSER)
-                sasl_getprop(nntp_saslconn, SASL_USERNAME, (const void **) &userid);
+            if (sasl_result != SASL_NOUSER) {
+                sasl_getprop(nntp_saslconn,
+                             SASL_USERNAME,
+                             (const void **) &userid);
+            }
 
             xsyslog_ev(LOG_NOTICE, "login.bad",
                        lf_s("r.clienthost", nntp_clienthost),
@@ -2173,18 +2739,22 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
                        lf_s("login.mech", mech),
                        lf_s("error", sasl_errdetail(nntp_saslconn)));
 
-            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+            failedloginpause =
+                config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
 
             /* Don't allow user probing */
-            if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
+            if (sasl_result == SASL_NOUSER) {
+                sasl_result = SASL_BADAUTH;
+            }
 
             errorstring = sasl_errstring(sasl_result, NULL, NULL);
             if (errorstring) {
                 prot_printf(nntp_out, "%d %s\r\n", code, errorstring);
-            } else {
+            }
+            else {
                 prot_printf(nntp_out, "%d Error authenticating\r\n", code);
             }
         }
@@ -2200,9 +2770,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
      */
     sasl_result = sasl_getprop(nntp_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
-        prot_printf(nntp_out, "481 weird SASL error %d SASL_USERNAME\r\n",
+        prot_printf(nntp_out,
+                    "481 weird SASL error %d SASL_USERNAME\r\n",
                     sasl_result);
-        syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
+        syslog(LOG_ERR,
+               "weird SASL error %d getting SASL_USERNAME",
                sasl_result);
         reset_saslconn(&nntp_saslconn);
         return;
@@ -2215,16 +2787,29 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     /* really, we should be doing a sasl_getprop on SASL_SSF_EXTERNAL,
        but the current libsasl doesn't allow that. */
     if (nntp_starttls_done) {
-        switch(ssf) {
-        case 0: ssfmsg = "tls protection"; break;
-        case 1: ssfmsg = "tls plus integrity protection"; break;
-        default: ssfmsg = "tls plus privacy protection"; break;
+        switch (ssf) {
+        case 0:
+            ssfmsg = "tls protection";
+            break;
+        case 1:
+            ssfmsg = "tls plus integrity protection";
+            break;
+        default:
+            ssfmsg = "tls plus privacy protection";
+            break;
         }
-    } else {
-        switch(ssf) {
-        case 0: ssfmsg = "no protection"; break;
-        case 1: ssfmsg = "integrity protection"; break;
-        default: ssfmsg = "privacy protection"; break;
+    }
+    else {
+        switch (ssf) {
+        case 0:
+            ssfmsg = "no protection";
+            break;
+        case 1:
+            ssfmsg = "integrity protection";
+            break;
+        default:
+            ssfmsg = "privacy protection";
+            break;
         }
     }
 
@@ -2235,20 +2820,37 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         const char *sep = "";
         char part1[1024] = "";
         char part2[1024] = "";
-        prot_printf(nntp_out,
-                    "400 Too many open connections (");
+        prot_printf(nntp_out, "400 Too many open connections (");
         if (limits.maxhost) {
-            prot_printf(nntp_out, "%s%d of %d from %s", sep,
-                        limits.host, limits.maxhost, nntp_clienthost);
-            snprintf(part1, sizeof(part1), "%s%d of %d from %s", sep,
-                        limits.host, limits.maxhost, nntp_clienthost);
+            prot_printf(nntp_out,
+                        "%s%d of %d from %s",
+                        sep,
+                        limits.host,
+                        limits.maxhost,
+                        nntp_clienthost);
+            snprintf(part1,
+                     sizeof(part1),
+                     "%s%d of %d from %s",
+                     sep,
+                     limits.host,
+                     limits.maxhost,
+                     nntp_clienthost);
             sep = ", ";
         }
         if (limits.maxuser) {
-            prot_printf(nntp_out, "%s%d of %d for %s", sep,
-                        limits.user, limits.maxuser, nntp_userid);
-            snprintf(part2, sizeof(part2), "%s%d of %d for %s", sep,
-                        limits.user, limits.maxuser, nntp_userid);
+            prot_printf(nntp_out,
+                        "%s%d of %d for %s",
+                        sep,
+                        limits.user,
+                        limits.maxuser,
+                        nntp_userid);
+            snprintf(part2,
+                     sizeof(part2),
+                     "%s%d of %d for %s",
+                     sep,
+                     limits.user,
+                     limits.maxuser,
+                     nntp_userid);
         }
         prot_printf(nntp_out, ")\r\n");
         syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
@@ -2267,21 +2869,25 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     if (success_data) {
         prot_printf(nntp_out, "283 %s\r\n", success_data);
         free(success_data);
-    } else {
+    }
+    else {
         prot_printf(nntp_out, "281 Success (%s)\r\n", ssfmsg);
     }
 
-    prot_setsasl(nntp_in,  nntp_saslconn);
+    prot_setsasl(nntp_in, nntp_saslconn);
     prot_setsasl(nntp_out, nntp_saslconn);
 
     /* Close IP-based telemetry log and create new log based on userid */
-    if (nntp_logfd != -1) close(nntp_logfd);
+    if (nntp_logfd != -1) {
+        close(nntp_logfd);
+    }
     nntp_logfd = telemetry_log(nntp_userid, nntp_in, nntp_out, 0);
 
     if (ssf) {
         /* close any selected group */
-        if (group_state)
+        if (group_state) {
             index_close(&group_state);
+        }
         if (backend_current) {
             proxy_downserver(backend_current);
             backend_current = NULL;
@@ -2289,8 +2895,12 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     }
 }
 
-static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
-                    unsigned long uid, unsigned long last)
+static void cmd_hdr(char *cmd,
+                    char *hdr,
+                    char *pat,
+                    char *msgid,
+                    unsigned long uid,
+                    unsigned long last)
 {
     int msgno, last_msgno;
     int by_msgid = (msgid != NULL);
@@ -2304,9 +2914,11 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
     for (; msgno <= last_msgno; msgno++) {
         char *body;
 
-        if (!found++)
-            prot_printf(nntp_out, "%u Headers follow:\r\n",
+        if (!found++) {
+            prot_printf(nntp_out,
+                        "%u Headers follow:\r\n",
                         cmd[0] == 'X' ? 221 : 225);
+        }
 
         /* see if we're looking for metadata */
         if (hdr[0] == ':') {
@@ -2314,46 +2926,65 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
                 struct buf xref = BUF_INITIALIZER;
                 unsigned long size = index_getsize(group_state, msgno);
 
-                if (!by_msgid) msgid = index_get_msgid(group_state, msgno);
+                if (!by_msgid) {
+                    msgid = index_get_msgid(group_state, msgno);
+                }
                 build_xref(msgid, &xref, 0);
-                if (!by_msgid) free(msgid);
+                if (!by_msgid) {
+                    free(msgid);
+                }
 
-                prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
+                prot_printf(nntp_out,
+                            "%lu %lu\r\n",
+                            by_msgid ? 0 : uid,
                             size + xref.len + 2); /* +2 for \r\n */
                 buf_free(&xref);
             }
-            else if (!strcasecmp(":lines", hdr))
-                prot_printf(nntp_out, "%u %lu\r\n",
+            else if (!strcasecmp(":lines", hdr)) {
+                prot_printf(nntp_out,
+                            "%u %lu\r\n",
                             by_msgid ? 0 : index_getuid(group_state, msgno),
                             index_getlines(group_state, msgno));
-            else
-                prot_printf(nntp_out, "%u \r\n",
+            }
+            else {
+                prot_printf(nntp_out,
+                            "%u \r\n",
                             by_msgid ? 0 : index_getuid(group_state, msgno));
+            }
         }
         else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
             struct buf xref = BUF_INITIALIZER;
 
-            if (!by_msgid) msgid = index_get_msgid(group_state, msgno);
+            if (!by_msgid) {
+                msgid = index_get_msgid(group_state, msgno);
+            }
             build_xref(msgid, &xref, 1);
-            if (!by_msgid) free(msgid);
+            if (!by_msgid) {
+                free(msgid);
+            }
 
-            prot_printf(nntp_out, "%u %s\r\n",
+            prot_printf(nntp_out,
+                        "%u %s\r\n",
                         by_msgid ? 0 : index_getuid(group_state, msgno),
                         buf_cstring(&xref));
             buf_free(&xref);
         }
-        else if ((body = index_getheader(group_state, msgno, hdr)) &&
-                 (!pat ||                       /* [X]HDR */
-                  wildmat(body, pat))) {        /* XPAT with match */
-                prot_printf(nntp_out, "%u %s\r\n",
-                            by_msgid ? 0 : index_getuid(group_state, msgno), body);
+        else if ((body = index_getheader(group_state, msgno, hdr))
+                 && (!pat ||                /* [X]HDR */
+                     wildmat(body, pat))) { /* XPAT with match */
+            prot_printf(nntp_out,
+                        "%u %s\r\n",
+                        by_msgid ? 0 : index_getuid(group_state, msgno),
+                        body);
         }
     }
 
-    if (found)
+    if (found) {
         prot_printf(nntp_out, ".\r\n");
-    else
+    }
+    else {
         prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
+    }
 }
 
 static void cmd_help(void)
@@ -2361,95 +2992,134 @@ static void cmd_help(void)
     prot_printf(nntp_out, "100 Supported commands:\r\n");
 
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tARTICLE [ message-id | number ]\r\n"
+        prot_printf(nntp_out,
+                    "\tARTICLE [ message-id | number ]\r\n"
                     "\t\tRetrieve entirety of the specified article.\r\n");
     }
     if (!nntp_authstate) {
         if (!nntp_userid) {
-            prot_printf(nntp_out, "\tAUTHINFO SASL mechanism [initial-response]\r\n"
-                        "\t\tPerform an authentication exchange using the specified\r\n"
-                        "\t\tSASL mechanism.\r\n");
-            prot_printf(nntp_out, "\tAUTHINFO USER username\r\n"
+            prot_printf(
+                nntp_out,
+                "\tAUTHINFO SASL mechanism [initial-response]\r\n"
+                "\t\tPerform an authentication exchange using the specified\r\n"
+                "\t\tSASL mechanism.\r\n");
+            prot_printf(nntp_out,
+                        "\tAUTHINFO USER username\r\n"
                         "\t\tPresent username for authentication.\r\n");
         }
-        prot_printf(nntp_out, "\tAUTHINFO PASS password\r\n"
+        prot_printf(nntp_out,
+                    "\tAUTHINFO PASS password\r\n"
                     "\t\tPresent clear-text password for authentication.\r\n");
     }
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tBODY [ message-id | number ]\r\n"
+        prot_printf(nntp_out,
+                    "\tBODY [ message-id | number ]\r\n"
                     "\t\tRetrieve body of the specified article.\r\n");
     }
-    prot_printf(nntp_out, "\tCAPABILITIES\r\n"
+    prot_printf(nntp_out,
+                "\tCAPABILITIES\r\n"
                 "\t\tList the current server capabilities.\r\n");
     if (nntp_capa & MODE_FEED) {
-        prot_printf(nntp_out, "\tCHECK message-id\r\n"
+        prot_printf(nntp_out,
+                    "\tCHECK message-id\r\n"
                     "\t\tCheck if the server wants the specified article.\r\n");
     }
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tDATE\r\n"
+        prot_printf(nntp_out,
+                    "\tDATE\r\n"
                     "\t\tRequest the current server UTC date and time.\r\n");
-        prot_printf(nntp_out, "\tGROUP group\r\n"
+        prot_printf(nntp_out,
+                    "\tGROUP group\r\n"
                     "\t\tSelect a newsgroup for article retrieval.\r\n");
-        prot_printf(nntp_out, "\tHDR header [ message-id | range ]\r\n"
+        prot_printf(nntp_out,
+                    "\tHDR header [ message-id | range ]\r\n"
                     "\t\tRetrieve the specified header/metadata from the\r\n"
                     "\t\tspecified article(s).\r\n");
     }
-    prot_printf(nntp_out, "\tHEAD [ message-id | number ]\r\n"
+    prot_printf(nntp_out,
+                "\tHEAD [ message-id | number ]\r\n"
                 "\t\tRetrieve the headers of the specified article.\r\n");
-    prot_printf(nntp_out, "\tHELP\r\n"
+    prot_printf(nntp_out,
+                "\tHELP\r\n"
                 "\t\tRequest command summary (this text).\r\n");
     if (nntp_capa & MODE_FEED) {
-        prot_printf(nntp_out, "\tIHAVE message-id\r\n"
-                    "\t\tPresent/transfer the specified article to the server.\r\n");
+        prot_printf(
+            nntp_out,
+            "\tIHAVE message-id\r\n"
+            "\t\tPresent/transfer the specified article to the server.\r\n");
     }
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tLAST\r\n"
+        prot_printf(nntp_out,
+                    "\tLAST\r\n"
                     "\t\tSelect the previous article.\r\n");
     }
-    prot_printf(nntp_out, "\tLIST [ ACTIVE wildmat ]\r\n"
+    prot_printf(nntp_out,
+                "\tLIST [ ACTIVE wildmat ]\r\n"
                 "\t\tList the (subset of) valid newsgroups.\r\n");
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tLIST HEADERS [ MSGID | RANGE ]\r\n"
-                    "\t\tList the headers and metadata items available via HDR.\r\n");
-        prot_printf(nntp_out, "\tLIST NEWSGROUPS [wildmat]\r\n"
-                    "\t\tList the descriptions of the specified newsgroups.\r\n");
-        prot_printf(nntp_out, "\tLIST OVERVIEW.FMT\r\n"
-                    "\t\tList the headers and metadata items available via OVER.\r\n");
-        prot_printf(nntp_out, "\tLISTGROUP [group [range]]\r\n"
-                    "\t\tList the article numbers in the specified newsgroup.\r\n");
-        if (config_getswitch(IMAPOPT_ALLOWNEWNEWS))
-            prot_printf(nntp_out, "\tNEWNEWS wildmat date time [GMT]\r\n"
-                        "\t\tList the newly arrived articles in the specified newsgroup(s)\r\n"
+        prot_printf(
+            nntp_out,
+            "\tLIST HEADERS [ MSGID | RANGE ]\r\n"
+            "\t\tList the headers and metadata items available via HDR.\r\n");
+        prot_printf(
+            nntp_out,
+            "\tLIST NEWSGROUPS [wildmat]\r\n"
+            "\t\tList the descriptions of the specified newsgroups.\r\n");
+        prot_printf(
+            nntp_out,
+            "\tLIST OVERVIEW.FMT\r\n"
+            "\t\tList the headers and metadata items available via OVER.\r\n");
+        prot_printf(
+            nntp_out,
+            "\tLISTGROUP [group [range]]\r\n"
+            "\t\tList the article numbers in the specified newsgroup.\r\n");
+        if (config_getswitch(IMAPOPT_ALLOWNEWNEWS)) {
+            prot_printf(nntp_out,
+                        "\tNEWNEWS wildmat date time [GMT]\r\n"
+                        "\t\tList the newly arrived articles in the specified "
+                        "newsgroup(s)\r\n"
                         "\t\tsince the specified date and time.\r\n");
-        prot_printf(nntp_out, "\tNEXT\r\n"
+        }
+        prot_printf(nntp_out,
+                    "\tNEXT\r\n"
                     "\t\tSelect the next article.\r\n");
-        prot_printf(nntp_out, "\tOVER [ message-id | range ]\r\n"
-                    "\t\tRetrieve the overview information for the specified article(s).\r\n");
-        prot_printf(nntp_out, "\tPOST\r\n"
+        prot_printf(nntp_out,
+                    "\tOVER [ message-id | range ]\r\n"
+                    "\t\tRetrieve the overview information for the specified "
+                    "article(s).\r\n");
+        prot_printf(nntp_out,
+                    "\tPOST\r\n"
                     "\t\tPost an article to the server.\r\n");
     }
 
-    prot_printf(nntp_out, "\tQUIT\r\n"
+    prot_printf(nntp_out,
+                "\tQUIT\r\n"
                 "\t\tTerminate the session.\r\n");
     if (tls_starttls_enabled() && !nntp_starttls_done && !nntp_authstate) {
-        prot_printf(nntp_out, "\tSTARTTLS\r\n"
+        prot_printf(nntp_out,
+                    "\tSTARTTLS\r\n"
                     "\t\tStart a TLS negotiation.\r\n");
     }
-    prot_printf(nntp_out, "\tSTAT [ message-id | number ]\r\n"
+    prot_printf(nntp_out,
+                "\tSTAT [ message-id | number ]\r\n"
                 "\t\tCheck if the specified article exists.\r\n");
     if (nntp_capa & MODE_FEED) {
-        prot_printf(nntp_out, "\tTAKETHIS message-id\r\n"
+        prot_printf(nntp_out,
+                    "\tTAKETHIS message-id\r\n"
                     "\t\tTransfer the specified article to the server.\r\n");
     }
     if ((nntp_capa & MODE_READ) && (nntp_authstate || allowanonymous)) {
-        prot_printf(nntp_out, "\tXPAT header message-id|range wildmat\r\n"
-                    "\t\tList the specified article(s) in which the contents\r\n"
-                    "\t\tof the specified header/metadata matches the wildmat.\r\n");
+        prot_printf(
+            nntp_out,
+            "\tXPAT header message-id|range wildmat\r\n"
+            "\t\tList the specified article(s) in which the contents\r\n"
+            "\t\tof the specified header/metadata matches the wildmat.\r\n");
     }
     prot_printf(nntp_out, ".\r\n");
 }
 
-struct list_rock {
+struct list_rock
+{
     int (*proc)(const char *, void *);
     unsigned rights;
     struct wildmat *wild;
@@ -2466,20 +3136,27 @@ static int list_cb(const mbentry_t *mbentry, void *rock)
     struct wildmat *wild;
 
     /* skip mailboxes that we aren't allowed to list */
-    if (!mbentry->acl ||
-        !(cyrus_acl_myrights(nntp_authstate, mbentry->acl) & lrock->rights)) {
+    if (!mbentry->acl
+        || !(cyrus_acl_myrights(nntp_authstate, mbentry->acl) & lrock->rights))
+    {
         return 0;
     }
 
     /* skip mailboxes that we don't want to serve as newsgroups */
-    if (!is_newsgroup(name)) return 0;
+    if (!is_newsgroup(name)) {
+        return 0;
+    }
 
     /* see if the mailbox matches one of our specified wildmats */
     wild = lrock->wild;
-    while (wild->pat && wildmat(name, wild->pat) != 1) wild++;
+    while (wild->pat && wildmat(name, wild->pat) != 1) {
+        wild++;
+    }
 
     /* if we don't have a match, or its a negative match, skip it */
-    if (!wild->pat || wild->not) return 0;
+    if (!wild->pat || wild->not) {
+        return 0;
+    }
 
     if (mbentry->server) {
         /* remote group */
@@ -2488,16 +3165,22 @@ static int list_cb(const mbentry_t *mbentry, void *rock)
         if (!hash_lookup(mbentry->server, &lrock->server_table)) {
             /* add this server to our table */
             hash_insert(mbentry->server,
-                        (void *)0xDEADBEEF, &lrock->server_table);
+                        (void *) 0xDEADBEEF,
+                        &lrock->server_table);
         }
 
         return 0;
     }
-    else if (lrock->proc) return lrock->proc(name, lrock);
-    else return CYRUSDB_DONE;
+    else if (lrock->proc) {
+        return lrock->proc(name, lrock);
+    }
+    else {
+        return CYRUSDB_DONE;
+    }
 }
 
-struct enum_rock {
+struct enum_rock
+{
     const char *cmd;
     char *wild;
 };
@@ -2506,16 +3189,23 @@ struct enum_rock {
  * hash_enumerate() callback function to LIST (proxy)
  */
 static void list_proxy(const char *server,
-                       void *data __attribute__((unused)), void *rock)
+                       void *data __attribute__((unused)),
+                       void *rock)
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;
     char *result;
 
-    be = proxy_findserver(server, &nntp_protocol,
+    be = proxy_findserver(server,
+                          &nntp_protocol,
                           nntp_authstate ? nntp_userid : "anonymous",
-                          &backend_cached, &backend_current, NULL, nntp_in);
-    if (!be) return;
+                          &backend_cached,
+                          &backend_current,
+                          NULL,
+                          nntp_in);
+    if (!be) {
+        return;
+    }
 
     prot_printf(be->out, "LIST %s %s\r\n", erock->cmd, erock->wild);
 
@@ -2540,12 +3230,14 @@ static int do_active(const char *name, void *rock __attribute__((unused)))
         /* can't open group, skip it */
     }
     else {
-        prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
-                    group_state->exists ?
-                    index_getuid(group_state, group_state->exists) :
-                    group_state->mailbox->i.last_uid,
-                    group_state->exists ? index_getuid(group_state, 1) :
-                    group_state->mailbox->i.last_uid+1,
+        prot_printf(nntp_out,
+                    "%s %u %u %c\r\n",
+                    name + strlen(newsprefix),
+                    group_state->exists
+                        ? index_getuid(group_state, group_state->exists)
+                        : group_state->mailbox->i.last_uid,
+                    group_state->exists ? index_getuid(group_state, 1)
+                                        : group_state->mailbox->i.last_uid + 1,
                     postable ? 'y' : 'n');
         index_close(&group_state);
     }
@@ -2557,48 +3249,60 @@ static int do_active(const char *name, void *rock __attribute__((unused)))
  * annotatemore_findall() callback function to LIST NEWSGROUPS
  */
 static int newsgroups_cb(const char *mailbox,
-                  uint32_t uid __attribute__((unused)),
-                  const char *entry __attribute__((unused)),
-                  const char *userid,
-                  const struct buf *value,
-                  const struct annotate_metadata *mdata __attribute__((unused)),
-                  void *rock)
+                         uint32_t uid __attribute__((unused)),
+                         const char *entry __attribute__((unused)),
+                         const char *userid,
+                         const struct buf *value,
+                         const struct annotate_metadata *mdata
+                         __attribute__((unused)),
+                         void *rock)
 {
     struct wildmat *wild = (struct wildmat *) rock;
 
     /* skip personal mailboxes */
-    if ((!strncasecmp(mailbox, "INBOX", 5) &&
-         (!mailbox[5] || mailbox[5] == '.')) ||
-        !strncmp(mailbox, "user.", 5))
+    if ((!strncasecmp(mailbox, "INBOX", 5)
+         && (!mailbox[5] || mailbox[5] == '.'))
+        || !strncmp(mailbox, "user.", 5))
+    {
         return 0;
+    }
 
     /* see if the mailbox matches one of our wildmats */
-    while (wild->pat && wildmat(mailbox, wild->pat) != 1) wild++;
+    while (wild->pat && wildmat(mailbox, wild->pat) != 1) {
+        wild++;
+    }
 
     /* if we don't have a match, or its a negative match, skip it */
-    if (!wild->pat || wild->not) return 0;
+    if (!wild->pat || wild->not) {
+        return 0;
+    }
 
     /* we only care about shared /comment */
-    if (userid[0]) return 0;
+    if (userid[0]) {
+        return 0;
+    }
 
-    prot_printf(nntp_out, "%s\t%s\r\n", mailbox+strlen(newsprefix),
-                value->s);
+    prot_printf(nntp_out, "%s\t%s\r\n", mailbox + strlen(newsprefix), value->s);
 
     return 0;
 }
 
 static void cmd_list(char *arg1, char *arg2)
 {
-    if (!arg1)
+    if (!arg1) {
         arg1 = (char *) "active";
-    else
+    }
+    else {
         lcase(arg1);
+    }
 
     if (!strcmp(arg1, "active")) {
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = (char *) "*";
+        if (!arg2) {
+            arg2 = (char *) "*";
+        }
 
         erock.cmd = "ACTIVE";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -2627,8 +3331,9 @@ static void cmd_list(char *arg1, char *arg2)
         free_wildmats(lrock.wild);
         free(erock.wild);
 
-        if (group_state)
+        if (group_state) {
             index_close(&group_state);
+        }
     }
     else if (!(nntp_capa & MODE_READ)) {
         prot_printf(nntp_out, "502 Permission denied\r\n");
@@ -2655,7 +3360,9 @@ static void cmd_list(char *arg1, char *arg2)
         struct list_rock lrock;
         struct enum_rock erock;
 
-        if (!arg2) arg2 = (char *) "*";
+        if (!arg2) {
+            arg2 = (char *) "*";
+        }
 
         erock.cmd = "NEWSGROUPS";
         erock.wild = xstrdup(arg2); /* make a copy before we munge it */
@@ -2677,8 +3384,13 @@ static void cmd_list(char *arg1, char *arg2)
 
         strcpy(pattern, newsprefix);
         strcat(pattern, "*");
-        annotatemore_findall_pattern(pattern, 0, "/comment", /*modseq*/0,
-                             newsgroups_cb, lrock.wild, /*flags*/0);
+        annotatemore_findall_pattern(pattern,
+                                     0,
+                                     "/comment",
+                                     /*modseq*/ 0,
+                                     newsgroups_cb,
+                                     lrock.wild,
+                                     /*flags*/ 0);
 
         prot_printf(nntp_out, ".\r\n");
 
@@ -2705,7 +3417,8 @@ static void cmd_list(char *arg1, char *arg2)
             /* new OVER format */
             prot_printf(nntp_out, ":bytes\r\n");
             prot_printf(nntp_out, ":lines\r\n");
-        } else {
+        }
+        else {
             /* old XOVER format */
             prot_printf(nntp_out, "Bytes:\r\n");
             prot_printf(nntp_out, "Lines:\r\n");
@@ -2713,8 +3426,9 @@ static void cmd_list(char *arg1, char *arg2)
         prot_printf(nntp_out, "Xref:full\r\n");
         prot_printf(nntp_out, ".\r\n");
     }
-    else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions") ||
-             !strcmp(arg1, "distrib.pats")) {
+    else if (!strcmp(arg1, "active.times") || !strcmp(arg1, "distributions")
+             || !strcmp(arg1, "distrib.pats"))
+    {
         prot_printf(nntp_out, "503 Unsupported LIST command\r\n");
     }
     else {
@@ -2735,7 +3449,8 @@ static void cmd_mode(char *arg)
         if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
             prot_printf(nntp_out, " Cyrus NNTP %s", CYRUS_VERSION);
         }
-        prot_printf(nntp_out, " server ready, posting %s\r\n",
+        prot_printf(nntp_out,
+                    " server ready, posting %s\r\n",
                     (nntp_capa & MODE_READ) ? "allowed" : "prohibited");
     }
     else if (!strcmp(arg, "stream")) {
@@ -2764,18 +3479,20 @@ static void cmd_newgroups(time_t tstamp __attribute__((unused)))
 #endif
 }
 
-
 /*
  * duplicate_find() callback function to list NEWNEWS
  */
-struct newrock {
+struct newrock
+{
     time_t tstamp;
     struct wildmat *wild;
     char lastid[1024];
 };
 
-static int newnews_cb(const duplicate_key_t *dkey, time_t mark,
-                      unsigned long uid, void *rock)
+static int newnews_cb(const duplicate_key_t *dkey,
+                      time_t mark,
+                      unsigned long uid,
+                      void *rock)
 {
     struct newrock *nrock = (struct newrock *) rock;
 
@@ -2783,12 +3500,15 @@ static int newnews_cb(const duplicate_key_t *dkey, time_t mark,
      * the message is newer than the tstamp, and
      * the message is in mailbox we serve as a newsgroup..
      */
-    if (strcmp(dkey->id, nrock->lastid) && mark >= nrock->tstamp &&
-        uid && is_newsgroup(dkey->to)) {
+    if (strcmp(dkey->id, nrock->lastid) && mark >= nrock->tstamp && uid
+        && is_newsgroup(dkey->to))
+    {
         struct wildmat *wild = nrock->wild;
 
         /* see if the mailbox matches one of our specified wildmats */
-        while (wild->pat && wildmat(dkey->to, wild->pat) != 1) wild++;
+        while (wild->pat && wildmat(dkey->to, wild->pat) != 1) {
+            wild++;
+        }
 
         /* we have a match, and its not a negative match */
         if (wild->pat && !wild->not) {
@@ -2827,15 +3547,17 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
     last_msgno = index_finduid(group_state, last, FIND_LE);
 
     for (; msgno <= last_msgno; msgno++) {
-        if (!found++)
+        if (!found++) {
             prot_printf(nntp_out, "224 Overview information follows:\r\n");
+        }
 
         if ((over = index_overview(group_state, msgno))) {
             struct buf xref = BUF_INITIALIZER;
 
             build_xref(over->msgid, &xref, 0);
 
-            prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
+            prot_printf(nntp_out,
+                        "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
                         msgid ? 0 : over->uid,
                         over->subj ? over->subj : "",
                         over->from ? over->from : "",
@@ -2843,32 +3565,35 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
                         over->msgid ? over->msgid : "",
                         over->ref ? over->ref : "",
                         over->bytes + xref.len + 2, /* +2 for \r\n */
-                        over->lines, buf_cstring(&xref));
+                        over->lines,
+                        buf_cstring(&xref));
             buf_free(&xref);
         }
     }
 
-    if (found)
+    if (found) {
         prot_printf(nntp_out, ".\r\n");
-    else
+    }
+    else {
         prot_printf(nntp_out, "423 No such article(s) in this newsgroup\r\n");
+    }
 }
-
 
 #define RCPT_GROW 30
 
 typedef struct message_data message_data_t;
 
-struct message_data {
-    struct protstream *data;    /* message in temp file */
-    FILE *f;                    /* FILE * corresponding */
+struct message_data
+{
+    struct protstream *data; /* message in temp file */
+    FILE *f;                 /* FILE * corresponding */
 
-    char *id;                   /* message id */
-    char *path;                 /* path */
-    char *control;              /* control message */
-    unsigned long size;         /* size of message in bytes */
-    strarray_t rcpt;            /* mailboxes to post message */
-    char *date;                 /* date field of header */
+    char *id;           /* message id */
+    char *path;         /* path */
+    char *control;      /* control message */
+    unsigned long size; /* size of message in bytes */
+    strarray_t rcpt;    /* mailboxes to post message */
+    char *date;         /* date field of header */
 
     hdrcache_t hdrcache;
 };
@@ -2895,10 +3620,12 @@ static int msg_new(message_data_t **m)
 
 static void msg_free(message_data_t *m)
 {
-    if (m->data)
+    if (m->data) {
         prot_free(m->data);
-    if (m->f)
+    }
+    if (m->f) {
         fclose(m->f);
+    }
     free(m->id);
     free(m->path);
     free(m->control);
@@ -2918,13 +3645,15 @@ static void parse_groups(const char *groups, message_data_t *msg)
     char *buf = xstrdup(groups);
     const char sep[] = ", \t";
 
-    for (p = strtok(buf, sep) ; p ; p = strtok(NULL, sep)) {
+    for (p = strtok(buf, sep); p; p = strtok(NULL, sep)) {
         /* construct the mailbox name */
         free(rcpt);
-        rcpt = strconcat(newsprefix, p, (char *)NULL);
+        rcpt = strconcat(newsprefix, p, (char *) NULL);
 
         /* skip mailboxes that we don't serve as newsgroups */
-        if (!is_newsgroup(rcpt)) continue;
+        if (!is_newsgroup(rcpt)) {
+            continue;
+        }
 
         /* Only add mailboxes that exist */
         if (!proxy_mlookup(rcpt, NULL, NULL, NULL)) {
@@ -2943,9 +3672,12 @@ static void parse_groups(const char *groups, message_data_t *msg)
  *  'newspostuser' contains an optional userid used to create "post"
  *    email addresses from newsgroup names
  */
-static void add_header(const char *destname, const char **dest,
-                       const char **src, const char *newspostuser,
-                       hdrcache_t hdrcache, FILE *f)
+static void add_header(const char *destname,
+                       const char **dest,
+                       const char **src,
+                       const char *newspostuser,
+                       hdrcache_t hdrcache,
+                       FILE *f)
 {
     struct buf buf = BUF_INITIALIZER;
     char *newdest = NULL;
@@ -2970,17 +3702,21 @@ static void add_header(const char *destname, const char **dest,
 
             for (s = src[0];; s += n) {
                 /* skip whitespace */
-                while (s && *s &&
-                       (Uisspace(*s) || *s == ',')) s++;
-                if (!s || !*s) break;
+                while (s && *s && (Uisspace(*s) || *s == ',')) {
+                    s++;
+                }
+                if (!s || !*s) {
+                    break;
+                }
 
                 /* find end of source address/group */
                 n = strcspn(s, ", \t");
 
                 /* append the new (translated) address */
-                buf_printf(&buf, "%s%s+%.*s",
-                           sep, newspostuser, (int) n, s);
-                if (config_defdomain) buf_printf(&buf, "@%s", config_defdomain);
+                buf_printf(&buf, "%s%s+%.*s", sep, newspostuser, (int) n, s);
+                if (config_defdomain) {
+                    buf_printf(&buf, "@%s", config_defdomain);
+                }
 
                 sep = ", ";
             }
@@ -2995,7 +3731,8 @@ static void add_header(const char *destname, const char **dest,
             /* add the new header to the cache */
             spool_cache_header(xstrdup(destname), newdest, hdrcache);
         }
-    } else if (dest) {
+    }
+    else if (dest) {
         /* no source header, use original dest header */
         newdest = (char *) dest[0];
     }
@@ -3003,8 +3740,10 @@ static void add_header(const char *destname, const char **dest,
     if (newdest) {
         /* add the new dest header to the spool file */
         fprintf(f, "%s: ", destname);
-        if (fold) fprintf(f, "%.*s\r\n\t", fold, newdest);
-        fprintf(f, "%s\r\n", newdest+fold);
+        if (fold) {
+            fprintf(f, "%.*s\r\n\t", fold, newdest);
+        }
+        fprintf(f, "%s\r\n", newdest + fold);
     }
 }
 
@@ -3023,10 +3762,10 @@ static int savemsg(message_data_t *m, FILE *f)
     static int post_count = 0;
     FILE *stagef = NULL;
     const char *skipheaders[] = {
-        "Path",         /* need to prepend our servername */
-        "Xref",         /* need to remove (generated on the fly) */
-        "To",           /* need to add "post" email addresses */
-        "Reply-To",     /* need to add "post" email addresses */
+        "Path",     /* need to prepend our servername */
+        "Xref",     /* need to remove (generated on the fly) */
+        "To",       /* need to add "post" email addresses */
+        "Reply-To", /* need to add "post" email addresses */
         NULL
     };
 
@@ -3047,13 +3786,15 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get path */
     if ((body = spool_getheader(m->hdrcache, "path")) != NULL) {
         /* prepend to the cached path */
-        m->path = strconcat(config_servername, "!", body[0], (char *)NULL);
+        m->path = strconcat(config_servername, "!", body[0], (char *) NULL);
         spool_replace_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
-    } else {
+    }
+    else {
         /* no path, create one */
-        m->path = strconcat(config_servername, "!",
+        m->path = strconcat(config_servername,
+                            "!",
                             nntp_userid ? nntp_userid : "anonymous",
-                            (char *)NULL);
+                            (char *) NULL);
         spool_cache_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
     }
     fprintf(f, "Path: %s\r\n", m->path);
@@ -3061,13 +3802,18 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get message-id */
     if ((body = spool_getheader(m->hdrcache, "message-id")) != NULL) {
         m->id = xstrdup(body[0]);
-    } else {
+    }
+    else {
         /* no message-id, create one */
         pid_t p = getpid();
 
         m->id = xmalloc(40 + strlen(config_servername));
-        sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) now,
-                post_count++, config_servername);
+        sprintf(m->id,
+                "<cmu-nntpd-%d-%d-%d@%s>",
+                p,
+                (int) now,
+                post_count++,
+                config_servername);
         fprintf(f, "Message-ID: %s\r\n", m->id);
         spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
     }
@@ -3075,7 +3821,7 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get date */
     if ((body = spool_getheader(m->hdrcache, "date")) == NULL) {
         /* no date, create one */
-        char datestr[RFC5322_DATETIME_MAX+1];
+        char datestr[RFC5322_DATETIME_MAX + 1];
 
         time_to_rfc5322(now, datestr, sizeof(datestr));
         m->date = xstrdup(datestr);
@@ -3099,8 +3845,9 @@ static int savemsg(message_data_t *m, FILE *f)
         sprintf(s, "%scontrol.%.*s", newsprefix, (int) len, m->control);
 
         strarray_appendm(&m->rcpt, s);
-    } else {
-        m->control = NULL;      /* no control */
+    }
+    else {
+        m->control = NULL; /* no control */
 
         /* get newsgroups */
         if ((groups = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
@@ -3110,7 +3857,8 @@ static int savemsg(message_data_t *m, FILE *f)
                 r = IMAP_MAILBOX_NONEXISTENT; /* no newsgroups that we serve */
             }
             if (!r) {
-                const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
+                const char *newspostuser =
+                    config_getstring(IMAPOPT_NEWSPOSTUSER);
                 uint64_t newsaddheaders =
                     config_getbitfield(IMAPOPT_NEWSADDHEADERS);
                 const char **to = NULL, **replyto = NULL;
@@ -3118,8 +3866,9 @@ static int savemsg(message_data_t *m, FILE *f)
                 /* add To: header to spooled message file,
                    optionally adding "post" email addr based on newsgroup */
                 body = spool_getheader(m->hdrcache, "to");
-                if (newspostuser &&
-                    (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_TO)) {
+                if (newspostuser
+                    && (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_TO))
+                {
                     to = groups;
                 }
                 add_header("To", body, to, newspostuser, m->hdrcache, f);
@@ -3127,25 +3876,39 @@ static int savemsg(message_data_t *m, FILE *f)
                 /* add Reply-To: header to spooled message file,
                    optionally adding "post" email addr based on newsgroup */
                 body = spool_getheader(m->hdrcache, "reply-to");
-                if (newspostuser &&
-                    (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_REPLYTO)) {
+                if (newspostuser
+                    && (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_REPLYTO))
+                {
                     /* determine which groups header to use for reply-to */
                     replyto = spool_getheader(m->hdrcache, "followup-to");
-                    if (!replyto) replyto = groups;
-                    else if (!strncasecmp(replyto[0], "poster",
-                                          strcspn(replyto[0], " \t"))) {
+                    if (!replyto) {
+                        replyto = groups;
+                    }
+                    else if (!strncasecmp(replyto[0],
+                                          "poster",
+                                          strcspn(replyto[0], " \t")))
+                    {
                         /* reply doesn't go to group */
                         newspostuser = NULL;
 
-                        if (body) replyto = NULL;
-                        else replyto = spool_getheader(m->hdrcache, "from");
+                        if (body) {
+                            replyto = NULL;
+                        }
+                        else {
+                            replyto = spool_getheader(m->hdrcache, "from");
+                        }
                     }
                 }
-                add_header("Reply-To", body, replyto, newspostuser,
-                           m->hdrcache, f);
+                add_header("Reply-To",
+                           body,
+                           replyto,
+                           newspostuser,
+                           m->hdrcache,
+                           f);
             }
-        } else {
-            r = NNTP_NO_NEWSGROUPS;             /* no newsgroups header */
+        }
+        else {
+            r = NNTP_NO_NEWSGROUPS; /* no newsgroups header */
         }
 
         if (r) {
@@ -3198,7 +3961,9 @@ static int savemsg(message_data_t *m, FILE *f)
 
     r = spool_copy_msg(nntp_in, f);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     fflush(f);
     if (ferror(f)) {
@@ -3223,18 +3988,22 @@ static int deliver_remote(message_data_t *msg, struct dest *dlist)
         struct backend *be;
         char buf[4096];
 
-        be = proxy_findserver(d->server, &nntp_protocol,
+        be = proxy_findserver(d->server,
+                              &nntp_protocol,
                               nntp_authstate ? nntp_userid : "anonymous",
-                              &backend_cached, &backend_current,
-                              NULL, nntp_in);
-        if (!be) return IMAP_SERVER_UNAVAILABLE;
+                              &backend_cached,
+                              &backend_current,
+                              NULL,
+                              nntp_in);
+        if (!be) {
+            return IMAP_SERVER_UNAVAILABLE;
+        }
 
         /* tell the backend about our new article */
         prot_printf(be->out, "IHAVE %s\r\n", msg->id);
         prot_flush(be->out);
 
-        if (!prot_fgets(buf, sizeof(buf), be->in) ||
-            strncmp("335", buf, 3)) {
+        if (!prot_fgets(buf, sizeof(buf), be->in) || strncmp("335", buf, 3)) {
             syslog(LOG_NOTICE, "backend doesn't want article %s", msg->id);
             continue;
         }
@@ -3242,21 +4011,25 @@ static int deliver_remote(message_data_t *msg, struct dest *dlist)
         /* send the article */
         rewind(msg->f);
         while (fgets(buf, sizeof(buf), msg->f)) {
-            if (buf[0] == '.') prot_putc('.', be->out);
+            if (buf[0] == '.') {
+                prot_putc('.', be->out);
+            }
             do {
                 prot_printf(be->out, "%s", buf);
-            } while (buf[strlen(buf)-1] != '\n' &&
-                     fgets(buf, sizeof(buf), msg->f));
+            } while (buf[strlen(buf) - 1] != '\n'
+                     && fgets(buf, sizeof(buf), msg->f));
         }
 
         /* Protect against messages not ending in CRLF */
-        if (buf[strlen(buf)-1] != '\n') prot_printf(be->out, "\r\n");
+        if (buf[strlen(buf) - 1] != '\n') {
+            prot_printf(be->out, "\r\n");
+        }
 
         prot_printf(be->out, ".\r\n");
 
-        if (!prot_fgets(buf, sizeof(buf), be->in) ||
-            strncmp("235", buf, 3)) {
-            syslog(LOG_WARNING, "article %s transfer to backend failed",
+        if (!prot_fgets(buf, sizeof(buf), be->in) || strncmp("235", buf, 3)) {
+            syslog(LOG_WARNING,
+                   "article %s transfer to backend failed",
                    msg->id);
             return NNTP_FAIL_TRANSFER;
         }
@@ -3272,7 +4045,7 @@ static int deliver(message_data_t *msg)
     struct body *body = NULL;
     struct dest *dlist = NULL;
     mbentry_t *mbentry = NULL;
-    duplicate_key_t dkey = {msg->id, NULL, msg->date};
+    duplicate_key_t dkey = { msg->id, NULL, msg->date };
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt.count; n++) {
@@ -3284,10 +4057,14 @@ static int deliver(message_data_t *msg)
 
         /* look it up */
         r = proxy_mlookup(rcpt, &mbentry, NULL, NULL);
-        if (r) return IMAP_MAILBOX_NONEXISTENT;
+        if (r) {
+            return IMAP_MAILBOX_NONEXISTENT;
+        }
 
-        if (!(mbentry->acl && (myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl)) &&
-              (myrights & ACL_POST))) {
+        if (!(mbentry->acl
+              && (myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl))
+              && (myrights & ACL_POST)))
+        {
             mboxlist_entry_free(&mbentry);
             return IMAP_PERMISSION_DENIED;
         }
@@ -3300,30 +4077,46 @@ static int deliver(message_data_t *msg)
             /* local group */
             struct appendstate as;
             static const quota_t qdiffs[QUOTA_NUMRESOURCES] =
-                                    QUOTA_DIFFS_INITIALIZER;
+                QUOTA_DIFFS_INITIALIZER;
 
-            if (msg->id &&
-                duplicate_check(&dkey)) {
+            if (msg->id && duplicate_check(&dkey)) {
                 /* duplicate message */
                 duplicate_log(&dkey, "nntp delivery");
                 continue;
             }
 
-            r = append_setup(&as, rcpt,
+            r = append_setup(&as,
+                             rcpt,
                              nntp_authstate ? nntp_userid : NULL,
-                             nntp_authstate, ACL_POST, qdiffs, NULL, 0, 0);
+                             nntp_authstate,
+                             ACL_POST,
+                             qdiffs,
+                             NULL,
+                             0,
+                             0);
 
             if (!r) {
                 prot_rewind(msg->data);
                 if (stage) {
-                    r = append_fromstage(&as, &body, stage, 0, 0,
-                                         NULL, !singleinstance,
-                                         /*annotations*/NULL);
-                } else {
-                    /* XXX should never get here */
-                    r = append_fromstream(&as, &body, msg->data, msg->size, 0, NULL);
+                    r = append_fromstage(&as,
+                                         &body,
+                                         stage,
+                                         0,
+                                         0,
+                                         NULL,
+                                         !singleinstance,
+                                         /*annotations*/ NULL);
                 }
-                if (r || ( msg->id && duplicate_check(&dkey) ) ) {
+                else {
+                    /* XXX should never get here */
+                    r = append_fromstream(&as,
+                                          &body,
+                                          msg->data,
+                                          msg->size,
+                                          0,
+                                          NULL);
+                }
+                if (r || (msg->id && duplicate_check(&dkey))) {
                     append_abort(&as);
 
                     if (!r) {
@@ -3337,8 +4130,9 @@ static int deliver(message_data_t *msg)
                 }
             }
 
-            if (!r && msg->id)
+            if (!r && msg->id) {
                 duplicate_mark(&dkey, time(NULL), as.baseuid);
+            }
 
             if (r) {
                 mboxlist_entry_free(&mbentry);
@@ -3373,7 +4167,7 @@ static int deliver(message_data_t *msg)
     return r;
 }
 
-#if 0  /* XXX  Need to review control message auth/authz and implementation */
+#if 0 /* XXX  Need to review control message auth/authz and implementation */
 static int newgroup(message_data_t *msg)
 {
     int r;
@@ -3540,22 +4334,29 @@ static int strip_post_addresses(char *body)
     size_t postlen, n;
     int nonpost = 0;
 
-    if (!newspostuser) return 1;  /* we didn't add this header, so leave it */
+    if (!newspostuser) {
+        return 1; /* we didn't add this header, so leave it */
+    }
     postlen = strlen(newspostuser);
 
     for (p = body;; p += n) {
         end = p;
 
         /* skip whitespace */
-        while (p && *p && (Uisspace(*p) || *p == ',')) p++;
+        while (p && *p && (Uisspace(*p) || *p == ',')) {
+            p++;
+        }
 
-        if (!p || !*p) break;
+        if (!p || !*p) {
+            break;
+        }
 
         /* find end of address */
         n = strcspn(p, ", \t\r\n");
 
-        if ((n > postlen + 1) &&  /* +1 for '+' */
-            !strncmp(p, newspostuser, postlen) && p[postlen] == '+') {
+        if ((n > postlen + 1) && /* +1 for '+' */
+            !strncmp(p, newspostuser, postlen) && p[postlen] == '+')
+        {
             /* found a post address.  since we always add the post
              * addresses to the end of the header, truncate it right here.
              */
@@ -3568,7 +4369,6 @@ static int strip_post_addresses(char *body)
 
     return nonpost;
 }
-
 
 static void feedpeer(char *peer, message_data_t *msg)
 {
@@ -3584,10 +4384,12 @@ static void feedpeer(char *peer, message_data_t *msg)
 
     /* parse the peer */
     user = pass = host = port = wild = NULL;
-    if ((wild = strrchr(peer, '/')))
+    if ((wild = strrchr(peer, '/'))) {
         *wild++ = '\0';
-    else if ((wild = strrchr(peer, ':')) &&
-             strcspn(wild, "!*?,.") != strlen(wild)) {
+    }
+    else if ((wild = strrchr(peer, ':'))
+             && strcspn(wild, "!*?,.") != strlen(wild))
+    {
         *wild++ = '\0';
         host = peer;
         oldform = 1;
@@ -3596,12 +4398,17 @@ static void feedpeer(char *peer, message_data_t *msg)
         if ((host = strchr(peer, '@'))) {
             *host++ = '\0';
             user = peer;
-            if ((pass = strchr(user, ':'))) *pass++ = '\0';
+            if ((pass = strchr(user, ':'))) {
+                *pass++ = '\0';
+            }
         }
-        else
+        else {
             host = peer;
+        }
 
-        if ((port = strchr(host, ':'))) *port++ = '\0';
+        if ((port = strchr(host, ':'))) {
+            *port++ = '\0';
+        }
     }
 
     /* check path to see if this message came through our peer */
@@ -3622,8 +4429,7 @@ static void feedpeer(char *peer, message_data_t *msg)
         for (n = 0; n < msg->rcpt.count; n++) {
             /* see if the newsgroup matches one of our wildmats */
             w = wmat;
-            while (w->pat &&
-                   wildmat(msg->rcpt.data[n], w->pat) != 1) {
+            while (w->pat && wildmat(msg->rcpt.data[n], w->pat) != 1) {
                 w++;
             }
 
@@ -3650,29 +4456,36 @@ static void feedpeer(char *peer, message_data_t *msg)
         free_wildmats(wmat);
     }
 
-    if (!feed) return;
+    if (!feed) {
+        return;
+    }
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = 0;
-    if (!port || !*port) port = (char *) "119";
+    if (!port || !*port) {
+        port = (char *) "119";
+    }
     if (getaddrinfo(host, port, &hints, &res0) != 0) {
         syslog(LOG_ERR, "getaddrinfo(%s, %s) failed: %m", host, port);
         return;
     }
 
     for (res = res0; res; res = res->ai_next) {
-        if ((sock = socket(res->ai_family, res->ai_socktype,
-                           res->ai_protocol)) < 0)
+        if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol))
+            < 0)
+        {
             continue;
-        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+        }
+        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) {
             break;
+        }
         close(sock);
         sock = -1;
     }
     freeaddrinfo(res0);
-    if(sock < 0) {
+    if (sock < 0) {
         syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
         return;
     }
@@ -3754,19 +4567,27 @@ static void feedpeer(char *peer, message_data_t *msg)
         if (!body) {
             if (!strncasecmp(buf, "Reply-To:", 9)) {
                 /* strip any post addresses, skip if becomes empty */
-                if (!strip_post_addresses(buf+9)) skip = 1;
+                if (!strip_post_addresses(buf + 9)) {
+                    skip = 1;
+                }
             }
         }
 
-        if (!skip && buf[0] == '.') prot_putc('.', pout);
+        if (!skip && buf[0] == '.') {
+            prot_putc('.', pout);
+        }
         do {
-            if (!skip) prot_printf(pout, "%s", buf);
-        } while (buf[strlen(buf)-1] != '\n' &&
-                 fgets(buf, sizeof(buf), msg->f));
+            if (!skip) {
+                prot_printf(pout, "%s", buf);
+            }
+        } while (buf[strlen(buf) - 1] != '\n'
+                 && fgets(buf, sizeof(buf), msg->f));
     }
 
     /* Protect against messages not ending in CRLF */
-    if (buf[strlen(buf)-1] != '\n') prot_printf(pout, "\r\n");
+    if (buf[strlen(buf) - 1] != '\n') {
+        prot_printf(pout, "\r\n");
+    }
 
     prot_printf(pout, ".\r\n");
 
@@ -3774,7 +4595,7 @@ static void feedpeer(char *peer, message_data_t *msg)
         syslog(LOG_ERR, "article %s transfer to peer failed", msg->id);
     }
 
-  quit:
+quit:
     prot_printf(pout, "QUIT\r\n");
     prot_flush(pout);
 
@@ -3802,18 +4623,23 @@ static void news2mail(message_data_t *msg)
     smtp_envelope_t sm_env = SMTP_ENVELOPE_INITIALIZER;
     smtp_envelope_set_from(&sm_env, "");
 
-    for (n = 0; n < msg->rcpt.count ; n++) {
+    for (n = 0; n < msg->rcpt.count; n++) {
         /* see if we want to send this to a mailing list */
         buf_free(&attrib);
         r = annotatemore_lookup(msg->rcpt.data[n],
-                                IMAP_ANNOT_NS "news2mail", "",
+                                IMAP_ANNOT_NS "news2mail",
+                                "",
                                 &attrib);
-        if (r) continue;
+        if (r) {
+            continue;
+        }
 
         /* add the email address to the RCPT envelope and to our To: header */
         if (attrib.s) {
             smtp_envelope_add_rcpt(&sm_env, buf_cstring(&attrib));
-            if (to[0]) strlcat(to, ", ", sizeof(to));
+            if (to[0]) {
+                strlcat(to, ", ", sizeof(to));
+            }
             strlcat(to, buf_cstring(&attrib), sizeof(to));
         }
     }
@@ -3825,8 +4651,11 @@ static void news2mail(message_data_t *msg)
 
         r = smtpclient_open(&sm);
 
-        if (r)
-            syslog(LOG_ERR, "news2mail: could not open SMTP client: %s", error_message(r));
+        if (r) {
+            syslog(LOG_ERR,
+                   "news2mail: could not open SMTP client: %s",
+                   error_message(r));
+        }
         else {
             int body = 0, skip, found_to = 0;
 
@@ -3838,7 +4667,9 @@ static void news2mail(message_data_t *msg)
                     body = 1;
 
                     /* insert a To: header if the message doesn't have one */
-                    if (!found_to) buf_printf(&msgbuf, "To: %s\r\n", to);
+                    if (!found_to) {
+                        buf_printf(&msgbuf, "To: %s\r\n", to);
+                    }
                 }
 
                 skip = 0;
@@ -3847,33 +4678,42 @@ static void news2mail(message_data_t *msg)
                     if (!strncasecmp(buf, "Newsgroups:", 11)) {
                         /* rename Newsgroups: to X-Newsgroups: */
                         buf_appendcstr(&msgbuf, "X-");
-                    } else if (!strncasecmp(buf, "Xref:", 5) ||
-                               !strncasecmp(buf, "Path:", 5) ||
-                               !strncasecmp(buf, "NNTP-Posting-", 13)) {
+                    }
+                    else if (!strncasecmp(buf, "Xref:", 5)
+                             || !strncasecmp(buf, "Path:", 5)
+                             || !strncasecmp(buf, "NNTP-Posting-", 13))
+                    {
                         /* skip these (for now) */
                         skip = 1;
-                    } else if (!strncasecmp(buf, "To:", 3)) {
+                    }
+                    else if (!strncasecmp(buf, "To:", 3)) {
                         /* insert our mailing list RCPTs first, and then
                            fold the header to accomodate the original RCPTs */
                         buf_printf(&msgbuf, "To: %s,\r\n", to);
                         /* overwrite the original "To:" with spaces */
                         memset(buf, ' ', 3);
                         found_to = 1;
-                    } else if (!strncasecmp(buf, "Reply-To:", 9)) {
+                    }
+                    else if (!strncasecmp(buf, "Reply-To:", 9)) {
                         /* strip any post addresses, skip if becomes empty */
-                        if (!strip_post_addresses(buf+9)) skip = 1;
+                        if (!strip_post_addresses(buf + 9)) {
+                            skip = 1;
+                        }
                     }
                 }
 
                 do {
-                    if (!skip) buf_appendcstr(&msgbuf, buf);
-                } while (buf[strlen(buf)-1] != '\n' &&
-                         fgets(buf, sizeof(buf), msg->f));
+                    if (!skip) {
+                        buf_appendcstr(&msgbuf, buf);
+                    }
+                } while (buf[strlen(buf) - 1] != '\n'
+                         && fgets(buf, sizeof(buf), msg->f));
             }
 
             /* Protect against messages not ending in CRLF */
-            if (buf[strlen(buf)-1] != '\n') buf_appendcstr(&msgbuf, "\r\n");
-
+            if (buf[strlen(buf) - 1] != '\n') {
+                buf_appendcstr(&msgbuf, "\r\n");
+            }
         }
 
         r = smtpclient_open(&sm);
@@ -3904,27 +4744,36 @@ static void cmd_post(char *msgid, int mode)
         /* already have it */
         syslog(LOG_INFO,
                "dupelim: news article id %s already present in mailbox %s",
-               msgid, mboxname);
+               msgid,
+               mboxname);
         r = NNTP_DONT_SEND;
     }
 
     if (mode != POST_TAKETHIS) {
         if (r) {
-            prot_printf(nntp_out, "%u %s Do not send article\r\n",
-                        post_codes[mode].no, msgid ? msgid : "");
+            prot_printf(nntp_out,
+                        "%u %s Do not send article\r\n",
+                        post_codes[mode].no,
+                        msgid ? msgid : "");
             return;
         }
         else {
-            prot_printf(nntp_out, "%u %s Send article\r\n",
-                        post_codes[mode].cont, msgid ? msgid : "");
-            if (mode == POST_CHECK) return;
+            prot_printf(nntp_out,
+                        "%u %s Send article\r\n",
+                        post_codes[mode].cont,
+                        msgid ? msgid : "");
+            if (mode == POST_CHECK) {
+                return;
+            }
         }
     }
 
     /* get a spool file (if needed) */
     if (!r) {
         f = tmpfile();
-        if (!f) r = IMAP_IOERROR;
+        if (!f) {
+            r = IMAP_IOERROR;
+        }
     }
 
     if (f) {
@@ -3934,12 +4783,16 @@ static void cmd_post(char *msgid, int mode)
         r = savemsg(msg, f);
 
         /* deliver the article */
-        if (!r) r = deliver(msg);
+        if (!r) {
+            r = deliver(msg);
+        }
 
         if (!r) {
-            prot_printf(nntp_out, "%u %s Article received ok\r\n",
-                        post_codes[mode].ok, msg->id ? msg->id : "");
-#if 0  /* XXX  Need to review control message auth/authz and implementation */
+            prot_printf(nntp_out,
+                        "%u %s Article received ok\r\n",
+                        post_codes[mode].ok,
+                        msg->id ? msg->id : "");
+#if 0 /* XXX  Need to review control message auth/authz and implementation */
             /* process control messages */
             if (msg->control && !config_mupdate_server) {
                 int r1 = 0;
@@ -3977,12 +4830,16 @@ static void cmd_post(char *msgid, int mode)
 
                     while (cur_peer) {
                         /* eat any leading whitespace */
-                        while (Uisspace(*cur_peer)) cur_peer++;
+                        while (Uisspace(*cur_peer)) {
+                            cur_peer++;
+                        }
 
                         /* find end of peer */
-                        if ((next_peer = strchr(cur_peer, ' ')) ||
-                            (next_peer = strchr(cur_peer, '\t')))
+                        if ((next_peer = strchr(cur_peer, ' '))
+                            || (next_peer = strchr(cur_peer, '\t')))
+                        {
                             *next_peer++ = '\0';
+                        }
 
                         /* feed the article to this peer */
                         feedpeer(cur_peer, msg);
@@ -4000,7 +4857,9 @@ static void cmd_post(char *msgid, int mode)
         }
 
         msg_free(msg); /* does fclose() */
-        if (stage) append_removestage(stage);
+        if (stage) {
+            append_removestage(stage);
+        }
         stage = NULL;
     }
     else {
@@ -4009,8 +4868,10 @@ static void cmd_post(char *msgid, int mode)
     }
 
     if (r) {
-        prot_printf(nntp_out, "%u %s Failed receiving article (%s)\r\n",
-                    post_codes[mode].fail, msgid ? msgid : "",
+        prot_printf(nntp_out,
+                    "%u %s Failed receiving article (%s)\r\n",
+                    post_codes[mode].fail,
+                    msgid ? msgid : "",
                     error_message(r));
     }
 
@@ -4022,47 +4883,46 @@ static void cmd_starttls(int nntps)
     int result;
 
     if (nntp_starttls_done == 1) {
-        prot_printf(nntp_out, "502 %s\r\n",
-                    "TLS is already active");
+        prot_printf(nntp_out, "502 %s\r\n", "TLS is already active");
         return;
     }
     if (nntp_authstate) {
-        prot_printf(nntp_out, "502 %s\r\n",
-                    "Already authenticated");
+        prot_printf(nntp_out, "502 %s\r\n", "Already authenticated");
         return;
     }
 
     SSL_CTX *ctx = NULL;
-    result=tls_init_serverengine("nntp",
-                                 5,        /* depth to verify */
-                                 !nntps,   /* can client auth? */
-                                 &ctx);
+    result = tls_init_serverengine("nntp",
+                                   5,      /* depth to verify */
+                                   !nntps, /* can client auth? */
+                                   &ctx);
 
     if (result == -1) {
 
         syslog(LOG_ERR, "[nntpd] error initializing TLS");
 
-        if (nntps == 0)
+        if (nntps == 0) {
             prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
-        else
-            fatal("tls_init() failed",EX_TEMPFAIL);
+        }
+        else {
+            fatal("tls_init() failed", EX_TEMPFAIL);
+        }
 
         return;
     }
 
-    if (nntps == 0)
-    {
+    if (nntps == 0) {
         prot_printf(nntp_out, "382 %s\r\n", "Begin TLS negotiation now");
         /* must flush our buffers before starting tls */
         prot_flush(nntp_out);
     }
 
-    result=tls_start_servertls(0, /* read */
-                               1, /* write */
-                               nntps ? 180 : nntp_timeout,
-                               &saslprops,
-                               nntp_alpn_map,
-                               &tls_conn);
+    result = tls_start_servertls(0, /* read */
+                                 1, /* write */
+                                 nntps ? 180 : nntp_timeout,
+                                 &saslprops,
+                                 nntp_alpn_map,
+                                 &tls_conn);
 
     /* if error */
     if (result == -1) {
@@ -4087,8 +4947,9 @@ static void cmd_starttls(int nntps)
     nntp_tls_comp = (void *) SSL_get_current_compression(tls_conn);
 
     /* close any selected group */
-    if (group_state)
+    if (group_state) {
         index_close(&group_state);
+    }
     if (backend_current) {
         proxy_downserver(backend_current);
         backend_current = NULL;
@@ -4108,8 +4969,7 @@ static void cmd_compress(char *alg)
                     SSL_COMP_get_name(nntp_tls_comp));
     }
     else if (strcasecmp(alg, "DEFLATE")) {
-        prot_printf(nntp_out,
-                    "502 Unknown COMPRESS algorithm: %s\r\n", alg);
+        prot_printf(nntp_out, "502 Unknown COMPRESS algorithm: %s\r\n", alg);
     }
     else if (ZLIB_VERSION[0] != zlibVersion()[0]) {
         prot_printf(nntp_out,
@@ -4117,8 +4977,7 @@ static void cmd_compress(char *alg)
                     alg);
     }
     else {
-        prot_printf(nntp_out,
-                    "206 %s compression active\r\n", alg);
+        prot_printf(nntp_out, "206 %s compression active\r\n", alg);
 
         /* enable (de)compression for the prot layer */
         prot_setcompress(nntp_in);
