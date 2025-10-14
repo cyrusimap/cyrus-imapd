@@ -53,14 +53,13 @@
 #include "strarray.h"
 #include "util.h"
 
-struct auth_state {
+struct auth_state
+{
     char userid[81];
     strarray_t groups;
 };
 
-static struct auth_state auth_anonymous = {
-    "anonymous", STRARRAY_INITIALIZER
-};
+static struct auth_state auth_anonymous = { "anonymous", STRARRAY_INITIALIZER };
 
 /*
  * Determine if the user is a member of 'identifier'
@@ -70,15 +69,26 @@ static struct auth_state auth_anonymous = {
  *      2       User is in the group that is identifier
  *      3       User is identifer
  */
-static int mymemberof(const struct auth_state *auth_state, const char *identifier)
+static int mymemberof(const struct auth_state *auth_state,
+                      const char *identifier)
 {
-    if (!auth_state) auth_state = &auth_anonymous;
+    if (!auth_state) {
+        auth_state = &auth_anonymous;
+    }
 
-    if (strcmp(identifier, "anyone") == 0) return 1;
+    if (strcmp(identifier, "anyone") == 0) {
+        return 1;
+    }
 
-    if (strcmp(identifier, auth_state->userid) == 0) return 3;
+    if (strcmp(identifier, auth_state->userid) == 0) {
+        return 3;
+    }
 
-    if (!strncmp(identifier, "group:", 6) && strarray_contains(&auth_state->groups, identifier+6)) return 2;
+    if (!strncmp(identifier, "group:", 6)
+        && strarray_contains(&auth_state->groups, identifier + 6))
+    {
+        return 2;
+    }
 
     return 0;
 }
@@ -110,7 +120,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
  * relaxed, too.
  */
 static const char allowedchars[256] = {
- /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+    /* 0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 00-0F */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, /* 10-1F */
     1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, /* 20-2F */
@@ -121,15 +131,13 @@ static const char allowedchars[256] = {
     1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, /* 60-6F */
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0, /* 70-7F */
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
 /*
@@ -149,8 +157,12 @@ static const char *mycanonifyid(const char *identifier, size_t len)
     char *p;
     int username_tolower = 0;
 
-    if (!len) len = strlen(identifier);
-    if (len >= sizeof(retbuf)) return NULL;
+    if (!len) {
+        len = strlen(identifier);
+    }
+    if (len >= sizeof(retbuf)) {
+        return NULL;
+    }
 
     memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
@@ -164,11 +176,14 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      */
 
     if (!strncmp(retbuf, "group:", 6)) {
-        grp = getgrnam(retbuf+6);
-        if (!grp) return NULL;
-        if (strlen(grp->gr_name) >= sizeof(retbuf)-6)
-                return NULL;
-        strcpy(retbuf+6, grp->gr_name);
+        grp = getgrnam(retbuf + 6);
+        if (!grp) {
+            return NULL;
+        }
+        if (strlen(grp->gr_name) >= sizeof(retbuf) - 6) {
+            return NULL;
+        }
+        strcpy(retbuf + 6, grp->gr_name);
         return retbuf;
     }
 
@@ -178,10 +193,11 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      */
     username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
     for (p = retbuf; *p; p++) {
-        if (username_tolower && Uisupper(*p))
-            *p = tolower((unsigned char)*p);
+        if (username_tolower && Uisupper(*p)) {
+            *p = tolower((unsigned char) *p);
+        }
 
-        switch (allowedchars[*(unsigned char*) p]) {
+        switch (allowedchars[*(unsigned char *) p]) {
         case 0:
             return NULL;
         default:
@@ -210,16 +226,21 @@ static struct auth_state *mynewstate(const char *identifier)
 #endif
 
     identifier = mycanonifyid(identifier, 0);
-    if (!identifier) return 0;
-    if (!strncmp(identifier, "group:", 6)) return 0;
+    if (!identifier) {
+        return 0;
+    }
+    if (!strncmp(identifier, "group:", 6)) {
+        return 0;
+    }
 
-    newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
+    newstate = (struct auth_state *) xmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
     strarray_init(&newstate->groups);
 
-    if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
+    if (!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE)) {
         return newstate;
+    }
 
     pwd = getpwnam(identifier);
 
@@ -228,8 +249,8 @@ static struct auth_state *mynewstate(const char *identifier)
 
     /* get the group ids */
     do {
-        groupids = (gid_t *)xrealloc((gid_t *)groupids,
-                                     ngroups * sizeof(gid_t));
+        groupids =
+            (gid_t *) xrealloc((gid_t *) groupids, ngroups * sizeof(gid_t));
 
         oldngroups = ngroups; /* copy of ngroups for comparison */
         ret = getgrouplist(identifier, gid, groupids, &ngroups);
@@ -240,28 +261,35 @@ static struct auth_state *mynewstate(const char *identifier)
          */
     } while (ret == -1 && ngroups != oldngroups);
 
-    if (ret == -1)
+    if (ret == -1) {
         goto err;
+    }
 
     while (ngroups--) {
         if (pwd || groupids[ngroups] != gid) {
-            if ((grp = getgrgid(groupids[ngroups])))
+            if ((grp = getgrgid(groupids[ngroups]))) {
                 strarray_append(&newstate->groups, grp->gr_name);
+            }
         }
     }
 
 err:
-    if (groupids) free(groupids);
+    if (groupids) {
+        free(groupids);
+    }
 
-#else /* !HAVE_GETGROUPLIST */
+#else  /* !HAVE_GETGROUPLIST */
     setgrent();
     while ((grp = getgrent())) {
         for (mem = grp->gr_mem; *mem; mem++) {
-            if (!strcmp(*mem, identifier)) break;
+            if (!strcmp(*mem, identifier)) {
+                break;
+            }
         }
 
-        if (*mem || (pwd && pwd->pw_gid == grp->gr_gid))
+        if (*mem || (pwd && pwd->pw_gid == grp->gr_gid)) {
             strarray_append(&newstate->groups, grp->gr_name);
+        }
     }
     endgrent();
 #endif /* HAVE_GETGROUPLIST */
@@ -280,14 +308,9 @@ static strarray_t *mygroups(const struct auth_state *auth_state)
     return strarray_dup(&auth_state->groups);
 }
 
-HIDDEN struct auth_mech auth_unix =
-{
-    "unix",             /* name */
+HIDDEN struct auth_mech auth_unix = {
+    "unix", /* name */
 
-    &mycanonifyid,
-    &mymemberof,
-    &mynewstate,
-    &myfreestate,
-    &mygroups,
-    NULL, /* refresh */
+    &mycanonifyid, &mymemberof, &mynewstate,
+    &myfreestate,  &mygroups,   NULL, /* refresh */
 };
