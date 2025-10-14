@@ -6,7 +6,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include "flags.h"
@@ -19,9 +19,10 @@ static int verify_flag(char *f)
 {
     if (f[0] == '\\') {
         lcase(f);
-        if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
-            strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
-            strcmp(f, "\\deleted")) {
+        if (strcmp(f, "\\seen") && strcmp(f, "\\answered")
+            && strcmp(f, "\\flagged") && strcmp(f, "\\draft")
+            && strcmp(f, "\\deleted"))
+        {
             return 0;
         }
         return 1;
@@ -45,7 +46,7 @@ int verify_flaglist(strarray_t *sl)
     resplit = strarray_split(joined, " ", STRARRAY_TRIM);
 
     // Perform duplicate elimination and flag verification
-    for (i = 0; i < resplit->count ; i++) {
+    for (i = 0; i < resplit->count; i++) {
         // has the side effect of lower-casing system flags
         if (!verify_flag(resplit->data[i])) {
             /*  [IMAP4FLAGS] Section 2 "General Requirements for Flag
