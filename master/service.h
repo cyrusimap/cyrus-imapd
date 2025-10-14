@@ -64,7 +64,8 @@ enum {
     REUSE_TIMEOUT = 60
 };
 
-struct notify_message {
+struct notify_message
+{
     int message;
     pid_t service_pid;
 };
