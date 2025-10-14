@@ -69,7 +69,8 @@ static ptrarray_t pkeys = PTRARRAY_INITIALIZER;
 
 static time_t max_age = 0;
 
-struct jwt {
+struct jwt
+{
     // Base64 parts
     const char *joh;
     size_t johlen;
@@ -85,17 +86,16 @@ struct jwt {
 
 static inline int is_base64url_char(char c)
 {
-    return ((c >= '0' && c <= '9') ||
-            (c >= 'a' && c <= 'z') ||
-            (c >= 'A' && c <= 'Z') ||
-            (c == '-' || c == '_'));
+    return ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')
+            || (c >= 'A' && c <= 'Z') || (c == '-' || c == '_'));
 }
 
 HIDDEN int http_jwt_reset(void)
 {
     EVP_PKEY *pkey;
-    while ((pkey = ptrarray_pop(&pkeys)))
+    while ((pkey = ptrarray_pop(&pkeys))) {
         EVP_PKEY_free(pkey);
+    }
     is_enabled = 0;
     max_age = 0;
     return 0;
@@ -107,8 +107,10 @@ static EVP_PKEY *read_hmac_key(struct buf *b64)
     EVP_PKEY *pkey = NULL;
 
     if (!charset_decode(&dec, buf_base(b64), buf_len(b64), ENCODING_BASE64)) {
-        pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC, NULL,
-                (unsigned char*)buf_base(&dec), buf_len(&dec));
+        pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_HMAC,
+                                            NULL,
+                                            (unsigned char *) buf_base(&dec),
+                                            buf_len(&dec));
     }
 
     buf_free(&dec);
@@ -136,7 +138,11 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
 {
     struct buf line = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
-    enum state { NONE, PUBLIC, HMAC } state = NONE;
+    enum state {
+        NONE,
+        PUBLIC,
+        HMAC
+    } state = NONE;
     size_t linenum = 0;
     int r = -1;
 
@@ -150,8 +156,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
         linenum++;
 
         buf_trim(&line);
-        if (!buf_len(&line))
+        if (!buf_len(&line)) {
             continue;
+        }
 
         if (!strcmp("-----BEGIN PUBLIC KEY-----", buf_cstring(&line))) {
             if (state != NONE) {
@@ -211,8 +218,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
             continue;
         }
 
-        if (state == NONE)
+        if (state == NONE) {
             continue;
+        }
 
         buf_append(&buf, &line);
         buf_putc(&buf, '\n');
@@ -221,7 +229,9 @@ static int read_keyfile(const char *fname, ptrarray_t *keys)
     r = 0;
 
 done:
-    if (fp) fclose(fp);
+    if (fp) {
+        fclose(fp);
+    }
     buf_free(&buf);
     buf_free(&line);
     return r;
@@ -275,8 +285,12 @@ HIDDEN int http_jwt_init(const char *keydir, int age)
     r = 0;
 
 done:
-    if (fts) fts_close(fts);
-    if (r) http_jwt_reset();
+    if (fts) {
+        fts_close(fts);
+    }
+    if (r) {
+        http_jwt_reset();
+    }
     return r;
 #endif /* HAVE_FTS */
 }
@@ -288,13 +302,16 @@ HIDDEN int http_jwt_is_enabled(void)
 
 static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
 {
-    if (!in || !inlen || inlen >= INT_MAX) return 0;
+    if (!in || !inlen || inlen >= INT_MAX) {
+        return 0;
+    }
 
     size_t dot[2] = { 0 };
     size_t ndot = 0;
     for (size_t i = 0; i < inlen; i++) {
-        if (is_base64url_char(in[i]))
+        if (is_base64url_char(in[i])) {
             continue;
+        }
 
         if (in[i] == '.' && ndot < 2) {
             dot[ndot++] = i;
@@ -306,7 +323,8 @@ static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
                 in[i] & 0xff, in[i] & 0xff, i);
         return 0;
     }
-    if (ndot != 2 || dot[0] == 0 || dot[1] == inlen-1 || dot[1] - dot[0] <= 1) {
+    if (ndot != 2 || dot[0] == 0 || dot[1] == inlen - 1 || dot[1] - dot[0] <= 1)
+    {
         xsyslog(LOG_ERR, "Token has invalid JWS structure", NULL);
         return 0;
     }
@@ -323,14 +341,17 @@ static int parse_token(struct jwt *jwt, const char *in, size_t inlen)
 
 static int validate_pkey_type(struct jwt *jwt, EVP_PKEY *pkey)
 {
-    if (!jwt->nid)
+    if (!jwt->nid) {
         return 0;
+    }
 
-    if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC"))
+    if (jwt->nid == EVP_PKEY_HMAC && EVP_PKEY_is_a(pkey, "HMAC")) {
         return 1;
+    }
 
-    if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA"))
+    if (jwt->nid == EVP_PKEY_RSA && EVP_PKEY_is_a(pkey, "RSA")) {
         return 1;
+    }
 
     return 0;
 }
@@ -344,7 +365,7 @@ static int validate_signature(struct jwt *jwt)
         return 0;
     }
 
-    const unsigned char *tok = (const unsigned char*) jwt->joh;
+    const unsigned char *tok = (const unsigned char *) jwt->joh;
     size_t toklen = jwt->johlen + jwt->jwslen + 1;
     const char *sig = buf_cstring(&jwt->buf);
     size_t siglen = buf_len(&jwt->buf);
@@ -356,8 +377,9 @@ static int validate_signature(struct jwt *jwt)
         EVP_PKEY *pkey = ptrarray_nth(&pkeys, i);
         EVP_MD_CTX_reset(ctx);
 
-        if (!validate_pkey_type(jwt, pkey))
+        if (!validate_pkey_type(jwt, pkey)) {
             continue;
+        }
 
         if (jwt->nid == EVP_PKEY_HMAC) {
             unsigned char md[EVP_MAX_MD_SIZE];
@@ -404,7 +426,9 @@ static int validate_signature(struct jwt *jwt)
                 continue;
             }
 
-            ret = EVP_DigestVerifyFinal(ctx, (const unsigned char*)sig, siglen) == 1;
+            ret =
+                EVP_DigestVerifyFinal(ctx, (const unsigned char *) sig, siglen)
+                == 1;
         }
     }
 
@@ -423,7 +447,8 @@ static int validate_header(struct jwt *jwt)
 
     int ret = 0;
 
-    json_t *joh = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
+    json_t *joh =
+        json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (json_object_size(joh) != 2) {
         xsyslog(LOG_ERR, "Unexpected JOSE header structure", NULL);
         goto done;
@@ -441,22 +466,24 @@ static int validate_header(struct jwt *jwt)
 
     if (alg && strlen(alg) == 5 && alg[1] == 'S') {
         switch (alg[0]) {
-            case 'H':
-                jwt->nid = EVP_PKEY_HMAC;
-                break;
-            case 'R':
-                jwt->nid = EVP_PKEY_RSA;
-                break;
-            default:
-                ;
+        case 'H':
+            jwt->nid = EVP_PKEY_HMAC;
+            break;
+        case 'R':
+            jwt->nid = EVP_PKEY_RSA;
+            break;
+        default:;
         }
 
-        if (!strcmp(&alg[2], "256"))
+        if (!strcmp(&alg[2], "256")) {
             jwt->emd = EVP_sha256();
-        else if (!strcmp(&alg[2], "384"))
+        }
+        else if (!strcmp(&alg[2], "384")) {
             jwt->emd = EVP_sha384();
-        else if (!strcmp(&alg[2], "512"))
+        }
+        else if (!strcmp(&alg[2], "512")) {
             jwt->emd = EVP_sha512();
+        }
     }
     if (jwt->nid == EVP_PKEY_NONE || !jwt->emd) {
         xsyslog(LOG_ERR, "Invalid \"alg\" claim", "alg=<%s>", alg);
@@ -482,7 +509,8 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
     time_t now = time(NULL);
     int ret = 0;
 
-    json_t *jws = json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
+    json_t *jws =
+        json_loads(buf_cstring(&jwt->buf), JSON_REJECT_DUPLICATES, NULL);
     if (!json_object_size(jws)) {
         xsyslog(LOG_ERR, "Unexpected JWS payload structure", NULL);
         goto done;
@@ -515,8 +543,9 @@ static int validate_payload(struct jwt *jwt, char *out, size_t outlen)
         has_err = 1;
     }
 
-    if (has_err)
+    if (has_err) {
         goto done;
+    }
 
     // Validate claims
 
@@ -580,17 +609,21 @@ HIDDEN int http_jwt_auth(const char *in, size_t inlen, char *out, size_t outlen)
     struct jwt jwt = { 0 };
     int status = SASL_BADAUTH;
 
-    if (!parse_token(&jwt, in, inlen))
+    if (!parse_token(&jwt, in, inlen)) {
         goto done;
+    }
 
-    if (!validate_header(&jwt))
+    if (!validate_header(&jwt)) {
         goto done;
+    }
 
-    if (!validate_signature(&jwt))
+    if (!validate_signature(&jwt)) {
         goto done;
+    }
 
-    if (!validate_payload(&jwt, out, outlen))
+    if (!validate_payload(&jwt, out, outlen)) {
         goto done;
+    }
 
     // out now contains the 'sub' value
     status = SASL_OK;

@@ -47,13 +47,14 @@
 #include "proxy.h"
 #include "http_h2.h"
 
-
 extern struct protocol_t http_protocol;
 
 extern void http_proto_host(hdrcache_t req_hdrs,
-                            const char **proto, const char **host);
+                            const char **proto,
+                            const char **host);
 extern int http_pipe_req_resp(struct backend *be, struct transaction_t *txn);
-extern int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
+extern int http_proxy_copy(struct backend *src_be,
+                           struct backend *dest_be,
                            struct transaction_t *txn);
 extern int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn);
 extern int http_proxy_check_input(struct http_connection *conn,
