@@ -63,8 +63,10 @@ extern int64_t config_getbytesize(enum imapopt opt, int defunit);
 /* these work on additional strings that are not defined in the
  * imapoptions table */
 extern const char *config_getoverflowstring(const char *key, const char *def);
-extern void config_foreachoverflowstring(
-    void (*func)(const char *, const char *, void *), void *rock);
+extern void config_foreachoverflowstring(void (*func)(const char *,
+                                                      const char *,
+                                                      void *),
+                                         void *rock);
 
 /* partition utilities */
 extern const char *config_partitiondir(const char *partition);
@@ -114,7 +116,7 @@ extern toggle_debug_cb config_toggle_debug_cb;
 extern void config_toggle_debug(void);
 
 /* config requirement flags */
-#define CONFIG_NEED_PARTITION_DATA (1<<0)
+#define CONFIG_NEED_PARTITION_DATA (1 << 0)
 
 /* what it really means when a byte size option treats 0 as "unlimited" */
 #define BYTESIZE_UNLIMITED (INT_MAX)

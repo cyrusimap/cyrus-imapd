@@ -48,7 +48,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-int iptostring(const struct sockaddr *addr, socklen_t addrlen,
-               char *out, unsigned outlen);
+int iptostring(const struct sockaddr *addr,
+               socklen_t addrlen,
+               char *out,
+               unsigned outlen);
 
 #endif /* IPTOSTRING_H */
