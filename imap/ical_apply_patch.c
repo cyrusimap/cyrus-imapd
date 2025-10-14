@@ -12,26 +12,28 @@ extern char *optarg;
 
 static char *read_stream(char *s, size_t size, void *d)
 {
-    return fgets(s, (int) size, (FILE*) d);
+    return fgets(s, (int) size, (FILE *) d);
 }
 
 static icalcomponent *parse_file(const char *fname)
 {
-     icalcomponent *component = NULL;
-     FILE *stream = fopen(fname, "r");
+    icalcomponent *component = NULL;
+    FILE *stream = fopen(fname, "r");
 
-     if (!stream) return NULL;
+    if (!stream) {
+        return NULL;
+    }
 
-     icalparser *parser = icalparser_new();
-     icalparser_set_gen_data(parser, stream);
+    icalparser *parser = icalparser_new();
+    icalparser_set_gen_data(parser, stream);
 
-     component = icalparser_parse(parser, read_stream);
+    component = icalparser_parse(parser, read_stream);
 
-     icalparser_free(parser);
-     fclose(stream);
+    icalparser_free(parser);
+    fclose(stream);
 
-     return component;
- }
+    return component;
+}
 
 int main(int argc, char *argv[])
 {

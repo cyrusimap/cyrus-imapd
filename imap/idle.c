@@ -48,7 +48,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <signal.h>
 #include <string.h>
@@ -84,12 +84,15 @@ static void idle_notify(json_t *msg)
          * through it's graceful shutdown path, so don't syslog. */
         pid_t pid = json_integer_value(json_object_get(msg, "pid"));
 
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "NOTIFY to idled for pid %d: %s.",
-                        pid, error_message(r));
+        syslog(LOG_ERR,
+               "IDLE: error sending message "
+               "NOTIFY to idled for pid %d: %s.",
+               pid,
+               error_message(r));
     }
-    if (errno == ENOENT)
+    if (errno == ENOENT) {
         errno = 0;
+    }
 }
 
 /*
@@ -102,7 +105,9 @@ EXPORTED int idle_init(void)
     int s;
     int r;
 
-    if (!idle_enabled()) return -1;
+    if (!idle_enabled()) {
+        return -1;
+    }
 
     r = idle_make_client_address(&local);
     assert(r);
@@ -111,15 +116,17 @@ EXPORTED int idle_init(void)
 
     idle_method_desc = "poll";
 
-    if (!idle_init_sock(&local))
+    if (!idle_init_sock(&local)) {
         return -1;
+    }
 
     s = idle_get_sock();
 
     /* put us in non-blocking mode */
     fdflags = fcntl(s, F_GETFD, 0);
-    if (fdflags != -1)
+    if (fdflags != -1) {
         fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    }
     if (fdflags == -1) {
         idle_done_sock();
         return -1;
@@ -141,12 +148,16 @@ EXPORTED int idle_enabled(void)
     return (idle_period > 0);
 }
 
-EXPORTED int idle_start(unsigned long events, time_t timeout,
-                        mailbox_filter_t filter, strarray_t *keys)
+EXPORTED int idle_start(unsigned long events,
+                        time_t timeout,
+                        mailbox_filter_t filter,
+                        strarray_t *keys)
 {
     int r;
 
-    if (!idle_enabled()) return 0;
+    if (!idle_enabled()) {
+        return 0;
+    }
 
     json_t *array = json_array();
     int i;
@@ -157,9 +168,18 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
 
     pid_t pid = getpid();
     json_t *msg = json_pack("{ s:s s:i s:i s:i s:i s:o }",
-                           "@type", "start", "pid", getpid(),
-                            "events", events, "timeout", timeout,
-                            "filter", filter, "keys", array);
+                            "@type",
+                            "start",
+                            "pid",
+                            getpid(),
+                            "events",
+                            events,
+                            "timeout",
+                            timeout,
+                            "filter",
+                            filter,
+                            "keys",
+                            array);
 
     /* Tell idled that we're idling.  It doesn't
      * matter if it fails, we'll still poll */
@@ -168,10 +188,13 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
 
     if (r) {
         int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "INIT to idled for pid %d: %s. "
-                        "Falling back to polling every %d seconds.",
-                        pid, error_message(r), idle_timeout);
+        syslog(LOG_ERR,
+               "IDLE: error sending message "
+               "INIT to idled for pid %d: %s. "
+               "Falling back to polling every %d seconds.",
+               pid,
+               error_message(r),
+               idle_timeout);
         return 0;
     }
 
@@ -191,11 +214,18 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
 {
     int r;
 
-    if (!idle_started) return;
+    if (!idle_started) {
+        return;
+    }
 
     pid_t pid = getpid();
     json_t *msg = json_pack("{ s:s s:i s:i }",
-                            "@type", "stop", "pid", pid, "filter", filter);
+                            "@type",
+                            "stop",
+                            "pid",
+                            pid,
+                            "filter",
+                            filter);
 
     /* Tell idled that we're done idling */
     r = idle_send(&idle_remote, msg);
@@ -203,15 +233,19 @@ EXPORTED void idle_stop(mailbox_filter_t filter)
 
     if (r && (r != ENOENT)) {
         /* See comment in idle_notify() about ENOENT */
-        syslog(LOG_ERR, "IDLE: error sending message "
-                        "DONE to idled for pid %d: %s.",
-                        pid, error_message(r));
+        syslog(LOG_ERR,
+               "IDLE: error sending message "
+               "DONE to idled for pid %d: %s.",
+               pid,
+               error_message(r));
     }
 
-    if (filter == FILTER_NONE)
+    if (filter == FILTER_NONE) {
         idle_started = 0;
-    else
+    }
+    else {
         idle_started &= ~filter;
+    }
 }
 
 EXPORTED void idle_done(void)
