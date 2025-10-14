@@ -48,7 +48,7 @@
 
 EXPORTED void tok_init(tok_t *t, const char *str, const char *sep, int flags)
 {
-    tok_initm(t, str ? xstrdup(str) : NULL, sep, flags|TOK_FREEBUFFER);
+    tok_initm(t, str ? xstrdup(str) : NULL, sep, flags | TOK_FREEBUFFER);
 }
 
 EXPORTED void tok_initm(tok_t *t, char *str, const char *sep, int flags)
@@ -61,8 +61,9 @@ EXPORTED void tok_initm(tok_t *t, char *str, const char *sep, int flags)
 
 EXPORTED void tok_fini(tok_t *t)
 {
-    if ((t->flags & TOK_FREEBUFFER))
+    if ((t->flags & TOK_FREEBUFFER)) {
         free(t->buf);
+    }
     memset(t, 0, sizeof(*t));
 }
 
@@ -72,8 +73,9 @@ EXPORTED char *tok_next(tok_t *t)
     char *token;
 
     /* initialising us with a NULL buffer is harmless */
-    if (!t->buf)
+    if (!t->buf) {
         return NULL;
+    }
 
     /* use the given separator or the default separator string */
     sep = (t->sep ? t->sep : " \t\n\r");
@@ -107,14 +109,16 @@ EXPORTED char *tok_next(tok_t *t)
     /* we have a token, perform any additional munging */
 
     if ((t->flags & TOK_TRIMLEFT)) {
-        while (*token && isspace(*token))
+        while (*token && isspace(*token)) {
             token++;
+        }
     }
 
     if ((t->flags & TOK_TRIMRIGHT)) {
         char *p = token + strlen(token) - 1;
-        while (p >= token && isspace(*p))
+        while (p >= token && isspace(*p)) {
             *p-- = '\0';
+        }
     }
 
     t->curr = token;
@@ -123,7 +127,8 @@ EXPORTED char *tok_next(tok_t *t)
 
 EXPORTED unsigned int tok_offset(const tok_t *t)
 {
-    if (!t->buf || !t->curr)
+    if (!t->buf || !t->curr) {
         return 0;
+    }
     return (t->curr - t->buf);
 }

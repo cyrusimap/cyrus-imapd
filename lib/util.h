@@ -57,14 +57,14 @@
 #include <stdio.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #ifndef STDIN_FILENO
 /* Standard file descriptors.  */
-#define STDIN_FILENO    0       /* Standard input.  */
-#define STDOUT_FILENO   1       /* Standard output.  */
-#define STDERR_FILENO   2       /* Standard error output.  */
+# define STDIN_FILENO 0  /* Standard input.  */
+# define STDOUT_FILENO 1 /* Standard output.  */
+# define STDERR_FILENO 2 /* Standard error output.  */
 #endif
 
 #include "buf.h"
@@ -90,18 +90,18 @@ extern const char CYRUS_VERSION[];
 #endif
 
 #ifdef HAVE_LIBUUID
-#include <uuid/uuid.h>
+# include <uuid/uuid.h>
 #endif
 #ifndef UUID_STR_LEN
-#define UUID_STR_LEN  37
+# define UUID_STR_LEN 37
 #endif
 
 #define BIT32_MAX 4294967295U
 #define BIT64_MAX 18446744073709551615UL
 
-#define BIT64_FMT          "%016" PRIx64
-#define UINT64_FMT         "%" PRIu64
-#define UINT64_LALIGN_FMT  "%-*" PRIu64
+#define BIT64_FMT "%016" PRIx64
+#define UINT64_FMT "%" PRIu64
+#define UINT64_LALIGN_FMT "%-*" PRIu64
 #define UINT64_NANOSEC_FMT ".%.9" PRIu64
 
 typedef uint32_t bit32;
@@ -112,46 +112,47 @@ typedef uint64_t modseq_t;
 #define atomodseq_t(s) strtoull(s, NULL, 10)
 char *modseqtoa(modseq_t modseq);
 
-#define Uisalnum(c) isalnum((int)((unsigned char)(c)))
-#define Uisalpha(c) isalpha((int)((unsigned char)(c)))
-#define Uisascii(c) isascii((int)((unsigned char)(c)))
-#define Uiscntrl(c) iscntrl((int)((unsigned char)(c)))
-#define Uisdigit(c) isdigit((int)((unsigned char)(c)))
-#define Uislower(c) islower((int)((unsigned char)(c)))
-#define Uisspace(c) isspace((int)((unsigned char)(c)))
-#define Uisupper(c) isupper((int)((unsigned char)(c)))
-#define Uisxdigit(c) isxdigit((int)((unsigned char)(c)))
+#define Uisalnum(c) isalnum((int) ((unsigned char) (c)))
+#define Uisalpha(c) isalpha((int) ((unsigned char) (c)))
+#define Uisascii(c) isascii((int) ((unsigned char) (c)))
+#define Uiscntrl(c) iscntrl((int) ((unsigned char) (c)))
+#define Uisdigit(c) isdigit((int) ((unsigned char) (c)))
+#define Uislower(c) islower((int) ((unsigned char) (c)))
+#define Uisspace(c) isspace((int) ((unsigned char) (c)))
+#define Uisupper(c) isupper((int) ((unsigned char) (c)))
+#define Uisxdigit(c) isxdigit((int) ((unsigned char) (c)))
 
 extern const unsigned char convert_to_lowercase[256];
 extern const unsigned char convert_to_uppercase[256];
 
 #ifndef TOUPPER
-#define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
+# define TOUPPER(c) (convert_to_uppercase[(unsigned char) (c)])
 #endif
 #ifndef TOLOWER
-#define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
+# define TOLOWER(c) (convert_to_lowercase[(unsigned char) (c)])
 #endif
 
 #ifndef MAX
-#define MAX(x, y) ((x) > (y) ? (x) : (y))
+# define MAX(x, y) ((x) > (y) ? (x) : (y))
 #endif
 #ifndef MIN
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
+# define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 /* Some BSDs don't print "NULL" for a NULL pointer string. */
 #ifndef IS_NULL
-#define IS_NULL(s)      ((s) == NULL ? "(NULL)" : (s))
+# define IS_NULL(s) ((s) == NULL ? "(NULL)" : (s))
 #endif
 
 /* Calculate the number of entries in a vector */
-#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
+#define VECTOR_SIZE(vector) (sizeof(vector) / sizeof(vector[0]))
 
 #ifndef TIMESPEC_TO_TIMEVAL
-#define TIMESPEC_TO_TIMEVAL(tv, ts) {         \
-        (tv)->tv_sec  = (ts)->tv_sec;         \
-        (tv)->tv_usec = (ts)->tv_nsec / 1000; \
-}
+# define TIMESPEC_TO_TIMEVAL(tv, ts)                                           \
+     {                                                                         \
+         (tv)->tv_sec = (ts)->tv_sec;                                          \
+         (tv)->tv_usec = (ts)->tv_nsec / 1000;                                 \
+     }
 #endif
 
 /* We have an issue that we can't store UTIME_OMIT into the nanosecond
@@ -159,49 +160,53 @@ extern const unsigned char convert_to_uppercase[256];
  * postitive nanosecond values.  We also store 0 as 0, so callers are
  * required to make sure they have a SAFE_NSEC value when writing */
 #define UTIME_SAFE_NSEC(n) (n > 0 && n < 1000000000)
-#define _NSVAL(n)                                                           \
-        (UTIME_SAFE_NSEC(n) ? n : 0)
-#define TIMESPEC_TO_NANOSEC(ts)                                             \
-        ((uint64_t) (ts)->tv_sec * 1000000000 + _NSVAL((ts)->tv_nsec))
+#define _NSVAL(n) (UTIME_SAFE_NSEC(n) ? n : 0)
+#define TIMESPEC_TO_NANOSEC(ts)                                                \
+    ((uint64_t) (ts)->tv_sec * 1000000000 + _NSVAL((ts)->tv_nsec))
 
 /* On the way back, we convert 0 to UTIME_OMIT and all other values stay the
  * same, meaning that round-tripping a time with zero nanoseconds through this
  * function pair will add one nanosecond */
-#define TIMESPEC_FROM_NANOSEC(ts, nanosec) {    \
-        (ts)->tv_sec  = (nanosec) / 1000000000; \
-        (ts)->tv_nsec = (nanosec) % 1000000000; \
-}
+#define TIMESPEC_FROM_NANOSEC(ts, nanosec)                                     \
+    {                                                                          \
+        (ts)->tv_sec = (nanosec) / 1000000000;                                 \
+        (ts)->tv_nsec = (nanosec) % 1000000000;                                \
+    }
 
-#define NANOSEC_TO_JMAPID(buf, nanosec) {                                   \
-        assert(nanosec);                                                    \
-        uint64_t u64 = htonll(UINT64_MAX - (nanosec));                      \
-        charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID); \
-}
+#define NANOSEC_TO_JMAPID(buf, nanosec)                                        \
+    {                                                                          \
+        assert(nanosec);                                                       \
+        uint64_t u64 = htonll(UINT64_MAX - (nanosec));                         \
+        charset_encode(buf, (const char *) &u64, 8, ENCODING_BASE64JMAPID);    \
+    }
 
-#define MODSEQ_TO_JMAPID(buf, modseq) {                                 \
-        uint64_t u64 = htonll(modseq);                                  \
-        const char *p = (const char *) &u64;                            \
-        size_t len = sizeof(u64);                                       \
-        for (; *p == 0 && len > 1; p++, len--);                         \
-        charset_encode(buf, p, len, ENCODING_BASE64JMAPID);             \
-}
+#define MODSEQ_TO_JMAPID(buf, modseq)                                          \
+    {                                                                          \
+        uint64_t u64 = htonll(modseq);                                         \
+        const char *p = (const char *) &u64;                                   \
+        size_t len = sizeof(u64);                                              \
+        for (; *p == 0 && len > 1; p++, len--)                                 \
+            ;                                                                  \
+        charset_encode(buf, p, len, ENCODING_BASE64JMAPID);                    \
+    }
 
-typedef struct keyvalue {
+typedef struct keyvalue
+{
     char *key, *value;
 } keyvalue;
 
 /* convert string to all lower case
  */
-extern char *lcase (char *str);
+extern char *lcase(char *str);
 
 /* convert string to all upper case
  */
-extern char *ucase (char *str);
+extern char *ucase(char *str);
 
 /* clean up control characters in a string while copying it
  *  returns pointer to a static buffer containing the cleaned-up version
  */
-extern char *beautify_string (const char *src);
+extern char *beautify_string(const char *src);
 
 /* Same semantics as strcmp() but gracefully handles
  * either or both it's arguments being NULL */
@@ -221,8 +226,10 @@ int strcmpnull(const char *a, const char *b);
  *  cmpf is the comparison function (strcmp, stricmp, etc).
  *  returns NULL if not found, or key/value pair if found.
  */
-extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
-                               int (*cmpf)(const char *s1, const char *s2));
+extern keyvalue *kv_bsearch(const char *key,
+                            keyvalue *kv,
+                            int nelem,
+                            int (*cmpf)(const char *s1, const char *s2));
 
 /*
  * create an [unlinked] temporary file and return the file descriptor.
@@ -243,7 +250,9 @@ extern int removedir(const char *path);
 /* Call rename but fsync the directory before returning success */
 extern int xopendir(const char *dest, int create);
 extern int xrenameat(int dirfd, const char *src, const char *dest);
-extern int cyrus_settime_fdptr(const char *path, struct timespec *when, int *dirfdp);
+extern int cyrus_settime_fdptr(const char *path,
+                               struct timespec *when,
+                               int *dirfdp);
 extern int cyrus_unlink_fdptr(const char *fname, int *dirfdp);
 extern void xclosedir(int dirfd);
 extern int cyrus_rename(const char *src, const char *dest);
@@ -260,14 +269,18 @@ extern void cyrus_reset_stdio(void);
 extern int cyrus_mkdir(const char *path, mode_t mode);
 
 enum {
-    COPYFILE_NOLINK = (1<<0),
-    COPYFILE_MKDIR  = (1<<1),
-    COPYFILE_KEEPTIME = (1<<2),
-    COPYFILE_NODIRSYNC = (1<<3)
+    COPYFILE_NOLINK = (1 << 0),
+    COPYFILE_MKDIR = (1 << 1),
+    COPYFILE_KEEPTIME = (1 << 2),
+    COPYFILE_NODIRSYNC = (1 << 3)
 };
 
-extern int cyrus_copyfile_fdptr(const char *from, const char *to, int flags, int *dirfdp);
-#define cyrus_copyfile(from, to, flags) cyrus_copyfile_fdptr(from, to, flags, NULL)
+extern int cyrus_copyfile_fdptr(const char *from,
+                                const char *to,
+                                int flags,
+                                int *dirfdp);
+#define cyrus_copyfile(from, to, flags)                                        \
+    cyrus_copyfile_fdptr(from, to, flags, NULL)
 
 enum {
     BEFORE_SETUID,
@@ -296,7 +309,7 @@ uint64_t str2uint64(const char *p);
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);
 extern void cmdtime_starttimer(void);
-extern void cmdtime_endtimer(double * cmdtime, double * nettime);
+extern void cmdtime_endtimer(double *cmdtime, double *nettime);
 extern void cmdtime_netstart(void);
 extern void cmdtime_netend(void);
 extern int cmdtime_checksearch(void);
@@ -313,10 +326,8 @@ extern clock_t sclock(void);
  * XXX declarations depend on regex_t, which is only available with config.h,
  * XXX and therefore not available within headers that are to be installed.
  */
-int buf_replace_all_re(struct buf *buf, const regex_t *,
-                       const char *replace);
-int buf_replace_one_re(struct buf *buf, const regex_t *,
-                       const char *replace);
+int buf_replace_all_re(struct buf *buf, const regex_t *, const char *replace);
+int buf_replace_one_re(struct buf *buf, const regex_t *, const char *replace);
 #endif
 
 /*
@@ -330,11 +341,11 @@ int buf_replace_one_re(struct buf *buf, const regex_t *,
  */
 char *strconcat(const char *s1, ...);
 
-#define BH_LOWER            (0)
-#define BH_UPPER            (1<<8)
-#define _BH_SEP             (1<<9)
-#define BH_SEPARATOR(c)     (_BH_SEP|((c)&0x7f))
-#define _BH_GETSEP(flags)   (flags & _BH_SEP ? (char)(flags & 0x7f) : '\0')
+#define BH_LOWER (0)
+#define BH_UPPER (1 << 8)
+#define _BH_SEP (1 << 9)
+#define BH_SEPARATOR(c) (_BH_SEP | ((c) & 0x7f))
+#define _BH_GETSEP(flags) (flags & _BH_SEP ? (char) (flags & 0x7f) : '\0')
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 
@@ -343,9 +354,9 @@ int buf_hex_to_bin(struct buf *bin, const char *hex, size_t hexlen);
 
 /* use getpassphrase on machines which support it */
 #ifdef HAVE_GETPASSPHRASE
-#define cyrus_getpass getpassphrase
+# define cyrus_getpass getpassphrase
 #else
-#define cyrus_getpass getpass
+# define cyrus_getpass getpass
 #endif
 
 #ifdef HAVE_ZLIB
@@ -361,14 +372,14 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
 
 /* A wrapper for close() which handles the fd=-1 case cleanly.
  * The argument may have side effects and must be an lvalue */
-#define xclose(fd) \
-    do { \
-        int *_fdp = &(fd); \
-        if (*_fdp >= 0) { \
-            close(*_fdp); \
-            *_fdp = -1; \
-        } \
-    } while(0)
+#define xclose(fd)                                                             \
+    do {                                                                       \
+        int *_fdp = &(fd);                                                     \
+        if (*_fdp >= 0) {                                                      \
+            close(*_fdp);                                                      \
+            *_fdp = -1;                                                        \
+        }                                                                      \
+    } while (0)
 
 /* A wrapper for strncpy() which ensures that the destination
  * string is always NUL-terminated.  Yes, I know we have an
@@ -376,13 +387,13 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
  * but that isn't a highly optimised libc or compiler provided
  * function like strncpy(), and we can trivially and efficiently
  * add the NUL termination semantic on top of strncpy(). */
-#define xstrncpy(d, s, n) \
-    do { \
-        char *_d = (d); \
-        size_t _n = (n); \
-        strncpy(_d, (s), _n-1); \
-        _d[_n-1] = '\0'; \
-    } while(0)
+#define xstrncpy(d, s, n)                                                      \
+    do {                                                                       \
+        char *_d = (d);                                                        \
+        size_t _n = (n);                                                       \
+        strncpy(_d, (s), _n - 1);                                              \
+        _d[_n - 1] = '\0';                                                     \
+    } while (0)
 
 /* simple function to request a file gets pre-loaded by the OS */
 int warmup_file(const char *filename, off_t offset, off_t length);
@@ -392,11 +403,12 @@ const char *makeuuid();
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
 
-void xsyslog_fn(int priority, const char *description,
-                const char *func, const char *extra_fmt, ...)
-               __attribute__((format(printf, 4, 5)));
-#define xsyslog(pri, desc, ...)  \
-    xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
+void xsyslog_fn(int priority,
+                const char *description,
+                const char *func,
+                const char *extra_fmt,
+                ...) __attribute__((format(printf, 4, 5)));
+#define xsyslog(pri, desc, ...) xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
 
 /*
  * GCC_VERSION macro usage:
@@ -404,11 +416,11 @@ void xsyslog_fn(int priority, const char *description,
  *   do_something();
  * #endif
  */
-#define GCC_VERSION (__GNUC__ * 10000           \
-                     + __GNUC_MINOR__ * 100     \
-                     + __GNUC_PATCHLEVEL__)
+#define GCC_VERSION                                                            \
+    (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 
-typedef struct logfmt_arg {
+typedef struct logfmt_arg
+{
     const char *name;
     int type;
     union {
@@ -426,24 +438,31 @@ typedef struct logfmt_arg {
     };
 } logfmt_arg;
 
-typedef struct logfmt_arg_list {
+typedef struct logfmt_arg_list
+{
     size_t nmemb;
     logfmt_arg *data;
 } logfmt_arg_list;
 
-#define logfmt_arg_LIST(...) (logfmt_arg_list *)                   \
-    &(logfmt_arg_list) {                                           \
-        sizeof((logfmt_arg []){__VA_ARGS__}) / sizeof(logfmt_arg), \
-        (logfmt_arg []){__VA_ARGS__}                               \
+#define logfmt_arg_LIST(...)                                                   \
+    (logfmt_arg_list *) &(logfmt_arg_list)                                     \
+    {                                                                          \
+        sizeof((logfmt_arg[]) { __VA_ARGS__ }) / sizeof(logfmt_arg),           \
+            (logfmt_arg[])                                                     \
+        {                                                                      \
+            __VA_ARGS__                                                        \
+        }                                                                      \
     }
 
-void _xsyslog_ev(int saved_errno, int priority, const char *event,
+void _xsyslog_ev(int saved_errno,
+                 int priority,
+                 const char *event,
                  logfmt_arg_list *arg);
 
-#define xsyslog_ev(priority, event, ...)                                \
-    do {                                                                \
-        int se = errno;                                                 \
-        _xsyslog_ev(se, priority, event, logfmt_arg_LIST(__VA_ARGS__)); \
+#define xsyslog_ev(priority, event, ...)                                       \
+    do {                                                                       \
+        int se = errno;                                                        \
+        _xsyslog_ev(se, priority, event, logfmt_arg_LIST(__VA_ARGS__));        \
     } while (0)
 
 enum logfmt_type {
@@ -463,25 +482,116 @@ enum logfmt_type {
     LF_RAW
 };
 
-#define lf_c(key, value)   (logfmt_arg){ key, LF_C,   { .c   = value } }
-#define lf_d(key, value)   (logfmt_arg){ key, LF_D,   { .d   = value } }
-#define lf_ld(key, value)  (logfmt_arg){ key, LF_LD,  { .ld  = value } }
-#define lf_lld(key, value) (logfmt_arg){ key, LF_LLD, { .lld = value } }
-#define lf_u(key, value)   (logfmt_arg){ key, LF_U,   { .u   = value } }
-#define lf_lu(key, value)  (logfmt_arg){ key, LF_LU,  { .lu  = value } }
-#define lf_llu(key, value) (logfmt_arg){ key, LF_LLU, { .llu = value } }
-#define lf_zd(key, value)  (logfmt_arg){ key, LF_ZD,  { .zd  = value } }
-#define lf_zu(key, value)  (logfmt_arg){ key, LF_ZU,  { .zu  = value } }
-#define lf_llx(key, value) (logfmt_arg){ key, LF_LLX, { .llu = value } }
-#define lf_f(key, value)   (logfmt_arg){ key, LF_F,   { .f   = value } }
-#define lf_m(key)          (logfmt_arg){ key, LF_M,   {              } }
-#define lf_s(key, value)   (logfmt_arg){ key, LF_S,   { .s   = value } }
+#define lf_c(key, value)                                                       \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_C,                                                             \
+        {                                                                      \
+            .c = value                                                         \
+        }                                                                      \
+    }
+#define lf_d(key, value)                                                       \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_D,                                                             \
+        {                                                                      \
+            .d = value                                                         \
+        }                                                                      \
+    }
+#define lf_ld(key, value)                                                      \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_LD,                                                            \
+        {                                                                      \
+            .ld = value                                                        \
+        }                                                                      \
+    }
+#define lf_lld(key, value)                                                     \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_LLD,                                                           \
+        {                                                                      \
+            .lld = value                                                       \
+        }                                                                      \
+    }
+#define lf_u(key, value)                                                       \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_U,                                                             \
+        {                                                                      \
+            .u = value                                                         \
+        }                                                                      \
+    }
+#define lf_lu(key, value)                                                      \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_LU,                                                            \
+        {                                                                      \
+            .lu = value                                                        \
+        }                                                                      \
+    }
+#define lf_llu(key, value)                                                     \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_LLU,                                                           \
+        {                                                                      \
+            .llu = value                                                       \
+        }                                                                      \
+    }
+#define lf_zd(key, value)                                                      \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_ZD,                                                            \
+        {                                                                      \
+            .zd = value                                                        \
+        }                                                                      \
+    }
+#define lf_zu(key, value)                                                      \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_ZU,                                                            \
+        {                                                                      \
+            .zu = value                                                        \
+        }                                                                      \
+    }
+#define lf_llx(key, value)                                                     \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_LLX,                                                           \
+        {                                                                      \
+            .llu = value                                                       \
+        }                                                                      \
+    }
+#define lf_f(key, value)                                                       \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_F,                                                             \
+        {                                                                      \
+            .f = value                                                         \
+        }                                                                      \
+    }
+#define lf_m(key)                                                              \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_M,                                                             \
+        {                                                                      \
+        }                                                                      \
+    }
+#define lf_s(key, value)                                                       \
+    (logfmt_arg)                                                               \
+    {                                                                          \
+        key, LF_S,                                                             \
+        {                                                                      \
+            .s = value                                                         \
+        }                                                                      \
+    }
 
-#define lf_raw(key, fmt, ...) ({                               \
-    struct buf value = BUF_INITIALIZER;                        \
-    buf_printf(&value, fmt, __VA_ARGS__);                      \
-    (logfmt_arg){ key, LF_RAW, { .s = buf_release(&value) } }; \
-})
+#define lf_raw(key, fmt, ...)                                                  \
+    ({                                                                         \
+        struct buf value = BUF_INITIALIZER;                                    \
+        buf_printf(&value, fmt, __VA_ARGS__);                                  \
+        (logfmt_arg){ key, LF_RAW, { .s = buf_release(&value) } };             \
+    })
 
 /* Set up cyrus_gettime as a weak alias for a wrapper around clock_gettime.
  * We then use cyrus_gettime everywhere instead of clock_gettime, and unit
@@ -494,7 +604,9 @@ static int wrap_clock_gettime(clockid_t id, struct timespec *ts)
 {
     return clock_gettime(id, ts);
 }
-__attribute__((weak, alias("wrap_clock_gettime"), visibility("default")))
-extern int cyrus_gettime(clockid_t, struct timespec *);
+__attribute__((weak,
+               alias("wrap_clock_gettime"),
+               visibility("default"))) extern int
+cyrus_gettime(clockid_t, struct timespec *);
 
 #endif /* INCLUDED_UTIL_H */
