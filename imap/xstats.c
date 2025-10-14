@@ -43,7 +43,6 @@
 #include <config.h>
 #include "xstats.h"
 
-
 EXPORTED uint32_t xstats[XSTATS_NUM_METRICS];
 EXPORTED const char *xstats_names[XSTATS_NUM_METRICS] = {
 #define X(x) _STRINGIFY(x)

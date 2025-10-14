@@ -41,7 +41,6 @@
  *
  */
 
-
 #ifndef XML_SUPPORT_H
 #define XML_SUPPORT_H
 
@@ -55,15 +54,15 @@
 
 extern xmlChar *xmlBufferDetach(xmlBufferPtr buf);
 
-#ifndef HAVE_XML_FIRSTCHILD
+# ifndef HAVE_XML_FIRSTCHILD
 
 extern xmlNodePtr xmlGetNextNode(xmlNodePtr node);
 
-#define xmlFirstElementChild(parent) xmlGetNextNode(parent->children)
+#  define xmlFirstElementChild(parent) xmlGetNextNode(parent->children)
 
-#define xmlNextElementSibling(node) xmlGetNextNode(node->next)
+#  define xmlNextElementSibling(node) xmlGetNextNode(node->next)
 
-#endif /* HAVE_XML_FIRSTCHILD */
+# endif /* HAVE_XML_FIRSTCHILD */
 
 #endif /* HAVE_XML_BUFFERDETACH */
 
