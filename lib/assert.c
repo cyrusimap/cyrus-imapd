@@ -50,14 +50,18 @@
 
 extern int config_fatals_abort;
 
-EXPORTED void
-assertionfailed(const char *file, int line, const char *expr)
+EXPORTED void assertionfailed(const char *file, int line, const char *expr)
 {
     char buf[1024];
 
-    snprintf(buf, sizeof(buf), "Internal error: assertion failed%s: %s: %d%s%s",
+    snprintf(buf,
+             sizeof(buf),
+             "Internal error: assertion failed%s: %s: %d%s%s",
              config_fatals_abort ? " (aborting)" : "",
-             file, line, expr ? ": " : "", expr ? expr : "");
+             file,
+             line,
+             expr ? ": " : "",
+             expr ? expr : "");
 
     if (config_fatals_abort) {
         /* usually the program's fatal function is responsible for handling

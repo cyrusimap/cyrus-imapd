@@ -52,9 +52,13 @@
 static const char unknown_user[] = "unknown-user";
 static const char unspecified_domain[] = "unspecified-domain";
 
-static void parseaddr_append(struct address ***addrpp, const char *name,
-                             const char *route, const char *mailbox,
-                             const char *domain, char **freemep, int invalid);
+static void parseaddr_append(struct address ***addrpp,
+                             const char *name,
+                             const char *route,
+                             const char *mailbox,
+                             const char *domain,
+                             char **freemep,
+                             int invalid);
 static int parseaddr_phrase(char **inp,
                             const char **phrasep,
                             const char *specials);
@@ -105,7 +109,13 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
 
         case '@':
             tok = parseaddr_domain(&s, &domain, &comment, &invalid);
-            parseaddr_append(&addrp, comment, 0, phrase, domain, &freeme, invalid);
+            parseaddr_append(&addrp,
+                             comment,
+                             0,
+                             phrase,
+                             domain,
+                             &freeme,
+                             invalid);
             if (tok == ';') {
                 parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
                 ingroup = 0;
@@ -120,31 +130,61 @@ EXPORTED void parseaddr_list(const char *str, struct address **addrp)
                     *--s = '@';
                     tok = parseaddr_route(&s, &route);
                     if (tok != ':') {
-                        parseaddr_append(&addrp, phrase, route, "", "", &freeme, invalid);
-                        while (tok && tok != '>') tok = *s++;
+                        parseaddr_append(&addrp,
+                                         phrase,
+                                         route,
+                                         "",
+                                         "",
+                                         &freeme,
+                                         invalid);
+                        while (tok && tok != '>') {
+                            tok = *s++;
+                        }
                         continue;
                     }
                     tok = parseaddr_phrase(&s, &mailbox, "@>");
                     if (tok != '@') {
-                        parseaddr_append(&addrp, phrase, route, mailbox, "",
-                                         &freeme, invalid);
+                        parseaddr_append(&addrp,
+                                         phrase,
+                                         route,
+                                         mailbox,
+                                         "",
+                                         &freeme,
+                                         invalid);
                         continue;
                     }
                 }
                 tok = parseaddr_domain(&s, &domain, 0, &invalid);
-                parseaddr_append(&addrp, phrase, route, mailbox, domain,
-                                 &freeme, invalid);
-                while (tok && tok != '>') tok = *s++;
+                parseaddr_append(&addrp,
+                                 phrase,
+                                 route,
+                                 mailbox,
+                                 domain,
+                                 &freeme,
+                                 invalid);
+                while (tok && tok != '>') {
+                    tok = *s++;
+                }
                 continue; /* effectively auto-inserts a comma */
             }
             else {
-                parseaddr_append(&addrp, phrase, 0, mailbox, "", &freeme, invalid);
+                parseaddr_append(&addrp,
+                                 phrase,
+                                 0,
+                                 mailbox,
+                                 "",
+                                 &freeme,
+                                 invalid);
             }
         }
     }
-    if (ingroup) parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
+    if (ingroup) {
+        parseaddr_append(&addrp, 0, 0, 0, 0, &freeme, invalid);
+    }
 
-    if (freeme) free(freeme);
+    if (freeme) {
+        free(freeme);
+    }
 }
 
 /*
@@ -155,9 +195,11 @@ EXPORTED void parseaddr_free(struct address *addr)
     struct address *next;
 
     while (addr) {
-        if (addr->freeme) free(addr->freeme);
+        if (addr->freeme) {
+            free(addr->freeme);
+        }
         next = addr->next;
-        free((char *)addr);
+        free((char *) addr);
         addr = next;
     }
 }
@@ -165,13 +207,17 @@ EXPORTED void parseaddr_free(struct address *addr)
 /*
  * Helper function to append a new address structure to and address list.
  */
-static void parseaddr_append(struct address ***addrpp, const char *name,
-                             const char *route, const char *mailbox,
-                             const char *domain, char **freemep, int invalid)
+static void parseaddr_append(struct address ***addrpp,
+                             const char *name,
+                             const char *route,
+                             const char *mailbox,
+                             const char *domain,
+                             char **freemep,
+                             int invalid)
 {
     struct address *newaddr;
 
-    newaddr = (struct address *)xmalloc(sizeof(struct address));
+    newaddr = (struct address *) xmalloc(sizeof(struct address));
     if (name && *name) {
         newaddr->name = name;
     }
@@ -205,26 +251,30 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
 
 /* Macro to skip white space and RFC 822 comments */
 
-#define SKIPWHITESPACE(s) \
-{ \
-    int _c, _comment = 0; \
- \
-    while ((_c = *(s))) { \
-        if (_c == '(') { \
-            _comment = 1; \
-            (s)++; \
-            while ((_comment && (_c = *(s)))) { \
-                (s)++; \
-                if (_c == '\\' && *(s)) (s)++; \
-                else if (_c == '(') _comment++; \
-                else if (_c == ')') _comment--; \
-            } \
-            (s)--; \
-        } \
-        else if (!Uisspace(_c)) break; \
-        (s)++; \
-    } \
-}
+#define SKIPWHITESPACE(s)                                                      \
+    {                                                                          \
+        int _c, _comment = 0;                                                  \
+                                                                               \
+        while ((_c = *(s))) {                                                  \
+            if (_c == '(') {                                                   \
+                _comment = 1;                                                  \
+                (s)++;                                                         \
+                while ((_comment && (_c = *(s)))) {                            \
+                    (s)++;                                                     \
+                    if (_c == '\\' && *(s))                                    \
+                        (s)++;                                                 \
+                    else if (_c == '(')                                        \
+                        _comment++;                                            \
+                    else if (_c == ')')                                        \
+                        _comment--;                                            \
+                }                                                              \
+                (s)--;                                                         \
+            }                                                                  \
+            else if (!Uisspace(_c))                                            \
+                break;                                                         \
+            (s)++;                                                             \
+        }                                                                      \
+    }
 
 /*
  * Parse an RFC 822 "phrase", stopping at 'specials'
@@ -246,7 +296,7 @@ static int parseaddr_phrase(char **inp,
         if (c == '"') {
             while ((c = *src)) {
                 src++;
-                if (c == '\\' && *src == '\r' && *(src+1) == '\n') {
+                if (c == '\\' && *src == '\r' && *(src + 1) == '\n') {
                     /* Ignore quote right in front of CR+LF. There's no
                      * point in accepting lone CR or stray LF, and there's
                      * clients out there that produce these bogus addresses. */
@@ -266,19 +316,27 @@ static int parseaddr_phrase(char **inp,
                     goto fail;
                 }
                 else if (iscntrl(c)) {
-                    if (c == '\r' || c == '\n')
+                    if (c == '\r' || c == '\n') {
                         c = ' '; // replace CR and LF with space
-                    else if (c != '\t')
+                    }
+                    else if (c != '\t') {
                         continue; // else ignore anything but TAB
+                    }
                 }
-                if (c == '"') break;        /* end of quoted string */
+                if (c == '"') {
+                    break; /* end of quoted string */
+                }
                 if (c == '\\') {
-                    if (!(c = *src)) goto fail;
+                    if (!(c = *src)) {
+                        goto fail;
+                    }
                     src++;
                 }
                 *dst++ = c;
             }
-            if (c != '"') goto fail;        /* unbalanced " */
+            if (c != '"') {
+                goto fail; /* unbalanced " */
+            }
         }
         else if (Uisspace(c) || c == '(') {
             src--;
@@ -286,7 +344,9 @@ static int parseaddr_phrase(char **inp,
             *dst++ = ' ';
         }
         else if (!c || strchr(specials, c)) {
-            if (dst > *phrasep && dst[-1] == ' ') dst--;
+            if (dst > *phrasep && dst[-1] == ' ') {
+                dst--;
+            }
             *dst = '\0';
             *inp = src;
             return c;
@@ -317,20 +377,30 @@ static int parseaddr_domain(char **inp,
     char *cdst;
     int comment;
 
-    if (commentp) *commentp = 0;
+    if (commentp) {
+        *commentp = 0;
+    }
     SKIPWHITESPACE(src);
 
     *domainp = dst = src;
 
     for (;;) {
         c = *src++;
-        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':' || c > 127) {
+        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ':'
+            || c > 127)
+        {
             *dst++ = c;
-            if (commentp) *commentp = 0;
+            if (commentp) {
+                *commentp = 0;
+            }
         }
         else if (c == '.') {
-            if (dst > *domainp && dst[-1] != '.') *dst++ = c;
-            if (commentp) *commentp = 0;
+            if (dst > *domainp && dst[-1] != '.') {
+                *dst++ = c;
+            }
+            if (commentp) {
+                *commentp = 0;
+            }
         }
         else if (c == '(') {
             if (commentp) {
@@ -338,11 +408,19 @@ static int parseaddr_domain(char **inp,
                 comment = 1;
                 while (comment && (c = *src)) {
                     src++;
-                    if (c == '(') comment++;
-                    else if (c == ')') comment--;
-                    else if (c == '\\' && (c = *src)) src++;
+                    if (c == '(') {
+                        comment++;
+                    }
+                    else if (c == ')') {
+                        comment--;
+                    }
+                    else if (c == '\\' && (c = *src)) {
+                        src++;
+                    }
 
-                    if (comment) *cdst++ = c;
+                    if (comment) {
+                        *cdst++ = c;
+                    }
                 }
                 *cdst = '\0';
             }
@@ -356,10 +434,14 @@ static int parseaddr_domain(char **inp,
              * until we get to a sane state. */
             *invalid = 1;
             *dst++ = c;
-            if (commentp) *commentp = 0;
+            if (commentp) {
+                *commentp = 0;
+            }
         }
         else if (!Uisspace(c)) {
-            if (dst > *domainp && dst[-1] == '.') dst--;
+            if (dst > *domainp && dst[-1] == '.') {
+                dst--;
+            }
             *dst = '\0';
             *inp = src;
             return c;
@@ -382,20 +464,26 @@ static int parseaddr_route(char **inp, const char **routep)
 
     for (;;) {
         c = *src++;
-        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' ||
-            c == ',' || c == '@') {
+        if (Uisalnum(c) || c == '-' || c == '[' || c == ']' || c == ','
+            || c == '@')
+        {
             *dst++ = c;
         }
         else if (c == '.') {
-            if (dst > *routep && dst[-1] != '.') *dst++ = c;
+            if (dst > *routep && dst[-1] != '.') {
+                *dst++ = c;
+            }
         }
         else if (Uisspace(c) || c == '(') {
             src--;
             SKIPWHITESPACE(src);
         }
         else {
-            while (dst > *routep &&
-                   (dst[-1] == '.' || dst[-1] == ',' || dst[-1] == '@')) dst--;
+            while (dst > *routep
+                   && (dst[-1] == '.' || dst[-1] == ',' || dst[-1] == '@'))
+            {
+                dst--;
+            }
             *dst = '\0';
             *inp = src;
             return c;
@@ -410,9 +498,10 @@ EXPORTED char *address_get_all(const struct address *a, int canon_domain)
     if (a->mailbox || a->domain) {
         const char *m = a->mailbox ? a->mailbox : unknown_user;
         const char *d = a->domain ? a->domain : unspecified_domain;
-        s = strconcat(m, "@", d, (char *)NULL);
-        if (canon_domain)
+        s = strconcat(m, "@", d, (char *) NULL);
+        if (canon_domain) {
             lcase(s + strlen(m) + 1);
+        }
     }
 
     return s;
@@ -429,8 +518,9 @@ EXPORTED char *address_get_domain(const struct address *a, int canon_domain)
 
     if (a->domain) {
         s = xstrdup(a->domain);
-        if (canon_domain)
+        if (canon_domain) {
             lcase(s);
+        }
     }
 
     return s;
@@ -442,7 +532,7 @@ EXPORTED char *address_get_user(const struct address *a)
 
     if (a->mailbox) {
         char *p = strchr(a->mailbox, '+');
-        int len = p ? p - a->mailbox : (int)strlen(a->mailbox);
+        int len = p ? p - a->mailbox : (int) strlen(a->mailbox);
         s = xstrndup(a->mailbox, len);
     }
 
@@ -465,23 +555,27 @@ EXPORTED char *address_get_detail(const struct address *a)
  * Address iterator interface
  */
 
-EXPORTED void address_itr_init(struct address_itr *ai, const char *str,
+EXPORTED void address_itr_init(struct address_itr *ai,
+                               const char *str,
                                int reverse_path)
 {
     memset(ai, 0, sizeof(*ai));
     if (!*str && reverse_path) {
         /* Null reverse-path */
-        ai->addrlist = (struct address *)xzmalloc(sizeof(struct address));
+        ai->addrlist = (struct address *) xzmalloc(sizeof(struct address));
     }
-    else parseaddr_list(str, &ai->addrlist);
+    else {
+        parseaddr_list(str, &ai->addrlist);
+    }
     ai->anext = ai->addrlist;
 }
 
 EXPORTED const struct address *address_itr_next(struct address_itr *ai)
 {
     struct address *a;
-    if (ai->anext == NULL)
+    if (ai->anext == NULL) {
         return NULL;
+    }
     a = ai->anext;
     ai->anext = ai->anext->next;
     return a;
@@ -493,7 +587,6 @@ EXPORTED void address_itr_fini(struct address_itr *ai)
     memset(ai, 0, sizeof(*ai));
 }
 
-
 /*
  * Convenience function to return a single canonicalised address.
  */
@@ -503,10 +596,10 @@ EXPORTED char *address_canonicalise(const char *str)
     char *s = NULL;
 
     parseaddr_list(str, &addrlist);
-    if (addrlist)
+    if (addrlist) {
         s = address_get_all(addrlist, 1);
+    }
     parseaddr_free(addrlist);
 
     return s;
 }
-

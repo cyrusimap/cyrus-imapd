@@ -50,7 +50,8 @@
 
 /* A parameter for SMTP envelope address, identified by key.
  * The value val may be NULL. */
-typedef struct {
+typedef struct
+{
     char *key;
     char *val;
 } smtp_param_t;
@@ -58,7 +59,8 @@ typedef struct {
 /* A SMTP envelope address with address addr. The params
  * array contains the optional address parameters for the
  * MAIL FROM and RCPT TO commands. */
-typedef struct {
+typedef struct
+{
     char *addr;
     ptrarray_t params; /* Array of smtp_param_t */
     int completed;
@@ -66,13 +68,18 @@ typedef struct {
 
 /* A SMTP envelope with the MAIL FROM address and one
  * or more RCPT TO recipient addresses. */
-typedef struct {
+typedef struct
+{
     smtp_addr_t from;
     ptrarray_t rcpts; /* Array of smtp_addr_t */
 } smtp_envelope_t;
 
 /* The empty SMTP envelope */
-#define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER, 0 }, PTRARRAY_INITIALIZER }
+#define SMTP_ENVELOPE_INITIALIZER                                              \
+    {                                                                          \
+        { NULL, PTRARRAY_INITIALIZER, 0 },                                     \
+        PTRARRAY_INITIALIZER                                                   \
+}
 
 /* Return non-zero if val is a valid esmtp-keyword
  * as defined in RFC 5321, section 4.1.2. */
@@ -88,10 +95,12 @@ extern void smtp_encode_esmtp_value(const char *val, struct buf *xtext);
 
 /* Set the MAIL FROM address in env and return the new value.
  * Any existing address is deallocated. */
-extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env, const char *addr);
+extern smtp_addr_t *smtp_envelope_set_from(smtp_envelope_t *env,
+                                           const char *addr);
 
 /* Add a RCPT TO address to the recipients of env and return the new value. */
-extern smtp_addr_t *smtp_envelope_add_rcpt(smtp_envelope_t *env, const char *addr);
+extern smtp_addr_t *smtp_envelope_add_rcpt(smtp_envelope_t *env,
+                                           const char *addr);
 
 /* Free all memory of pointers and arrays in env */
 extern void smtp_envelope_fini(smtp_envelope_t *env);
@@ -110,13 +119,19 @@ extern int smtpclient_open_host(const char *addr, smtpclient_t **smp);
 
 /* Send message data with SMTP envelope env. Data is dot-escaped
  * before it is written to the SMTP backend. */
-extern int smtpclient_send(smtpclient_t *sm, smtp_envelope_t *env, struct buf *data);
-extern int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct protstream *data);
+extern int smtpclient_send(smtpclient_t *sm,
+                           smtp_envelope_t *env,
+                           struct buf *data);
+extern int smtpclient_sendprot(smtpclient_t *sm,
+                               smtp_envelope_t *env,
+                               struct protstream *data);
 
 /* Check the SMTP envelope (and optionally size and/or From: header addresses)
    without sending data */
-extern int smtpclient_sendcheck(smtpclient_t *sm, smtp_envelope_t *env,
-                                size_t size, strarray_t *fromaddr);
+extern int smtpclient_sendcheck(smtpclient_t *sm,
+                                smtp_envelope_t *env,
+                                size_t size,
+                                strarray_t *fromaddr);
 
 /* Close the SMTP client and free its memory */
 extern int smtpclient_close(smtpclient_t **smp);
@@ -163,7 +178,7 @@ extern void smtpclient_set_by(smtpclient_t *sm, const char *value);
  * An IDENTITY parameter in the SMTP envelope of the smtpclient_from
  * function overrides this value, regardless of advertised extensions.
  *
-* Setting this to NULL resets the value. */
+ * Setting this to NULL resets the value. */
 extern void smtpclient_set_jmapid(smtpclient_t *sm, const char *value);
 
 /* Add the SIZE=value parameter to MAIL FROM commands, if the
@@ -191,6 +206,5 @@ extern unsigned smtpclient_get_resp_code(smtpclient_t *sm);
 
 /* Return the text of the last SMTP response, or NULL if empty */
 extern const char *smtpclient_get_resp_text(smtpclient_t *sm);
-
 
 #endif

@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
@@ -88,7 +88,8 @@ static jmap_method_t jmap_admin_methods_nonstandard[] = {
 HIDDEN void jmap_admin_init(jmap_settings_t *settings)
 {
     json_object_set_new(settings->server_capabilities,
-            JMAP_ADMIN_EXTENSION, json_object());
+                        JMAP_ADMIN_EXTENSION,
+                        json_object());
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         jmap_add_methods(jmap_admin_methods_nonstandard, settings);
@@ -97,12 +98,17 @@ HIDDEN void jmap_admin_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_admin_capabilities(json_t *account_capabilities)
 {
-    if (!httpd_userisadmin) return;
+    if (!httpd_userisadmin) {
+        return;
+    }
 
-    json_object_set_new(account_capabilities, JMAP_ADMIN_EXTENSION, json_object());
+    json_object_set_new(account_capabilities,
+                        JMAP_ADMIN_EXTENSION,
+                        json_object());
 }
 
-struct rewrite_calevent_privacy_rock {
+struct rewrite_calevent_privacy_rock
+{
     /* Request state */
     json_t *rewritten;
     json_t *not_rewritten;
@@ -113,10 +119,12 @@ struct rewrite_calevent_privacy_rock {
     struct buf buf;
 };
 
-static int rewrite_calevent_privacy_find_uids(void *vrock, struct caldav_data *cdata)
+static int rewrite_calevent_privacy_find_uids(void *vrock,
+                                              struct caldav_data *cdata)
 {
-    if (!cdata->comp_flags.privacy)
+    if (!cdata->comp_flags.privacy) {
         return 0;
+    }
 
     struct rewrite_calevent_privacy_rock *rock = vrock;
 
@@ -131,7 +139,8 @@ static int rewrite_calevent_privacy_find_uids(void *vrock, struct caldav_data *c
     return 0;
 }
 
-static int rewrite_calevent_privacy_update_uid(struct mailbox *mbox, int uid,
+static int rewrite_calevent_privacy_update_uid(struct mailbox *mbox,
+                                               int uid,
                                                struct caldav_db *caldavdb,
                                                struct transaction_t *txn,
                                                struct buf *buf,
@@ -141,28 +150,44 @@ static int rewrite_calevent_privacy_update_uid(struct mailbox *mbox, int uid,
 
     struct index_record record;
     int r = mailbox_find_index_record(mbox, uid, &record);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     struct caldav_data *cdata;
     r = caldav_lookup_imapuid(caldavdb, mbox->mbentry, uid, &cdata, 1);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     ical = record_to_ical(mbox, &record, NULL);
-    if (!ical) goto done;
+    if (!ical) {
+        goto done;
+    }
 
     buf_setcstr(buf, cdata->dav.resource);
     cdata->comp_flags.privacy = 0;
-    int ret = caldav_store_resource(txn, ical, mbox, buf_cstring(buf),
-            cdata->dav.createdmodseq, caldavdb, 0, txn->userid,
-            NULL, NULL, sched_addrs);
-    if (ret != HTTP_NO_CONTENT)
+    int ret = caldav_store_resource(txn,
+                                    ical,
+                                    mbox,
+                                    buf_cstring(buf),
+                                    cdata->dav.createdmodseq,
+                                    caldavdb,
+                                    0,
+                                    txn->userid,
+                                    NULL,
+                                    NULL,
+                                    sched_addrs);
+    if (ret != HTTP_NO_CONTENT) {
         r = IMAP_INTERNAL;
+    }
 
 done:
-    if (ical) icalcomponent_free(ical);
+    if (ical) {
+        icalcomponent_free(ical);
+    }
     return r;
 }
-
 
 static int rewrite_calevent_privacy(const char *userid, void *vrock)
 {
@@ -176,10 +201,10 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
     if (r) {
         json_t *err = jmap_server_error(IMAP_INTERNAL);
         buf_reset(&rock->buf);
-        buf_printf(&rock->buf, "can not open cstate: %s",
-                error_message(r));
-        json_object_set_new(err, "description",
-                json_string(buf_cstring(&rock->buf)));
+        buf_printf(&rock->buf, "can not open cstate: %s", error_message(r));
+        json_object_set_new(err,
+                            "description",
+                            json_string(buf_cstring(&rock->buf)));
         json_object_set_new(rock->not_rewritten, userid, err);
         goto done;
     }
@@ -188,29 +213,33 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
 
     rock->txn.userid = userid;
     rock->txn.req_hdrs = spool_new_hdrcache();
-    spool_append_header(xstrdup("Schedule-Reply"), xstrdup("F"),
-            rock->txn.req_hdrs);
+    spool_append_header(xstrdup("Schedule-Reply"),
+                        xstrdup("F"),
+                        rock->txn.req_hdrs);
 
     caldavdb = caldav_open_userid(userid);
     if (!caldavdb) {
         json_t *err = jmap_server_error(IMAP_INTERNAL);
-        json_object_set_new(err, "description",
-                json_string("can not open caldavdb"));
+        json_object_set_new(err,
+                            "description",
+                            json_string("can not open caldavdb"));
         json_object_set_new(rock->not_rewritten, userid, err);
         goto done;
     }
 
     construct_hash_table(&rock->uids_bymbkey, 1024, 0);
 
-    r = caldav_foreach(caldavdb, NULL,
-            rewrite_calevent_privacy_find_uids, rock);
+    r = caldav_foreach(caldavdb,
+                       NULL,
+                       rewrite_calevent_privacy_find_uids,
+                       rock);
     if (r) {
         buf_reset(&rock->buf);
-        buf_printf(&rock->buf, "caldav_foreach: %s",
-                cyrusdb_strerror(r));
+        buf_printf(&rock->buf, "caldav_foreach: %s", cyrusdb_strerror(r));
         json_t *err = jmap_server_error(IMAP_INTERNAL);
-        json_object_set_new(err, "description",
-                json_string(buf_cstring(&rock->buf)));
+        json_object_set_new(err,
+                            "description",
+                            json_string(buf_cstring(&rock->buf)));
         json_object_set_new(rock->not_rewritten, userid, err);
         goto done;
     }
@@ -244,33 +273,40 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
 
         if (!r) {
             for (int uid = bv_first_set(uids); uid > 0;
-                    uid = bv_next_set(uids, uid + 1)) {
-                r = rewrite_calevent_privacy_update_uid(mbox, uid,
-                        caldavdb, &rock->txn, &rock->buf, &sched_addrs);
+                 uid = bv_next_set(uids, uid + 1))
+            {
+                r = rewrite_calevent_privacy_update_uid(mbox,
+                                                        uid,
+                                                        caldavdb,
+                                                        &rock->txn,
+                                                        &rock->buf,
+                                                        &sched_addrs);
 
                 size_t l = buf_len(&idbuf);
                 buf_printf(&idbuf, ":%d", uid);
                 if (!r) {
                     json_object_set_new(rewritten_uids,
-                            buf_cstring(&idbuf), json_true());
+                                        buf_cstring(&idbuf),
+                                        json_true());
                 }
                 else {
                     json_object_set_new(not_rewritten_uids,
-                            buf_cstring(&idbuf),
-                            json_string(error_message(r)));
+                                        buf_cstring(&idbuf),
+                                        json_string(error_message(r)));
                 }
                 buf_truncate(&idbuf, l);
             }
         }
         else {
             for (int uid = bv_first_set(uids); uid > 0;
-                    uid = bv_next_set(uids, uid + 1)) {
+                 uid = bv_next_set(uids, uid + 1))
+            {
 
                 size_t l = buf_len(&idbuf);
                 buf_printf(&idbuf, ":%d", uid);
                 json_object_set_new(not_rewritten_uids,
-                        buf_cstring(&idbuf),
-                        json_string(error_message(r)));
+                                    buf_cstring(&idbuf),
+                                    json_string(error_message(r)));
                 buf_truncate(&idbuf, l);
             }
         }
@@ -283,15 +319,21 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
     if (json_object_size(rewritten_uids)) {
         json_object_set_new(rock->rewritten, userid, rewritten_uids);
     }
-    else json_decref(rewritten_uids);
+    else {
+        json_decref(rewritten_uids);
+    }
 
     if (json_object_size(not_rewritten_uids)) {
         json_t *err = json_pack("{s:s s:o}",
-                "type", "rewritePrivacyError",
-                "uids", not_rewritten_uids);
+                                "type",
+                                "rewritePrivacyError",
+                                "uids",
+                                not_rewritten_uids);
         json_object_set_new(rock->not_rewritten, userid, err);
     }
-    else json_decref(not_rewritten_uids);
+    else {
+        json_decref(not_rewritten_uids);
+    }
 
     strarray_free(mbkeys);
 
@@ -312,7 +354,9 @@ done:
     memset(&rock->txn, 0, sizeof(struct transaction_t));
     buf_free(&rock->buf);
 
-    if (caldavdb) caldav_close(caldavdb);
+    if (caldavdb) {
+        caldav_close(caldavdb);
+    }
     conversations_commit(&cstate);
     strarray_fini(&sched_addrs);
     free(calhomename);
@@ -332,12 +376,12 @@ static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req)
 
     const char *arg;
     json_t *jarg;
-    json_object_foreach(req->args, arg, jarg) {
+    json_object_foreach (req->args, arg, jarg) {
         if (!strcmp(arg, "userIds")) {
             if (json_is_array(jarg)) {
                 size_t i;
                 json_t *jval;
-                json_array_foreach(jarg, i, jval) {
+                json_array_foreach (jarg, i, jval) {
                     if (!json_is_string(jval)) {
                         jmap_parser_push_index(&parser, "userIds", i, NULL);
                         jmap_parser_invalid(&parser, NULL);
@@ -356,23 +400,25 @@ static int jmap_admin_rewrite_calevent_privacy(jmap_req_t *req)
 
     if (json_array_size(parser.invalid)) {
         json_t *err = json_pack("{s:s s:O}",
-                "type", "invalidArguments",
-                "arguments", parser.invalid);
+                                "type",
+                                "invalidArguments",
+                                "arguments",
+                                parser.invalid);
         jmap_error(req, err);
         goto done;
     }
 
     // Process users
 
-    struct rewrite_calevent_privacy_rock rock = {
-        .rewritten = json_object(), .not_rewritten = json_object()
-    };
+    struct rewrite_calevent_privacy_rock rock = { .rewritten = json_object(),
+                                                  .not_rewritten =
+                                                      json_object() };
 
     json_t *userids = json_object_get(req->args, "userIds");
     if (json_is_array(userids)) {
         size_t i;
         json_t *jval;
-        json_array_foreach(userids, i, jval) {
+        json_array_foreach (userids, i, jval) {
             rewrite_calevent_privacy(json_string_value(jval), &rock);
         }
     }
@@ -399,11 +445,12 @@ done:
 
 static int collect_userids(const char *userid, void *rock)
 {
-    strarray_append((strarray_t*)rock, userid);
+    strarray_append((strarray_t *) rock, userid);
     return 0;
 }
 
-struct migrate_defaultalarms_rock {
+struct migrate_defaultalarms_rock
+{
     const char *userid;
     json_t *migrated;
     int keep_caldav_alarms;
@@ -414,29 +461,33 @@ static int migrate_defaultalarms(const mbentry_t *mbentry, void *vrock)
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     struct migrate_defaultalarms_rock *rock = vrock;
 
-    if (mbentry->mbtype != MBTYPE_CALENDAR)
-        goto done;
-
-    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0))
-        goto done;
-
-    const strarray_t *boxes = mbname_boxes(mbname);
-    if (strarray_size(boxes) < 2)
-        goto done;
-
-    const char *collname = strarray_nth(boxes, strarray_size(boxes) - 1);
-    if (!strncmpsafe(collname, SCHED_INBOX, strlen(SCHED_INBOX)-1) ||
-        !strncmpsafe(collname, SCHED_OUTBOX, strlen(SCHED_OUTBOX)-1) ||
-        !strncmpsafe(collname, MANAGED_ATTACH, strlen(MANAGED_ATTACH)-1)) {
+    if (mbentry->mbtype != MBTYPE_CALENDAR) {
         goto done;
     }
 
-    const char *id = strarray_nth(boxes, boxes->count-1);
+    if (!mboxname_iscalendarmailbox(mbname_intname(mbname), 0)) {
+        goto done;
+    }
+
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (strarray_size(boxes) < 2) {
+        goto done;
+    }
+
+    const char *collname = strarray_nth(boxes, strarray_size(boxes) - 1);
+    if (!strncmpsafe(collname, SCHED_INBOX, strlen(SCHED_INBOX) - 1)
+        || !strncmpsafe(collname, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)
+        || !strncmpsafe(collname, MANAGED_ATTACH, strlen(MANAGED_ATTACH) - 1))
+    {
+        goto done;
+    }
+
+    const char *id = strarray_nth(boxes, boxes->count - 1);
 
     json_t *jerr = NULL;
-    enum defaultalarms_migrate39_flags flags = rock->keep_caldav_alarms ?
-        DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS :
-        DEFAULTALARMS_MIGRATE_NOFLAG;
+    enum defaultalarms_migrate39_flags flags =
+        rock->keep_caldav_alarms ? DEFAULTALARMS_MIGRATE_KEEP_CALDAV_ALARMS
+                                 : DEFAULTALARMS_MIGRATE_NOFLAG;
     defaultalarms_migrate39(mbentry, flags, &jerr);
 
     json_object_set_new(rock->migrated, id, jerr ? jerr : json_null());
@@ -463,12 +514,12 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
 
     const char *arg;
     json_t *jarg;
-    json_object_foreach(req->args, arg, jarg) {
+    json_object_foreach (req->args, arg, jarg) {
         if (!strcmp(arg, "userIds")) {
             if (json_is_array(jarg)) {
                 size_t i;
                 json_t *jval;
-                json_array_foreach(jarg, i, jval) {
+                json_array_foreach (jarg, i, jval) {
                     if (!json_is_string(jval)) {
                         jmap_parser_push_index(&parser, "userIds", i, NULL);
                         jmap_parser_invalid(&parser, NULL);
@@ -495,8 +546,10 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
 
     if (json_array_size(parser.invalid)) {
         json_t *err = json_pack("{s:s s:O}",
-                "type", "invalidArguments",
-                "arguments", parser.invalid);
+                                "type",
+                                "invalidArguments",
+                                "arguments",
+                                parser.invalid);
         jmap_error(req, err);
         goto done;
     }
@@ -506,7 +559,7 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
     if (json_is_array(juserids)) {
         size_t i;
         json_t *jval;
-        json_array_foreach(juserids, i, jval) {
+        json_array_foreach (juserids, i, jval) {
             strarray_append(&userids, json_string_value(jval));
         }
     }
@@ -521,20 +574,22 @@ static int jmap_admin_migrate_defaultalarms(jmap_req_t *req)
 
         user_nslock_t *user_nslock = user_nslock_lock_w(userid);
 
-        struct migrate_defaultalarms_rock rock = {
-            .userid = userid,
-            .migrated = json_object(),
-            .keep_caldav_alarms = keep_caldav_alarms
-        };
+        struct migrate_defaultalarms_rock rock = { .userid = userid,
+                                                   .migrated = json_object(),
+                                                   .keep_caldav_alarms =
+                                                       keep_caldav_alarms };
 
         char *calhomename = caldav_mboxname(userid, NULL);
         mboxlist_mboxtree(calhomename,
-                migrate_defaultalarms, &rock, MBOXTREE_SKIP_ROOT);
+                          migrate_defaultalarms,
+                          &rock,
+                          MBOXTREE_SKIP_ROOT);
         xzfree(calhomename);
 
-        json_object_set(migrated_userids, userid,
-                json_object_size(rock.migrated) ?
-                rock.migrated : json_null());
+        json_object_set(migrated_userids,
+                        userid,
+                        json_object_size(rock.migrated) ? rock.migrated
+                                                        : json_null());
 
         json_decref(rock.migrated);
 

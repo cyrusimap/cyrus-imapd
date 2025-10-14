@@ -68,6 +68,6 @@ extern void glob_free(glob **gp);
 extern int glob_test(glob *g, const char *str);
 
 /* MACROS */
-#define GLOB_MATCH(g, str) ((int)strlen(str) == glob_test((g), (str)))
+#define GLOB_MATCH(g, str) ((int) strlen(str) == glob_test((g), (str)))
 
 #endif /* INCLUDED_GLOB_H */

@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include <dirent.h>
@@ -63,14 +63,17 @@
 #include "xunlink.h"
 
 #ifdef USE_SIEVE
-#include "sieve/bc_parse.h"
-#include "sieve/sieve_interface.h"
+# include "sieve/bc_parse.h"
+# include "sieve/sieve_interface.h"
 #endif
 
-EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
+EXPORTED int sievedir_foreach(const char *sievedir,
+                              unsigned flags,
                               int (*func)(const char *sievedir,
-                                          const char *name, struct stat *sbuf,
-                                          const char *target, void *rock),
+                                          const char *name,
+                                          struct stat *sbuf,
+                                          const char *target,
+                                          void *rock),
                               void *rock)
 {
     DIR *dp;
@@ -82,7 +85,9 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     assert(sievedir);
 
     if ((dp = opendir(sievedir)) == NULL) {
-        if (errno == ENOENT) return SIEVEDIR_OK;
+        if (errno == ENOENT) {
+            return SIEVEDIR_OK;
+        }
 
         xsyslog(LOG_ERR, "IOERROR: can not open sieve directory",
                 "path=<%s>", sievedir);
@@ -96,11 +101,15 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
         char target[PATH_MAX] = "";
         struct stat sbuf;
 
-        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
+        if (!strcmp(name, ".") || !strcmp(name, "..")) {
+            continue;
+        }
 
         strlcpy(path + dir_len, name, sizeof(path) - dir_len);
 
-        if (lstat(path, &sbuf) < 0) continue;
+        if (lstat(path, &sbuf) < 0) {
+            continue;
+        }
 
         if (S_ISREG(sbuf.st_mode)) {
             if (flags) {
@@ -111,8 +120,9 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
                         /* ignore non-scripts */
                         continue;
                     }
-                    if ((flags & SIEVEDIR_IGNORE_JUNK) &&
-                        strcmpnull(ext, BYTECODE_SUFFIX)) {
+                    if ((flags & SIEVEDIR_IGNORE_JUNK)
+                        && strcmpnull(ext, BYTECODE_SUFFIX))
+                    {
                         /* ignore non-bytecode */
                         continue;
                     }
@@ -127,7 +137,9 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
             /* fetch link target */
             ssize_t tgt_len = readlink(path, target, sizeof(target) - 1);
 
-            if (tgt_len > 0) target[tgt_len] = '\0';
+            if (tgt_len > 0) {
+                target[tgt_len] = '\0';
+            }
         }
         else if (flags & SIEVEDIR_IGNORE_JUNK) {
             /* ignore all other entries */
@@ -135,7 +147,9 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
         }
 
         r = func(sievedir, name, &sbuf, target, rock);
-        if (r != SIEVEDIR_OK) break;
+        if (r != SIEVEDIR_OK) {
+            break;
+        }
     }
 
     closedir(dp);
@@ -154,7 +168,9 @@ EXPORTED struct buf *sievedir_get_script(const char *sievedir,
 
     int fd = open(buf_cstring(&buf), 0);
     buf_free(&buf);
-    if (fd < 0) return NULL;
+    if (fd < 0) {
+        return NULL;
+    }
 
     buf_refresh_mmap(&buf, 1, fd, script, MAP_UNKNOWN_LEN, "sieve");
 
@@ -174,12 +190,16 @@ EXPORTED int sievedir_valid_name(const struct buf *name)
     const char *ptr;
 
     /* must be at least one character long */
-    if (len < 1) return 0;
+    if (len < 1) {
+        return 0;
+    }
 
     ptr = buf_base(name);
 
     for (lup = 0; lup < len; lup++) {
-        if ((ptr[lup] == '/') || (ptr[lup] == '\0')) return 0;
+        if ((ptr[lup] == '/') || (ptr[lup] == '\0')) {
+            return 0;
+        }
     }
 
     return (lup < SIEVEDIR_MAX_NAME_LEN);
@@ -211,7 +231,9 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
 
 EXPORTED int sievedir_script_isactive(const char *sievedir, const char *name)
 {
-    if (!name) return 0;
+    if (!name) {
+        return 0;
+    }
 
     return (strcmpnull(name, sievedir_get_active(sievedir)) == 0);
 }
@@ -220,7 +242,7 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
 {
     char target[PATH_MAX];
     char active[PATH_MAX];
-    char tmp[PATH_MAX+4];  /* +4 for ".NEW" */
+    char tmp[PATH_MAX + 4]; /* +4 for ".NEW" */
 
     assert(sievedir);
 
@@ -286,7 +308,8 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
 }
 
 EXPORTED int sievedir_rename_script(const char *sievedir,
-                                    const char *oldname, const char *newname)
+                                    const char *oldname,
+                                    const char *newname)
 {
     /* rename script and bytecode; move active link */
     char oldpath[PATH_MAX], newpath[PATH_MAX];
@@ -294,10 +317,18 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
 
     assert(sievedir);
 
-    snprintf(oldpath, sizeof(oldpath),
-             "%s/%s%s", sievedir, oldname, BYTECODE_SUFFIX);
-    snprintf(newpath, sizeof(newpath),
-             "%s/%s%s", sievedir, newname, BYTECODE_SUFFIX);
+    snprintf(oldpath,
+             sizeof(oldpath),
+             "%s/%s%s",
+             sievedir,
+             oldname,
+             BYTECODE_SUFFIX);
+    snprintf(newpath,
+             sizeof(newpath),
+             "%s/%s%s",
+             sievedir,
+             newname,
+             BYTECODE_SUFFIX);
     r = cyrus_rename(oldpath, newpath);
     if (r) {
         xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
@@ -309,8 +340,10 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
 }
 
 #ifdef USE_SIEVE
-EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
-                                 const char *content, char **errors)
+EXPORTED int sievedir_put_script(const char *sievedir,
+                                 const char *name,
+                                 const char *content,
+                                 char **errors)
 {
     char new_bcpath[PATH_MAX];
     int fd = -1;
@@ -323,9 +356,15 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     int r = sieve_script_parse_string(NULL, content, &myerrors, &s);
 
     if (r) {
-        if (s) sieve_script_free(&s);
-        if (errors) *errors = myerrors;
-        else free(myerrors);
+        if (s) {
+            sieve_script_free(&s);
+        }
+        if (errors) {
+            *errors = myerrors;
+        }
+        else {
+            free(myerrors);
+        }
         return SIEVEDIR_INVALID;
     }
 
@@ -336,8 +375,12 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
         goto done;
     }
 
-    snprintf(new_bcpath, sizeof(new_bcpath),
-             "%s/%s%s.NEW", sievedir, name, BYTECODE_SUFFIX);
+    snprintf(new_bcpath,
+             sizeof(new_bcpath),
+             "%s/%s%s.NEW",
+             sievedir,
+             name,
+             BYTECODE_SUFFIX);
 
     r = cyrus_mkdir(new_bcpath, 0755);
     if (r) {
@@ -382,13 +425,19 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
         r = SIEVEDIR_IOERROR;
     }
 
- done:
+done:
     if (fd >= 0) {
         close(fd);
-        if (r) xunlink(new_bcpath);
+        if (r) {
+            xunlink(new_bcpath);
+        }
     }
-    if (bc) sieve_free_bytecode(&bc);
-    if (s) sieve_script_free(&s);
+    if (bc) {
+        sieve_free_bytecode(&bc);
+    }
+    if (s) {
+        sieve_script_free(&s);
+    }
 
     return (r ? r : SIEVEDIR_OK);
 }
@@ -396,14 +445,17 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
 
 EXPORTED int sievedir_valid_path(const char *sievedir)
 {
-    if (!sievedir || *sievedir != '/') return 0;
+    if (!sievedir || *sievedir != '/') {
+        return 0;
+    }
 
     char *resolved = realpath(sievedir, NULL);
 
-    if (!resolved && errno != ENOENT) return 0;
+    if (!resolved && errno != ENOENT) {
+        return 0;
+    }
 
     free(resolved);
 
     return 1;
 }
-

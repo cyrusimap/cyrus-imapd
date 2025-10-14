@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <ctype.h>
 #include <errno.h>
@@ -74,23 +74,30 @@ EXPORTED int zoneinfo_open(const char *fname)
     int ret;
     char *tofree = NULL;
 
-    if (zoneinfo_dbopen)
+    if (zoneinfo_dbopen) {
         return 0;
+    }
 
-    if (!fname) fname = config_getstring(IMAPOPT_ZONEINFO_DB_PATH);
+    if (!fname) {
+        fname = config_getstring(IMAPOPT_ZONEINFO_DB_PATH);
+    }
 
     /* create db file name */
     if (!fname) {
-        tofree = strconcat(config_dir, FNAME_ZONEINFODB, (char *)NULL);
+        tofree = strconcat(config_dir, FNAME_ZONEINFODB, (char *) NULL);
         fname = tofree;
     }
 
     ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &zoneinfodb);
     if (ret != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+        syslog(LOG_ERR,
+               "DBERROR: opening %s: %s",
+               fname,
                cyrusdb_strerror(ret));
     }
-    else zoneinfo_dbopen = 1;
+    else {
+        zoneinfo_dbopen = 1;
+    }
 
     free(tofree);
 
@@ -105,13 +112,15 @@ EXPORTED void zoneinfo_close(struct txn *tid)
         if (tid) {
             r = cyrusdb_commit(zoneinfodb, tid);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: error committing zoneinfo: %s",
+                syslog(LOG_ERR,
+                       "DBERROR: error committing zoneinfo: %s",
                        cyrusdb_strerror(r));
             }
         }
         r = cyrusdb_close(zoneinfodb);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing zoneinfo: %s",
+            syslog(LOG_ERR,
+                   "DBERROR: error closing zoneinfo: %s",
                    cyrusdb_strerror(r));
         }
         zoneinfo_dbopen = 0;
@@ -125,8 +134,10 @@ void zoneinfo_done(void)
     /* DB->done() handled by cyrus_done() */
 }
 
-static int parse_zoneinfo(const char *data, int datalen,
-                          struct zoneinfo *zi, int all)
+static int parse_zoneinfo(const char *data,
+                          int datalen,
+                          struct zoneinfo *zi,
+                          int all)
 {
     const char *dend = data + datalen;
     unsigned version;
@@ -137,10 +148,16 @@ static int parse_zoneinfo(const char *data, int datalen,
     /* version SP type SP dtstamp SP (string *(TAB string)) */
 
     version = strtoul(data, &p, 10);
-    if (version != ZONEINFO_VERSION) return CYRUSDB_IOERROR;
+    if (version != ZONEINFO_VERSION) {
+        return CYRUSDB_IOERROR;
+    }
 
-    if (p < dend) zi->type = strtoul(p, &p, 10);
-    if (p < dend) zi->dtstamp = strtotimet(p, &p, 10);
+    if (p < dend) {
+        zi->type = strtoul(p, &p, 10);
+    }
+    if (p < dend) {
+        zi->dtstamp = strtotimet(p, &p, 10);
+    }
 
     if (all && p < dend) {
         size_t len = dend - ++p;
@@ -148,7 +165,9 @@ static int parse_zoneinfo(const char *data, int datalen,
         tok_t tok;
 
         tok_initm(&tok, str, "\t", TOK_FREEBUFFER);
-        while ((str = tok_next(&tok))) appendstrlist(&zi->data, str);
+        while ((str = tok_next(&tok))) {
+            appendstrlist(&zi->data, str);
+        }
         tok_fini(&tok);
     }
 
@@ -162,77 +181,116 @@ EXPORTED int zoneinfo_lookup(const char *tzid, struct zoneinfo *zi)
     int r;
 
     /* Don't access DB if it hasn't been opened */
-    if (!zoneinfo_dbopen) return CYRUSDB_INTERNAL;
+    if (!zoneinfo_dbopen) {
+        return CYRUSDB_INTERNAL;
+    }
 
     assert(tzid);
 
     /* Check if there is an entry in the database */
     do {
-        r = cyrusdb_fetch(zoneinfodb, tzid, strlen(tzid), &data, &datalen, NULL);
+        r = cyrusdb_fetch(zoneinfodb,
+                          tzid,
+                          strlen(tzid),
+                          &data,
+                          &datalen,
+                          NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    if (r || !data || (datalen < 6)) return r ? r : CYRUSDB_IOERROR;
+    if (r || !data || (datalen < 6)) {
+        return r ? r : CYRUSDB_IOERROR;
+    }
 
-    if (!zi) return 0;
+    if (!zi) {
+        return 0;
+    }
 
     return parse_zoneinfo(data, datalen, zi, 1);
 }
 
-EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **tid)
+EXPORTED int zoneinfo_store(const char *tzid,
+                            struct zoneinfo *zi,
+                            struct txn **tid)
 {
     struct strlist *sl;
     const char *sep;
     int r;
 
     /* Don't access DB if it hasn't been opened */
-    if (!zoneinfo_dbopen) return CYRUSDB_INTERNAL;
+    if (!zoneinfo_dbopen) {
+        return CYRUSDB_INTERNAL;
+    }
 
     assert(tzid && zi);
 
     /* version SP type SP dtstamp SP (string *(TAB string)) */
     buf_reset(&databuf);
-    buf_printf(&databuf, "%u %u " TIME_T_FMT " ", ZONEINFO_VERSION, zi->type, zi->dtstamp);
-    for (sl = zi->data, sep = ""; sl; sl = sl->next, sep = "\t")
+    buf_printf(&databuf,
+               "%u %u " TIME_T_FMT " ",
+               ZONEINFO_VERSION,
+               zi->type,
+               zi->dtstamp);
+    for (sl = zi->data, sep = ""; sl; sl = sl->next, sep = "\t") {
         buf_printf(&databuf, "%s%s", sep, sl->s);
+    }
 
-    r = cyrusdb_store(zoneinfodb, tzid, strlen(tzid),
-                  buf_cstring(&databuf), buf_len(&databuf), tid);
+    r = cyrusdb_store(zoneinfodb,
+                      tzid,
+                      strlen(tzid),
+                      buf_cstring(&databuf),
+                      buf_len(&databuf),
+                      tid);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating zoneinfo: %s (%s)",
-               tzid, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "DBERROR: error updating zoneinfo: %s (%s)",
+               tzid,
+               cyrusdb_strerror(r));
     }
 
     return r;
 }
 
-
 static int tzmatch(const char *str, size_t slen, const char *pat)
 {
-    for ( ; *pat; str++, slen--, pat++) {
+    for (; *pat; str++, slen--, pat++) {
         /* End of string and more pattern */
-        if (!slen && *pat != '*') return 0;
+        if (!slen && *pat != '*') {
+            return 0;
+        }
 
         switch (*pat) {
         case '*':
             /* Collapse consecutive stars */
-            while (*++pat == '*') continue;
+            while (*++pat == '*') {
+                continue;
+            }
 
             /* Trailing star matches anything */
-            if (!*pat) return 1;
+            if (!*pat) {
+                return 1;
+            }
 
-            while (slen) if (tzmatch(str++, slen--, pat)) return 1;
+            while (slen) {
+                if (tzmatch(str++, slen--, pat)) {
+                    return 1;
+                }
+            }
             return 0;
 
         case ' ':
         case '_':
             /* Treat ' ' == '_' */
-            if (*str != ' ' && *str != '_') return 0;
+            if (*str != ' ' && *str != '_') {
+                return 0;
+            }
             break;
 
         default:
             /* Case-insensitive comparison */
-            if (tolower(*str) != tolower(*pat)) return 0;
+            if (tolower(*str) != tolower(*pat)) {
+                return 0;
+            }
             break;
         }
     }
@@ -241,45 +299,59 @@ static int tzmatch(const char *str, size_t slen, const char *pat)
     return (!slen);
 }
 
-
-struct findrock {
+struct findrock
+{
     const char *find;
     int tzid_only;
     time_t changedsince;
-    int (*proc)(const char *tzid, int tzidlen,
-                struct zoneinfo *zi, void *rock);
+    int (*proc)(const char *tzid, int tzidlen, struct zoneinfo *zi, void *rock);
     void *rock;
 };
 
 static int find_p(void *rock,
-                  const char *tzid, size_t tzidlen,
-                  const char *data, size_t datalen)
+                  const char *tzid,
+                  size_t tzidlen,
+                  const char *data,
+                  size_t datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
     struct zoneinfo zi;
 
-    if (parse_zoneinfo(data, datalen, &zi, 0)) return 0;
+    if (parse_zoneinfo(data, datalen, &zi, 0)) {
+        return 0;
+    }
 
     switch (zi.type) {
-    case ZI_INFO: return 0;
+    case ZI_INFO:
+        return 0;
 
     case ZI_LINK:
-        if (frock->tzid_only) return 0;
+        if (frock->tzid_only) {
+            return 0;
+        }
         break;
 
     case ZI_ZONE:
-        if (zi.dtstamp <= frock->changedsince) return 0;
+        if (zi.dtstamp <= frock->changedsince) {
+            return 0;
+        }
         break;
     }
 
-    if (!frock->find) return 1;
-    if (frock->tzid_only) return (tzidlen == strlen(frock->find));
+    if (!frock->find) {
+        return 1;
+    }
+    if (frock->tzid_only) {
+        return (tzidlen == strlen(frock->find));
+    }
     return tzmatch(tzid, tzidlen, frock->find);
 }
 
 static int find_cb(void *rock,
-                   const char *tzid, size_t tzidlen,
-                   const char *data, size_t datalen)
+                   const char *tzid,
+                   size_t tzidlen,
+                   const char *data,
+                   size_t datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
     struct zoneinfo zi;
@@ -297,7 +369,9 @@ static int find_cb(void *rock,
             tzidlen = strlen(tzid);
             r = zoneinfo_lookup(tzid, &zi);
         }
-        if (!r) r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
+        if (!r) {
+            r = (*frock->proc)(tzid, tzidlen, &zi, frock->rock);
+        }
         freestrlist(zi.data);
         freestrlist(linkto);
     }
@@ -305,15 +379,19 @@ static int find_cb(void *rock,
     return r;
 }
 
-EXPORTED int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
-                         int (*proc)(const char *tzid, int tzidlen,
-                                     struct zoneinfo *zi, void *rock),
-                         void *rock)
+EXPORTED int zoneinfo_find(
+    const char *find,
+    int tzid_only,
+    time_t changedsince,
+    int (*proc)(const char *tzid, int tzidlen, struct zoneinfo *zi, void *rock),
+    void *rock)
 {
     struct findrock frock;
 
     /* Don't access DB if it hasn't been opened */
-    if (!zoneinfo_dbopen) return CYRUSDB_INTERNAL;
+    if (!zoneinfo_dbopen) {
+        return CYRUSDB_INTERNAL;
+    }
 
     assert(proc);
 
@@ -323,9 +401,16 @@ EXPORTED int zoneinfo_find(const char *find, int tzid_only, time_t changedsince,
     frock.proc = proc;
     frock.rock = rock;
 
-    if (!find || !tzid_only) find = "";
+    if (!find || !tzid_only) {
+        find = "";
+    }
 
     /* process each matching entry in our database */
-    return cyrusdb_foreach(zoneinfodb, (char *) find, strlen(find),
-                           &find_p, &find_cb, &frock, NULL);
+    return cyrusdb_foreach(zoneinfodb,
+                           (char *) find,
+                           strlen(find),
+                           &find_p,
+                           &find_cb,
+                           &frock,
+                           NULL);
 }

@@ -73,23 +73,41 @@ EXPORTED struct vparse_card *vcard_parse_string(const char *str)
         vparse_fillpos(&vparser, &pos);
         if (pos.startpos < 60) {
             int len = pos.errorpos - pos.startpos;
-            syslog(LOG_ERR, "vcard error %s at line %d char %d: %.*s ---> %.*s <---",
-                   vparse_errstr(vr), pos.errorline, pos.errorchar,
-                   pos.startpos, str, len, str + pos.startpos);
+            syslog(LOG_ERR,
+                   "vcard error %s at line %d char %d: %.*s ---> %.*s <---",
+                   vparse_errstr(vr),
+                   pos.errorline,
+                   pos.errorchar,
+                   pos.startpos,
+                   str,
+                   len,
+                   str + pos.startpos);
         }
         else if (pos.errorpos - pos.startpos < 40) {
             int len = pos.errorpos - pos.startpos;
-            syslog(LOG_ERR, "vcard error %s at line %d char %d: ... %.*s ---> %.*s <---",
-                   vparse_errstr(vr), pos.errorline, pos.errorchar,
-                   40 - len, str + pos.errorpos - 40,
-                   len, str + pos.startpos);
+            syslog(LOG_ERR,
+                   "vcard error %s at line %d char %d: ... %.*s ---> %.*s <---",
+                   vparse_errstr(vr),
+                   pos.errorline,
+                   pos.errorchar,
+                   40 - len,
+                   str + pos.errorpos - 40,
+                   len,
+                   str + pos.startpos);
         }
         else {
-            syslog(LOG_ERR, "error %s at line %d char %d: %.*s ... %.*s <--- (started at line %d char %d)",
-                   vparse_errstr(vr), pos.errorline, pos.errorchar,
-                   20, str + pos.startpos,
-                   20, str + pos.errorpos - 20,
-                   pos.startline, pos.startchar);
+            syslog(LOG_ERR,
+                   "error %s at line %d char %d: %.*s ... %.*s <--- (started "
+                   "at line %d char %d)",
+                   vparse_errstr(vr),
+                   pos.errorline,
+                   pos.errorchar,
+                   20,
+                   str + pos.startpos,
+                   20,
+                   str + pos.errorpos - 20,
+                   pos.startline,
+                   pos.startchar);
         }
     }
     else {
@@ -116,7 +134,7 @@ EXPORTED struct buf *vcard_as_buf(struct vparse_card *vcard)
 }
 
 EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
-                                    const struct index_record *record)
+                                             const struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
     struct vparse_card *vcard = NULL;
@@ -130,38 +148,57 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
     return vcard;
 }
 
-struct image_magic {
+struct image_magic
+{
     size_t offset;
     size_t len;
     uint8_t data[8];
 };
 
-static const struct image_signature {
+static const struct image_signature
+{
     const char *mediatype;
     struct image_magic magic[2];
 } image_signatures[] = {
-    { "image/bmp",  { { 0, 2, { 0x42, 0x4D } },                         // "BM"
-                      { 0, 0, { 0x00 } } } },
-    { "image/gif",  { { 0, 6, { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 } }, // "GIF87a"
-                      { 0, 0, { 0x00 } } } },
-    { "image/gif",  { { 0, 6, { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 } }, // "GIF89a"
-                      { 0, 0, { 0x00 } } } },
-    { "image/jpeg", { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE0 } },
-                      { 6, 5, { 0x4A, 0x46, 0x49, 0x46, 0x00 } } } },   // "JFIF\0"
-    { "image/jpeg", { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE0 } },
-                      { 6, 5, { 0x4A, 0x46, 0x58, 0x58, 0x00 } } } },   // "JFXX\0"
-    { "image/jpeg", { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE1 } },
-                      { 6, 5, { 0x45, 0x78, 0x69, 0x66, 0x00 } } } },   // "Exif\0"
-    { "image/png",  { { 0, 8, { 0x89,
-                                0x50, 0x4E, 0x47, 0x0D, 0x0A,           // "PNG\r\n"
-                                0x1A, 0x0A } },
-                      { 0, 0, { 0x00 } } } },
-    { "image/tiff", { { 0, 4, { 0x49, 0x49, 0x2A, 0x00 } },             // "II*\0"
-                      { 0, 0, { 0x00 } } } },
-    { "image/tiff", { { 0, 4, { 0x4D, 0x4D, 0x00, 0x2A } },             // "MM\0*"
-                      { 0, 0, { 0x00 } } } },
-    { "image/webp", { { 0, 4, { 0x52, 0x49, 0x46, 0x46 } },             // "RIFF"
-                      { 8, 4, { 0x57, 0x45, 0x42, 0x50 } } } },         // "WEBP"
+    { "image/bmp",
+     { { 0, 2, { 0x42, 0x4D } }, // "BM"
+        { 0, 0, { 0x00 } } } },
+    { "image/gif",
+     { { 0, 6, { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 } }, // "GIF87a"
+        { 0, 0, { 0x00 } } } },
+    { "image/gif",
+     { { 0, 6, { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 } }, // "GIF89a"
+        { 0, 0, { 0x00 } } } },
+    { "image/jpeg",
+     { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE0 } },
+        { 6, 5, { 0x4A, 0x46, 0x49, 0x46, 0x00 } } } }, // "JFIF\0"
+    { "image/jpeg",
+     { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE0 } },
+        { 6, 5, { 0x4A, 0x46, 0x58, 0x58, 0x00 } } } }, // "JFXX\0"
+    { "image/jpeg",
+     { { 0, 4, { 0xFF, 0xD8, 0xFF, 0xE1 } },
+        { 6, 5, { 0x45, 0x78, 0x69, 0x66, 0x00 } } } }, // "Exif\0"
+    { "image/png",
+     { { 0,
+          8,
+          { 0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A, // "PNG\r\n"
+            0x1A,
+            0x0A } },
+        { 0, 0, { 0x00 } } } },
+    { "image/tiff",
+     { { 0, 4, { 0x49, 0x49, 0x2A, 0x00 } }, // "II*\0"
+        { 0, 0, { 0x00 } } } },
+    { "image/tiff",
+     { { 0, 4, { 0x4D, 0x4D, 0x00, 0x2A } }, // "MM\0*"
+        { 0, 0, { 0x00 } } } },
+    { "image/webp",
+     { { 0, 4, { 0x52, 0x49, 0x46, 0x46 } },     // "RIFF"
+        { 8, 4, { 0x57, 0x45, 0x42, 0x50 } } } }, // "WEBP"
     { 0 }
 };
 
@@ -175,8 +212,14 @@ static size_t _prop_decode_value(const char *data,
     size_t size = 0;
 
     /* Decode property value */
-    charset_decode_mimebody(data, strlen(data), ENCODING_BASE64, &decbuf, &size);
-    if (!decbuf) return 0;
+    charset_decode_mimebody(data,
+                            strlen(data),
+                            ENCODING_BASE64,
+                            &decbuf,
+                            &size);
+    if (!decbuf) {
+        return 0;
+    }
 
     if (content_type && !*content_type) {
         /* Attempt to detect the content type */
@@ -185,9 +228,11 @@ static size_t _prop_decode_value(const char *data,
         for (sig = image_signatures; sig->mediatype; sig++) {
             int i;
             for (i = 0; i < 2 && sig->magic[i].len; i++) {
-                if (size - sig->magic[i].offset <= sig->magic[i].len ||
-                    memcmp(decbuf + sig->magic[i].offset,
-                           sig->magic[i].data, sig->magic[i].len)) {
+                if (size - sig->magic[i].offset <= sig->magic[i].len
+                    || memcmp(decbuf + sig->magic[i].offset,
+                              sig->magic[i].data,
+                              sig->magic[i].len))
+                {
                     break;
                 }
             }
@@ -198,9 +243,12 @@ static size_t _prop_decode_value(const char *data,
         }
 
         if (!*content_type) {
-            xmlDocPtr doc = xmlReadMemory(decbuf, size, NULL, NULL,
-                                          XML_PARSE_NOERROR |
-                                          XML_PARSE_NOWARNING);
+            xmlDocPtr doc =
+                xmlReadMemory(decbuf,
+                              size,
+                              NULL,
+                              NULL,
+                              XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
             if (doc) {
                 xmlNodePtr root = xmlDocGetRootElement(doc);
                 if (!xmlStrcmp(root->name, BAD_CAST "svg")) {
@@ -233,13 +281,18 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
     struct vparse_param *param;
     char *data, *mt, *b64;
 
-    if (!prop) return 0;
+    if (!prop) {
+        return 0;
+    }
 
-    if (content_type) *content_type = NULL;
+    if (content_type) {
+        *content_type = NULL;
+    }
 
     /* Make sure we have base64-encoded data */
-    if (((param = vparse_get_param(prop, "encoding")) &&
-         !strcasecmp("b", param->value))) {
+    if (((param = vparse_get_param(prop, "encoding"))
+         && !strcasecmp("b", param->value)))
+    {
         /* vCard v3 */
         data = prop->v.value;
 
@@ -247,37 +300,42 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
             struct buf buf = BUF_INITIALIZER;
 
             buf_setcstr(&buf, param->value);
-            if (strncmp("image/", buf_lcase(&buf), 6))
+            if (strncmp("image/", buf_lcase(&buf), 6)) {
                 buf_insertcstr(&buf, 0, "image/");
+            }
 
             *content_type = buf_release(&buf);
         }
     }
-    else if (!strncmp("data:", prop->v.value, 5) &&
-             (mt = prop->v.value + 5) &&
-             (b64 = strstr(mt, ";base64,"))) {
+    else if (!strncmp("data:", prop->v.value, 5) && (mt = prop->v.value + 5)
+             && (b64 = strstr(mt, ";base64,")))
+    {
         /* data URI -- data:[<media type>][;base64],<data> */
         size_t mt_len = b64 - mt;
 
         data = b64 + 8;
 
-        if (content_type && mt_len)
+        if (content_type && mt_len) {
             *content_type = xstrndup(mt, mt_len);
+        }
     }
     else {
         return 0;
     }
-    
+
     /* Decode property value */
     return _prop_decode_value(data, value, content_type, guid);
 }
 
-struct preferred_prop {
-    void *prop;  // either vparse_entry* or vcardproperty*
+struct preferred_prop
+{
+    void *prop; // either vparse_entry* or vcardproperty*
     int level;
 };
 
-static void check_pref(void *prop, const char *name, int level,
+static void check_pref(void *prop,
+                       const char *name,
+                       int level,
                        struct hash_table *pref_table)
 {
     struct preferred_prop *pp = hash_lookup(name, pref_table);
@@ -294,7 +352,8 @@ static void check_pref(void *prop, const char *name, int level,
 }
 
 static void add_type_pref(const char *key __attribute__((unused)),
-                          void *data, void *rock __attribute__((unused)))
+                          void *data,
+                          void *rock __attribute__((unused)))
 {
     int is_ventry = !!rock;
 
@@ -323,7 +382,6 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
     /* Create hash table of preferred properties */
     construct_hash_table(&pref_table, 10, 1);
 
-
     for (ventry = vcard->objects->properties; ventry; ventry = next) {
         const char *name = ventry->name;
         const char *propval = ventry->v.value;
@@ -331,8 +389,12 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
         next = ventry->next;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         buf_reset(&buf);
 
@@ -343,8 +405,9 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
         while (*paramp) {
             vparam = *paramp;
 
-            if (!strcasecmpsafe(vparam->name, "pref") ||
-                !strcasecmpsafe(vparam->name, "mediatype")) {
+            if (!strcasecmpsafe(vparam->name, "pref")
+                || !strcasecmpsafe(vparam->name, "mediatype"))
+            {
 
                 if (strchr("Pp", vparam->name[0])) {
                     check_pref(ventry, name, atoi(vparam->value), &pref_table);
@@ -375,7 +438,7 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
             }
             else if (!strncmp(propval, "urn:uuid:", 9)) {
                 /* uuid URN -> text */
-                buf_setcstr(&buf, propval+9);
+                buf_setcstr(&buf, propval + 9);
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
             else {
@@ -383,10 +446,9 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
                 vparse_add_param(ventry, "VALUE", "uri");
             }
         }
-        else if (!strcasecmp(name, "key")   ||
-                 !strcasecmp(name, "logo")  ||
-                 !strcasecmp(name, "photo") ||
-                 !strcasecmp(name, "sound")) {
+        else if (!strcasecmp(name, "key") || !strcasecmp(name, "logo")
+                 || !strcasecmp(name, "photo") || !strcasecmp(name, "sound"))
+        {
             /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
             if (!strncmp(propval, "data:", 5)) {
                 /* Rewrite data: URI as 'b' encoded value */
@@ -428,7 +490,7 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
         else if (!strcasecmp(name, "geo")) {
             /* Rewrite GEO property */
             if (!strncmp(propval, "geo:", 4)) {
-                buf_setcstr(&buf, propval+4);
+                buf_setcstr(&buf, propval + 4);
                 buf_replace_char(&buf, ',', ';');
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
@@ -477,7 +539,9 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
 
 static int vcard_value_is_uri(const char *val)
 {
-    if (!val) return 0;
+    if (!val) {
+        return 0;
+    }
     xmlURIPtr xuri = xmlParseURI(val);
     int is_uri = xuri && xuri->scheme;
     xmlFreeURI(xuri);
@@ -485,11 +549,13 @@ static int vcard_value_is_uri(const char *val)
 }
 
 static const char *known_types[] = {
-    "WORK", "HOME", "TEXT", "VOICE", "FAX", "CELL", "VIDEO", "PAGER", "TEXTPHONE",
-    "CONTACT", "ACQUAINTANCE", "FRIEND", "MET", "CO-WORKER", "COLLEAGUE",
-    "CO-RESIDENT", "NEIGHBOR", "CHILD", "PARENT", "SIBLING", "SPOUSE", "KIN",
-    "MUSE", "CRUSH", "DATE", "SWEETHEART", "ME", "AGENT", "EMERGENCY", "PREF",
-    "MAIN-NUMBER", "BILLING", "DELIVERY", NULL
+    "WORK",         "HOME",     "TEXT",     "VOICE",     "FAX",
+    "CELL",         "VIDEO",    "PAGER",    "TEXTPHONE", "CONTACT",
+    "ACQUAINTANCE", "FRIEND",   "MET",      "CO-WORKER", "COLLEAGUE",
+    "CO-RESIDENT",  "NEIGHBOR", "CHILD",    "PARENT",    "SIBLING",
+    "SPOUSE",       "KIN",      "MUSE",     "CRUSH",     "DATE",
+    "SWEETHEART",   "ME",       "AGENT",    "EMERGENCY", "PREF",
+    "MAIN-NUMBER",  "BILLING",  "DELIVERY", NULL
 };
 
 EXPORTED void vcard_to_v4(struct vparse_card *vcard)
@@ -514,8 +580,12 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
         next = ventry->next;
 
-        if (!name) continue;
-        if (!propval) continue;
+        if (!name) {
+            continue;
+        }
+        if (!propval) {
+            continue;
+        }
 
         buf_reset(&buf);
 
@@ -531,7 +601,8 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
             if (vparam->value && !strcasecmpsafe(vparam->name, "type")) {
                 const char **val = known_types;
 
-                for (; *val && strcasecmp(*val, vparam->value); val++);
+                for (; *val && strcasecmp(*val, vparam->value); val++)
+                    ;
                 if (!*val) {
                     *paramp = vparam->next;
                     vparam->next = NULL;
@@ -569,10 +640,9 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
         }
-        else if (!strcasecmp(name, "key")   ||
-                 !strcasecmp(name, "logo")  ||
-                 !strcasecmp(name, "photo") ||
-                 !strcasecmp(name, "sound")) {
+        else if (!strcasecmp(name, "key") || !strcasecmp(name, "logo")
+                 || !strcasecmp(name, "photo") || !strcasecmp(name, "sound"))
+        {
             /* Rewrite KEY, LOGO, PHOTO, SOUND properties */
             if (type) {
                 switch (toupper(name[0])) {
@@ -593,9 +663,10 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
             vparam = vparse_get_param(ventry, "value");
 
-            if ((vparam && strcasecmp(vparam->value, "uri")) ||
-                vparse_get_param(ventry, "encoding") ||
-                !vcard_value_is_uri(propval)) {
+            if ((vparam && strcasecmp(vparam->value, "uri"))
+                || vparse_get_param(ventry, "encoding")
+                || !vcard_value_is_uri(propval))
+            {
                 /* Rewrite 'b' encoded value as data: URI */
                 buf_insertcstr(&buf, 0, "data:");
 
@@ -641,7 +712,7 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
         }
         else if (!strncasecmp(name, "x-addressbookserver-", 20)) {
             /* Rename X-ADDRESSBOOKSERVER-* properties */
-            char *newname = xstrdup(name+20);
+            char *newname = xstrdup(name + 20);
 
             free(ventry->name);
             ventry->name = newname;
@@ -659,12 +730,14 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
 
 #ifdef HAVE_LIBICALVCARD
 
-EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
+EXPORTED vcardcomponent *vcard_parse_string_x(const char *str)
 {
     vcardcomponent *vcard = vcardcomponent_new_from_string(str);
 
     /* Remove all X-LIC-ERROR properties */
-    if (vcard) vcardcomponent_strip_errors(vcard);
+    if (vcard) {
+        vcardcomponent_strip_errors(vcard);
+    }
 
     return vcard;
 }
@@ -679,7 +752,9 @@ EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
     char *str = vcardcomponent_as_vcard_string_r(vcard);
     struct buf *ret = buf_new();
 
-    if (str) buf_initm(ret, str, strlen(str));
+    if (str) {
+        buf_initm(ret, str, strlen(str));
+    }
 
     return ret;
 }
@@ -709,22 +784,29 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
     vcardparameter *param;
     const char *mt, *b64;
 
-    if (!prop) return 0;
+    if (!prop) {
+        return 0;
+    }
 
     val = vcardproperty_get_value(prop);
-    if (vcardvalue_isa(val) == VCARD_X_VALUE)
+    if (vcardvalue_isa(val) == VCARD_X_VALUE) {
         data = vcardvalue_get_x(val);
-    else
+    }
+    else {
         data = vcardvalue_get_uri(val);
+    }
 
-    if (!data) return 0;
+    if (!data) {
+        return 0;
+    }
 
-    if (content_type) *content_type = NULL;
+    if (content_type) {
+        *content_type = NULL;
+    }
 
     /* Make sure we have base64-encoded data */
     param = vcardproperty_get_first_parameter(prop, VCARD_ENCODING_PARAMETER);
-    if (param &&
-        vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
+    if (param && vcardparameter_get_encoding(param) == VCARD_ENCODING_B) {
         /* vCard v3 */
 
         param = vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
@@ -756,27 +838,29 @@ EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
                 }
             }
 
-            if (strncmp(type, buf_lcase(&buf), strlen(type)))
+            if (strncmp(type, buf_lcase(&buf), strlen(type))) {
                 buf_insertcstr(&buf, 0, type);
+            }
 
             *content_type = buf_release(&buf);
         }
     }
-    else if (!strncmp("data:", data, 5) &&
-             (mt = data + 5) &&
-             (b64 = strstr(mt, ";base64,"))) {
+    else if (!strncmp("data:", data, 5) && (mt = data + 5)
+             && (b64 = strstr(mt, ";base64,")))
+    {
         /* data URI -- data:[<media type>][;base64],<data> */
         size_t mt_len = b64 - mt;
 
         data = b64 + 8;
 
-        if (content_type && mt_len)
+        if (content_type && mt_len) {
             *content_type = xstrndup(mt, mt_len);
+        }
     }
     else {
         return 0;
     }
-    
+
     /* Decode property value */
     return _prop_decode_value(data, value, content_type, guid);
 }
@@ -788,7 +872,8 @@ EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
 
     for (param = vcardproperty_get_first_parameter(prop, VCARD_ANY_PARAMETER);
          param;
-         param = vcardproperty_get_next_parameter(prop, VCARD_ANY_PARAMETER)) {
+         param = vcardproperty_get_next_parameter(prop, VCARD_ANY_PARAMETER))
+    {
 
         if (strcasecmpsafe(vcardparameter_get_xname(param), name)) {
             continue;

@@ -53,7 +53,9 @@ xmlChar *xmlBufferDetach(xmlBufferPtr buf)
 {
     xmlChar *ret;
 
-    if (!buf) return NULL;
+    if (!buf) {
+        return NULL;
+    }
 
     ret = buf->content;
     buf->content = NULL;
@@ -62,14 +64,15 @@ xmlChar *xmlBufferDetach(xmlBufferPtr buf)
     return ret;
 }
 
-#ifndef HAVE_XML_FIRSTCHILD
+# ifndef HAVE_XML_FIRSTCHILD
 
 xmlNodePtr xmlGetNextNode(xmlNodePtr node)
 {
-    for (; node && node->type != XML_ELEMENT_NODE; node = node->next);
+    for (; node && node->type != XML_ELEMENT_NODE; node = node->next)
+        ;
     return node;
 }
 
-#endif /* HAVE_XML_FIRSTCHILD */
+# endif /* HAVE_XML_FIRSTCHILD */
 
 #endif /* HAVE_XML_BUFFERDETACH */

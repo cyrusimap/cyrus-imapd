@@ -41,7 +41,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <stdio.h>
@@ -75,19 +75,26 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     const char *myarg = (arg ? arg : "");
     int len = strlen(myarg) + 1;
 
-    if (*buflen + len > max_size) return -1;
+    if (*buflen + len > max_size) {
+        return -1;
+    }
 
-    strcat(buf+*buflen, myarg);
+    strcat(buf + *buflen, myarg);
     *buflen += len;
 
     return 0;
 }
 
-static void notify_dlist(const char *sockpath, const char *method,
-                         const char *class, const char *priority,
-                         const char *user, const char *mailbox,
-                         int nopt, const char **options,
-                         const char *message, const char *fname,
+static void notify_dlist(const char *sockpath,
+                         const char *method,
+                         const char *class,
+                         const char *priority,
+                         const char *user,
+                         const char *mailbox,
+                         int nopt,
+                         const char **options,
+                         const char *message,
+                         const char *fname,
                          const char *loginfo)
 {
     struct sockaddr_un sun_data;
@@ -105,25 +112,29 @@ static void notify_dlist(const char *sockpath, const char *method,
     dlist_setatom(dl, "USER", user);
     dlist_setatom(dl, "MAILBOX", mailbox);
     il = dlist_newlist(dl, "OPTIONS");
-    for (i = 0; i < nopt; i++)
+    for (i = 0; i < nopt; i++) {
         dlist_setatom(il, NULL, options[i]);
+    }
     dlist_setatom(dl, "MESSAGE", message);
     dlist_setatom(dl, "FILEPATH", fname);
 
-    memset((char *)&sun_data, 0, sizeof(sun_data));
+    memset((char *) &sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
     strlcpy(sun_data.sun_path, sockpath, sizeof(sun_data.sun_path));
 
     soc = socket(PF_UNIX, SOCK_STREAM, 0);
     if (soc < 0) {
         syslog(LOG_ERR,
-               "NOTIFY(%s): unable to create notify socket(): %m", loginfo);
+               "NOTIFY(%s): unable to create notify socket(): %m",
+               loginfo);
         goto out;
     }
 
-    if (connect(soc, (struct sockaddr *)&sun_data, sizeof(sun_data)) < 0) {
+    if (connect(soc, (struct sockaddr *) &sun_data, sizeof(sun_data)) < 0) {
         syslog(LOG_ERR,
-               "NOTIFY(%s): failed to connect to %s: %m", loginfo, sockpath);
+               "NOTIFY(%s): failed to connect to %s: %m",
+               loginfo,
+               sockpath);
         goto out;
     }
 
@@ -138,32 +149,50 @@ static void notify_dlist(const char *sockpath, const char *method,
     prot_flush(out);
 
     c = dlist_parse(&res, 1, 0, in);
-    if (c == '\r') c = prot_getc(in);
+    if (c == '\r') {
+        c = prot_getc(in);
+    }
     /* XXX - do something with the response?  Like have NOTIFY answer */
     if (c == '\n' && res && res->name) {
         if (strcmp(res->name, "OK")) {
-            syslog(LOG_NOTICE, "NOTIFY(%s): response %s to method %s",
-                  loginfo, res->name, method);
+            syslog(LOG_NOTICE,
+                   "NOTIFY(%s): response %s to method %s",
+                   loginfo,
+                   res->name,
+                   method);
         }
     }
     else {
-        syslog(LOG_ERR, "NOTIFY(%s): error sending %s to %s",
-               loginfo, method, sockpath);
+        syslog(LOG_ERR,
+               "NOTIFY(%s): error sending %s to %s",
+               loginfo,
+               method,
+               sockpath);
     }
 
 out:
-    if (in) prot_free(in);
-    if (out) prot_free(out);
-    if (soc >= 0) close(soc);
+    if (in) {
+        prot_free(in);
+    }
+    if (out) {
+        prot_free(out);
+    }
+    if (soc >= 0) {
+        close(soc);
+    }
     dlist_free(&dl);
     dlist_free(&res);
 }
 
 EXPORTED void notify(const char *method,
-            const char *class, const char *priority,
-            const char *user, const char *mailbox,
-            int nopt, const char **options,
-            const char *message, const char *fname)
+                     const char *class,
+                     const char *priority,
+                     const char *user,
+                     const char *mailbox,
+                     int nopt,
+                     const char **options,
+                     const char *message,
+                     const char *fname)
 {
     const char *notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
     int soc = -1;
@@ -186,9 +215,17 @@ EXPORTED void notify(const char *method,
     loginfo = buf_release(&logbuf);
 
     if (!strncmp(notify_sock, "dlist:", 6)) {
-        notify_dlist(notify_sock+6, method, class, priority,
-                     user, mailbox, nopt, options,
-                     message, fname, loginfo);
+        notify_dlist(notify_sock + 6,
+                     method,
+                     class,
+                     priority,
+                     user,
+                     mailbox,
+                     nopt,
+                     options,
+                     message,
+                     fname,
+                     loginfo);
         free(loginfo);
         return;
     }
@@ -196,11 +233,12 @@ EXPORTED void notify(const char *method,
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
         syslog(LOG_ERR,
-               "NOTIFY(%s): unable to create notify socket(): %m", loginfo);
+               "NOTIFY(%s): unable to create notify socket(): %m",
+               loginfo);
         goto out;
     }
 
-    memset((char *)&sun_data, 0, sizeof(sun_data));
+    memset((char *) &sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
     if (notify_sock) {
         strlcpy(sun_data.sun_path, notify_sock, sizeof(sun_data.sun_path));
@@ -208,7 +246,8 @@ EXPORTED void notify(const char *method,
     else {
         strlcpy(sun_data.sun_path, config_dir, sizeof(sun_data.sun_path));
         strlcat(sun_data.sun_path,
-                FNAME_NOTIFY_SOCK, sizeof(sun_data.sun_path));
+                FNAME_NOTIFY_SOCK,
+                sizeof(sun_data.sun_path));
     }
 
     /* Get send buffer size */
@@ -232,28 +271,46 @@ EXPORTED void notify(const char *method,
      */
 
     r = add_arg(buf, bufsiz, method, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, class, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, priority, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, user, &buflen);
-    if (!r) r = add_arg(buf, bufsiz, mailbox, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, class, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, priority, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, user, &buflen);
+    }
+    if (!r) {
+        r = add_arg(buf, bufsiz, mailbox, &buflen);
+    }
 
     snprintf(noptstr, sizeof(noptstr), "%d", nopt);
-    if (!r) r = add_arg(buf, bufsiz, noptstr, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, noptstr, &buflen);
+    }
 
     for (i = 0; !r && i < nopt; i++) {
         r = add_arg(buf, bufsiz, options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, bufsiz, message, &buflen);
-    if (!r && fname) r = add_arg(buf, bufsiz, fname, &buflen);
+    if (!r) {
+        r = add_arg(buf, bufsiz, message, &buflen);
+    }
+    if (!r && fname) {
+        r = add_arg(buf, bufsiz, fname, &buflen);
+    }
 
     if (r) {
         syslog(LOG_ERR, "NOTIFY(%s): datagram too large", loginfo);
         goto out;
     }
 
-    r = sendto(soc, buf, buflen, 0,
-               (struct sockaddr *)&sun_data, sizeof(sun_data));
+    r = sendto(soc,
+               buf,
+               buflen,
+               0,
+               (struct sockaddr *) &sun_data,
+               sizeof(sun_data));
 
     if (r < 0) {
         syslog(LOG_ERR, "NOTIFY(%s): unable to sendto() socket: %m", loginfo);

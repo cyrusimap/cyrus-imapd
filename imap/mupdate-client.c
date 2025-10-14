@@ -52,7 +52,7 @@
 #include <syslog.h>
 #include <stdarg.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -60,7 +60,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #ifdef HAVE_SYS_SELECT_H
-#include <sys/select.h>
+# include <sys/select.h>
 #endif
 
 #include "global.h"
@@ -72,26 +72,40 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
-static struct protocol_t mupdate_protocol =
-{ "mupdate", "mupdate", NULL, TYPE_STD,
-  { { { 1, "* OK" },
-      { NULL, NULL, "* OK", NULL,
-        CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
-        { { "AUTH", CAPA_AUTH },
-          { "STARTTLS", CAPA_STARTTLS },
-          { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-          { NULL, 0 } } },
-      { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
-      { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
-      { "Z01 COMPRESS \"DEFLATE\"", NULL, "Z01 OK" },
-      { "N01 NOOP", NULL, "N01 OK" },
-      { "Q01 LOGOUT", NULL, "Q01 " } } }
+static struct protocol_t mupdate_protocol = {
+    "mupdate",
+    "mupdate",
+    NULL,
+    TYPE_STD,
+    { { { 1, "* OK" },
+        { NULL,
+          NULL,
+          "* OK",
+          NULL,
+          CAPAF_ONE_PER_LINE | CAPAF_SKIP_FIRST_WORD,
+          { { "AUTH", CAPA_AUTH },
+            { "STARTTLS", CAPA_STARTTLS },
+            { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+            { NULL, 0 } } },
+        { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
+        { "A01 AUTHENTICATE",
+          USHRT_MAX,
+          1,
+          "A01 OK",
+          "A01 NO",
+          "",
+          "*",
+          NULL,
+          0 },
+        { "Z01 COMPRESS \"DEFLATE\"", NULL, "Z01 OK" },
+        { "N01 NOOP", NULL, "N01 OK" },
+        { "Q01 LOGOUT", NULL, "Q01 " } } }
 };
 
 EXPORTED int mupdate_connect(const char *server,
-                    const char *port __attribute__((unused)),
-                    mupdate_handle **handle,
-                    sasl_callback_t *cbs)
+                             const char *port __attribute__((unused)),
+                             mupdate_handle **handle,
+                             sasl_callback_t *cbs)
 {
     mupdate_handle *h = NULL;
     const char *status = NULL;
@@ -121,13 +135,15 @@ EXPORTED int mupdate_connect(const char *server,
         h->sasl_cb = cbs;
     }
 
-    h->conn = backend_connect(NULL, server, &mupdate_protocol,
-                              "", cbs, &status, -1);
+    h->conn =
+        backend_connect(NULL, server, &mupdate_protocol, "", cbs, &status, -1);
 
     if (!h->conn) {
         free_callbacks(h->sasl_cb);
         h->sasl_cb = NULL;
-        syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "no auth status");
+        syslog(LOG_ERR,
+               "mupdate_connect failed: %s",
+               status ? status : "no auth status");
         return MUPDATE_NOCONN;
     }
 
@@ -141,7 +157,9 @@ EXPORTED void mupdate_disconnect(mupdate_handle **hp)
 {
     mupdate_handle *h;
 
-    if (!hp || !(*hp)) return;
+    if (!hp || !(*hp)) {
+        return;
+    }
     h = *hp;
 
     backend_disconnect(h->conn);
@@ -165,17 +183,22 @@ EXPORTED void mupdate_disconnect(mupdate_handle **hp)
 /* We're really only looking for an OK or NO or BAD here -- and the callback
  * is never called in those cases.  So if the callback is called, we have
  * an error! */
-static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((unused)),
+static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata
+                             __attribute__((unused)),
                              const char *cmd,
                              void *context __attribute__((unused)))
 {
-    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command received was %s", cmd);
+    syslog(LOG_ERR,
+           "mupdate_scarf_one was called, but shouldn't be.  Command received "
+           "was %s",
+           cmd);
     return -1;
 }
 
 EXPORTED int mupdate_activate(mupdate_handle *handle,
-                     const char *mailbox, const char *location,
-                     const char *acl)
+                              const char *mailbox,
+                              const char *location,
+                              const char *acl)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -196,23 +219,25 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
-    if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+    if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
+        syslog(LOG_ERR,
+               "%s: double ! detected in location '%s'",
+               __func__,
+               location);
 
         return MUPDATE_BADPARAM;
     }
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
@@ -221,23 +246,28 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
                 "{" SIZE_T_FMT "+}\r\n%s "
                 "{" SIZE_T_FMT "+}\r\n%s\r\n",
                 handle->tagn++,
-                strlen(mailbox), mailbox,
-                strlen(location), location,
-                (acl ? strlen(acl): 0), (acl ? acl : "")
-        );
+                strlen(mailbox),
+                mailbox,
+                strlen(location),
+                location,
+                (acl ? strlen(acl) : 0),
+                (acl ? acl : ""));
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
         return ret;
-    } else if (response != MUPDATE_OK) {
+    }
+    else if (response != MUPDATE_OK) {
         return MUPDATE_FAIL;
-    } else {
+    }
+    else {
         return 0;
     }
 }
 
 HIDDEN int mupdate_reserve(mupdate_handle *handle,
-                    const char *mailbox, const char *location)
+                           const char *mailbox,
+                           const char *location)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -258,23 +288,25 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
-    if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+    if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
+        syslog(LOG_ERR,
+               "%s: double ! detected in location '%s'",
+               __func__,
+               location);
 
         return MUPDATE_BADPARAM;
     }
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the location part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
@@ -282,22 +314,26 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
                 "{" SIZE_T_FMT "+}\r\n%s "
                 "{" SIZE_T_FMT "+}\r\n%s\r\n",
                 handle->tagn++,
-                strlen(mailbox), mailbox,
-                strlen(location), location
-        );
+                strlen(mailbox),
+                mailbox,
+                strlen(location),
+                location);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
         return ret;
-    } else if (response != MUPDATE_OK) {
+    }
+    else if (response != MUPDATE_OK) {
         return MUPDATE_FAIL_RESERVE;
-    } else {
+    }
+    else {
         return 0;
     }
 }
 
 EXPORTED int mupdate_deactivate(mupdate_handle *handle,
-                       const char *mailbox, const char *location)
+                                const char *mailbox,
+                                const char *location)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -318,46 +354,50 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     /* make sure we don't have a double server!partition */
-    if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+    if ((p = strchr(location, '!')) && strchr(p + 1, '!')) {
+        syslog(LOG_ERR,
+               "%s: double ! detected in location '%s'",
+               __func__,
+               location);
 
         return MUPDATE_BADPARAM;
     }
 
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
-        if (p) location = p + 1;
+        if (p) {
+            location = p + 1;
+        }
     }
 
     prot_printf(handle->conn->out,
-            "X%u DEACTIVATE "
-            "{" SIZE_T_FMT "+}\r\n%s "
-            "{" SIZE_T_FMT "+}\r\n%s\r\n",
-            handle->tagn++,
-            strlen(mailbox), mailbox,
-            strlen(location), location
-        );
+                "X%u DEACTIVATE "
+                "{" SIZE_T_FMT "+}\r\n%s "
+                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                handle->tagn++,
+                strlen(mailbox),
+                mailbox,
+                strlen(location),
+                location);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
         return ret;
-    } else if (response != MUPDATE_OK) {
+    }
+    else if (response != MUPDATE_OK) {
         return MUPDATE_FAIL_RESERVE;
-    } else {
+    }
+    else {
         return 0;
     }
 }
 
-EXPORTED int mupdate_delete(mupdate_handle *handle,
-                   const char *mailbox)
+EXPORTED int mupdate_delete(mupdate_handle *handle, const char *mailbox)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -372,29 +412,37 @@ EXPORTED int mupdate_delete(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
-    if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+    if (!handle->saslcompleted) {
+        return MUPDATE_NOAUTH;
+    }
 
     prot_printf(handle->conn->out,
-                "X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
-                strlen(mailbox), mailbox);
+                "X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
+                handle->tagn++,
+                strlen(mailbox),
+                mailbox);
 
     ret = mupdate_scarf(handle, mupdate_scarf_one, NULL, 1, &response);
     if (ret) {
         return ret;
-    } else if (response != MUPDATE_OK) {
+    }
+    else if (response != MUPDATE_OK) {
         return MUPDATE_FAIL;
-    } else {
+    }
+    else {
         return 0;
     }
 }
 
-
 static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
-                           const char *cmd, void *context)
+                           const char *cmd,
+                           void *context)
 {
-    struct mupdate_handle_s *h = (struct mupdate_handle_s *)context;
+    struct mupdate_handle_s *h = (struct mupdate_handle_s *) context;
 
-    if (!h || !cmd || !mdata) return 1;
+    if (!h || !cmd || !mdata) {
+        return 1;
+    }
 
     /* coyp the data to the handle storage */
     /* XXX why can't we just point to the 'mdata' buffers? */
@@ -406,11 +454,13 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
 
         free(h->acl);
         h->acl = xstrdup(mdata->acl);
-    } else if (!strncmp(cmd, "RESERVE", 7)) {
+    }
+    else if (!strncmp(cmd, "RESERVE", 7)) {
         h->mailboxdata_buf.t = RESERVE;
         free(h->acl);
         h->acl = xstrdup("");
-    } else {
+    }
+    else {
         /* Bad command */
         return 1;
     }
@@ -422,8 +472,9 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     return 0;
 }
 
-EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
-                 struct mupdate_mailboxdata **target)
+EXPORTED int mupdate_find(mupdate_handle *handle,
+                          const char *mailbox,
+                          struct mupdate_mailboxdata **target)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -444,8 +495,10 @@ EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
     }
 
     prot_printf(handle->conn->out,
-                "X%u FIND {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
-                strlen(mailbox), mailbox);
+                "X%u FIND {" SIZE_T_FMT "+}\r\n%s\r\n",
+                handle->tagn++,
+                strlen(mailbox),
+                mailbox);
 
     memset(&(handle->mailboxdata_buf), 0, sizeof(handle->mailboxdata_buf));
 
@@ -456,19 +509,23 @@ EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
     if (!ret && response == MUPDATE_OK && handle->mailboxdata_buf.mailbox) {
         *target = &(handle->mailboxdata_buf);
         return 0;
-    } else if (!ret && response == MUPDATE_OK) {
+    }
+    else if (!ret && response == MUPDATE_OK) {
         /* it looked okay, but we didn't get a mailbox */
         *target = NULL;
         return MUPDATE_MAILBOX_UNKNOWN;
-    } else {
+    }
+    else {
         /* Something Bad happened */
         *target = NULL;
         return ret ? ret : MUPDATE_FAIL;
     }
 }
 
-EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
-                 const char *prefix, void *context)
+EXPORTED int mupdate_list(mupdate_handle *handle,
+                          mupdate_callback callback,
+                          const char *prefix,
+                          void *context)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -485,27 +542,31 @@ EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 
     if (prefix) {
         prot_printf(handle->conn->out,
-                    "X%u LIST {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
-                    strlen(prefix), prefix);
-    } else {
-        prot_printf(handle->conn->out,
-                    "X%u LIST\r\n", handle->tagn++);
+                    "X%u LIST {" SIZE_T_FMT "+}\r\n%s\r\n",
+                    handle->tagn++,
+                    strlen(prefix),
+                    prefix);
+    }
+    else {
+        prot_printf(handle->conn->out, "X%u LIST\r\n", handle->tagn++);
     }
 
     ret = mupdate_scarf(handle, callback, context, 1, &response);
 
     if (ret) {
         return ret;
-    } else if (response != MUPDATE_OK) {
+    }
+    else if (response != MUPDATE_OK) {
         return MUPDATE_FAIL;
-    } else {
+    }
+    else {
         return 0;
     }
 }
 
-
-EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
-                 void *context)
+EXPORTED int mupdate_noop(mupdate_handle *handle,
+                          mupdate_callback callback,
+                          void *context)
 {
     int ret;
     enum mupdate_cmd_response response;
@@ -520,30 +581,34 @@ EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
         return MUPDATE_BADPARAM;
     }
 
-    prot_printf(handle->conn->out,
-                "X%u NOOP\r\n", handle->tagn++);
+    prot_printf(handle->conn->out, "X%u NOOP\r\n", handle->tagn++);
 
     ret = mupdate_scarf(handle, callback, context, 1, &response);
 
     if (!ret && response == MUPDATE_OK) {
         return 0;
-    } else {
+    }
+    else {
         return ret ? ret : MUPDATE_FAIL;
     }
 }
 
-#define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->conn->in); \
-                                 if ((ch) != '\n') { syslog(LOG_ERR, \
-                             "extra arguments received, aborting connection");\
-                                 r = MUPDATE_PROTOCOL_ERROR;\
-                                 goto done; }} while(0)
+#define CHECKNEWLINE(c, ch)                                                    \
+    do {                                                                       \
+        if ((ch) == '\r') (ch) = prot_getc((c)->conn->in);                     \
+        if ((ch) != '\n') {                                                    \
+            syslog(LOG_ERR, "extra arguments received, aborting connection");  \
+            r = MUPDATE_PROTOCOL_ERROR;                                        \
+            goto done;                                                         \
+        }                                                                      \
+    } while (0)
 
 /* Scarf up the incoming data and perform the requested operations */
 EXPORTED int mupdate_scarf(mupdate_handle *handle,
-                  mupdate_callback callback,
-                  void *context,
-                  int wait_for_ok,
-                  enum mupdate_cmd_response *response)
+                           mupdate_callback callback,
+                           void *context,
+                           int wait_for_ok,
+                           enum mupdate_cmd_response *response)
 {
     struct mupdate_mailboxdata box;
     int r = 0;
@@ -565,7 +630,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
         if (wait_for_ok) {
             prot_BLOCK(handle->conn->in);
-        } else {
+        }
+        else {
             /* check for input */
             prot_NONBLOCK(handle->conn->in);
             ch = prot_getc(handle->conn->in);
@@ -573,11 +639,13 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             if (ch == EOF && errno == EAGAIN) {
                 /* this was just "no input" we return 0 */
                 goto done;
-            } else if (ch == EOF) {
+            }
+            else if (ch == EOF) {
                 /* this was a fatal error */
                 r = MUPDATE_NOCONN;
                 goto done;
-            } else {
+            }
+            else {
                 /* there's input waiting, put back our character */
                 prot_ungetc(ch, handle->conn->in);
             }
@@ -611,14 +679,17 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             handle->cmd.s[0] = toupper((unsigned char) handle->cmd.s[0]);
         }
         for (p = &(handle->cmd.s[1]); *p; p++) {
-            if (Uislower(*p))
+            if (Uislower(*p)) {
                 *p = toupper((unsigned char) *p);
+            }
         }
 
-        switch(handle->cmd.s[0]) {
+        switch (handle->cmd.s[0]) {
         case 'B':
             if (!strncmp(handle->cmd.s, "BAD", 3)) {
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_ERR, "mupdate BAD response: %s", handle->arg1.s);
@@ -626,8 +697,11 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                     *response = MUPDATE_BAD;
                 }
                 goto done;
-            } else if (!strncmp(handle->cmd.s, "BYE", 3)) {
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+            }
+            else if (!strncmp(handle->cmd.s, "BYE", 3)) {
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_ERR, "mupdate BYE response: %s", handle->arg1.s);
@@ -640,7 +714,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
         case 'D':
             if (!strncmp(handle->cmd.s, "DELETE", 6)) {
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 memset(&box, 0, sizeof(box));
@@ -650,7 +726,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 r = callback(&box, handle->cmd.s, context);
                 if (r) {
                     syslog(LOG_ERR,
-                           "error deleting mailbox: callback returned %d", r);
+                           "error deleting mailbox: callback returned %d",
+                           r);
                     goto done;
                 }
                 break;
@@ -660,21 +737,27 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'M':
             if (!strncmp(handle->cmd.s, "MAILBOX", 7)) {
                 /* Mailbox Name */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* Server */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg2));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg2));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* ACL */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg3));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg3));
                 CHECKNEWLINE(handle, ch);
 
                 /* Handle mailbox command */
@@ -685,7 +768,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 r = callback(&box, handle->cmd.s, context);
                 if (r) { /* callback error ? */
                     syslog(LOG_ERR,
-                           "error activating mailbox: callback returned %d", r);
+                           "error activating mailbox: callback returned %d",
+                           r);
                     goto done;
                 }
                 break;
@@ -693,12 +777,16 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
             goto badcmd;
         case 'N':
             if (!strncmp(handle->cmd.s, "NO", 2)) {
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
                 syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
                 if (wait_for_ok) {
-                    if (response) *response = MUPDATE_NO;
+                    if (response) {
+                        *response = MUPDATE_NO;
+                    }
                     goto done;
                 }
                 break;
@@ -707,11 +795,15 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'O':
             if (!strncmp(handle->cmd.s, "OK", 2)) {
                 /* It's all good, grab the attached string and move on */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
 
                 CHECKNEWLINE(handle, ch);
                 if (wait_for_ok) {
-                    if (response) *response = MUPDATE_OK;
+                    if (response) {
+                        *response = MUPDATE_OK;
+                    }
                     goto done;
                 }
                 break;
@@ -720,14 +812,18 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         case 'R':
             if (!strncmp(handle->cmd.s, "RESERVE", 7)) {
                 /* Mailbox Name */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg1));
                 if (ch != ' ') {
                     r = MUPDATE_PROTOCOL_ERROR;
                     goto done;
                 }
 
                 /* Server */
-                ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg2));
+                ch = getmstring(handle->conn->in,
+                                handle->conn->out,
+                                &(handle->arg2));
                 CHECKNEWLINE(handle, ch);
 
                 /* Handle reserve command */
@@ -737,7 +833,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 r = callback(&box, handle->cmd.s, context);
                 if (r) { /* callback error ? */
                     syslog(LOG_ERR,
-                           "error reserving mailbox: callback returned %d", r);
+                           "error reserving mailbox: callback returned %d",
+                           r);
                     goto done;
                 }
 
@@ -748,14 +845,15 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         default:
         badcmd:
             /* Bad Command */
-            syslog(LOG_ERR, "bad/unexpected command from master: %s",
+            syslog(LOG_ERR,
+                   "bad/unexpected command from master: %s",
                    handle->cmd.s);
             r = MUPDATE_PROTOCOL_ERROR;
             goto done;
         }
     }
 
- done:
+done:
     /* reset blocking */
     prot_NONBLOCK(handle->conn->in);
 
@@ -771,13 +869,16 @@ EXPORTED void kick_mupdate(void)
     int len;
 
     /* no server? drop out */
-    if (!config_mupdate_server)
+    if (!config_mupdate_server) {
         return;
+    }
 
     /* don't kick on standard backends */
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD
         && config_getstring(IMAPOPT_PROXYSERVERS))
+    {
         return;
+    }
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
@@ -788,18 +889,20 @@ EXPORTED void kick_mupdate(void)
     buf_appendcstr(&addrbuf, config_dir);
     buf_appendcstr(&addrbuf, FNAME_MUPDATE_TARGET_SOCK);
     if (buf_len(&addrbuf) >= sizeof(srvaddr.sun_path)) {
-        syslog(LOG_ERR, "kick_mupdate: configured socket path '%s' is too long"
-                        " (maximum length is " SIZE_T_FMT ")",
-                        buf_cstring(&addrbuf), sizeof(srvaddr.sun_path) - 1);
+        syslog(LOG_ERR,
+               "kick_mupdate: configured socket path '%s' is too long"
+               " (maximum length is " SIZE_T_FMT ")",
+               buf_cstring(&addrbuf),
+               sizeof(srvaddr.sun_path) - 1);
         fatal("socket path too long", EX_CONFIG);
     }
 
-    memset((char *)&srvaddr, 0, sizeof(srvaddr));
+    memset((char *) &srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
     strlcpy(srvaddr.sun_path, buf_cstring(&addrbuf), sizeof(srvaddr.sun_path));
     len = sizeof(srvaddr.sun_family) + strlen(srvaddr.sun_path) + 1;
 
-    r = connect(s, (struct sockaddr *)&srvaddr, len);
+    r = connect(s, (struct sockaddr *) &srvaddr, len);
     if (r == -1) {
         syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
         goto done;
@@ -810,7 +913,7 @@ EXPORTED void kick_mupdate(void)
         syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
     }
 
- done:
+done:
     buf_free(&addrbuf);
     close(s);
     return;

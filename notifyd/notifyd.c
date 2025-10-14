@@ -41,7 +41,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -74,11 +74,10 @@ const int config_need_data = 0;
 
 static int soc = 0; /* master has handed us the port as stdin */
 
-static notifymethod_t *default_method;  /* default method daemon is using */
-
+static notifymethod_t *default_method; /* default method daemon is using */
 
 /* Cleanly shut down and exit */
-void shut_down(int code) __attribute__ ((noreturn));
+void shut_down(int code) __attribute__((noreturn));
 EXPORTED void shut_down(int code)
 {
     in_shutdown = 1;
@@ -89,11 +88,12 @@ EXPORTED void shut_down(int code)
     exit(code);
 }
 
-static char *fetch_arg(char *head, char* tail)
+static char *fetch_arg(char *head, char *tail)
 {
     char *cp;
 
-    for (cp = head; *cp && cp < tail; cp++);
+    for (cp = head; *cp && cp < tail; cp++)
+        ;
     return (cp == tail ? NULL : cp + 1);
 }
 
@@ -101,7 +101,7 @@ static int do_notify(void)
 {
     struct sockaddr_un sun_data;
     socklen_t sunlen = sizeof(sun_data);
-    char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
+    char buf[NOTIFY_MAXSIZE + 1], *cp, *tail;
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
     strarray_t options = STRARRAY_INITIALIZER;
@@ -131,8 +131,12 @@ static int do_notify(void)
             /* caught a SIGHUP, return */
             return 0;
         }
-        r = recvfrom(soc, buf, bufsiz, 0,
-                     (struct sockaddr *) &sun_data, &sunlen);
+        r = recvfrom(soc,
+                     buf,
+                     bufsiz,
+                     0,
+                     (struct sockaddr *) &sun_data,
+                     &sunlen);
         if (r == -1) {
             return (errno);
         }
@@ -148,20 +152,39 @@ static int do_notify(void)
          */
         method = (cp = buf);
 
-        if (cp) class = (cp = fetch_arg(cp, tail));
-        if (cp) priority = (cp = fetch_arg(cp, tail));
-        if (cp) user = (cp = fetch_arg(cp, tail));
-        if (cp) mailbox = (cp = fetch_arg(cp, tail));
+        if (cp) {
+            class = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            priority = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            user = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            mailbox = (cp = fetch_arg(cp, tail));
+        }
 
-        if (cp) cp = fetch_arg(cp, tail); /* skip to nopt */
-        if (cp) nopt = strtol(cp, NULL, 10);
-        if (nopt < 0 || errno == ERANGE) cp = NULL;
+        if (cp) {
+            cp = fetch_arg(cp, tail); /* skip to nopt */
+        }
+        if (cp) {
+            nopt = strtol(cp, NULL, 10);
+        }
+        if (nopt < 0 || errno == ERANGE) {
+            cp = NULL;
+        }
 
-        for (i = 0; cp && i < nopt; i++)
+        for (i = 0; cp && i < nopt; i++) {
             strarray_append(&options, cp = fetch_arg(cp, tail));
+        }
 
-        if (cp) message = (cp = fetch_arg(cp, tail));
-        if (cp) fname = (cp = fetch_arg(cp, tail));
+        if (cp) {
+            message = (cp = fetch_arg(cp, tail));
+        }
+        if (cp) {
+            fname = (cp = fetch_arg(cp, tail));
+        }
 
         if (!message) {
             syslog(LOG_ERR, "malformed notify request");
@@ -169,24 +192,34 @@ static int do_notify(void)
             return 0;
         }
 
-        if (!*method)
+        if (!*method) {
             nmethod = default_method;
+        }
         else {
             nmethod = methods;
             while (nmethod->name) {
-                if (!strcasecmp(nmethod->name, method)) break;
+                if (!strcasecmp(nmethod->name, method)) {
+                    break;
+                }
                 nmethod++;
             }
         }
 
-        syslog(LOG_DEBUG, "do_notify using method '%s'",
-               nmethod->name ? nmethod->name: "unknown");
+        syslog(LOG_DEBUG,
+               "do_notify using method '%s'",
+               nmethod->name ? nmethod->name : "unknown");
 
         if (nmethod->name) {
-            reply = nmethod->notify(class, priority, user, mailbox,
-                                    nopt, options.data, message, fname);
+            reply = nmethod->notify(class,
+                                    priority,
+                                    user,
+                                    mailbox,
+                                    nopt,
+                                    options.data,
+                                    message,
+                                    fname);
         }
-#if 0  /* we don't care about responses right now */
+#if 0 /* we don't care about responses right now */
         else {
             reply = strdup("NO unknown notification method");
             if (!reply) {
@@ -202,7 +235,6 @@ static int do_notify(void)
     /* never reached */
 }
 
-
 EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
@@ -215,26 +247,34 @@ EXPORTED void fatal(const char *s, int code)
 
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     shut_down(code);
 }
 
 static void usage(void)
 {
-    syslog(LOG_ERR, "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] [-D] [-X] [-m method].  method defaults to null");
+    syslog(LOG_ERR,
+           "usage: notifyd [-C <alt_config>] [-U <max usage>] [-T timeout] "
+           "[-D] [-X] [-m method].  method defaults to null");
     exit(EX_USAGE);
 }
 
-EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
+EXPORTED int service_init(int argc,
+                          char **argv,
+                          char **envp __attribute__((unused)))
 {
     int opt;
     const char *method = "null";
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
+    if (geteuid() == 0) {
+        fatal("must run as the Cyrus user", EX_USAGE);
+    }
 
     while ((opt = getopt(argc, argv, "m:")) != EOF) {
-        switch(opt) {
+        switch (opt) {
         case 'm':
             method = optarg;
             break;
@@ -245,11 +285,15 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
 
     default_method = methods;
     while (default_method->name) {
-        if (!strcasecmp(default_method->name, method)) break;
+        if (!strcasecmp(default_method->name, method)) {
+            break;
+        }
         default_method++;
     }
 
-    if (!default_method) fatal("unknown notification method %s", EX_USAGE);
+    if (!default_method) {
+        fatal("unknown notification method %s", EX_USAGE);
+    }
 
     signals_set_shutdown(&shut_down);
 
@@ -263,8 +307,8 @@ EXPORTED void service_abort(int error)
 }
 
 EXPORTED int service_main(int argc __attribute__((unused)),
-                 char **argv __attribute__((unused)),
-                 char **envp __attribute__((unused)))
+                          char **argv __attribute__((unused)),
+                          char **envp __attribute__((unused)))
 {
     int r = 0;
 

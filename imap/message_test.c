@@ -42,7 +42,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -69,7 +69,11 @@
 static int usage(const char *name);
 
 static int verbose = 0;
-static enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
+static enum {
+    PART_TREE,
+    TEXT_SECTIONS,
+    TEXT_RECEIVER
+} dump_mode = PART_TREE;
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
@@ -79,13 +83,16 @@ static void dump_octets(FILE *fp, const char *base, unsigned int len)
 
     while (len > 0) {
         fputs("    ", fp);
-        for (i = 0 ; i < 16 && i < len ; i++)
-            fprintf(fp, "%02x ", ((unsigned char *)base)[i]);
-        for (; i < 16 ; i++)
+        for (i = 0; i < 16 && i < len; i++) {
+            fprintf(fp, "%02x ", ((unsigned char *) base)[i]);
+        }
+        for (; i < 16; i++) {
             fputs("   ", fp);
+        }
         fputs("   ", fp);
-        for (i = 0 ; i < 16 && i < len ; i++)
+        for (i = 0; i < 16 && i < len; i++) {
             fputc((isprint(base[i]) && !isspace(base[i]) ? base[i] : '.'), fp);
+        }
         fputc('\n', fp);
 
         i = (len > 16 ? 16 : len);
@@ -96,32 +103,41 @@ static void dump_octets(FILE *fp, const char *base, unsigned int len)
 
 static void dump_buf(FILE *fp, const struct buf *data)
 {
-#define MAX_TEXT    512
+#define MAX_TEXT 512
     if (verbose || data->len <= MAX_TEXT) {
         dump_octets(fp, data->s, data->len);
     }
     else {
-        dump_octets(fp, data->s, MAX_TEXT/2);
+        dump_octets(fp, data->s, MAX_TEXT / 2);
         fputs("    ...\n", fp);
-        dump_octets(fp, data->s + data->len - MAX_TEXT/2, MAX_TEXT/2);
+        dump_octets(fp, data->s + data->len - MAX_TEXT / 2, MAX_TEXT / 2);
     }
 #undef MAX_TEXT
 }
 
-static int dump_one_section(int partno, charset_t charset, int encoding,
+static int dump_one_section(int partno,
+                            charset_t charset,
+                            int encoding,
                             const char *type __attribute__((unused)),
                             const char *subtype,
-                            const struct param *type_params __attribute__((unused)),
+                            const struct param *type_params
+                            __attribute__((unused)),
                             const char *disposition __attribute__((unused)),
-                            const struct param *disposition_params __attribute__((unused)),
-                            const struct message_guid *content_guid __attribute__((unused)),
+                            const struct param *disposition_params
+                            __attribute__((unused)),
+                            const struct message_guid *content_guid
+                            __attribute__((unused)),
                             const char *part __attribute__((unused)),
                             struct buf *data,
                             void *rock __attribute__((unused)))
 {
-#define MAX_TEXT    512
+#define MAX_TEXT 512
     printf("SECTION partno=%d length=%llu subtype=%s charset=%s encoding=%s\n",
-            partno, (unsigned long long)data->len, subtype, charset_alias_name(charset), encoding_name(encoding));
+           partno,
+           (unsigned long long) data->len,
+           subtype,
+           charset_alias_name(charset),
+           encoding_name(encoding));
     dump_buf(stdout, data);
     return 0;
 #undef MAX_TEXT
@@ -166,8 +182,9 @@ int main(int argc, char **argv)
 
         case 'r':
             recno = atoi(optarg);
-            if (recno <= 0)
+            if (recno <= 0) {
                 usage(argv[0]);
+            }
             break;
 
         case 's':
@@ -196,10 +213,12 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind != argc)
+    if (optind != argc) {
         usage(argv[0]);
-    if (mboxname && filename)
+    }
+    if (mboxname && filename) {
         usage(argv[0]);
+    }
 
     cyrus_init(alt_config, "message_test", 0, CONFIG_NEED_PARTITION_DATA);
 
@@ -210,8 +229,10 @@ int main(int argc, char **argv)
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
-            fprintf(stderr, "Failed to open mailbox %s: %s\n",
-                    mboxname, error_message(r));
+            fprintf(stderr,
+                    "Failed to open mailbox %s: %s\n",
+                    mboxname,
+                    error_message(r));
             return 1;
         }
 
@@ -219,16 +240,18 @@ int main(int argc, char **argv)
         record.recno = recno;
         r = mailbox_reload_index_record(mailbox, &record);
         if (r) {
-            fprintf(stderr, "Failed to read index record %u of %s: %s\n",
-                    recno, mboxname, error_message(r));
+            fprintf(stderr,
+                    "Failed to read index record %u of %s: %s\n",
+                    recno,
+                    mboxname,
+                    error_message(r));
             return 1;
         }
 
         message = message_new_from_record(mailbox, &record);
         r = dump_message(message);
         if (r) {
-            fprintf(stderr, "Error dumping message: %s\n",
-                    error_message(r));
+            fprintf(stderr, "Error dumping message: %s\n", error_message(r));
             return 1;
         }
 
@@ -241,16 +264,17 @@ int main(int argc, char **argv)
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
-            fprintf(stderr, "Failed to open mailbox %s: %s\n",
-                    mboxname, error_message(r));
+            fprintf(stderr,
+                    "Failed to open mailbox %s: %s\n",
+                    mboxname,
+                    error_message(r));
             return 1;
         }
 
         message = message_new_from_mailbox(mailbox, recno);
         r = dump_message(message);
         if (r) {
-            fprintf(stderr, "Error dumping message: %s\n",
-                    error_message(r));
+            fprintf(stderr, "Error dumping message: %s\n", error_message(r));
             return 1;
         }
 
@@ -263,8 +287,7 @@ int main(int argc, char **argv)
         r = dump_message(message);
         message_unref(&message);
         if (r) {
-            fprintf(stderr, "Error dumping message: %s\n",
-                    error_message(r));
+            fprintf(stderr, "Error dumping message: %s\n", error_message(r));
             return 1;
         }
     }
@@ -273,13 +296,13 @@ int main(int argc, char **argv)
         int c;
         struct buf buf = BUF_INITIALIZER;
 
-        while ((c = fgetc(stdin)) != EOF)
+        while ((c = fgetc(stdin)) != EOF) {
             buf_putc(&buf, c);
+        }
         message = message_new_from_data(buf.s, buf.len);
         dump_message(message);
         if (r) {
-            fprintf(stderr, "Error dumping message: %s\n",
-                    error_message(r));
+            fprintf(stderr, "Error dumping message: %s\n", error_message(r));
             return 1;
         }
 
@@ -294,7 +317,9 @@ int main(int argc, char **argv)
 
 static int usage(const char *name)
 {
-    fprintf(stderr, "usage: %s [format-options] -m mailbox [-r recno] [-R]\n", name);
+    fprintf(stderr,
+            "usage: %s [format-options] -m mailbox [-r recno] [-R]\n",
+            name);
     fprintf(stderr, "       %s [format-options] -f filename\n", name);
     fprintf(stderr, "       %s [format-options] < message\n", name);
     fprintf(stderr, "format-options :=\n");
@@ -304,14 +329,14 @@ static int usage(const char *name)
     exit(EX_USAGE);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "message_test: %s\n", s);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
-
-

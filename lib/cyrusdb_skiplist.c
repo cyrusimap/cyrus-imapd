@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <netinet/in.h>
 
@@ -142,23 +142,25 @@ enum {
     WRITELOCKED = 2,
 };
 
-struct txn {
+struct txn
+{
     int syncfd;
 
     /* logstart is where we start changes from on commit, where we truncate
        to on abort */
     unsigned logstart;
-    unsigned logend;                    /* where to write to continue this txn */
+    unsigned logend; /* where to write to continue this txn */
 };
 
-struct dbengine {
+struct dbengine
+{
     /* file data */
     char *fname;
     int fd;
 
     const char *map_base;
-    size_t map_len;     /* mapped size */
-    size_t map_size;    /* actual size */
+    size_t map_len;  /* mapped size */
+    size_t map_size; /* actual size */
     ino_t map_ino;
 
     /* header info */
@@ -167,7 +169,7 @@ struct dbengine {
     uint32_t maxlevel;
     uint32_t curlevel;
     uint32_t listsize;
-    uint32_t logstart;          /* where the log starts from last chkpnt */
+    uint32_t logstart; /* where the log starts from last chkpnt */
     time_t last_recovery;
 
     /* tracking info */
@@ -178,7 +180,8 @@ struct dbengine {
     struct timeval starttime;
 };
 
-struct db_list {
+struct db_list
+{
     struct dbengine *db;
     struct db_list *next;
     int refcount;
@@ -199,7 +202,8 @@ static void getsyncfd(struct dbengine *db, struct txn *t)
 {
     if (!use_osync) {
         t->syncfd = db->fd;
-    } else if (t->syncfd == -1) {
+    }
+    else if (t->syncfd == -1) {
         t->syncfd = open(db->fname, O_RDWR | O_DSYNC, 0666);
         assert(t->syncfd != -1); /* XXX do better error recovery */
     }
@@ -238,23 +242,32 @@ static int myinit(const char *dbdir, int myflags)
             xunlink(cleanfile);
 
             if (stat(sfile, &sbuf) == 0) {
-                syslog(LOG_NOTICE, "skiplist: clean shutdown detected,"
-                                   " starting normally");
+                syslog(LOG_NOTICE,
+                       "skiplist: clean shutdown detected,"
+                       " starting normally");
                 goto normal;
             }
         }
 
-        syslog(LOG_NOTICE, "skiplist: clean shutdown file missing, updating recovery stamp");
+        syslog(
+            LOG_NOTICE,
+            "skiplist: clean shutdown file missing, updating recovery stamp");
 
         /* set the recovery timestamp; all databases earlier than this
            time need recovery run when opened */
         global_recovery = time(NULL);
         fd = open(sfile, O_RDWR | O_CREAT, 0644);
-        if (fd == -1) r = -1;
+        if (fd == -1) {
+            r = -1;
+        }
 
-        if (r != -1) r = ftruncate(fd, 0);
+        if (r != -1) {
+            r = ftruncate(fd, 0);
+        }
         net32_time = htonl(global_recovery);
-        if (r != -1) r = retry_write(fd, &net32_time, 4);
+        if (r != -1) {
+            r = retry_write(fd, &net32_time, 4);
+        }
         xclose(fd);
 
         if (r == -1) {
@@ -263,8 +276,9 @@ static int myinit(const char *dbdir, int myflags)
             xclose(fd);
             return CYRUSDB_IOERROR;
         }
-    } else {
-normal:
+    }
+    else {
+    normal:
         /* read the global recovery timestamp */
         errno = 0;
 
@@ -275,7 +289,9 @@ normal:
                               "filename=<%s>", sfile);
         }
 
-        if (r != -1) r = retry_read(fd, &net32_time, 4);
+        if (r != -1) {
+            r = retry_read(fd, &net32_time, 4);
+        }
 
         if (r == -1) {
             xsyslog(LOG_ERR, "DBERROR: skipstamp unreadable, assuming the worst",
@@ -285,7 +301,8 @@ normal:
              * it doesn't need it.
              */
             global_recovery = 0;
-        } else {
+        }
+        else {
             global_recovery = ntohl(net32_time);
         }
 
@@ -361,12 +378,13 @@ enum {
 /* bump to the next multiple of 4 bytes */
 #define ROUNDUP(num) (((num) + 3) & 0xFFFFFFFC)
 
-#define TYPE(ptr) (ntohl(*((uint32_t *)(ptr))))
+#define TYPE(ptr) (ntohl(*((uint32_t *) (ptr))))
 #define KEY(ptr) ((ptr) + 8)
-#define KEYLEN(ptr) (ntohl(*((uint32_t *)((ptr) + 4))))
+#define KEYLEN(ptr) (ntohl(*((uint32_t *) ((ptr) + 4))))
 #define DATA(ptr) ((ptr) + 8 + ROUNDUP(KEYLEN(ptr)) + 4)
-#define DATALEN(ptr) (ntohl(*((uint32_t *)((ptr) + 8 + ROUNDUP(KEYLEN(ptr))))))
-#define FIRSTPTR(ptr) ((ptr) + 8 + ROUNDUP(KEYLEN(ptr)) + 4 + ROUNDUP(DATALEN(ptr)))
+#define DATALEN(ptr) (ntohl(*((uint32_t *) ((ptr) + 8 + ROUNDUP(KEYLEN(ptr))))))
+#define FIRSTPTR(ptr)                                                          \
+    ((ptr) + 8 + ROUNDUP(KEYLEN(ptr)) + 4 + ROUNDUP(DATALEN(ptr)))
 
 /* return a pointer to the pointer */
 #define PTR(ptr, x) (FIRSTPTR(ptr) + 4 * (x))
@@ -375,14 +393,16 @@ enum {
  * given a pointer to the start of the record, return the offset
  * corresponding to the xth pointer
  */
-#define FORWARD(ptr, x) (ntohl(*((uint32_t *)(FIRSTPTR(ptr) + 4 * (x)))))
+#define FORWARD(ptr, x) (ntohl(*((uint32_t *) (FIRSTPTR(ptr) + 4 * (x)))))
 
 static int is_safe(struct dbengine *db, const char *ptr)
 {
-    if (ptr < db->map_base)
+    if (ptr < db->map_base) {
         return 0;
-    if (ptr > db->map_base + db->map_size)
+    }
+    if (ptr > db->map_base + db->map_size) {
         return 0;
+    }
 
     return 1;
 }
@@ -392,17 +412,21 @@ static unsigned LEVEL_safe(struct dbengine *db, const char *ptr)
     const uint32_t *p, *q;
 
     assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
-    if (!is_safe(db, ptr + 12))
+    if (!is_safe(db, ptr + 12)) {
         return 0;
-    if (!is_safe(db, ptr + 12 + KEYLEN(ptr)))
+    }
+    if (!is_safe(db, ptr + 12 + KEYLEN(ptr))) {
         return 0;
+    }
     p = q = (uint32_t *) FIRSTPTR(ptr);
-    if (!is_safe(db, (const char *)p))
+    if (!is_safe(db, (const char *) p)) {
         return 0;
-    while (*p != (uint32_t)-1) {
+    }
+    while (*p != (uint32_t) -1) {
         p++;
-        if (!is_safe(db, (const char *)p))
+        if (!is_safe(db, (const char *) p)) {
             return 0;
+        }
     }
     return p - q;
 }
@@ -423,17 +447,17 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
                              db->fname, ptr - db->map_base);
             return 0;
         }
-        ret += 4;                       /* tag */
-        ret += 4;                       /* keylen */
-        ret += ROUNDUP(KEYLEN(ptr));    /* key */
-        ret += 4;                       /* datalen */
-        ret += ROUNDUP(DATALEN(ptr));   /* data */
-        ret += 4 * level;               /* pointers */
-        ret += 4;                       /* padding */
+        ret += 4;                     /* tag */
+        ret += 4;                     /* keylen */
+        ret += ROUNDUP(KEYLEN(ptr));  /* key */
+        ret += 4;                     /* datalen */
+        ret += ROUNDUP(DATALEN(ptr)); /* data */
+        ret += 4 * level;             /* pointers */
+        ret += 4;                     /* padding */
         break;
 
     case DELETE:
-        if (!is_safe(db, ptr+8)) {
+        if (!is_safe(db, ptr + 8)) {
             xsyslog(LOG_ERR, "IOERROR: skiplist RECSIZE not safe",
                              "filename=<%s> offset=<" OFF_T_FMT ">",
                              db->fname, ptr - db->map_base);
@@ -443,7 +467,7 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
         break;
 
     case COMMIT:
-        if (!is_safe(db, ptr+4)) {
+        if (!is_safe(db, ptr + 4)) {
             xsyslog(LOG_ERR, "IOERROR: skiplist RECSIZE not safe",
                              "filename=<%s> offset=<" OFF_T_FMT ">",
                              db->fname, ptr - db->map_base);
@@ -465,24 +489,29 @@ static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
 static int SAFE_TO_APPEND(struct dbengine *db)
 {
     /* check it's a multiple of 4 */
-    if (db->map_size % 4) return 1;
+    if (db->map_size % 4) {
+        return 1;
+    }
 
     /* is it the beginning of the log? */
     if (db->map_size == db->logstart) {
-        if (*((uint32_t *)(db->map_base + db->map_size - 4)) != htonl(-1)) {
+        if (*((uint32_t *) (db->map_base + db->map_size - 4)) != htonl(-1)) {
             return 1;
         }
     }
 
     /* in the middle of the log somewhere */
     else {
-        if (*((uint32_t *)(db->map_base + db->map_size - 4)) != htonl(COMMIT)) {
+        if (*((uint32_t *) (db->map_base + db->map_size - 4)) != htonl(COMMIT))
+        {
             return 1;
         }
 
         /* if it's not an end of a record or a delete */
-        if (!((*((uint32_t *)(db->map_base + db->map_size - 8)) == htonl(-1)) ||
-              (*((uint32_t *)(db->map_base + db->map_size -12)) == htonl(DELETE)))) {
+        if (!((*((uint32_t *) (db->map_base + db->map_size - 8)) == htonl(-1))
+              || (*((uint32_t *) (db->map_base + db->map_size - 12))
+                  == htonl(DELETE))))
+        {
             return 1;
         }
     }
@@ -498,14 +527,16 @@ static int newtxn(struct dbengine *db, struct txn **tidptr)
      * If it isn't, we need to run recovery. */
     if (SAFE_TO_APPEND(db)) {
         int r = recovery(db, RECOVERY_FORCE | RECOVERY_CALLER_LOCKED);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     /* create the transaction */
     tid = xmalloc(sizeof(struct txn));
     tid->syncfd = -1;
     tid->logstart = db->map_size;
-/*    assert(t->logstart != -1);*/
+    /*    assert(t->logstart != -1);*/
     tid->logend = tid->logstart;
     db->current_txn = tid;
 
@@ -515,12 +546,13 @@ static int newtxn(struct dbengine *db, struct txn **tidptr)
     return 0;
 }
 
-
 static unsigned PADDING_safe(struct dbengine *db, const char *ptr)
 {
     unsigned size = RECSIZE_safe(db, ptr);
-    if (!size) return 0;
-    return ntohl(*((uint32_t *)((ptr) + size - 4)));
+    if (!size) {
+        return 0;
+    }
+    return ntohl(*((uint32_t *) ((ptr) + size - 4)));
 }
 
 /* given an open, mapped db, read in the header information */
@@ -532,7 +564,8 @@ static int read_header(struct dbengine *db)
 
     if (db->map_len < HEADER_SIZE) {
         syslog(LOG_ERR,
-               "skiplist: file not large enough for header: %s", db->fname);
+               "skiplist: file not large enough for header: %s",
+               db->fname);
         return CYRUSDB_BADFORMAT;
     }
 
@@ -543,37 +576,44 @@ static int read_header(struct dbengine *db)
         return CYRUSDB_BADFORMAT;
     }
 
-    db->version = ntohl(*((uint32_t *)(db->map_base + OFFSET_VERSION)));
+    db->version = ntohl(*((uint32_t *) (db->map_base + OFFSET_VERSION)));
     db->version_minor =
-        ntohl(*((uint32_t *)(db->map_base + OFFSET_VERSION_MINOR)));
+        ntohl(*((uint32_t *) (db->map_base + OFFSET_VERSION_MINOR)));
     if (db->version != SKIPLIST_VERSION) {
-        syslog(LOG_ERR, "skiplist: version mismatch: %s has version %d.%d",
-               db->fname, db->version, db->version_minor);
+        syslog(LOG_ERR,
+               "skiplist: version mismatch: %s has version %d.%d",
+               db->fname,
+               db->version,
+               db->version_minor);
         return CYRUSDB_BADFORMAT;
     }
 
-    db->maxlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_MAXLEVEL)));
+    db->maxlevel = ntohl(*((uint32_t *) (db->map_base + OFFSET_MAXLEVEL)));
 
     if (db->maxlevel > SKIPLIST_MAXLEVEL) {
         syslog(LOG_ERR,
                "skiplist %s: MAXLEVEL %d in database beyond maximum %d",
-               db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
+               db->fname,
+               db->maxlevel,
+               SKIPLIST_MAXLEVEL);
         return CYRUSDB_IOERROR;
     }
 
-    db->curlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_CURLEVEL)));
+    db->curlevel = ntohl(*((uint32_t *) (db->map_base + OFFSET_CURLEVEL)));
 
     if (db->curlevel > db->maxlevel) {
         syslog(LOG_ERR,
                "skiplist %s: CURLEVEL %d in database beyond maximum %d",
-               db->fname, db->curlevel, db->maxlevel);
+               db->fname,
+               db->curlevel,
+               db->maxlevel);
         return CYRUSDB_IOERROR;
     }
 
-    db->listsize = ntohl(*((uint32_t *)(db->map_base + OFFSET_LISTSIZE)));
-    db->logstart = ntohl(*((uint32_t *)(db->map_base + OFFSET_LOGSTART)));
+    db->listsize = ntohl(*((uint32_t *) (db->map_base + OFFSET_LISTSIZE)));
+    db->logstart = ntohl(*((uint32_t *) (db->map_base + OFFSET_LOGSTART)));
     db->last_recovery =
-        ntohl(*((uint32_t *)(db->map_base + OFFSET_LASTRECOVERY)));
+        ntohl(*((uint32_t *) (db->map_base + OFFSET_LASTRECOVERY)));
 
     /* verify dummy node */
     dptr = DUMMY_PTR(db);
@@ -609,15 +649,15 @@ static int write_header(struct dbengine *db)
 {
     char buf[HEADER_SIZE];
 
-    assert (db->lock_status == WRITELOCKED);
+    assert(db->lock_status == WRITELOCKED);
     memcpy(buf + 0, HEADER_MAGIC, HEADER_MAGIC_SIZE);
-    *((uint32_t *)(buf + OFFSET_VERSION)) = htonl(db->version);
-    *((uint32_t *)(buf + OFFSET_VERSION_MINOR)) = htonl(db->version_minor);
-    *((uint32_t *)(buf + OFFSET_MAXLEVEL)) = htonl(db->maxlevel);
-    *((uint32_t *)(buf + OFFSET_CURLEVEL)) = htonl(db->curlevel);
-    *((uint32_t *)(buf + OFFSET_LISTSIZE)) = htonl(db->listsize);
-    *((uint32_t *)(buf + OFFSET_LOGSTART)) = htonl(db->logstart);
-    *((uint32_t *)(buf + OFFSET_LASTRECOVERY)) = htonl(db->last_recovery);
+    *((uint32_t *) (buf + OFFSET_VERSION)) = htonl(db->version);
+    *((uint32_t *) (buf + OFFSET_VERSION_MINOR)) = htonl(db->version_minor);
+    *((uint32_t *) (buf + OFFSET_MAXLEVEL)) = htonl(db->maxlevel);
+    *((uint32_t *) (buf + OFFSET_CURLEVEL)) = htonl(db->curlevel);
+    *((uint32_t *) (buf + OFFSET_LISTSIZE)) = htonl(db->listsize);
+    *((uint32_t *) (buf + OFFSET_LOGSTART)) = htonl(db->logstart);
+    *((uint32_t *) (buf + OFFSET_LASTRECOVERY)) = htonl(db->last_recovery);
 
     /* write it out */
     lseek(db->fd, 0, SEEK_SET);
@@ -634,9 +674,14 @@ static int write_header(struct dbengine *db)
 static int update_lock(struct dbengine *db, struct txn *txn)
 {
     /* txn->logend is the current size of the file */
-    assert (db->is_open && db->lock_status == WRITELOCKED);
-    map_refresh(db->fd, 0, &db->map_base, &db->map_len, txn->logend,
-                db->fname, 0);
+    assert(db->is_open && db->lock_status == WRITELOCKED);
+    map_refresh(db->fd,
+                0,
+                &db->map_base,
+                &db->map_len,
+                txn->logend,
+                db->fname,
+                0);
     db->map_size = txn->logend;
 
     return 0;
@@ -663,8 +708,7 @@ static int write_lock(struct dbengine *db, const char *altname)
     db->lock_status = WRITELOCKED;
     gettimeofday(&db->starttime, 0);
 
-    map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
-                fname, 0);
+    map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size, fname, 0);
 
     if (db->is_open) {
         /* reread header */
@@ -702,7 +746,9 @@ static int read_lock(struct dbengine *db)
             lock_unlock(db->fd, db->fname);
             return CYRUSDB_IOERROR;
         }
-        if (sbuf.st_ino == sbuffile.st_ino) break;
+        if (sbuf.st_ino == sbuffile.st_ino) {
+            break;
+        }
 
         newfd = open(db->fname, O_RDWR, 0644);
         if (newfd == -1) {
@@ -726,8 +772,13 @@ static int read_lock(struct dbengine *db)
 
     /* printf("%d: read lock: %d\n", getpid(), db->map_ino); */
 
-    map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
-                db->fname, 0);
+    map_refresh(db->fd,
+                0,
+                &db->map_base,
+                &db->map_len,
+                sbuf.st_size,
+                db->fname,
+                0);
 
     if (db->is_open) {
         /* reread header */
@@ -755,8 +806,10 @@ static int unlock(struct dbengine *db)
     gettimeofday(&endtime, 0);
     timediff = timesub(&db->starttime, &endtime);
     if (timediff > 1.0) {
-        syslog(LOG_NOTICE, "skiplist: longlock %s for %0.1f seconds",
-               db->fname, timediff);
+        syslog(LOG_NOTICE,
+               "skiplist: longlock %s for %0.1f seconds",
+               db->fname,
+               timediff);
     }
 
     /* printf("%d: unlock: %d\n", getpid(), db->map_ino); */
@@ -773,7 +826,9 @@ static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
     if (!tidptr) {
         /* just grab a readlock */
         r = read_lock(db);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
 
         /* start tracking the lock time */
         gettimeofday(&db->starttime, 0);
@@ -794,11 +849,15 @@ static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
 
     /* grab a r/w lock */
     r = write_lock(db, NULL);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* start the transaction */
     r = newtxn(db, tidptr);
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* start tracking the lock time */
     gettimeofday(&db->starttime, 0);
@@ -808,7 +867,9 @@ static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
 
 static int dispose_db(struct dbengine *db)
 {
-    if (!db) return 0;
+    if (!db) {
+        return 0;
+    }
 
     if (db->lock_status) {
         syslog(LOG_ERR, "skiplist: closed while still locked");
@@ -842,18 +903,29 @@ static int compare_signed(const char *s1, size_t l1, const char *s2, size_t l2)
         s1++;
         s2++;
     }
-    if (min >= 0) return cmp;
-    if (l1 > l2) return 1;
-    if (l2 > l1) return -1;
+    if (min >= 0) {
+        return cmp;
+    }
+    if (l1 > l2) {
+        return 1;
+    }
+    if (l2 > l1) {
+        return -1;
+    }
     return 0;
 }
 
-static int mylock(struct dbengine *db, struct txn **mytid, int flags __attribute__((unused)))
+static int mylock(struct dbengine *db,
+                  struct txn **mytid,
+                  int flags __attribute__((unused)))
 {
     return lock_or_refresh(db, mytid);
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
+static int myopen(const char *fname,
+                  int flags,
+                  struct dbengine **ret,
+                  struct txn **mytid)
 {
     struct dbengine *db;
     struct db_list *list_ent = open_db;
@@ -864,13 +936,19 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     }
     if (list_ent) {
         /* we already have this DB open! */
-        syslog(LOG_NOTICE, "skiplist: %s is already open %d time%s, returning object",
-               fname, list_ent->refcount, list_ent->refcount == 1 ? "" : "s");
-        if (list_ent->db->current_txn)
+        syslog(LOG_NOTICE,
+               "skiplist: %s is already open %d time%s, returning object",
+               fname,
+               list_ent->refcount,
+               list_ent->refcount == 1 ? "" : "s");
+        if (list_ent->db->current_txn) {
             return CYRUSDB_LOCKED;
+        }
         if (mytid) {
             r = lock_or_refresh(list_ent->db, mytid);
-            if (r) return r;
+            if (r) {
+                return r;
+            }
         }
         ++list_ent->refcount;
         *ret = list_ent->db;
@@ -971,8 +1049,13 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
 
         /* map the new file */
         db->map_size = db->logstart;
-        map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->logstart,
-                    db->fname, 0);
+        map_refresh(db->fd,
+                    0,
+                    &db->map_base,
+                    &db->map_len,
+                    db->logstart,
+                    db->fname,
+                    0);
     }
 
     db->is_open = 1;
@@ -1005,8 +1088,9 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     list_ent->refcount = 1;
     open_db = list_ent;
 
-    if (mytid)
-        return mylock(db, mytid, /*flags*/0);
+    if (mytid) {
+        return mylock(db, mytid, /*flags*/ 0);
+    }
 
     return 0;
 }
@@ -1023,8 +1107,12 @@ static int myclose(struct dbengine *db)
     }
     assert(list_ent);
     if (--list_ent->refcount <= 0) {
-        if (prev) prev->next = list_ent->next;
-        else open_db = list_ent->next;
+        if (prev) {
+            prev->next = list_ent->next;
+        }
+        else {
+            open_db = list_ent->next;
+        }
         free(list_ent);
         return dispose_db(db);
     }
@@ -1036,7 +1124,8 @@ static int myclose(struct dbengine *db)
    if it doesn't exist.
    if previous is set, finds the last node < key */
 static const char *find_node(struct dbengine *db,
-                             const char *key, size_t keylen,
+                             const char *key,
+                             size_t keylen,
                              unsigned *updateoffsets)
 {
     const char *ptr = db->map_base + DUMMY_OFFSET(db);
@@ -1050,13 +1139,19 @@ static const char *find_node(struct dbengine *db,
     }
 
     for (i = db->curlevel - 1; i >= 0; i--) {
-        while ((offset = FORWARD(ptr, i)) &&
-               compare_signed(KEY(db->map_base + offset), KEYLEN(db->map_base + offset),
-                       key, keylen) < 0) {
+        while ((offset = FORWARD(ptr, i))
+               && compare_signed(KEY(db->map_base + offset),
+                                 KEYLEN(db->map_base + offset),
+                                 key,
+                                 keylen)
+                      < 0)
+        {
             /* move forward at level 'i' */
             ptr = db->map_base + offset;
         }
-        if (updateoffsets) updateoffsets[i] = ptr - db->map_base;
+        if (updateoffsets) {
+            updateoffsets[i] = ptr - db->map_base;
+        }
     }
 
     ptr = db->map_base + FORWARD(ptr, 0);
@@ -1065,8 +1160,10 @@ static const char *find_node(struct dbengine *db,
 }
 
 static int myfetch(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char **data, size_t *datalen,
+                   const char *key,
+                   size_t keylen,
+                   const char **data,
+                   size_t *datalen,
                    struct txn **tidptr)
 {
     const char *ptr;
@@ -1074,8 +1171,12 @@ static int myfetch(struct dbengine *db,
 
     assert(db != NULL && key != NULL);
 
-    if (data) *data = NULL;
-    if (datalen) *datalen = 0;
+    if (data) {
+        *data = NULL;
+    }
+    if (datalen) {
+        *datalen = 0;
+    }
 
     /* Hacky workaround:
      *
@@ -1091,7 +1192,8 @@ static int myfetch(struct dbengine *db,
         if ((r = lock_or_refresh(db, tidptr)) < 0) {
             return r;
         }
-    } else {
+    }
+    else {
         /* grab a r lock */
         if ((r = read_lock(db)) < 0) {
             return r;
@@ -1100,12 +1202,19 @@ static int myfetch(struct dbengine *db,
 
     ptr = find_node(db, key, keylen, 0);
 
-    if (ptr == db->map_base || compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+    if (ptr == db->map_base
+        || compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen))
+    {
         /* failed to find key/keylen */
         r = CYRUSDB_NOTFOUND;
-    } else {
-        if (datalen) *datalen = DATALEN(ptr);
-        if (data) *data = DATA(ptr);
+    }
+    else {
+        if (datalen) {
+            *datalen = DATALEN(ptr);
+        }
+        if (data) {
+            *data = DATA(ptr);
+        }
     }
 
     if (!tidptr) {
@@ -1123,9 +1232,11 @@ static int myfetch(struct dbengine *db,
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,
-                     const char *prefix, size_t prefixlen,
+                     const char *prefix,
+                     size_t prefixlen,
                      foreach_p *goodp,
-                     foreach_cb *cb, void *rock,
+                     foreach_cb *cb,
+                     void *rock,
                      struct txn **tidptr)
 {
     const char *ptr;
@@ -1152,7 +1263,8 @@ static int myforeach(struct dbengine *db,
         if ((r = lock_or_refresh(db, tidptr)) < 0) {
             return r;
         }
-    } else {
+    }
+    else {
         /* grab a r lock */
         if ((r = read_lock(db)) < 0) {
             return r;
@@ -1164,11 +1276,17 @@ static int myforeach(struct dbengine *db,
 
     while (ptr != db->map_base) {
         /* does it match prefix? */
-        if (KEYLEN(ptr) < (uint32_t) prefixlen) break;
-        if (prefixlen && compare_signed(KEY(ptr), prefixlen, prefix, prefixlen)) break;
+        if (KEYLEN(ptr) < (uint32_t) prefixlen) {
+            break;
+        }
+        if (prefixlen && compare_signed(KEY(ptr), prefixlen, prefix, prefixlen))
+        {
+            break;
+        }
 
-        if (!goodp ||
-            goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr))) {
+        if (!goodp
+            || goodp(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr)))
+        {
             ino_t ino = db->map_ino;
             unsigned long sz = db->map_size;
 
@@ -1190,7 +1308,9 @@ static int myforeach(struct dbengine *db,
 
             /* make callback */
             cb_r = cb(rock, KEY(ptr), KEYLEN(ptr), DATA(ptr), DATALEN(ptr));
-            if (cb_r) break;
+            if (cb_r) {
+                break;
+            }
 
             if (!tidptr) {
                 /* grab a r lock */
@@ -1199,7 +1319,8 @@ static int myforeach(struct dbengine *db,
                     return r;
                 }
                 need_unlock = 1;
-            } else {
+            }
+            else {
                 /* make sure we're up to date */
                 update_lock(db, *tidptr);
             }
@@ -1212,18 +1333,22 @@ static int myforeach(struct dbengine *db,
                 /* 'ptr' might not equal 'savebuf'.  if it's different,
                    we want to stay where we are.  if it's the same, we
                    should move on to the next one */
-                if (savebufsize == KEYLEN(ptr) &&
-                    !memcmp(savebuf, KEY(ptr), savebufsize)) {
+                if (savebufsize == KEYLEN(ptr)
+                    && !memcmp(savebuf, KEY(ptr), savebufsize))
+                {
                     ptr = db->map_base + FORWARD(ptr, 0);
-                } else {
+                }
+                else {
                     /* 'savebuf' got deleted, so we're now pointing at the
                        right thing */
                 }
-            } else {
+            }
+            else {
                 /* move to the next one */
                 ptr = db->map_base + FORWARD(ptr, 0);
             }
-        } else {
+        }
+        else {
             /* we didn't make the callback; keep going */
             ptr = db->map_base + FORWARD(ptr, 0);
         }
@@ -1246,7 +1371,8 @@ static unsigned int randlvl(struct dbengine *db)
     unsigned int lvl = 1;
 
     while ((((float) rand() / (float) (RAND_MAX)) < PROB)
-           && (lvl < db->maxlevel)) {
+           && (lvl < db->maxlevel))
+    {
         lvl++;
     }
     /* syslog(LOG_DEBUG, "picked level %d", lvl); */
@@ -1255,9 +1381,12 @@ static unsigned int randlvl(struct dbengine *db)
 }
 
 static int mystore(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char *data, size_t datalen,
-                   struct txn **tidptr, int overwrite)
+                   const char *key,
+                   size_t keylen,
+                   const char *data,
+                   size_t datalen,
+                   struct txn **tidptr,
+                   int overwrite)
 {
     const char *ptr;
     uint32_t klen;
@@ -1270,8 +1399,8 @@ static int mystore(struct dbengine *db,
     struct txn *localtid = NULL;
     uint32_t endpadding = htonl(-1);
     uint32_t zeropadding[4] = { 0, 0, 0, 0 };
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
-    unsigned newoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL + 1];
+    unsigned newoffsets[SKIPLIST_MAXLEVEL + 1];
     uint32_t addrectype = htonl(ADD);
     uint32_t delrectype = htonl(DELETE);
     uint32_t todelete;
@@ -1281,8 +1410,9 @@ static int mystore(struct dbengine *db,
 
     assert(db != NULL);
     assert(key && keylen);
-    if (!data)
+    if (!data) {
         datalen = 0;
+    }
 
     /* not keeping the transaction, just create one local to
      * this function */
@@ -1305,11 +1435,12 @@ static int mystore(struct dbengine *db,
 
     newoffset = tid->logend;
     ptr = find_node(db, key, keylen, updateoffsets);
-    if (ptr != db->map_base &&
-        !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+    if (ptr != db->map_base
+        && !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen))
+    {
 
         if (!overwrite) {
-            myabort(db, tid);   /* releases lock */
+            myabort(db, tid); /* releases lock */
             return CYRUSDB_EXISTS;
         }
         /* replace with an equal height node */
@@ -1327,7 +1458,8 @@ static int mystore(struct dbengine *db,
         for (i = 0; i < lvl; i++) {
             newoffsets[i] = htonl(FORWARD(ptr, i));
         }
-    } else {
+    }
+    else {
         /* pick a size for the new node */
         lvl = randlvl(db);
 
@@ -1346,8 +1478,7 @@ static int mystore(struct dbengine *db,
         /* newoffsets is written in the iovec later */
         for (i = 0; i < lvl; i++) {
             /* written in the iovec */
-            newoffsets[i] =
-                htonl(FORWARD(db->map_base + updateoffsets[i], i));
+            newoffsets[i] = htonl(FORWARD(db->map_base + updateoffsets[i], i));
         }
     }
 
@@ -1360,7 +1491,9 @@ static int mystore(struct dbengine *db,
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &klen, 4);
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) key, keylen);
     if (ROUNDUP(keylen) - keylen > 0) {
-        WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) zeropadding,
+        WRITEV_ADD_TO_IOVEC(iov,
+                            num_iov,
+                            (char *) zeropadding,
                             ROUNDUP(keylen) - keylen);
     }
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &dlen, 4);
@@ -1368,7 +1501,9 @@ static int mystore(struct dbengine *db,
         WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) data, datalen);
     }
     if (ROUNDUP(datalen) - datalen > 0) {
-        WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) zeropadding,
+        WRITEV_ADD_TO_IOVEC(iov,
+                            num_iov,
+                            (char *) zeropadding,
                             ROUNDUP(datalen) - datalen);
     }
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) newoffsets, 4 * lvl);
@@ -1383,7 +1518,7 @@ static int mystore(struct dbengine *db,
         myabort(db, tid);
         return CYRUSDB_IOERROR;
     }
-    tid->logend += r;           /* update where to write next */
+    tid->logend += r; /* update where to write next */
 
     /* update pointers after writing record so abort is guaranteed to
      * see which records need reverting */
@@ -1403,35 +1538,43 @@ static int mystore(struct dbengine *db,
     if (localtid) {
         /* commit the store, which releases the write lock */
         r = mycommit(db, tid);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     return 0;
 }
 
 static int create(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  const char *data, size_t datalen,
+                  const char *key,
+                  size_t keylen,
+                  const char *data,
+                  size_t datalen,
                   struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
 static int store(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char *data, size_t datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char *data,
+                 size_t datalen,
                  struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
 static int mydelete(struct dbengine *db,
-                    const char *key, size_t keylen,
-                    struct txn **tidptr, int force __attribute__((unused)))
+                    const char *key,
+                    size_t keylen,
+                    struct txn **tidptr,
+                    int force __attribute__((unused)))
 {
     const char *ptr;
     uint32_t delrectype = htonl(DELETE);
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL + 1];
     uint32_t offset;
     uint32_t writebuf[2];
     struct txn *tid, *localtid = NULL;
@@ -1456,8 +1599,9 @@ static int mydelete(struct dbengine *db,
     }
 
     ptr = find_node(db, key, keylen, updateoffsets);
-    if (ptr != db->map_base &&
-        !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen)) {
+    if (ptr != db->map_base
+        && !compare_signed(KEY(ptr), KEYLEN(ptr), key, keylen))
+    {
         /* gotcha */
         offset = ptr - db->map_base;
 
@@ -1553,13 +1697,15 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         goto done;
     }
 
- done:
-    if (!r)
+done:
+    if (!r) {
         db->current_txn = NULL;
+    }
 
     /* consider checkpointing */
-    if (!r && !(db->open_flags & CYRUSDB_NOCOMPACT) &&
-        tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE)) {
+    if (!r && !(db->open_flags & CYRUSDB_NOCOMPACT)
+        && tid->logend > (2 * db->logstart + SKIPLIST_MINREWRITE))
+    {
         r = mycheckpoint(db);
     }
 
@@ -1576,7 +1722,8 @@ static int mycommit(struct dbengine *db, struct txn *tid)
             xsyslog(LOG_ERR, "DBERROR: skiplist commit AND abort failed",
                              "filename=<%s>", db->fname);
         }
-    } else {
+    }
+    else {
         /* release the write lock */
         if ((r = unlock(db)) < 0) {
             return r;
@@ -1595,7 +1742,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 static int myabort(struct dbengine *db, struct txn *tid)
 {
     const char *ptr;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL + 1];
     unsigned offset;
     unsigned i;
     int r = 0;
@@ -1612,7 +1759,8 @@ static int myabort(struct dbengine *db, struct txn *tid)
         /* find the last log entry */
         for (offset = tid->logstart, ptr = db->map_base + offset;
              offset + RECSIZE_safe(db, ptr) != (uint32_t) tid->logend;
-             offset += RECSIZE_safe(db, ptr), ptr = db->map_base + offset) ;
+             offset += RECSIZE_safe(db, ptr), ptr = db->map_base + offset)
+            ;
 
         offset = ptr - db->map_base;
 
@@ -1640,14 +1788,13 @@ static int myabort(struct dbengine *db, struct txn *tid)
                 retry_write(db->fd, (char *) &netnewoffset, 4);
             }
             break;
-        case DELETE:
-        {
+        case DELETE: {
             unsigned lvl;
             uint32_t netnewoffset;
             const char *q;
 
             /* re-add this record.  it can't exist right now. */
-            netnewoffset = *((uint32_t *)(ptr + 4));
+            netnewoffset = *((uint32_t *) (ptr + 4));
             q = db->map_base + ntohl(netnewoffset);
             lvl = LEVEL_safe(db, q);
             (void) find_node(db, KEY(q), KEYLEN(q), updateoffsets);
@@ -1669,9 +1816,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
 
     /* truncate the file to remove log entries */
     if (ftruncate(db->fd, tid->logstart) < 0) {
-        syslog(LOG_ERR,
-               "DBERROR: skiplist abort %s: ftruncate: %m",
-               db->fname);
+        syslog(LOG_ERR, "DBERROR: skiplist abort %s: ftruncate: %m", db->fname);
         r = CYRUSDB_IOERROR;
         unlock(db);
         return r;
@@ -1703,7 +1848,7 @@ static int mycheckpoint(struct dbengine *db)
     int oldfd;
     struct iovec iov[50];
     unsigned num_iov;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL + 1];
     const char *ptr;
     unsigned offset;
     int r = 0;
@@ -1713,14 +1858,20 @@ static int mycheckpoint(struct dbengine *db)
 
     /* we need the latest and greatest data */
     assert(db->is_open && db->lock_status == WRITELOCKED);
-    map_refresh(db->fd, 0, &db->map_base, &db->map_len, MAP_UNKNOWN_LEN,
-                db->fname, 0);
+    map_refresh(db->fd,
+                0,
+                &db->map_base,
+                &db->map_len,
+                MAP_UNKNOWN_LEN,
+                db->fname,
+                0);
 
     /* can't be in a transaction */
     assert(db->current_txn == NULL);
 
     if ((r = myconsistent(db, NULL, 1)) < 0) {
-        syslog(LOG_ERR, "db %s, inconsistent pre-checkpoint, bailing out",
+        syslog(LOG_ERR,
+               "db %s, inconsistent pre-checkpoint, bailing out",
                db->fname);
         return r;
     }
@@ -1757,7 +1908,8 @@ static int mycheckpoint(struct dbengine *db)
         r = retry_write(db->fd, (char *) buf, dsize);
         if (r != dsize) {
             r = CYRUSDB_IOERROR;
-        } else {
+        }
+        else {
             r = 0;
         }
         free(buf);
@@ -1786,14 +1938,18 @@ static int mycheckpoint(struct dbengine *db)
         num_iov = 0;
         WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &iorectype, 4);
         /* copy all but the rectype from the record */
-        WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) ptr + 4, RECSIZE_safe(db, ptr) - 4);
+        WRITEV_ADD_TO_IOVEC(iov,
+                            num_iov,
+                            (char *) ptr + 4,
+                            RECSIZE_safe(db, ptr) - 4);
 
         newoffset = lseek(db->fd, 0, SEEK_END);
         netnewoffset = htonl(newoffset);
         r = retry_writev(db->fd, iov, num_iov);
         if (r < 0) {
             r = CYRUSDB_IOERROR;
-        } else {
+        }
+        else {
             r = 0;
         }
         for (i = 0; !r && i < lvl; i++) {
@@ -1802,7 +1958,8 @@ static int mycheckpoint(struct dbengine *db)
             if (p < 0) {
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
 
@@ -1810,7 +1967,8 @@ static int mycheckpoint(struct dbengine *db)
             if (r < 0) {
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
 
@@ -1830,7 +1988,8 @@ static int mycheckpoint(struct dbengine *db)
         if (p < 0) {
             r = CYRUSDB_IOERROR;
             break;
-        } else {
+        }
+        else {
             r = 0;
         }
 
@@ -1838,7 +1997,8 @@ static int mycheckpoint(struct dbengine *db)
         if (r < 0) {
             r = CYRUSDB_IOERROR;
             break;
-        } else {
+        }
+        else {
             r = 0;
         }
     }
@@ -1900,20 +2060,29 @@ static int mycheckpoint(struct dbengine *db)
         }
         db->map_size = sbuf.st_size;
         db->map_ino = sbuf.st_ino;
-        map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
-                    db->fname, 0);
+        map_refresh(db->fd,
+                    0,
+                    &db->map_base,
+                    &db->map_len,
+                    sbuf.st_size,
+                    db->fname,
+                    0);
     }
 
     if ((r = myconsistent(db, NULL, 1)) < 0) {
-        syslog(LOG_ERR, "db %s, inconsistent post-checkpoint, bailing out",
+        syslog(LOG_ERR,
+               "db %s, inconsistent post-checkpoint, bailing out",
                db->fname);
         return r;
     }
 
     syslog(LOG_INFO,
            "skiplist: checkpointed %s (%d record%s, %d bytes) in %2.3f sec",
-           db->fname, db->listsize, db->listsize == 1 ? "" : "s",
-           db->logstart, (sclock() - start) / (double) CLOCKS_PER_SEC);
+           db->fname,
+           db->listsize,
+           db->listsize == 1 ? "" : "s",
+           db->logstart,
+           (sclock() - start) / (double) CLOCKS_PER_SEC);
 
     return r;
 }
@@ -1957,7 +2126,9 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
         case INORDER:
         case ADD:
             printf("kl=%d dl=%d lvl=%d\n",
-                   KEYLEN(ptr), DATALEN(ptr), LEVEL_safe(db, ptr));
+                   KEYLEN(ptr),
+                   DATALEN(ptr),
+                   LEVEL_safe(db, ptr));
             printf("\t");
             for (i = 0; i < LEVEL_safe(db, ptr); i++) {
                 printf("%04X ", FORWARD(ptr, i));
@@ -1966,7 +2137,7 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
             break;
 
         case DELETE:
-            printf("offset=%04X\n", ntohl(*((uint32_t *)(ptr + 4))));
+            printf("offset=%04X\n", ntohl(*((uint32_t *) (ptr + 4))));
             break;
 
         case COMMIT:
@@ -1994,8 +2165,12 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
 
     assert(db->current_txn == tid); /* could both be null */
 
-    if (!locked) read_lock(db);
-    else if (tid) update_lock(db, tid);
+    if (!locked) {
+        read_lock(db);
+    }
+    else if (tid) {
+        update_lock(db, tid);
+    }
 
     offset = FORWARD(db->map_base + DUMMY_OFFSET(db), 0);
     while (offset != 0) {
@@ -2008,11 +2183,15 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
 
             if (offset > db->map_size) {
                 syslog(LOG_ERR,
-                        "skiplist inconsistent: %04X: ptr %d is %04X; "
-                        "eof is %04X",
-                        (unsigned int) (ptr - db->map_base),
-                        i, offset, (unsigned int) db->map_size);
-                if (!locked) unlock(db);
+                       "skiplist inconsistent: %04X: ptr %d is %04X; "
+                       "eof is %04X",
+                       (unsigned int) (ptr - db->map_base),
+                       i,
+                       offset,
+                       (unsigned int) db->map_size);
+                if (!locked) {
+                    unlock(db);
+                }
                 return CYRUSDB_INTERNAL;
             }
 
@@ -2024,12 +2203,15 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
                 cmp = compare_signed(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
                 if (cmp >= 0) {
                     syslog(LOG_ERR,
-                            "skiplist inconsistent: %04X: ptr %d is %04X; "
-                            "compare_signed() = %d",
-                            (unsigned int) (ptr - db->map_base),
-                            i,
-                            offset, cmp);
-                    if (!locked) unlock(db);
+                           "skiplist inconsistent: %04X: ptr %d is %04X; "
+                           "compare_signed() = %d",
+                           (unsigned int) (ptr - db->map_base),
+                           i,
+                           offset,
+                           cmp);
+                    if (!locked) {
+                        unlock(db);
+                    }
                     return CYRUSDB_INTERNAL;
                 }
             }
@@ -2038,7 +2220,9 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
         offset = FORWARD(ptr, 0);
     }
 
-    if (!locked) unlock(db);
+    if (!locked) {
+        unlock(db);
+    }
 
     return 0;
 }
@@ -2048,10 +2232,11 @@ static int recovery(struct dbengine *db, int flags)
 {
     const char *ptr, *keyptr;
     unsigned filesize = db->map_size;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL + 1];
     uint32_t offset, offsetnet, myoff = 0;
     int r = 0;
-    int need_checkpoint = libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT);
+    int need_checkpoint =
+        libcyrus_config_getswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT);
     time_t start = time(NULL);
     unsigned i;
 
@@ -2065,9 +2250,9 @@ static int recovery(struct dbengine *db, int flags)
         return r;
     }
 
-    if (!(flags & RECOVERY_FORCE)
-        && global_recovery
-        && db->last_recovery >= global_recovery) {
+    if (!(flags & RECOVERY_FORCE) && global_recovery
+        && db->last_recovery >= global_recovery)
+    {
         /* someone beat us to it */
         unlock(db);
         return 0;
@@ -2118,8 +2303,8 @@ static int recovery(struct dbengine *db, int flags)
 
     /* reset the data that was written INORDER by the last checkpoint */
     offset = DUMMY_OFFSET(db) + DUMMY_SIZE(db);
-    while (!r && (offset < filesize)
-              && TYPE(db->map_base + offset) == INORDER) {
+    while (!r && (offset < filesize) && TYPE(db->map_base + offset) == INORDER)
+    {
         ptr = db->map_base + offset;
         offsetnet = htonl(offset);
 
@@ -2137,7 +2322,8 @@ static int recovery(struct dbengine *db, int flags)
                                  "filename=<%s>", db->fname);
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
 
@@ -2145,7 +2331,8 @@ static int recovery(struct dbengine *db, int flags)
             if (r < 0) {
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
 
@@ -2157,8 +2344,11 @@ static int recovery(struct dbengine *db, int flags)
         if (!r) {
             unsigned size = RECSIZE_safe(db, ptr);
             if (!size) {
-                syslog(LOG_ERR, "skiplist recovery %s: damaged record at %u, truncating here",
-                       db->fname, offset);
+                syslog(LOG_ERR,
+                       "skiplist recovery %s: damaged record at %u, truncating "
+                       "here",
+                       db->fname,
+                       offset);
                 filesize = offset;
                 break;
             }
@@ -2176,8 +2366,11 @@ static int recovery(struct dbengine *db, int flags)
     }
 
     if (offset != db->logstart) {
-        syslog(LOG_NOTICE, "skiplist recovery %s: incorrect logstart %04X changed to %04X",
-               db->fname, db->logstart, offset);
+        syslog(LOG_NOTICE,
+               "skiplist recovery %s: incorrect logstart %04X changed to %04X",
+               db->fname,
+               db->logstart,
+               offset);
         db->logstart = offset; /* header will be committed later */
     }
 
@@ -2192,7 +2385,8 @@ static int recovery(struct dbengine *db, int flags)
                                  "filename=<%s>", db->fname);
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
 
@@ -2200,7 +2394,8 @@ static int recovery(struct dbengine *db, int flags)
             if (r < 0) {
                 r = CYRUSDB_IOERROR;
                 break;
-            } else {
+            }
+            else {
                 r = 0;
             }
         }
@@ -2211,8 +2406,13 @@ static int recovery(struct dbengine *db, int flags)
         const char *p, *q;
 
         /* refresh map, so we see the writes we've just done */
-        map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
-                    db->fname, 0);
+        map_refresh(db->fd,
+                    0,
+                    &db->map_base,
+                    &db->map_len,
+                    db->map_size,
+                    db->fname,
+                    0);
 
         ptr = db->map_base + offset;
 
@@ -2223,8 +2423,11 @@ static int recovery(struct dbengine *db, int flags)
                 offset += 4;
                 ptr = db->map_base + offset;
             }
-            syslog(LOG_ERR, "skiplist recovery %s: skipped %d bytes of zeros at %04X",
-                            db->fname, offset - orig, orig);
+            syslog(LOG_ERR,
+                   "skiplist recovery %s: skipped %d bytes of zeros at %04X",
+                   db->fname,
+                   offset - orig,
+                   orig);
             need_checkpoint = 1;
         }
 
@@ -2233,16 +2436,20 @@ static int recovery(struct dbengine *db, int flags)
         /* if this is a commit, we've processed everything in this txn */
         if (TYPE(ptr) == COMMIT) {
             unsigned size = RECSIZE_safe(db, ptr);
-            if (!size) break;
+            if (!size) {
+                break;
+            }
             offset += size;
             continue;
         }
 
         /* make sure this is ADD or DELETE */
         if (TYPE(ptr) != ADD && TYPE(ptr) != DELETE) {
-            syslog(LOG_ERR,
-                   "DBERROR: skiplist recovery %s: %04X should be ADD or DELETE",
-                   db->fname, offset);
+            syslog(
+                LOG_ERR,
+                "DBERROR: skiplist recovery %s: %04X should be ADD or DELETE",
+                db->fname,
+                offset);
             r = CYRUSDB_IOERROR;
             break;
         }
@@ -2254,16 +2461,21 @@ static int recovery(struct dbengine *db, int flags)
             unsigned size = RECSIZE_safe(db, p);
             if (!size) {
                 /* hmm, we can't trust this transaction */
-                syslog(LOG_ERR,
-                       "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
-                       "truncating corrupted file instead of looping forever...",
-                       db->fname);
+                syslog(
+                    LOG_ERR,
+                    "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
+                    "truncating corrupted file instead of looping forever...",
+                    db->fname);
                 p = q;
                 break;
             }
             p += size;
-            if (p >= q) break;
-            if (TYPE(p) == COMMIT) break;
+            if (p >= q) {
+                break;
+            }
+            if (TYPE(p) == COMMIT) {
+                break;
+            }
         }
         if (p >= q) {
             syslog(LOG_NOTICE,
@@ -2279,19 +2491,28 @@ static int recovery(struct dbengine *db, int flags)
         /* look for the key */
         if (TYPE(ptr) == ADD) {
             keyptr = find_node(db, KEY(ptr), KEYLEN(ptr), updateoffsets);
-            if (keyptr == db->map_base ||
-                compare_signed(KEY(ptr), KEYLEN(ptr), KEY(keyptr), KEYLEN(keyptr))) {
+            if (keyptr == db->map_base
+                || compare_signed(KEY(ptr),
+                                  KEYLEN(ptr),
+                                  KEY(keyptr),
+                                  KEYLEN(keyptr)))
+            {
                 /* didn't find exactly this node */
                 keyptr = NULL;
             }
-        } else { /* type == DELETE */
+        }
+        else { /* type == DELETE */
             const char *p;
 
-            myoff = ntohl(*((uint32_t *)(ptr + 4)));
+            myoff = ntohl(*((uint32_t *) (ptr + 4)));
             p = db->map_base + myoff;
             keyptr = find_node(db, KEY(p), KEYLEN(p), updateoffsets);
-            if (keyptr == db->map_base ||
-                compare_signed(KEY(p), KEYLEN(p), KEY(keyptr), KEYLEN(keyptr))) {
+            if (keyptr == db->map_base
+                || compare_signed(KEY(p),
+                                  KEYLEN(p),
+                                  KEY(keyptr),
+                                  KEYLEN(keyptr)))
+            {
                 /* didn't find exactly this node */
                 keyptr = NULL;
             }
@@ -2314,24 +2535,31 @@ static int recovery(struct dbengine *db, int flags)
                 retry_write(db->fd, (char *) &newoffset, 4);
             }
 
-        /* otherwise if DELETE, throw an error */
-        } else if (TYPE(ptr) == DELETE) {
+            /* otherwise if DELETE, throw an error */
+        }
+        else if (TYPE(ptr) == DELETE) {
             syslog(LOG_ERR,
-                   "DBERROR: skiplist recovery %s: DELETE at %04X doesn't exist, skipping",
-                   db->fname, offset);
+                   "DBERROR: skiplist recovery %s: DELETE at %04X doesn't "
+                   "exist, skipping",
+                   db->fname,
+                   offset);
             need_checkpoint = 1;
 
-        /* otherwise insert it */
-        } else if (TYPE(ptr) == ADD) {
+            /* otherwise insert it */
+        }
+        else if (TYPE(ptr) == ADD) {
             unsigned int lvl;
-            uint32_t newoffsets[SKIPLIST_MAXLEVEL+1];
+            uint32_t newoffsets[SKIPLIST_MAXLEVEL + 1];
 
             if (keyptr) {
                 syslog(LOG_ERR,
-                       "DBERROR: skiplist recovery %s: ADD at %04X exists, replacing",
-                       db->fname, offset);
+                       "DBERROR: skiplist recovery %s: ADD at %04X exists, "
+                       "replacing",
+                       db->fname,
+                       offset);
                 need_checkpoint = 1;
-            } else {
+            }
+            else {
                 db->listsize++;
             }
             offsetnet = htonl(offset);
@@ -2339,10 +2567,14 @@ static int recovery(struct dbengine *db, int flags)
             lvl = LEVEL_safe(db, ptr);
             if (lvl > SKIPLIST_MAXLEVEL) {
                 syslog(LOG_ERR,
-                       "DBERROR: skiplist recovery %s: node claims level %d (greater than max %d)",
-                       db->fname, lvl, SKIPLIST_MAXLEVEL);
+                       "DBERROR: skiplist recovery %s: node claims level %d "
+                       "(greater than max %d)",
+                       db->fname,
+                       lvl,
+                       SKIPLIST_MAXLEVEL);
                 r = CYRUSDB_IOERROR;
-            } else {
+            }
+            else {
                 /* NOTE - in the bogus case where a record with the same key already
                  * exists, there are three possible cases:
                  * lvl == LEVEL_safe(db, keyptr)
@@ -2367,16 +2599,17 @@ static int recovery(struct dbengine *db, int flags)
                     /* set our next pointers */
                     if (keyptr && i < LEVEL_safe(db, keyptr)) {
                         /* need to replace the matching record key */
-                        newoffsets[i] =
-                            htonl(FORWARD(keyptr, i));
-                    } else {
+                        newoffsets[i] = htonl(FORWARD(keyptr, i));
+                    }
+                    else {
                         newoffsets[i] =
                             htonl(FORWARD(db->map_base + updateoffsets[i], i));
                     }
 
                     /* replace 'updateoffsets' to point to me */
                     lseek(db->fd,
-                          PTR(db->map_base + updateoffsets[i], i) - db->map_base,
+                          PTR(db->map_base + updateoffsets[i], i)
+                              - db->map_base,
                           SEEK_SET);
                     retry_write(db->fd, (char *) &offsetnet, 4);
                 }
@@ -2390,20 +2623,24 @@ static int recovery(struct dbengine *db, int flags)
                         newoffsetnet = htonl(FORWARD(keyptr, i));
                         /* replace 'updateoffsets' to point onwards */
                         lseek(db->fd,
-                              PTR(db->map_base + updateoffsets[i], i) - db->map_base,
+                              PTR(db->map_base + updateoffsets[i], i)
+                                  - db->map_base,
                               SEEK_SET);
                         retry_write(db->fd, (char *) &newoffsetnet, 4);
                     }
                 }
             }
-        /* can't happen */
-        } else {
+            /* can't happen */
+        }
+        else {
             abort();
         }
 
         /* move to next record */
         unsigned size = RECSIZE_safe(db, ptr);
-        if (!size) break;
+        if (!size) {
+            break;
+        }
         offset += size;
     }
 
@@ -2423,7 +2660,8 @@ static int recovery(struct dbengine *db, int flags)
     /* fsync the recovered database */
     if (!r && DO_FSYNC && (fdatasync(db->fd) < 0)) {
         syslog(LOG_ERR,
-               "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname);
+               "DBERROR: skiplist recovery %s: fdatasync: %m",
+               db->fname);
         r = CYRUSDB_IOERROR;
     }
 
@@ -2436,7 +2674,8 @@ static int recovery(struct dbengine *db, int flags)
     /* fsync the new header */
     if (!r && DO_FSYNC && (fdatasync(db->fd) < 0)) {
         syslog(LOG_ERR,
-               "DBERROR: skiplist recovery %s: fdatasync: %m", db->fname);
+               "DBERROR: skiplist recovery %s: fdatasync: %m",
+               db->fname);
         r = CYRUSDB_IOERROR;
     }
 
@@ -2445,14 +2684,23 @@ static int recovery(struct dbengine *db, int flags)
 
         syslog(LOG_NOTICE,
                "skiplist: recovered %s (%d record%s, %ld bytes) in %d second%s",
-               db->fname, db->listsize, db->listsize == 1 ? "" : "s",
-               (long unsigned)db->map_size, diff, diff == 1 ? "" : "s");
+               db->fname,
+               db->listsize,
+               db->listsize == 1 ? "" : "s",
+               (long unsigned) db->map_size,
+               diff,
+               diff == 1 ? "" : "s");
     }
 
     if (!r && need_checkpoint) {
         /* refresh map, so we see the writes we've just done */
-        map_refresh(db->fd, 0, &db->map_base, &db->map_len, db->map_size,
-                    db->fname, 0);
+        map_refresh(db->fd,
+                    0,
+                    &db->map_base,
+                    &db->map_len,
+                    db->map_size,
+                    db->fname,
+                    0);
         r = mycheckpoint(db);
     }
 
@@ -2463,33 +2711,30 @@ static int recovery(struct dbengine *db, int flags)
     return r;
 }
 
-EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
-{
-    "skiplist",                 /* name */
+EXPORTED struct cyrusdb_backend cyrusdb_skiplist = { "skiplist", /* name */
 
-    &myinit,
-    &cyrusdb_generic_done,
-    &cyrusdb_generic_archive,
-    &cyrusdb_generic_unlink,
+                                                     &myinit,
+                                                     &cyrusdb_generic_done,
+                                                     &cyrusdb_generic_archive,
+                                                     &cyrusdb_generic_unlink,
 
-    &myopen,
-    &myclose,
+                                                     &myopen,
+                                                     &myclose,
 
-    &myfetch,
-    &myfetch,
-    NULL,
+                                                     &myfetch,
+                                                     &myfetch,
+                                                     NULL,
 
-    &myforeach,
-    &create,
-    &store,
-    &mydelete,
+                                                     &myforeach,
+                                                     &create,
+                                                     &store,
+                                                     &mydelete,
 
-    &mylock,
-    &mycommit,
-    &myabort,
+                                                     &mylock,
+                                                     &mycommit,
+                                                     &myabort,
 
-    &dump,
-    &consistent,
-    &mycheckpoint,
-    &compare_signed
-};
+                                                     &dump,
+                                                     &consistent,
+                                                     &mycheckpoint,
+                                                     &compare_signed };

@@ -76,7 +76,9 @@ static inline void auditlog_push(struct buf *buf,
     int len = 0;
 
     assert(key && *key);
-    if (!value) value = "";
+    if (!value) {
+        value = "";
+    }
 
     len = strlen(value);
     if (len > 1 && value[0] == '<' && value[len - 1] == '>') {
@@ -124,7 +126,9 @@ EXPORTED void auditlog_acl(const char *mboxname,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, "acl");
 
@@ -146,7 +150,9 @@ EXPORTED void auditlog_client(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
 
@@ -157,12 +163,13 @@ EXPORTED void auditlog_client(const char *action,
 }
 
 /* n.b. you probably want to call duplicate_log()! */
-HIDDEN void auditlog_duplicate(const char *action,
-                               const duplicate_key_t *dkey)
+HIDDEN void auditlog_duplicate(const char *action, const duplicate_key_t *dkey)
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, "duplicate");
 
@@ -180,14 +187,17 @@ EXPORTED void auditlog_imip(const char *message_id,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, "processed iMIP");
 
     auditlog_push(&buf, "message-id", message_id ? message_id : "nomsgid");
     auditlog_push(&buf, "outcome", outcome);
-    if (errstr)
+    if (errstr) {
         auditlog_push(&buf, "errstr", errstr);
+    }
 
     auditlog_finish(&buf);
 }
@@ -199,12 +209,14 @@ EXPORTED void auditlog_mailbox(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
 
-    if (oldmailbox && strcmpsafe(mailbox_name(oldmailbox),
-                                 mailbox_name(mailbox)))
+    if (oldmailbox
+        && strcmpsafe(mailbox_name(oldmailbox), mailbox_name(mailbox)))
     {
         auditlog_push(&buf, "oldmailbox", mailbox_name(oldmailbox));
     }
@@ -214,14 +226,15 @@ EXPORTED void auditlog_mailbox(const char *action,
     auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
     buf_printf(&buf, " uidvalidity=<%u>", mailbox->i.uidvalidity);
 
-    if (oldmailbox && strcmpsafe(mailbox_partition(oldmailbox),
-                                 mailbox_partition(mailbox)))
+    if (oldmailbox
+        && strcmpsafe(mailbox_partition(oldmailbox),
+                      mailbox_partition(mailbox)))
     {
         auditlog_push(&buf, "oldpart", mailbox_partition(oldmailbox));
         auditlog_push(&buf, "newpart", mailbox_partition(mailbox));
     }
-    else if (newpartition && strcmpsafe(mailbox_partition(mailbox),
-                                        newpartition))
+    else if (newpartition
+             && strcmpsafe(mailbox_partition(mailbox), newpartition))
     {
         auditlog_push(&buf, "oldpart", mailbox_partition(mailbox));
         auditlog_push(&buf, "newpart", newpartition);
@@ -236,7 +249,9 @@ EXPORTED void auditlog_mboxname(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
 
@@ -259,11 +274,13 @@ EXPORTED void auditlog_message(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
     struct conversations_state *cstate;
-    char flagstr[FLAGMAPSTR_MAXLEN] = {0};
-    char emailid[JMAP_MAX_EMAILID_SIZE] = {0};
-    char threadid[JMAP_THREADID_SIZE] = {0};
+    char flagstr[FLAGMAPSTR_MAXLEN] = { 0 };
+    char emailid[JMAP_MAX_EMAILID_SIZE] = { 0 };
+    char threadid[JMAP_THREADID_SIZE] = { 0 };
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     cstate = mailbox_get_cstate(mailbox);
     jmap_set_emailid(cstate, &record->guid, 0, &record->internaldate, emailid);
@@ -275,8 +292,10 @@ EXPORTED void auditlog_message(const char *action,
     auditlog_push(&buf, "mailbox", mailbox_name(mailbox));
     auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
     auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
-    buf_printf(&buf, " uid=<%u> modseq=<" MODSEQ_FMT ">",
-                     record->uid, record->modseq);
+    buf_printf(&buf,
+               " uid=<%u> modseq=<" MODSEQ_FMT ">",
+               record->uid,
+               record->modseq);
     auditlog_push(&buf, "sysflags", flagstr);
     auditlog_push(&buf, "guid", message_guid_encode(&record->guid));
     auditlog_push(&buf, "emailid", emailid);
@@ -297,7 +316,9 @@ EXPORTED void auditlog_message_uid(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
 
@@ -314,7 +335,9 @@ EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, "modseq");
 
@@ -322,13 +345,16 @@ EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
     auditlog_push(&buf, "uniqueid", mailbox_uniqueid(mailbox));
     auditlog_push(&buf, "mboxid", mailbox_jmapid(mailbox));
 
-    buf_printf(&buf, " highestmodseq=<" MODSEQ_FMT ">",
-                     mailbox->i.highestmodseq);
-    buf_printf(&buf, " deletedmodseq=<" MODSEQ_FMT ">",
-                     mailbox->i.deletedmodseq);
-    buf_printf(&buf, " crcs=<%u/%u>",
-                     mailbox->i.synccrcs.basic,
-                     mailbox->i.synccrcs.annot);
+    buf_printf(&buf,
+               " highestmodseq=<" MODSEQ_FMT ">",
+               mailbox->i.highestmodseq);
+    buf_printf(&buf,
+               " deletedmodseq=<" MODSEQ_FMT ">",
+               mailbox->i.deletedmodseq);
+    buf_printf(&buf,
+               " crcs=<%u/%u>",
+               mailbox->i.synccrcs.basic,
+               mailbox->i.synccrcs.annot);
 
     auditlog_finish(&buf);
 }
@@ -338,14 +364,17 @@ EXPORTED void auditlog_proxy(const char *userid, const char *status)
     struct buf buf = BUF_INITIALIZER;
     char rsessionid[MAX_SESSIONID_SIZE];
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     parse_sessionid(status, rsessionid);
 
     auditlog_begin(&buf, "proxy");
 
-    if (userid)
+    if (userid) {
         auditlog_push(&buf, "userid", userid);
+    }
     auditlog_push(&buf, "remote", rsessionid);
 
     auditlog_finish(&buf);
@@ -359,22 +388,26 @@ EXPORTED void auditlog_quota(const char *action,
     struct buf buf = BUF_INITIALIZER;
     int resource;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
     auditlog_push(&buf, "root", root);
 
     for (resource = 0; resource < QUOTA_NUMRESOURCES; resource++) {
         if (oldquotas) {
-            buf_printf(&buf, " old%s=<%lld>",
-                             quota_names[resource],
-                             oldquotas[resource]);
+            buf_printf(&buf,
+                       " old%s=<%lld>",
+                       quota_names[resource],
+                       oldquotas[resource]);
         }
 
         if (newquotas) {
-            buf_printf(&buf, " new%s=<%lld>",
-                             quota_names[resource],
-                             newquotas[resource]);
+            buf_printf(&buf,
+                       " new%s=<%lld>",
+                       quota_names[resource],
+                       newquotas[resource]);
         }
     }
 
@@ -391,25 +424,32 @@ EXPORTED void auditlog_sieve(const char *action,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, action);
 
-    if (userid)
+    if (userid) {
         auditlog_push(&buf, "userid", userid);
+    }
 
     auditlog_push(&buf, "in.msgid", in_msgid ? in_msgid : "nomsgid");
-    if (out_msgid)
+    if (out_msgid) {
         auditlog_push(&buf, "out.msgid", out_msgid);
+    }
 
-    if (target)
+    if (target) {
         auditlog_push(&buf, "target", target);
+    }
 
-    if (from_addr)
+    if (from_addr) {
         auditlog_push(&buf, "from", from_addr);
+    }
 
-    if (to_addr)
+    if (to_addr) {
         auditlog_push(&buf, "to", to_addr);
+    }
 
     auditlog_finish(&buf);
 }
@@ -418,11 +458,15 @@ EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
 {
     struct buf buf = BUF_INITIALIZER;
 
-    if (!config_auditlog) return;
+    if (!config_auditlog) {
+        return;
+    }
 
     auditlog_begin(&buf, "traffic");
-    buf_printf(&buf, " bytes_in=<%" PRIu64 ">"
-                     " bytes_out=<%" PRIu64 ">",
-                     bytes_in, bytes_out);
+    buf_printf(&buf,
+               " bytes_in=<%" PRIu64 ">"
+               " bytes_out=<%" PRIu64 ">",
+               bytes_in,
+               bytes_out);
     auditlog_finish(&buf);
 }

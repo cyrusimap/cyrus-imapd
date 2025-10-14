@@ -1,6 +1,6 @@
 /*
  * test ptsmodule_standard_root_dn
- * gcc -I.. -I ../lib ../lib/.libs/util.o ../lib/.libs/xmalloc.o ../lib/.libs/map_shared.o ../lib/.libs/retry.o ../lib/.libs/assert.o test3.c -lz -lpcre2-posix 
+ * gcc -I.. -I ../lib ../lib/.libs/util.o ../lib/.libs/xmalloc.o ../lib/.libs/map_shared.o ../lib/.libs/retry.o ../lib/.libs/assert.o test3.c -lz -lpcre2-posix
  */
 #include <assert.h>
 #include <stdio.h>
@@ -21,7 +21,9 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
 
     assert(domain != NULL && domain[0] != '\0');
 
-    syslog(LOG_DEBUG, "ptsmodule_standard_root_dn called for domain %s", domain);
+    syslog(LOG_DEBUG,
+           "ptsmodule_standard_root_dn called for domain %s",
+           domain);
 
     /* Each dot is to be replaced with ',dc='.
      * We also need a leading 'dc=' at the start.
@@ -38,8 +40,9 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
 
         part = strtok_r(NULL, ".", &tok_state);
 
-        if (part != NULL)
+        if (part != NULL) {
             buf_appendcstr(&buf, dc_sep);
+        }
     }
 
     free(domain_copy);
@@ -53,12 +56,14 @@ static int ptsmodule_standard_root_dn(const char *domain, const char **result)
     return PTSM_OK;
 }
 
-void fatal(const char *s, int code) {
+void fatal(const char *s, int code)
+{
     fprintf(stderr, "fatal error: %s\n", s);
     exit(code);
 }
 
-int main(int argc, const char **argv) {
+int main(int argc, const char **argv)
+{
     int errors = 0;
     int i;
 
@@ -74,8 +79,10 @@ int main(int argc, const char **argv) {
             free(result);
         }
         else {
-            fprintf(stderr, "error: ptsmodule_standard_root_dn returned %i\n", r);
-            errors ++;
+            fprintf(stderr,
+                    "error: ptsmodule_standard_root_dn returned %i\n",
+                    r);
+            errors++;
         }
     }
 

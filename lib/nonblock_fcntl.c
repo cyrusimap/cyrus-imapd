@@ -50,13 +50,13 @@
 #include "nonblock.h"
 
 #ifndef FNDELAY
-#define FNDELAY         O_NDELAY
+# define FNDELAY O_NDELAY
 #endif
 
 #ifdef O_NONBLOCK
-#define NON_BLOCKING_MODE O_NONBLOCK
+# define NON_BLOCKING_MODE O_NONBLOCK
 #else
-#define NON_BLOCKING_MODE FNDELAY
+# define NON_BLOCKING_MODE FNDELAY
 #endif
 
 EXPORTED const char nonblock_method_desc[] = "fcntl";
@@ -71,12 +71,14 @@ EXPORTED void nonblock(int fd, int mode)
     int flags;
 
     flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) fatal("Internal error: fcntl F_GETFL failed", EX_IOERR);
+    if (flags < 0) {
+        fatal("Internal error: fcntl F_GETFL failed", EX_IOERR);
+    }
     if (mode) {
         flags |= NON_BLOCKING_MODE;
     }
     else {
         flags &= ~NON_BLOCKING_MODE;
     }
-    (void)fcntl(fd, F_SETFL, flags);
+    (void) fcntl(fd, F_SETFL, flags);
 }

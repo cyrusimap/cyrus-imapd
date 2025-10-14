@@ -60,14 +60,16 @@ EXPORTED void slowio_reset_impl(void)
 
 EXPORTED void slowio_maybe_delay_read_impl(ssize_t n_bytes)
 {
-    if (config_debug_slowio)
+    if (config_debug_slowio) {
         slowio_maybe_delay_impl(&slowio_read, n_bytes);
+    }
 }
 
 EXPORTED void slowio_maybe_delay_write_impl(ssize_t n_bytes)
 {
-    if (config_debug_slowio)
+    if (config_debug_slowio) {
         slowio_maybe_delay_impl(&slowio_write, n_bytes);
+    }
 }
 
 EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
@@ -75,7 +77,9 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
     const double max_bytes_per_sec = SLOWIO_MAX_BYTES_SEC;
     struct timespec now;
 
-    if (n_bytes < 0) return; /* that wasn't a valid I/O op! */
+    if (n_bytes < 0) {
+        return; /* that wasn't a valid I/O op! */
+    }
 
     if (isnan(slowio_min_elapsed)) {
         struct timespec res;
@@ -97,8 +101,7 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
         return;
     }
 
-    if (slowio->last_delay.tv_sec == 0
-        && slowio->last_delay.tv_nsec == 0
+    if (slowio->last_delay.tv_sec == 0 && slowio->last_delay.tv_nsec == 0
         && slowio->bytes_since_last_delay == 0)
     {
         /* first time called, just initialise */
@@ -107,24 +110,30 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
         return;
     }
 
-    if (n_bytes == 0) return; /* nothing else to do */
+    if (n_bytes == 0) {
+        return; /* nothing else to do */
+    }
 
     slowio->bytes_since_last_delay += n_bytes;
     /* XXX alas, timesub() is for timeval, not timespec */
-    double elapsed = (double)(now.tv_sec - slowio->last_delay.tv_sec)
-                     + (double)(now.tv_nsec - slowio->last_delay.tv_nsec)
-                       / 1000000000.0;
+    double elapsed =
+        (double) (now.tv_sec - slowio->last_delay.tv_sec)
+        + (double) (now.tv_nsec - slowio->last_delay.tv_nsec) / 1000000000.0;
 
-    if (slowio->bytes_since_last_delay == 0) return;
+    if (slowio->bytes_since_last_delay == 0) {
+        return;
+    }
 
     /* can't divide by zero, but if bytes have arrived without any observable
      * time having passed, we're running extremely fast and must delay!
      */
-    if (elapsed <= 0.0) elapsed = slowio_min_elapsed;
+    if (elapsed <= 0.0) {
+        elapsed = slowio_min_elapsed;
+    }
 
     if (slowio->bytes_since_last_delay / elapsed > max_bytes_per_sec) {
-        double delay = (slowio->bytes_since_last_delay / max_bytes_per_sec)
-                       - elapsed;
+        double delay =
+            (slowio->bytes_since_last_delay / max_bytes_per_sec) - elapsed;
         double delay_s, delay_ns;
         struct timespec sleeptime;
         int r;

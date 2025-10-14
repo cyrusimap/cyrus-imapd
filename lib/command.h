@@ -51,7 +51,8 @@
 #include "prot.h"
 #include "strarray.h"
 
-struct command {
+struct command
+{
     char *argv0;
     pid_t pid;
     struct protstream *stdin_prot;
@@ -60,8 +61,11 @@ struct command {
 
 extern int run_command(const char *argv0, ...);
 extern int run_command_strarray(const strarray_t *argv);
-extern int command_popen(struct command **cmdp, const char *mode,
-                         const char *cwd, const char *argv0, ...);
+extern int command_popen(struct command **cmdp,
+                         const char *mode,
+                         const char *cwd,
+                         const char *argv0,
+                         ...);
 extern int command_pclose(struct command **cmdp);
 extern int command_done_stdin(struct command *);
 

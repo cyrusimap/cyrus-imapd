@@ -50,67 +50,66 @@
 
 #ifdef HAVE_WSLAY
 
-#include <errno.h>
-#include <syslog.h>
+# include <errno.h>
+# include <syslog.h>
 
-#include <sasl/saslutil.h>
+# include <sasl/saslutil.h>
 
-#include "http_h2.h"
-#include "proc.h"
-#include "retry.h"
-#include "telemetry.h"
-#include "tok.h"
-#include "xsha1.h"
+# include "http_h2.h"
+# include "proc.h"
+# include "retry.h"
+# include "telemetry.h"
+# include "tok.h"
+# include "xsha1.h"
 
 /* generated headers are not necessarily in current directory */
-#include "imap/http_err.h"
+# include "imap/http_err.h"
 
-
-#define WS_CKEY_LEN  24
-#define WS_AKEY_LEN  28
-#define WS_GUID      "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
+# define WS_CKEY_LEN 24
+# define WS_AKEY_LEN 28
+# define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 /* WebSocket Extension flags */
 enum {
-    EXT_PMCE_DEFLATE   = (1<<0)      /* Per-Message Compression Ext (RFC 7692) */
+    EXT_PMCE_DEFLATE = (1 << 0) /* Per-Message Compression Ext (RFC 7692) */
 };
 
 /* Supported WebSocket Extensions */
-static struct ws_extension {
+static struct ws_extension
+{
     const char *name;
     unsigned flag;
 } extensions[] = {
-#ifdef HAVE_ZLIB
+# ifdef HAVE_ZLIB
     { "permessage-deflate", EXT_PMCE_DEFLATE },
-#endif
-    { NULL, 0 }
+# endif
+    { NULL,                 0                }
 };
 
-
 /* WebSocket channel context */
-struct ws_context {
+struct ws_context
+{
     wslay_event_context_ptr event;
     const char *accept_key;
     const char *protocol;
     ws_data_callback *data_cb;
     struct buf log;
     int log_tail;
-    unsigned ext;                    /* Bitmask of negotiated extension(s) */
+    unsigned ext; /* Bitmask of negotiated extension(s) */
 
-    struct protstream *pin;          /* Input data stream */
+    struct protstream *pin; /* Input data stream */
 
     union {
-        struct {
-            void *zstrm;             /* Zlib decompression context */
-            unsigned no_context : 1;
+        struct
+        {
+            void *zstrm; /* Zlib decompression context */
+            unsigned no_context:1;
             unsigned max_wbits;
         } deflate;
     } pmce;
 };
 
 static int ws_timeout;
-
 
 static const char *wslay_opcode_as_str(enum wslay_opcode opcode)
 {
@@ -159,7 +158,8 @@ static const char *wslay_error_as_str(enum wslay_error err_code)
 }
 
 static ssize_t recv_cb(wslay_event_context_ptr ev,
-                       uint8_t *buf, size_t len,
+                       uint8_t *buf,
+                       size_t len,
                        int flags __attribute__((unused)),
                        void *user_data)
 {
@@ -182,7 +182,7 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
 
         /* XXX  Wslay seems to treat any other error as catastrophic and
            sends a close frame on its own, bypassing the logic in ws_input().
-           Always return WOULDBLOCK here so we can return appropriate 
+           Always return WOULDBLOCK here so we can return appropriate
            status codes and message strings in ws_input().
         */
         wslay_event_set_error(ev, WSLAY_ERR_WOULDBLOCK);
@@ -195,14 +195,20 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
 }
 
 static ssize_t send_cb(wslay_event_context_ptr ev,
-                       const uint8_t *data, size_t len,
-                       int flags, void *user_data)
+                       const uint8_t *data,
+                       size_t len,
+                       int flags,
+                       void *user_data)
 {
     struct transaction_t *txn = (struct transaction_t *) user_data;
-    int last_chunk = (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
+    int last_chunk =
+        (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
 
-    int r = txn->conn->resp_body_chunk(txn, (const char *) data, len,
-                                       last_chunk, NULL /* md5ctx */);
+    int r = txn->conn->resp_body_chunk(txn,
+                                       (const char *) data,
+                                       len,
+                                       last_chunk,
+                                       NULL /* md5ctx */);
 
     xsyslog(LOG_DEBUG, "WS send", "len=<%zu>, r=<%d>", len, r);
 
@@ -214,9 +220,8 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     return len;
 }
 
-
-#ifdef HAVE_ZLIB
-#include <zlib.h>
+# ifdef HAVE_ZLIB
+#  include <zlib.h>
 
 static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
 {
@@ -230,7 +235,9 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
     while ((token = tok_next(params))) {
         char *value = strchr(token, '=');
 
-        if (value) *value++ = '\0';
+        if (value) {
+            *value++ = '\0';
+        }
 
         if (!strcmp(token, "server_no_context_takeover")) {
             ctx->pmce.deflate.no_context = 1;
@@ -240,26 +247,41 @@ static void ws_zlib_init(struct transaction_t *txn, tok_t *params)
         }
         else if (!strcmp(token, "server_max_window_bits")) {
             if (value) {
-                if (*value == '"') value++;
+                if (*value == '"') {
+                    value++;
+                }
                 ctx->pmce.deflate.max_wbits = atoi(value);
             }
-            else ctx->pmce.deflate.max_wbits = 0;  /* force error */
+            else {
+                ctx->pmce.deflate.max_wbits = 0; /* force error */
+            }
         }
         else if (!strcmp(token, "client_max_window_bits")) {
             if (value) {
-                if (*value == '"') value++;
+                if (*value == '"') {
+                    value++;
+                }
                 client_max_wbits = atoi(value);
             }
         }
     }
 
     /* (Re)configure compression context for raw deflate */
-    if (txn->zstrm) deflateEnd(txn->zstrm);
-    else txn->zstrm = xzmalloc(sizeof(z_stream));
+    if (txn->zstrm) {
+        deflateEnd(txn->zstrm);
+    }
+    else {
+        txn->zstrm = xzmalloc(sizeof(z_stream));
+    }
 
-    if (deflateInit2(txn->zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+    if (deflateInit2(txn->zstrm,
+                     Z_DEFAULT_COMPRESSION,
+                     Z_DEFLATED,
                      -ctx->pmce.deflate.max_wbits,
-                     MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
+                     MAX_MEM_LEVEL,
+                     Z_DEFAULT_STRATEGY)
+        != Z_OK)
+    {
         free(txn->zstrm);
         txn->zstrm = NULL;
     }
@@ -287,7 +309,8 @@ static void ws_zlib_done(struct ws_context *ctx)
 }
 
 static int zlib_decompress(struct transaction_t *txn,
-                           const char *buf, unsigned len)
+                           const char *buf,
+                           unsigned len)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     z_stream *zstrm = ctx->pmce.deflate.zstrm;
@@ -324,14 +347,18 @@ static int zlib_decompress(struct transaction_t *txn,
 
     return 0;
 }
-#else /* !HAVE_ZLIB */
+# else /* !HAVE_ZLIB */
 
-#define MAX_WBITS 0
+#  define MAX_WBITS 0
 
 static void ws_zlib_init(struct transaction_t *txn __attribute__((unused)),
-                         tok_t *params __attribute__((unused))) { }
+                         tok_t *params __attribute__((unused)))
+{
+}
 
-static void ws_zlib_done(struct ws_context *ctx __attribute__((unused))) { }
+static void ws_zlib_done(struct ws_context *ctx __attribute__((unused)))
+{
+}
 
 static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
                            const char *buf __attribute__((unused)),
@@ -340,24 +367,27 @@ static int zlib_decompress(struct transaction_t *txn __attribute__((unused)),
     fatal("zlib_decompress() called, but no Zlib", EX_SOFTWARE);
 }
 
-#endif /* HAVE_ZLIB */
+# endif /* HAVE_ZLIB */
 
-
-static void on_frame_recv_start_cb(wslay_event_context_ptr ev __attribute__((unused)),
-                                   const struct wslay_event_on_frame_recv_start_arg *arg,
-                                   void *user_data __attribute__((unused)))
+static void on_frame_recv_start_cb(
+    wslay_event_context_ptr ev __attribute__((unused)),
+    const struct wslay_event_on_frame_recv_start_arg *arg,
+    void *user_data __attribute__((unused)))
 {
     xsyslog(LOG_DEBUG, "WS frame start",
             "opcode=<%s>, rsv=<0x%x>, fin=<0x%x>, length=<%ld>",
            wslay_opcode_as_str(arg->opcode), arg->rsv, arg->fin, arg->payload_length);
 }
 
-#define COMP_FAILED_ERR    "Compressing message failed"
-#define DECOMP_FAILED_ERR  "Decompressing message failed"
+# define COMP_FAILED_ERR "Compressing message failed"
+# define DECOMP_FAILED_ERR "Decompressing message failed"
 
-static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
-                     struct wslay_event_msg *msgarg, uint8_t *rsv,
-                     const char **pmce_str, const char **err_msg)
+static int queue_msg(struct transaction_t *txn,
+                     struct buf *outbuf,
+                     struct wslay_event_msg *msgarg,
+                     uint8_t *rsv,
+                     const char **pmce_str,
+                     const char **err_msg)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
 
@@ -365,11 +395,14 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
     if (ctx->ext & EXT_PMCE_DEFLATE) {
         int r = zlib_compress(txn,
                               ctx->pmce.deflate.no_context ? COMPRESS_START : 0,
-                              buf_base(outbuf), buf_len(outbuf));
+                              buf_base(outbuf),
+                              buf_len(outbuf));
         if (r) {
             syslog(LOG_ERR, "queue_response(): zlib_compress() failed");
 
-            if (err_msg) *err_msg = COMP_FAILED_ERR;
+            if (err_msg) {
+                *err_msg = COMP_FAILED_ERR;
+            }
             return WSLAY_CODE_INTERNAL_SERVER_ERROR;
         }
 
@@ -378,7 +411,9 @@ static int queue_msg(struct transaction_t *txn, struct buf *outbuf,
         buf_move(outbuf, &txn->zbuf);
 
         *rsv |= WSLAY_RSV1_BIT;
-        if (pmce_str) *pmce_str = "deflate";
+        if (pmce_str) {
+            *pmce_str = "deflate";
+        }
     }
 
     /* Queue the server response */
@@ -436,8 +471,11 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
-    buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
-               wslay_opcode_as_str(arg->opcode), arg->rsv, arg->msg_length);
+    buf_printf(&ctx->log,
+               "opcode=%s; rsv=0x%x; length=%ld",
+               wslay_opcode_as_str(arg->opcode),
+               arg->rsv,
+               arg->msg_length);
     if (pmce_str) {
         buf_printf(&ctx->log, " [%ld]; pmce=%s", buf_len(&inbuf), pmce_str);
         pmce_str = NULL;
@@ -445,8 +483,10 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     switch (arg->opcode) {
     case WSLAY_CONNECTION_CLOSE:
-        buf_printf(&ctx->log, "; status=%d; msg='%s'", arg->status_code,
-                   buf_len(&inbuf) ? buf_cstring(&inbuf)+2 : "");
+        buf_printf(&ctx->log,
+                   "; status=%d; msg='%s'",
+                   arg->status_code,
+                   buf_len(&inbuf) ? buf_cstring(&inbuf) + 2 : "");
         txn->flags.conn = CONN_CLOSE;
         break;
 
@@ -460,12 +500,18 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             int niov = 0;
 
             buf_reset(&txn->buf);
-            buf_printf(&txn->buf, "<" TIME_T_FMT "<", time(NULL));  /* timestamp */
-            WRITEV_ADD_TO_IOVEC(iov, niov,
-                                buf_base(&txn->buf), buf_len(&txn->buf));
+            buf_printf(&txn->buf,
+                       "<" TIME_T_FMT "<",
+                       time(NULL)); /* timestamp */
+            WRITEV_ADD_TO_IOVEC(iov,
+                                niov,
+                                buf_base(&txn->buf),
+                                buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                syslog(LOG_NOTICE,
+                       "IONOTICE: failed to write telemetry for %s",
+                       httpd_userid);
             }
         }
 
@@ -497,12 +543,18 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
             int niov = 0;
 
             buf_reset(&txn->buf);
-            buf_printf(&txn->buf, ">" TIME_T_FMT ">", time(NULL));  /* timestamp */
-            WRITEV_ADD_TO_IOVEC(iov, niov,
-                                buf_base(&txn->buf), buf_len(&txn->buf));
+            buf_printf(&txn->buf,
+                       ">" TIME_T_FMT ">",
+                       time(NULL)); /* timestamp */
+            WRITEV_ADD_TO_IOVEC(iov,
+                                niov,
+                                buf_base(&txn->buf),
+                                buf_len(&txn->buf));
             WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
             if (writev(logfd, iov, niov) < 0) {
-                syslog(LOG_NOTICE, "IONOTICE: failed to write telemetry for %s", httpd_userid);
+                syslog(LOG_NOTICE,
+                       "IONOTICE: failed to write telemetry for %s",
+                       httpd_userid);
             }
         }
 
@@ -513,20 +565,26 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         /* Log the server response */
         buf_printf(&ctx->log,
                    ") => \"Success\" (opcode=%s; rsv=0x%x; length=%ld",
-                   wslay_opcode_as_str(msgarg.opcode), rsv, msgarg.msg_length);
+                   wslay_opcode_as_str(msgarg.opcode),
+                   rsv,
+                   msgarg.msg_length);
         if (pmce_str) {
             buf_printf(&ctx->log, " [%ld]; pmce=%s", orig_len, pmce_str);
         }
 
         /* close out the telemetry log for this action */
-        if (logfd >= 0) close(logfd);
+        if (logfd >= 0) {
+            close(logfd);
+        }
         logfd = -1;
 
         break;
     }
 
-  err:
-    if (logfd >= 0) close(logfd);
+err:
+    if (logfd >= 0) {
+        close(logfd);
+    }
 
     if (err_code) {
         size_t err_msg_len = strlen(err_msg);
@@ -538,21 +596,26 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
         buf_printf(&ctx->log,
                    ") => \"Fail\" (opcode=%s; rsv=0x%x; length=%ld"
                    "; status=%d; msg='%s'",
-                   wslay_opcode_as_str(WSLAY_CONNECTION_CLOSE), rsv, err_msg_len,
-                   err_code, err_msg);
+                   wslay_opcode_as_str(WSLAY_CONNECTION_CLOSE),
+                   rsv,
+                   err_msg_len,
+                   err_code,
+                   err_msg);
     }
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
-    buf_printf(&ctx->log, ") [timing: cmd=%f net=%f total=%f]",
-               cmdtime, nettime, cmdtime + nettime);
+    buf_printf(&ctx->log,
+               ") [timing: cmd=%f net=%f total=%f]",
+               cmdtime,
+               nettime,
+               cmdtime + nettime);
 
     syslog(LOG_INFO, "%s", buf_cstring(&ctx->log));
 
     buf_free(&inbuf);
     buf_free(&outbuf);
 }
-
 
 HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
                    struct buf *serverinfo)
@@ -564,7 +627,6 @@ HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
     return (ws_timeout > 0);
 }
 
-
 /* Parse Sec-WebSocket-Extensions header(s) for interesting extensions */
 static void parse_extensions(struct transaction_t *txn)
 {
@@ -575,18 +637,21 @@ static void parse_extensions(struct transaction_t *txn)
 
     /* Look for interesting extensions.  Unknown == ignore */
     for (i = 0; ext_hdr && ext_hdr[i]; i++) {
-        tok_t ext = TOK_INITIALIZER(ext_hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+        tok_t ext =
+            TOK_INITIALIZER(ext_hdr[i], ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
         char *token;
 
         while ((token = tok_next(&ext))) {
             struct ws_extension *extp = extensions;
             tok_t param;
 
-            tok_initm(&param, token, ";", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            tok_initm(&param, token, ";", TOK_TRIMLEFT | TOK_TRIMRIGHT);
             token = tok_next(&param);
 
             /* Locate a matching extension */
-            while (extp->name && strcmp(token, extp->name)) extp++;
+            while (extp->name && strcmp(token, extp->name)) {
+                extp++;
+            }
 
             /* Check if client wants per-message compression */
             if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
@@ -607,13 +672,15 @@ static void parse_extensions(struct transaction_t *txn)
     }
 }
 
-
 static void _end_channel(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
-    const char *msg = txn->conn->close_str ? txn->conn->close_str : txn->error.desc;
+    const char *msg =
+        txn->conn->close_str ? txn->conn->close_str : txn->error.desc;
 
-    if (!ctx) return;
+    if (!ctx) {
+        return;
+    }
 
     wslay_event_context_ptr ev = ctx->event;
 
@@ -621,13 +688,17 @@ static void _end_channel(struct transaction_t *txn)
     if (wslay_event_get_write_enabled(ev) && !wslay_event_get_close_sent(ev)) {
         int r;
 
-        if (!msg) msg = "Server unavailable";
+        if (!msg) {
+            msg = "Server unavailable";
+        }
 
         xsyslog(LOG_DEBUG, "WS close", "msg=<%s>", msg);
 
         syslog(LOG_DEBUG, "wslay_event_queue_close(%s)", msg);
-        r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                    (uint8_t *) msg, strlen(msg));
+        r = wslay_event_queue_close(ev,
+                                    WSLAY_CODE_GOING_AWAY,
+                                    (uint8_t *) msg,
+                                    strlen(msg));
         if (r) {
             xsyslog(LOG_ERR, "WS close failed",
                     "err=<%s>", wslay_error_as_str(r));
@@ -653,19 +724,18 @@ static void _end_channel(struct transaction_t *txn)
 }
 
 HIDDEN int ws_start_channel(struct transaction_t *txn,
-                            const char *protocol, ws_data_callback *data_cb)
+                            const char *protocol,
+                            ws_data_callback *data_cb)
 {
     int r, resp_code;
     const char **hdr, *accept_key = NULL;
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
-        recv_cb,
-        send_cb,
-        NULL, /* genmask                          */
-        NULL, /* on_frame_recv_start (debug only) */
-        NULL, /* on_frame_recv_chunk              */
-        NULL, /* on_frame_recv_end                */
+        recv_cb,       send_cb, NULL, /* genmask                          */
+        NULL,                         /* on_frame_recv_start (debug only) */
+        NULL,                         /* on_frame_recv_chunk              */
+        NULL,                         /* on_frame_recv_end                */
         on_msg_recv_cb
     };
 
@@ -695,7 +765,8 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         }
 
         for (i = 0; !found && hdr[i]; i++) {
-            tok_t tok = TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            tok_t tok =
+                TOK_INITIALIZER(hdr[i], ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
             char *token;
 
             while ((token = tok_next(&tok))) {
@@ -735,11 +806,14 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
         buf_appendcstr(&txn->buf, WS_GUID);
         xsha1((u_char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
 
-        buf_ensure(&txn->buf, WS_AKEY_LEN+1);
+        buf_ensure(&txn->buf, WS_AKEY_LEN + 1);
         accept_key = buf_base(&txn->buf);
 
-        r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
-                          (char *) accept_key, WS_AKEY_LEN+1, NULL);
+        r = sasl_encode64((char *) sha1buf,
+                          SHA1_DIGEST_LENGTH,
+                          (char *) accept_key,
+                          WS_AKEY_LEN + 1,
+                          NULL);
         if (r != SASL_OK) {
             xsyslog(LOG_WARNING, "WS base64 encode failed", "r=<%d>", r);
         }
@@ -780,18 +854,24 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
 
     /* Add client data */
     buf_printf(&ctx->log, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
+    if (httpd_userid) {
+        buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
+    }
     if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
         buf_printf(&ctx->log, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client"))) {
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+        }
+        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With"))) {
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
+        }
     }
 
     /* Add request-line */
-    buf_printf(&ctx->log, "; \"WebSocket/%s via %s\" (",
-               protocol ? protocol : "echo" , txn->req_line.ver);
+    buf_printf(&ctx->log,
+               "; \"WebSocket/%s via %s\" (",
+               protocol ? protocol : "echo",
+               txn->req_line.ver);
     if ((hdr = spool_getheader(txn->req_hdrs, ":stream-id"))) {
         buf_printf(&ctx->log, "stream-id=%s; ", hdr[0]);
     }
@@ -813,18 +893,25 @@ HIDDEN int ws_start_channel(struct transaction_t *txn,
     /* Register service/module as a WebSocket */
     const struct namespace_t *namespace = txn->req_tgt.namespace;
     struct buf service = BUF_INITIALIZER;
-    buf_printf(&service, "%s%s", config_ident,
-               namespace->well_known ? strrchr(namespace->well_known, '/') :
-               namespace->prefix);
-    r = proc_register(&httpd_proc_handle, 0,
-                      buf_cstring(&service), txn->conn->clienthost,
-                      httpd_userid, txn->req_tgt.path, "WS");
-    if (r) fatal("unable to register process", EX_IOERR);
+    buf_printf(&service,
+               "%s%s",
+               config_ident,
+               namespace->well_known ? strrchr(namespace->well_known, '/')
+                                     : namespace->prefix);
+    r = proc_register(&httpd_proc_handle,
+                      0,
+                      buf_cstring(&service),
+                      txn->conn->clienthost,
+                      httpd_userid,
+                      txn->req_tgt.path,
+                      "WS");
+    if (r) {
+        fatal("unable to register process", EX_IOERR);
+    }
     buf_free(&service);
 
     return 0;
 }
-
 
 HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 {
@@ -844,14 +931,14 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
     }
 
     if (ctx->ext & EXT_PMCE_DEFLATE) {
-        simple_hdr(txn, "Sec-WebSocket-Extensions",
+        simple_hdr(txn,
+                   "Sec-WebSocket-Extensions",
                    "permessage-deflate%s; server_max_window_bits=%u",
-                   ctx->pmce.deflate.no_context ?
-                   "; server_no_context_takeover" : "",
+                   ctx->pmce.deflate.no_context ? "; server_no_context_takeover"
+                                                : "",
                    ctx->pmce.deflate.max_wbits);
     }
 }
-
 
 static void ws_output(struct transaction_t *txn)
 {
@@ -880,7 +967,6 @@ static void ws_output(struct transaction_t *txn)
         txn->flags.conn = CONN_CLOSE;
     }
 }
-
 
 HIDDEN void ws_input(struct transaction_t *txn)
 {

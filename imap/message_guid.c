@@ -70,7 +70,6 @@
 
 /* ====================================================================== */
 
-
 /* Public interface */
 
 /* message_guid_generate() ***********************************************
@@ -80,7 +79,8 @@
  ************************************************************************/
 
 EXPORTED void message_guid_generate(struct message_guid *guid,
-                           const char *msg_base, unsigned long msg_len)
+                                    const char *msg_base,
+                                    unsigned long msg_len)
 {
     guid->status = GUID_NULL;
     memset(guid->value, 0, MESSAGE_GUID_SIZE);
@@ -95,7 +95,8 @@ EXPORTED void message_guid_generate(struct message_guid *guid,
  *
  ************************************************************************/
 
-EXPORTED void message_guid_copy(struct message_guid *dst, const struct message_guid *src)
+EXPORTED void message_guid_copy(struct message_guid *dst,
+                                const struct message_guid *src)
 {
     memcpy(dst, src, sizeof(struct message_guid));
 }
@@ -138,7 +139,8 @@ EXPORTED int message_guid_cmp(const struct message_guid *g1,
  *
  ************************************************************************/
 
-EXPORTED unsigned long message_guid_hash(const struct message_guid *guid, int hash_size)
+EXPORTED unsigned long message_guid_hash(const struct message_guid *guid,
+                                         int hash_size)
 {
     int i;
     unsigned long result = 0;
@@ -148,12 +150,15 @@ EXPORTED unsigned long message_guid_hash(const struct message_guid *guid, int ha
 
     if (hash_size > 1024) {
         /* Pair up chars to get 16 bit values */
-        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2)
-            result += (s[i] << 8) + s[i+1];
+        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2) {
+            result += (s[i] << 8) + s[i + 1];
+        }
     }
-    else
-        for (i = 0; i < MESSAGE_GUID_SIZE; i++)
+    else {
+        for (i = 0; i < MESSAGE_GUID_SIZE; i++) {
             result += s[i];
+        }
+    }
 
     return (result % hash_size);
 }
@@ -180,11 +185,12 @@ EXPORTED int message_guid_isnull(const struct message_guid *guid)
 {
     if (guid->status == GUID_UNKNOWN) {
         /* allow internal recalculation while still being const */
-        struct message_guid *backdoor = (struct message_guid *)guid;
+        struct message_guid *backdoor = (struct message_guid *) guid;
         const unsigned char *p = guid->value;
         int i;
 
-        for (i = 0; (i < MESSAGE_GUID_SIZE) && !*p++; i++);
+        for (i = 0; (i < MESSAGE_GUID_SIZE) && !*p++; i++)
+            ;
         backdoor->status = (i == MESSAGE_GUID_SIZE) ? GUID_NULL : GUID_NONNULL;
     }
 
@@ -219,7 +225,6 @@ EXPORTED const char *message_guid_import(struct message_guid *guid,
     return buf + MESSAGE_GUID_SIZE;
 }
 
-
 /* Routines for manipulating text value (ASCII hex encoding) */
 
 /* message_guid_encode() *************************************************
@@ -231,16 +236,17 @@ EXPORTED const char *message_guid_import(struct message_guid *guid,
 
 EXPORTED const char *message_guid_encode(const struct message_guid *guid)
 {
-    static char text[2*MESSAGE_GUID_SIZE+1];
+    static char text[2 * MESSAGE_GUID_SIZE + 1];
     int r = bin_to_hex(&guid->value, MESSAGE_GUID_SIZE, text, BH_LOWER);
-    assert(r == 2*MESSAGE_GUID_SIZE);
+    assert(r == 2 * MESSAGE_GUID_SIZE);
     return text;
 }
 
-EXPORTED const char *message_guid_encode_short(const struct message_guid *guid, size_t len)
+EXPORTED const char *message_guid_encode_short(const struct message_guid *guid,
+                                               size_t len)
 {
-    assert(len > 0 && len < MESSAGE_GUID_SIZE*2);
-    char *backdoor = (char *)message_guid_encode(guid);
+    assert(len > 0 && len < MESSAGE_GUID_SIZE * 2);
+    char *backdoor = (char *) message_guid_encode(guid);
     backdoor[len] = '\0';
     return backdoor;
 }

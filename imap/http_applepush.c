@@ -93,9 +93,12 @@ struct namespace_t namespace_applepush = {
 
 static void applepush_init(struct buf *serverinfo __attribute__((unused)))
 {
-    namespace_applepush.enabled = apns_enabled &&
-        ((namespace_calendar.enabled && config_getstring(IMAPOPT_APS_TOPIC_CALDAV)) ||
-         (namespace_addressbook.enabled && config_getstring(IMAPOPT_APS_TOPIC_CARDDAV)));
+    namespace_applepush.enabled =
+        apns_enabled
+        && ((namespace_calendar.enabled
+             && config_getstring(IMAPOPT_APS_TOPIC_CALDAV))
+            || (namespace_addressbook.enabled
+                && config_getstring(IMAPOPT_APS_TOPIC_CARDDAV)));
 }
 
 static int meth_get_applepush(struct transaction_t *txn,
@@ -112,55 +115,69 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* unpack query params */
     vals = hash_lookup("token", &txn->req_qparams);
-    if (!vals) goto done;
+    if (!vals) {
+        goto done;
+    }
     token = vals->s;
 
     vals = hash_lookup("key", &txn->req_qparams);
-    if (!vals) goto done;
+    if (!vals) {
+        goto done;
+    }
     key = vals->s;
 
     /* decompose key to userid + mailbox uniqueid */
     keyparts = strarray_split(key, "/", 0);
-    if (strarray_size(keyparts) != 2)
+    if (strarray_size(keyparts) != 2) {
         goto done;
+    }
     mailbox_userid = strarray_nth(keyparts, 0);
     mailbox_uniqueid = strarray_nth(keyparts, 1);
 
     /* lookup mailbox */
-    mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid,
+    mboxname = mboxlist_find_uniqueid(mailbox_uniqueid,
+                                      mailbox_userid,
                                       httpd_authstate);
     if (!mboxname) {
         syslog(LOG_ERR,
                "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",
-               mailbox_uniqueid, mailbox_userid);
+               mailbox_uniqueid,
+               mailbox_userid);
         goto done;
     }
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r || !mbentry) {
-        syslog(LOG_ERR, "meth_get_applepush: mboxlist_lookup(%s): %s",
-               mboxname, error_message(r));
+        syslog(LOG_ERR,
+               "meth_get_applepush: mboxlist_lookup(%s): %s",
+               mboxname,
+               error_message(r));
         goto done;
     }
 
     /* mailbox must be calendar or addressbook */
     mbtype = mbtype_isa(mbentry->mbtype);
-    if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK)
+    if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK) {
         goto done;
+    }
 
     /* check if auth user has access to mailbox */
     int myrights = httpd_myrights(httpd_authstate, mbentry);
     if (!(myrights & ACL_READ)) {
-        syslog(LOG_ERR, "meth_get_applepush: no read access to %s for %s (%s)",
-               mboxname, httpd_userid, mbentry->acl);
+        syslog(LOG_ERR,
+               "meth_get_applepush: no read access to %s for %s (%s)",
+               mboxname,
+               httpd_userid,
+               mbentry->acl);
         goto done;
     }
 
-    aps_topic = config_getstring(mbtype_isa(mbtype) == MBTYPE_CALENDAR ?
-                                 IMAPOPT_APS_TOPIC_CALDAV :
-                                 IMAPOPT_APS_TOPIC_CARDDAV);
+    aps_topic = config_getstring(mbtype_isa(mbtype) == MBTYPE_CALENDAR
+                                     ? IMAPOPT_APS_TOPIC_CALDAV
+                                     : IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_ERR, "aps_topic_%s not configured, can't subscribe",
+        syslog(LOG_ERR,
+               "aps_topic_%s not configured, can't subscribe",
                mbtype_isa(mbtype) == MBTYPE_CALENDAR ? "caldav" : "carddav");
         goto done;
     }
@@ -169,9 +186,15 @@ static int meth_get_applepush(struct transaction_t *txn,
 
     /* notify! */
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE_DAV);
-    mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
-                                       mailbox_userid, mailbox_uniqueid, mbtype,
-                                       config_getduration(IMAPOPT_APS_EXPIRY, 'd'));
+    mboxevent_set_applepushservice_dav(
+        mboxevent,
+        aps_topic,
+        token,
+        httpd_userid,
+        mailbox_userid,
+        mailbox_uniqueid,
+        mbtype,
+        config_getduration(IMAPOPT_APS_EXPIRY, 'd'));
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
@@ -179,8 +202,12 @@ static int meth_get_applepush(struct transaction_t *txn,
 
 done:
     mboxlist_entry_free(&mbentry);
-    if (mboxname) free(mboxname);
-    if (keyparts) strarray_free(keyparts);
+    if (mboxname) {
+        free(mboxname);
+    }
+    if (keyparts) {
+        strarray_free(keyparts);
+    }
 
     return rc;
 }
@@ -213,11 +240,11 @@ static int meth_post_applepush(struct transaction_t *txn, void *params)
     return meth_get_applepush(txn, params);
 }
 
-
 /* Apple push notifications
    https://github.com/apple/ccs-calendarserver/blob/master/doc/Extensions/caldav-pubsubdiscovery.txt
 */
-int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
+int propfind_push_transports(const xmlChar *name,
+                             xmlNsPtr ns,
                              struct propfind_ctx *fctx,
                              xmlNodePtr prop __attribute__((unused)),
                              xmlNodePtr resp,
@@ -226,13 +253,17 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
 {
     xmlNodePtr node, transport, subscription_url;
 
-    assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ||
-           fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
+    assert(fctx->req_tgt->namespace->id == URL_NS_CALENDAR
+           || fctx->req_tgt->namespace->id == URL_NS_ADDRESSBOOK);
 
-    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_applepush.enabled) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Only on home sets */
-    if (fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     if (!propstat) {
         /* Prescreen "property" request - add namespace for environment */
@@ -241,58 +272,80 @@ int propfind_push_transports(const xmlChar *name, xmlNsPtr ns,
     }
 
     const char *aps_topic =
-        config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
-                         IMAPOPT_APS_TOPIC_CALDAV : IMAPOPT_APS_TOPIC_CARDDAV);
+        config_getstring(fctx->req_tgt->namespace->id == URL_NS_CALENDAR
+                             ? IMAPOPT_APS_TOPIC_CALDAV
+                             : IMAPOPT_APS_TOPIC_CARDDAV);
     if (!aps_topic) {
-        syslog(LOG_DEBUG, "aps_topic_%s not configured,"
+        syslog(LOG_DEBUG,
+               "aps_topic_%s not configured,"
                " can't build CS:push-transports response",
-               fctx->req_tgt->namespace->id == URL_NS_CALENDAR ?
-               "caldav" : "carddav");
+               fctx->req_tgt->namespace->id == URL_NS_CALENDAR ? "caldav"
+                                                               : "carddav");
         return HTTP_NOT_FOUND;
     }
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_CS], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
+    node = xml_add_prop(HTTP_OK,
+                        fctx->ns[NS_CS],
+                        &propstat[PROPSTAT_OK],
+                        name,
+                        ns,
+                        NULL,
+                        0);
 
     transport = xmlNewChild(node, NULL, BAD_CAST "transport", NULL);
     xmlNewProp(transport, BAD_CAST "type", BAD_CAST "APSD");
 
     subscription_url =
         xmlNewChild(transport, NULL, BAD_CAST "subscription-url", NULL);
-    xml_add_href(subscription_url, fctx->ns[NS_DAV], namespace_applepush.prefix);
+    xml_add_href(subscription_url,
+                 fctx->ns[NS_DAV],
+                 namespace_applepush.prefix);
 
     xmlNewChild(transport, NULL, BAD_CAST "apsbundleid", BAD_CAST aps_topic);
 
     // XXX from config, I think?
     ensure_ns(fctx->ns, NS_MOBME, resp->parent, XML_NS_MOBME, "MM");
-    xmlNewChild(transport, fctx->ns[NS_MOBME],
-                BAD_CAST "env", BAD_CAST "PRODUCTION");
+    xmlNewChild(transport,
+                fctx->ns[NS_MOBME],
+                BAD_CAST "env",
+                BAD_CAST "PRODUCTION");
 
     // XXX from config
-    xmlNewChild(transport, NULL,
-                BAD_CAST "refresh-interval", BAD_CAST "86400");
+    xmlNewChild(transport, NULL, BAD_CAST "refresh-interval", BAD_CAST "86400");
 
     return 0;
 }
 
-int propfind_pushkey(const xmlChar *name, xmlNsPtr ns,
+int propfind_pushkey(const xmlChar *name,
+                     xmlNsPtr ns,
                      struct propfind_ctx *fctx,
                      xmlNodePtr prop __attribute__((unused)),
                      xmlNodePtr resp __attribute__((unused)),
                      struct propstat propstat[],
                      void *rock __attribute__((unused)))
 {
-    if (!namespace_applepush.enabled) return HTTP_NOT_FOUND;
+    if (!namespace_applepush.enabled) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Only on collections */
-    if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
+    if (!fctx->req_tgt->collection) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* key is userid and mailbox uniqueid */
     buf_reset(&fctx->buf);
-    buf_printf(&fctx->buf, "%s/%s",
-               fctx->req_tgt->userid, mailbox_uniqueid(fctx->mailbox));
-    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                 name, ns, BAD_CAST buf_cstring(&fctx->buf), 0);
+    buf_printf(&fctx->buf,
+               "%s/%s",
+               fctx->req_tgt->userid,
+               mailbox_uniqueid(fctx->mailbox));
+    xml_add_prop(HTTP_OK,
+                 fctx->ns[NS_DAV],
+                 &propstat[PROPSTAT_OK],
+                 name,
+                 ns,
+                 BAD_CAST buf_cstring(&fctx->buf),
+                 0);
 
     return 0;
 }

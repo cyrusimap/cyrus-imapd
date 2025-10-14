@@ -41,7 +41,6 @@
  *
  */
 
-
 #include <config.h>
 
 #include <string.h>
@@ -54,15 +53,20 @@ static int parse_date(json_t *json, unsigned utc)
     const char *s = NULL;
     struct tm date;
 
-    if (!json_is_string(json)) return 0;
+    if (!json_is_string(json)) {
+        return 0;
+    }
 
     /* parse full-date and partial-time up to time-secfrac */
     s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%S", &date);
-    if (!s) return 0;
+    if (!s) {
+        return 0;
+    }
 
     /* parse time-secfrac */
     if (*s == '.') {
-        while (Uisdigit(*(++s)));
+        while (Uisdigit(*(++s)))
+            ;
     }
 
     if (utc) {
@@ -71,7 +75,9 @@ static int parse_date(json_t *json, unsigned utc)
     }
 
     /* parse time-numoffset */
-    if (*s == '-' || *s == '+') s++;
+    if (*s == '-' || *s == '+') {
+        s++;
+    }
     s = strptime(s, "%H:%M", &date);
 
     return (s && *s == '\0');
@@ -92,8 +98,10 @@ int json_array_find(json_t *array, const char *needle)
     size_t i;
     json_t *val;
 
-    json_array_foreach(array, i, val) {
-        if (!strcmp(needle, json_string_value(val))) return i;
+    json_array_foreach (array, i, val) {
+        if (!strcmp(needle, json_string_value(val))) {
+            return i;
+        }
     }
 
     return -1;
@@ -101,8 +109,10 @@ int json_array_find(json_t *array, const char *needle)
 
 /* Get the property with the given key, if it exists.
    Otherwise, create is with the given json_pack() args */
-json_t *json_object_get_vanew(json_t *obj, const char *key,
-                              const char *fmt, ...)
+json_t *json_object_get_vanew(json_t *obj,
+                              const char *key,
+                              const char *fmt,
+                              ...)
 {
     json_t *val = json_object_get(obj, key);
 

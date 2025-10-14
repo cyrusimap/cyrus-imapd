@@ -47,7 +47,7 @@
 #include <syslog.h>
 #include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "dynarray.h"
@@ -70,23 +70,8 @@ extern const struct search_engine xapian_search_engine;
 #endif
 
 static const struct search_engine default_search_engine = {
-    "default",
-    0,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL
+    "default", 0,    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL,      NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
 EXPORTED const struct search_engine *search_engine(void)
@@ -105,58 +90,58 @@ EXPORTED const struct search_engine *search_engine(void)
     }
 }
 
-EXPORTED struct search_snippet_markup default_snippet_markup = {
-    "<b>", "</b>", "..."
-};
+EXPORTED struct search_snippet_markup default_snippet_markup = { "<b>",
+                                                                 "</b>",
+                                                                 "..." };
 
 EXPORTED const char *search_part_as_string(int part)
 {
-    static const char *const names[SEARCH_NUM_PARTS] = {
-        NULL, // ANY
-        "FROM",
-        "TO",
-        "CC",
-        "BCC",
-        "SUBJECT",
-        "LISTID",
-        "TYPE",
-        "HEADERS",
-        "BODY",
-        "LOCATION",
-        "ATTACHMENTNAME",
-        "ATTACHMENTBODY",
-        "DELIVEREDTO",
-        "LANGUAGE",
-        "PRIORITY",
-        "MESSAGEID",
-        "REFERENCES",
-        "INREPLYTO"
-    };
+    static const char *const names[SEARCH_NUM_PARTS] = { NULL, // ANY
+                                                         "FROM",
+                                                         "TO",
+                                                         "CC",
+                                                         "BCC",
+                                                         "SUBJECT",
+                                                         "LISTID",
+                                                         "TYPE",
+                                                         "HEADERS",
+                                                         "BODY",
+                                                         "LOCATION",
+                                                         "ATTACHMENTNAME",
+                                                         "ATTACHMENTBODY",
+                                                         "DELIVEREDTO",
+                                                         "LANGUAGE",
+                                                         "PRIORITY",
+                                                         "MESSAGEID",
+                                                         "REFERENCES",
+                                                         "INREPLYTO" };
 
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
 }
 
 EXPORTED int search_part_is_body(int part)
 {
-    return part == SEARCH_PART_BODY ||
-           part == SEARCH_PART_LOCATION ||
-           part == SEARCH_PART_ATTACHMENTBODY;
+    return part == SEARCH_PART_BODY || part == SEARCH_PART_LOCATION
+           || part == SEARCH_PART_ATTACHMENTBODY;
 }
 
-
-EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
+EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox,
+                                               int opts)
 {
-    if (!mailbox) return NULL;
+    if (!mailbox) {
+        return NULL;
+    }
 
     const struct search_engine *se = search_engine();
-    return (se->begin_search ?
-            se->begin_search(mailbox, opts) : NULL);
+    return (se->begin_search ? se->begin_search(mailbox, opts) : NULL);
 }
 
 EXPORTED void search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = search_engine();
-    if (se->end_search) se->end_search(bx);
+    if (se->end_search) {
+        se->end_search(bx);
+    }
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
@@ -170,8 +155,9 @@ EXPORTED search_text_receiver_t *search_begin_update(int verbose)
 static int search_batch_size(void)
 {
     const struct search_engine *se = search_engine();
-    return (se->flags & SEARCH_FLAG_CAN_BATCH ?
-            config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
+    return (se->flags & SEARCH_FLAG_CAN_BATCH
+                ? config_getint(IMAPOPT_SEARCH_BATCHSIZE)
+                : INT_MAX);
 }
 
 /*
@@ -181,47 +167,57 @@ static int search_batch_size(void)
  * processes like imapds.  The reacquisition may of course fail.
  * Returns an IMAP error code or 0 on success.
  */
-static int flush_batch(search_text_receiver_t *rx,
-                       int flags,
-                       ptrarray_t *batch)
+static int flush_batch(search_text_receiver_t *rx, int flags, ptrarray_t *batch)
 {
     int i;
     int r = 0;
     int indexflags = 0;
 
     /* prefetch files */
-    for (i = 0 ; i < batch->count ; i++) {
+    for (i = 0; i < batch->count; i++) {
         message_t *msg = ptrarray_nth(batch, i);
 
         const char *fname;
         r = message_get_fname(msg, &fname);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
         r = warmup_file(fname, 0, 0);
-        if (r) return r; /* means we failed to open a file,
-                            so we'll fail later anyway */
+        if (r) {
+            return r; /* means we failed to open a file,
+                        so we'll fail later anyway */
+        }
     }
 
-    if (flags & SEARCH_UPDATE_ALLOW_PARTIALS)
+    if (flags & SEARCH_UPDATE_ALLOW_PARTIALS) {
         indexflags |= INDEX_GETSEARCHTEXT_ALLOW_PARTIALS;
+    }
 
-    for (i = 0 ; i < batch->count ; i++) {
+    for (i = 0; i < batch->count; i++) {
         message_t *msg = ptrarray_nth(batch, i);
-        if (!r) r = index_getsearchtext(msg, NULL, rx, indexflags);
+        if (!r) {
+            r = index_getsearchtext(msg, NULL, rx, indexflags);
+        }
         message_unref(&msg);
     }
     ptrarray_truncate(batch, 0);
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     if (rx->flush) {
         r = rx->flush(rx);
-        if (r) return r;
+        if (r) {
+            return r;
+        }
     }
 
     return r;
 }
 
-struct attachpart {
+struct attachpart
+{
     char *fname;
     uint32_t imap_uid;
     char *imap_partid;
@@ -266,7 +262,7 @@ static int create_attachpart(struct mailbox *mailbox,
         goto done;
     }
 
-    ptrarray_append(&queue, (void*)body);
+    ptrarray_append(&queue, (void *) body);
 
     while ((body = ptrarray_pop(&queue))) {
         if (index_want_attachextract(body->type, body->subtype)) {
@@ -321,11 +317,13 @@ static void warmup_attachextract_cache(dynarray_t *attachparts)
         struct attachpart *ap = dynarray_nth(attachparts, i);
 
         if (strcmpsafe(ap->fname, fname)) {
-            if (mapped)
+            if (mapped) {
                 map_free(&mapped, &mapped_len);
+            }
 
-            if (fd != -1)
+            if (fd != -1) {
                 close(fd);
+            }
 
             fd = open(ap->fname, O_RDONLY);
             if (fd == -1) {
@@ -335,8 +333,13 @@ static void warmup_attachextract_cache(dynarray_t *attachparts)
                 continue;
             }
 
-            map_refresh(fd, 1, &mapped, &mapped_len,
-                    MAP_UNKNOWN_LEN, ap->fname, NULL);
+            map_refresh(fd,
+                        1,
+                        &mapped,
+                        &mapped_len,
+                        MAP_UNKNOWN_LEN,
+                        ap->fname,
+                        NULL);
             fname = ap->fname;
         }
 
@@ -366,11 +369,13 @@ static void warmup_attachextract_cache(dynarray_t *attachparts)
         buf_free(&data);
     }
 
-    if (mapped)
+    if (mapped) {
         map_free(&mapped, &mapped_len);
+    }
 
-    if (fd != -1)
+    if (fd != -1) {
         close(fd);
+    }
 
     buf_free(&buf);
 }
@@ -388,12 +393,13 @@ static int flush_attachparts(search_text_receiver_t *rx,
     for (int i = 0; i < dynarray_size(attachparts); i++) {
         struct attachpart *ap = dynarray_nth(attachparts, i);
 
-        if (prev_uid == ap->imap_uid)
+        if (prev_uid == ap->imap_uid) {
             continue;
+        }
 
         prev_uid = ap->imap_uid;
 
-        struct index_record record = {0};
+        struct index_record record = { 0 };
         r = mailbox_find_index_record(mailbox, ap->imap_uid, &record);
         if (r) {
             xsyslog(LOG_WARNING, "could not find index record - ignoring",
@@ -430,15 +436,19 @@ static void build_batch(search_text_receiver_t *rx,
     /* we want to index EXPUNGED messages too, because otherwise when we check the
      * ranges matching the GUID in conversations DB later, we might think we've
      * indexed it when we actually haven't */
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
-    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials)
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    if ((flags & SEARCH_UPDATE_INCREMENTAL) && !reindex_partials) {
         mailbox_iter_startuid(iter, rx->first_unindexed_uid(rx));
+    }
 
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         if ((flags & SEARCH_UPDATE_BATCH) && batch->count >= batch_size) {
-            syslog(LOG_INFO, "search_update_mailbox batching %u messages to %s",
-                    batch->count, mailbox_name(mailbox));
+            syslog(LOG_INFO,
+                   "search_update_mailbox batching %u messages to %s",
+                   batch->count,
+                   mailbox_name(mailbox));
             *is_incomplete = 1;
             break;
         }
@@ -446,16 +456,19 @@ static void build_batch(search_text_receiver_t *rx,
         message_t *msg = message_new_from_record(mailbox, record);
 
         uint8_t indexlevel = rx->is_indexed(rx, msg);
-        if ((reindex_partials && (indexlevel & SEARCH_INDEXLEVEL_PARTIAL)) ||
-            (min_indexlevel && indexlevel < min_indexlevel)) {
+        if ((reindex_partials && (indexlevel & SEARCH_INDEXLEVEL_PARTIAL))
+            || (min_indexlevel && indexlevel < min_indexlevel))
+        {
             /* Reindex that message */
             indexlevel = 0;
         }
 
-        if (!indexlevel)
+        if (!indexlevel) {
             ptrarray_append(batch, msg);
-        else
+        }
+        else {
             message_unref(&msg);
+        }
     }
 
     mailbox_iter_done(&iter);
@@ -466,7 +479,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
                                    int min_indexlevel,
                                    int flags)
 {
-    int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
+    int r = 0; /* Using IMAP_* not SQUAT_* return codes here */
     int is_incomplete = 0;
     ptrarray_t batch = PTRARRAY_INITIALIZER;
     dynarray_t attachparts = DYNARRAY_INITIALIZER(sizeof(struct attachpart));
@@ -475,12 +488,16 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     char *mboxname = xstrdup(mailbox_name(mailbox));
 
     r = rx->begin_mailbox(rx, mailbox, flags);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     // Build message batch
 
     build_batch(rx, mailbox, min_indexlevel, flags, &batch, &is_incomplete);
-    if (!batch.count) goto done;
+    if (!batch.count) {
+        goto done;
+    }
 
     // Split messages with attachments from batch
     int newlen = 0;
@@ -489,24 +506,32 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         if (create_attachpart(mailbox, msg, &attachparts)) {
             message_unref(&msg);
         }
-        else ptrarray_set(&batch, newlen++, msg);
+        else {
+            ptrarray_set(&batch, newlen++, msg);
+        }
     }
 
-    if (newlen < ptrarray_size(&batch))
+    if (newlen < ptrarray_size(&batch)) {
         ptrarray_truncate(&batch, newlen);
+    }
 
     // Index text-only messages
     if (batch.count) {
         r = flush_batch(rx, flags, &batch);
-        if (r) goto done;
+        if (r) {
+            goto done;
+        }
     }
 
-    if (!dynarray_size(&attachparts))
+    if (!dynarray_size(&attachparts)) {
         goto done;
+    }
 
     // Release mailbox lock
     r = rx->end_mailbox(rx, mailbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
     mailbox_close(&mailbox);
 
     // Log timestamp
@@ -518,8 +543,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Extract attachment text and cache results
     if (!attachextract_get_cachedir()) {
-        mycachedir =
-            create_tempdir(config_getstring(IMAPOPT_TEMP_PATH), "attachextract");
+        mycachedir = create_tempdir(config_getstring(IMAPOPT_TEMP_PATH),
+                                    "attachextract");
         attachextract_set_cachedir(mycachedir);
     }
 
@@ -527,10 +552,14 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Retake mailbox lock
     r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     r = rx->begin_mailbox(rx, mailbox, flags);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     // Log timestamp
     if (flags & SEARCH_UPDATE_VERBOSE) {
@@ -556,7 +585,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
         removedir(mycachedir);
     }
 
- done:
+done:
     *mailboxptr = mailbox;
     ptrarray_fini(&batch);
     free_attachpart(&attachparts);
@@ -564,8 +593,12 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     free(mboxname);
     {
         int r2 = rx->end_mailbox(rx, mailbox);
-        if (r) return r;
-        if (r2) return r2;
+        if (r) {
+            return r;
+        }
+        if (r2) {
+            return r2;
+        }
     }
     return is_incomplete ? IMAP_AGAIN : 0;
 }
@@ -578,15 +611,17 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
     return (se->end_update ? se->end_update(rx) : 0);
 }
 
-EXPORTED search_text_receiver_t *search_begin_snippets(void *internalised,
-                                                       int verbose,
-                                                       struct search_snippet_markup *markup,
-                                                       search_snippet_cb_t proc,
-                                                       void *rock)
+EXPORTED search_text_receiver_t *search_begin_snippets(
+    void *internalised,
+    int verbose,
+    struct search_snippet_markup *markup,
+    search_snippet_cb_t proc,
+    void *rock)
 {
     const struct search_engine *se = search_engine();
-    return (se->begin_snippets ? se->begin_snippets(internalised,
-                                    verbose, markup, proc, rock) : NULL);
+    return (se->begin_snippets
+                ? se->begin_snippets(internalised, verbose, markup, proc, rock)
+                : NULL);
 }
 
 EXPORTED int search_end_snippets(search_text_receiver_t *rx)
@@ -598,18 +633,19 @@ EXPORTED int search_end_snippets(search_text_receiver_t *rx)
 EXPORTED char *search_describe_internalised(void *internalised)
 {
     const struct search_engine *se = search_engine();
-    return (se->describe_internalised ?
-            se->describe_internalised(internalised) : 0);
+    return (se->describe_internalised ? se->describe_internalised(internalised)
+                                      : 0);
 }
 
 EXPORTED void search_free_internalised(void *internalised)
 {
     const struct search_engine *se = search_engine();
-    if (se->free_internalised) se->free_internalised(internalised);
+    if (se->free_internalised) {
+        se->free_internalised(internalised);
+    }
 }
 
-EXPORTED int search_list_files(const char *userid,
-                               strarray_t *files)
+EXPORTED int search_list_files(const char *userid, strarray_t *files)
 {
     const struct search_engine *se = search_engine();
     return (se->list_files ? se->list_files(userid, files) : 0);
@@ -622,7 +658,9 @@ EXPORTED int search_compact(const char *userid,
                             int flags)
 {
     const struct search_engine *se = search_engine();
-    return (se->compact ? se->compact(userid, reindextiers, srctiers, desttier, flags) : 0);
+    return (se->compact
+                ? se->compact(userid, reindextiers, srctiers, desttier, flags)
+                : 0);
 }
 
 EXPORTED int search_deluser(const mbentry_t *mbentry)
@@ -642,9 +680,12 @@ const char *search_op_as_string(int op)
     static char buf[33];
 
     switch (op) {
-    case SEARCH_OP_AND: return "AND";
-    case SEARCH_OP_OR: return "OR";
-    case SEARCH_OP_NOT: return "NOT";
+    case SEARCH_OP_AND:
+        return "AND";
+    case SEARCH_OP_OR:
+        return "OR";
+    case SEARCH_OP_NOT:
+        return "NOT";
     default:
         snprintf(buf, sizeof(buf), "(%d)", op);
         return buf;

@@ -57,9 +57,10 @@ EXPORTED void bufarray_fini(bufarray_t *ba)
 {
     size_t i;
 
-    if (!ba)
+    if (!ba) {
         return;
-    for (i = 0 ; i < ba->count ; i++) {
+    }
+    for (i = 0; i < ba->count; i++) {
         buf_free(ba->items[i]);
         free(ba->items[i]);
         ba->items[i] = NULL;
@@ -72,19 +73,21 @@ EXPORTED void bufarray_fini(bufarray_t *ba)
 
 EXPORTED void bufarray_free(bufarray_t **ba)
 {
-    if (!ba || !*ba)
+    if (!ba || !*ba) {
         return;
+    }
     bufarray_fini(*ba);
     free(*ba);
     *ba = NULL;
 }
 
-#define QUANTUM     16
+#define QUANTUM 16
 static inline size_t grow(size_t have, size_t want)
 {
     size_t x = MAX(QUANTUM, have);
-    while (x < want)
+    while (x < want) {
         x *= 2;
+    }
     return x;
 }
 
@@ -94,8 +97,9 @@ static inline size_t grow(size_t have, size_t want)
  */
 static void ba_ensure_alloc(bufarray_t *ba, size_t newalloc)
 {
-    if (newalloc < ba->alloc)
+    if (newalloc < ba->alloc) {
         return;
+    }
     newalloc = grow(ba->alloc, newalloc + 1);
     ba->items = xzrealloc(ba->items,
                           sizeof(struct buf) * ba->alloc,
@@ -109,7 +113,7 @@ EXPORTED bufarray_t *bufarray_dup(const bufarray_t *ba)
     size_t i;
 
     bufarray_truncate(new, ba->count);
-    for (i = 0 ; i < ba->count ; i++) {
+    for (i = 0; i < ba->count; i++) {
         new->items[i] = buf_new();
         buf_setmap(new->items[i], ba->items[i]->s, ba->items[i]->len);
     }
@@ -136,13 +140,15 @@ EXPORTED void bufarray_truncate(bufarray_t *ba, size_t newlen)
 {
     size_t i;
 
-    if (newlen == ba->count)
+    if (newlen == ba->count) {
         return;
+    }
 
     if (newlen > ba->count) {
         ba_ensure_alloc(ba, newlen);
-    } else {
-        for (i = newlen ; i < ba->count ; i++) {
+    }
+    else {
+        for (i = newlen; i < ba->count; i++) {
             buf_free(ba->items[i]);
             free(ba->items[i]);
             ba->items[i] = 0;

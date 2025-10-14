@@ -42,7 +42,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <stdlib.h>
@@ -103,80 +103,124 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         buf_appendcstr(&buf, " comparator-i;unicode-casemap");
 
         /* add actions */
-        if (i->fileinto &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
+        if (i->fileinto
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))
+        {
             buf_appendcstr(&buf, " fileinto");
-        if (i->reject &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
+        }
+        if (i->reject
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
+        {
             buf_appendcstr(&buf, " reject ereject");
-        if (i->vacation &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
+        }
+        if (i->vacation
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
+        {
             buf_appendcstr(&buf, " vacation vacation-seconds");
-        else if (i->vacation &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
+        }
+        else if (i->vacation
+                 && (config_sieve_extensions
+                     & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
+        {
             buf_appendcstr(&buf, " vacation");
-        if (i->notify &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
+        }
+        if (i->notify
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
+        {
             buf_appendcstr(&buf, " notify enotify");
 
             /* Add NOTIFY capability */
             strarray_append(i->extensions, "NOTIFY");
             strarray_append(i->extensions, "mailto");
         }
-        if (i->getinclude &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
+        if (i->getinclude
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
+        {
             buf_appendcstr(&buf, " include");
-        if (i->addheader &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
+        }
+        if (i->addheader
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))
+        {
             buf_appendcstr(&buf, " editheader");
-#if 0  /* Don't advertise this to ManageSieve clients -
-          We probably don't want end users adding this action themselves */
+        }
+#if 0 /* Don't advertise this to ManageSieve clients -                         \
+         We probably don't want end users adding this action themselves */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG)
             buf_appendcstr(&buf, " vnd.cyrus.log");
 #endif
-        if (i->snooze &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
+        if (i->snooze
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))
+        {
             buf_appendcstr(&buf, " vnd.cyrus.snooze");
-        if (i->processcal &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))
+        }
+        if (i->processcal
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))
+        {
             buf_appendcstr(&buf, " processcalendar");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
+        }
+        if (config_sieve_extensions
+            & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
+        {
             buf_appendcstr(&buf, " vnd.cyrus.implicit_keep_target");
+        }
 
         /* add tests */
-        if (i->getenvelope &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
+        if (i->getenvelope
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))
+        {
             buf_appendcstr(&buf, " envelope");
-        if (i->getenvironment &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT))
+        }
+        if (i->getenvironment
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT))
+        {
             buf_appendcstr(&buf, " environment");
-        if (i->getbody &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
+        }
+        if (i->getbody
+            && (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))
+        {
             buf_appendcstr(&buf, " body");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS) {
             buf_appendcstr(&buf, " imap4flags");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE) {
             buf_appendcstr(&buf, " date");
-        if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
+        }
+        if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE)) {
             buf_appendcstr(&buf, " ihave");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX) {
             buf_appendcstr(&buf, " mailbox");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA) {
             buf_appendcstr(&buf, " mboxmetadata");
+        }
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)
+        {
             buf_appendcstr(&buf, " servermetadata");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE) {
             buf_appendcstr(&buf, " duplicate");
-        if (i->jmapquery &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY))
+        }
+        if (i->jmapquery
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY))
+        {
             buf_appendcstr(&buf, " vnd.cyrus.jmapquery");
+        }
 
         /* add match-types */
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL) {
             buf_appendcstr(&buf, " relational");
+        }
 #ifdef ENABLE_REGEX
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX) {
             buf_appendcstr(&buf, " regex");
+        }
 #endif
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) {
             buf_appendcstr(&buf, " extlists");
@@ -187,25 +231,38 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         }
 
         /* add misc extensions */
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS) {
             buf_appendcstr(&buf, " subaddress");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_COPY) {
             buf_appendcstr(&buf, " copy");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX) {
             buf_appendcstr(&buf, " index");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES) {
             buf_appendcstr(&buf, " variables");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY)
+        }
+        if (config_sieve_extensions
+            & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY)
+        {
             buf_appendcstr(&buf, " redirect-deliverby");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN) {
             buf_appendcstr(&buf, " redirect-dsn");
-        if (i->getspecialuseexists &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))
+        }
+        if (i->getspecialuseexists
+            && (config_sieve_extensions
+                & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))
+        {
             buf_appendcstr(&buf, " special-use");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FCC) {
             buf_appendcstr(&buf, " fcc");
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
+        }
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID) {
             buf_appendcstr(&buf, " mailboxid");
+        }
 
         /* Set Sieve extensions string */
         strarray_setm(i->extensions, ext_pos, buf_release(&buf));
@@ -257,21 +314,25 @@ EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
     interp->keep = f;
 }
 
-EXPORTED void sieve_register_processcal(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_processcal(sieve_interp_t *interp,
+                                        sieve_callback *f)
 {
     interp->processcal = f;
 }
 
 EXPORTED void sieve_register_notify(sieve_interp_t *interp,
-                                    sieve_callback *f, const strarray_t *methods)
+                                    sieve_callback *f,
+                                    const strarray_t *methods)
 {
     static strarray_t default_methods = STRARRAY_INITIALIZER;
 
-    if (!default_methods.count)
+    if (!default_methods.count) {
         strarray_append(&default_methods, "mailto:");
+    }
 
-    interp->notifymethods =
-        (methods && methods->data && methods->count) ? methods : &default_methods;
+    interp->notifymethods = (methods && methods->data && methods->count)
+                                ? methods
+                                : &default_methods;
 
     interp->notify = f;
 }
@@ -283,22 +344,26 @@ EXPORTED void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
     interp->getsize = f;
 }
 
-EXPORTED void sieve_register_mailboxexists(sieve_interp_t *interp, sieve_get_mailboxexists *f)
+EXPORTED void sieve_register_mailboxexists(sieve_interp_t *interp,
+                                           sieve_get_mailboxexists *f)
 {
     interp->getmailboxexists = f;
 }
 
-EXPORTED void sieve_register_mailboxidexists(sieve_interp_t *interp, sieve_get_mailboxidexists *f)
+EXPORTED void sieve_register_mailboxidexists(sieve_interp_t *interp,
+                                             sieve_get_mailboxidexists *f)
 {
     interp->getmailboxidexists = f;
 }
 
-EXPORTED void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f)
+EXPORTED void sieve_register_metadata(sieve_interp_t *interp,
+                                      sieve_get_metadata *f)
 {
     interp->getmetadata = f;
 }
 
-EXPORTED void sieve_register_specialuseexists(sieve_interp_t *interp, sieve_get_specialuseexists *f)
+EXPORTED void sieve_register_specialuseexists(sieve_interp_t *interp,
+                                              sieve_get_specialuseexists *f)
 {
     interp->getspecialuseexists = f;
 }
@@ -314,7 +379,8 @@ EXPORTED void sieve_register_headersection(sieve_interp_t *interp,
     interp->getheadersection = f;
 }
 
-EXPORTED int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *f)
+EXPORTED int sieve_register_addheader(sieve_interp_t *interp,
+                                      sieve_add_header *f)
 {
     if (!interp->getheadersection) {
         return SIEVE_NOT_FINALIZED; /* we need getheadersection for editheader! */
@@ -324,7 +390,8 @@ EXPORTED int sieve_register_addheader(sieve_interp_t *interp, sieve_add_header *
     return SIEVE_OK;
 }
 
-EXPORTED int sieve_register_deleteheader(sieve_interp_t *interp, sieve_delete_header *f)
+EXPORTED int sieve_register_deleteheader(sieve_interp_t *interp,
+                                         sieve_delete_header *f)
 {
     if (!interp->getheadersection) {
         return SIEVE_NOT_FINALIZED; /* we need getheadersection for editheader! */
@@ -339,12 +406,14 @@ EXPORTED void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f)
     interp->getfname = f;
 }
 
-EXPORTED void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f)
+EXPORTED void sieve_register_envelope(sieve_interp_t *interp,
+                                      sieve_get_envelope *f)
 {
     interp->getenvelope = f;
 }
 
-EXPORTED void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
+EXPORTED void sieve_register_include(sieve_interp_t *interp,
+                                     sieve_get_include *f)
 {
     interp->getinclude = f;
 }
@@ -365,18 +434,24 @@ EXPORTED void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
     interp->getbody = f;
 }
 
-EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
+EXPORTED int sieve_register_vacation(sieve_interp_t *interp,
+                                     sieve_vacation_t *v)
 {
     if (!interp->getenvelope) {
         return SIEVE_NOT_FINALIZED; /* we need envelope for vacation! */
     }
 
-    if (v->min_response == 0)
-        v->min_response = config_getduration(IMAPOPT_SIEVE_VACATION_MIN_RESPONSE, 's');
-    if (v->max_response == 0)
-        v->max_response = config_getduration(IMAPOPT_SIEVE_VACATION_MAX_RESPONSE, 's');
+    if (v->min_response == 0) {
+        v->min_response =
+            config_getduration(IMAPOPT_SIEVE_VACATION_MIN_RESPONSE, 's');
+    }
+    if (v->max_response == 0) {
+        v->max_response =
+            config_getduration(IMAPOPT_SIEVE_VACATION_MAX_RESPONSE, 's');
+    }
     if (v->min_response < 0 || v->max_response < 7 * DAY2SEC || !v->autorespond
-        || !v->send_response) {
+        || !v->send_response)
+    {
         return SIEVE_FAIL;
     }
 
@@ -403,23 +478,28 @@ EXPORTED int sieve_register_duplicate(sieve_interp_t *interp,
         return SIEVE_FAIL;
     }
 
-    if (d->max_expiration > 7776000) d->max_expiration = 7776000;  /* 90 days */
+    if (d->max_expiration > 7776000) {
+        d->max_expiration = 7776000; /* 90 days */
+    }
 
     interp->duplicate = d;
     return SIEVE_OK;
 }
 
-EXPORTED void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f)
+EXPORTED void sieve_register_jmapquery(sieve_interp_t *interp,
+                                       sieve_jmapquery *f)
 {
     interp->jmapquery = f;
 }
 
-EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)
+EXPORTED void sieve_register_parse_error(sieve_interp_t *interp,
+                                         sieve_parse_error *f)
 {
     interp->err = f;
 }
 
-EXPORTED void sieve_register_execute_error(sieve_interp_t *interp, sieve_execute_error *f)
+EXPORTED void sieve_register_execute_error(sieve_interp_t *interp,
+                                           sieve_execute_error *f)
 {
     interp->execute_err = f;
 }
@@ -428,154 +508,157 @@ int interp_verify(sieve_interp_t *i)
 {
     if (i->redirect && i->keep && i->getsize && i->getheader) {
         return SIEVE_OK;
-    } else {
+    }
+    else {
         return SIEVE_NOT_FINALIZED;
     }
 }
 
 /* Array of Sieve capabilities */
-static const struct sieve_capa_t {
+static const struct sieve_capa_t
+{
     const char *str;
     unsigned long long flag;
-} sieve_capabilities[] =
-{
+} sieve_capabilities[] = {
     /* Sieve "base" - RFC 5228 */
-    { "comparator-i;octet",         SIEVE_CAPA_BASE },
-    { "comparator-i;ascii-casemap", SIEVE_CAPA_BASE },
-    { "comparator-i;ascii-numeric", SIEVE_CAPA_COMP_NUMERIC },
+    { "comparator-i;octet",             SIEVE_CAPA_BASE          },
+    { "comparator-i;ascii-casemap",     SIEVE_CAPA_BASE          },
+    { "comparator-i;ascii-numeric",     SIEVE_CAPA_COMP_NUMERIC  },
 
-    { "encoded-character", SIEVE_CAPA_ENCODED_CHAR },
-    { "envelope",          SIEVE_CAPA_ENVELOPE },
-    { "fileinto",          SIEVE_CAPA_FILEINTO },
+    { "encoded-character",              SIEVE_CAPA_ENCODED_CHAR  },
+    { "envelope",                       SIEVE_CAPA_ENVELOPE      },
+    { "fileinto",                       SIEVE_CAPA_FILEINTO      },
 
     /* Regular Expressions - draft-ietf-sieve-regex */
-    { "regex", SIEVE_CAPA_REGEX },
+    { "regex",                          SIEVE_CAPA_REGEX         },
 
     /* Copy - RFC 3894 */
-    { "copy", SIEVE_CAPA_COPY },
+    { "copy",                           SIEVE_CAPA_COPY          },
 
     /* Body - RFC 5173 */
-    { "body", SIEVE_CAPA_BODY },
+    { "body",                           SIEVE_CAPA_BODY          },
 
     /* Environment - RFC 5183 */
-    { "environment", SIEVE_CAPA_ENVIRONMENT },
+    { "environment",                    SIEVE_CAPA_ENVIRONMENT   },
 
     /* Variables - RFC 5229 */
-    { "variables", SIEVE_CAPA_VARIABLES },
+    { "variables",                      SIEVE_CAPA_VARIABLES     },
 
     /* Vacation - RFC 5230 */
-    { "vacation", SIEVE_CAPA_VACATION },
+    { "vacation",                       SIEVE_CAPA_VACATION      },
 
     /* Relational - RFC 5231 */
-    { "relational", SIEVE_CAPA_RELATIONAL },
+    { "relational",                     SIEVE_CAPA_RELATIONAL    },
 
     /* IMAP4 Flags - RFC 5232 */
-    { "imap4flags", SIEVE_CAPA_IMAP4FLAGS },
+    { "imap4flags",                     SIEVE_CAPA_IMAP4FLAGS    },
 
     /* Subaddress - RFC 5233 */
-    { "subaddress", SIEVE_CAPA_SUBADDRESS },
+    { "subaddress",                     SIEVE_CAPA_SUBADDRESS    },
 
     /* Spamtest & Virustest - RFC 5235 */
-    { "spamtest",     SIEVE_CAPA_SPAM },
-    { "spamtestplus", SIEVE_CAPA_SPAMPLUS },
-    { "virustest",    SIEVE_CAPA_VIRUS },
+    { "spamtest",                       SIEVE_CAPA_SPAM          },
+    { "spamtestplus",                   SIEVE_CAPA_SPAMPLUS      },
+    { "virustest",                      SIEVE_CAPA_VIRUS         },
 
     /* Date & Index - RFC 5260 */
-    { "date",  SIEVE_CAPA_DATE },
-    { "index", SIEVE_CAPA_INDEX },
+    { "date",                           SIEVE_CAPA_DATE          },
+    { "index",                          SIEVE_CAPA_INDEX         },
 
     /* Editheader - RFC 5293 */
-    { "editheader", SIEVE_CAPA_EDITHEADER },
+    { "editheader",                     SIEVE_CAPA_EDITHEADER    },
 
     /* [Extended] Reject - RFC 5429 */
-    { "ereject", SIEVE_CAPA_EREJECT },
-    { "reject",  SIEVE_CAPA_REJECT },
+    { "ereject",                        SIEVE_CAPA_EREJECT       },
+    { "reject",                         SIEVE_CAPA_REJECT        },
 
     /* Notifications - RFC 5435 */
-    { "enotify", SIEVE_CAPA_ENOTIFY },
-    { "notify",  SIEVE_CAPA_NOTIFY }, /* deprecated draft-martin-sieve-notify-01 */
+    { "enotify",                        SIEVE_CAPA_ENOTIFY       },
+    { "notify",
+     SIEVE_CAPA_NOTIFY                                           }, /* deprecated draft-martin-sieve-notify-01 */
 
     /* Ihave - RFC 5463 */
-    { "ihave", SIEVE_CAPA_IHAVE },
+    { "ihave",                          SIEVE_CAPA_IHAVE         },
 
     /* Mailbox & Metadata - RFC 5490 */
-    { "mailbox",        SIEVE_CAPA_MAILBOX },
-    { "mboxmetadata",   SIEVE_CAPA_MBOXMETA },
-    { "servermetadata", SIEVE_CAPA_SERVERMETA },
+    { "mailbox",                        SIEVE_CAPA_MAILBOX       },
+    { "mboxmetadata",                   SIEVE_CAPA_MBOXMETA      },
+    { "servermetadata",                 SIEVE_CAPA_SERVERMETA    },
 
     /* MIME Part Handling - RFC 5703 */
-    { "enclose",      SIEVE_CAPA_ENCLOSE },
-    { "extracttext",  SIEVE_CAPA_EXTRACT },
-    { "foreverypart", SIEVE_CAPA_FOREVERYPART },
-    { "mime",         SIEVE_CAPA_MIME },
-    { "replace",      SIEVE_CAPA_REPLACE },
+    { "enclose",                        SIEVE_CAPA_ENCLOSE       },
+    { "extracttext",                    SIEVE_CAPA_EXTRACT       },
+    { "foreverypart",                   SIEVE_CAPA_FOREVERYPART  },
+    { "mime",                           SIEVE_CAPA_MIME          },
+    { "replace",                        SIEVE_CAPA_REPLACE       },
 
     /* DSN & Deliver-By - RFC 6009 */
-    { "envelope-deliverby", SIEVE_CAPA_ENV_DELBY },
-    { "envelope-dsn",       SIEVE_CAPA_ENV_DSN },
-    { "redirect-deliverby", SIEVE_CAPA_REDIR_DELBY },
-    { "redirect-dsn",       SIEVE_CAPA_REDIR_DSN },
+    { "envelope-deliverby",             SIEVE_CAPA_ENV_DELBY     },
+    { "envelope-dsn",                   SIEVE_CAPA_ENV_DSN       },
+    { "redirect-deliverby",             SIEVE_CAPA_REDIR_DELBY   },
+    { "redirect-dsn",                   SIEVE_CAPA_REDIR_DSN     },
 
     /* Vacation :seconds - RFC 6131 */
-    { "vacation-seconds", SIEVE_CAPA_VACATION_SEC },
+    { "vacation-seconds",               SIEVE_CAPA_VACATION_SEC  },
 
     /* External Lists - RFC 6134 */
-    { "extlists", SIEVE_CAPA_EXTLISTS },
+    { "extlists",                       SIEVE_CAPA_EXTLISTS      },
 
     /* Convert - RFC 6558 */
-    { "convert", SIEVE_CAPA_CONVERT },
+    { "convert",                        SIEVE_CAPA_CONVERT       },
 
     /* Include - RFC 6609 */
-    { "include", SIEVE_CAPA_INCLUDE },
+    { "include",                        SIEVE_CAPA_INCLUDE       },
 
     /* IMAP Events - RFC 6785 */
-    { "imapsieve", SIEVE_CAPA_IMAP },
+    { "imapsieve",                      SIEVE_CAPA_IMAP          },
 
     /* Duplicate - RFC 7352 */
-    { "duplicate", SIEVE_CAPA_DUPLICATE },
+    { "duplicate",                      SIEVE_CAPA_DUPLICATE     },
 
     /* Special-Use - RFC 8579 */
-    { "special-use", SIEVE_CAPA_SPECIAL_USE },
+    { "special-use",                    SIEVE_CAPA_SPECIAL_USE   },
 
     /* Fcc - RFC 8580 */
-    { "fcc", SIEVE_CAPA_FCC },
+    { "fcc",                            SIEVE_CAPA_FCC           },
 
     /* Mailboxid - RFC 9042 */
-    { "mailboxid", SIEVE_CAPA_MAILBOXID },
+    { "mailboxid",                      SIEVE_CAPA_MAILBOXID     },
 
     /* Log - vnd.cyrus.log */
-    { "vnd.cyrus.log", SIEVE_CAPA_LOG },
-    { "x-cyrus-log",   SIEVE_CAPA_LOG },              // legacy capability
+    { "vnd.cyrus.log",                  SIEVE_CAPA_LOG           },
+    { "x-cyrus-log",                    SIEVE_CAPA_LOG           }, // legacy capability
 
     /* JMAP Query - vnd.cyrus.jmapquery */
-    { "vnd.cyrus.jmapquery", SIEVE_CAPA_JMAPQUERY },
-    { "x-cyrus-jmapquery",   SIEVE_CAPA_JMAPQUERY },  // legacy capability
+    { "vnd.cyrus.jmapquery",            SIEVE_CAPA_JMAPQUERY     },
+    { "x-cyrus-jmapquery",              SIEVE_CAPA_JMAPQUERY     }, // legacy capability
 
     /* Snooze - draft-ietf-extra-sieve-snooze */
-    { "snooze",           SIEVE_CAPA_SNOOZE },
-    { "vnd.cyrus.snooze", SIEVE_CAPA_SNOOZE },        // legacy capability
-    { "x-cyrus-snooze",   SIEVE_CAPA_SNOOZE },        // legacy capability
+    { "snooze",                         SIEVE_CAPA_SNOOZE        },
+    { "vnd.cyrus.snooze",               SIEVE_CAPA_SNOOZE        }, // legacy capability
+    { "x-cyrus-snooze",                 SIEVE_CAPA_SNOOZE        }, // legacy capability
 
     /* ProcessCalendar - RFC 9671 */
-    { "processcalendar", SIEVE_CAPA_PROCESSCAL },
-    { "vnd.cyrus.imip",  SIEVE_CAPA_PROCESSCAL },     // legacy capability
+    { "processcalendar",                SIEVE_CAPA_PROCESSCAL    },
+    { "vnd.cyrus.imip",                 SIEVE_CAPA_PROCESSCAL    }, // legacy capability
 
     /* vnd.cyrus.implicit_keep_target */
-    { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET },
+    { "vnd.cyrus.implicit_keep_target", SIEVE_CAPA_IKEEP_TARGET  },
 
     /* i;unicode-casemap - RFC 5051 */
-    { "comparator-i;unicode-casemap", SIEVE_CAPA_COMP_UCASEMAP },
+    { "comparator-i;unicode-casemap",   SIEVE_CAPA_COMP_UCASEMAP },
 
-    { NULL, 0 }
+    { NULL,                             0                        }
 };
-    
 
 EXPORTED const char *lookup_capability_string(unsigned long long flag)
 {
     const struct sieve_capa_t *capa;
 
     for (capa = sieve_capabilities; capa->str; capa++) {
-        if (flag == capa->flag) return capa->str;
+        if (flag == capa->flag) {
+            return capa->str;
+        }
     }
 
     return NULL;
@@ -586,7 +669,9 @@ unsigned long long lookup_capability(const char *str)
     const struct sieve_capa_t *capa;
 
     for (capa = sieve_capabilities; capa->str; capa++) {
-        if (!strcmp(str, capa->str)) return capa->flag;
+        if (!strcmp(str, capa->str)) {
+            return capa->flag;
+        }
     }
 
     return 0;
@@ -606,104 +691,157 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_ENVELOPE:
-        if (!(interp->getenvelope &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE))) capa = 0;
+        if (!(interp->getenvelope
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVELOPE)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_FILEINTO:
-        if (!(interp->fileinto &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO))) capa = 0;
+        if (!(interp->fileinto
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FILEINTO)))
+        {
+            capa = 0;
+        }
         break;
 
 #ifdef ENABLE_REGEX
     case SIEVE_CAPA_REGEX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)) {
+            capa = 0;
+        }
         break;
 #endif
 
     case SIEVE_CAPA_COPY:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_COPY)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_ENVIRONMENT:
-        if (!(interp->getenvironment &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT))) capa = 0;
+        if (!(interp->getenvironment
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_ENVIRONMENT)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_BODY:
-        if (!(interp->getbody &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_BODY))) capa = 0;
+        if (!(interp->getbody
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_BODY)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_VARIABLES:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)) {
+            capa = 0;
+        }
         break;
-        
+
     case SIEVE_CAPA_VACATION:
-        if (!(interp->vacation &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))) capa = 0;
+        if (!(interp->vacation
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_RELATIONAL:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_IMAP4FLAGS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)) {
+            capa = 0;
+        }
         break;
-        
+
     case SIEVE_CAPA_SUBADDRESS:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_DATE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_INDEX:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INDEX)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_EDITHEADER:
-        if (!(interp->addheader && interp->deleteheader &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER))) capa = 0;
+        if (!(interp->addheader && interp->deleteheader
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EDITHEADER)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_EREJECT:
     case SIEVE_CAPA_REJECT:
-        if (!(interp->reject &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))) capa = 0;
+        if (!(interp->reject
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_ENOTIFY:
-        if (!(interp->notify &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))) capa = 0;
+        if (!(interp->notify
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_IHAVE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_MAILBOX:
-        if (!(interp->getmailboxexists &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX))) capa = 0;
+        if (!(interp->getmailboxexists
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOX)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_MBOXMETA:
-        if (!(interp->getmetadata &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA))) capa = 0;
+        if (!(interp->getmetadata
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MBOXMETADATA)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_SERVERMETA:
-        if (!(interp->getmetadata &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA))) capa = 0;
+        if (!(interp->getmetadata
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_VACATION_SEC:
-        if (!(interp->vacation &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))) {
+        if (!(interp->vacation
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS)))
+        {
             capa = 0;
-        } else {
+        }
+        else {
             /* Note that "vacation-seconds" implies "vacation", and a script
              * with "vacation-seconds" in a "require" list MAY omit "vacation"
              * from that list. */
@@ -712,71 +850,105 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_EXTLISTS:
-        if (!(interp->isvalidlist && interp->listcompare &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) &&
-              (config_getbitfield(IMAPOPT_HTTPMODULES) & IMAP_ENUM_HTTPMODULES_CARDDAV)))
+        if (!(interp->isvalidlist && interp->listcompare
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)
+              && (config_getbitfield(IMAPOPT_HTTPMODULES)
+                  & IMAP_ENUM_HTTPMODULES_CARDDAV)))
+        {
             capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_INCLUDE:
-        if (!(interp->getinclude &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))) capa = 0;
+        if (!(interp->getinclude
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_DUPLICATE:
-        if (!(interp->duplicate &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE))) capa = 0;
+        if (!(interp->duplicate
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_SPECIAL_USE:
-        if (!(interp->getspecialuseexists &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE))) capa = 0;
+        if (!(interp->getspecialuseexists
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SPECIAL_USE)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_FCC:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FCC)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_REDIR_DELBY:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY))
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DELIVERBY)) {
             capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_REDIR_DSN:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)) capa = 0;
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)) {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_MAILBOXID:
-        if (!(interp->getmailboxidexists &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID))) capa = 0;
+        if (!(interp->getmailboxidexists
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_LOG:
-        if (!(interp->log &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG))) capa = 0;
+        if (!(interp->log
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_LOG)))
+        {
+            capa = 0;
+        }
         break;
 
 #ifdef WITH_JMAP
     case SIEVE_CAPA_JMAPQUERY:
-        if (!(interp->jmapquery &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY)))
+        if (!(interp->jmapquery
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_JMAPQUERY)))
+        {
             capa = 0;
+        }
         break;
 #endif
 
     case SIEVE_CAPA_SNOOZE:
-        if (!(interp->snooze &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE))) capa = 0;
+        if (!(interp->snooze
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SNOOZE)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_PROCESSCAL:
-        if (!(interp->processcal &&
-              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR))) capa = 0;
+        if (!(interp->processcal
+              && (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_PROCESSCALENDAR)))
+        {
+            capa = 0;
+        }
         break;
 
     case SIEVE_CAPA_IKEEP_TARGET:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET))
+        if (!(config_ext
+              & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET))
+        {
             capa = 0;
+        }
         break;
 
     default:

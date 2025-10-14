@@ -47,7 +47,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <fcntl.h>
 #include <signal.h>
@@ -74,7 +74,7 @@
 #include "util.h"
 
 #ifndef PATH_MAX
-#define PATH_MAX 4096
+# define PATH_MAX 4096
 #endif
 
 extern int optind, opterr;
@@ -89,7 +89,9 @@ static int newfile = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose) {
+        syslog(LOG_DEBUG, "telling master %x", msg);
+    }
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
@@ -98,7 +100,7 @@ void notify_master(int fd, int msg)
 }
 
 #ifdef HAVE_LIBWRAP
-#include <tcpd.h>
+# include <tcpd.h>
 
 int allow_severity = LOG_DEBUG;
 int deny_severity = LOG_ERR;
@@ -111,7 +113,7 @@ static void libwrap_init(struct request_info *req, char *service)
 static int libwrap_ask(struct request_info *req, int fd)
 {
     struct sockaddr_storage sin_storage;
-    struct sockaddr *sin = (struct sockaddr *)&sin_storage;
+    struct sockaddr *sin = (struct sockaddr *) &sin_storage;
     socklen_t sinlen;
     int a;
 
@@ -140,12 +142,14 @@ static int libwrap_ask(struct request_info *req, int fd)
 }
 
 #else
-struct request_info { int x; };
+struct request_info
+{
+    int x;
+};
 
 static void libwrap_init(struct request_info *r __attribute__((unused)),
                          char *service __attribute__((unused)))
 {
-
 }
 
 static int libwrap_ask(struct request_info *r __attribute__((unused)),
@@ -163,8 +167,12 @@ static int getlockfd(char *service, int id)
     char lockfile[1024];
     int fd;
 
-    snprintf(lockfile, sizeof(lockfile), "%s/socket/%s-%d.lock",
-             config_dir, service, id);
+    snprintf(lockfile,
+             sizeof(lockfile),
+             "%s/socket/%s-%d.lock",
+             config_dir,
+             service,
+             id);
     fd = open(lockfile, O_CREAT | O_RDWR, 0600);
     if (fd < 0) {
         syslog(LOG_ERR,
@@ -190,22 +198,23 @@ static int lockaccept(void)
 
     if (lockfd != -1) {
         alockinfo.l_type = F_WRLCK;
-        while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 &&
-               errno == EINTR &&
-               !signals_poll())
+        while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && errno == EINTR
+               && !signals_poll())
             /* noop */;
 
         if (rc < 0 && signals_poll()) {
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(0);
             return -1;
         }
 
         if (rc < 0) {
             syslog(LOG_ERR, "fcntl: F_SETLKW: error getting accept lock: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_OSERR);
             return -1;
         }
@@ -226,15 +235,15 @@ static int unlockaccept(void)
 
     if (lockfd != -1) {
         alockinfo.l_type = F_UNLCK;
-        while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 &&
-               errno == EINTR && !signals_poll())
+        while ((rc = fcntl(lockfd, F_SETLKW, &alockinfo)) < 0 && errno == EINTR
+               && !signals_poll())
             /* noop */;
 
         if (rc < 0) {
-            syslog(LOG_ERR,
-                   "fcntl: F_SETLKW: error releasing accept lock: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            syslog(LOG_ERR, "fcntl: F_SETLKW: error releasing accept lock: %m");
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_OSERR);
             return -1;
         }
@@ -273,7 +282,7 @@ static int safe_wait_readable(int fd)
      */
     signals_reset_sighup_handler(0);
 
-    r = signals_select(fd+1, &rfds, NULL, NULL, NULL);
+    r = signals_select(fd + 1, &rfds, NULL, NULL, NULL);
 
     /* we don't want to be interrupted by SIGHUP anymore */
     signals_reset_sighup_handler(1);
@@ -325,7 +334,7 @@ int main(int argc, char **argv, char **envp)
     opterr = 0; /* disable error reporting,
                    since we don't know about service-specific options */
     while ((opt = getopt(argc, argv, "C:U:T:DX")) != EOF) {
-        if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
+        if (argv[optind - 1][0] == '-' && strlen(argv[optind - 1]) > 2) {
             /* we have merged options */
             syslog(LOG_ERR,
                    "options and arguments MUST be separated by whitespace");
@@ -338,11 +347,15 @@ int main(int argc, char **argv, char **envp)
             break;
         case 'U': /* maximum uses */
             max_use = atoi(optarg);
-            if (max_use < 0) max_use = 0;
+            if (max_use < 0) {
+                max_use = 0;
+            }
             break;
         case 'T': /* reuse timeout */
             reuse_timeout = atoi(optarg);
-            if (reuse_timeout < 0) reuse_timeout = 0;
+            if (reuse_timeout < 0) {
+                reuse_timeout = 0;
+            }
             break;
         case 'D':
             call_debugger = 1;
@@ -351,24 +364,28 @@ int main(int argc, char **argv, char **envp)
             debug_stdio = 1;
             break;
         default:
-            strarray_appendm(&service_argv, argv[optind-1]);
+            strarray_appendm(&service_argv, argv[optind - 1]);
 
             /* option has an argument */
-            if (optind < argc && argv[optind][0] != '-')
+            if (optind < argc && argv[optind][0] != '-') {
                 strarray_appendm(&service_argv, argv[optind++]);
+            }
 
             break;
         }
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++)
+    for (; optind < argc; optind++) {
         strarray_appendm(&service_argv, argv[optind]);
+    }
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     if (verbose > 30) {
         syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
@@ -392,8 +409,9 @@ int main(int argc, char **argv, char **envp)
     /* if timeout is enabled, pick a random timeout between reuse_timeout
      * and 2*reuse_timeout to avoid massive IO overload if the network
      * connection goes away */
-    if (reuse_timeout)
+    if (reuse_timeout) {
         reuse_timeout = reuse_timeout + (rand() % reuse_timeout);
+    }
 
     extern const int config_need_data;
     cyrus_init(alt_config, service, 0, config_need_data);
@@ -411,8 +429,12 @@ int main(int argc, char **argv, char **envp)
              * they're about to attach a debugger, so worrying about leaking
              * contents of memory here is a little silly! :)
              */
-            snprintf(debugbuf, sizeof(debugbuf), debugger,
-                     argv[0], getpid(), service);
+            snprintf(debugbuf,
+                     sizeof(debugbuf),
+                     debugger,
+                     argv[0],
+                     getpid(),
+                     service);
 #pragma GCC diagnostic pop
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
@@ -429,54 +451,72 @@ int main(int argc, char **argv, char **envp)
     else {
         /* set close on exec */
         fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-        if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                        fdflags | FD_CLOEXEC);
+        if (fdflags != -1) {
+            fdflags = fcntl(LISTEN_FD, F_SETFD, fdflags | FD_CLOEXEC);
+        }
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
         fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-        if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
-                                        fdflags | FD_CLOEXEC);
+        if (fdflags != -1) {
+            fdflags = fcntl(STATUS_FD, F_SETFD, fdflags | FD_CLOEXEC);
+        }
         if (fdflags == -1) {
             syslog(LOG_ERR, "unable to set close on exec: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
 
         /* figure out what sort of socket this is */
-        if (getsockopt(LISTEN_FD, SOL_SOCKET, SO_TYPE,
-                    (char *) &soctype, &typelen) < 0) {
+        if (getsockopt(LISTEN_FD,
+                       SOL_SOCKET,
+                       SO_TYPE,
+                       (char *) &soctype,
+                       &typelen)
+            < 0)
+        {
             syslog(LOG_ERR, "getsockopt: SOL_SOCKET: failed to get type: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
         if (getsockname(LISTEN_FD, &socname, &addrlen) < 0) {
             syslog(LOG_ERR, "getsockname: failed: %m");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
 
         if (service_init(service_argv.count, service_argv.data, envp) != 0) {
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             return 1;
         }
     }
 
     /* determine initial process file inode, size and mtime */
-    if (service_argv.data[0][0] == '/')
+    if (service_argv.data[0][0] == '/') {
         strlcpy(path, service_argv.data[0], sizeof(path));
-    else
-        snprintf(path, sizeof(path), "%s/%s", LIBEXEC_DIR, service_argv.data[0]);
+    }
+    else {
+        snprintf(path,
+                 sizeof(path),
+                 "%s/%s",
+                 LIBEXEC_DIR,
+                 service_argv.data[0]);
+    }
 
     stat(path, &sbuf);
-    start_ino= sbuf.st_ino;
+    start_ino = sbuf.st_ino;
     start_size = sbuf.st_size;
     start_mtime = sbuf.st_mtime;
 
@@ -513,8 +553,9 @@ int main(int argc, char **argv, char **envp)
                 syslog(LOG_INFO, "cannot stat process file: %m");
                 break;
             }
-            if (sbuf.st_ino != start_ino || sbuf.st_size != start_size ||
-                sbuf.st_mtime != start_mtime) {
+            if (sbuf.st_ino != start_ino || sbuf.st_size != start_size
+                || sbuf.st_mtime != start_mtime)
+            {
                 syslog(LOG_INFO, "process file has changed");
                 newfile = 1;
                 break;
@@ -524,8 +565,9 @@ int main(int argc, char **argv, char **envp)
                 /* Wait for the file descriptor to be connected to, in a
                  * signal-safe manner.  This ensures the accept() does
                  * not block and we don't need to make it signal-safe.  */
-                if (safe_wait_readable(LISTEN_FD) < 0)
+                if (safe_wait_readable(LISTEN_FD) < 0) {
                     continue;
+                }
                 fd = accept(LISTEN_FD, NULL, NULL);
                 if (fd < 0) {
                     switch (errno) {
@@ -548,33 +590,46 @@ int main(int argc, char **argv, char **envp)
                         break;
 
                     case EINVAL:
-                        if (signals_poll() == SIGHUP) break;
+                        if (signals_poll() == SIGHUP) {
+                            break;
+                        }
                         GCC_FALLTHROUGH
 
                     default:
                         syslog(LOG_ERR, "accept failed: %m");
-                        if (MESSAGE_MASTER_ON_EXIT)
-                            notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                        if (MESSAGE_MASTER_ON_EXIT) {
+                            notify_master(STATUS_FD,
+                                          MASTER_SERVICE_UNAVAILABLE);
+                        }
                         service_abort(EX_OSERR);
                     }
                 }
-            } else {
+            }
+            else {
                 /* udp */
                 struct sockaddr_storage from;
                 socklen_t fromlen;
                 char ch;
                 int r;
 
-                if (safe_wait_readable(LISTEN_FD) < 0)
+                if (safe_wait_readable(LISTEN_FD) < 0) {
                     continue;
+                }
                 fromlen = sizeof(from);
-                r = recvfrom(LISTEN_FD, (void *) &ch, 1, MSG_PEEK,
-                             (struct sockaddr *) &from, &fromlen);
+                r = recvfrom(LISTEN_FD,
+                             (void *) &ch,
+                             1,
+                             MSG_PEEK,
+                             (struct sockaddr *) &from,
+                             &fromlen);
                 if (r == -1) {
-                    if (signals_poll() == SIGHUP) break;
+                    if (signals_poll() == SIGHUP) {
+                        break;
+                    }
                     syslog(LOG_ERR, "recvfrom failed: %m");
-                    if (MESSAGE_MASTER_ON_EXIT)
+                    if (MESSAGE_MASTER_ON_EXIT) {
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                    }
                     service_abort(EX_OSERR);
                 }
                 fd = LISTEN_FD;
@@ -586,15 +641,17 @@ int main(int argc, char **argv, char **envp)
 
         if (fd < 0 && (signals_poll() || newfile)) {
             /* timed out (SIGALRM), SIGHUP, or new process file */
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(0);
         }
         if (fd < 0) {
             /* how did this happen? - we might have caught a signal. */
             syslog(LOG_ERR, "accept() failed but we didn't catch it?");
-            if (MESSAGE_MASTER_ON_EXIT)
+            if (MESSAGE_MASTER_ON_EXIT) {
                 notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+            }
             service_abort(EX_SOFTWARE);
         }
 
@@ -602,7 +659,7 @@ int main(int argc, char **argv, char **envp)
         alarm(0);
 
         /* tcp only */
-        if(soctype == SOCK_STREAM && socname.sa_family != AF_UNIX) {
+        if (soctype == SOCK_STREAM && socname.sa_family != AF_UNIX) {
             libwrap_init(&request, service);
 
             if (!libwrap_ask(&request, fd)) {
@@ -626,8 +683,8 @@ int main(int argc, char **argv, char **envp)
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
-#if 0  /* XXX  This appears to have no valid use (and breaks wire protocols).
-          We should look into capturing stderr and sending it to syslog. */
+#if 0 /* XXX  This appears to have no valid use (and breaks wire protocols).   \
+         We should look into capturing stderr and sending it to syslog. */
         if (fd != STDERR_FILENO && dup2(fd, STDERR_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
@@ -635,8 +692,10 @@ int main(int argc, char **argv, char **envp)
 #endif
 
         /* tcp only */
-        if(soctype == SOCK_STREAM) {
-            if (fd > STDERR_FILENO) close(fd);
+        if (soctype == SOCK_STREAM) {
+            if (fd > STDERR_FILENO) {
+                close(fd);
+            }
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);

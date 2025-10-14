@@ -56,7 +56,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-
 EXPORTED int caldav_caluseraddr_read(const char *mboxname,
                                      const char *userid,
                                      strarray_t *addr)
@@ -84,7 +83,9 @@ EXPORTED int caldav_caluseraddr_read(const char *mboxname,
     // and so we got rid of the <pref> field, too.
     const char *sep = strchr(buf_cstring(&buf), ';');
     // Just ignore the <pref> field in the annotation value.
-    if (sep) buf_remove(&buf, 0, sep + 1 - buf_base(&buf));
+    if (sep) {
+        buf_remove(&buf, 0, sep + 1 - buf_base(&buf));
+    }
     // Reset and split address list.
     strarray_truncate(addr, 0);
     strarray_splitm(addr, buf_release(&buf), ",", STRARRAY_TRIM);
@@ -102,7 +103,9 @@ EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
     struct buf buf = BUF_INITIALIZER;
 
     int r = mailbox_get_annotate_state(mbox, 0, &astate);
-    if (r) goto done;
+    if (r) {
+        goto done;
+    }
 
     hash_table addrset = HASH_TABLE_INITIALIZER;
     construct_hash_table(&addrset, strarray_size(addrs) + 1, 0);
@@ -124,13 +127,16 @@ EXPORTED int caldav_caluseraddr_write(struct mailbox *mbox,
         }
 
         // Deduplicate normalized URIs.
-        if (hash_lookup(buf_cstring(&normaddr), &addrset))
+        if (hash_lookup(buf_cstring(&normaddr), &addrset)) {
             continue;
+        }
 
-        hash_insert(buf_cstring(&normaddr), (void*)1, &addrset);
+        hash_insert(buf_cstring(&normaddr), (void *) 1, &addrset);
 
         // Append original URI to annotation value.
-        if (i) buf_putc(&buf, ',');
+        if (i) {
+            buf_putc(&buf, ',');
+        }
         buf_appendcstr(&buf, addr);
     }
 
@@ -145,7 +151,8 @@ done:
 }
 
 EXPORTED void get_schedule_addresses(const char *mboxname,
-                                     const char *userid, strarray_t *addresses)
+                                     const char *userid,
+                                     strarray_t *addresses)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -161,7 +168,9 @@ EXPORTED void get_schedule_addresses(const char *mboxname,
         int i;
         for (i = 0; i < strarray_size(addresses); i++) {
             const char *item = strarray_nth(addresses, i);
-            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            if (!strncasecmp(item, "mailto:", 7)) {
+                item += 7;
+            }
 
             char *addr = xmlURIUnescapeString(item, strlen(item), NULL);
             strarray_setm(addresses, i, addr);

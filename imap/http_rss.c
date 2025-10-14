@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <ctype.h>
 #include <string.h>
@@ -76,35 +76,37 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-#define XML_NS_ATOM     "http://www.w3.org/2005/Atom"
+#define XML_NS_ATOM "http://www.w3.org/2005/Atom"
 #define GUID_URL_SCHEME "data:,"
 #define MAX_SECTION_LEN 128
-#define FEEDLIST_VAR    "%RSS_FEEDLIST%"
+#define FEEDLIST_VAR "%RSS_FEEDLIST%"
 
-static const char def_template[] =
-    HTML_DOCTYPE
+static const char def_template[] = HTML_DOCTYPE
     "<html>\n<head>\n<title>Cyrus RSS Feeds</title>\n</head>\n"
-    "<body>\n<h2>Cyrus RSS Feeds</h2>\n"
-    FEEDLIST_VAR
-    "</body>\n</html>\n";
+    "<body>\n<h2>Cyrus RSS Feeds</h2>\n" FEEDLIST_VAR "</body>\n</html>\n";
 
 static time_t compile_time;
 static void rss_init(struct buf *serverinfo);
 static int meth_get(struct transaction_t *txn, void *params);
 static int rss_parse_path(const char *path,
-                          struct request_target_t *tgt, const char **errstr);
+                          struct request_target_t *tgt,
+                          const char **errstr);
 static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn);
-static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
-                         unsigned recno, uint32_t uid,
-                         struct index_record *record, struct body **body,
+static int fetch_message(struct transaction_t *txn,
+                         struct mailbox *mailbox,
+                         unsigned recno,
+                         uint32_t uid,
+                         struct index_record *record,
+                         struct body **body,
                          struct buf *msg_buf);
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox);
 static void display_message(struct transaction_t *txn,
-                            const char *mboxname, const struct index_record *record,
-                            struct body *body, const struct buf *msg_buf);
+                            const char *mboxname,
+                            const struct index_record *record,
+                            struct body *body,
+                            const struct buf *msg_buf);
 static struct body *body_fetch_section(struct body *body, const char *section);
-
 
 /* Namespace for RSS feeds of mailboxes */
 // clang-format off
@@ -141,12 +143,13 @@ struct namespace_t namespace_rss = {
 };
 // clang-format on
 
-
 static void rss_init(struct buf *serverinfo __attribute__((unused)))
 {
     namespace_rss.enabled = config_httpmodules & IMAP_ENUM_HTTPMODULES_RSS;
 
-    if (!namespace_rss.enabled) return;
+    if (!namespace_rss.enabled) {
+        return;
+    }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 }
@@ -161,33 +164,49 @@ static int meth_get(struct transaction_t *txn,
     uint32_t uid = 0;
     struct mailbox *mailbox = NULL;
 
-    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+    if (!httpd_userid) {
+        return HTTP_UNAUTHORIZED;
+    }
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_parse_path(txn->req_uri->path,
-                            &txn->req_tgt, &txn->error.desc))) {
+                            &txn->req_tgt,
+                            &txn->error.desc)))
+    {
         txn->error.desc = error_message(r);
         return HTTP_NOT_FOUND;
     }
 
     /* If no mailboxname, list all available feeds */
-    if (!txn->req_tgt.mbentry) return list_feeds(txn);
+    if (!txn->req_tgt.mbentry) {
+        return list_feeds(txn);
+    }
 
     /* Make sure it is a mailbox that we are treating as an RSS feed */
-    if (!is_feed(txn->req_tgt.mbentry->name)) return HTTP_NOT_FOUND;
+    if (!is_feed(txn->req_tgt.mbentry->name)) {
+        return HTTP_NOT_FOUND;
+    }
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & ACL_READ)) return HTTP_NO_PRIVS;
+    if (!(rights & ACL_READ)) {
+        return HTTP_NO_PRIVS;
+    }
 
     if (txn->req_tgt.mbentry->server) {
         /* Remote mailbox */
         struct backend *be;
 
         be = proxy_findserver(txn->req_tgt.mbentry->server,
-                              &http_protocol, httpd_userid,
-                              &backend_cached, NULL, NULL, httpd_in);
-        if (!be) return HTTP_UNAVAILABLE;
+                              &http_protocol,
+                              httpd_userid,
+                              &backend_cached,
+                              NULL,
+                              NULL,
+                              httpd_in);
+        if (!be) {
+            return HTTP_UNAVAILABLE;
+        }
 
         return http_pipe_req_resp(be, txn);
     }
@@ -197,29 +216,40 @@ static int meth_get(struct transaction_t *txn,
     /* Open mailbox for reading */
     r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
     if (r) {
-        syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
+        syslog(LOG_ERR,
+               "http_mailbox_open(%s) failed: %s",
+               txn->req_tgt.mbentry->name,
+               error_message(r));
         txn->error.desc = error_message(r);
 
         switch (r) {
-        case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-        case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-        default: return HTTP_SERVER_ERROR;
+        case IMAP_PERMISSION_DENIED:
+            return HTTP_FORBIDDEN;
+        case IMAP_MAILBOX_NONEXISTENT:
+            return HTTP_NOT_FOUND;
+        default:
+            return HTTP_SERVER_ERROR;
         }
     }
 
     /* Check for UID, if any */
     if (txn->req_tgt.resource) {
         uid = strtoul(txn->req_tgt.resource, NULL, 10);
-        if (!uid) uid = -1;
+        if (!uid) {
+            uid = -1;
+        }
 
         /* Check for section query param, if any */
         param = hash_lookup("section", &txn->req_qparams);
-        if (param) section = param->s;
+        if (param) {
+            section = param->s;
+        }
     }
 
     /* If no UID specified, list messages as an RSS feed */
-    if (!uid) ret = list_messages(txn, mailbox);
+    if (!uid) {
+        ret = list_messages(txn, mailbox);
+    }
     else if (uid > mailbox->i.last_uid) {
         txn->error.desc = "Message does not exist";
         ret = HTTP_NOT_FOUND;
@@ -230,8 +260,14 @@ static int meth_get(struct transaction_t *txn,
         struct body *body = NULL;
 
         /* Fetch the message */
-        if (!(ret = fetch_message(txn, mailbox, 0, uid,
-                                  &record, &body, &msg_buf))) {
+        if (!(ret = fetch_message(txn,
+                                  mailbox,
+                                  0,
+                                  uid,
+                                  &record,
+                                  &body,
+                                  &msg_buf)))
+        {
             int precond;
             const char *etag = NULL;
             time_t lastmod = 0;
@@ -254,11 +290,15 @@ static int meth_get(struct transaction_t *txn,
                 /* Fill in ETag, Last-Modified, and Expires */
                 resp_body->etag = etag;
                 resp_body->lastmod = lastmod;
-                resp_body->maxage = 31536000;  /* 1 year */
+                resp_body->maxage = 31536000; /* 1 year */
                 txn->flags.cc |= CC_MAXAGE;
-                if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
+                if (httpd_userid) {
+                    txn->flags.cc |= CC_PRIVATE;
+                }
 
-                if (precond != HTTP_NOT_MODIFIED) break;
+                if (precond != HTTP_NOT_MODIFIED) {
+                    break;
+                }
 
                 GCC_FALLTHROUGH
 
@@ -270,7 +310,11 @@ static int meth_get(struct transaction_t *txn,
 
             if (!section) {
                 /* Return entire message formatted as text/html */
-                display_message(txn, mailbox_name(mailbox), &record, body, &msg_buf);
+                display_message(txn,
+                                mailbox_name(mailbox),
+                                &record,
+                                body,
+                                &msg_buf);
             }
             else if (!strcmp(section, "0")) {
                 /* Return entire message as text/plain */
@@ -289,11 +333,12 @@ static int meth_get(struct transaction_t *txn,
                     goto done;
                 }
 
-                outbuf = charset_decode_mimebody(buf_base(&msg_buf) +
-                                                 part->content_offset,
+                outbuf = charset_decode_mimebody(buf_base(&msg_buf)
+                                                     + part->content_offset,
                                                  part->content_size,
                                                  part->charset_enc,
-                                                 &part->decoded_body, &outsize);
+                                                 &part->decoded_body,
+                                                 &outsize);
 
                 if (!outbuf) {
                     txn->error.desc = "Unknown MIME encoding";
@@ -308,7 +353,7 @@ static int meth_get(struct transaction_t *txn,
                 write_body(precond, txn, outbuf, outsize);
             }
 
-          done:
+        done:
             buf_free(&msg_buf);
 
             if (body) {
@@ -321,30 +366,34 @@ static int meth_get(struct transaction_t *txn,
     mailbox_close(&mailbox);
 
     return ret;
-
 }
 
-
 /* Create a mailbox name from the request URL */
-static int rss_parse_path(const char *path, struct request_target_t *tgt,
+static int rss_parse_path(const char *path,
+                          struct request_target_t *tgt,
                           const char **resultstr)
 {
     const char *start, *end;
-    char mboxname[MAX_MAILBOX_BUFFER+1];
+    char mboxname[MAX_MAILBOX_BUFFER + 1];
     size_t len;
 
     /* Clip off RSS prefix */
     start = path + strlen(namespace_rss.prefix);
-    if (*start == '/') start++;
+    if (*start == '/') {
+        start++;
+    }
     end = start + strlen(start);
 
-    if ((end > start) && (end[-1] == '/')) end--;
+    if ((end > start) && (end[-1] == '/')) {
+        end--;
+    }
 
     /* Check for UID */
     if (end > start && end[-1] == '.') {
         const char *p;
 
-        for (p = end-2; p > start && isdigit((int) *p); p--);
+        for (p = end - 2; p > start && isdigit((int) *p); p--)
+            ;
         if (*p == '/') {
             end = p;
             tgt->resource = (char *) ++p;
@@ -352,7 +401,9 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     }
 
     len = end - start;
-    if (len > MAX_MAILBOX_BUFFER) return IMAP_MAILBOX_BADNAME;
+    if (len > MAX_MAILBOX_BUFFER) {
+        return IMAP_MAILBOX_BADNAME;
+    }
 
     strncpy(mboxname, start, len);
     mboxname[len] = '\0';
@@ -361,27 +412,35 @@ static int rss_parse_path(const char *path, struct request_target_t *tgt,
     if (*mboxname) {
         /* Translate external (URL) mboxname to internal */
         for (; len > 0; len--) {
-            if (mboxname[len-1] == '/') mboxname[len-1] = '.';
-            else if (mboxname[len-1] == '.') mboxname[len-1] = '^';
+            if (mboxname[len - 1] == '/') {
+                mboxname[len - 1] = '.';
+            }
+            else if (mboxname[len - 1] == '.') {
+                mboxname[len - 1] = '^';
+            }
         }
 
         int r = proxy_mlookup(mboxname, &tgt->mbentry, NULL, NULL);
         if (r) {
-            syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   mboxname, error_message(r));
+            syslog(LOG_ERR,
+                   "mlookup(%s) failed: %s",
+                   mboxname,
+                   error_message(r));
             *resultstr = error_message(r);
 
             switch (r) {
-            case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-            case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-            default: return HTTP_SERVER_ERROR;
+            case IMAP_PERMISSION_DENIED:
+                return HTTP_FORBIDDEN;
+            case IMAP_MAILBOX_NONEXISTENT:
+                return HTTP_NOT_FOUND;
+            default:
+                return HTTP_SERVER_ERROR;
             }
         }
     }
 
     return 0;
 }
-
 
 /*
  * Checks to make sure that the given mailbox is actually something
@@ -393,33 +452,38 @@ static int is_feed(const char *mbox)
     struct wildmat *wild;
 
     if (!feeds) {
-        feeds = split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS),
-                               NULL);
+        feeds =
+            split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS), NULL);
     }
 
     /* check mailbox against the 'rss_feeds' wildmat */
     wild = feeds;
-    while (wild->pat && wildmat(mbox, wild->pat) != 1) wild++;
+    while (wild->pat && wildmat(mbox, wild->pat) != 1) {
+        wild++;
+    }
 
     /* if we don't have a match, or its a negative match, don't use it */
-    if (!wild->pat || wild->not) return 0;
+    if (!wild->pat || wild->not) {
+        return 0;
+    }
 
     /* otherwise, its usable */
     return 1;
 }
 
-
 /*
  * mboxlist_findall() callback function to list RSS feeds as a tree
  */
-struct node {
+struct node
+{
     char name[MAX_MAILBOX_BUFFER];
     size_t len;
     struct node *parent;
     struct node *child;
 };
 
-struct list_rock {
+struct list_rock
+{
     struct transaction_t *txn;
     struct node *last;
 };
@@ -436,29 +500,36 @@ static int do_list(const char *name, void *rock)
         int r;
 
         /* Don't list mailboxes that we don't treat as RSS feeds */
-        if (!is_feed(name)) return 0;
+        if (!is_feed(name)) {
+            return 0;
+        }
 
         /* Don't list deleted mailboxes */
-        if (mboxname_isdeletedmailbox(name, NULL)) return 0;
+        if (mboxname_isdeletedmailbox(name, NULL)) {
+            return 0;
+        }
 
         /* Lookup the mailbox and make sure it is readable */
         r = proxy_mlookup(name, &mbentry, NULL, NULL);
-        if (r) return 0;
+        if (r) {
+            return 0;
+        }
 
         rights = httpd_myrights(httpd_authstate, mbentry);
         mboxlist_entry_free(&mbentry);
 
-        if ((rights & ACL_READ) != ACL_READ)
+        if ((rights & ACL_READ) != ACL_READ) {
             return 0;
+        }
     }
 
-    if (name &&
-        !strncmp(name, last->name, last->len) &&
-        (!last->len || (name[last->len] == '.'))) {
+    if (name && !strncmp(name, last->name, last->len)
+        && (!last->len || (name[last->len] == '.')))
+    {
         /* Found closest ancestor of 'name' */
         struct node *node;
         size_t len = strlen(name);
-        char shortname[MAX_MAILBOX_NAME+1], path[MAX_MAILBOX_PATH+1];
+        char shortname[MAX_MAILBOX_NAME + 1], path[MAX_MAILBOX_PATH + 1];
         char *cp, *href = NULL;
 
         /* Send a body chunk once in a while */
@@ -474,14 +545,19 @@ static int do_list(const char *name, void *rock)
         }
         else {
             /* Create first child */
-            buf_printf(buf, "\n<ul%s>\n",
+            buf_printf(buf,
+                       "\n<ul%s>\n",
                        last->parent ? "" : " id='feed'"); /* needed by CSS */
             node = xmalloc(sizeof(struct node));
         }
 
         /* See if we have a missing ancestor in the tree */
-        if ((cp = strchr(&name[last->len+1], '.'))) len = cp - name;
-        else href = path;
+        if ((cp = strchr(&name[last->len + 1], '.'))) {
+            len = cp - name;
+        }
+        else {
+            href = path;
+        }
 
         /* Populate new/updated node */
         xstrncpy(node->name, name, len);
@@ -492,8 +568,12 @@ static int do_list(const char *name, void *rock)
         lrock->last = last->child = node;
 
         /* Get last segment of mailbox name */
-        if ((cp = strrchr(node->name, '.'))) cp++;
-        else cp = node->name;
+        if ((cp = strrchr(node->name, '.'))) {
+            cp++;
+        }
+        else {
+            cp = node->name;
+        }
 
         /* Translate short mailbox name to external form */
         strlcpy(shortname, cp, sizeof(shortname));
@@ -505,13 +585,16 @@ static int do_list(const char *name, void *rock)
             /* Translate internal mboxname to external (URL) */
             buf_setcstr(mboxname, node->name);
             for (; len > 0; len--) {
-                if (mboxname->s[len-1] == '.') mboxname->s[len-1] = '/';
-                else if (mboxname->s[len-1] == '^') mboxname->s[len-1] = '.';
+                if (mboxname->s[len - 1] == '.') {
+                    mboxname->s[len - 1] = '/';
+                }
+                else if (mboxname->s[len - 1] == '^') {
+                    mboxname->s[len - 1] = '.';
+                }
             }
 
             snprintf(path, sizeof(path), "/rss/%s", buf_cstring(mboxname));
-            buf_printf(buf, "<li><a href=\"%s\">%s</a>",
-                       href, shortname);
+            buf_printf(buf, "<li><a href=\"%s\">%s</a>", href, shortname);
         }
         else {
             /* Add missing ancestor and recurse down the tree */
@@ -540,11 +623,11 @@ static int do_list(const char *name, void *rock)
 
 static int list_cb(struct findall_data *data, void *rock)
 {
-    if (data && data->is_exactmatch)
+    if (data && data->is_exactmatch) {
         return do_list(mbname_intname(data->mbname), rock);
+    }
     return do_list(NULL, rock);
 }
-
 
 /* Create a HTML document listing all RSS feeds available to the user */
 static int list_feeds(struct transaction_t *txn)
@@ -567,21 +650,31 @@ static int list_feeds(struct transaction_t *txn)
 
         buf_reset(path);
         prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
-        if (prefix) buf_printf(path, "%s/", prefix);
+        if (prefix) {
+            buf_printf(path, "%s/", prefix);
+        }
         buf_appendcstr(path, template_file);
 
         /* See if template exists and contains feedlist variable */
-        if (!stat(buf_cstring(path), &sbuf) && S_ISREG(sbuf.st_mode) &&
-            (size_t) sbuf.st_size >= varlen &&
-            (fd = open(buf_cstring(path), O_RDONLY)) != -1) {
+        if (!stat(buf_cstring(path), &sbuf) && S_ISREG(sbuf.st_mode)
+            && (size_t) sbuf.st_size >= varlen
+            && (fd = open(buf_cstring(path), O_RDONLY)) != -1)
+        {
             const char *p;
             unsigned long len;
 
-            map_refresh(fd, 1, &template, &template_len, sbuf.st_size,
-                        template_file, NULL);
+            map_refresh(fd,
+                        1,
+                        &template,
+                        &template_len,
+                        sbuf.st_size,
+                        template_file,
+                        NULL);
 
             for (p = template, len = template_len;
-                 len >= varlen && strncmp(p, FEEDLIST_VAR, varlen); p++, len--);
+                 len >= varlen && strncmp(p, FEEDLIST_VAR, varlen);
+                 p++, len--)
+                ;
             if (len >= varlen) {
                 var = p;
                 lastmod = sbuf.st_mtime;
@@ -616,12 +709,18 @@ static int list_feeds(struct transaction_t *txn)
     stat(mboxlist, &sbuf);
     free(mboxlist);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               "-" TIME_T_FMT "-" OFF_T_FMT,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     /* stat() imapd.conf for Last-Modified and ETag */
     stat(config_filename, &sbuf);
     lastmod = MAX(lastmod, sbuf.st_mtime);
-    buf_printf(&txn->buf, "-" TIME_T_FMT "-" OFF_T_FMT, sbuf.st_mtime, sbuf.st_size);
+    buf_printf(&txn->buf,
+               "-" TIME_T_FMT "-" OFF_T_FMT,
+               sbuf.st_mtime,
+               sbuf.st_size);
 
     /* Check any preconditions */
     precond = check_precond(txn, buf_cstring(&txn->buf), lastmod);
@@ -632,10 +731,12 @@ static int list_feeds(struct transaction_t *txn)
         /* Fill in ETag, Last-Modified, and Expires */
         txn->resp_body.etag = buf_cstring(&txn->buf);
         txn->resp_body.lastmod = lastmod;
-        txn->resp_body.maxage = 86400;  /* 24 hrs */
+        txn->resp_body.maxage = 86400; /* 24 hrs */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -662,20 +763,29 @@ static int list_feeds(struct transaction_t *txn)
     buf_reset(body);
     lrock.txn = txn;
     lrock.last = &root;
-    int isadmin = httpd_userisadmin||httpd_userisproxyadmin;
-    mboxlist_findall(&httpd_namespace, "*", isadmin, httpd_userid,
-                     httpd_authstate, list_cb, &lrock);
+    int isadmin = httpd_userisadmin || httpd_userisproxyadmin;
+    mboxlist_findall(&httpd_namespace,
+                     "*",
+                     isadmin,
+                     httpd_userid,
+                     httpd_authstate,
+                     list_cb,
+                     &lrock);
 
     /* Close out the tree */
-    if (buf_len(body)) write_body(0, txn, buf_cstring(body), buf_len(body));
+    if (buf_len(body)) {
+        write_body(0, txn, buf_cstring(body), buf_len(body));
+    }
 
     /* Send rest of template */
-    if (suffix_len) write_body(0, txn, suffix, suffix_len);
+    if (suffix_len) {
+        write_body(0, txn, suffix, suffix_len);
+    }
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-  done:
+done:
     if (fd != -1) {
         map_free(&template, &template_len);
         close(fd);
@@ -684,11 +794,13 @@ static int list_feeds(struct transaction_t *txn)
     return ret;
 }
 
-
 /* Fetch the index record & bodystructure, and mmap the message */
-static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
-                         unsigned recno, uint32_t uid,
-                         struct index_record *record, struct body **body,
+static int fetch_message(struct transaction_t *txn,
+                         struct mailbox *mailbox,
+                         unsigned recno,
+                         uint32_t uid,
+                         struct index_record *record,
+                         struct body **body,
                          struct buf *msg_buf)
 {
     int r;
@@ -700,13 +812,14 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     record->recno = recno;
     record->uid = uid;
     r = mailbox_reload_index_record(mailbox, record);
-    if ((r == CYRUSDB_NOTFOUND) ||
-        ((record->system_flags & FLAG_DELETED) ||
-         record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+    if ((r == CYRUSDB_NOTFOUND)
+        || ((record->system_flags & FLAG_DELETED)
+            || record->internal_flags & FLAG_INTERNAL_EXPUNGED))
+    {
         txn->error.desc = "Message has been removed";
 
         /* Fill in Expires */
-        txn->resp_body.maxage = 31536000;  /* 1 year */
+        txn->resp_body.maxage = 31536000; /* 1 year */
         txn->flags.cc |= CC_MAXAGE;
         return HTTP_GONE;
     }
@@ -732,27 +845,42 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     return 0;
 }
 
-
-static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
-                          unsigned replace, unsigned level)
+static void buf_escapestr(struct buf *buf,
+                          const char *str,
+                          unsigned max,
+                          unsigned replace,
+                          unsigned level)
 {
     const char *c;
     unsigned buflen = buf_len(buf), len = 0;
 
-    if (!replace && config_httpprettytelemetry)
+    if (!replace && config_httpprettytelemetry) {
         buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+    }
 
     for (c = str; c && *c && (!max || len < max); c++, len++) {
         /* Translate CR to HTML <br> tag */
-        if (*c == '\r') buf_appendcstr(buf, "<br>");
-        else if (*c == '\n' && !config_httpprettytelemetry) continue;
+        if (*c == '\r') {
+            buf_appendcstr(buf, "<br>");
+        }
+        else if (*c == '\n' && !config_httpprettytelemetry) {
+            continue;
+        }
 
         /* Translate XML/HTML specials */
-        else if (*c == '"') buf_appendcstr(buf, "&quot;");
-//      else if (*c == '\'') buf_appendcstr(buf, "&apos;");
-        else if (*c == '&') buf_appendcstr(buf, "&amp;");
-        else if (*c == '<') buf_appendcstr(buf, "&lt;");
-        else if (*c == '>') buf_appendcstr(buf, "&gt;");
+        else if (*c == '"') {
+            buf_appendcstr(buf, "&quot;");
+        }
+        //      else if (*c == '\'') buf_appendcstr(buf, "&apos;");
+        else if (*c == '&') {
+            buf_appendcstr(buf, "&amp;");
+        }
+        else if (*c == '<') {
+            buf_appendcstr(buf, "&lt;");
+        }
+        else if (*c == '>') {
+            buf_appendcstr(buf, "&gt;");
+        }
 
         /* Handle multi-byte UTF-8 sequences */
         else if ((*c & 0xc0) == 0xc0) {
@@ -767,8 +895,9 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
              */
             unsigned char lead = *c;
 
-            do buf_putc(buf, *c);
-            while (((lead <<= 1) & 0x80) && c++);
+            do {
+                buf_putc(buf, *c);
+            } while (((lead <<= 1) & 0x80) && c++);
         }
 
         /* Check for non-printable chars */
@@ -777,7 +906,9 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
                 /* Replace entire string with a warning */
                 buf_truncate(buf, buflen);
                 buf_printf_markup(buf, level++, "<blockquote>");
-                buf_printf_markup(buf, level, "<i><b>NOTE:</b> "
+                buf_printf_markup(buf,
+                                  level,
+                                  "<i><b>NOTE:</b> "
                                   "This message contains characters "
                                   "that can not be displayed in RSS</i>");
                 buf_printf_markup(buf, --level, "</blockquote>");
@@ -789,12 +920,15 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
             }
         }
 
-        else buf_putc(buf, *c);
+        else {
+            buf_putc(buf, *c);
+        }
     }
 
-    if (!replace && config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+    if (!replace && config_httpprettytelemetry) {
+        buf_appendcstr(buf, "\n");
+    }
 }
-
 
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
@@ -808,13 +942,16 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     struct buf *url = &txn->buf;
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
-    char mboxname[MAX_MAILBOX_NAME+1];
+    char mboxname[MAX_MAILBOX_NAME + 1];
     struct buf attrib = BUF_INITIALIZER;
 
     /* Check any preconditions */
     lastmod = mailbox->i.last_appenddate.tv_sec;
-    sprintf(etag, "%u-%u-%u",
-            mailbox->i.uidvalidity, mailbox->i.last_uid, mailbox->i.exists);
+    sprintf(etag,
+            "%u-%u-%u",
+            mailbox->i.uidvalidity,
+            mailbox->i.last_uid,
+            mailbox->i.exists);
     precond = check_precond(txn, etag, lastmod);
 
     switch (precond) {
@@ -823,10 +960,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         /* Fill in ETag, Last-Modified, and Expires */
         txn->resp_body.etag = etag;
         txn->resp_body.lastmod = lastmod;
-        txn->resp_body.maxage = 3600;  /* 1 hr */
+        txn->resp_body.maxage = 3600; /* 1 hr */
         txn->flags.cc |= CC_MAXAGE;
 
-        if (precond != HTTP_NOT_MODIFIED) break;
+        if (precond != HTTP_NOT_MODIFIED) {
+            break;
+        }
 
         GCC_FALLTHROUGH
 
@@ -847,15 +986,21 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Get maximum age of items to display */
     max_age = config_getduration(IMAPOPT_RSS_MAXAGE, 'd');
-    if (max_age > 0) age_mark = time(0) - max_age;
+    if (max_age > 0) {
+        age_mark = time(0) - max_age;
+    }
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
-    if (max_items < 0) max_items = 0;
+    if (max_items < 0) {
+        max_items = 0;
+    }
 
     /* Get length of description to display */
     max_len = config_getint(IMAPOPT_RSS_MAXSYNOPSIS);
-    if (max_len < 0) max_len = 0;
+    if (max_len < 0) {
+        max_len = 0;
+    }
 
 #if 0
     /* Obtain recentuid */
@@ -900,15 +1045,17 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf_markup(buf, level, XML_DECLARATION);
 
     /* Set up the Atom <feed> response for the mailbox */
-    buf_printf_markup(buf, level++,
-                      "<feed xmlns=\"" XML_NS_ATOM "\">");
+    buf_printf_markup(buf, level++, "<feed xmlns=\"" XML_NS_ATOM "\">");
 
     /* <title> - required */
     buf_printf_markup(buf, level, "<title>%s</title>", mboxname);
 
     /* <id> - required */
-    buf_printf_markup(buf, level, "<id>%s%s</id>",
-                      GUID_URL_SCHEME, mailbox_uniqueid(mailbox));
+    buf_printf_markup(buf,
+                      level,
+                      "<id>%s%s</id>",
+                      GUID_URL_SCHEME,
+                      mailbox_uniqueid(mailbox));
 
     /* <updated> - required */
     time_to_rfc3339(lastmod, datestr, sizeof(datestr));
@@ -923,12 +1070,15 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     annotatemore_lookup_mbox(mailbox, "/comment", "", &attrib);
     if (age_mark) {
         time_to_rfc5322(age_mark, datestr, sizeof(datestr));
-        buf_printf_markup(buf, level,
-                        "<subtitle>%s [posts since %s]</subtitle>",
-                          buf_cstring(&attrib), datestr);
+        buf_printf_markup(buf,
+                          level,
+                          "<subtitle>%s [posts since %s]</subtitle>",
+                          buf_cstring(&attrib),
+                          datestr);
     }
     else {
-        buf_printf_markup(buf, level,
+        buf_printf_markup(buf,
+                          level,
                           "<subtitle>%s [%u most recent posts]</subtitle>",
                           buf_cstring(&attrib),
                           max_items ? (unsigned) max_items : mailbox->i.exists);
@@ -936,13 +1086,17 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_free(&attrib);
 
     /* <link> - optional */
-    buf_printf_markup(buf, level,
+    buf_printf_markup(buf,
+                      level,
                       "<link rel=\"self\" type=\"application/atom+xml\""
-                      " href=\"%s\"/>", buf_cstring(url));
+                      " href=\"%s\"/>",
+                      buf_cstring(url));
 
     /* <generator> - optional */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-        buf_printf_markup(buf, level, "<generator>Cyrus HTTP %s</generator>",
+        buf_printf_markup(buf,
+                          level,
+                          "<generator>Cyrus HTTP %s</generator>",
                           CYRUS_VERSION);
     }
 
@@ -951,7 +1105,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Add an <entry> for each message */
     for (recno = mailbox->i.num_records, nitems = 0;
-         recno >= 1 && (!max_items || nitems < max_items); recno--) {
+         recno >= 1 && (!max_items || nitems < max_items);
+         recno--)
+    {
         struct index_record record;
         struct body *body = NULL;
         char *subj;
@@ -967,20 +1123,25 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         }
 
         /* Fetch the message */
-        if (fetch_message(txn, mailbox, recno, 0,
-                          &record, &body, &content.map)) {
+        if (fetch_message(txn, mailbox, recno, 0, &record, &body, &content.map))
+        {
             continue;
         }
 
         /* XXX  Are we going to do anything with \Recent? */
         if (record.uid <= recentuid) {
-            syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
-                   recno, record.uid, recentuid);
+            syslog(LOG_DEBUG,
+                   "recno %u not recent (%u/%u)",
+                   recno,
+                   record.uid,
+                   recentuid);
             continue;
         }
 
         /* Make sure the message is new enough */
-        if (record.gmtime.tv_sec < age_mark) continue;
+        if (record.gmtime.tv_sec < age_mark) {
+            continue;
+        }
 
         /* Feeding this message, increment counter */
         nitems++;
@@ -995,8 +1156,11 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         free(subj);
 
         /* <id> - required */
-        buf_printf_markup(buf, level, "<id>%s%s</id>",
-                          GUID_URL_SCHEME, message_guid_encode(&record.guid));
+        buf_printf_markup(buf,
+                          level,
+                          "<id>%s%s</id>",
+                          GUID_URL_SCHEME,
+                          message_guid_encode(&record.guid));
 
         /* <updated> - required */
         time_to_rfc3339(record.gmtime.tv_sec, datestr, sizeof(datestr));
@@ -1008,32 +1172,43 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         /* <link> - optional */
         buf_truncate(url, url_len);
         buf_printf(url, "/%u.", record.uid);
-        buf_printf_markup(buf, level, "<link rel=\"alternate\""
+        buf_printf_markup(buf,
+                          level,
+                          "<link rel=\"alternate\""
                           " type=\"text/html\" href=\"%s\"/>",
                           buf_cstring(url));
 
         /* <author> - optional */
         addr = body->from;
-        if (!addr) addr = body->sender;
+        if (!addr) {
+            addr = body->sender;
+        }
         if (addr && *addr->mailbox) {
             buf_printf_markup(buf, level++, "<author>");
 
             /* <name> - required */
             if (addr->name) {
-                char *name = charset_parse_mimeheader(addr->name, charset_flags);
+                char *name =
+                    charset_parse_mimeheader(addr->name, charset_flags);
                 buf_printf_markup(buf, level++, "<name>");
                 buf_escapestr(buf, name, 0, 0, level);
                 buf_printf_markup(buf, --level, "</name>");
                 free(name);
             }
             else {
-                buf_printf_markup(buf, level, "<name>%s@%s</name>",
-                                  addr->mailbox, addr->domain);
+                buf_printf_markup(buf,
+                                  level,
+                                  "<name>%s@%s</name>",
+                                  addr->mailbox,
+                                  addr->domain);
             }
 
             /* <email> - optional */
-            buf_printf_markup(buf, level, "<email>%s@%s</email>",
-                              addr->mailbox, addr->domain);
+            buf_printf_markup(buf,
+                              level,
+                              "<email>%s@%s</email>",
+                              addr->mailbox,
+                              addr->domain);
 
             buf_printf_markup(buf, --level, "</author>");
         }
@@ -1056,7 +1231,9 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
         if (parts) {
             struct bodypart **p;
 
-            for (p = parts; *p; p++) free(*p);
+            for (p = parts; *p; p++) {
+                free(*p);
+            }
             free(parts);
         }
 
@@ -1078,50 +1255,73 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     return 0;
 }
 
-
-static void display_address(struct buf *buf, struct address *addr,
-                            const char *sep, unsigned level)
+static void display_address(struct buf *buf,
+                            struct address *addr,
+                            const char *sep,
+                            unsigned level)
 {
-    if (config_httpprettytelemetry)
+    if (config_httpprettytelemetry) {
         buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+    }
 
     buf_printf(buf, "%s", sep);
-    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
-    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
-               addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+    if (addr->name) {
+        buf_printf(buf, "\"%s\" ", addr->name);
+    }
+    buf_printf(buf,
+               "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
+               addr->mailbox,
+               addr->domain,
+               addr->mailbox,
+               addr->domain);
 
-    if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+    if (config_httpprettytelemetry) {
+        buf_appendcstr(buf, "\n");
+    }
 }
 
-
 static void display_part(struct transaction_t *txn,
-                         struct body *body, const struct index_record *record,
-                         const char *cursection, const struct buf *msg_buf,
+                         struct body *body,
+                         const struct index_record *record,
+                         const char *cursection,
+                         const struct buf *msg_buf,
                          unsigned level)
 {
     struct buf *buf = &txn->resp_body.payload;
-    char nextsection[MAX_SECTION_LEN+1];
+    char nextsection[MAX_SECTION_LEN + 1];
 
     if (body->numparts) {
         /* multipart */
         int i = 0;
 
-        if (!strcmpsafe(body->subtype, "ALTERNATIVE") &&
-            !strcmpsafe(body->subpart[0].type, "TEXT")) {
+        if (!strcmpsafe(body->subtype, "ALTERNATIVE")
+            && !strcmpsafe(body->subpart[0].type, "TEXT"))
+        {
             /* Look for a multipart/ or text/html subpart to display first,
                otherwise start with first subpart */
             for (i = body->numparts; --i;) {
-                if (!strcmpsafe(body->subpart[i].type, "MULTIPART") ||
-                    !strcmpsafe(body->subpart[i].subtype, "HTML")) break;
+                if (!strcmpsafe(body->subpart[i].type, "MULTIPART")
+                    || !strcmpsafe(body->subpart[i].subtype, "HTML"))
+                {
+                    break;
+                }
             }
         }
 
         /* Display all/remaining subparts */
         for (; i < body->numparts; i++) {
-            snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-                     cursection, *cursection ? "." : "", i+1);
-            display_part(txn, &body->subpart[i],
-                         record, nextsection, msg_buf, level);
+            snprintf(nextsection,
+                     sizeof(nextsection),
+                     "%s%s%d",
+                     cursection,
+                     *cursection ? "." : "",
+                     i + 1);
+            display_part(txn,
+                         &body->subpart[i],
+                         record,
+                         nextsection,
+                         msg_buf,
+                         level);
         }
     }
     else if (body->subpart) {
@@ -1131,7 +1331,8 @@ static void display_part(struct transaction_t *txn,
         const char *sep;
 
         /* Display enclosed message header as a shaded table */
-        buf_printf_markup(buf, level++,
+        buf_printf_markup(buf,
+                          level++,
                           "<table width=\"100%%\" bgcolor=\"#CCCCCC\">");
         /* Subject header field */
         if (subpart->subject) {
@@ -1139,8 +1340,10 @@ static void display_part(struct transaction_t *txn,
 
             subj = charset_parse_mimeheader(subpart->subject, charset_flags);
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
-                              "<td align=right valign=top><b>Subject: </b></td>");
+            buf_printf_markup(
+                buf,
+                level,
+                "<td align=right valign=top><b>Subject: </b></td>");
             buf_printf_markup(buf, level, "<td>%s</td>", subj);
             buf_printf_markup(buf, --level, "</tr>");
             free(subj);
@@ -1148,20 +1351,21 @@ static void display_part(struct transaction_t *txn,
         /* From header field */
         if (subpart->from && *subpart->from->mailbox) {
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
-                              "<td align=right><b>From: </b></td>");
+            buf_printf_markup(buf, level, "<td align=right><b>From: </b></td>");
             buf_printf_markup(buf, level++, "<td>");
             display_address(buf, subpart->from, "", level);
             buf_printf_markup(buf, --level, "</td>");
             buf_printf_markup(buf, --level, "</tr>");
         }
         /* Sender header field (if different than From */
-        if (subpart->sender && *subpart->sender->mailbox &&
-            (!subpart->from ||
-             strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
-             strcmp(subpart->sender->domain, subpart->from->domain))) {
+        if (subpart->sender && *subpart->sender->mailbox
+            && (!subpart->from
+                || strcmp(subpart->sender->mailbox, subpart->from->mailbox)
+                || strcmp(subpart->sender->domain, subpart->from->domain)))
+        {
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
+            buf_printf_markup(buf,
+                              level,
                               "<td align=right><b>Sender: </b></td>");
             buf_printf_markup(buf, level++, "<td>");
             display_address(buf, subpart->sender, "", level);
@@ -1169,12 +1373,14 @@ static void display_part(struct transaction_t *txn,
             buf_printf_markup(buf, --level, "</tr>");
         }
         /* Reply-To header field (if different than From */
-        if (subpart->reply_to && *subpart->reply_to->mailbox &&
-            (!subpart->from ||
-             strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
-             strcmp(subpart->reply_to->domain, subpart->from->domain))) {
+        if (subpart->reply_to && *subpart->reply_to->mailbox
+            && (!subpart->from
+                || strcmp(subpart->reply_to->mailbox, subpart->from->mailbox)
+                || strcmp(subpart->reply_to->domain, subpart->from->domain)))
+        {
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
+            buf_printf_markup(buf,
+                              level,
                               "<td align=right><b>Reply-To: </b></td>");
             buf_printf_markup(buf, level++, "<td>");
             display_address(buf, subpart->reply_to, "", level);
@@ -1183,15 +1389,17 @@ static void display_part(struct transaction_t *txn,
         }
         /* Date header field */
         buf_printf_markup(buf, level++, "<tr>");
-        buf_printf_markup(buf, level,
-                          "<td align=right><b>Date: </b></td>");
-        buf_printf_markup(buf, level,
-                          "<td width=\"100%%\">%s</td>", subpart->date);
+        buf_printf_markup(buf, level, "<td align=right><b>Date: </b></td>");
+        buf_printf_markup(buf,
+                          level,
+                          "<td width=\"100%%\">%s</td>",
+                          subpart->date);
         buf_printf_markup(buf, --level, "</tr>");
         /* To header field (possibly multiple addresses) */
         if (subpart->to) {
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
+            buf_printf_markup(buf,
+                              level,
                               "<td align=right valign=top><b>To: </b></td>");
             buf_printf_markup(buf, level++, "<td>");
             for (sep = "", addr = subpart->to; addr; addr = addr->next) {
@@ -1204,7 +1412,8 @@ static void display_part(struct transaction_t *txn,
         /* Cc header field (possibly multiple addresses) */
         if (subpart->cc) {
             buf_printf_markup(buf, level++, "<tr>");
-            buf_printf_markup(buf, level,
+            buf_printf_markup(buf,
+                              level,
                               "<td align=right valign=top><b>Cc: </b></td>");
             buf_printf_markup(buf, level++, "<td>");
             for (sep = "", addr = subpart->cc; addr; addr = addr->next) {
@@ -1215,18 +1424,22 @@ static void display_part(struct transaction_t *txn,
             buf_printf_markup(buf, --level, "</tr>");
         }
         buf_printf_markup(buf, --level, "</table>");
-//      buf_printf_markup(buf, level, "<br>");
+        //      buf_printf_markup(buf, level, "<br>");
 
         /* Display subpart */
-        snprintf(nextsection, sizeof(nextsection), "%s%s", cursection,
+        snprintf(nextsection,
+                 sizeof(nextsection),
+                 "%s%s",
+                 cursection,
                  subpart->numparts ? "" : (*cursection ? ".1" : "1"));
         display_part(txn, subpart, record, nextsection, msg_buf, level);
     }
     else {
         /* Leaf part - display something */
 
-        if (!strcmpsafe(body->type, "TEXT") &&
-            (!body->disposition || !strcmp(body->disposition, "INLINE"))) {
+        if (!strcmpsafe(body->type, "TEXT")
+            && (!body->disposition || !strcmp(body->disposition, "INLINE")))
+        {
             /* Display non-attachment text part */
             int ishtml = !strcmpsafe(body->subtype, "HTML");
             charset_t charset = charset_lookupname(body->charset_id);
@@ -1238,14 +1451,20 @@ static void display_part(struct transaction_t *txn,
             }
             body->decoded_body =
                 charset_to_utf8cstr(buf_base(msg_buf) + body->content_offset,
-                                body->content_size, charset, encoding);
+                                    body->content_size,
+                                    charset,
+                                    encoding);
             charset_free(&charset);
-            if (!ishtml) buf_printf_markup(buf, level, "<pre>");
+            if (!ishtml) {
+                buf_printf_markup(buf, level, "<pre>");
+            }
             write_body(0, txn, buf_cstring(buf), buf_len(buf));
             buf_reset(buf);
 
             write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
-            if (!ishtml) buf_printf_markup(buf, level, "</pre>");
+            if (!ishtml) {
+                buf_printf_markup(buf, level, "</pre>");
+            }
         }
         else {
             int is_image = !strcmpsafe(body->type, "IMAGE");
@@ -1257,40 +1476,58 @@ static void display_part(struct transaction_t *txn,
              */
             /* Look for a filename in parameters */
             if (body->disposition) {
-                if (!strcmp(body->disposition, "ATTACHMENT")) is_image = 0;
+                if (!strcmp(body->disposition, "ATTACHMENT")) {
+                    is_image = 0;
+                }
                 param = body->disposition_params;
                 file_attr = "FILENAME";
             }
             for (; param && strcmp(param->attribute, file_attr);
-                 param = param->next);
+                 param = param->next)
+                ;
 
             buf_printf_markup(buf, level++, "<div align=center>");
 
             /* Create link */
-            buf_printf_markup(buf, level++,
+            buf_printf_markup(buf,
+                              level++,
                               "<a href=\"%s?section=%s\" type=\"%s/%s\">",
-                              txn->req_tgt.path, cursection,
-                              body->type, body->subtype);
+                              txn->req_tgt.path,
+                              cursection,
+                              body->type,
+                              body->subtype);
 
-            if (config_httpprettytelemetry)
+            if (config_httpprettytelemetry) {
                 buf_printf(buf, "%*s", level * MARKUP_INDENT, "");
+            }
 
             /* Add image */
             if (is_image) {
-                buf_printf(buf, "<img src=\"%s?section=%s\" alt=\"",
-                           txn->req_tgt.path, cursection);
+                buf_printf(buf,
+                           "<img src=\"%s?section=%s\" alt=\"",
+                           txn->req_tgt.path,
+                           cursection);
             }
 
             /* Create text for link or alternative text for image */
-            if (param) buf_printf(buf, "%s", param->value);
+            if (param) {
+                buf_printf(buf, "%s", param->value);
+            }
             else {
-                buf_printf(buf, "[%s/%s %u bytes]",
-                           body->type, body->subtype, body->content_size);
+                buf_printf(buf,
+                           "[%s/%s %u bytes]",
+                           body->type,
+                           body->subtype,
+                           body->content_size);
             }
 
-            if (is_image) buf_printf(buf, "\">");
+            if (is_image) {
+                buf_printf(buf, "\">");
+            }
 
-            if (config_httpprettytelemetry) buf_appendcstr(buf, "\n");
+            if (config_httpprettytelemetry) {
+                buf_appendcstr(buf, "\n");
+            }
 
             buf_printf_markup(buf, --level, "</a>");
             buf_printf_markup(buf, --level, "</div>");
@@ -1300,13 +1537,14 @@ static void display_part(struct transaction_t *txn,
     }
 }
 
-
 /* Return entire message formatted as text/html */
 static void display_message(struct transaction_t *txn,
-                            const char *mboxname, const struct index_record *record,
-                            struct body *body, const struct buf *msg_buf)
+                            const char *mboxname,
+                            const struct index_record *record,
+                            struct body *body,
+                            const struct buf *msg_buf)
 {
-    struct body toplevel = {0};
+    struct body toplevel = { 0 };
     struct buf *buf = &txn->resp_body.payload;
     unsigned level = 0;
 
@@ -1325,14 +1563,18 @@ static void display_message(struct transaction_t *txn,
     buf_printf_markup(buf, level, HTML_DOCTYPE);
     buf_printf_markup(buf, level++, "<html>");
     buf_printf_markup(buf, level++, "<head>");
-    buf_printf_markup(buf, level, "<title>%s:%u</title>",
-                      mboxname, record->uid);
+    buf_printf_markup(buf,
+                      level,
+                      "<title>%s:%u</title>",
+                      mboxname,
+                      record->uid);
     buf_printf_markup(buf, --level, "</head>");
     buf_printf_markup(buf, level++, "<body>");
 
     /* Create link to message source */
     buf_printf_markup(buf, level++, "<div align=center>");
-    buf_printf_markup(buf, level,
+    buf_printf_markup(buf,
+                      level,
                       "<a href=\"%s?section=0\" type=\"plain/text\">"
                       "[View message source]</a>",
                       txn->req_tgt.path);
@@ -1359,7 +1601,6 @@ static void display_message(struct transaction_t *txn,
     write_body(0, txn, NULL, 0);
 }
 
-
 /* Fetch, decode, and return the specified MIME message part */
 static struct body *body_fetch_section(struct body *body, const char *section)
 {
@@ -1369,14 +1610,18 @@ static struct body *body_fetch_section(struct body *body, const char *section)
         int32_t skip = 0;
         int r = parseint32(p, &p, &skip);
 
-        if (r || !skip) return NULL;
+        if (r || !skip) {
+            return NULL;
+        }
 
         if (body->subpart && !body->numparts) {
             /* step inside message/rfc822 */
             body = body->subpart;
         }
 
-        if ((skip > 1) && (skip > body->numparts)) return NULL;
+        if ((skip > 1) && (skip > body->numparts)) {
+            return NULL;
+        }
 
         if (body->numparts) {
             /* step inside multipart */
@@ -1384,7 +1629,9 @@ static struct body *body_fetch_section(struct body *body, const char *section)
         }
 
         if (*p == '.') {
-            if (!body->subpart) return NULL;
+            if (!body->subpart) {
+                return NULL;
+            }
             p++;
         }
     }

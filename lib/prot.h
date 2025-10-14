@@ -54,7 +54,7 @@
 #include <openssl/ssl.h>
 
 #ifdef HAVE_ZLIB
-#include <zlib.h>
+# include <zlib.h>
 #endif /* HAVE_ZLIB */
 
 #include "util.h"
@@ -70,12 +70,13 @@ struct prot_waitevent;
 typedef void prot_readcallback_t(struct protstream *s, void *rock);
 typedef ssize_t prot_fillcallback_t(unsigned char *buf, size_t len, void *rock);
 
-struct protstream {
+struct protstream
+{
     /* The Buffer */
     unsigned char *buf;
     unsigned buf_size;
     unsigned char *ptr; /* The end of data in the buffer */
-    unsigned cnt; /* Space Remaining in buffer */
+    unsigned cnt;       /* Space Remaining in buffer */
 
     /* File Descriptors */
     int fd;         /* The Socket */
@@ -100,10 +101,10 @@ struct protstream {
 #endif /* HAVE_ZLIB */
 
     /* Big Buffer Information */
-    const char *bigbuf_base;  /* Base Pointer */
-    size_t bigbuf_siz; /* Overall Size of Buffer */
-    size_t bigbuf_len; /* Length of mapped file */
-    size_t bigbuf_pos; /* Current Position */
+    const char *bigbuf_base; /* Base Pointer */
+    size_t bigbuf_siz;       /* Overall Size of Buffer */
+    size_t bigbuf_len;       /* Length of mapped file */
+    size_t bigbuf_pos;       /* Current Position */
 
     /* Callback-fill information */
     prot_fillcallback_t *fillcallback_proc;
@@ -117,7 +118,7 @@ struct protstream {
 
     /* Parameters */
     int write;
-    int dontblock; /* Application requested nonblocking */
+    int dontblock;       /* Application requested nonblocking */
     int dontblock_isset; /* write only, we've fcntl(O_NONBLOCK)'d */
     int read_timeout;
     time_t timeout_mark;
@@ -139,11 +140,13 @@ struct protstream {
     void *userdata;
 };
 
-typedef struct prot_waitevent *prot_waiteventcallback_t(struct protstream *s,
-                                                        struct prot_waitevent *ev,
-                                                        void *rock);
+typedef struct prot_waitevent *prot_waiteventcallback_t(
+    struct protstream *s,
+    struct prot_waitevent *ev,
+    void *rock);
 
-struct prot_waitevent {
+struct prot_waitevent
+{
     time_t mark;
     prot_waiteventcallback_t *proc;
     void *rock;
@@ -256,12 +259,11 @@ extern int prot_resettimeout(struct protstream *s);
 
 /* Connect two streams so that when you block on reading s, the layer
  * will automatically flush flushs */
-extern int prot_setflushonread(struct protstream *s,
-                               struct protstream *flushs);
-
+extern int prot_setflushonread(struct protstream *s, struct protstream *flushs);
 
 int prot_setreadcallback(struct protstream *s,
-                                prot_readcallback_t *proc, void *rock);
+                         prot_readcallback_t *proc,
+                         void *rock);
 extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
                                                 time_t mark,
                                                 prot_waiteventcallback_t *proc,
@@ -286,7 +288,8 @@ extern int prot_vprintf(struct protstream *, const char *, va_list)
     __attribute__((format(printf, 2, 0)));
 extern int prot_printf(struct protstream *, const char *, ...)
     __attribute__((format(printf, 2, 3)));
-extern int prot_printliteral(struct protstream *out, const char *s,
+extern int prot_printliteral(struct protstream *out,
+                             const char *s,
                              size_t size);
 extern int prot_printstring(struct protstream *out, const char *s);
 extern int prot_printmap(struct protstream *out, const char *s, size_t n);
@@ -297,8 +300,10 @@ extern int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 
 /* select() for protstreams */
-extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
-                       struct protgroup **out, int *extra_read_flag,
+extern int prot_select(struct protgroup *readstreams,
+                       int extra_read_fd,
+                       struct protgroup **out,
+                       int *extra_read_flag,
                        struct timeval *timeout);
 
 /* Protgroup manipulations */

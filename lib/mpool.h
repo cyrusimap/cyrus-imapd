@@ -42,19 +42,19 @@
 
 #ifndef _MPOOL_H_
 
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
+# ifdef HAVE_UNISTD_H
+#  include <unistd.h>
+# endif
 
-#include <stdio.h>
-#include <string.h>
-#include <signal.h>
-#include <stdlib.h>
+# include <stdio.h>
+# include <string.h>
+# include <signal.h>
+# include <stdlib.h>
 
 /* Opaque mpool handle */
 struct mpool;
 
-#define DEFAULT_MPOOL_SIZE 32768
+# define DEFAULT_MPOOL_SIZE 32768
 
 /* Create a new pool -- pass zero for default */
 /* 'size' is the size of the first blob of memory that will be allocated */

@@ -45,7 +45,7 @@
 
 #ifdef CYRUS_BYTESWAP
 
-#include <netinet/in.h>
+# include <netinet/in.h>
 
 /* Structure used to swap the bytes in a 64-bit uint64_t. */
 union byteswap_64_u {
@@ -71,7 +71,6 @@ EXPORTED uint64_t _htonll(uint64_t x)
 
     return u2.a;
 }
-
 
 /* Function to byteswap big endian 64bit unsigned integers
  * back to little endian host order on little endian machines.

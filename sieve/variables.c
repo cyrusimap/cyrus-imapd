@@ -8,7 +8,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include "variables.h"
@@ -17,7 +17,12 @@
 
 #include <ctype.h>
 
-#define buf_swap(b1, b2) { struct buf *temp = b1; b1 = b2; b2 = temp; }
+#define buf_swap(b1, b2)                                                       \
+    {                                                                          \
+        struct buf *temp = b1;                                                 \
+        b1 = b2;                                                               \
+        b2 = temp;                                                             \
+    }
 
 EXPORTED char *variables_modify_string(const char *string, int modifiers)
 {
@@ -27,7 +32,9 @@ EXPORTED char *variables_modify_string(const char *string, int modifiers)
     buf_init_ro_cstr(result, string);
 
     if (!buf_len(result)) {
-        if (BFV_LENGTH & modifiers) buf_printf(result, "%zu", (size_t) 0);
+        if (BFV_LENGTH & modifiers) {
+            buf_printf(result, "%zu", (size_t) 0);
+        }
         return buf_release(result);
     }
 
@@ -66,8 +73,11 @@ EXPORTED char *variables_modify_string(const char *string, int modifiers)
         string = buf_cstring(result);
 
         buf_reset(working_buffer);
-        buf_printf(working_buffer, "%c%s", (BFV_LOWERFIRST & modifiers) ?
-                   tolower(string[0]) : toupper(string[0]), string + 1);
+        buf_printf(working_buffer,
+                   "%c%s",
+                   (BFV_LOWERFIRST & modifiers) ? tolower(string[0])
+                                                : toupper(string[0]),
+                   string + 1);
         buf_swap(result, working_buffer);
     }
 
@@ -93,7 +103,9 @@ EXPORTED char *variables_modify_string(const char *string, int modifiers)
             case '[':
             case '{':
             case '|':
-                if (!(BFV_QUOTEREGEX & modifiers)) break;
+                if (!(BFV_QUOTEREGEX & modifiers)) {
+                    break;
+                }
                 GCC_FALLTHROUGH
                 /* :matches AND :regex special characters */
             case '*':

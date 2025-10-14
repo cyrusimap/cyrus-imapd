@@ -46,7 +46,7 @@
 #include <sys/uio.h>
 #include <sysexits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "retry.h"
@@ -62,7 +62,7 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
     size_t nread;
     char *buf = vbuf;
 
-    for (nread = 0; nread < nbyte; ) {
+    for (nread = 0; nread < nbyte;) {
         ssize_t n = read(fd, buf + nread, nbyte - nread);
         if (n == 0) {
             /* end of file */
@@ -70,7 +70,9 @@ EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
         }
 
         if (n == -1) {
-            if (errno == EINTR || errno == EAGAIN) continue;
+            if (errno == EINTR || errno == EAGAIN) {
+                continue;
+            }
             return -1;
         }
 
@@ -91,13 +93,17 @@ EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
     const char *buf = vbuf;
     size_t written = 0;
 
-    if (nbyte == 0) return 0;
+    if (nbyte == 0) {
+        return 0;
+    }
 
-    for (written = 0; written < nbyte; ) {
+    for (written = 0; written < nbyte;) {
         ssize_t n = write(fd, buf + written, nbyte - written);
 
         if (n == -1) {
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                continue;
+            }
             return -1;
         }
 
@@ -126,16 +132,17 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 #ifdef MAXIOV
         MAXIOV
 #else
-#ifdef IOV_MAX
+# ifdef IOV_MAX
         IOV_MAX
-#else
+# else
         8192
-#endif
+# endif
 #endif
         ;
 
-    if (!iovcnt)
+    if (!iovcnt) {
         return 0;
+    }
 
     for (i = 0; i < iovcnt; i++) {
         len += srciov[i].iov_len;
@@ -149,7 +156,9 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
                 iov_max /= 2;
                 continue;
             }
-            if (errno == EINTR) continue;
+            if (errno == EINTR) {
+                continue;
+            }
             free(baseiov);
             return -1;
         }
@@ -158,7 +167,9 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 
         slowio_maybe_delay_write(n);
 
-        if (written == len) break;
+        if (written == len) {
+            break;
+        }
 
         /* Oh well, welcome to the slow path - we have copies */
         if (!baseiov) {
@@ -174,7 +185,9 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
             n -= iov->iov_len;
             iov++;
             iovcnt--;
-            if (!iovcnt) fatal("ran out of iov", EX_SOFTWARE);
+            if (!iovcnt) {
+                fatal("ran out of iov", EX_SOFTWARE);
+            }
         }
 
         /* Skip whatever portion of the current iov that has been written */

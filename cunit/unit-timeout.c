@@ -54,16 +54,17 @@ static void (*timeout_callback)(void);
 static pid_t timeout_pid = -1;
 static int timeout_fd = -1;
 
-#define PIPE_READ       0
-#define PIPE_WRITE      1
-#define CMD_BEGIN       'B'
-#define CMD_END         'E'
+#define PIPE_READ 0
+#define PIPE_WRITE 1
+#define CMD_BEGIN 'B'
+#define CMD_END 'E'
 
 static void sigusr1_handler(int sig __attribute__((unused)))
 {
-// fprintf(stderr, "timeout: received SIGUSR1\n");
-    if (timeout_callback)
+    // fprintf(stderr, "timeout: received SIGUSR1\n");
+    if (timeout_callback) {
         timeout_callback();
+    }
 }
 
 static void timeout_mainloop(int fd, pid_t pid)
@@ -78,30 +79,32 @@ static void timeout_mainloop(int fd, pid_t pid)
         pfd.fd = fd;
         pfd.events = POLLIN;
 
-// if (timeout < 0)
-// fprintf(stderr, "timeout: waiting for command\n");
-// else
-// fprintf(stderr, "timeout: waiting for command or %d.%03d sec\n", timeout/1000, timeout % 1000);
+        // if (timeout < 0)
+        // fprintf(stderr, "timeout: waiting for command\n");
+        // else
+        // fprintf(stderr, "timeout: waiting for command or %d.%03d sec\n", timeout/1000, timeout % 1000);
 
         /* wait for command from the parent or timeout */
         r = poll(&pfd, 1, timeout);
-// fprintf(stderr, "timeout: awoke, r=%d\n", r);
+        // fprintf(stderr, "timeout: awoke, r=%d\n", r);
         if (r < 0) {
             perror("timeout: poll");
             exit(1);
         }
         if (r == 0) {
             /* timed out */
-// fprintf(stderr, "timeout: sending USR1 to %d\n", (int)pid);
+            // fprintf(stderr, "timeout: sending USR1 to %d\n", (int)pid);
             kill(pid, SIGUSR1);
             timeout = -1;
             continue;
         }
         if (r != 1 || !pfd.revents) {
             /* WTF?? */
-            fprintf(stderr, "timeout: weirdness from poll: "
-                            "r=%d pfd.revents=%d\n",
-                            r, pfd.revents);
+            fprintf(stderr,
+                    "timeout: weirdness from poll: "
+                    "r=%d pfd.revents=%d\n",
+                    r,
+                    pfd.revents);
             exit(1);
         }
 
@@ -142,8 +145,10 @@ static void timeout_mainloop(int fd, pid_t pid)
             break;
 
         default:
-            fprintf(stderr, "timeout: Unknown command '%c' (%#x)\n",
-                            c, (unsigned) c);
+            fprintf(stderr,
+                    "timeout: Unknown command '%c' (%#x)\n",
+                    c,
+                    (unsigned) c);
             exit(1);
         }
     }
@@ -187,7 +192,8 @@ int timeout_init(void (*cb)(void))
         sa.sa_handler = sigusr1_handler;
         sa.sa_flags = SA_NODEFER;
         sigaction(SIGUSR1, &sa, NULL);
-    } else {
+    }
+    else {
         /* child */
         close(pipefd[PIPE_WRITE]);
         timeout_mainloop(pipefd[PIPE_READ], getppid());
@@ -202,9 +208,10 @@ int timeout_begin(int millisec)
     char c;
     int r;
 
-// fprintf(stderr, "timeout_begin\n");
-    if (timeout_fd < 0)
+    // fprintf(stderr, "timeout_begin\n");
+    if (timeout_fd < 0) {
         return -1;
+    }
 
     c = CMD_BEGIN;
     r = write(timeout_fd, &c, sizeof(c));
@@ -225,9 +232,10 @@ int timeout_end(void)
     char c;
     int r;
 
-// fprintf(stderr, "timeout_end\n");
-    if (timeout_fd < 0)
+    // fprintf(stderr, "timeout_end\n");
+    if (timeout_fd < 0) {
         return -1;
+    }
 
     c = CMD_END;
     r = write(timeout_fd, &c, sizeof(c));
@@ -250,13 +258,14 @@ void timeout_fini(void)
 
     if (timeout_pid > 0) {
         r = kill(timeout_pid, SIGTERM);
-        if (r < 0 && errno != ESRCH)
+        if (r < 0 && errno != ESRCH) {
             perror("timeout: kill");
-        else
+        }
+        else {
             waitpid(timeout_pid, &status, 0);
+        }
         timeout_pid = -1;
     }
 
     signal(SIGUSR1, SIG_IGN);
 }
-

@@ -111,16 +111,16 @@ enum cyrus_opt {
     CYRUSOPT_CYRUSDB_AUTOCONVERT,
 
     CYRUSOPT_LAST
-
 };
 
 union cyrus_config_value {
     const char *s; /* string */
-    long i; /* int */
-    long b; /* switch */
+    long i;        /* int */
+    long b;        /* switch */
 };
 
-struct cyrusopt_s {
+struct cyrusopt_s
+{
     const enum cyrus_opt opt;
     union cyrus_config_value val;
     const enum cyrus_opttype t;
@@ -136,7 +136,10 @@ void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
 void libcyrus_config_setint(enum cyrus_opt opt, int val);
 void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
 
-extern void libcyrus_delayed_action(const char *key, void (*cb)(void *), void (*free)(void *), void *rock);
+extern void libcyrus_delayed_action(const char *key,
+                                    void (*cb)(void *),
+                                    void (*free)(void *),
+                                    void *rock);
 extern void libcyrus_run_delayed(void);
 
 /* Start/Stop the Library */

@@ -250,7 +250,7 @@ void test_xmalloc(void)
 
 void test_xsha1(void)
 {
-    SHA1_CTX ctx = {0};
+    SHA1_CTX ctx = { 0 };
     unsigned char digest[SHA1_DIGEST_LENGTH];
     const unsigned char data[] = "this is some data";
 
@@ -270,7 +270,7 @@ int main(int argc, char **argv)
     int opt;
 
     while ((opt = getopt(argc, argv, "C:")) != -1) {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;

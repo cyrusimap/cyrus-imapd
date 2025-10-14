@@ -53,7 +53,8 @@
 
 /* "compiled" glob structure: may change
  */
-typedef struct glob {
+typedef struct glob
+{
     regex_t regex;
 } glob;
 
@@ -73,16 +74,22 @@ EXPORTED glob *glob_init(const char *str, char sep)
         case '*':
         case '%':
             /* remove duplicate hierarchy match (2) */
-            while (*str == '%') ++str;
+            while (*str == '%') {
+                ++str;
+            }
             /* If we found a '*', treat '%' as '*' (1) */
             if (*str == '*') {
                 /* remove duplicate wildcards (1) */
-                while (*str == '*' || (*str == '%' && str[1])) ++str;
+                while (*str == '*' || (*str == '%' && str[1])) {
+                    ++str;
+                }
                 buf_appendcstr(&buf, ".*");
             }
             else {
                 buf_appendcstr(&buf, "[^");
-                if (sep == '\\') buf_putc(&buf, '\\');
+                if (sep == '\\') {
+                    buf_putc(&buf, '\\');
+                }
                 buf_putc(&buf, sep);
                 buf_appendcstr(&buf, "]*");
             }
@@ -112,7 +119,9 @@ EXPORTED glob *glob_init(const char *str, char sep)
         }
     }
     buf_appendcstr(&buf, ")([");
-    if (sep == '\\') buf_putc(&buf, '\\');
+    if (sep == '\\') {
+        buf_putc(&buf, '\\');
+    }
     buf_putc(&buf, sep);
     buf_appendcstr(&buf, "]|$)");
 
@@ -149,8 +158,9 @@ EXPORTED int glob_test(glob *g, const char *str)
 {
     regmatch_t match[3];
 
-    if (regexec(&g->regex, str, 2, match, 0))
+    if (regexec(&g->regex, str, 2, match, 0)) {
         return -1;
+    }
 
     return match[1].rm_eo;
 }

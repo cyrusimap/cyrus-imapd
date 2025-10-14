@@ -103,16 +103,18 @@
 
 /* The format of a SQUAT index file. This record is stored at the
    beginning of the file. */
-typedef struct {
-  char header_text[8];       /* "SQUAT 1\n" */
-  char doc_list_offset[8];   /* offset to a doc-list structure (see below) */
-  char doc_ID_list_offset[8];/* offset to a doc-ID-list structure (see below) */
-  char word_list_offset[8];  /* offset to a word-list structure (see below) */
-  char valid_char_bits[32];  /* a bitmap recording which characters
-                                appear in the index. The client
-                                promises that query strings will not
-                                contain characters which don't have
-                                their bits set in the bitmap. */
+typedef struct
+{
+    char header_text[8];     /* "SQUAT 1\n" */
+    char doc_list_offset[8]; /* offset to a doc-list structure (see below) */
+    char doc_ID_list_offset
+        [8]; /* offset to a doc-ID-list structure (see below) */
+    char word_list_offset[8]; /* offset to a word-list structure (see below) */
+    char valid_char_bits[32]; /* a bitmap recording which characters
+                                 appear in the index. The client
+                                 promises that query strings will not
+                                 contain characters which don't have
+                                 their bits set in the bitmap. */
 } SquatDiskHeader;
 
 /* Index file format
@@ -163,15 +165,15 @@ void squat_set_last_error(int err);
 
 /* Decode and encode a 32-bit quantity into a 4-byte field in an
    architecture-independent (big-endian) format. */
-SquatInt32 squat_decode_32(char const* s);
+SquatInt32 squat_decode_32(char const *s);
 /* We return s + 4. */
-char* squat_encode_32(char* s, SquatInt32 v);
+char *squat_encode_32(char *s, SquatInt32 v);
 
 /* Decode and encode a 64-bit quantity into an 8-byte field in an
    architecture-independent (big-endian) format. */
-SquatInt64 squat_decode_64(char const* s);
+SquatInt64 squat_decode_64(char const *s);
 /* We return s + 8. */
-char* squat_encode_64(char* s, SquatInt64 v);
+char *squat_encode_64(char *s, SquatInt64 v);
 
 /* Decode and encode a 64-bit quantity into a variable length field in
    an architecture-independent format. We use one byte for every 7
@@ -184,12 +186,12 @@ char* squat_encode_64(char* s, SquatInt64 v);
    routines. Negative integers might be returned from decoding if the
    data was corrupted. */
 /* *s is incremented to point past the decoded value. */
-SquatInt64 squat_decode_I(char const** s);
+SquatInt64 squat_decode_I(char const **s);
 /* num_to_skip encoded values are decoded and discarded. We return a
    pointer past the end of the decoded values. */
-char const* squat_decode_skip_I(char const* s, int num_to_skip);
+char const *squat_decode_skip_I(char const *s, int num_to_skip);
 /* We return a pointer past the encoded value. */
-char* squat_encode_I(char* s, SquatInt64 v);
+char *squat_encode_I(char *s, SquatInt64 v);
 /* We return the number of bytes required to encode the given value. */
 int squat_count_encode_I(SquatInt64 v64);
 

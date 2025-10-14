@@ -51,11 +51,14 @@ extern ssize_t retry_write(int fd, const void *buf, size_t nbyte);
 extern ssize_t retry_writev(int fd, const struct iovec *iov, int iovcnt);
 
 /* add a buffer 's' of length 'len' to iovec 'iov' */
-#define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
-    do { (iov)[(num_iov)].iov_base = (char *)(s); \
-         (iov)[(num_iov)++].iov_len = (len); } while (0)
+#define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len)                              \
+    do {                                                                       \
+        (iov)[(num_iov)].iov_base = (char *) (s);                              \
+        (iov)[(num_iov)++].iov_len = (len);                                    \
+    } while (0)
 
 /* add a string 's' to iovec 'iov' */
-#define WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, s) WRITEV_ADD_TO_IOVEC(iov, num_iov, s, strlen(s))
+#define WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, s)                                \
+    WRITEV_ADD_TO_IOVEC(iov, num_iov, s, strlen(s))
 
 #endif /* INCLUDED_RETRY_H */

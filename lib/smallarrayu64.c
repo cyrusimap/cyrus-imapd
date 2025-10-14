@@ -12,7 +12,9 @@ EXPORTED smallarrayu64_t *smallarrayu64_new(void)
 
 EXPORTED void smallarrayu64_fini(smallarrayu64_t *sa)
 {
-    if (!sa) return;
+    if (!sa) {
+        return;
+    }
     arrayu64_fini(&sa->spillover);
     sa->count = 0;
     sa->use_spillover = 0;
@@ -20,7 +22,9 @@ EXPORTED void smallarrayu64_fini(smallarrayu64_t *sa)
 
 EXPORTED void smallarrayu64_free(smallarrayu64_t *sa)
 {
-    if (!sa) return;
+    if (!sa) {
+        return;
+    }
     smallarrayu64_fini(sa);
     free(sa);
 }
@@ -49,18 +53,21 @@ EXPORTED size_t smallarrayu64_size(smallarrayu64_t *sa)
 static inline int adjust_index_ro(const smallarrayu64_t *sa, int idx)
 {
     size_t count = sa->count + arrayu64_size(&sa->spillover);
-    if (idx >= 0 && (unsigned) idx >= count)
+    if (idx >= 0 && (unsigned) idx >= count) {
         return -1;
-    else if (idx < 0)
+    }
+    else if (idx < 0) {
         idx += count;
+    }
     return idx;
 }
 
 EXPORTED uint64_t smallarrayu64_nth(smallarrayu64_t *sa, int idx)
 {
-    if ((idx = adjust_index_ro(sa, idx)) < 0)
+    if ((idx = adjust_index_ro(sa, idx)) < 0) {
         return 0;
-    if ((size_t)idx < sa->count) {
+    }
+    if ((size_t) idx < sa->count) {
         return sa->data[idx];
     }
     else {

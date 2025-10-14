@@ -59,22 +59,25 @@
 
 /* Flags for cyrus_init() */
 enum {
-    CYRUSINIT_NODB =    (1<<0),
-    CYRUSINIT_PERROR =  (1<<1)
+    CYRUSINIT_NODB = (1 << 0),
+    CYRUSINIT_PERROR = (1 << 1)
 };
 
 /* Startup the configuration subsystem */
 /* Note that cyrus_init is pretty much the wholesale startup function
  * for any libimap/libcyrus process, and should be called fairly early
  * (and needs an associated cyrus_done call) */
-extern int cyrus_init(const char *alt_config, const char *ident,
-                      unsigned flags, int config_need_data);
-extern void global_sasl_init(int client, int server,
+extern int cyrus_init(const char *alt_config,
+                      const char *ident,
+                      unsigned flags,
+                      int config_need_data);
+extern void global_sasl_init(int client,
+                             int server,
                              const sasl_callback_t *callbacks);
 
 /* Register a module callback. This callback will be called
  * during cyrus_done, passing callback data rock */
-extern void cyrus_modules_add(void (*done)(void*), void *rock);
+extern void cyrus_modules_add(void (*done)(void *), void *rock);
 
 /* Shutdown a cyrus process */
 extern void cyrus_done(void);
@@ -87,38 +90,43 @@ extern int mysasl_config(void *context,
                          unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
-#define SASL_CB_PROC_PTR  (int (*)())
+#define SASL_CB_PROC_PTR (int (*)())
 
 /* user canonification */
-extern const char *canonify_userid(char *user, const char *loginid,
+extern const char *canonify_userid(char *user,
+                                   const char *loginid,
                                    int *domain_from_ip);
 
 extern int is_userid_anonymous(const char *user);
 
 extern int mysasl_canon_user(sasl_conn_t *conn,
                              void *context,
-                             const char *user, unsigned ulen,
+                             const char *user,
+                             unsigned ulen,
                              unsigned flags,
                              const char *user_realm,
                              char *out_user,
-                             unsigned out_max, unsigned *out_ulen);
+                             unsigned out_max,
+                             unsigned *out_ulen);
 
 extern int mysasl_proxy_policy(sasl_conn_t *conn,
                                void *context,
-                               const char *requested_user, unsigned rlen,
-                               const char *auth_identity, unsigned alen,
+                               const char *requested_user,
+                               unsigned rlen,
+                               const char *auth_identity,
+                               unsigned alen,
                                const char *def_realm __attribute__((unused)),
                                unsigned urlen __attribute__((unused)),
                                struct propctx *propctx __attribute__((unused)));
 
 /* check if `authstate' is a valid member of class */
-extern int global_authisa(struct auth_state *authstate,
-                          enum imapopt opt);
+extern int global_authisa(struct auth_state *authstate, enum imapopt opt);
 
 /* useful types */
 struct protstream;
 
-struct proxy_context {
+struct proxy_context
+{
     int use_acl;
     int proxy_servers;
     struct auth_state **authstate;
@@ -126,7 +134,8 @@ struct proxy_context {
     int *userisproxyadmin;
 };
 
-struct saslprops_t {
+struct saslprops_t
+{
     struct buf iplocalport;
     struct buf ipremoteport;
     sasl_ssf_t ssf;
@@ -134,15 +143,19 @@ struct saslprops_t {
     sasl_channel_binding_t cbinding;
     unsigned char tls_finished[MAX_FINISHED_LEN];
 };
-#define SASLPROPS_INITIALIZER \
-    { BUF_INITIALIZER, BUF_INITIALIZER, 0, BUF_INITIALIZER, \
-      { NULL, 0, 0, NULL }, { 0 } }
+#define SASLPROPS_INITIALIZER                                                  \
+    {                                                                          \
+        BUF_INITIALIZER, BUF_INITIALIZER,      0,                              \
+        BUF_INITIALIZER, { NULL, 0, 0, NULL }, \
+         { 0 }                           \
+}
 
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
 #define UNIX_SOCKET "[unix socket]"
 extern const char *get_clienthost(int s,
-                                  const char **localip, const char **remoteip);
+                                  const char **localip,
+                                  const char **remoteip);
 extern void saslprops_reset(struct saslprops_t *saslprops);
 extern void saslprops_free(struct saslprops_t *saslprops);
 extern int saslprops_set_tls(struct saslprops_t *saslprops,

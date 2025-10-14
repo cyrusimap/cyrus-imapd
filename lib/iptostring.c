@@ -50,28 +50,39 @@
 #include <errno.h>
 #include "iptostring.h"
 
-EXPORTED int iptostring(const struct sockaddr *addr, socklen_t addrlen,
-               char *out, unsigned outlen) {
+EXPORTED int iptostring(const struct sockaddr *addr,
+                        socklen_t addrlen,
+                        char *out,
+                        unsigned outlen)
+{
     char hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];
     int niflags;
 
-    if(!addr || !out) {
+    if (!addr || !out) {
         errno = EINVAL;
         return -1;
     }
 
     niflags = NI_NUMERICHOST | NI_NUMERICSERV;
 #ifdef NI_WITHSCOPEID
-    if (addr->sa_family == AF_INET6)
+    if (addr->sa_family == AF_INET6) {
         niflags |= NI_WITHSCOPEID;
+    }
 #endif
-    if (getnameinfo(addr, addrlen, hbuf, sizeof(hbuf), pbuf, sizeof(pbuf),
-                    niflags) != 0) {
+    if (getnameinfo(addr,
+                    addrlen,
+                    hbuf,
+                    sizeof(hbuf),
+                    pbuf,
+                    sizeof(pbuf),
+                    niflags)
+        != 0)
+    {
         errno = EINVAL;
         return -1;
     }
 
-    if(outlen < strlen(hbuf) + strlen(pbuf) + 2) {
+    if (outlen < strlen(hbuf) + strlen(pbuf) + 2) {
         errno = ENOMEM;
         return -1;
     }

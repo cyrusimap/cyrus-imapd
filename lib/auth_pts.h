@@ -44,11 +44,11 @@
 #define INCLUDED_AUTH_PTS_H
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <sys/file.h>
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+# include <sys/param.h>
 #endif
 #include <ctype.h>
 
@@ -58,12 +58,14 @@
 #define PTS_DBSOCKET "/ptclient/ptsock"
 #define PTS_DB_KEYSIZE 512
 
-struct auth_ident {
+struct auth_ident
+{
     unsigned hash;
     char id[PTS_DB_KEYSIZE];
 };
 
-struct auth_state {
+struct auth_state
+{
     struct auth_ident userid; /* the CANONICAL userid */
     time_t mark;
     int ngroups;

@@ -42,10 +42,10 @@
 
 #include <config.h>
 #ifdef HAVE_STRINGS_H
-#include <strings.h>
+# include <strings.h>
 #endif
 #ifdef HAVE_STRING_H
-#include <string.h>
+# include <string.h>
 #endif
 
 char *strsep(char **stringp, const char *delim)
@@ -53,16 +53,21 @@ char *strsep(char **stringp, const char *delim)
     char *p;
     char *start;
 
-    if (!stringp) return NULL;
+    if (!stringp) {
+        return NULL;
+    }
     start = *stringp;
-    if (!start) return NULL;
+    if (!start) {
+        return NULL;
+    }
 
     p = strpbrk(start, delim);
-    if (!p) return NULL;
+    if (!p) {
+        return NULL;
+    }
 
     *p++ = '\0';
     *stringp = p;
 
     return start;
 }
-

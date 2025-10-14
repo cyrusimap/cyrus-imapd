@@ -58,8 +58,9 @@ EXPORTED arrayu64_t *arrayu64_new(void)
 
 EXPORTED void arrayu64_fini(arrayu64_t *au)
 {
-    if (!au)
+    if (!au) {
         return;
+    }
     free(au->data);
     au->data = NULL;
     au->count = 0;
@@ -68,18 +69,20 @@ EXPORTED void arrayu64_fini(arrayu64_t *au)
 
 EXPORTED void arrayu64_free(arrayu64_t *au)
 {
-    if (!au)
+    if (!au) {
         return;
+    }
     arrayu64_fini(au);
     free(au);
 }
 
-#define QUANTUM     16
+#define QUANTUM 16
 static inline size_t grow(size_t have, size_t want)
 {
     size_t x = MAX(QUANTUM, have);
-    while (x < want)
+    while (x < want) {
         x *= 2;
+    }
     return x;
 }
 
@@ -88,8 +91,9 @@ static inline size_t grow(size_t have, size_t want)
  */
 static void ensure_alloc(arrayu64_t *au, size_t newalloc)
 {
-    if (newalloc <= au->alloc)
+    if (newalloc <= au->alloc) {
         return;
+    }
     newalloc = grow(au->alloc, newalloc);
     au->data = xzrealloc(au->data,
                          sizeof(uint64_t) * au->alloc,
@@ -110,10 +114,12 @@ static void ensure_alloc(arrayu64_t *au, size_t newalloc)
  */
 static inline int adjust_index_ro(const arrayu64_t *au, int idx)
 {
-    if (idx >= 0 && (unsigned) idx >= au->count)
+    if (idx >= 0 && (unsigned) idx >= au->count) {
         return -1;
-    else if (idx < 0)
+    }
+    else if (idx < 0) {
         idx += au->count;
+    }
     return idx;
 }
 
@@ -128,15 +134,18 @@ static inline int adjust_index_rw(arrayu64_t *au, int idx, int grow)
     if (idx >= 0 && (unsigned) idx >= au->count) {
         /* expanding the array as a side effect @idx pointing
          * outside the current bounds, plus perhaps @grow */
-        ensure_alloc(au, idx+grow);
-    } else if (idx < 0) {
+        ensure_alloc(au, idx + grow);
+    }
+    else if (idx < 0) {
         /* adjust Perl-style negative indices */
         idx += au->count;
-        if (idx >= 0 && grow)
-            ensure_alloc(au, au->count+grow);
-    } else if (grow) {
+        if (idx >= 0 && grow) {
+            ensure_alloc(au, au->count + grow);
+        }
+    }
+    else if (grow) {
         /* expanding the array due to an insert or append */
-        ensure_alloc(au, au->count+grow);
+        ensure_alloc(au, au->count + grow);
     }
     return idx;
 }
@@ -148,8 +157,9 @@ EXPORTED arrayu64_t *arrayu64_dup(const arrayu64_t *au)
 
     arrayu64_truncate(new, au->count);
 
-    for (i = 0 ; i < au->count ; i++)
+    for (i = 0; i < au->count; i++) {
         new->data[i] = au->data[i];
+    }
 
     return new;
 }
@@ -165,28 +175,34 @@ EXPORTED int arrayu64_append(arrayu64_t *au, uint64_t val)
 EXPORTED int arrayu64_add(arrayu64_t *au, uint64_t val)
 {
     int pos = arrayu64_find(au, val, 0);
-    if (pos < 0) pos = arrayu64_append(au, val);
+    if (pos < 0) {
+        pos = arrayu64_append(au, val);
+    }
     return pos;
 }
 
 EXPORTED void arrayu64_set(arrayu64_t *au, int idx, uint64_t val)
 {
-    if ((idx = adjust_index_rw(au, idx, 0)) < 0)
+    if ((idx = adjust_index_rw(au, idx, 0)) < 0) {
         return;
+    }
     au->data[idx] = val;
     /* adjust the count if we just sparsely expanded the array */
-    if ((unsigned) idx >= au->count)
-        au->count = idx+1;
+    if ((unsigned) idx >= au->count) {
+        au->count = idx + 1;
+    }
 }
-
 
 EXPORTED void arrayu64_insert(arrayu64_t *au, int idx, uint64_t val)
 {
-    if ((idx = adjust_index_rw(au, idx, 1)) < 0)
+    if ((idx = adjust_index_rw(au, idx, 1)) < 0) {
         return;
-    if ((unsigned) idx < au->count)
-        memmove(au->data+idx+1, au->data+idx,
-                sizeof(uint64_t) * (au->count-idx));
+    }
+    if ((unsigned) idx < au->count) {
+        memmove(au->data + idx + 1,
+                au->data + idx,
+                sizeof(uint64_t) * (au->count - idx));
+    }
     au->data[idx] = val;
     au->count++;
 }
@@ -194,13 +210,16 @@ EXPORTED void arrayu64_insert(arrayu64_t *au, int idx, uint64_t val)
 EXPORTED uint64_t arrayu64_remove(arrayu64_t *au, int idx)
 {
     uint64_t val;
-    if ((idx = adjust_index_ro(au, idx)) < 0)
+    if ((idx = adjust_index_ro(au, idx)) < 0) {
         return 0;
+    }
     val = au->data[idx];
     au->count--;
-    if ((unsigned) idx < au->count)
-        memmove(au->data+idx, au->data+idx+1,
-                sizeof(uint64_t) * (au->count-idx));
+    if ((unsigned) idx < au->count) {
+        memmove(au->data + idx,
+                au->data + idx + 1,
+                sizeof(uint64_t) * (au->count - idx));
+    }
     au->data[au->count] = 0;
     return val;
 }
@@ -212,8 +231,9 @@ EXPORTED int arrayu64_remove_all(arrayu64_t *au, uint64_t val)
 
     for (;;) {
         i = arrayu64_find(au, val, i);
-        if (i < 0)
+        if (i < 0) {
             break;
+        }
         count++;
         arrayu64_remove(au, i);
     }
@@ -223,14 +243,15 @@ EXPORTED int arrayu64_remove_all(arrayu64_t *au, uint64_t val)
 
 EXPORTED void arrayu64_truncate(arrayu64_t *au, size_t newlen)
 {
-    if (newlen == au->count)
+    if (newlen == au->count) {
         return;
+    }
 
     if (newlen > au->count) {
         ensure_alloc(au, newlen);
     }
     else {
-        memset(au->data+newlen, 0, sizeof(uint64_t) * (au->count - newlen));
+        memset(au->data + newlen, 0, sizeof(uint64_t) * (au->count - newlen));
     }
 
     au->count = newlen;
@@ -239,8 +260,9 @@ EXPORTED void arrayu64_truncate(arrayu64_t *au, size_t newlen)
 /* note: values outside the range are all zero */
 EXPORTED uint64_t arrayu64_nth(const arrayu64_t *au, int idx)
 {
-    if ((idx = adjust_index_ro(au, idx)) < 0)
+    if ((idx = adjust_index_ro(au, idx)) < 0) {
         return 0;
+    }
     return au->data[idx];
 }
 
@@ -250,8 +272,9 @@ EXPORTED uint64_t arrayu64_max(const arrayu64_t *au)
     size_t i;
 
     for (i = 0; i < au->count; i++) {
-        if (au->data[i] > max)
+        if (au->data[i] > max) {
             max = au->data[i];
+        }
     }
 
     return max;
@@ -259,20 +282,26 @@ EXPORTED uint64_t arrayu64_max(const arrayu64_t *au)
 
 static int _numeric_sort(const void *a, const void *b)
 {
-    uint64_t av = *((uint64_t *)a);
-    uint64_t bv = *((uint64_t *)b);
+    uint64_t av = *((uint64_t *) a);
+    uint64_t bv = *((uint64_t *) b);
 
-    if (av == bv)
+    if (av == bv) {
         return 0;
-    if (av < bv)
+    }
+    if (av < bv) {
         return -1;
+    }
     return 1;
 }
 
 EXPORTED void arrayu64_sort(arrayu64_t *au, arrayu64_cmp_fn_t *cmp)
 {
-    if (!cmp) cmp = _numeric_sort;
-    if (au->count) qsort(au->data, au->count, sizeof(uint64_t), cmp);
+    if (!cmp) {
+        cmp = _numeric_sort;
+    }
+    if (au->count) {
+        qsort(au->data, au->count, sizeof(uint64_t), cmp);
+    }
 }
 
 EXPORTED void arrayu64_uniq(arrayu64_t *au)
@@ -280,8 +309,9 @@ EXPORTED void arrayu64_uniq(arrayu64_t *au)
     size_t i;
 
     for (i = 1; i < au->count; i++) {
-        if (au->data[i-1] == au->data[i])
+        if (au->data[i - 1] == au->data[i]) {
             arrayu64_remove(au, i--);
+        }
     }
 }
 
@@ -289,12 +319,14 @@ EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
 {
     size_t i;
 
-    if ((idx = adjust_index_ro(au, idx)) < 0)
+    if ((idx = adjust_index_ro(au, idx)) < 0) {
         return -1;
+    }
 
     for (i = idx; i < au->count; i++) {
-        if (au->data[i] == val)
+        if (au->data[i] == val) {
             return i;
+        }
     }
 
     return -1;
@@ -303,20 +335,25 @@ EXPORTED off_t arrayu64_find(const arrayu64_t *au, uint64_t val, off_t idx)
 // needs a sorted array
 EXPORTED off_t arrayu64_bsearch(const arrayu64_t *au, uint64_t val)
 {
-    if (!au->count) return -1;
+    if (!au->count) {
+        return -1;
+    }
 
     size_t low = 0;
     size_t high = au->count - 1;
 
     while (low <= high) {
-        off_t mid = (high - low)/2 + low;
+        off_t mid = (high - low) / 2 + low;
         uint64_t this = arrayu64_nth(au, mid);
-        if (this == val)
+        if (this == val) {
             return mid;
-        if (this > val)
+        }
+        if (this > val) {
             high = mid - 1;
-        else
+        }
+        else {
             low = mid + 1;
+        }
     }
     return -1;
 }

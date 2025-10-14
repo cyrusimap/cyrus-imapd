@@ -47,7 +47,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+# include <config.h>
 #endif
 
 #include <stdio.h>
@@ -81,7 +81,7 @@
 #include "times.h"
 
 #ifdef WITH_JMAP
-#include "imap/jmap_mail_query.h"
+# include "imap/jmap_mail_query.h"
 #endif
 
 static char vacation_answer;
@@ -89,7 +89,8 @@ static char vacation_answer;
 /* current namespace */
 static struct namespace test_namespace;
 
-typedef struct {
+typedef struct
+{
     char *name;
     FILE *data;
     int size;
@@ -101,7 +102,8 @@ typedef struct {
     strarray_t *env_to;
 } message_data_t;
 
-typedef struct {
+typedef struct
+{
     const char *userid;
     const char *host;
     const char *remotehost;
@@ -126,15 +128,17 @@ static void fill_cache(message_data_t *m)
    to return, and we also can't expose our the recipients to the message */
 static int getenvelope(void *mc, const char *field, const char ***contents)
 {
-    message_data_t *m = (message_data_t *)mc;
+    message_data_t *m = (message_data_t *) mc;
 
     if (!strcasecmp(field, "from")) {
-        *contents = (const char **)m->env_from->data;
+        *contents = (const char **) m->env_from->data;
         return SIEVE_OK;
-    } else if (!strcasecmp(field, "to")) {
-        *contents = (const char **)m->env_to->data;
+    }
+    else if (!strcasecmp(field, "to")) {
+        *contents = (const char **) m->env_to->data;
         return SIEVE_OK;
-    } else {
+    }
+    else {
         *contents = NULL;
         return SIEVE_FAIL;
     }
@@ -153,18 +157,25 @@ static int getheader(void *v, const char *phead, const char ***body)
 
     if (*body) {
         return SIEVE_OK;
-    } else {
+    }
+    else {
         return SIEVE_FAIL;
     }
 }
 
-static void getheaders_cb(const char *name, const char *value,
-                          const char *raw, void *rock)
+static void getheaders_cb(const char *name,
+                          const char *value,
+                          const char *raw,
+                          void *rock)
 {
     struct buf *contents = (struct buf *) rock;
 
-    if (raw) buf_appendcstr(contents, raw);
-    else buf_printf(contents, "%s: %s\r\n", name, value);
+    if (raw) {
+        buf_appendcstr(contents, raw);
+    }
+    else {
+        buf_printf(contents, "%s: %s\r\n", name, value);
+    }
 }
 
 static int getheadersection(void *mc, struct buf **contents)
@@ -183,7 +194,9 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL || body == NULL) return SIEVE_FAIL;
+    if (head == NULL || body == NULL) {
+        return SIEVE_FAIL;
+    }
 
     if (index < 0) {
         printf("appending header '%s: %s'\n", head, body);
@@ -202,7 +215,9 @@ static int deleteheader(void *mc, const char *head, int index)
 {
     message_data_t *m = (message_data_t *) mc;
 
-    if (head == NULL) return SIEVE_FAIL;
+    if (head == NULL) {
+        return SIEVE_FAIL;
+    }
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
@@ -226,40 +241,56 @@ static int getenvironment(void *sc, const char *keyname, char **res)
         if (!strcmp(keyname, "domain")) {
             const char *domain = strchr(sd->host, '.');
 
-            if (domain) domain++;
-            else domain = "";
+            if (domain) {
+                domain++;
+            }
+            else {
+                domain = "";
+            }
 
             *res = xstrdup(domain);
         }
         break;
 
     case 'h':
-        if (!strcmp(keyname, "host")) *res = xstrdup(sd->host);
+        if (!strcmp(keyname, "host")) {
+            *res = xstrdup(sd->host);
+        }
         break;
 
     case 'l':
-        if (!strcmp(keyname, "location")) *res = xstrdup("MDA");
+        if (!strcmp(keyname, "location")) {
+            *res = xstrdup("MDA");
+        }
         break;
 
     case 'n':
-        if (!strcmp(keyname, "name")) *res = xstrdup("Cyrus LMTP");
+        if (!strcmp(keyname, "name")) {
+            *res = xstrdup("Cyrus LMTP");
+        }
         break;
 
     case 'p':
-        if (!strcmp(keyname, "phase")) *res = xstrdup("during");
+        if (!strcmp(keyname, "phase")) {
+            *res = xstrdup("during");
+        }
         break;
 
     case 'r':
         if (!strncmp(keyname, "remote-", 7)) {
-            if (!strcmp(keyname+7, "host"))
+            if (!strcmp(keyname + 7, "host")) {
                 *res = xstrdup(sd->remotehost);
-            else if (sd->remoteip && !strcmp(keyname+7, "ip"))
+            }
+            else if (sd->remoteip && !strcmp(keyname + 7, "ip")) {
                 *res = xstrdup(sd->remoteip);
+            }
         }
         break;
 
     case 'v':
-        if (!strcmp(keyname, "version")) *res = xstrdup(CYRUS_VERSION);
+        if (!strcmp(keyname, "version")) {
+            *res = xstrdup(CYRUS_VERSION);
+        }
         break;
     }
 
@@ -298,28 +329,36 @@ static int getsize(void *mc, int *size)
     return SIEVE_OK;
 }
 
-static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
+static int getbody(void *mc,
+                   const char **content_types,
+                   sieve_bodypart_t ***parts)
 {
     message_data_t *m = (message_data_t *) mc;
     int r = 0;
 
     if (!m->content.body) {
         /* parse the message body if we haven't already */
-        r = message_parse_file_buf(m->data, &m->content.map,
-                                   &m->content.body, NULL);
+        r = message_parse_file_buf(m->data,
+                                   &m->content.map,
+                                   &m->content.body,
+                                   NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
-    if (!r) message_fetch_part(&m->content, content_types,
-                               (struct bodypart ***) parts);
+    if (!r) {
+        message_fetch_part(&m->content,
+                           content_types,
+                           (struct bodypart ***) parts);
+    }
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
 static int getinclude(void *sc __attribute__((unused)),
                       const char *script,
                       int isglobal __attribute__((unused)),
-                      char *fpath, size_t size)
+                      char *fpath,
+                      size_t size)
 {
     strlcpy(fpath, script, size);
     strlcat(fpath, ".bc", size);
@@ -327,12 +366,15 @@ static int getinclude(void *sc __attribute__((unused)),
     return SIEVE_OK;
 }
 
-static int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
-                    void *mc, const char **errmsg __attribute__((unused)))
+static int redirect(void *ac,
+                    void *ic,
+                    void *sc __attribute__((unused)),
+                    void *mc,
+                    const char **errmsg __attribute__((unused)))
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     printf("redirecting message '%s' to '%s'\n", m->name, rc->addr);
 
@@ -340,38 +382,48 @@ static int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int discard(void *ac __attribute__((unused)),
-                   void *ic, void *sc __attribute__((unused)),
-                   void *mc, const char **errmsg __attribute__((unused)))
+                   void *ic,
+                   void *sc __attribute__((unused)),
+                   void *mc,
+                   const char **errmsg __attribute__((unused)))
 {
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     printf("discarding message '%s'\n", m->name);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
-                  void *mc, const char **errmsg __attribute__((unused)))
+static int reject(void *ac,
+                  void *ic,
+                  void *sc __attribute__((unused)),
+                  void *mc,
+                  const char **errmsg __attribute__((unused)))
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
-    if (rc->is_extended)
+    if (rc->is_extended) {
         printf("LMTP rejecting message '%s' with '%s'\n", m->name, rc->msg);
-    else
+    }
+    else {
         printf("rejecting message '%s' with '%s'\n", m->name, rc->msg);
+    }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
-                    void *mc, const char **errmsg __attribute__((unused)))
+static int fileinto(void *ac,
+                    void *ic,
+                    void *sc __attribute__((unused)),
+                    void *mc,
+                    const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     if (!m) {
         /* just doing destination mailbox resolution */
@@ -391,12 +443,15 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
-                  void *mc, const char **errmsg __attribute__((unused)))
+static int snooze(void *ac,
+                  void *ic,
+                  void *sc __attribute__((unused)),
+                  void *mc,
+                  const char **errmsg __attribute__((unused)))
 {
     sieve_snooze_context_t *sn = (sieve_snooze_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     time_t now = time(NULL);
     struct tm *tm = localtime(&now);
@@ -421,7 +476,7 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
         t = arrayu64_nth(sn->times, 0);
 
         /* Find next available day */
-        for (i = tm->tm_wday+1; i < 14; i++) {
+        for (i = tm->tm_wday + 1; i < 14; i++) {
             if (sn->days & (1 << (i % 7))) {
                 day_inc = i - tm->tm_wday;
                 break;
@@ -447,12 +502,15 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
-                void *mc, const char **errmsg __attribute__((unused)))
+static int keep(void *ac,
+                void *ic,
+                void *sc __attribute__((unused)),
+                void *mc,
+                const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     if (!m) {
         /* just doing destination mailbox resolution */
@@ -471,12 +529,14 @@ static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
+static int notify(void *ac,
+                  void *ic,
+                  void *sc __attribute__((unused)),
                   void *mc __attribute__((unused)),
                   const char **errmsg __attribute__((unused)))
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     printf("notify ");
     if (nc->method) {
@@ -484,23 +544,28 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
         if (nc->options) {
             int i;
             for (i = 0; i < strarray_size(nc->options); i++) {
-                if (i) printf(", ");
+                if (i) {
+                    printf(", ");
+                }
                 printf("%s", strarray_nth(nc->options, i));
             }
         }
         printf("), ");
     }
-    printf("msg = '%s' with priority = %s\n",nc->message, nc->priority);
+    printf("msg = '%s' with priority = %s\n", nc->message, nc->priority);
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-void sieve_log(void *sc __attribute__((unused)), void *mc __attribute__((unused)), const char *text)
+void sieve_log(void *sc __attribute__((unused)),
+               void *mc __attribute__((unused)),
+               const char *text)
 {
     printf("sieve log: text=%s\n", text);
 }
 
-static int mysieve_error(int lineno, const char *msg,
+static int mysieve_error(int lineno,
+                         const char *msg,
                          void *i __attribute__((unused)),
                          void *s __attribute__((unused)))
 {
@@ -519,8 +584,8 @@ static int mysieve_execute_error(const char *msg,
     return SIEVE_OK;
 }
 
-
-static int autorespond(void *ac, void *ic __attribute__((unused)),
+static int autorespond(void *ac,
+                       void *ic __attribute__((unused)),
                        void *sc __attribute__((unused)),
                        void *mc __attribute__((unused)),
                        const char **errmsg __attribute__((unused)))
@@ -543,25 +608,37 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
         else {
             printf("' in %d days? ", arc->seconds / DAY2SEC);
         }
-        if (!scanf(" %c", &yn))
+        if (!scanf(" %c", &yn)) {
             return SIEVE_FAIL;
+        }
     }
 
-    if (TOLOWER(yn) == 'y') return SIEVE_DONE;
-    if (TOLOWER(yn) == 'n') return SIEVE_OK;
+    if (TOLOWER(yn) == 'y') {
+        return SIEVE_DONE;
+    }
+    if (TOLOWER(yn) == 'n') {
+        return SIEVE_OK;
+    }
 
     return SIEVE_FAIL;
 }
 
-static int send_response(void *ac, void *ic, void *sc,
-                         void *mc, const char **errmsg)
+static int send_response(void *ac,
+                         void *ic,
+                         void *sc,
+                         void *mc,
+                         const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
-    int *force_fail = (int*) ic;
+    int *force_fail = (int *) ic;
 
     printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
-           src->msg, src->subj, src->addr, m->name, src->fromaddr);
+           src->msg,
+           src->subj,
+           src->addr,
+           m->name,
+           src->fromaddr);
 
     if (src->fcc.mailbox) {
         message_data_t vmc = { .name = (char *) "vacation-autoresponse" };
@@ -573,7 +650,10 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const char *json)
+static int jmapquery(void *ic __attribute__((unused)),
+                     void *sc,
+                     void *mc,
+                     const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = (message_data_t *) mc;
@@ -584,28 +664,40 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 
     /* Create filter from json */
     jfilter = json_loads(json, 0, &jerr);
-    if (!jfilter) return 0;
+    if (!jfilter) {
+        return 0;
+    }
 
     int r = 0;
 
     if (!md->content.matchmime) {
         if (!md->content.body) {
             /* parse the message body if we haven't already */
-            r = message_parse_file_buf(md->data, &md->content.map,
-                                       &md->content.body, NULL);
+            r = message_parse_file_buf(md->data,
+                                       &md->content.map,
+                                       &md->content.body,
+                                       NULL);
             if (r) {
                 json_decref(jfilter);
                 return 0;
             }
         }
         /* build the query filter */
-        md->content.matchmime = jmap_email_matchmime_new(&md->content.map, &err);
+        md->content.matchmime =
+            jmap_email_matchmime_new(&md->content.map, &err);
     }
 
     /* Run query */
-    if (md->content.matchmime)
-        matches = jmap_email_matchmime(md->content.matchmime, jfilter, NULL, userid,
-                sd->authstate, sd->ns, time(NULL), &err);
+    if (md->content.matchmime) {
+        matches = jmap_email_matchmime(md->content.matchmime,
+                                       jfilter,
+                                       NULL,
+                                       userid,
+                                       sd->authstate,
+                                       sd->ns,
+                                       time(NULL),
+                                       &err);
+    }
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
@@ -621,10 +713,10 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 #endif
 
 static sieve_vacation_t vacation = {
-    0,                          /* min response */
-    0,                          /* max response */
-    &autorespond,               /* autorespond() */
-    &send_response              /* send_response() */
+    0,             /* min response */
+    0,             /* max response */
+    &autorespond,  /* autorespond() */
+    &send_response /* send_response() */
 };
 
 static int usage(const char *argv0) __attribute__((noreturn));
@@ -637,7 +729,8 @@ static int usage(const char *argv0)
     fprintf(stderr, "   -u userid\n");
     fprintf(stderr, "   -e envelope_from\n");
     fprintf(stderr, "   -t envelope_to\n");
-    fprintf(stderr, "   -r y|n - have sent vacation response already? (if required)\n");
+    fprintf(stderr,
+            "   -r y|n - have sent vacation response already? (if required)\n");
     fprintf(stderr, "   -h local_hostname\n");
     fprintf(stderr, "   -H remote_hostname\n");
     fprintf(stderr, "   -I remote_ipaddr\n");
@@ -664,7 +757,7 @@ int main(int argc, char *argv[])
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
 
-    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF)
+    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF) {
         switch (c) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -702,25 +795,29 @@ int main(int argc, char *argv[])
             usage(argv[0]);
             break;
         }
+    }
 
     if (!script) {
-        if ((argc - optind) < 2)
+        if ((argc - optind) < 2) {
             usage(argv[0]);
+        }
         else {
             message = argv[optind];
-            script = argv[optind+1];
+            script = argv[optind + 1];
         }
     }
 
     /* Load configuration file. */
     cyrus_init(alt_config, "test", 0, 0);
 
-    mboxname_init_namespace(&test_namespace, /*options*/0);
+    mboxname_init_namespace(&test_namespace, /*options*/ 0);
     sd.ns = &test_namespace;
     // anyone authstate
     sd.authstate = auth_newstate("anyone");
 
-    if (!sd.host) sd.host = config_servername;
+    if (!sd.host) {
+        sd.host = config_servername;
+    }
 
     /* Check if script is bytecode or text */
     f = fopen(script, "r");
@@ -734,14 +831,16 @@ int main(int argc, char *argv[])
         bytecode_info_t *bc = NULL;
         char *err = NULL;
 
-        if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0 ||
-            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) != 0) {
+        if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0
+            || memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) != 0)
+        {
             /* Not Sieve bytecode - try to parse as text */
 
             if (sieve_script_parse_only(f, &err, &s) != SIEVE_OK) {
-                if(err) {
+                if (err) {
                     fprintf(stderr, "Unable to parse script: %s\n", err);
-                } else {
+                }
+                else {
                     fprintf(stderr, "Unable to parse script\n");
                 }
                 sieve_script_free(&s);
@@ -761,7 +860,9 @@ int main(int argc, char *argv[])
             script = tmpscript = tempname;
             fd = mkstemp(script);
             if (fd < 0) {
-                fprintf(stderr, "couldn't open bytecode output file %s\n", script);
+                fprintf(stderr,
+                        "couldn't open bytecode output file %s\n",
+                        script);
                 sieve_free_bytecode(&bc);
                 sieve_script_free(&s);
                 exit(1);
@@ -837,7 +938,9 @@ int main(int argc, char *argv[])
         }
 
         f = fdopen(fd, "r");
-        if (f) m = new_msg(f, sbuf.st_size, message);
+        if (f) {
+            m = new_msg(f, sbuf.st_size, message);
+        }
         if (!f || !m) {
             printf("can not open message '%s'\n", message);
             exit(1);
@@ -867,8 +970,9 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (m)
+    if (m) {
         free_msg(m);
+    }
     strarray_fini(&e_from);
     strarray_fini(&e_to);
     auth_freestate(sd.authstate);
@@ -876,11 +980,13 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-EXPORTED void fatal(const char* message, int rc)
+EXPORTED void fatal(const char *message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
 
-    if (rc != EX_PROTOCOL && config_fatals_abort) abort();
+    if (rc != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(rc);
 }

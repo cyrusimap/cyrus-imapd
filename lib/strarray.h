@@ -56,8 +56,8 @@ typedef struct
     char **data;
 } strarray_t;
 
-#define STRARRAY_INITIALIZER    { 0, 0, NULL }
-#define strarray_init(sa)   (memset((sa), 0, sizeof(strarray_t)))
+#define STRARRAY_INITIALIZER { 0, 0, NULL }
+#define strarray_init(sa) (memset((sa), 0, sizeof(strarray_t)))
 void strarray_fini(strarray_t *);
 
 strarray_t *strarray_new(void);
@@ -65,7 +65,8 @@ void strarray_free(strarray_t *);
 
 #define strarray_appendv(sa, s) strarray_nth((sa), strarray_append((sa), (s)))
 #define strarray_addv(sa, s) strarray_nth((sa), strarray_add((sa), (s)))
-#define strarray_add_casev(sa, s) strarray_nth((sa), strarray_add_case((sa), (s)))
+#define strarray_add_casev(sa, s)                                              \
+    strarray_nth((sa), strarray_add_case((sa), (s)))
 
 int strarray_append(strarray_t *, const char *);
 int strarray_add(strarray_t *, const char *);
@@ -89,20 +90,26 @@ void strarray_addfirst(strarray_t *, const char *);
 void strarray_addfirst_case(strarray_t *, const char *);
 void strarray_subtract_complement(strarray_t *sa, const strarray_t *sb);
 
-#define strarray_shift(sa)          strarray_remove((sa), 0)
-#define strarray_unshift(sa, s)     strarray_insert((sa), 0, (s))
-#define strarray_unshiftm(sa, s)    strarray_insertm((sa), 0, (s))
+#define strarray_shift(sa) strarray_remove((sa), 0)
+#define strarray_unshift(sa, s) strarray_insert((sa), 0, (s))
+#define strarray_unshiftm(sa, s) strarray_insertm((sa), 0, (s))
 
-#define strarray_pop(sa)            strarray_remove((sa), -1)
-#define strarray_push(sa, s)        strarray_append((sa), (s))
-#define strarray_pushm(sa, s)       strarray_appendm((sa), (s))
+#define strarray_pop(sa) strarray_remove((sa), -1)
+#define strarray_push(sa, s) strarray_append((sa), (s))
+#define strarray_pushm(sa, s) strarray_appendm((sa), (s))
 
 char *strarray_join(const strarray_t *, const char *sep);
-#define STRARRAY_TRIM (1<<0)
-#define STRARRAY_LCASE (1<<1)
-strarray_t *strarray_splitm(strarray_t *sa, char *buf, const char *sep, int flags);
+#define STRARRAY_TRIM (1 << 0)
+#define STRARRAY_LCASE (1 << 1)
+strarray_t *strarray_splitm(strarray_t *sa,
+                            char *buf,
+                            const char *sep,
+                            int flags);
 strarray_t *strarray_split(const char *buf, const char *sep, int flags);
-strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
+strarray_t *strarray_nsplit(const char *buf,
+                            size_t len,
+                            const char *sep,
+                            int flags);
 
 /* strarray_cmp_fn_t is same sig as qsort's compar argument */
 typedef int strarray_cmp_fn_t(const void *, const void *);
@@ -113,12 +120,11 @@ void strarray_uniq(strarray_t *);
 char **strarray_safetakevf(strarray_t *sa);
 char **strarray_takevf(strarray_t *sa);
 
-int strarray_find(const strarray_t *sa, const char *match,
-                  int starting);
-int strarray_find_case(const strarray_t *sa, const char *match,
-                       int starting);
+int strarray_find(const strarray_t *sa, const char *match, int starting);
+int strarray_find_case(const strarray_t *sa, const char *match, int starting);
 #define strarray_contains(sa, match) (strarray_find(sa, match, 0) >= 0)
-#define strarray_contains_case(sa, match) (strarray_find_case(sa, match, 0) >= 0)
+#define strarray_contains_case(sa, match)                                      \
+    (strarray_find_case(sa, match, 0) >= 0)
 
 int strarray_intersect(const strarray_t *sa, const strarray_t *b);
 int strarray_intersect_case(const strarray_t *sa, const strarray_t *b);

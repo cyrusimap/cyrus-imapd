@@ -56,10 +56,10 @@
 #include <syslog.h>
 #include <time.h>
 
-static dynarray_t cronevent_schedule
-    = DYNARRAY_INITIALIZER(sizeof(struct cron_spec));
-static dynarray_t cronevent_details
-    = DYNARRAY_INITIALIZER(sizeof(struct cronevent_details));
+static dynarray_t cronevent_schedule =
+    DYNARRAY_INITIALIZER(sizeof(struct cron_spec));
+static dynarray_t cronevent_details =
+    DYNARRAY_INITIALIZER(sizeof(struct cronevent_details));
 
 static time_t cronevent_last_run_time = 0;
 
@@ -68,7 +68,7 @@ EXPORTED void cronevent_add(const char *name,
                             const char *cmd,
                             bool ignore_err)
 {
-    struct cron_spec cron_spec = {0};
+    struct cron_spec cron_spec = { 0 };
     struct cronevent_details *details = NULL;
     const char *parse_err = NULL;
     int spec_idx, det_idx;
@@ -77,14 +77,18 @@ EXPORTED void cronevent_add(const char *name,
         xsyslog(LOG_ERR, "event missing name",
                          "spec=<%s> cmd=<%s>",
                          spec, cmd);
-        if (ignore_err) return;
+        if (ignore_err) {
+            return;
+        }
         fatal("event missing name", EX_CONFIG);
     }
 
     if (!cmd || !*cmd) {
         xsyslog(LOG_ERR, "event missing cmd",
                          "name=<%s>", name);
-        if (ignore_err) return;
+        if (ignore_err) {
+            return;
+        }
         fatal("event missing cmd", EX_CONFIG);
     }
 
@@ -92,7 +96,9 @@ EXPORTED void cronevent_add(const char *name,
         xsyslog(LOG_ERR, "unable to parse cron spec",
                          "name=<%s> spec=<%s> parse_err=<%s>",
                          name, spec, parse_err);
-        if (ignore_err) return;
+        if (ignore_err) {
+            return;
+        }
         fatal("unable to parse cron spec", EX_CONFIG);
     }
 
@@ -136,8 +142,9 @@ EXPORTED void cronevent_poll_due(struct timeval now,
     cron_spec_from_timeval(&current_time, &run_time, &now);
 
     /* only do anything once per minute */
-    if (cronevent_last_run_time && run_time <= cronevent_last_run_time)
+    if (cronevent_last_run_time && run_time <= cronevent_last_run_time) {
         return;
+    }
 
     const int n_events = dynarray_size(&cronevent_schedule);
     assert(n_events == dynarray_size(&cronevent_details));
@@ -156,8 +163,7 @@ EXPORTED void cronevent_poll_due(struct timeval now,
 }
 
 /* hidden accessors for unit tests */
-HIDDEN void cronevent_get_schedule(dynarray_t **schedule,
-                                   dynarray_t **details)
+HIDDEN void cronevent_get_schedule(dynarray_t **schedule, dynarray_t **details)
 {
     *schedule = &cronevent_schedule;
     *details = &cronevent_details;

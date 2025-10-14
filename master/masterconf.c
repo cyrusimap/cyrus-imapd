@@ -64,13 +64,13 @@
 
 extern const char *MASTER_CONFIG_FILENAME;
 
-struct configlist {
+struct configlist
+{
     char *key;
     char *value;
 };
 
-extern void fatal(const char *buf, int code)
-    __attribute__((noreturn));
+extern void fatal(const char *buf, int code) __attribute__((noreturn));
 
 void fatalf(int code, const char *fmt, ...)
 {
@@ -82,7 +82,6 @@ void fatalf(int code, const char *fmt, ...)
     va_end(args);
     fatal(buf, code);
 }
-
 
 int masterconf_init(const char *ident, const char *alt_config)
 {
@@ -107,10 +106,12 @@ int masterconf_init(const char *ident, const char *alt_config)
         prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
         /* XXX master ignores IMAPOPT_SYSLOG_FACILITY */
 
-        if (prefix)
+        if (prefix) {
             buf = strconcat(prefix, "/", ident, NULL);
-        else
+        }
+        else {
             buf = xstrdup(ident);
+        }
 
         /* Reopen the log with the new prefix */
         closelog();
@@ -120,46 +121,52 @@ int masterconf_init(const char *ident, const char *alt_config)
     /* don't free 'buf', syslog needs it for the lifetime of the process */
 
     /* drop debug messages locally */
-    if (!config_debug)
+    if (!config_debug) {
         setlogmask(LOG_UPTO(LOG_INFO));
+    }
 
     return 0;
 }
 
-struct entry {
-#define MAXARGS     64
+struct entry
+{
+#define MAXARGS 64
     int nargs;
-    struct {
+    struct
+    {
         char *key;
         char *value;
     } args[MAXARGS];
     int lineno;
 };
 
-const char *masterconf_getstring(struct entry *e, const char *key,
+const char *masterconf_getstring(struct entry *e,
+                                 const char *key,
                                  const char *def)
 {
     int i;
 
-    for (i = 0 ; i < e->nargs ; i++) {
-        if (!strcmp(key, e->args[i].key))
+    for (i = 0; i < e->nargs; i++) {
+        if (!strcmp(key, e->args[i].key)) {
             return e->args[i].value;
+        }
     }
     return def;
 }
 
-int masterconf_getint(struct entry *e,
-                      const char *key, int def)
+int masterconf_getint(struct entry *e, const char *key, int def)
 {
     const char *val = masterconf_getstring(e, key, NULL);
 
-    if (!val) return def;
-    if (!Uisdigit(*val) &&
-        (*val != '-' || !Uisdigit(val[1]))) {
-            syslog(LOG_DEBUG,
-                   "value '%s' for '%s' does not look like a number.",
-                   val, key);
-            return def;
+    if (!val) {
+        return def;
+    }
+    if (!Uisdigit(*val) && (*val != '-' || !Uisdigit(val[1]))) {
+        syslog(LOG_DEBUG,
+               "value '%s' for '%s' does not look like a number.",
+               val,
+               key);
+        return def;
     }
     return atoi(val);
 }
@@ -168,19 +175,25 @@ int masterconf_getswitch(struct entry *e, const char *key, int def)
 {
     const char *val = masterconf_getstring(e, key, NULL);
 
-    if (!val) return def;
+    if (!val) {
+        return def;
+    }
 
-    if (val[0] == '0' || val[0] == 'n' ||
-        (val[0] == 'o' && val[1] == 'f') || val[0] == 'f') {
+    if (val[0] == '0' || val[0] == 'n' || (val[0] == 'o' && val[1] == 'f')
+        || val[0] == 'f')
+    {
         return 0;
     }
-    else if (val[0] == '1' || val[0] == 'y' ||
-             (val[0] == 'o' && val[1] == 'n') || val[0] == 't') {
+    else if (val[0] == '1' || val[0] == 'y' || (val[0] == 'o' && val[1] == 'n')
+             || val[0] == 't')
+    {
         return 1;
     }
 
-    syslog(LOG_DEBUG, "cannot interpret value '%s' for key '%s'. use y/n.",
-               val, key);
+    syslog(LOG_DEBUG,
+           "cannot interpret value '%s' for key '%s'. use y/n.",
+           val,
+           key);
 
     return def;
 }
@@ -192,19 +205,25 @@ static void split_args(struct entry *e, char *buf)
 
     for (;;) {
         /* skip whitespace before arg */
-        while (Uisspace(*p))
+        while (Uisspace(*p)) {
             p++;
-        if (!*p)
+        }
+        if (!*p) {
             return;
+        }
         key = p;
 
         /* parse the key */
-        for (q = p ; Uisalnum(*q) ; q++)
+        for (q = p; Uisalnum(*q); q++)
             ;
-        if (*q != '=')
-            fatalf(EX_CONFIG, "configuration file %s: "
-                              "bad character '%c' in argument on line %d",
-                              MASTER_CONFIG_FILENAME, *q, e->lineno);
+        if (*q != '=') {
+            fatalf(EX_CONFIG,
+                   "configuration file %s: "
+                   "bad character '%c' in argument on line %d",
+                   MASTER_CONFIG_FILENAME,
+                   *q,
+                   e->lineno);
+        }
         *q++ = '\0';
 
         /* parse the value */
@@ -212,23 +231,31 @@ static void split_args(struct entry *e, char *buf)
             /* quoted string */
             value = ++q;
             q = strchr(q, '"');
-            if (!q)
-                fatalf(EX_CONFIG, "configuration file %s: missing \" on line %d",
-                        MASTER_CONFIG_FILENAME, e->lineno);
+            if (!q) {
+                fatalf(EX_CONFIG,
+                       "configuration file %s: missing \" on line %d",
+                       MASTER_CONFIG_FILENAME,
+                       e->lineno);
+            }
             *q++ = '\0';
         }
         else {
             /* simple word */
             value = q;
-            while (*q && !Uisspace(*q))
+            while (*q && !Uisspace(*q)) {
                 q++;
-            if (*q)
+            }
+            if (*q) {
                 *q++ = '\0';
+            }
         }
 
-        if (e->nargs == MAXARGS)
-                fatalf(EX_CONFIG, "configuration file %s: too many arguments on line %d",
-                        MASTER_CONFIG_FILENAME, e->lineno);
+        if (e->nargs == MAXARGS) {
+            fatalf(EX_CONFIG,
+                   "configuration file %s: too many arguments on line %d",
+                   MASTER_CONFIG_FILENAME,
+                   e->lineno);
+        }
         e->args[e->nargs].key = key;
         e->args[e->nargs].value = value;
         e->nargs++;
@@ -236,8 +263,10 @@ static void split_args(struct entry *e, char *buf)
     }
 }
 
-static void process_section(FILE *f, int *lnptr,
-                            masterconf_process *func, void *rock)
+static void process_section(FILE *f,
+                            int *lnptr,
+                            masterconf_process *func,
+                            void *rock)
 {
     struct entry e;
     char buf[4096];
@@ -249,24 +278,38 @@ static void process_section(FILE *f, int *lnptr,
         lineno++;
 
         /* remove EOL character */
-        if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+        if (buf[strlen(buf) - 1] == '\n') {
+            buf[strlen(buf) - 1] = '\0';
+        }
         /* remove starting whitespace */
-        for (p = buf; *p && Uisspace(*p); p++);
+        for (p = buf; *p && Uisspace(*p); p++)
+            ;
 
         /* remove comments */
         q = strchr(p, '#');
-        if (q) *q = '\0';
+        if (q) {
+            *q = '\0';
+        }
 
         /* skip empty lines or all comment lines */
-        if (!*p) continue;
-        if (*p == '}') break;
+        if (!*p) {
+            continue;
+        }
+        if (*p == '}') {
+            break;
+        }
 
-        for (q = p; Uisalnum(*q); q++) ;
+        for (q = p; Uisalnum(*q); q++)
+            ;
         if (*q) {
-            if (q > p && !Uisspace(*q))
-                fatalf(EX_CONFIG, "configuration file %s: "
-                                  "bad character '%c' in name on line %d",
-                                  MASTER_CONFIG_FILENAME, *q, lineno);
+            if (q > p && !Uisspace(*q)) {
+                fatalf(EX_CONFIG,
+                       "configuration file %s: "
+                       "bad character '%c' in name on line %d",
+                       MASTER_CONFIG_FILENAME,
+                       *q,
+                       lineno);
+            }
             *q++ = '\0';
         }
 
@@ -279,13 +322,16 @@ static void process_section(FILE *f, int *lnptr,
         }
 
         /* end of section? */
-        if (strchr(q, '}')) break;
+        if (strchr(q, '}')) {
+            break;
+        }
     }
 
     *lnptr = lineno;
 }
 
-void masterconf_getsection(const char *section, masterconf_process *f,
+void masterconf_getsection(const char *section,
+                           masterconf_process *f,
                            void *rock)
 {
     FILE *infile = NULL;
@@ -303,49 +349,67 @@ void masterconf_getsection(const char *section, masterconf_process *f,
         infile = fopen(buf, "r");
     }
 
-    if (!infile)
+    if (!infile) {
         infile = fopen(MASTER_CONFIG_FILENAME, "r");
+    }
 
-    if (!infile)
-        fatalf(EX_CONFIG, "can't open configuration file %s: %m",
-                MASTER_CONFIG_FILENAME);
+    if (!infile) {
+        fatalf(EX_CONFIG,
+               "can't open configuration file %s: %m",
+               MASTER_CONFIG_FILENAME);
+    }
 
     while (fgets(buf, sizeof(buf), infile)) {
         char *p, *q;
 
         lineno++;
 
-        if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
-        for (p = buf; *p && Uisspace(*p); p++);
+        if (buf[strlen(buf) - 1] == '\n') {
+            buf[strlen(buf) - 1] = '\0';
+        }
+        for (p = buf; *p && Uisspace(*p); p++)
+            ;
 
         /* remove comments */
         q = strchr(p, '#');
-        if (q) *q = '\0';
+        if (q) {
+            *q = '\0';
+        }
 
         /* skip empty lines or all comment lines */
-        if (!*p) continue;
+        if (!*p) {
+            continue;
+        }
 
-        if (level == 0 &&
-            *p == *section && !strncasecmp(p, section, seclen) &&
-            !Uisalnum(p[seclen])) {
+        if (level == 0 && *p == *section && !strncasecmp(p, section, seclen)
+            && !Uisalnum(p[seclen]))
+        {
             for (p += seclen; *p; p++) {
-                if (*p == '{') level++;
-                if (*p == '}') level--;
+                if (*p == '{') {
+                    level++;
+                }
+                if (*p == '}') {
+                    level--;
+                }
             }
 
             /* valid opening; process the section */
-            if (level == 1) process_section(infile, &lineno, f, rock);
+            if (level == 1) {
+                process_section(infile, &lineno, f, rock);
+            }
 
             continue;
         }
 
         for (; *p; p++) {
-            if (*p == '{') level++;
-            if (*p == '}') level--;
+            if (*p == '{') {
+                level++;
+            }
+            if (*p == '}') {
+                level--;
+            }
         }
     }
 
     fclose(infile);
 }
-
-

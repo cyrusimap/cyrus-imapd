@@ -43,18 +43,20 @@
 #ifndef INCLUDED_PARSEADDR_H
 #define INCLUDED_PARSEADDR_H
 
-struct address {
+struct address
+{
     const char *name;
     const char *route;
     const char *mailbox;
     const char *domain;
     struct address *next;
-    char *freeme;               /* If non-nil, free */
-    int invalid;                /* If non-zero, this mail address is known to
-                                   be invalid. */
+    char *freeme; /* If non-nil, free */
+    int invalid;  /* If non-zero, this mail address is known to
+                     be invalid. */
 };
 
-struct address_itr {
+struct address_itr
+{
     struct address *addrlist;
     struct address *anext;
 };
@@ -68,7 +70,8 @@ extern char *address_get_domain(const struct address *, int canon_domain);
 extern char *address_get_user(const struct address *);
 extern char *address_get_detail(const struct address *);
 
-extern void address_itr_init(struct address_itr *ai, const char *str,
+extern void address_itr_init(struct address_itr *ai,
+                             const char *str,
                              int reverse_path);
 extern const struct address *address_itr_next(struct address_itr *ai);
 extern void address_itr_fini(struct address_itr *ai);

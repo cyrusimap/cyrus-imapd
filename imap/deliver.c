@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <signal.h>
@@ -82,22 +82,28 @@ static struct protstream *deliver_out, *deliver_in;
 
 static const char *sockaddr;
 
-static struct protocol_t lmtp_protocol =
-{ "lmtp", "lmtp", NULL, TYPE_STD,
-  { { { 0, "220 " },
-      { "LHLO", "deliver", "250 ", NULL,
-        CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD|CAPAF_DASH_STUFFING,
-        { { "AUTH", CAPA_AUTH },
-          { "STARTTLS", CAPA_STARTTLS },
-          { "PIPELINING", CAPA_PIPELINING },
-          { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
-          { "TRACE", CAPA_TRACE },
-          { NULL, 0 } } },
-      { "STARTTLS", "220", "454", 0 },
-      { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
-      { NULL, NULL, NULL },
-      { "NOOP", NULL, "250" },
-      { "QUIT", NULL, "221" } } }
+static struct protocol_t lmtp_protocol = {
+    "lmtp",
+    "lmtp",
+    NULL,
+    TYPE_STD,
+    { { { 0, "220 " },
+        { "LHLO",
+          "deliver",
+          "250 ",
+          NULL,
+          CAPAF_ONE_PER_LINE | CAPAF_SKIP_FIRST_WORD | CAPAF_DASH_STUFFING,
+          { { "AUTH", CAPA_AUTH },
+            { "STARTTLS", CAPA_STARTTLS },
+            { "PIPELINING", CAPA_PIPELINING },
+            { "IGNOREQUOTA", CAPA_IGNOREQUOTA },
+            { "TRACE", CAPA_TRACE },
+            { NULL, 0 } } },
+        { "STARTTLS", "220", "454", 0 },
+        { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
+        { NULL, NULL, NULL },
+        { "NOOP", NULL, "250" },
+        { "QUIT", NULL, "221" } } }
 };
 
 /* unused for deliver.c, but needed to make lmtpengine.c happy */
@@ -105,8 +111,12 @@ int deliver_logfd = -1;
 
 /* forward declarations */
 
-static int deliver_msg(char *return_path, char *authuser, int ignorequota,
-                       char **users, int numusers, char *mailbox);
+static int deliver_msg(char *return_path,
+                       char *authuser,
+                       int ignorequota,
+                       char **users,
+                       int numusers,
+                       char *mailbox);
 static struct backend *init_net(const char *sockaddr);
 
 static void usage(void)
@@ -118,18 +128,24 @@ static void usage(void)
     exit(EX_USAGE);
 }
 
-EXPORTED void fatal(const char* s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
-    if(recurse_code) exit(code);
-    else recurse_code = 0;
+    if (recurse_code) {
+        exit(code);
+    }
+    else {
+        recurse_code = 0;
+    }
 
-    prot_printf(deliver_out,"421 4.3.0 deliver: %s\r\n", s);
+    prot_printf(deliver_out, "421 4.3.0 deliver: %s\r\n", s);
     prot_flush(deliver_out);
     cyrus_done();
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -150,8 +166,14 @@ void pipe_through(struct backend *conn)
         prot_flush(deliver_out);
         prot_flush(conn->out);
 
-    } while (!proxy_check_input(protin, deliver_in, deliver_out,
-                                conn->in, conn->out, PROT_NO_FD, NULL, 0));
+    } while (!proxy_check_input(protin,
+                                deliver_in,
+                                deliver_out,
+                                conn->in,
+                                conn->out,
+                                PROT_NO_FD,
+                                NULL,
+                                0));
 
     /* ok, we're done. */
     protgroup_free(protin);
@@ -176,20 +198,21 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "debug", no_argument, NULL, 'D' }, /* XXX undocumented */
-        { "auth-id", required_argument, NULL, 'a' },
-        { "lmtp", no_argument, NULL, 'l' },
-        { "mailbox", required_argument, NULL, 'm' },
-        { "ignore-quota", no_argument, NULL, 'q' },
-        { "return-path", required_argument, NULL, 'r' },
-        { "trace-id", required_argument, NULL, 't' },
-        { 0, 0, 0, 0 },
+        { "debug",        no_argument,       NULL, 'D' }, /* XXX undocumented */
+        { "auth-id",      required_argument, NULL, 'a' },
+        { "lmtp",         no_argument,       NULL, 'l' },
+        { "mailbox",      required_argument, NULL, 'm' },
+        { "ignore-quota", no_argument,       NULL, 'q' },
+        { "return-path",  required_argument, NULL, 'r' },
+        { "trace-id",     required_argument, NULL, 't' },
+        { 0,              0,                 0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -213,7 +236,9 @@ int main(int argc, char **argv)
                 usage();
                 /* NOTREACHED */
             }
-            if (*optarg) mailboxname = optarg;
+            if (*optarg) {
+                mailboxname = optarg;
+            }
             break;
 
         case 'a':
@@ -226,7 +251,7 @@ int main(int argc, char **argv)
             break;
 
         case 'F': /* set IMAP flag. we no longer support this */
-            fprintf(stderr,"deliver: 'F' option no longer supported\n");
+            fprintf(stderr, "deliver: 'F' option no longer supported\n");
             usage();
             break;
 
@@ -235,7 +260,7 @@ int main(int argc, char **argv)
             break;
 
         case 'E':
-            fprintf(stderr,"deliver: 'E' option no longer supported\n");
+            fprintf(stderr, "deliver: 'E' option no longer supported\n");
             usage();
             break;
 
@@ -265,7 +290,10 @@ int main(int argc, char **argv)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    cyrus_init(alt_config, "deliver", CYRUSINIT_NODB, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config,
+               "deliver",
+               CYRUSINIT_NODB,
+               CONFIG_NEED_PARTITION_DATA);
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {
@@ -290,8 +318,12 @@ int main(int argc, char **argv)
         }
 
         /* deliver to users or global mailbox */
-        r = deliver_msg(return_path,authuser, ignorequota,
-                        argv+optind, argc - optind, mailboxname);
+        r = deliver_msg(return_path,
+                        authuser,
+                        ignorequota,
+                        argv + optind,
+                        argc - optind,
+                        mailboxname);
     }
 
     cyrus_done();
@@ -311,35 +343,42 @@ static void just_exit(const char *msg)
  */
 static struct backend *init_net(const char *unixpath)
 {
-  int lmtpdsock;
-  struct sockaddr_un addr;
-  struct backend *conn;
+    int lmtpdsock;
+    struct sockaddr_un addr;
+    struct backend *conn;
 
-  if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-      just_exit("socket failed");
-  }
+    if ((lmtpdsock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+        just_exit("socket failed");
+    }
 
-  addr.sun_family = AF_UNIX;
-  strlcpy(addr.sun_path, unixpath, sizeof(addr.sun_path));
+    addr.sun_family = AF_UNIX;
+    strlcpy(addr.sun_path, unixpath, sizeof(addr.sun_path));
 
-  if (connect(lmtpdsock, (struct sockaddr *) &addr,
-              sizeof(addr.sun_family) + strlen(addr.sun_path) + 1) < 0) {
-      just_exit("connect failed");
-  }
+    if (connect(lmtpdsock,
+                (struct sockaddr *) &addr,
+                sizeof(addr.sun_family) + strlen(addr.sun_path) + 1)
+        < 0)
+    {
+        just_exit("connect failed");
+    }
 
-  conn = xzmalloc(sizeof(struct backend));
-  conn->timeout = NULL;
-  conn->in = prot_new(lmtpdsock, 0);
-  conn->out = prot_new(lmtpdsock, 1);
-  conn->sock = lmtpdsock;
-  prot_setflushonread(conn->in, conn->out);
-  conn->prot = &lmtp_protocol;
+    conn = xzmalloc(sizeof(struct backend));
+    conn->timeout = NULL;
+    conn->in = prot_new(lmtpdsock, 0);
+    conn->out = prot_new(lmtpdsock, 1);
+    conn->sock = lmtpdsock;
+    prot_setflushonread(conn->in, conn->out);
+    conn->prot = &lmtp_protocol;
 
-  return conn;
+    return conn;
 }
 
-static int deliver_msg(char *return_path, char *authuser, int ignorequota,
-                       char **users, int numusers, char *mailbox)
+static int deliver_msg(char *return_path,
+                       char *authuser,
+                       int ignorequota,
+                       char **users,
+                       int numusers,
+                       char *mailbox)
 {
     int r;
     struct backend *conn;
@@ -353,8 +392,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     }
 
     /* connect */
-    conn = backend_connect(NULL, sockaddr, &lmtp_protocol,
-                           "", NULL, NULL, -1);
+    conn = backend_connect(NULL, sockaddr, &lmtp_protocol, "", NULL, NULL, -1);
     if (!conn) {
         just_exit("couldn't connect to lmtpd");
     }
@@ -366,31 +404,39 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
     txn->isdotstuffed = 0;
     txn->tempfail_unknown_mailbox = 0;
     txn->rcpt_num = numusers ? numusers : 1;
-    if (mailbox) ml = strlen(mailbox);
+    if (mailbox) {
+        ml = strlen(mailbox);
+    }
     if (numusers == 0) {
         /* just deliver to mailbox 'mailbox' */
         const char *BB = config_getstring(IMAPOPT_POSTUSER);
-        txn->rcpt[0].addr = (char *) xmalloc(ml + strlen(BB) + 2); /* XXX leaks! */
+        txn->rcpt[0].addr =
+            (char *) xmalloc(ml + strlen(BB) + 2); /* XXX leaks! */
         sprintf(txn->rcpt[0].addr, "%s+%s", BB, mailbox);
         txn->rcpt[0].ignorequota = ignorequota;
-    } else {
+    }
+    else {
         /* setup each recipient */
         for (j = 0; j < numusers; j++) {
             if (mailbox) {
                 size_t ulen;
 
-                txn->rcpt[j].addr =
-                    (char *) xmalloc(strlen(users[j]) + ml + 2);
+                txn->rcpt[j].addr = (char *) xmalloc(strlen(users[j]) + ml + 2);
 
                 /* find the length of the userid minus the domain */
                 ulen = strcspn(users[j], "@");
-                sprintf(txn->rcpt[j].addr, "%.*s+%s",
-                        (int) ulen, users[j], mailbox);
+                sprintf(txn->rcpt[j].addr,
+                        "%.*s+%s",
+                        (int) ulen,
+                        users[j],
+                        mailbox);
 
                 /* add the domain if we have one */
-                if (ulen < strlen(users[j]))
-                    strcat(txn->rcpt[j].addr, users[j]+ulen);
-            } else {
+                if (ulen < strlen(users[j])) {
+                    strcat(txn->rcpt[j].addr, users[j] + ulen);
+                }
+            }
+            else {
                 txn->rcpt[j].addr = xstrdup(users[j]);
             }
             txn->rcpt[j].ignorequota = ignorequota;
@@ -419,7 +465,8 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
             /* we just need any permanent failure, though we should
                probably return data from the client-side LMTP info */
             printf("%s: %s\n",
-                   txn->rcpt[j].addr, error_message(txn->rcpt[j].r));
+                   txn->rcpt[j].addr,
+                   error_message(txn->rcpt[j].r));
             if (r != EX_TEMPFAIL) {
                 r = EX_DATAERR;
             }

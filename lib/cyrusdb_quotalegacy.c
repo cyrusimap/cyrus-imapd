@@ -52,7 +52,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -102,7 +102,8 @@
 
 /* we have the file locked iff we have an outstanding transaction */
 
-struct subtxn {
+struct subtxn
+{
     int fd;
 
     char *fnamenew;
@@ -111,23 +112,26 @@ struct subtxn {
     int delete;
 };
 
-struct txn {
-    hash_table table;   /* hash table of sub-transactions */
+struct txn
+{
+    hash_table table; /* hash table of sub-transactions */
 
-    int (*proc)(const char *, struct subtxn *);  /* commit/abort procedure */
+    int (*proc)(const char *, struct subtxn *); /* commit/abort procedure */
 
-    int result;         /* final result of the commit/abort */
+    int result; /* final result of the commit/abort */
 };
 
-struct dbengine {
+struct dbengine
+{
     char *path;
 
-    char *data;         /* allocated buffer for fetched data */
+    char *data; /* allocated buffer for fetched data */
 
-    struct txn txn;     /* transaction associated with this db handle */
+    struct txn txn; /* transaction associated with this db handle */
 };
 
-static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *tid);
+static int abort_txn(struct dbengine *db __attribute__((unused)),
+                     struct txn *tid);
 static int compar_qr(const void *v1, const void *v2);
 
 /* hash the prefix - either with or without 'user.' part */
@@ -136,14 +140,19 @@ static char name_to_hashchar(const char *name, int isprefix)
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     const char *idx;
 
-    if (!*name) return '\0';
+    if (!*name) {
+        return '\0';
+    }
     /* you can't actually prefix with a fulldirhash character! (Bug 3735) */
-    if (config_fulldirhash && isprefix) return '\0';
+    if (config_fulldirhash && isprefix) {
+        return '\0';
+    }
 
     idx = strchr(name, '.'); /* skip past user. */
     if (idx == NULL) {
         idx = name;
-    } else {
+    }
+    else {
         idx++;
     }
 
@@ -166,13 +175,14 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     size -= len;
 
     if (config_virtdomains && (p = strchr(qr, '!'))) {
-        *p = '\0';  /* split domain!qr */
+        *p = '\0'; /* split domain!qr */
         c = (char) dir_hash_c(qr, config_fulldirhash);
-        if ((len = snprintf(buf, size, "%s%c/%s",
-                            FNAME_DOMAINDIR, c, qr)) >= size) {
+        if ((len = snprintf(buf, size, "%s%c/%s", FNAME_DOMAINDIR, c, qr))
+            >= size)
+        {
             fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
         }
-        *p++ = '!';  /* reassemble domain!qr */
+        *p++ = '!'; /* reassemble domain!qr */
         qr = p;
         buf += len;
         size -= len;
@@ -180,8 +190,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
         if (!*qr) {
             /* quota for entire domain */
             if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= (int) size) {
-                fatal("insufficient buffer size in hash_quota",
-                      EX_TEMPFAIL);
+                fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
             }
             return;
         }
@@ -247,10 +256,10 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
     if ((writefd = tid->fdnew) != -1) {
         /* we wrote something */
 
-        if (fsync(writefd) ||
-            fstat(writefd, &sbuf) == -1 ||
-            cyrus_rename(tid->fnamenew, fname) == -1 ||
-            lock_unlock(writefd, fname) == -1) {
+        if (fsync(writefd) || fstat(writefd, &sbuf) == -1
+            || cyrus_rename(tid->fnamenew, fname) == -1
+            || lock_unlock(writefd, fname) == -1)
+        {
             xsyslog(LOG_ERR, "IOERROR: commit failed",
                              "fname=<%s>",
                              tid->fnamenew);
@@ -258,11 +267,14 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
         }
         close(writefd);
         free(tid->fnamenew);
-    } else if (tid->delete) {
+    }
+    else if (tid->delete) {
         /* delete file */
-        if (xunlink(fname) == -1)
+        if (xunlink(fname) == -1) {
             r = CYRUSDB_IOERROR;
-    } else {
+        }
+    }
+    else {
         /* read-only txn */
     }
 
@@ -293,8 +305,12 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
 static void free_db(struct dbengine *db)
 {
     if (db) {
-        if (db->path) free(db->path);
-        if (db->data) free(db->data);
+        if (db->path) {
+            free(db->path);
+        }
+        if (db->data) {
+            free(db->data);
+        }
         free_hash_table(&db->txn.table, NULL);
         free(db);
     }
@@ -312,7 +328,10 @@ static struct subtxn *new_subtxn(const char *fname __attribute__((unused)),
     return ret;
 }
 
-static int myopen(const char *fname, int flags, struct dbengine **ret, struct txn **mytid)
+static int myopen(const char *fname,
+                  int flags,
+                  struct dbengine **ret,
+                  struct txn **mytid)
 {
     struct dbengine *db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     struct stat sbuf;
@@ -325,7 +344,9 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     construct_hash_table(&db->txn.table, 200, 0);
 
     /* strip any filename from the path */
-    if ((p = strrchr(db->path, '/'))) *p = '\0';
+    if ((p = strrchr(db->path, '/'))) {
+        *p = '\0';
+    }
 
     r = stat(db->path, &sbuf);
     if (r == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
@@ -359,8 +380,10 @@ static int myclose(struct dbengine *db)
     return 0;
 }
 
-static int myfetch(struct dbengine *db, char *quota_path,
-                   const char **data, size_t *datalen,
+static int myfetch(struct dbengine *db,
+                   char *quota_path,
+                   const char **data,
+                   size_t *datalen,
                    struct txn **tid)
 {
     struct subtxn *mytid = NULL;
@@ -371,16 +394,21 @@ static int myfetch(struct dbengine *db, char *quota_path,
 
     assert(db);
 
-    if (data) *data = NULL;
-    if (datalen) *datalen = 0;
+    if (data) {
+        *data = NULL;
+    }
+    if (datalen) {
+        *datalen = 0;
+    }
 
     if (!data || !datalen) {
         /* just check if the key exists */
         struct stat sbuf;
 
         if (stat(quota_path, &sbuf) == -1) {
-            if (errno == ENOENT)
+            if (errno == ENOENT) {
                 errno = 0;
+            }
             return CYRUSDB_NOTFOUND;
         }
 
@@ -388,10 +416,12 @@ static int myfetch(struct dbengine *db, char *quota_path,
     }
 
     if (tid) {
-        if (!*tid)
+        if (!*tid) {
             *tid = &db->txn;
-        else
+        }
+        else {
             mytid = (struct subtxn *) hash_lookup(quota_path, &db->txn.table);
+        }
     }
 
     /* open and lock file, if needed */
@@ -427,20 +457,26 @@ static int myfetch(struct dbengine *db, char *quota_path,
             hash_insert(quota_path, mytid, &db->txn.table);
         }
     }
-    else
+    else {
         quota_fd = mytid->fd;
+    }
 
     free(db->data);
     db->data = NULL;
 
-    map_refresh(quota_fd, 1, &quota_base, &quota_len,
-                MAP_UNKNOWN_LEN, quota_path, 0);
+    map_refresh(quota_fd,
+                1,
+                &quota_base,
+                &quota_len,
+                MAP_UNKNOWN_LEN,
+                quota_path,
+                0);
 
     if (!quota_len) {
         *data = db->data = xstrdup("");
         *datalen = 0;
     }
-    else if (quota_base[quota_len-1] != '\n') {
+    else if (quota_base[quota_len - 1] != '\n') {
         r = CYRUSDB_IOERROR;
     }
     else {
@@ -450,26 +486,34 @@ static int myfetch(struct dbengine *db, char *quota_path,
     }
 
     map_free(&quota_base, &quota_len);
-    if (!tid) close(quota_fd);
+    if (!tid) {
+        close(quota_fd);
+    }
 
-    if (r) return r;
+    if (r) {
+        return r;
+    }
 
     /* magic old-format conversion */
     if (db->data[0] != '%') {
         char *eol = strchr(db->data, '\n');
         /* convert the separating \n to SP */
-        if (eol) *eol = ' ';
+        if (eol) {
+            *eol = ' ';
+        }
     }
 
     return 0;
 }
 
 static int fetch(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char **data, size_t *datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char **data,
+                 size_t *datalen,
                  struct txn **tid)
 {
-    char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
+    char quota_path[MAX_QUOTA_PATH + 1], *tmpkey = NULL;
 
     /* if we need to truncate the key, do so */
     if (key[keylen] != '\0') {
@@ -480,7 +524,9 @@ static int fetch(struct dbengine *db,
     }
 
     hash_quota(quota_path, sizeof(quota_path), key, db->path);
-    if (tmpkey) free(tmpkey);
+    if (tmpkey) {
+        free(tmpkey);
+    }
 
     return myfetch(db, quota_path, data, datalen, tid);
 }
@@ -494,7 +540,10 @@ static const char *path_to_qr(const char *path, char *buf)
     if ((p = strstr(path, FNAME_DOMAINDIR))) {
         /* use the quota_path as a buffer to construct virtdomain qr */
         p += strlen(FNAME_DOMAINDIR) + 2; /* +2 for hashdir */
-        sprintf(buf, "%.*s!%s", (int) strcspn(p, "/"), p,
+        sprintf(buf,
+                "%.*s!%s",
+                (int) strcspn(p, "/"),
+                p,
                 strcmp(qr, "root") ? qr : "");
         qr = buf;
     }
@@ -505,7 +554,7 @@ static const char *path_to_qr(const char *path, char *buf)
 static int compar_qr(const void *v1, const void *v2)
 {
     const char *qr1, *qr2;
-    char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
+    char qrbuf1[MAX_QUOTA_PATH + 1], qrbuf2[MAX_QUOTA_PATH + 1];
 
     qr1 = path_to_qr(*((const char **) v1), qrbuf1);
     qr2 = path_to_qr(*((const char **) v2), qrbuf2);
@@ -513,7 +562,8 @@ static int compar_qr(const void *v1, const void *v2)
     return strcmp(qr1, qr2);
 }
 
-static void scan_qr_dir(char *quota_path, const char *prefix,
+static void scan_qr_dir(char *quota_path,
+                        const char *prefix,
                         strarray_t *pathbuf)
 {
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
@@ -534,47 +584,56 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
 
     c = config_fulldirhash ? 'A' : 'a';
     for (i = 0; i < 26; i++, c++) {
-        if (onlyc && c != onlyc) continue;
+        if (onlyc && c != onlyc) {
+            continue;
+        }
         *endp = c;
 
         qrdir = opendir(quota_path);
 
         if (qrdir) {
             while ((next = readdir(qrdir)) != NULL) {
-                if (!strcmp(next->d_name, ".")
-                    || !strcmp(next->d_name, "..")) continue;
+                if (!strcmp(next->d_name, ".") || !strcmp(next->d_name, "..")) {
+                    continue;
+                }
 
-                if (!strncmp(next->d_name, prefix, strlen(prefix)))
-                    strarray_appendm(pathbuf,
-                                     strconcat(quota_path, next->d_name, (char *)NULL));
+                if (!strncmp(next->d_name, prefix, strlen(prefix))) {
+                    strarray_appendm(
+                        pathbuf,
+                        strconcat(quota_path, next->d_name, (char *) NULL));
+                }
             }
 
             closedir(qrdir);
         }
     }
 
-    if (config_virtdomains && !strlen(prefix) &&
-        strstr(quota_path, FNAME_DOMAINDIR)) {
+    if (config_virtdomains && !strlen(prefix)
+        && strstr(quota_path, FNAME_DOMAINDIR))
+    {
         /* search for a domain quota */
         struct stat buf;
 
         strcpy(endp, "root");
 
-        if (!stat(quota_path, &buf))
+        if (!stat(quota_path, &buf)) {
             strarray_append(pathbuf, quota_path);
+        }
     }
 }
 
 static int foreach(struct dbengine *db,
-                   const char *prefix, size_t prefixlen,
+                   const char *prefix,
+                   size_t prefixlen,
                    foreach_p *goodp,
-                   foreach_cb *cb, void *rock,
+                   foreach_cb *cb,
+                   void *rock,
                    struct txn **tid)
 {
     int r = CYRUSDB_OK;
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
-    char quota_path[MAX_QUOTA_PATH+1];
+    char quota_path[MAX_QUOTA_PATH + 1];
     strarray_t pathbuf = STRARRAY_INITIALIZER;
     int i;
     char *tmpprefix = NULL, *p = NULL;
@@ -590,8 +649,9 @@ static int foreach(struct dbengine *db,
     }
 
     hash_quota(quota_path, sizeof(quota_path), prefix, db->path);
-    if (config_virtdomains && (p = strchr(prefix, '!')))
+    if (config_virtdomains && (p = strchr(prefix, '!'))) {
         prefix = p + 1;
+    }
 
     /* search for the quotaroots */
     scan_qr_dir(quota_path, prefix, &pathbuf);
@@ -603,8 +663,11 @@ static int foreach(struct dbengine *db,
         DIR *qrdir;
         struct dirent *next = NULL;
 
-        n = snprintf(quota_path, sizeof(quota_path)-3, "%s%s",
-                     db->path, FNAME_DOMAINDIR);
+        n = snprintf(quota_path,
+                     sizeof(quota_path) - 3,
+                     "%s%s",
+                     db->path,
+                     FNAME_DOMAINDIR);
 
         endp = quota_path + n;
 
@@ -619,10 +682,16 @@ static int foreach(struct dbengine *db,
             if (qrdir) {
                 while ((next = readdir(qrdir)) != NULL) {
                     if (!strcmp(next->d_name, ".")
-                        || !strcmp(next->d_name, "..")) continue;
+                        || !strcmp(next->d_name, ".."))
+                    {
+                        continue;
+                    }
 
-                    snprintf(endp+2, sizeof(quota_path) - (n+2),
-                             "%s%s", next->d_name, FNAME_QUOTADIR);
+                    snprintf(endp + 2,
+                             sizeof(quota_path) - (n + 2),
+                             "%s%s",
+                             next->d_name,
+                             FNAME_QUOTADIR);
                     scan_qr_dir(quota_path, "", &pathbuf);
                 }
 
@@ -631,20 +700,27 @@ static int foreach(struct dbengine *db,
         }
     }
 
-    if (tmpprefix) free(tmpprefix);
+    if (tmpprefix) {
+        free(tmpprefix);
+    }
 
-    if (tid && !*tid) *tid = &db->txn;
+    if (tid && !*tid) {
+        *tid = &db->txn;
+    }
 
     /* sort the quotaroots (ignoring paths) */
-    if (pathbuf.data)
+    if (pathbuf.data) {
         qsort(pathbuf.data, pathbuf.count, sizeof(char *), compar_qr);
+    }
 
     for (i = 0; i < pathbuf.count; i++) {
         const char *data, *key;
         size_t keylen, datalen;
 
         r = myfetch(db, pathbuf.data[i], &data, &datalen, tid);
-        if (r) break;
+        if (r) {
+            break;
+        }
 
         key = path_to_qr(pathbuf.data[i], quota_path);
         keylen = strlen(key);
@@ -652,7 +728,9 @@ static int foreach(struct dbengine *db,
         if (!goodp || goodp(rock, key, keylen, data, datalen)) {
             /* make callback */
             r = cb(rock, key, keylen, data, datalen);
-            if (r) break;
+            if (r) {
+                break;
+            }
         }
     }
 
@@ -662,11 +740,14 @@ static int foreach(struct dbengine *db,
 }
 
 static int mystore(struct dbengine *db,
-                   const char *key, size_t keylen,
-                   const char *data, size_t datalen,
-                   struct txn **tid, int overwrite)
+                   const char *key,
+                   size_t keylen,
+                   const char *data,
+                   size_t datalen,
+                   struct txn **tid,
+                   int overwrite)
 {
-    char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
+    char quota_path[MAX_QUOTA_PATH + 1], *tmpkey = NULL;
     struct subtxn *mytid = NULL;
     int r = 0;
 
@@ -676,13 +757,17 @@ static int mystore(struct dbengine *db,
     tmpkey[keylen] = '\0';
 
     hash_quota(quota_path, sizeof(quota_path), tmpkey, db->path);
-    if (tmpkey) free(tmpkey);
+    if (tmpkey) {
+        free(tmpkey);
+    }
 
     if (tid) {
-        if (!*tid)
+        if (!*tid) {
             *tid = &db->txn;
-        else
+        }
+        else {
             mytid = (struct subtxn *) hash_lookup(quota_path, &db->txn.table);
+        }
     }
 
     /* open and lock file, if needed */
@@ -717,22 +802,26 @@ static int mystore(struct dbengine *db,
 
         mytid = new_subtxn(quota_path, fd);
 
-        if (tid) hash_insert(quota_path, mytid, &db->txn.table);
+        if (tid) {
+            hash_insert(quota_path, mytid, &db->txn.table);
+        }
     }
 
     if (!data) {
         mytid->delete = 1;
     }
     else {
-        char new_quota_path[MAX_QUOTA_PATH+1], *buf, *p;
+        char new_quota_path[MAX_QUOTA_PATH + 1], *buf, *p;
         int newfd = -1, r1 = 0;
         ssize_t n;
 
         if (mytid->fd != -1 && !overwrite) {
-            if (tid)
+            if (tid) {
                 abort_txn(db, *tid);
-            else
+            }
+            else {
                 abort_subtxn(quota_path, mytid);
+            }
             return CYRUSDB_EXISTS;
         }
 
@@ -743,17 +832,21 @@ static int mystore(struct dbengine *db,
             xunlink(new_quota_path);
             newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
             if (newfd == -1 && errno == ENOENT) {
-                if (cyrus_mkdir(new_quota_path, 0755) != -1)
-                    newfd = open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+                if (cyrus_mkdir(new_quota_path, 0755) != -1) {
+                    newfd =
+                        open(new_quota_path, O_CREAT | O_TRUNC | O_RDWR, 0666);
+                }
             }
             if (newfd == -1) {
                 xsyslog(LOG_ERR, "IOERROR: creating quota file failed",
                                  "fname=<%s>",
                                  new_quota_path);
-                if (tid)
+                if (tid) {
                     abort_txn(db, *tid);
-                else
+                }
+                else {
                     abort_subtxn(quota_path, mytid);
+                }
                 return CYRUSDB_IOERROR;
             }
 
@@ -763,48 +856,59 @@ static int mystore(struct dbengine *db,
                 xsyslog(LOG_ERR, "IOERROR: lock_blocking failed",
                                  "fname=<%s>",
                                  new_quota_path);
-                if (tid)
+                if (tid) {
                     abort_txn(db, *tid);
-                else
+                }
+                else {
                     abort_subtxn(quota_path, mytid);
+                }
                 return CYRUSDB_IOERROR;
             }
         }
 
-        buf = xmalloc(datalen+1);
+        buf = xmalloc(datalen + 1);
         memcpy(buf, data, datalen);
         if (buf[0] != '%') {
             /* convert separating SP to \n */
             p = memchr(buf, ' ', datalen);
-            if (p) *p = '\n';
+            if (p) {
+                *p = '\n';
+            }
         }
         /* add a terminating \n */
         buf[datalen] = '\n';
 
         lseek(mytid->fdnew, 0, SEEK_SET);
         /* XXX this should maybe use retry_write... */
-        n = write(mytid->fdnew, buf, datalen+1);
-        if (n == (ssize_t)datalen+1) r1 = ftruncate(mytid->fdnew, datalen+1);
+        n = write(mytid->fdnew, buf, datalen + 1);
+        if (n == (ssize_t) datalen + 1) {
+            r1 = ftruncate(mytid->fdnew, datalen + 1);
+        }
         free(buf);
 
-        if (n != (ssize_t)datalen+1 || r1 == -1) {
-            if (n == -1 || r1 == -1)
+        if (n != (ssize_t) datalen + 1 || r1 == -1) {
+            if (n == -1 || r1 == -1) {
                 xsyslog(LOG_ERR, "IOERROR: write failed",
                                  "fname=<%s>",
                                  new_quota_path);
-            else
+            }
+            else {
                 xsyslog(LOG_ERR, "IOERROR: partial write",
                                  "fname=<%s> wanted=<%d>",
                                  new_quota_path, (int)datalen+1);
-            if (tid)
+            }
+            if (tid) {
                 abort_txn(db, *tid);
-            else
+            }
+            else {
                 abort_subtxn(quota_path, mytid);
+            }
             return CYRUSDB_IOERROR;
         }
 
-        if (!mytid->fnamenew)
+        if (!mytid->fnamenew) {
             mytid->fnamenew = xstrdup(new_quota_path);
+        }
     }
 
     if (!tid) {
@@ -816,24 +920,30 @@ static int mystore(struct dbengine *db,
 }
 
 static int create(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  const char *data, size_t datalen,
+                  const char *key,
+                  size_t keylen,
+                  const char *data,
+                  size_t datalen,
                   struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
 static int store(struct dbengine *db,
-                 const char *key, size_t keylen,
-                 const char *data, size_t datalen,
+                 const char *key,
+                 size_t keylen,
+                 const char *data,
+                 size_t datalen,
                  struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
 static int delete(struct dbengine *db,
-                  const char *key, size_t keylen,
-                  struct txn **mytid, int force __attribute__((unused)))
+                  const char *key,
+                  size_t keylen,
+                  struct txn **mytid,
+                  int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
@@ -846,10 +956,13 @@ static void txn_proc(const char *fname, void *data, void *rock)
     r = tid->proc(fname, (struct subtxn *) data);
     hash_del(fname, &tid->table);
 
-    if (r && !tid->result) tid->result = r;
+    if (r && !tid->result) {
+        tid->result = r;
+    }
 }
 
-static int commit_txn(struct dbengine *db __attribute__((unused)), struct txn *tid)
+static int commit_txn(struct dbengine *db __attribute__((unused)),
+                      struct txn *tid)
 {
     tid->proc = commit_subtxn;
     tid->result = 0;
@@ -859,7 +972,8 @@ static int commit_txn(struct dbengine *db __attribute__((unused)), struct txn *t
     return tid->result;
 }
 
-static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *tid)
+static int abort_txn(struct dbengine *db __attribute__((unused)),
+                     struct txn *tid)
 {
     tid->proc = abort_subtxn;
     tid->result = 0;
@@ -869,9 +983,8 @@ static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *ti
     return tid->result;
 }
 
-HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
-{
-    "quotalegacy",                      /* name */
+HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy = {
+    "quotalegacy", /* name */
 
     &cyrusdb_generic_init,
     &cyrusdb_generic_done,

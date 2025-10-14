@@ -80,88 +80,97 @@
 
 #define NUM_STORAGE_CLASSES 100
 
-#define BOOL  int
+#define BOOL int
 #define FALSE (0)
-#define TRUE  (1)
+#define TRUE (1)
 #define STATIC static
 
-
-typedef struct _NEWSGROUP {
-    char                *Name;
-    char                *Rest;
-    unsigned long       Last;
-    unsigned long       Lastpurged;
-        /* These fields are new. */
-    time_t              Keep;
-    time_t              Default;
-    time_t              Purge;
+typedef struct _NEWSGROUP
+{
+    char *Name;
+    char *Rest;
+    unsigned long Last;
+    unsigned long Lastpurged;
+    /* These fields are new. */
+    time_t Keep;
+    time_t Default;
+    time_t Purge;
     /* X flag => remove entire article when it expires in this group */
-    BOOL                Poison;
+    BOOL Poison;
 } NEWSGROUP;
 
-typedef struct _EXPIRECLASS {
-    time_t              Keep;
-    time_t              Default;
-    time_t              Purge;
-    BOOL                Missing;
-    BOOL                ReportedMissing;
+typedef struct _EXPIRECLASS
+{
+    time_t Keep;
+    time_t Default;
+    time_t Purge;
+    BOOL Missing;
+    BOOL ReportedMissing;
 } EXPIRECLASS;
 
 /*
 **  Expire-specific stuff.
 */
-#define MAGIC_TIME      49710.
+#define MAGIC_TIME 49710.
 
+STATIC NEWSGROUP EXPdefault;
+STATIC int nGroups;
+STATIC int nGroups_alloc;
+STATIC time_t EXPremember;
+STATIC time_t Now;
+STATIC EXPIRECLASS EXPclasses[NUM_STORAGE_CLASSES];
+STATIC NEWSGROUP *Groups;
 
-STATIC NEWSGROUP        EXPdefault;
-STATIC int              nGroups;
-STATIC int              nGroups_alloc;
-STATIC time_t           EXPremember;
-STATIC time_t           Now;
-STATIC EXPIRECLASS      EXPclasses[NUM_STORAGE_CLASSES];
-STATIC NEWSGROUP        *Groups;
-
-STATIC int              EXPverbose;
+STATIC int EXPverbose;
 /*
 **  Split a line at a specified field separator into a vector and return
 **  the number of fields found, or -1 on error.
 */
 STATIC int EXPsplit(char *p, char sep, char **argv, int count)
 {
-    int                 i;
+    int i;
 
-    if (!p)
-      return 0;
+    if (!p) {
+        return 0;
+    }
 
-    while (*p == sep)
-      ++p;
+    while (*p == sep) {
+        ++p;
+    }
 
-    if (!*p)
-      return 0;
+    if (!*p) {
+        return 0;
+    }
 
-    if (!p)
-      return 0;
+    if (!p) {
+        return 0;
+    }
 
-    while (*p == sep)
-      ++p;
+    while (*p == sep) {
+        ++p;
+    }
 
-    if (!*p)
-      return 0;
+    if (!*p) {
+        return 0;
+    }
 
-    for (i = 1, *argv++ = p; *p; )
+    for (i = 1, *argv++ = p; *p;) {
         if (*p++ == sep) {
             p[-1] = '\0';
-            for (; *p == sep; p++);
-            if (!*p)
+            for (; *p == sep; p++)
+                ;
+            if (!*p) {
                 return i;
-            if (++i == count)
+            }
+            if (++i == count) {
                 /* Overflow. */
                 return -1;
+            }
             *argv++ = p;
         }
+    }
     return i;
 }
-
 
 /*
 **  Parse a number field converting it into a "when did this start?".
@@ -171,72 +180,82 @@ STATIC int EXPsplit(char *p, char sep, char **argv, int count)
 */
 STATIC BOOL EXPgetnum(int line, char *word, time_t *v, char *name)
 {
-    char                *p;
-    BOOL                SawDot;
-    double              d;
+    char *p;
+    BOOL SawDot;
+    double d;
 
     if (caseEQ(word, "never")) {
-        *v = (time_t)0;
+        *v = (time_t) 0;
         return TRUE;
     }
 
     /* Check the number.  We don't have strtod yet. */
-    for (p = word; ISWHITE(*p); p++)
+    for (p = word; ISWHITE(*p); p++) {
         continue;
-    if (*p == '+' || *p == '-')
+    }
+    if (*p == '+' || *p == '-') {
         p++;
-    for (SawDot = FALSE; *p; p++)
+    }
+    for (SawDot = FALSE; *p; p++) {
         if (*p == '.') {
-            if (SawDot)
+            if (SawDot) {
                 break;
+            }
             SawDot = TRUE;
         }
-        else if (!Uisdigit(*p))
+        else if (!Uisdigit(*p)) {
             break;
+        }
+    }
     if (*p) {
-        (void)fprintf(stderr, "Line %d, bad `%c' character in %s field\n",
-                line, *p, name);
+        (void) fprintf(stderr,
+                       "Line %d, bad `%c' character in %s field\n",
+                       line,
+                       *p,
+                       name);
         return FALSE;
     }
     d = atof(word);
-    if (d > MAGIC_TIME)
-        *v = (time_t)0;
-    else
-        *v = Now - (time_t)(d * 86400.);
+    if (d > MAGIC_TIME) {
+        *v = (time_t) 0;
+    }
+    else {
+        *v = Now - (time_t) (d * 86400.);
+    }
     return TRUE;
 }
-
 
 /*
 **  Set the expiration fields for all groups that match this pattern.
 */
 STATIC void EXPmatch(char *p, NEWSGROUP *v, char mod)
 {
-    NEWSGROUP           *ngp;
-    int                 i;
-    BOOL                negate;
+    NEWSGROUP *ngp;
+    int i;
+    BOOL negate;
 
     negate = *p == '!';
-    if (negate)
+    if (negate) {
         p++;
-    for (ngp = Groups, i = nGroups; --i >= 0; ngp++)
-    {
-        if (negate ? !wildmat(ngp->Name, p) : wildmat(ngp->Name, p))
+    }
+    for (ngp = Groups, i = nGroups; --i >= 0; ngp++) {
+        if (negate ? !wildmat(ngp->Name, p) : wildmat(ngp->Name, p)) {
             if (mod == 'a') {
                 /*|| (mod == 'm' && ngp->Rest[0] == NF_FLAG_MODERATED)
                   || (mod == 'u' && ngp->Rest[0] != NF_FLAG_MODERATED)) { */
-                ngp->Keep      = v->Keep;
-                ngp->Default   = v->Default;
-                ngp->Purge     = v->Purge;
-                ngp->Poison    = v->Poison;
+                ngp->Keep = v->Keep;
+                ngp->Default = v->Default;
+                ngp->Purge = v->Purge;
+                ngp->Poison = v->Poison;
                 if (EXPverbose > 4) {
-                    (void)printf("%s", ngp->Name);
-                    (void)printf(" %13.13s", ctime(&v->Keep) + 3);
-                    (void)printf(" %13.13s", ctime(&v->Default) + 3);
-                    (void)printf(" %13.13s", ctime(&v->Purge) + 3);
-                    (void)printf(" (%s)\n", p);
+                    (void) printf("%s", ngp->Name);
+                    (void) printf(" %13.13s", ctime(&v->Keep) + 3);
+                    (void) printf(" %13.13s", ctime(&v->Default) + 3);
+                    (void) printf(" %13.13s", ctime(&v->Purge) + 3);
+                    (void) printf(" (%s)\n", p);
                 }
             }
+        }
     }
 }
 
@@ -245,60 +264,67 @@ STATIC void EXPmatch(char *p, NEWSGROUP *v, char mod)
 */
 BOOL EXPreadfile(FILE *F)
 {
-    char                *p;
-    int                 i;
-    int                 j;
-    int                 k;
-    char                mod;
-    NEWSGROUP           v;
-    BOOL                SawDefault;
-    char                buff[BUFSIZ];
-    char                *fields[7];
-    char                **patterns;
+    char *p;
+    int i;
+    int j;
+    int k;
+    char mod;
+    NEWSGROUP v;
+    BOOL SawDefault;
+    char buff[BUFSIZ];
+    char *fields[7];
+    char **patterns;
 
     /* Scan all lines. */
     EXPremember = -1;
     SawDefault = FALSE;
-    patterns = NEW(char*, nGroups);
-    for (i = 0; i < NUM_STORAGE_CLASSES; i++)
+    patterns = NEW(char *, nGroups);
+    for (i = 0; i < NUM_STORAGE_CLASSES; i++) {
         EXPclasses[i].ReportedMissing = EXPclasses[i].Missing = TRUE;
+    }
 
     for (i = 1; fgets(buff, sizeof buff, F) != NULL; i++) {
         if ((p = strchr(buff, '\n')) == NULL) {
-            (void)fprintf(stderr, "Line %d too long\n", i);
+            (void) fprintf(stderr, "Line %d too long\n", i);
             return FALSE;
         }
         *p = '\0';
         p = strchr(buff, '#');
-        if (p)
+        if (p) {
             *p = '\0';
-        else
-            p = buff + strlen(buff);
-        while (--p >= buff) {
-            if (Uisspace(*p))
-                *p = '\0';
-            else
-                break;
         }
-        if (buff[0] == '\0')
+        else {
+            p = buff + strlen(buff);
+        }
+        while (--p >= buff) {
+            if (Uisspace(*p)) {
+                *p = '\0';
+            }
+            else {
+                break;
+            }
+        }
+        if (buff[0] == '\0') {
             continue;
+        }
         if ((j = EXPsplit(buff, ':', fields, SIZEOF(fields))) == -1) {
-            (void)fprintf(stderr, "Line %d too many fields\n", i);
+            (void) fprintf(stderr, "Line %d too many fields\n", i);
             return FALSE;
         }
 
         /* Expired-article remember line? */
         if (EQ(fields[0], "/remember/")) {
             if (j != 2) {
-                (void)fprintf(stderr, "Line %d bad format\n", i);
+                (void) fprintf(stderr, "Line %d bad format\n", i);
                 return FALSE;
             }
             if (EXPremember != -1) {
-                (void)fprintf(stderr, "Line %d duplicate /remember/\n", i);
+                (void) fprintf(stderr, "Line %d duplicate /remember/\n", i);
                 return FALSE;
             }
-            if (!EXPgetnum(i, fields[1], &EXPremember, "remember"))
+            if (!EXPgetnum(i, fields[1], &EXPremember, "remember")) {
                 return FALSE;
+            }
             continue;
         }
 
@@ -309,21 +335,27 @@ BOOL EXPreadfile(FILE *F)
                 fprintf(stderr, "Line %d bad storage class %d\n", i, j);
             }
 
-            if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep,    "keep")
+            if (!EXPgetnum(i, fields[1], &EXPclasses[j].Keep, "keep")
                 || !EXPgetnum(i, fields[2], &EXPclasses[j].Default, "default")
-                || !EXPgetnum(i, fields[3], &EXPclasses[j].Purge,   "purge"))
+                || !EXPgetnum(i, fields[3], &EXPclasses[j].Purge, "purge"))
+            {
                 return FALSE;
+            }
             /* These were turned into offsets, so the test is the opposite
              * of what you think it should be.  If Purge isn't forever,
              * make sure it's greater then the other two fields. */
             if (EXPclasses[j].Purge) {
                 /* Some value not forever; make sure other values are in range. */
-                if (EXPclasses[j].Keep && EXPclasses[j].Keep < EXPclasses[j].Purge) {
-                    (void)fprintf(stderr, "Line %d keep>purge\n", i);
+                if (EXPclasses[j].Keep
+                    && EXPclasses[j].Keep < EXPclasses[j].Purge)
+                {
+                    (void) fprintf(stderr, "Line %d keep>purge\n", i);
                     return FALSE;
                 }
-                if (EXPclasses[j].Default && EXPclasses[j].Default < EXPclasses[j].Purge) {
-                    (void)fprintf(stderr, "Line %d default>purge\n", i);
+                if (EXPclasses[j].Default
+                    && EXPclasses[j].Default < EXPclasses[j].Purge)
+                {
+                    (void) fprintf(stderr, "Line %d default>purge\n", i);
                     return FALSE;
                 }
             }
@@ -333,37 +365,42 @@ BOOL EXPreadfile(FILE *F)
 
         /* Regular expiration line -- right number of fields? */
         if (j != 5) {
-            (void)fprintf(stderr, "Line %d bad format\n", i);
+            (void) fprintf(stderr, "Line %d bad format\n", i);
             return FALSE;
         }
 
         /* Parse the fields. */
-        if (strchr(fields[1], 'M') != NULL)
+        if (strchr(fields[1], 'M') != NULL) {
             mod = 'm';
-        else if (strchr(fields[1], 'U') != NULL)
+        }
+        else if (strchr(fields[1], 'U') != NULL) {
             mod = 'u';
-        else if (strchr(fields[1], 'A') != NULL)
+        }
+        else if (strchr(fields[1], 'A') != NULL) {
             mod = 'a';
+        }
         else {
-            (void)fprintf(stderr, "Line %d bad modflag\n", i);
+            (void) fprintf(stderr, "Line %d bad modflag\n", i);
             return FALSE;
         }
         v.Poison = (strchr(fields[1], 'X') != NULL);
-        if (!EXPgetnum(i, fields[2], &v.Keep,    "keep")
-         || !EXPgetnum(i, fields[3], &v.Default, "default")
-         || !EXPgetnum(i, fields[4], &v.Purge,   "purge"))
+        if (!EXPgetnum(i, fields[2], &v.Keep, "keep")
+            || !EXPgetnum(i, fields[3], &v.Default, "default")
+            || !EXPgetnum(i, fields[4], &v.Purge, "purge"))
+        {
             return FALSE;
+        }
         /* These were turned into offsets, so the test is the opposite
          * of what you think it should be.  If Purge isn't forever,
          * make sure it's greater then the other two fields. */
         if (v.Purge) {
             /* Some value not forever; make sure other values are in range. */
             if (v.Keep && v.Keep < v.Purge) {
-                (void)fprintf(stderr, "Line %d keep>purge\n", i);
+                (void) fprintf(stderr, "Line %d keep>purge\n", i);
                 return FALSE;
             }
             if (v.Default && v.Default < v.Purge) {
-                (void)fprintf(stderr, "Line %d default>purge\n", i);
+                (void) fprintf(stderr, "Line %d default>purge\n", i);
                 return FALSE;
             }
         }
@@ -371,23 +408,24 @@ BOOL EXPreadfile(FILE *F)
         /* Is this the default line? */
         if (fields[0][0] == '*' && fields[0][1] == '\0' && mod == 'a') {
             if (SawDefault) {
-                (void)fprintf(stderr, "Line %d duplicate default\n", i);
+                (void) fprintf(stderr, "Line %d duplicate default\n", i);
                 return FALSE;
             }
-            EXPdefault.Keep    = v.Keep;
+            EXPdefault.Keep = v.Keep;
             EXPdefault.Default = v.Default;
-            EXPdefault.Purge   = v.Purge;
-            EXPdefault.Poison  = v.Poison;
+            EXPdefault.Purge = v.Purge;
+            EXPdefault.Poison = v.Poison;
             SawDefault = TRUE;
         }
 
         /* Assign to all groups that match the pattern and flags. */
         if ((j = EXPsplit(fields[0], ',', patterns, nGroups)) == -1) {
-            (void)fprintf(stderr, "Line %d too many patterns\n", i);
+            (void) fprintf(stderr, "Line %d too many patterns\n", i);
             return FALSE;
         }
-        for (k = 0; k < j; k++)
+        for (k = 0; k < j; k++) {
             EXPmatch(patterns[k], &v, mod);
+        }
     }
     DISPOSE(patterns);
 
@@ -396,8 +434,9 @@ BOOL EXPreadfile(FILE *F)
 
 int ExpireExists(int num)
 {
-    if ((num<0) || (num>=nGroups))
+    if ((num < 0) || (num >= nGroups)) {
         return 1;
+    }
 
     return 0;
 }
@@ -418,8 +457,10 @@ int readconfig_init(void)
 
     nGroups = 0;
     nGroups_alloc = 1000;
-    Groups=(NEWSGROUP *) malloc(sizeof(NEWSGROUP) * 1000);
-    if (Groups==NULL) fatal("Unable to alloc",0);
+    Groups = (NEWSGROUP *) malloc(sizeof(NEWSGROUP) * 1000);
+    if (Groups == NULL) {
+        fatal("Unable to alloc", 0);
+    }
 
     return 0;
 }
@@ -428,11 +469,11 @@ void artificial_matchall(int days)
 {
     NEWSGROUP ne;
 
-    ne.Default = Now - (time_t)(days * 86400.);
-    EXPmatch("*", &ne,'a');
+    ne.Default = Now - (time_t) (days * 86400.);
+    EXPmatch("*", &ne, 'a');
 }
 
-#if 0 /* debugginf */
+#if 0  /* debugginf */
 void show_groups(void)
 {
     int lup;
@@ -452,63 +493,79 @@ void show_groups(void)
 /*
  * Callback to deal with untagged LIST/LSUB data
  */
-void
-callback_list(struct imclient *imclient,
-              void *rock,
-              struct imclient_reply *reply)
+void callback_list(struct imclient *imclient,
+                   void *rock,
+                   struct imclient_reply *reply)
 {
-    (void)imclient; (void)rock;
+    (void) imclient;
+    (void) rock;
     char *s, *end;
     char *mailbox, *attributes, *separator;
     int c;
 
     s = reply->text;
 
-    if (*s++ != '(') return;
+    if (*s++ != '(') {
+        return;
+    }
     end = strchr(s, ')');
-    if (!end) return;
+    if (!end) {
+        return;
+    }
     attributes = s;
     s = end;
     *s++ = '\0';
 
-    if (*s++ != ' ') return;
+    if (*s++ != ' ') {
+        return;
+    }
     if (*s == 'N') {
-        if (s[1] != 'I' || s[2] != 'L') return;
+        if (s[1] != 'I' || s[2] != 'L') {
+            return;
+        }
         separator = "";
         s += 3;
     }
     else if (*s == '\"') {
         s++;
-        if (*s == '\\') s++;
+        if (*s == '\\') {
+            s++;
+        }
         separator = s++;
-        if (*s != '\"') return;
+        if (*s != '\"') {
+            return;
+        }
         *s++ = '\0';
     }
-    (void)separator;
+    (void) separator;
 
-    if (*s++ != ' ') return;
+    if (*s++ != ' ') {
+        return;
+    }
     c = imparse_astring(&s, &mailbox);
-    if (c != '\0') return;
+    if (c != '\0') {
+        return;
+    }
 
-    if ((strncasecmp(mailbox,"INBOX",5)!=0) && (strncasecmp(mailbox,"user.",5)!=0))
+    if ((strncasecmp(mailbox, "INBOX", 5) != 0)
+        && (strncasecmp(mailbox, "user.", 5) != 0))
     {
 
-        Groups[nGroups].Name = malloc( strlen(mailbox)+1);
+        Groups[nGroups].Name = malloc(strlen(mailbox) + 1);
         strcpy(Groups[nGroups].Name, mailbox);
         nGroups++;
 
-        if (nGroups >= nGroups_alloc)
-        {
-            nGroups_alloc +=1000;
-            Groups=(NEWSGROUP *) realloc(Groups, sizeof(NEWSGROUP) * nGroups_alloc);
-            if (Groups==NULL) fatal("Unable to alloc",0);
+        if (nGroups >= nGroups_alloc) {
+            nGroups_alloc += 1000;
+            Groups = (NEWSGROUP *) realloc(Groups,
+                                           sizeof(NEWSGROUP) * nGroups_alloc);
+            if (Groups == NULL) {
+                fatal("Unable to alloc", 0);
+            }
         }
-
     }
 
-    for (s = attributes; (end = strchr(s, ' '))!=NULL; s = end+1) {
+    for (s = attributes; (end = strchr(s, ' ')) != NULL; s = end + 1) {
         *s = '\0';
-
     }
-
 }

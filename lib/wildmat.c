@@ -85,126 +85,136 @@
 #include "wildmat.h"
 #include "xmalloc.h"
 
+#define TRUE 1
+#define FALSE 0
+#define ABORT -1
 
-#define TRUE                    1
-#define FALSE                   0
-#define ABORT                   -1
-
-
-    /* What character marks an inverted character class? */
-#define NEGATE_CLASS            '^'
-    /* Is "*" a common pattern? */
+/* What character marks an inverted character class? */
+#define NEGATE_CLASS '^'
+/* Is "*" a common pattern? */
 #define OPTIMIZE_JUST_STAR
-    /* Do tar(1) matching rules, which ignore a trailing slash? */
+/* Do tar(1) matching rules, which ignore a trailing slash? */
 #undef MATCH_TAR_PATTERN
-
 
 /*
 **  Match text and p, return TRUE, FALSE, or ABORT.
 */
 static int DoMatch(const char *text, const char *p)
 {
-    int                 last;
-    int                 matched;
-    int                 reverse;
+    int last;
+    int matched;
+    int reverse;
 
-    for ( ; *p; text++, p++) {
-        if (*text == '\0' && *p != '*')
+    for (; *p; text++, p++) {
+        if (*text == '\0' && *p != '*') {
             return ABORT;
+        }
         switch (*p) {
         case '\\':
             /* Literal match with following character. */
             p++;
             /* FALLTHROUGH */
         default:
-            if (*text != *p)
+            if (*text != *p) {
                 return FALSE;
+            }
             continue;
         case '?':
             /* Match anything. */
             continue;
         case '*':
-            while (*++p == '*')
+            while (*++p == '*') {
                 /* Consecutive stars act just like one. */
                 continue;
-            if (*p == '\0')
+            }
+            if (*p == '\0') {
                 /* Trailing star matches everything. */
                 return TRUE;
-            while (*text)
-                if ((matched = DoMatch(text++, p)) != FALSE)
+            }
+            while (*text) {
+                if ((matched = DoMatch(text++, p)) != FALSE) {
                     return matched;
+                }
+            }
             return ABORT;
         case '[':
             reverse = p[1] == NEGATE_CLASS ? TRUE : FALSE;
-            if (reverse)
+            if (reverse) {
                 /* Inverted character class. */
                 p++;
+            }
             matched = FALSE;
-            if (p[1] == ']' || p[1] == '-')
-                if (*++p == *text)
+            if (p[1] == ']' || p[1] == '-') {
+                if (*++p == *text) {
                     matched = TRUE;
-            for (last = *p; *++p && *p != ']'; last = *p)
+                }
+            }
+            for (last = *p; *++p && *p != ']'; last = *p) {
                 /* This next line requires a good C compiler. */
-                if (*p == '-' && p[1] != ']'
-                    ? *text <= *++p && *text >= last : *text == *p)
+                if (*p == '-' && p[1] != ']' ? *text <= *++p && *text >= last
+                                             : *text == *p)
+                {
                     matched = TRUE;
-            if (matched == reverse)
+                }
+            }
+            if (matched == reverse) {
                 return FALSE;
+            }
             continue;
         }
     }
 
-#ifdef  MATCH_TAR_PATTERN
-    if (*text == '/')
+#ifdef MATCH_TAR_PATTERN
+    if (*text == '/') {
         return TRUE;
-#endif  /* MATCH_TAR_ATTERN */
+    }
+#endif /* MATCH_TAR_ATTERN */
     return *text == '\0';
 }
-
 
 /*
 **  User-level routine.  Returns TRUE or FALSE.
 */
 EXPORTED int wildmat(const char *text, const char *p)
 {
-#ifdef  OPTIMIZE_JUST_STAR
-    if (p[0] == '*' && p[1] == '\0')
+#ifdef OPTIMIZE_JUST_STAR
+    if (p[0] == '*' && p[1] == '\0') {
         return TRUE;
-#endif  /* OPTIMIZE_JUST_STAR */
+    }
+#endif /* OPTIMIZE_JUST_STAR */
     return DoMatch(text, p) == TRUE;
 }
 
-
-
-#if     defined(TEST)
+#if defined(TEST)
 
 /* Yes, we use gets not fgets.  Sue me. */
-extern char     *gets();
+extern char *gets();
 
-
-int
-main()
+int main()
 {
-    char         p[80];
-    char         text[80];
+    char p[80];
+    char text[80];
 
     printf("Wildmat tester.  Enter pattern, then strings to test.\n");
     printf("A blank line gets prompts for a new pattern; a blank pattern\n");
     printf("exits the program.\n");
 
-    for ( ; ; ) {
+    for (;;) {
         printf("\nEnter pattern:  ");
-        (void)fflush(stdout);
-        if (gets(p) == NULL || p[0] == '\0')
+        (void) fflush(stdout);
+        if (gets(p) == NULL || p[0] == '\0') {
             break;
-        for ( ; ; ) {
+        }
+        for (;;) {
             printf("Enter text:  ");
-            (void)fflush(stdout);
-            if (gets(text) == NULL)
+            (void) fflush(stdout);
+            if (gets(text) == NULL) {
                 exit(0);
-            if (text[0] == '\0')
+            }
+            if (text[0] == '\0') {
                 /* Blank line; go back and get a new pattern. */
                 break;
+            }
             printf("      %s\n", wildmat(text, p) ? "YES" : "NO");
         }
     }
@@ -212,9 +222,7 @@ main()
     exit(0);
     /* NOTREACHED */
 }
-#endif  /* defined(TEST) */
-
-
+#endif /* defined(TEST) */
 
 EXPORTED struct wildmat *split_wildmats(char *str, const char *prefix)
 {
@@ -222,7 +230,9 @@ EXPORTED struct wildmat *split_wildmats(char *str, const char *prefix)
     struct wildmat *wild = NULL;
     int n = 0;
 
-    if (prefix) snprintf(pattern, sizeof(pattern), "%s.", prefix);
+    if (prefix) {
+        snprintf(pattern, sizeof(pattern), "%s.", prefix);
+    }
     p = pattern + strlen(pattern);
 
     /*
@@ -232,20 +242,30 @@ EXPORTED struct wildmat *split_wildmats(char *str, const char *prefix)
      * we want to test them (per RFC 3977 section 4.2)
      */
     do {
-        if ((c = strrchr(str, ',')))
+        if ((c = strrchr(str, ','))) {
             *c++ = '\0';
-        else
+        }
+        else {
             c = str;
+        }
 
         if (!(n % 10)) /* alloc some more */
+        {
             wild = xrealloc(wild, (n + 11) * sizeof(struct wildmat));
+        }
 
-        if (*c == '!') wild[n].not = 1;         /* not */
-        else if (*c == '@') wild[n].not = -1;   /* absolute not (feeding) */
-        else wild[n].not = 0;
+        if (*c == '!') {
+            wild[n].not = 1; /* not */
+        }
+        else if (*c == '@') {
+            wild[n].not = -1; /* absolute not (feeding) */
+        }
+        else {
+            wild[n].not = 0;
+        }
 
-        strncpy(p, wild[n].not ? c + 1 : c, pattern+sizeof(pattern) - p);
-        pattern[sizeof(pattern)-1] = '\0';
+        strncpy(p, wild[n].not ? c + 1 : c, pattern + sizeof(pattern) - p);
+        pattern[sizeof(pattern) - 1] = '\0';
 
         wild[n++].pat = xstrdup(pattern);
     } while (c != str);

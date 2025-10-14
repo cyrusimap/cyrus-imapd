@@ -11,7 +11,8 @@
 #include <stdlib.h>
 
 /* merge two sorted lists */
-static void *lmerge(void *p, void *q,
+static void *lmerge(void *p,
+                    void *q,
                     void *(*getnext)(void *),
                     void (*setnext)(void *, void *),
                     int (*compar)(void *, void *, void *),
@@ -21,12 +22,12 @@ static void *lmerge(void *p, void *q,
 
     /* the lowest item in p/q starts the new list */
     if (compar(p, q, call_data) < 0) {
-      m = r = p;
-      p = getnext(p);
+        m = r = p;
+        p = getnext(p);
     }
     else {
-      m = r = q;
-      q = getnext(q);
+        m = r = q;
+        q = getnext(q);
     }
 
     /* merge the rest of p/q */
@@ -50,26 +51,31 @@ static void *lmerge(void *p, void *q,
 }
 
 EXPORTED void *lsort(void *p,
-            void *(*getnext)(void *),
-            void (*setnext)(void *, void *),
-            int (*compar)(void *, void *, void *),
-            void *call_data)
+                     void *(*getnext)(void *),
+                     void (*setnext)(void *, void *),
+                     int (*compar)(void *, void *, void *),
+                     void *call_data)
 {
     void *q, *r;
 
     if (p) {
         /* split list in half */
         q = p;
-        for (r = getnext(q); r && (r = getnext(r)) != NULL; r = getnext(r))
+        for (r = getnext(q); r && (r = getnext(r)) != NULL; r = getnext(r)) {
             q = getnext(q);
+        }
         r = getnext(q);
         setnext(q, NULL);
 
         /* sort each half recursively and merge the results */
-        if (r)
+        if (r) {
             p = lmerge(lsort(p, getnext, setnext, compar, call_data),
                        lsort(r, getnext, setnext, compar, call_data),
-                       getnext, setnext, compar, call_data);
+                       getnext,
+                       setnext,
+                       compar,
+                       call_data);
+        }
     }
     return p;
 }

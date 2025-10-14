@@ -42,7 +42,6 @@
 
 #include <config.h>
 
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -55,11 +54,14 @@
 #include "libconfig.h"
 #include "notify_external.h"
 
-char* notify_external(const char *class, const char *priority,
-                      const char *user, const char *mailbox,
+char *notify_external(const char *class,
+                      const char *priority,
+                      const char *user,
+                      const char *mailbox,
                       int nopt __attribute__((unused)),
                       char **options __attribute__((unused)),
-                      const char *message, const char *fname)
+                      const char *message,
+                      const char *fname)
 {
     const char *notify;
     const char *buf[12];
@@ -87,9 +89,8 @@ char* notify_external(const char *class, const char *priority,
     buf[11] = NULL;
 
     if (pipe(fds) < 0) {
-       syslog(LOG_ERR,
-              "notify_external: pipe() returned %s", strerror(errno));
-       return strdup("NO notify_external pipe failed");
+        syslog(LOG_ERR, "notify_external: pipe() returned %s", strerror(errno));
+        return strdup("NO notify_external pipe failed");
     }
 
     if ((child_pid = fork()) == 0) {
@@ -114,7 +115,8 @@ char* notify_external(const char *class, const char *priority,
     fprintf(stream, "%s\n", message);
 
     fclose(stream);
-    while (waitpid(child_pid, &status, 0) < 0);
+    while (waitpid(child_pid, &status, 0) < 0)
+        ;
 
     return strdup("OK notify_external notification successful");
 }

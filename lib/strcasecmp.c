@@ -51,7 +51,9 @@
  */
 int strcasecmp(const char *str1, const char *str2)
 {
-    while (*str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2;
+    while (*str1 && TOLOWER(*str1) == TOLOWER(*str2)) {
+        ++str1, ++str2;
+    }
 
     return ((int) TOLOWER(*str1) - (int) TOLOWER(*str2));
 }
@@ -60,8 +62,9 @@ int strcasecmp(const char *str1, const char *str2)
  */
 int strncasecmp(const char *str1, const char *str2, size_t n)
 {
-    while (n && *str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2, --n;
+    while (n && *str1 && TOLOWER(*str1) == TOLOWER(*str2)) {
+        ++str1, ++str2, --n;
+    }
 
     return (n ? (int) TOLOWER(*str1) - (int) TOLOWER(*str2) : 0);
 }
-

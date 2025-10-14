@@ -54,16 +54,17 @@ int webdav_done(void);
 
 #ifdef WITH_DAV
 
-#include "dav_db.h"
-#include "mboxlist.h"
+# include "dav_db.h"
+# include "mboxlist.h"
 
 struct webdav_db;
 
-#define WEBDAV_CREATE 0x01
-#define WEBDAV_TRUNC  0x02
+# define WEBDAV_CREATE 0x01
+# define WEBDAV_TRUNC 0x02
 
-struct webdav_data {
-    struct dav_data dav;  /* MUST be first so we can typecast */
+struct webdav_data
+{
+    struct dav_data dav; /* MUST be first so we can typecast */
     const char *filename;
     const char *type;
     const char *subtype;
@@ -85,24 +86,28 @@ int webdav_close(struct webdav_db *webdavdb);
 /* lookup an entry from 'webdavdb' by resource
    (optionally inside a transaction for updates) */
 int webdav_lookup_resource(struct webdav_db *webdavdb,
-                           const mbentry_t *mbentry, const char *resource,
+                           const mbentry_t *mbentry,
+                           const char *resource,
                            struct webdav_data **result,
                            int tombstones);
 
 /* lookup an entry from 'webdavdb' by mailbox and IMAP uid
    (optionally inside a transaction for updates) */
 int webdav_lookup_imapuid(struct webdav_db *webdavdb,
-                          const mbentry_t *mbentry, int uid,
+                          const mbentry_t *mbentry,
+                          int uid,
                           struct webdav_data **result,
                           int tombstones);
 
 /* lookup an entry from 'webdavdb' by resource UID
    (optionally inside a transaction for updates) */
-int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
+int webdav_lookup_uid(struct webdav_db *webdavdb,
+                      const char *res_uid,
                       struct webdav_data **result);
 
 /* process each entry for 'mailbox' in 'webdavdb' with cb() */
-int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry,
+int webdav_foreach(struct webdav_db *webdavdb,
+                   const mbentry_t *mbentry,
                    int (*cb)(void *rock, struct webdav_data *data),
                    void *rock);
 
@@ -130,8 +135,12 @@ int webdav_abort(struct webdav_db *webdavdb);
  * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int webdav_get_updates(struct webdav_db *webdavdb,
-                       modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
-                       int max_records, webdav_cb_t *cb, void *rock);
+                       modseq_t oldmodseq,
+                       const mbentry_t *mbentry,
+                       int kind,
+                       int max_records,
+                       webdav_cb_t *cb,
+                       void *rock);
 
 #endif /* WITH_DAV */
 

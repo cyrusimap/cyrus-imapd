@@ -50,21 +50,20 @@
 #endif
 #include <config.h>
 
-#define _PASTE(a,b)             a##b
-#define _STRINGIFY(x)           #x
+#define _PASTE(a, b) a##b
+#define _STRINGIFY(x) #x
 
-enum
-{
-#define X(x)    _PASTE(XSTATS_,x)
+enum {
+#define X(x) _PASTE(XSTATS_, x)
 #include "xstats_metrics.h"
 #undef X
     XSTATS_NUM_METRICS
 };
-extern uint32_t xstats[XSTATS_NUM_METRICS];     /* 32b wrapping counters */
+extern uint32_t xstats[XSTATS_NUM_METRICS]; /* 32b wrapping counters */
 extern const char *xstats_names[XSTATS_NUM_METRICS];
 
-#define xstats_inc(m)           (xstats[_PASTE(XSTATS_,m)]++)
-#define xstats_add(m, x)        (xstats[_PASTE(XSTATS_,m)] += (x))
+#define xstats_inc(m) (xstats[_PASTE(XSTATS_, m)]++)
+#define xstats_add(m, x) (xstats[_PASTE(XSTATS_, m)] += (x))
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 

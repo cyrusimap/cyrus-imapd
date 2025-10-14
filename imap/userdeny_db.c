@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,9 +75,7 @@ static void init_internal();
 static const char default_message[] = "Access to this service has been blocked";
 
 /* parse the data */
-static int parse_record(struct buf *buf,
-                        char **wildp,
-                        const char **msgp)
+static int parse_record(struct buf *buf, char **wildp, const char **msgp)
 {
     const char *msg = default_message;
     char *wild;
@@ -86,12 +84,15 @@ static int parse_record(struct buf *buf,
     buf_cstring(buf); /* use a working copy */
 
     /* check version */
-    if (((version = strtoul(buf->s, &wild, 10)) < 1) ||
-        (version > USERDENY_VERSION))
+    if (((version = strtoul(buf->s, &wild, 10)) < 1)
+        || (version > USERDENY_VERSION))
+    {
         return IMAP_MAILBOX_BADFORMAT;
+    }
 
-    if (*wild++ != '\t')
+    if (*wild++ != '\t') {
         return IMAP_MAILBOX_BADFORMAT;
+    }
 
     /* check if we have a deny message */
     if (version == USERDENY_VERSION) {
@@ -112,7 +113,10 @@ static int parse_record(struct buf *buf,
  * userdeny() checks to see if 'user' is denied access to 'service'
  * Returns 1 if a matching deny entry exists in DB, otherwise returns 0.
  */
-EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
+EXPORTED int userdeny(const char *user,
+                      const char *service,
+                      char *msgbuf,
+                      size_t bufsiz)
 {
     int r, ret = 0; /* allow access by default */
     const char *data = NULL;
@@ -126,8 +130,12 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 
     init_internal();
 
-    if (!denydb) denydb_open(/*create*/0);
-    if (!denydb) return 0;
+    if (!denydb) {
+        denydb_open(/*create*/ 0);
+    }
+    if (!denydb) {
+        return 0;
+    }
 
     memset(&tok, 0, sizeof(tok));
 
@@ -147,17 +155,17 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
         if (r != CYRUSDB_NOTFOUND) {
             syslog(LOG_WARNING,
                    "DENYDB_ERROR: error reading entry '%s': %s",
-                   user, cyrusdb_strerror(r));
+                   user,
+                   cyrusdb_strerror(r));
         }
         goto out;
     }
     buf_init_ro(&buf, data, datalen);
 
-        /* parse the data */
+    /* parse the data */
     r = parse_record(&buf, &wild, &msg);
     if (r) {
-        syslog(LOG_WARNING,
-               "DENYDB_ERROR: invalid entry for '%s'", user);
+        syslog(LOG_WARNING, "DENYDB_ERROR: invalid entry for '%s'", user);
         goto out;
     }
 
@@ -169,7 +177,9 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 
         /* is it a negated pattern? */
         not = (*pat == '!');
-        if (not) ++pat;
+        if (not) {
+            ++pat;
+        }
 
         syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
 
@@ -177,7 +187,9 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
         if (wildmat(service, pat)) {
             /* match ==> we're done */
             ret = !not;
-            if (msgbuf) strlcpy(msgbuf, msg, bufsiz);
+            if (msgbuf) {
+                strlcpy(msgbuf, msg, bufsiz);
+            }
             break;
         }
     }
@@ -208,8 +220,9 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
         goto out;
     }
 
-    if (!service)
+    if (!service) {
         service = "*";
+    }
 
     if (!user || strchr(service, '\t')) {
         /* the service field may not contain a TAB, it's the field separator */
@@ -225,22 +238,25 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
 
     /* write the record */
     do {
-        r = cyrusdb_store(denydb,
-                          user, strlen(user),
-                          data.s, data.len,
-                          &txn);
+        r = cyrusdb_store(denydb, user, strlen(user), data.s, data.len, &txn);
     } while (r == CYRUSDB_AGAIN);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: couldn't store denydb record for %s: %s",
-                        user, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "IOERROR: couldn't store denydb record for %s: %s",
+               user,
+               cyrusdb_strerror(r));
         r = IMAP_IOERROR;
     }
 
 out:
     if (txn) {
-        if (r) cyrusdb_abort(denydb, txn);
-        else cyrusdb_commit(denydb, txn);
+        if (r) {
+            cyrusdb_abort(denydb, txn);
+        }
+        else {
+            cyrusdb_commit(denydb, txn);
+        }
     }
     buf_free(&data);
     return r;
@@ -258,26 +274,34 @@ EXPORTED int denydb_delete(const char *user)
 
     init_internal();
 
-    if (!denydb) return 0;
+    if (!denydb) {
+        return 0;
+    }
 
-    if (!user) return r;
+    if (!user) {
+        return r;
+    }
 
     /* remove the record */
     do {
-        r = cyrusdb_delete(denydb,
-                           user, strlen(user),
-                           &txn, /*force*/1);
+        r = cyrusdb_delete(denydb, user, strlen(user), &txn, /*force*/ 1);
     } while (r == CYRUSDB_AGAIN);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: couldn't delete denydb record for %s: %s",
-                        user, cyrusdb_strerror(r));
+        syslog(LOG_ERR,
+               "IOERROR: couldn't delete denydb record for %s: %s",
+               user,
+               cyrusdb_strerror(r));
         r = IMAP_IOERROR;
     }
 
     if (txn) {
-        if (r) cyrusdb_abort(denydb, txn);
-        else cyrusdb_commit(denydb, txn);
+        if (r) {
+            cyrusdb_abort(denydb, txn);
+        }
+        else {
+            cyrusdb_commit(denydb, txn);
+        }
     }
     return r;
 }
@@ -289,10 +313,12 @@ struct denydb_rock
 };
 
 static int denydb_foreach_cb(void *rock,
-                             const char *key, size_t keylen,
-                             const char *data, size_t datalen)
+                             const char *key,
+                             size_t keylen,
+                             const char *data,
+                             size_t datalen)
 {
-    struct denydb_rock *dr = (struct denydb_rock *)rock;
+    struct denydb_rock *dr = (struct denydb_rock *) rock;
     struct buf user = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     char *wild = NULL;
@@ -307,9 +333,8 @@ static int denydb_foreach_cb(void *rock,
     buf_init_ro(&buf, data, datalen);
     r = parse_record(&buf, &wild, &msg);
     if (r) {
-        syslog(LOG_WARNING,
-               "DENYDB_ERROR: invalid entry for '%s'", user.s);
-        r = 0;  /* whatever, keep going */
+        syslog(LOG_WARNING, "DENYDB_ERROR: invalid entry for '%s'", user.s);
+        r = 0; /* whatever, keep going */
         goto out;
     }
 
@@ -327,17 +352,23 @@ EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
 
     init_internal();
 
-    if (!denydb) return 0;
+    if (!denydb) {
+        return 0;
+    }
 
     dr.proc = proc;
     dr.rock = rock;
 
-    return cyrusdb_foreach(denydb, "", 0,
-                           NULL, denydb_foreach_cb, &dr,
-                           /* txn */NULL);
+    return cyrusdb_foreach(denydb,
+                           "",
+                           0,
+                           NULL,
+                           denydb_foreach_cb,
+                           &dr,
+                           /* txn */ NULL);
 }
 
-static void done_cb(void*rock __attribute__((unused)))
+static void done_cb(void *rock __attribute__((unused)))
 {
     if (denydb) {
         denydb_close();
@@ -377,7 +408,7 @@ EXPORTED int denydb_open(int create)
 
     /* create db file name */
     if (!fname) {
-        tofree = strconcat(config_dir, FNAME_USERDENYDB, (char *)NULL);
+        tofree = strconcat(config_dir, FNAME_USERDENYDB, (char *) NULL);
         fname = tofree;
     }
 
@@ -387,7 +418,9 @@ EXPORTED int denydb_open(int create)
         ret = ENOENT;
     }
     else if (ret != CYRUSDB_OK) {
-        syslog(LOG_WARNING, "DENYDB_ERROR: opening %s: %s", fname,
+        syslog(LOG_WARNING,
+               "DENYDB_ERROR: opening %s: %s",
+               fname,
                cyrusdb_strerror(ret));
         ret = IMAP_IOERROR;
     }
@@ -403,7 +436,8 @@ EXPORTED void denydb_close(void)
     if (denydb) {
         r = cyrusdb_close(denydb);
         if (r) {
-            syslog(LOG_ERR, "DENYDB_ERROR: error closing: %s",
+            syslog(LOG_ERR,
+                   "DENYDB_ERROR: error closing: %s",
                    cyrusdb_strerror(r));
         }
         denydb = NULL;

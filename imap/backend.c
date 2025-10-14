@@ -46,7 +46,7 @@
 #include <string.h>
 #include <signal.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <fcntl.h>
 #include <sys/types.h>
@@ -77,15 +77,15 @@
 #include "xstrlcat.h"
 
 #ifndef AI_V4MAPPED
-#define AI_V4MAPPED     0
+# define AI_V4MAPPED 0
 #endif
 
 #ifndef AI_ADDRCONFIG
-#define AI_ADDRCONFIG   0
+# define AI_ADDRCONFIG 0
 #endif
 
 #ifndef AI_MASK
-#define AI_MASK (AI_V4MAPPED | AI_ADDRCONFIG)
+# define AI_MASK (AI_V4MAPPED | AI_ADDRCONFIG)
 #endif
 
 enum {
@@ -97,8 +97,9 @@ static void forget_capabilities(struct backend *s)
 {
     int i;
 
-    for (i = 0 ; i < s->num_cap_params ; i++)
+    for (i = 0; i < s->num_cap_params; i++) {
         free(s->cap_params[i].params);
+    }
     s->capability = 0;
     free(s->cap_params);
     s->cap_params = NULL;
@@ -111,7 +112,7 @@ static char *append_word(char *w1, const char *w2)
     int len2 = strlen(w2);
     w1 = xrealloc(w1, len1 + len2 + 2);
     w1[len1] = ' ';
-    strcpy(w1+len1+1, w2);
+    strcpy(w1 + len1 + 1, w2);
     return w1;
 }
 
@@ -125,27 +126,34 @@ static void save_capability(struct backend *s,
 {
     int i;
 
-    if (s->prot->type != TYPE_STD) return;
+    if (s->prot->type != TYPE_STD) {
+        return;
+    }
 
     s->capability |= c->flag;
 
     if (param) {
         /* find the matching cap_params entry */
-        for (i = 0 ; i < s->num_cap_params ; i++)
-            if (s->cap_params[i].capa == c->flag)
+        for (i = 0; i < s->num_cap_params; i++) {
+            if (s->cap_params[i].capa == c->flag) {
                 break;
+            }
+        }
 
         if (i == s->num_cap_params) {
             /* not found, expand the array and add a params */
             s->num_cap_params++;
-            s->cap_params = xrealloc(s->cap_params,
-                     sizeof(*s->cap_params) * s->num_cap_params);
+            s->cap_params =
+                xrealloc(s->cap_params,
+                         sizeof(*s->cap_params) * s->num_cap_params);
 
             s->cap_params[i].capa = c->flag;
             s->cap_params[i].params = xstrdup(param);
-        } else {
+        }
+        else {
             /* append to the existing params */
-            s->cap_params[i].params = append_word(s->cap_params[i].params, param);
+            s->cap_params[i].params =
+                append_word(s->cap_params[i].params, param);
         }
     }
 }
@@ -156,12 +164,15 @@ static void save_capability(struct backend *s,
  * If known, save the capability.
  */
 static int match_capability(struct backend *s,
-                            const char *name, const char *value)
+                            const char *name,
+                            const char *value)
 {
     const struct capa_t *c;
     const char *cend;
 
-    if (s->prot->type != TYPE_STD) return 0;
+    if (s->prot->type != TYPE_STD) {
+        return 0;
+    }
 
     for (c = s->prot->u.std.capa_cmd.capa; c->str; c++) {
         cend = strchr(c->str, '=');
@@ -170,24 +181,25 @@ static int match_capability(struct backend *s,
             /* c->str is of the form NAME=VALUE, we want to match
              * @name against the the NAME part and @value against
              * the VALUE part */
-            if (strlen(name) == (unsigned)(cend - c->str) &&
-                !strncasecmp(name, c->str, (int)(cend - c->str)) &&
-                value &&
-                !strcasecmp(value, cend+1)) {
+            if (strlen(name) == (unsigned) (cend - c->str)
+                && !strncasecmp(name, c->str, (int) (cend - c->str)) && value
+                && !strcasecmp(value, cend + 1))
+            {
                 save_capability(s, c, NULL);
-                return 1;   /* full match, stop calling me with this @name */
+                return 1; /* full match, stop calling me with this @name */
             }
-        } else {
+        }
+        else {
             /* c->str is a bare NAME, just try to match it against @name */
             if (!strcasecmp(c->str, name)) {
                 save_capability(s, c, value);
-                return 2;   /* partial match, keep calling with new @value
-                             * for this @name */
+                return 2; /* partial match, keep calling with new @value
+                           * for this @name */
             }
         }
     }
 
-    return 0;   /* no match, stop calling me with this @name */
+    return 0; /* no match, stop calling me with this @name */
 }
 
 /*
@@ -202,24 +214,29 @@ static char *find_response_code(char *buf, const char *code)
 
     /* Try to find the first response code */
     start = strchr(buf, '[');
-    if (!start)
-        return NULL;    /* no response codes */
+    if (!start) {
+        return NULL; /* no response codes */
+    }
 
     start++;
     for (;;) {
-        while (*start && Uisspace(*start))
+        while (*start && Uisspace(*start)) {
             start++;
-        if (!*start)
-            break;      /* nothing to see here */
+        }
+        if (!*start) {
+            break; /* nothing to see here */
+        }
         /* response codes are delineated by [] */
-        if (!(end = strchr(start, ']')))
-            break;      /* unbalanced [response code] */
+        if (!(end = strchr(start, ']'))) {
+            break; /* unbalanced [response code] */
+        }
         if (!strncasecmp(start, code, codelen) && Uisspace(start[codelen])) {
             *end = '\0';
-            start += codelen+1;
+            start += codelen + 1;
             return start;
-        } else {
-            start = end+1;
+        }
+        else {
+            start = end + 1;
         }
     }
 
@@ -246,11 +263,11 @@ static char *quote_tok(char *buf)
     static const char sep[] = "\"";
 
     p = strtok(buf, sep);
-    if (p)
+    if (p) {
         strtok(NULL, sep);
+    }
     return p;
 }
-
 
 /*
  * Parse a line of text from the wire which might contain
@@ -289,7 +306,9 @@ static int parse_capability(struct backend *s, const char *str)
     char *(*tok)(char *) = ws_tok;
     static const char code[] = "CAPABILITY";
 
-    if (s->prot->type != TYPE_STD) return 0;
+    if (s->prot->type != TYPE_STD) {
+        return 0;
+    }
 
     /* save the buffer, we're going to be destructively parsing it */
     buf = xstrdupsafe(str);
@@ -298,37 +317,46 @@ static int parse_capability(struct backend *s, const char *str)
         /*
          * POP3, LMTP and sync protocol style: one capability per line.
          */
-        if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
+        if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_QUOTE_WORDS)) {
             tok = quote_tok;
+        }
 
-        if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_DASH_STUFFING))
+        if ((s->prot->u.std.capa_cmd.formatflags & CAPAF_DASH_STUFFING)) {
             word = dash_tok(buf);
-        else
+        }
+        else {
             word = tok(buf);
+        }
 
         /* Ignore the first word of the line.  Used for LMTP and POP3 */
-        if (word && (s->prot->u.std.capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
+        if (word
+            && (s->prot->u.std.capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
+        {
             word = tok(NULL);
+        }
 
-        if (!word)
+        if (!word) {
             goto out;
+        }
         /* @word is the capability name. Any remaining atoms are parameters */
         param = tok(NULL);
 
         if (!param) {
             /* no parameters */
             matches |= match_capability(s, word, NULL);
-        } else {
+        }
+        else {
             /* 1 or more parameters */
-            for ( ; param ; param = tok(NULL)) {
+            for (; param; param = tok(NULL)) {
                 int r = match_capability(s, word, param);
                 matches |= r;
-                if (r != 2)
+                if (r != 2) {
                     break;
+                }
             }
         }
-
-    } else {
+    }
+    else {
         /*
          * IMAP style: one humongous line with a list of atoms
          * of the form NAME or NAME=PARAM, preceded by the atom
@@ -342,23 +370,25 @@ static int parse_capability(struct backend *s, const char *str)
              * containing a CAPABILITY response code, and possibly
              * containing some other response codes we don't care about. */
             word = tok(start);
-        } else {
+        }
+        else {
             /* The line is probably an untagged response to a CAPABILITY
              * command.  Tokenize until we find the CAPABILITY atom */
-            for (word = tok(buf) ;
-                 word && strcasecmp(word, code) ;
+            for (word = tok(buf); word && strcasecmp(word, code);
                  word = tok(NULL))
                 ;
-            if (word)
-                word = tok(NULL);   /* skip the CAPABILITY atom itself */
+            if (word) {
+                word = tok(NULL); /* skip the CAPABILITY atom itself */
+            }
         }
 
         /* `word' now points to the first capability; parse it and
          * each remaining word as a NAME or NAME=VALUE capability */
-        for ( ; word ; word = tok(NULL)) {
+        for (; word; word = tok(NULL)) {
             param = strchr(word, '=');
-            if (param)
+            if (param) {
                 *param++ = '\0';
+            }
             matches |= match_capability(s, word, param);
         }
     }
@@ -370,10 +400,13 @@ out:
 
 static void post_parse_capability(struct backend *s)
 {
-    if (s->prot->type != TYPE_STD) return;
+    if (s->prot->type != TYPE_STD) {
+        return;
+    }
 
-    if (s->prot->u.std.capa_cmd.postcapability)
+    if (s->prot->u.std.capa_cmd.postcapability) {
         s->prot->u.std.capa_cmd.postcapability(s);
+    }
 }
 
 /*
@@ -398,19 +431,24 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
     char str[2047];
     const char *resp;
 
-    if (prot->type != TYPE_STD) return 0;
+    if (prot->type != TYPE_STD) {
+        return 0;
+    }
 
-    resp = (automatic == AUTO_CAPA_BANNER) ?
-        prot->u.std.banner.resp : prot->u.std.capa_cmd.resp;
+    resp = (automatic == AUTO_CAPA_BANNER) ? prot->u.std.banner.resp
+                                           : prot->u.std.capa_cmd.resp;
 
     if (!automatic) {
         /* no capability command */
-        if (!prot->u.std.capa_cmd.cmd) return -1;
+        if (!prot->u.std.capa_cmd.cmd) {
+            return -1;
+        }
 
         /* request capabilities of server */
         prot_printf(pout, "%s", prot->u.std.capa_cmd.cmd);
-        if (prot->u.std.capa_cmd.arg)
+        if (prot->u.std.capa_cmd.arg) {
             prot_printf(pout, " %s", prot->u.std.capa_cmd.arg);
+        }
         prot_printf(pout, "\r\n");
         prot_flush(pout);
     }
@@ -418,7 +456,9 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
     forget_capabilities(s);
 
     do {
-        if (prot_fgets(str, sizeof(str), pin) == NULL) break;
+        if (prot_fgets(str, sizeof(str), pin) == NULL) {
+            break;
+        }
 
         matches |= parse_capability(s, str);
 
@@ -463,14 +503,16 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
  * capability was not reported by the server, or was reported with no
  * parameters, NULL is returned.
  */
-EXPORTED char *backend_get_cap_params(const struct backend *s, unsigned long capa)
+EXPORTED char *backend_get_cap_params(const struct backend *s,
+                                      unsigned long capa)
 {
     int i;
 
-    if (!(s->capability & capa))
+    if (!(s->capability & capa)) {
         return NULL;
+    }
 
-    for (i = 0 ; i < s->num_cap_params ; i++) {
+    for (i = 0; i < s->num_cap_params; i++) {
         if (s->cap_params[i].capa == capa) {
             return xstrdup(s->cap_params[i].params);
         }
@@ -489,9 +531,11 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
     prot_flush(s->out);
 
     /* check response */
-    if (!prot_fgets(buf, sizeof(buf), s->in) ||
-        strncmp(buf, compress_cmd->ok, strlen(compress_cmd->ok)))
+    if (!prot_fgets(buf, sizeof(buf), s->in)
+        || strncmp(buf, compress_cmd->ok, strlen(compress_cmd->ok)))
+    {
         return -1;
+    }
 
     prot_setcompress(s->in);
     prot_setcompress(s->out);
@@ -500,7 +544,8 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 }
 #else
 static int do_compress(struct backend *s __attribute__((unused)),
-                       struct simple_cmd_t *compress_cmd __attribute__((unused)))
+                       struct simple_cmd_t *compress_cmd
+                       __attribute__((unused)))
 {
     return -1;
 }
@@ -523,72 +568,89 @@ EXPORTED int backend_starttls(struct backend *s,
         prot_flush(s->out);
 
         /* check response */
-        if (!prot_fgets(buf, sizeof(buf), s->in) ||
-            strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
+        if (!prot_fgets(buf, sizeof(buf), s->in)
+            || strncmp(buf, tls_cmd->ok, strlen(tls_cmd->ok)))
+        {
             return -1;
+        }
 
         auto_capa = tls_cmd->auto_capa;
     }
 
     r = tls_init_clientengine(5, c_cert_file, c_key_file);
-    if (r == -1) return -1;
+    if (r == -1) {
+        return -1;
+    }
 
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &s->ext_ssf;
-    r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
+    r = tls_start_clienttls(s->in->fd,
+                            s->out->fd,
+                            layerp,
+                            &auth_id,
                             s->prot ? s->prot->alpn_map : NULL,
-                            &s->tlsconn, &s->tlssess);
-    if (r == -1) return -1;
+                            &s->tlsconn,
+                            &s->tlssess);
+    if (r == -1) {
+        return -1;
+    }
 
     if (s->saslconn) {
         r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &s->ext_ssf);
-        if (r == SASL_OK)
+        if (r == SASL_OK) {
             r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
-        if (auth_id) free(auth_id);
-        if (r != SASL_OK) return -1;
+        }
+        if (auth_id) {
+            free(auth_id);
+        }
+        if (r != SASL_OK) {
+            return -1;
+        }
     }
 
-    prot_settls(s->in,  s->tlsconn);
+    prot_settls(s->in, s->tlsconn);
     prot_settls(s->out, s->tlsconn);
 
-    ask_capability(s, /*dobanner*/1, auto_capa);
+    ask_capability(s, /*dobanner*/ 1, auto_capa);
 
     return 0;
 }
 
-EXPORTED char *intersect_mechlists( char *config, char *server )
+EXPORTED char *intersect_mechlists(char *config, char *server)
 {
-    char *newmechlist = xzmalloc( strlen( config ) + 1 );
+    char *newmechlist = xzmalloc(strlen(config) + 1);
     char *cmech = NULL, *smech = NULL, *s;
     int count = 0;
     char csave, ssave;
 
     do {
-        if ( isalnum( *config ) || *config == '_' || *config == '-' ) {
-            if ( cmech == NULL ) {
+        if (isalnum(*config) || *config == '_' || *config == '-') {
+            if (cmech == NULL) {
                 cmech = config;
             }
-        } else {
-            if ( cmech != NULL ) {
+        }
+        else {
+            if (cmech != NULL) {
                 csave = *config;
                 *config = '\0';
 
                 s = server;
                 do {
-                    if ( isalnum( *s ) || *s == '_' || *s == '-' ) {
-                        if ( smech == NULL ) {
+                    if (isalnum(*s) || *s == '_' || *s == '-') {
+                        if (smech == NULL) {
                             smech = s;
                         }
-                    } else {
-                        if ( smech != NULL ) {
+                    }
+                    else {
+                        if (smech != NULL) {
                             ssave = *s;
                             *s = '\0';
 
-                            if ( strcasecmp( cmech, smech ) == 0 ) {
-                                if ( count > 0 ) {
-                                    strcat( newmechlist, " " );
+                            if (strcasecmp(cmech, smech) == 0) {
+                                if (count > 0) {
+                                    strcat(newmechlist, " ");
                                 }
-                                strcat( newmechlist, cmech );
+                                strcat(newmechlist, cmech);
                                 count++;
 
                                 *s = ssave;
@@ -600,57 +662,70 @@ EXPORTED char *intersect_mechlists( char *config, char *server )
                             smech = NULL;
                         }
                     }
-                } while ( *s++ );
+                } while (*s++);
 
                 *config = csave;
                 cmech = NULL;
             }
         }
-    } while ( *config++ );
+    } while (*config++);
 
-    if ( count == 0 ) {
-        free( newmechlist );
-        return( NULL );
+    if (count == 0) {
+        free(newmechlist);
+        return (NULL);
     }
-    return( newmechlist );
+    return (newmechlist);
 }
 
-static int backend_authenticate(struct backend *s, const char *userid,
-                                sasl_callback_t *cb, const char **status)
+static int backend_authenticate(struct backend *s,
+                                const char *userid,
+                                sasl_callback_t *cb,
+                                const char **status)
 {
     struct protocol_t *prot = s->prot;
     int r;
     char *mechlist;
-    sasl_security_properties_t secprops =
-        { 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
+    sasl_security_properties_t secprops = {
+        0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL
+    }; /* default secprops */
     struct sockaddr_storage saddr_l, saddr_r;
     char remoteip[60], localip[60];
     socklen_t addrsize;
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
-    if (prot->type != TYPE_STD) return SASL_FAIL;
+    if (prot->type != TYPE_STD) {
+        return SASL_FAIL;
+    }
 
     /* set the IP addresses */
     addrsize = sizeof(struct sockaddr_storage);
-    if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
+    if (getpeername(s->sock, (struct sockaddr *) &saddr_r, &addrsize) != 0) {
         return SASL_FAIL;
-    if (iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
+    }
+    if (iptostring((struct sockaddr *) &saddr_r, addrsize, remoteip, 60) != 0) {
         return SASL_FAIL;
+    }
 
     addrsize = sizeof(struct sockaddr_storage);
-    if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
+    if (getsockname(s->sock, (struct sockaddr *) &saddr_l, &addrsize) != 0) {
         return SASL_FAIL;
-    if (iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
+    }
+    if (iptostring((struct sockaddr *) &saddr_l, addrsize, localip, 60) != 0) {
         return SASL_FAIL;
+    }
 
     s->sasl_cb = NULL;
     if (!cb) {
         strlcpy(optstr, s->hostname, sizeof(optstr));
         p = strchr(optstr, '.');
-        if (p) *p = '\0';
+        if (p) {
+            *p = '\0';
+        }
         strlcat(optstr, "_password", sizeof(optstr));
         pass = config_getoverflowstring(optstr, NULL);
-        if(!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+        if (!pass) {
+            pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+        }
         cb = mysasl_callbacks(userid,
                               config_getstring(IMAPOPT_PROXY_AUTHNAME),
                               config_getstring(IMAPOPT_PROXY_REALM),
@@ -659,10 +734,15 @@ static int backend_authenticate(struct backend *s, const char *userid,
     }
 
     /* Require proxying if we have an "interesting" userid (authzid) */
-    r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
-                        (userid  && *userid ? SASL_NEED_PROXY : 0) |
-                        (prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
-                        &s->saslconn);
+    r = sasl_client_new(
+        prot->sasl_service,
+        s->hostname,
+        localip,
+        remoteip,
+        cb,
+        (userid && *userid ? SASL_NEED_PROXY : 0)
+            | (prot->u.std.sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
+        &s->saslconn);
     if (r != SASL_OK) {
         free_callbacks(s->sasl_cb);
         s->sasl_cb = NULL;
@@ -680,16 +760,21 @@ static int backend_authenticate(struct backend *s, const char *userid,
        mechanism using a <shorthost>_mechs option */
     strcpy(buf, s->hostname);
     p = strchr(buf, '.');
-    if (p) *p = '\0';
+    if (p) {
+        *p = '\0';
+    }
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
 
-    if (!mech_conf)
+    if (!mech_conf) {
         mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
+    }
 
     strlcpy(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
-    if (p) *p = '\0';
+    if (p) {
+        *p = '\0';
+    }
 
     strlcat(optstr, "_client_cert", sizeof(optstr));
     const char *c_cert_file = config_getoverflowstring(optstr, NULL);
@@ -700,7 +785,9 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
     strlcpy(optstr, s->hostname, sizeof(optstr));
     p = strchr(optstr, '.');
-    if (p) *p = '\0';
+    if (p) {
+        *p = '\0';
+    }
 
     strlcat(optstr, "_client_key", sizeof(optstr));
 
@@ -715,11 +802,10 @@ static int backend_authenticate(struct backend *s, const char *userid,
         /* If we have a mech_conf, use it */
         if (mech_conf && mechlist) {
             char *conf = xstrdup(mech_conf);
-            char *newmechlist = intersect_mechlists( conf, mechlist );
+            char *newmechlist = intersect_mechlists(conf, mechlist);
 
-            if ( newmechlist == NULL ) {
-                syslog( LOG_INFO, "%s did not offer %s", s->hostname,
-                        mech_conf );
+            if (newmechlist == NULL) {
+                syslog(LOG_INFO, "%s did not offer %s", s->hostname, mech_conf);
             }
 
             free(conf);
@@ -729,32 +815,45 @@ static int backend_authenticate(struct backend *s, const char *userid,
 
         if (mechlist) {
             /* we now do the actual SASL exchange */
-            saslclient(s->saslconn, &prot->u.std.sasl_cmd, mechlist,
-                       s->in, s->out, &r, status);
+            saslclient(s->saslconn,
+                       &prot->u.std.sasl_cmd,
+                       mechlist,
+                       s->in,
+                       s->out,
+                       &r,
+                       status);
 
             /* garbage collect */
             free(mechlist);
             mechlist = NULL;
         }
-        else r = SASL_NOMECH;
+        else {
+            r = SASL_NOMECH;
+        }
 
         /* If we don't have a usable mech, do TLS and try again */
-    } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
-             backend_starttls(s, &prot->u.std.tls_cmd, c_cert_file, c_key_file) != -1 &&
-             (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
+    } while (
+        r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS)
+        && backend_starttls(s, &prot->u.std.tls_cmd, c_cert_file, c_key_file)
+               != -1
+        && (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
 
     if (r == SASL_OK) {
         prot_setsasl(s->in, s->saslconn);
         prot_setsasl(s->out, s->saslconn);
     }
 
-    if (mechlist) free(mechlist);
+    if (mechlist) {
+        free(mechlist);
+    }
 
     return r;
 }
 
-static int backend_login(struct backend *ret, const char *userid,
-                         sasl_callback_t *cb, const char **auth_status,
+static int backend_login(struct backend *ret,
+                         const char *userid,
+                         sasl_callback_t *cb,
+                         const char **auth_status,
                          int noauth)
 {
     int r = 0;
@@ -762,11 +861,13 @@ static int backend_login(struct backend *ret, const char *userid,
     char buf[2047];
     struct protocol_t *prot = ret->prot;
 
-    if (prot->type != TYPE_STD) return -1;
+    if (prot->type != TYPE_STD) {
+        return -1;
+    }
 
     if (prot->u.std.banner.auto_capa) {
         /* try to get the capabilities from the banner */
-        r = ask_capability(ret, /*dobanner*/1, AUTO_CAPA_BANNER);
+        r = ask_capability(ret, /*dobanner*/ 1, AUTO_CAPA_BANNER);
         if (r) {
             /* found capabilities in banner -> don't ask */
             ask = 0;
@@ -780,14 +881,15 @@ static int backend_login(struct backend *ret, const char *userid,
                        ret->in->error ? ret->in->error : "(null)");
                 return -1;
             }
-        } while (strncasecmp(buf, prot->u.std.banner.resp,
+        } while (strncasecmp(buf,
+                             prot->u.std.banner.resp,
                              strlen(prot->u.std.banner.resp)));
         xstrncpy(ret->banner, buf, sizeof(ret->banner));
     }
 
     if (ask) {
         /* get the capabilities */
-        ask_capability(ret, /*dobanner*/0, AUTO_CAPA_NO);
+        ask_capability(ret, /*dobanner*/ 0, AUTO_CAPA_NO);
     }
 
     /* now need to authenticate to backend server,
@@ -797,7 +899,8 @@ static int backend_login(struct backend *ret, const char *userid,
         const char *my_status = NULL;
 
         if ((r = backend_authenticate(ret, userid, cb, &my_status))) {
-            syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
+            syslog(LOG_ERR,
+                   "couldn't authenticate to backend server: %s",
                    sasl_errstring(r, NULL, NULL));
             free(old_mechlist);
             return -1;
@@ -810,7 +913,8 @@ static int backend_login(struct backend *ret, const char *userid,
                 /* if we have a SASL security layer, compare SASL mech lists
                    before/after AUTH to check for a MITM attack */
                 char *new_mechlist;
-                int auto_capa = (prot->u.std.sasl_cmd.auto_capa == AUTO_CAPA_AUTH_SSF);
+                int auto_capa =
+                    (prot->u.std.sasl_cmd.auto_capa == AUTO_CAPA_AUTH_SSF);
 
                 if (!strcmp(prot->service, "sieve")) {
                     /* XXX  Hack to handle ManageSieve servers.
@@ -825,22 +929,28 @@ static int backend_login(struct backend *ret, const char *userid,
                     prot_NONBLOCK(ret->in);
                     if ((ch = prot_getc(ret->in)) != EOF) {
                         prot_ungetc(ch, ret->in);
-                    } else {
+                    }
+                    else {
                         auto_capa = AUTO_CAPA_AUTH_NO;
                     }
                     prot_BLOCK(ret->in);
                 }
 
-                ask_capability(ret, /*dobanner*/0, auto_capa);
+                ask_capability(ret, /*dobanner*/ 0, auto_capa);
                 new_mechlist = backend_get_cap_params(ret, CAPA_AUTH);
-                if (new_mechlist &&
-                    old_mechlist &&
-                    strcmp(new_mechlist, old_mechlist)) {
-                    syslog(LOG_ERR, "possible MITM attack:"
+                if (new_mechlist && old_mechlist
+                    && strcmp(new_mechlist, old_mechlist))
+                {
+                    syslog(LOG_ERR,
+                           "possible MITM attack:"
                            "list of available SASL mechanisms changed");
 
-                    if (new_mechlist) free(new_mechlist);
-                    if (old_mechlist) free(old_mechlist);
+                    if (new_mechlist) {
+                        free(new_mechlist);
+                    }
+                    if (old_mechlist) {
+                        free(old_mechlist);
+                    }
                     return -1;
                 }
                 free(new_mechlist);
@@ -853,23 +963,27 @@ static int backend_login(struct backend *ret, const char *userid,
             }
 
             if (!(strcmp(prot->service, "imap")
-                && (strcmp(prot->service, "pop3"))))
+                  && (strcmp(prot->service, "pop3"))))
             {
                 auditlog_proxy(userid, my_status);
             }
         }
 
-        if (auth_status) *auth_status = my_status;
+        if (auth_status) {
+            *auth_status = my_status;
+        }
         free(old_mechlist);
     }
 
     /* start compression if requested and both client/server support it */
-    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) &&
-        CAPA(ret, CAPA_COMPRESS) &&
-        prot->u.std.compress_cmd.cmd) {
+    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) && CAPA(ret, CAPA_COMPRESS)
+        && prot->u.std.compress_cmd.cmd)
+    {
         r = do_compress(ret, &prot->u.std.compress_cmd);
         if (r) {
-            syslog(LOG_NOTICE, "couldn't enable compression on backend server: %s", error_message(r));
+            syslog(LOG_NOTICE,
+                   "couldn't enable compression on backend server: %s",
+                   error_message(r));
             r = 0; /* not a fail-level error */
         }
     }
@@ -880,10 +994,12 @@ static int backend_login(struct backend *ret, const char *userid,
 static int backend_client_bind(const int sock, const struct addrinfo *dest)
 {
     const char *client_bind_name = config_getstring(IMAPOPT_CLIENT_BIND_NAME);
-    struct addrinfo hints = {0}, *res0 = NULL, *iter;
+    struct addrinfo hints = { 0 }, *res0 = NULL, *iter;
     int r;
 
-    if (!client_bind_name) client_bind_name = config_servername;
+    if (!client_bind_name) {
+        client_bind_name = config_servername;
+    }
 
     hints.ai_family = dest->ai_family;
     hints.ai_socktype = dest->ai_socktype;
@@ -892,21 +1008,29 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
 
     r = getaddrinfo(client_bind_name, NULL, &hints, &res0);
     if (r && config_debug) {
-        syslog(LOG_DEBUG, "%s: getaddrinfo(%s) failed: %s",
-               __func__, client_bind_name, gai_strerror(r));
+        syslog(LOG_DEBUG,
+               "%s: getaddrinfo(%s) failed: %s",
+               __func__,
+               client_bind_name,
+               gai_strerror(r));
     }
 
     for (iter = res0; iter != NULL; iter = iter->ai_next) {
         r = bind(sock, iter->ai_addr, iter->ai_addrlen);
-        if (!r) break;  /* found a good one */
+        if (!r) {
+            break; /* found a good one */
+        }
 
         if (config_debug) {
-            char bind_addr[1024] = {0};
+            char bind_addr[1024] = { 0 };
             int saved_errno = errno;
 
-            getnameinfo(iter->ai_addr, iter->ai_addrlen,
-                        bind_addr, sizeof(bind_addr),
-                        NULL, 0,
+            getnameinfo(iter->ai_addr,
+                        iter->ai_addrlen,
+                        bind_addr,
+                        sizeof(bind_addr),
+                        NULL,
+                        0,
                         NI_NUMERICHOST);
 
             errno = saved_errno;
@@ -915,19 +1039,24 @@ static int backend_client_bind(const int sock, const struct addrinfo *dest)
     }
 
     if (r || !iter) {
-        syslog(LOG_ERR, "client bind failed: no suitable address found for %s",
+        syslog(LOG_ERR,
+               "client bind failed: no suitable address found for %s",
                client_bind_name);
         r = r ? r : -1;
     }
 
-    if (res0 != NULL) freeaddrinfo(res0);
+    if (res0 != NULL) {
+        freeaddrinfo(res0);
+    }
 
     return r;
 }
 
-EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
+EXPORTED struct backend *backend_connect_pipe(int infd,
+                                              int outfd,
                                               struct protocol_t *prot,
-                                              int do_tls, int logfd)
+                                              int do_tls,
+                                              int logfd)
 
 {
     struct backend *ret = xzmalloc(sizeof(struct backend));
@@ -946,23 +1075,31 @@ EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
     /* Start TLS if required */
     if (do_tls) {
         r = backend_starttls(ret, NULL, NULL, NULL);
-        if (r) goto error;
+        if (r) {
+            goto error;
+        }
     }
 
     /* Login to the server. Not really, but let's handshake. */
-    if (prot->type == TYPE_SPEC)
-        r = prot->u.spec.login(ret, NULL, NULL, NULL, /*noauth*/1);
-    else
-        r = backend_login(ret, NULL, NULL, NULL, /*noauth*/1);
+    if (prot->type == TYPE_SPEC) {
+        r = prot->u.spec.login(ret, NULL, NULL, NULL, /*noauth*/ 1);
+    }
+    else {
+        r = backend_login(ret, NULL, NULL, NULL, /*noauth*/ 1);
+    }
 
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     /* Set up logging */
     if (logfd >= 0) {
         prot_setlog(ret->in, logfd);
         prot_setlog(ret->out, logfd);
     }
-    else prot_settimeout(ret->in, 0);
+    else {
+        prot_settimeout(ret->in, 0);
+    }
 
     return ret;
 
@@ -973,10 +1110,13 @@ error:
     return NULL;
 }
 
-EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
-                                struct protocol_t *prot, const char *userid,
-                                sasl_callback_t *cb, const char **auth_status,
-                                int logfd)
+EXPORTED struct backend *backend_connect(struct backend *ret_backend,
+                                         const char *server,
+                                         struct protocol_t *prot,
+                                         const char *userid,
+                                         sasl_callback_t *cb,
+                                         const char **auth_status,
+                                         int logfd)
 
 {
     /* need to (re)establish connection to server or create one */
@@ -995,8 +1135,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
         strlcpy(ret->hostname, server, sizeof(ret->hostname));
         ret->timeout = NULL;
     }
-    else
+    else {
         ret = ret_backend;
+    }
 
     if (server[0] == '/') { /* unix socket */
         res0 = &hints;
@@ -1013,8 +1154,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
         sunsock.sun_family = AF_UNIX;
         strlcpy(sunsock.sun_path, server, sizeof(sunsock.sun_path));
 
-        if (!strcmp(prot->sasl_service, "lmtp") ||
-            !strcmp(prot->sasl_service, "csync")) {
+        if (!strcmp(prot->sasl_service, "lmtp")
+            || !strcmp(prot->sasl_service, "csync"))
+        {
             noauth = 1;
         }
     }
@@ -1035,23 +1177,31 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
                 *p++ = '\0';
                 tok_initm(&tok, p, "/", 0);
                 while ((opt = tok_next(&tok))) {
-                    if (!strcmp(opt, "tls")) do_tls = 1;
-                    else if (!strcmp(opt, "noauth")) noauth = 1;
+                    if (!strcmp(opt, "tls")) {
+                        do_tls = 1;
+                    }
+                    else if (!strcmp(opt, "noauth")) {
+                        noauth = 1;
+                    }
                 }
                 tok_fini(&tok);
             }
         }
 
         // don't do lookups if the port number is zero
-        if (!strcmp(service, "0")) goto error;
+        if (!strcmp(service, "0")) {
+            goto error;
+        }
 
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = PF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
         err = getaddrinfo(host, service, &hints, &res0);
         if (err) {
-            syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
-                   server, gai_strerror(err));
+            syslog(LOG_ERR,
+                   "getaddrinfo(%s) failed: %s",
+                   server,
+                   gai_strerror(err));
             goto error;
         }
 
@@ -1060,8 +1210,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
 
     for (res = res0; res; res = res->ai_next) {
         sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-        if (sock < 0)
+        if (sock < 0) {
             continue;
+        }
 
         if (do_client_bind) {
             r = backend_client_bind(sock, res);
@@ -1083,7 +1234,8 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
             int n;
             fd_set wfds, rfds;
             time_t now = time(NULL);
-            time_t timeout = now + config_getduration(IMAPOPT_CLIENT_TIMEOUT, 's');
+            time_t timeout =
+                now + config_getduration(IMAPOPT_CLIENT_TIMEOUT, 's');
             struct timeval waitfor;
 
             /* select() socket for writing until we succeed, fail, or timeout */
@@ -1108,8 +1260,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
                 /* Socket is ready for I/O - get SO_ERROR to determine status */
                 socklen_t errlen = sizeof(err);
 
-                if (!getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen) &&
-                    !(errno = err)) {
+                if (!getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen)
+                    && !(errno = err))
+                {
                     /* connect() succeeded */
                     break;
                 }
@@ -1121,7 +1274,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     }
 
     if (sock < 0) {
-        if (res0 != &hints) freeaddrinfo(res0);
+        if (res0 != &hints) {
+            freeaddrinfo(res0);
+        }
         syslog(LOG_ERR, "connect(%s) failed: %m", server);
         goto error;
     }
@@ -1130,8 +1285,9 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     nonblock(sock, 0);
 
     memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
-    if (res0 != &hints)
+    if (res0 != &hints) {
         freeaddrinfo(res0);
+    }
 
     ret->in = prot_new(sock, 0);
     ret->out = prot_new(sock, 1);
@@ -1146,29 +1302,41 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     /* Start TLS if required */
     if (do_tls) {
         r = backend_starttls(ret, NULL, NULL, NULL);
-        if (r) goto error;
+        if (r) {
+            goto error;
+        }
     }
 
     /* Login to the server */
-    if (prot->type == TYPE_SPEC)
+    if (prot->type == TYPE_SPEC) {
         r = prot->u.spec.login(ret, userid, cb, auth_status, noauth);
-    else
+    }
+    else {
         r = backend_login(ret, userid, cb, auth_status, noauth);
+    }
 
-    if (r) goto error;
+    if (r) {
+        goto error;
+    }
 
     if (logfd >= 0) {
         prot_setlog(ret->in, logfd);
         prot_setlog(ret->out, logfd);
     }
-    else prot_settimeout(ret->in, 0);
+    else {
+        prot_settimeout(ret->in, 0);
+    }
 
     return ret;
 
 error:
-    if (sock >= 0) backend_disconnect(ret);
+    if (sock >= 0) {
+        backend_disconnect(ret);
+    }
     ret->sock = -1;
-    if (!ret_backend) free(ret);
+    if (!ret_backend) {
+        free(ret);
+    }
     return NULL;
 }
 
@@ -1177,13 +1345,21 @@ EXPORTED int backend_ping(struct backend *s, const char *userid)
     char buf[1024];
     struct simple_cmd_t *ping_cmd;
 
-    if (!s) return 0;
-    if (s->sock == -1) return -1; /* Disconnected Socket */
+    if (!s) {
+        return 0;
+    }
+    if (s->sock == -1) {
+        return -1; /* Disconnected Socket */
+    }
 
-    if (s->prot->type == TYPE_SPEC) return s->prot->u.spec.ping(s, userid);
+    if (s->prot->type == TYPE_SPEC) {
+        return s->prot->u.spec.ping(s, userid);
+    }
 
     ping_cmd = &s->prot->u.std.ping_cmd;
-    if (!ping_cmd->cmd) return 0;
+    if (!ping_cmd->cmd) {
+        return 0;
+    }
 
     prot_printf(s->out, "%s\r\n", ping_cmd->cmd);
     prot_flush(s->out);
@@ -1192,12 +1368,14 @@ EXPORTED int backend_ping(struct backend *s, const char *userid)
         if (!prot_fgets(buf, sizeof(buf), s->in)) {
             /* connection closed? */
             return -1;
-        } else if (ping_cmd->unsol &&
-                   !strncmp(ping_cmd->unsol, buf,
-                            strlen(ping_cmd->unsol))) {
+        }
+        else if (ping_cmd->unsol
+                 && !strncmp(ping_cmd->unsol, buf, strlen(ping_cmd->unsol)))
+        {
             /* unsolicited response */
             continue;
-        } else {
+        }
+        else {
             /* success/fail response */
             return strncmp(ping_cmd->ok, buf, strlen(ping_cmd->ok));
         }
@@ -1206,14 +1384,18 @@ EXPORTED int backend_ping(struct backend *s, const char *userid)
 
 EXPORTED void backend_disconnect(struct backend *s)
 {
-    if (!s) return;
+    if (!s) {
+        return;
+    }
 
     if (!prot_error(s->in)) {
-       if (s->prot->type == TYPE_SPEC) s->prot->u.spec.logout(s);
-       else {
-           struct simple_cmd_t *logout_cmd = &s->prot->u.std.logout_cmd;
+        if (s->prot->type == TYPE_SPEC) {
+            s->prot->u.spec.logout(s);
+        }
+        else {
+            struct simple_cmd_t *logout_cmd = &s->prot->u.std.logout_cmd;
 
-           if (logout_cmd->cmd) {
+            if (logout_cmd->cmd) {
                 prot_printf(s->out, "%s\r\n", logout_cmd->cmd);
                 prot_flush(s->out);
 
@@ -1223,12 +1405,16 @@ EXPORTED void backend_disconnect(struct backend *s)
                     if (!prot_fgets(buf, sizeof(buf), s->in)) {
                         /* connection closed? */
                         break;
-                    } else if (logout_cmd->unsol &&
-                               !strncmp(logout_cmd->unsol, buf,
-                                        strlen(logout_cmd->unsol))) {
+                    }
+                    else if (logout_cmd->unsol
+                             && !strncmp(logout_cmd->unsol,
+                                         buf,
+                                         strlen(logout_cmd->unsol)))
+                    {
                         /* unsolicited response */
                         continue;
-                    } else {
+                    }
+                    else {
                         /* success/fail response -- don't care either way */
                         break;
                     }
@@ -1252,7 +1438,9 @@ EXPORTED void backend_disconnect(struct backend *s)
     }
 
     /* close/free socket & prot layer */
-    if (s->sock != -1) cyrus_close_sock(s->sock);
+    if (s->sock != -1) {
+        cyrus_close_sock(s->sock);
+    }
     s->sock = -1;
 
     prot_free(s->in);
@@ -1270,8 +1458,6 @@ EXPORTED void backend_disconnect(struct backend *s)
         free_callbacks(s->sasl_cb);
         s->sasl_cb = NULL;
     }
-
-
 
     /* free last_result buffer */
     buf_free(&s->last_result);
@@ -1304,21 +1490,27 @@ EXPORTED int backend_version(struct backend *be)
     /* contemporary numbering */
     banner_version = strstr(be->banner, "Cyrus IMAP ");
     if (banner_version != NULL
-        && (2 == sscanf(banner_version,
-                        "Cyrus IMAP %d.%d.%*d server ready",
-                        &major, &minor)
-            || 2 == sscanf(banner_version,
-                           "Cyrus IMAP %d.%d.%*d-%*s server ready",
-                           &major, &minor)
-       ))
+        && (2
+                == sscanf(banner_version,
+                          "Cyrus IMAP %d.%d.%*d server ready",
+                          &major,
+                          &minor)
+            || 2
+                   == sscanf(banner_version,
+                             "Cyrus IMAP %d.%d.%*d-%*s server ready",
+                             &major,
+                             &minor)))
     {
         if (major > 3) {
             /* unrecognised future version surely supports at least whatever
              * this version supports, which is a much better assumption than 6
              */
-            syslog(LOG_INFO, "%s: did not recognise remote Cyrus version from "
-                             "banner \"%s\". Assuming index version %d!",
-                             __func__, be->banner, MAILBOX_MINOR_VERSION);
+            syslog(LOG_INFO,
+                   "%s: did not recognise remote Cyrus version from "
+                   "banner \"%s\". Assuming index version %d!",
+                   __func__,
+                   be->banner,
+                   MAILBOX_MINOR_VERSION);
             return MAILBOX_MINOR_VERSION;
         }
         else if (major == 3) {
@@ -1348,8 +1540,9 @@ EXPORTED int backend_version(struct backend *be)
 
     /* version 2.5 is 13 */
     if (strstr(be->banner, "Cyrus IMAP 2.5.")
-     || strstr(be->banner, "Cyrus IMAP Murder 2.5.")
-     || strstr(be->banner, "git2.5.")) {
+        || strstr(be->banner, "Cyrus IMAP Murder 2.5.")
+        || strstr(be->banner, "git2.5."))
+    {
         return 13;
     }
 
@@ -1359,7 +1552,9 @@ EXPORTED int backend_version(struct backend *be)
     }
 
     two_three_minor = strstr(be->banner, "v2.3.");
-    if (!two_three_minor) goto unrecognised;
+    if (!two_three_minor) {
+        goto unrecognised;
+    }
     two_three_minor += strlen("v2.3.");
 
     /* at least version 2.3.10 */
@@ -1390,8 +1585,10 @@ EXPORTED int backend_version(struct backend *be)
 
 unrecognised:
     /* fallthrough, shouldn't happen */
-    syslog(LOG_WARNING, "%s: did not recognise remote Cyrus version from "
-                        "banner \"%s\".  Assuming index version 6!",
-                        __func__, be->banner);
+    syslog(LOG_WARNING,
+           "%s: did not recognise remote Cyrus version from "
+           "banner \"%s\".  Assuming index version 6!",
+           __func__,
+           be->banner);
     return 6;
 }

@@ -49,7 +49,7 @@
 
 EXPORTED void *cyrus_mutex_alloc(void)
 {
-    pthread_mutex_t *ret = (pthread_mutex_t *)xmalloc(sizeof(pthread_mutex_t));
+    pthread_mutex_t *ret = (pthread_mutex_t *) xmalloc(sizeof(pthread_mutex_t));
 
     pthread_mutex_init(ret, NULL);
 
@@ -68,7 +68,9 @@ EXPORTED int cyrus_mutex_unlock(void *mutex)
 
 EXPORTED void cyrus_mutex_free(void *mutex)
 {
-    if(!mutex) return;
+    if (!mutex) {
+        return;
+    }
 
     pthread_mutex_destroy(mutex);
     free(mutex);

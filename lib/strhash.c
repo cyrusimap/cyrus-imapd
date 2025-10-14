@@ -66,8 +66,9 @@ EXPORTED unsigned strhash_seeded_djb2(uint32_t seed, const char *string)
         }
     }
 
-    while ((c = *ustr++))
+    while ((c = *ustr++)) {
         hash = ((hash << 5) + hash) ^ c;
+    }
 
     return hash;
 }
@@ -77,12 +78,11 @@ EXPORTED unsigned strhash_legacy(const char *string)
     unsigned ret_val = 0;
     int i;
 
-    while (*string)
-    {
+    while (*string) {
         i = (int) *string;
         ret_val ^= i;
         ret_val <<= 1;
-        string ++;
+        string++;
     }
     return ret_val;
 }

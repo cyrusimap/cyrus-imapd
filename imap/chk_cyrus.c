@@ -54,7 +54,7 @@
 #include <netinet/in.h>
 #include <limits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "index.h"
@@ -75,24 +75,33 @@ static void usage(void)
 
 static const char *check_part = NULL; /* partition we are checking */
 
-static int chkmbox(struct findall_data *data, void *rock __attribute__((unused)))
+static int chkmbox(struct findall_data *data,
+                   void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
     int r;
     mbentry_t *mbentry = NULL;
     const char *name = mbname_intname(data->mbname);
 
     r = mboxlist_lookup(name, &mbentry, NULL);
 
-    if (r == IMAP_MAILBOX_NONEXISTENT)
-       return 0;
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        return 0;
+    }
 
     /* XXX reserved mailboxes? */
 
     if (r) {
-        fprintf(stderr, "bad mailbox %s in chkmbox: %s\n", name, error_message(r));
-        fatal("fatal error",EX_TEMPFAIL);
+        fprintf(stderr,
+                "bad mailbox %s in chkmbox: %s\n",
+                name,
+                error_message(r));
+        fatal("fatal error", EX_TEMPFAIL);
     }
 
     /* are we on the partition we are checking? */
@@ -122,14 +131,15 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "mailbox", required_argument, NULL, 'M' },
+        { "mailbox",   required_argument, NULL, 'M' },
         { "partition", required_argument, NULL, 'P' },
 
-        { 0, 0, 0, 0 },
+        { 0,           0,                 0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -137,7 +147,7 @@ int main(int argc, char **argv)
             break;
 
         case 'P':
-            if(mailbox) {
+            if (mailbox) {
                 usage();
                 exit(EX_USAGE);
             }
@@ -145,7 +155,7 @@ int main(int argc, char **argv)
             break;
 
         case 'M':
-            if(check_part) {
+            if (check_part) {
                 usage();
                 exit(EX_USAGE);
             }
@@ -160,17 +170,17 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "chk_cyrus", 0, CONFIG_NEED_PARTITION_DATA);
 
-    if(mailbox) {
+    if (mailbox) {
         fprintf(stderr, "Examining mailbox: %s\n", mailbox);
-        mboxlist_findone(NULL, mailbox, 1, NULL,
-                         NULL, chkmbox, NULL);
-    } else {
-        fprintf(stderr, "Examining partition: %s\n",
+        mboxlist_findone(NULL, mailbox, 1, NULL, NULL, chkmbox, NULL);
+    }
+    else {
+        fprintf(stderr,
+                "Examining partition: %s\n",
                 (check_part ? check_part : "ALL PARTITIONS"));
 
         /* build a list of mailboxes - we're using internal names here */
-        mboxlist_findall(NULL, pattern, 1, NULL,
-                         NULL, chkmbox, NULL);
+        mboxlist_findall(NULL, pattern, 1, NULL, NULL, chkmbox, NULL);
     }
 
     cyrus_done();

@@ -49,7 +49,9 @@
 
 #include "lib/xunlink.h"
 
-EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
+EXPORTED int xunlink_fn(const char *sfile,
+                        int sline,
+                        const char *sfunc,
                         const char *pathname)
 {
     int saved_errno, r;
@@ -69,11 +71,15 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
              * caller's location, but xsyslog would log ours
              */
             saved_errno = errno;
-            syslog(LOG_ERR, "IOERROR: unlink failed:"
-                            " pathname=<%s> syserror=<%s>"
-                            " file=<%s> line=<%d> func=<%s>",
-                            pathname, strerror(saved_errno),
-                            sfile, sline, sfunc);
+            syslog(LOG_ERR,
+                   "IOERROR: unlink failed:"
+                   " pathname=<%s> syserror=<%s>"
+                   " file=<%s> line=<%d> func=<%s>",
+                   pathname,
+                   strerror(saved_errno),
+                   sfile,
+                   sline,
+                   sfunc);
 
             /* if you want to abort() on unlink failure, patch that in here */
         }
@@ -83,8 +89,12 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
     return r;
 }
 
-EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
-                          int dirfd, const char *pathname, int flags)
+EXPORTED int xunlinkat_fn(const char *sfile,
+                          int sline,
+                          const char *sfunc,
+                          int dirfd,
+                          const char *pathname,
+                          int flags)
 {
     int saved_errno, r;
 
@@ -103,11 +113,17 @@ EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
              * caller's location, but xsyslog would log ours
              */
             saved_errno = errno;
-            syslog(LOG_ERR, "IOERROR: unlinkat failed:"
-                            " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
-                            " file=<%s> line=<%d> func=<%s>",
-                            dirfd, pathname, flags, strerror(saved_errno),
-                            sfile, sline, sfunc);
+            syslog(LOG_ERR,
+                   "IOERROR: unlinkat failed:"
+                   " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
+                   " file=<%s> line=<%d> func=<%s>",
+                   dirfd,
+                   pathname,
+                   flags,
+                   strerror(saved_errno),
+                   sfile,
+                   sline,
+                   sfunc);
 
             /* if you want to abort() on unlinkat failure, patch that in here */
         }

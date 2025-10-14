@@ -54,7 +54,6 @@
  *
  */
 
-
 #include "mappedfile.h"
 
 #include <config.h>
@@ -68,7 +67,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "assert.h"
@@ -83,15 +82,21 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {
     /* we may be rewriting inside a file, so don't shrink, only extend */
     if (update) {
-        if (offset > mf->map_size)
+        if (offset > mf->map_size) {
             mf->was_resized = 1;
-        else
+        }
+        else {
             offset = mf->map_size;
+        }
     }
 
     /* always give refresh another go, we may be map_nommap */
-    buf_refresh_mmap(&mf->map_buf, /*onceonly*/0, mf->fd, mf->fname,
-                  offset, /*mboxname*/NULL);
+    buf_refresh_mmap(&mf->map_buf,
+                     /*onceonly*/ 0,
+                     mf->fd,
+                     mf->fname,
+                     offset,
+                     /*mboxname*/ NULL);
 
     mf->map_size = offset;
 }
@@ -99,7 +104,8 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
  * times.  So don't do that.  It will mess with your locking no end */
 EXPORTED int mappedfile_open(struct mappedfile **mfp,
-                             const char *fname, int flags)
+                             const char *fname,
+                             int flags)
 {
     struct mappedfile *mf;
     struct stat sbuf;
@@ -120,7 +126,7 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
             r = -errno;
             goto err;
         }
-        int dirfd = xopendir(mf->fname, /*create*/1);
+        int dirfd = xopendir(mf->fname, /*create*/ 1);
         if (dirfd < 0) {
             xsyslog(LOG_ERR, "IOERROR: open directory failed for mappedfile",
                              "filename=<%s>", mf->fname);
@@ -159,7 +165,7 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
         goto err;
     }
 
-    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
+    _ensure_mapped(mf, sbuf.st_size, /*update*/ 0);
 
     *mfp = mf;
 
@@ -176,13 +182,16 @@ EXPORTED int mappedfile_close(struct mappedfile **mfp)
     int r = 0;
 
     /* make this safe to call multiple times */
-    if (!mf) return 0;
+    if (!mf) {
+        return 0;
+    }
 
     assert(mf->lock_status == MF_UNLOCKED);
     assert(!mf->dirty);
 
-    if (mf->fd >= 0)
+    if (mf->fd >= 0) {
         r = close(mf->fd);
+    }
 
     buf_free(&mf->map_buf);
     free(mf->fname);
@@ -222,7 +231,9 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
             lock_unlock(mf->fd, mf->fname);
             return -EIO;
         }
-        if (sbuf.st_ino == sbuffile.st_ino) break;
+        if (sbuf.st_ino == sbuffile.st_ino) {
+            break;
+        }
         buf_free(&mf->map_buf);
 
         newfd = open(mf->fname, O_RDWR, 0644);
@@ -240,7 +251,7 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
     mf->lock_status = MF_READLOCKED;
     gettimeofday(&mf->starttime, 0);
 
-    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
+    _ensure_mapped(mf, sbuf.st_size, /*update*/ 0);
 
     return 0;
 }
@@ -267,9 +278,11 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
     mf->lock_status = MF_WRITELOCKED;
     gettimeofday(&mf->starttime, 0);
 
-    if (changed) buf_free(&mf->map_buf);
+    if (changed) {
+        buf_free(&mf->map_buf);
+    }
 
-    _ensure_mapped(mf, sbuf.st_size, /*update*/0);
+    _ensure_mapped(mf, sbuf.st_size, /*update*/ 0);
 
     return 0;
 }
@@ -282,8 +295,12 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
     int r;
 
     /* make this safe to call multiple times */
-    if (!mf) return 0;
-    if (mf->lock_status == MF_UNLOCKED) return 0;
+    if (!mf) {
+        return 0;
+    }
+    if (mf->lock_status == MF_UNLOCKED) {
+        return 0;
+    }
 
     assert(mf->fd != -1);
     assert(!mf->dirty);
@@ -299,8 +316,10 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
     gettimeofday(&endtime, 0);
     timediff = timesub(&mf->starttime, &endtime);
     if (timediff > 1.0) {
-        syslog(LOG_NOTICE, "mappedfile: longlock %s for %0.1f seconds",
-               mf->fname, timediff);
+        syslog(LOG_NOTICE,
+               "mappedfile: longlock %s for %0.1f seconds",
+               mf->fname,
+               timediff);
     }
 
     return 0;
@@ -310,8 +329,9 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 {
     assert(mf->fd != -1);
 
-    if (!mf->dirty)
+    if (!mf->dirty) {
         return 0; /* nice, nothing to do */
+    }
 
     assert(mf->is_rw);
 
@@ -337,7 +357,8 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 }
 
 EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
-                                   const void *base, size_t len,
+                                   const void *base,
+                                   size_t len,
                                    off_t offset)
 {
     ssize_t written;
@@ -347,7 +368,9 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     assert(mf->fd != -1);
     assert(base);
 
-    if (!len) return 0; /* nothing to write! */
+    if (!len) {
+        return 0; /* nothing to write! */
+    }
 
     /* XXX - memcmp and don't both writing if it matches? */
 
@@ -372,7 +395,7 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
         return -1;
     }
 
-    _ensure_mapped(mf, pos+written, /*update*/1);
+    _ensure_mapped(mf, pos + written, /*update*/ 1);
 
     return written;
 }
@@ -385,7 +408,8 @@ EXPORTED ssize_t mappedfile_pwritebuf(struct mappedfile *mf,
 }
 
 EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
-                                    const struct iovec *iov, int nio,
+                                    const struct iovec *iov,
+                                    int nio,
                                     off_t offset)
 {
     ssize_t written;
@@ -395,7 +419,9 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
     assert(mf->fd != -1);
     assert(iov);
 
-    if (!nio) return 0; /* nothing to write! */
+    if (!nio) {
+        return 0; /* nothing to write! */
+    }
 
     /* XXX - memcmp and don't both writing if it matches? */
 
@@ -425,7 +451,7 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
         return -1;
     }
 
-    _ensure_mapped(mf, pos+written, /*update*/1);
+    _ensure_mapped(mf, pos + written, /*update*/ 1);
 
     return written;
 }
@@ -446,7 +472,7 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
         return r;
     }
 
-    _ensure_mapped(mf, offset, /*update*/0);
+    _ensure_mapped(mf, offset, /*update*/ 0);
     mf->was_resized = 1; /* force the fsync */
 
     return 0;

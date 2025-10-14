@@ -65,11 +65,11 @@ static void usage(void)
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [options] mailbox...\n", argv0);
 
-    fprintf(stderr, "\n%s\n",
+    fprintf(stderr,
+            "\n%s\n",
             "Options:\n"
             "    -C alt_config       # alternate config file\n"
-            "    -v                  # verbose\n"
-    );
+            "    -v                  # verbose\n");
 
     exit(EX_USAGE);
 }
@@ -77,10 +77,12 @@ static void usage(void)
 static void save_argv0(const char *s)
 {
     const char *slash = strrchr(s, '/');
-    if (slash)
+    if (slash) {
         argv0 = slash + 1;
-    else
+    }
+    else {
         argv0 = s;
+    }
 }
 
 EXPORTED void fatal(const char *s, int code)
@@ -88,7 +90,9 @@ EXPORTED void fatal(const char *s, int code)
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);
 
-    if (code != EX_PROTOCOL && config_fatals_abort) abort();
+    if (code != EX_PROTOCOL && config_fatals_abort) {
+        abort();
+    }
 
     exit(code);
 }
@@ -98,14 +102,17 @@ static void xlist_lookup_cb(const char *key, const char *val, void *rock)
     hash_table *xlistp = (hash_table *) rock;
     struct buf *flag;
 
-    if (strncmp(key, "xlist-", 6)) return;
+    if (strncmp(key, "xlist-", 6)) {
+        return;
+    }
 
     flag = buf_new();
     buf_putc(flag, '\\');
     buf_appendcstr(flag, key + 6);
 
-    if (verbose)
+    if (verbose) {
         printf("will set %s for folders named %s\n", buf_cstring(flag), val);
+    }
 
     hash_insert(val, flag, xlistp);
 }
@@ -113,50 +120,70 @@ static void xlist_lookup_cb(const char *key, const char *val, void *rock)
 static int set_specialuse(struct findall_data *data, void *rock)
 {
     const strarray_t *boxes = NULL;
-    hash_table *xlist = (hash_table *) rock; /* XXX nice if this could be const */
+    hash_table *xlist =
+        (hash_table *) rock; /* XXX nice if this could be const */
     const struct buf *flag = NULL;
     char *existing;
     int r;
 
-    if (!data) return 0;
-    if (!data->is_exactmatch) return 0;
+    if (!data) {
+        return 0;
+    }
+    if (!data->is_exactmatch) {
+        return 0;
+    }
 
-    if (!mbname_userid(data->mbname)) return 0;
+    if (!mbname_userid(data->mbname)) {
+        return 0;
+    }
 
     boxes = mbname_boxes(data->mbname);
     if (boxes->count != 1) /* INBOX, or nested subfolder */
+    {
         return 0;
+    }
 
     flag = hash_lookup(strarray_nth(boxes, 0), xlist);
-    if (!flag || !buf_len(flag)) return 0;
+    if (!flag || !buf_len(flag)) {
+        return 0;
+    }
 
-    existing = mboxlist_find_specialuse(buf_cstring(flag), mbname_userid(data->mbname));
+    existing = mboxlist_find_specialuse(buf_cstring(flag),
+                                        mbname_userid(data->mbname));
     if (existing) {
-        if (verbose)
+        if (verbose) {
             printf("not setting specialuse %s for %s, already exists as %s\n",
-                   buf_cstring(flag), mbname_intname(data->mbname), existing);
+                   buf_cstring(flag),
+                   mbname_intname(data->mbname),
+                   existing);
+        }
         free(existing);
         return 0;
     }
 
-    r = annotatemore_write(mbname_intname(data->mbname), "/specialuse",
-                           mbname_userid(data->mbname), flag);
+    r = annotatemore_write(mbname_intname(data->mbname),
+                           "/specialuse",
+                           mbname_userid(data->mbname),
+                           flag);
 
     if (r) {
-        fprintf(stderr, "failed to set specialuse %s for %s: %s",
-                        buf_cstring(flag), mbname_intname(data->mbname),
-                        error_message(r));
+        fprintf(stderr,
+                "failed to set specialuse %s for %s: %s",
+                buf_cstring(flag),
+                mbname_intname(data->mbname),
+                error_message(r));
         r = 0;
     }
     else if (verbose) {
         printf("set specialuse %s for %s\n",
-               buf_cstring(flag), mbname_intname(data->mbname));
+               buf_cstring(flag),
+               mbname_intname(data->mbname));
     }
 
     return 0;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
     save_argv0(argv[0]);
 
@@ -171,11 +198,12 @@ int main (int argc, char **argv)
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "verbose", no_argument, NULL, 'v' },
-        { 0, 0, 0, 0 },
+        { 0,         0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C':
@@ -189,9 +217,12 @@ int main (int argc, char **argv)
         }
     }
 
-    if (optind == argc) usage();
+    if (optind == argc) {
+        usage();
+    }
 
-    cyrus_init(alt_config, "cvt_xlist_specialuse",
+    cyrus_init(alt_config,
+               "cvt_xlist_specialuse",
                (verbose ? CYRUSINIT_PERROR : 0),
                CONFIG_NEED_PARTITION_DATA);
 
@@ -200,8 +231,9 @@ int main (int argc, char **argv)
 
     if (hash_numrecords(&xlist) < 1) {
         /* nothing to do */
-        fprintf(stderr, "no xlist- settings in %s, nothing to do\n",
-                        alt_config ? alt_config : CONFIG_FILENAME);
+        fprintf(stderr,
+                "no xlist- settings in %s, nothing to do\n",
+                alt_config ? alt_config : CONFIG_FILENAME);
         goto done;
     }
 
@@ -209,10 +241,16 @@ int main (int argc, char **argv)
         strarray_append(&patterns, argv[i]);
     }
 
-    r = mboxlist_findallmulti(NULL, &patterns, 1, NULL, NULL, set_specialuse, &xlist);
+    r = mboxlist_findallmulti(NULL,
+                              &patterns,
+                              1,
+                              NULL,
+                              NULL,
+                              set_specialuse,
+                              &xlist);
 
 done:
-    free_hash_table(&xlist, (void (*)(void*)) buf_free);
+    free_hash_table(&xlist, (void (*)(void *)) buf_free);
     strarray_fini(&patterns);
 
     cyrus_done();

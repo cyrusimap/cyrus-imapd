@@ -48,7 +48,7 @@
 #include <string.h>
 #include <sysexits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -83,8 +83,9 @@ int main(int argc, char *argv[])
         { 0, 0, 0, 0 },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -97,10 +98,13 @@ int main(int argc, char *argv[])
         strarray_t *backends = cyrusdb_backends();
         char sep;
 
-        fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
+        fprintf(stderr,
+                "Usage: %s [-C altconfig] <old db> <old db backend> <new db> "
+                "<new db backend>\n",
+                argv[0]);
         fprintf(stderr, "Usable Backends:  ");
 
-        for(i=0, sep = ':'; i < backends->count; i++) {
+        for (i = 0, sep = ':'; i < backends->count; i++) {
             fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
             sep = ',';
         }
@@ -111,7 +115,7 @@ int main(int argc, char *argv[])
     }
 
     old_db = argv[optind];
-    new_db = argv[optind+2];
+    new_db = argv[optind + 2];
 
     if (old_db[0] != '/' || new_db[0] != '/') {
         printf("\nSorry, you cannot use this tool with relative path names.\n"
@@ -121,8 +125,8 @@ int main(int argc, char *argv[])
         exit(EX_OSERR);
     }
 
-    OLDDB = argv[optind+1];
-    NEWDB = argv[optind+3];
+    OLDDB = argv[optind + 1];
+    NEWDB = argv[optind + 3];
 
     if (NEWDB == OLDDB) {
         fatal("no conversion required", EX_TEMPFAIL);
@@ -130,13 +134,17 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cvt_cyrusdb", 0, 0);
 
-    printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
-           new_db, NEWDB);
+    printf("Converting from %s (%s) to %s (%s)\n",
+           old_db,
+           OLDDB,
+           new_db,
+           NEWDB);
 
     int r = cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
     if (r) {
         printf("\nDBERROR: Conversion failed (r was %d)."
-               " Check syslog for details.\n", r);
+               " Check syslog for details.\n",
+               r);
     }
 
     cyrus_done();

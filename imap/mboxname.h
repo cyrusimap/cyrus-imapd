@@ -54,43 +54,55 @@
 #define DOTCHAR '^'
 
 /* list of our namespaces */
-enum { NAMESPACE_INBOX = 0,
-       NAMESPACE_USER = 1,
-       NAMESPACE_SHARED = 2 };
+enum {
+    NAMESPACE_INBOX = 0,
+    NAMESPACE_USER = 1,
+    NAMESPACE_SHARED = 2
+};
 
 /* namespace option flags */
-enum { NAMESPACE_OPTION_ADMIN = (1<<0),
-       NAMESPACE_OPTION_UTF8  = (1<<1) };
+enum {
+    NAMESPACE_OPTION_ADMIN = (1 << 0),
+    NAMESPACE_OPTION_UTF8 = (1 << 1)
+};
 
 /* categorise mailboxes */
-enum { MBNAME_INBOX = 1,
-       MBNAME_INBOXSUB = 2,
-       MBNAME_ALTINBOX = 3,
-       MBNAME_ALTPREFIX = 4,
-       MBNAME_OWNER = 5,
-       MBNAME_OTHERUSER = 6,
-       MBNAME_SHARED = 7,
-       MBNAME_OWNERDELETED = 8,
-       MBNAME_OTHERDELETED = 9 };
+enum {
+    MBNAME_INBOX = 1,
+    MBNAME_INBOXSUB = 2,
+    MBNAME_ALTINBOX = 3,
+    MBNAME_ALTPREFIX = 4,
+    MBNAME_OWNER = 5,
+    MBNAME_OTHERUSER = 6,
+    MBNAME_SHARED = 7,
+    MBNAME_OWNERDELETED = 8,
+    MBNAME_OTHERDELETED = 9
+};
 
 /* structure holding server namespace info */
-struct namespace {
+struct namespace
+{
     char hier_sep;
-    u_char isutf8  : 1; /* are we using utf-8 mailbox names? */
-    u_char isalt   : 1; /* are we using the alternate namespace? */
-    u_char isadmin : 1; /* current user is an admin */
-    char prefix[3][MAX_NAMESPACE_PREFIX+1];
+    u_char isutf8:1;  /* are we using utf-8 mailbox names? */
+    u_char isalt:1;   /* are we using the alternate namespace? */
+    u_char isadmin:1; /* current user is an admin */
+    char prefix[3][MAX_NAMESPACE_PREFIX + 1];
     int accessible[3];
 };
 
-#define NAMESPACE_INITIALIZER { '.', 0, 0, 0,              \
-                                { "INBOX.", "user.", "" }, \
-                                { 0, 0, 0, } }
+#define NAMESPACE_INITIALIZER                                                  \
+    {                                                                          \
+        '.', 0, 0, 0, { "INBOX.", "user.", "" },                               \
+        {                                                                      \
+            0, 0, 0,                                                           \
+        }                                                                      \
+    }
 
-struct mboxlock {
+struct mboxlock
+{
     char *name;
     int lock_fd;
-    int locktype;       /* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
+    int locktype; /* LOCK_NONE or LOCK_SHARED or LOCK_EXCLUSIVE */
 };
 
 struct mbname_parts;
@@ -99,20 +111,29 @@ typedef struct mbname_parts mbname_t;
 
 const char *mbname_userid(const mbname_t *mbname);
 const char *mbname_intname(const mbname_t *mbname);
-const char *mbname_extname(const mbname_t *mbname, const struct namespace *ns, const char *userid);
-int mbname_category(const mbname_t *mbname, const struct namespace *ns, const char *userid);
+const char *mbname_extname(const mbname_t *mbname,
+                           const struct namespace *ns,
+                           const char *userid);
+int mbname_category(const mbname_t *mbname,
+                    const struct namespace *ns,
+                    const char *userid);
 const char *mbname_category_prefix(int category, const struct namespace *ns);
 const char *mbname_domain(const mbname_t *mbname);
 const char *mbname_localpart(const mbname_t *mbname);
 const strarray_t *mbname_boxes(const mbname_t *mbname);
 time_t mbname_isdeleted(const mbname_t *mbname);
-const char *mbname_recipient(const mbname_t *mbname, const struct namespace *ns);
+const char *mbname_recipient(const mbname_t *mbname,
+                             const struct namespace *ns);
 
 mbname_t *mbname_from_userid(const char *userid);
 mbname_t *mbname_from_localdom(const char *localpart, const char *domain);
 mbname_t *mbname_from_intname(const char *intname);
-mbname_t *mbname_from_extname(const char *extname, const struct namespace *ns, const char *userid);
-mbname_t *mbname_from_extsub(const char *extsub, const struct namespace *ns, const char *userid);
+mbname_t *mbname_from_extname(const char *extname,
+                              const struct namespace *ns,
+                              const char *userid);
+mbname_t *mbname_from_extsub(const char *extsub,
+                             const struct namespace *ns,
+                             const char *userid);
 mbname_t *mbname_from_recipient(const char *recip, const struct namespace *ns);
 mbname_t *mbname_from_path(const char *path);
 mbname_t *mbname_dup(const mbname_t *mbname);
@@ -127,12 +148,16 @@ char *mbname_pop_boxes(mbname_t *mbname); /* free it yourself punk */
 void mbname_truncate_boxes(mbname_t *mbname, size_t len);
 void mbname_free(mbname_t **mbnamep);
 
-char *mboxname_from_external(const char *extname, const struct namespace *ns, const char *userid);
-char *mboxname_to_external(const char *intname, const struct namespace *ns, const char *userid);
-
+char *mboxname_from_external(const char *extname,
+                             const struct namespace *ns,
+                             const char *userid);
+char *mboxname_to_external(const char *intname,
+                           const struct namespace *ns,
+                           const char *userid);
 
 int open_mboxlocks_exist(void);
-int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
+int mboxname_lock(const char *mboxname,
+                  struct mboxlock **mboxlockptr,
                   int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
 int mboxname_islocked(const char *mboxname);
@@ -166,76 +191,87 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
  * If (internal) mailbox ('name', 'mbtype') is a ('prefix', 'need_mbtype') mailbox
  * returns non-zero
  */
-int mboxname_isa(const char *name, int mbtype,
-                 enum imapopt prefix, int need_mbtype);
+int mboxname_isa(const char *name,
+                 int mbtype,
+                 enum imapopt prefix,
+                 int need_mbtype);
 
 /*
  * If (internal) mailbox 'name' is a CALENDAR mailbox
  * returns non-zero
  */
-#define mboxname_iscalendarmailbox(name, mbtype) \
+#define mboxname_iscalendarmailbox(name, mbtype)                               \
     mboxname_isa(name, mbtype, IMAPOPT_CALENDARPREFIX, MBTYPE_CALENDAR)
 
 /*
  * If (internal) mailbox 'name' is an ADDRESSBOOK mailbox
  * returns non-zero
  */
-#define mboxname_isaddressbookmailbox(name, mbtype) \
+#define mboxname_isaddressbookmailbox(name, mbtype)                            \
     mboxname_isa(name, mbtype, IMAPOPT_ADDRESSBOOKPREFIX, MBTYPE_ADDRESSBOOK)
 
 /*
  * If (internal) mailbox 'name' is a DAVDRIVE mailbox
  * returns non-zero
  */
-#define mboxname_isdavdrivemailbox(name, mbtype) \
+#define mboxname_isdavdrivemailbox(name, mbtype)                               \
     mboxname_isa(name, mbtype, IMAPOPT_DAVDRIVEPREFIX, MBTYPE_COLLECTION)
 
 /*
  * If (internal) mailbox 'name' is a DAVNOTIFICATIONS mailbox
  * returns non-zero
  */
-#define mboxname_isdavnotificationsmailbox(name, mbtype) \
-    mboxname_isa(name, mbtype, IMAPOPT_DAVNOTIFICATIONSPREFIX, MBTYPE_COLLECTION)
+#define mboxname_isdavnotificationsmailbox(name, mbtype)                       \
+    mboxname_isa(name,                                                         \
+                 mbtype,                                                       \
+                 IMAPOPT_DAVNOTIFICATIONSPREFIX,                               \
+                 MBTYPE_COLLECTION)
 
 /* If (internal) mailbox is a user's top-level Notes mailbox,
  * returns non-zero
  */
-#define mboxname_isnotesmailbox(name, mbtype) \
+#define mboxname_isnotesmailbox(name, mbtype)                                  \
     mboxname_isa(name, mbtype, IMAPOPT_NOTESMAILBOX, MBTYPE_EMAIL)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmapsubmission mailbox
  * returns non-zero
  */
-#define mboxname_issubmissionmailbox(name, mbtype) \
+#define mboxname_issubmissionmailbox(name, mbtype)                             \
     mboxname_isa(name, mbtype, IMAPOPT_JMAPSUBMISSIONFOLDER, MBTYPE_JMAPSUBMIT)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
  * returns non-zero
  */
-#define mboxname_ispushsubscriptionmailbox(name, mbtype) \
-    mboxname_isa(name, mbtype, IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER, MBTYPE_JMAPPUSHSUB)
+#define mboxname_ispushsubscriptionmailbox(name, mbtype)                       \
+    mboxname_isa(name,                                                         \
+                 mbtype,                                                       \
+                 IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER,                           \
+                 MBTYPE_JMAPPUSHSUB)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmap upload mailbox
  * returns non-zero
  */
-#define mboxname_isjmapuploadmailbox(name, mbtype) \
+#define mboxname_isjmapuploadmailbox(name, mbtype)                             \
     mboxname_isa(name, mbtype, IMAPOPT_JMAPUPLOADFOLDER, MBTYPE_COLLECTION)
 
 /*
  * If (internal) mailbox 'name' is a user's #jmap notifications mailbox
  * returns non-zero
  */
-#define mboxname_isjmapnotificationsmailbox(name, mbtype) \
-    mboxname_isa(name, mbtype, IMAPOPT_JMAPNOTIFICATIONFOLDER, MBTYPE_JMAPNOTIFY)
+#define mboxname_isjmapnotificationsmailbox(name, mbtype)                      \
+    mboxname_isa(name,                                                         \
+                 mbtype,                                                       \
+                 IMAPOPT_JMAPNOTIFICATIONFOLDER,                               \
+                 MBTYPE_JMAPNOTIFY)
 
 /*
  * If (internal) mailbox 'name' is a user's #sieve mailbox
  * returns non-zero
  */
-#define mboxname_issievemailbox(name, mbtype) \
+#define mboxname_issievemailbox(name, mbtype)                                  \
     mboxname_isa(name, mbtype, IMAPOPT_SIEVE_FOLDER, MBTYPE_SIEVE)
 
 /*
@@ -270,11 +306,13 @@ int mboxname_contains_parent(const char *mboxname, const char *prev);
  * and mboxname2. Return NULL for INBOX or different owners. */
 char *mboxname_common_ancestor(const char *mboxname1, const char *mboxname2);
 
-void mboxname_hash(char *buf, size_t buf_len,
+void mboxname_hash(char *buf,
+                   size_t buf_len,
                    const char *root,
-                   const char *name) ;
+                   const char *name);
 
-void mboxname_id_hash(char *buf, size_t buf_len,
+void mboxname_id_hash(char *buf,
+                      size_t buf_len,
                       const char *root,
                       const char *id);
 
@@ -296,7 +334,6 @@ char *mboxname_drive(const char *userid, const char *collection);
 int mbname_same_userid(const mbname_t *a, const mbname_t *b);
 int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
 
-
 /*
  * Access files (or directories by leaving last parameter
  * zero) for a particular mailbox on partition.
@@ -314,7 +351,8 @@ char *mboxname_archivepath(const char *partition,
 char *mboxname_metapath(const char *partition,
                         const char *mboxname,
                         const char *uniqueid,
-                        int metafile, int isnew);
+                        int metafile,
+                        int isnew);
 
 char *mboxname_lockpath(const char *mboxname);
 char *mboxname_lockpath_suffix(const char *mboxname, const char *suffix);
@@ -335,15 +373,14 @@ void mboxname_todeleted(const char *name, char *result, int withtime);
  */
 int mboxname_make_parent(char *namebuf);
 
-
-char *mboxname_conf_getpath(const mbname_t *mbname,
-                            const char *suffix);
+char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix);
 char *mboxname_conf_getpath_legacy(const mbname_t *mbname, const char *suffix);
 char *mboxid_conf_getpath(const char *mboxid, const char *suffix);
 
 /* ======================== COUNTERS ==================== */
 
-struct mboxname_counters {
+struct mboxname_counters
+{
     uint32_t generation;
     uint32_t version;
     modseq_t highestmodseq;
@@ -384,12 +421,19 @@ struct mboxname_counters {
     uint32_t uidvalidity;
 };
 
-int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals);
-#define MBOXMODSEQ_ISFOLDER (1<<0)
-#define MBOXMODSEQ_ISDELETE (1<<1)
+int mboxname_read_counters(const char *mboxname,
+                           struct mboxname_counters *vals);
+#define MBOXMODSEQ_ISFOLDER (1 << 0)
+#define MBOXMODSEQ_ISDELETE (1 << 1)
 void mboxname_assert_canadd(const mbname_t *mbname);
-modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int flags);
-modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int flags);
+modseq_t mboxname_nextmodseq(const char *mboxname,
+                             modseq_t last,
+                             int mbtype,
+                             int flags);
+modseq_t mboxname_setmodseq(const char *mboxname,
+                            modseq_t val,
+                            int mbtype,
+                            int flags);
 uint32_t mboxname_readuidvalidity(const char *mboxname);
 uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last);
 uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val);

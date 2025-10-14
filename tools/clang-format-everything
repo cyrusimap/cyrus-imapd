@@ -1,0 +1,31 @@
+#!/usr/bin/env perl
+use v5.36.0;
+
+use experimental 'builtin';
+
+my @all_files = `git ls-files | grep '\\.c\$'`;
+chomp @all_files;
+
+my %is_dir = map {; my ($dir) = split m{/}, $_; $dir => 1 } @all_files;
+
+for my $dir (sort keys %is_dir) {
+  say "Formatting files in $dir...";
+
+  my @files = `git ls-files $dir | grep -e '\\.c\$' -e '\\.h\$'`;
+  chomp @files;
+
+  my $i = 1;
+  my $pages = builtin::ceil(@files / 10);
+
+  while (my @page = splice @files, 0, 10) {
+    my $message = $pages > 1
+      ? "XXX: clang-format files in $dir ($i/$pages)"
+      : "XXX: clang format files in $dir";
+
+    $i++;
+
+    system("clang-format -i @page");
+    system("git add @page");
+    system("git commit -m '$message'");
+  }
+}

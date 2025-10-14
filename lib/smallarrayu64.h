@@ -54,7 +54,8 @@
 
 #define SMALLARRAYU64_ALLOC 8
 
-typedef struct {
+typedef struct
+{
     size_t count;
     uint8_t data[SMALLARRAYU64_ALLOC];
     arrayu64_t spillover;
@@ -63,7 +64,7 @@ typedef struct {
 
 #define SMALLARRAYU64_INITIALIZER { 0, { 0 }, ARRAYU64_INITIALIZER, 0 }
 
-#define smallarrayu64_init(sa)   (memset((sa), 0, sizeof(smallarrayu64_t)))
+#define smallarrayu64_init(sa) (memset((sa), 0, sizeof(smallarrayu64_t)))
 extern void smallarrayu64_fini(smallarrayu64_t *sa);
 
 extern smallarrayu64_t *smallarrayu64_new(void);

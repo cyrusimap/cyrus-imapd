@@ -70,8 +70,10 @@ EXPORTED double debug_locks_longer_than = 0.0;
  * string naming the action that failed.
  *
  */
-EXPORTED int lock_reopen_ex(int fd, const char *filename,
-                            struct stat *sbuf, const char **failaction,
+EXPORTED int lock_reopen_ex(int fd,
+                            const char *filename,
+                            struct stat *sbuf,
+                            const char **failaction,
                             int *changed)
 {
     int r;
@@ -79,28 +81,38 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
     struct stat sbuffile, sbufspare;
     int newfd;
     struct timeval starttime;
-    if (debug_locks_longer_than)
+    if (debug_locks_longer_than) {
         gettimeofday(&starttime, 0);
+    }
 
-
-    if (!sbuf) sbuf = &sbufspare;
+    if (!sbuf) {
+        sbuf = &sbufspare;
+    }
 
     for (;;) {
-        fl.l_type= F_WRLCK;
+        fl.l_type = F_WRLCK;
         fl.l_whence = SEEK_SET;
         fl.l_start = 0;
         fl.l_len = 0;
         r = fcntl(fd, F_SETLKW, &fl);
         if (r == -1) {
-            if (errno == EINTR) continue;
-            if (failaction) *failaction = "locking";
+            if (errno == EINTR) {
+                continue;
+            }
+            if (failaction) {
+                *failaction = "locking";
+            }
             return -1;
         }
 
         r = fstat(fd, sbuf);
-        if (!r) r = stat(filename, &sbuffile);
+        if (!r) {
+            r = stat(filename, &sbuffile);
+        }
         if (r == -1) {
-            if (failaction) *failaction = "stating";
+            if (failaction) {
+                *failaction = "stating";
+            }
             r = lock_unlock(fd, filename);
             return -1;
         }
@@ -109,19 +121,30 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
             if (debug_locks_longer_than) {
                 struct timeval endtime;
                 gettimeofday(&endtime, 0);
-                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
-                                  (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
+                double locktime =
+                    (double) (endtime.tv_sec - starttime.tv_sec)
+                    + (double) (endtime.tv_usec - starttime.tv_usec)
+                          / 1000000.0;
                 if (locktime > debug_locks_longer_than) /* 10ms */
-                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+                {
+                    syslog(LOG_NOTICE,
+                           "locktimer: reopen %s (%0.2fs)",
+                           filename,
+                           locktime);
+                }
             }
             return 0;
         }
 
-        if (changed) *changed = 1;
+        if (changed) {
+            *changed = 1;
+        }
 
         newfd = open(filename, O_RDWR);
         if (newfd == -1) {
-            if (failaction) *failaction = "opening";
+            if (failaction) {
+                *failaction = "opening";
+            }
             r = lock_unlock(fd, filename);
             return -1;
         }
@@ -139,7 +162,9 @@ EXPORTED int lock_reopen_ex(int fd, const char *filename,
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
+EXPORTED int lock_setlock(int fd,
+                          int exclusive,
+                          int nonblock,
                           const char *filename)
 {
     int r;
@@ -147,11 +172,12 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
     int type = (exclusive ? F_WRLCK : F_RDLCK);
     int cmd = (nonblock ? F_SETLK : F_SETLKW);
     struct timeval starttime;
-    if (debug_locks_longer_than)
+    if (debug_locks_longer_than) {
         gettimeofday(&starttime, 0);
+    }
 
     for (;;) {
-        fl.l_type= type;
+        fl.l_type = type;
         fl.l_whence = SEEK_SET;
         fl.l_start = 0;
         fl.l_len = 0;
@@ -160,14 +186,22 @@ EXPORTED int lock_setlock(int fd, int exclusive, int nonblock,
             if (debug_locks_longer_than) {
                 struct timeval endtime;
                 gettimeofday(&endtime, 0);
-                double locktime = (double)(endtime.tv_sec - starttime.tv_sec) +
-                                  (double)(endtime.tv_usec - starttime.tv_usec)/1000000.0;
-                if (locktime > debug_locks_longer_than)
-                    syslog(LOG_NOTICE, "locktimer: reopen %s (%0.2fs)", filename, locktime);
+                double locktime =
+                    (double) (endtime.tv_sec - starttime.tv_sec)
+                    + (double) (endtime.tv_usec - starttime.tv_usec)
+                          / 1000000.0;
+                if (locktime > debug_locks_longer_than) {
+                    syslog(LOG_NOTICE,
+                           "locktimer: reopen %s (%0.2fs)",
+                           filename,
+                           locktime);
+                }
             }
             return 0;
         }
-        if (errno == EINTR) continue;
+        if (errno == EINTR) {
+            continue;
+        }
         return -1;
     }
 }
@@ -180,17 +214,20 @@ EXPORTED int lock_unlock(int fd, const char *filename __attribute__((unused)))
     struct flock fl;
     int r;
 
-    fl.l_type= F_UNLCK;
+    fl.l_type = F_UNLCK;
     fl.l_whence = SEEK_SET;
     fl.l_start = 0;
     fl.l_len = 0;
 
     for (;;) {
         r = fcntl(fd, F_SETLKW, &fl);
-        if (r != -1) return 0;
-        if (errno == EINTR) continue;
+        if (r != -1) {
+            return 0;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
         /* XXX help! */
         return -1;
     }
 }
-

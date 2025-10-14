@@ -44,7 +44,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -88,7 +88,7 @@ static int do_user(const char *userid, void *rock)
 {
     printf("Reconstructing DAV DB for %s...\n", userid);
 
-    return dav_reconstruct_user(userid, (const char *)rock);
+    return dav_reconstruct_user(userid, (const char *) rock);
 }
 
 int main(int argc, char **argv)
@@ -103,13 +103,14 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "all", no_argument, NULL, 'a' },
+        { "all",        no_argument,       NULL, 'a' },
         { "audit-tool", required_argument, NULL, 'A' },
-        { 0, 0, 0, 0 },
+        { 0,            0,                 0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -130,10 +131,11 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "dav_reconstruct", 0, 0);
-    global_sasl_init(1,0,NULL);
+    global_sasl_init(1, 0, NULL);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&recon_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&recon_namespace, NAMESPACE_OPTION_ADMIN)))
+    {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -143,15 +145,16 @@ int main(int argc, char **argv)
     sqldb_init();
 
     if (allusers) {
-        mboxlist_alluser(do_user, (void *)audit_tool);
+        mboxlist_alluser(do_user, (void *) audit_tool);
     }
     else if (optind == argc) {
-         usage();
+        usage();
     }
     else {
         int i;
-        for (i = optind; i < argc; i++)
-            do_user(argv[i], (void *)audit_tool);
+        for (i = optind; i < argc; i++) {
+            do_user(argv[i], (void *) audit_tool);
+        }
     }
 
     libcyrus_run_delayed();
@@ -161,11 +164,9 @@ int main(int argc, char **argv)
     exit(code);
 }
 
-
 void usage(void)
 {
-    fprintf(stderr,
-            "usage: dav_reconstruct [-C <alt_config>] userid\n");
+    fprintf(stderr, "usage: dav_reconstruct [-C <alt_config>] userid\n");
     exit(EX_USAGE);
 }
 

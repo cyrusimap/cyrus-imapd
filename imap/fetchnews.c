@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdio.h>
@@ -80,21 +80,23 @@ static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
     int r;
     char *tofree = NULL;
 
-    if (!fname)
+    if (!fname) {
         fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
+    }
 
     /* create db file name */
     if (!fname) {
-        tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
+        tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *) NULL);
         fname = tofree;
     }
 
     r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
-    if (r != 0)
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(r));
-    else
+    if (r != 0) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname, cyrusdb_strerror(r));
+    }
+    else {
         newsrc_dbopen = 1;
+    }
 
     free(tofree);
 
@@ -108,7 +110,8 @@ static int newsrc_done(void)
     if (newsrc_dbopen) {
         r = cyrusdb_close(newsrc_db);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing fetchnews.db: %s",
+            syslog(LOG_ERR,
+                   "DBERROR: error closing fetchnews.db: %s",
                    cyrusdb_strerror(r));
         }
         newsrc_dbopen = 0;
@@ -120,13 +123,16 @@ static int newsrc_done(void)
 static void usage(void)
 {
     fprintf(stderr,
-            "fetchnews [-C <altconfig>] [-s <server>] [-n] [-y] [-w <wildmat>] [-f <tstamp file>]\n"
+            "fetchnews [-C <altconfig>] [-s <server>] [-n] [-y] [-w <wildmat>] "
+            "[-f <tstamp file>]\n"
             "          [-a <authname> [-p <password>]] <peer>\n");
     exit(-1);
 }
 
-int init_net(const char *host, const char *port,
-             struct protstream **in, struct protstream **out)
+int init_net(const char *host,
+             const char *port,
+             struct protstream **in,
+             struct protstream **out)
 {
     int sock = -1;
     struct addrinfo hints, *res, *res0;
@@ -141,16 +147,19 @@ int init_net(const char *host, const char *port,
     }
 
     for (res = res0; res; res = res->ai_next) {
-        if ((sock = socket(res->ai_family, res->ai_socktype,
-                           res->ai_protocol)) < 0)
+        if ((sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol))
+            < 0)
+        {
             continue;
-        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+        }
+        if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0) {
             break;
+        }
         close(sock);
         sock = -1;
     }
     freeaddrinfo(res0);
-    if(sock < 0) {
+    if (sock < 0) {
         syslog(LOG_ERR, "connect(%s:%s) failed: %m", host, port);
         return -1;
     }
@@ -162,10 +171,15 @@ int init_net(const char *host, const char *port,
     return sock;
 }
 
-static int fetch(char *msgid, int bymsgid,
-          struct protstream *pin, struct protstream *pout,
-          struct protstream *sin, struct protstream *sout,
-          int *rejected, int *accepted, int *failed)
+static int fetch(char *msgid,
+                 int bymsgid,
+                 struct protstream *pin,
+                 struct protstream *pout,
+                 struct protstream *sin,
+                 struct protstream *sout,
+                 int *rejected,
+                 int *accepted,
+                 int *failed)
 {
     char buf[4096];
 
@@ -182,10 +196,12 @@ static int fetch(char *msgid, int bymsgid,
     }
 
     /* fetch the article */
-    if (bymsgid)
+    if (bymsgid) {
         prot_printf(pout, "ARTICLE %s\r\n", msgid);
-    else
+    }
+    else {
         prot_printf(pout, "ARTICLE\r\n");
+    }
 
     if (!prot_fgets(buf, sizeof(buf), pin)) {
         syslog(LOG_ERR, "ARTICLE terminated abnormally");
@@ -212,14 +228,15 @@ static int fetch(char *msgid, int bymsgid,
 
             do {
                 /* look for malformed lines with NUL CR LF */
-                if (buf[strlen(buf)-1] != '\n' &&
-                    strlen(buf)+2 < sizeof(buf)-1 &&
-                    buf[strlen(buf)+2] == '\n') {
+                if (buf[strlen(buf) - 1] != '\n'
+                    && strlen(buf) + 2 < sizeof(buf) - 1
+                    && buf[strlen(buf) + 2] == '\n')
+                {
                     strlcat(buf, "\r\n", sizeof(buf));
                 }
                 prot_printf(sout, "%s", buf);
-            } while (buf[strlen(buf)-1] != '\n' &&
-                     prot_fgets(buf, sizeof(buf), pin));
+            } while (buf[strlen(buf) - 1] != '\n'
+                     && prot_fgets(buf, sizeof(buf), pin));
         }
 
         if (buf[0] != '.') {
@@ -233,10 +250,12 @@ static int fetch(char *msgid, int bymsgid,
         syslog(LOG_ERR, "IHAVE terminated abnormally");
         return -1;
     }
-    else if (!strncmp("235", buf, 3))
+    else if (!strncmp("235", buf, 3)) {
         (*accepted)++;
-    else
+    }
+    else {
         (*failed)++;
+    }
 
     return 0;
 }
@@ -264,18 +283,19 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "auth-id", required_argument, NULL, 'a' },
+        { "auth-id",        required_argument, NULL, 'a' },
         { "newsstamp-file", required_argument, NULL, 'f' },
-        { "no-newnews", no_argument, NULL, 'n' },
-        { "password", required_argument, NULL, 'p' },
-        { "server", required_argument, NULL, 's' },
-        { "groups", required_argument, NULL, 'w' },
-        { "yyyy", no_argument, NULL, 'y' },
-        { 0, 0, 0, 0 },
+        { "no-newnews",     no_argument,       NULL, 'n' },
+        { "password",       required_argument, NULL, 'p' },
+        { "server",         required_argument, NULL, 's' },
+        { "groups",         required_argument, NULL, 'w' },
+        { "yyyy",           no_argument,       NULL, 'y' },
+        { 0,                0,                 0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         char *colon;
 
@@ -290,8 +310,9 @@ int main(int argc, char *argv[])
                 *colon = '\0';
                 port = colon + 1;
             }
-            else
+            else {
                 port = "119";
+            }
             break;
 
         case 'w': /* wildmat */
@@ -357,8 +378,9 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp("381", buf, 3)) {
             /* password required */
-            if (!password)
+            if (!password) {
                 password = cyrus_getpass("Please enter the password: ");
+            }
 
             if (!password) {
                 fprintf(stderr, "failed to get password\n");
@@ -395,9 +417,14 @@ int main(int argc, char *argv[])
 
         /* parse and normalize the server time */
         memset(&ctime, 0, sizeof(struct tm));
-        sscanf(buf+4, "%4d%02d%02d%02d%02d%02d",
-               &ctime.tm_year, &ctime.tm_mon, &ctime.tm_mday,
-               &ctime.tm_hour, &ctime.tm_min, &ctime.tm_sec);
+        sscanf(buf + 4,
+               "%4d%02d%02d%02d%02d%02d",
+               &ctime.tm_year,
+               &ctime.tm_mon,
+               &ctime.tm_mday,
+               &ctime.tm_hour,
+               &ctime.tm_min,
+               &ctime.tm_sec);
         ctime.tm_year -= 1900;
         ctime.tm_mon--;
         ctime.tm_isdst = -1;
@@ -428,7 +455,9 @@ int main(int argc, char *argv[])
         }
 
         /* ask for new articles */
-        if (stamp) stamp -= 180; /* adjust back 3 minutes */
+        if (stamp) {
+            stamp -= 180; /* adjust back 3 minutes */
+        }
         ptime = gmtime(&stamp);
         ptime->tm_isdst = -1;
 
@@ -472,11 +501,14 @@ int main(int argc, char *argv[])
 
     /* process the NEWNEWS/LIST ACTIVE list */
     while (prot_fgets(buf, sizeof(buf), pin)) {
-        if (buf[0] == '.') break;
+        if (buf[0] == '.') {
+            break;
+        }
         strarray_append(&resp, buf);
     }
     if (buf[0] != '.') {
-        syslog(LOG_ERR, "%s terminated abnormally",
+        syslog(LOG_ERR,
+               "%s terminated abnormally",
                newnews ? "NEWNEWS" : "LIST ACTIVE");
         goto quit;
     }
@@ -507,16 +539,25 @@ int main(int argc, char *argv[])
             *(strrchr(resp.data[i], '>') + 1) = '\0';
 
             offered++;
-            if (fetch(resp.data[i], 1, pin, pout, sin, sout,
-                      &rejected, &accepted, &failed)) {
+            if (fetch(resp.data[i],
+                      1,
+                      pin,
+                      pout,
+                      sin,
+                      sout,
+                      &rejected,
+                      &accepted,
+                      &failed))
+            {
                 goto quit;
             }
         }
 
         /* write the current timestamp */
         lseek(fd, 0, SEEK_SET);
-        if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp))
+        if (write(fd, &stamp, sizeof(stamp)) < (int) sizeof(stamp)) {
             syslog(LOG_ERR, "error writing %s", sfile);
+        }
         lock_unlock(fd, sfile);
         close(fd);
     }
@@ -539,11 +580,18 @@ int main(int argc, char *argv[])
             sscanf(resp.data[i], "%s %lu %lu", group, &high, &low);
 
             last = 0;
-            if (!cyrusdb_fetchlock(newsrc_db, group, strlen(group),
-                               &data, &datalen, &tid)) {
+            if (!cyrusdb_fetchlock(newsrc_db,
+                                   group,
+                                   strlen(group),
+                                   &data,
+                                   &datalen,
+                                   &tid))
+            {
                 last = strtoul(data, NULL, 10);
             }
-            if (high <= last) continue;
+            if (high <= last) {
+                continue;
+            }
 
             /* select the group */
             prot_printf(pout, "GROUP %s\r\n", group);
@@ -551,13 +599,16 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "GROUP terminated abnormally");
                 continue;
             }
-            else if (strncmp("211", buf, 3)) break;
+            else if (strncmp("211", buf, 3)) {
+                break;
+            }
 
             for (start = 1, cur = low > last ? low : ++last;; cur++) {
                 if (start) {
                     /* STAT the first article we haven't seen */
                     prot_printf(pout, "STAT %lu\r\n", cur);
-                } else {
+                }
+                else {
                     /* continue with the NEXT article */
                     prot_printf(pout, "NEXT\r\n");
                 }
@@ -574,8 +625,16 @@ int main(int argc, char *argv[])
                     /* find the end of the msgid */
                     *(strrchr(msgid, '>') + 1) = '\0';
 
-                    if (fetch(msgid, 0, pin, pout, sin, sout,
-                              &rejected, &accepted, &failed)) {
+                    if (fetch(msgid,
+                              0,
+                              pin,
+                              pout,
+                              sin,
+                              sout,
+                              &rejected,
+                              &accepted,
+                              &failed))
+                    {
                         cur--;
                         break;
                     }
@@ -584,23 +643,36 @@ int main(int argc, char *argv[])
                 }
 
                 /* have we reached the highwater mark? */
-                if (cur >= high) break;
+                if (cur >= high) {
+                    break;
+                }
             }
 
             snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
-            cyrusdb_store(newsrc_db, group, strlen(group),
-                      lastbuf, strlen(lastbuf)+1, &tid);
+            cyrusdb_store(newsrc_db,
+                          group,
+                          strlen(group),
+                          lastbuf,
+                          strlen(lastbuf) + 1,
+                          &tid);
         }
 
-        if (tid) cyrusdb_commit(newsrc_db, tid);
+        if (tid) {
+            cyrusdb_commit(newsrc_db, tid);
+        }
         newsrc_done();
     }
 
     syslog(LOG_NOTICE,
            "fetchnews: %s offered %d; %s rejected %d, accepted %d, failed %d",
-           peer, offered, server, rejected, accepted, failed);
+           peer,
+           offered,
+           server,
+           rejected,
+           accepted,
+           failed);
 
-  quit:
+quit:
     if (psock >= 0) {
         prot_printf(pout, "QUIT\r\n");
         prot_flush(pout);

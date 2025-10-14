@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -90,36 +90,41 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-p] [-m] [-i] [-l] [-R] [-1] [mailbox name]\n");
+    fprintf(stderr,
+            "usage: cyr_ls [-C <alt_config>] [-p] [-m] [-i] [-l] [-R] [-1] "
+            "[mailbox name]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr,"\t-p\targument is a UNIX path, not mailbox\n");
-    fprintf(stderr,"\t-7\tmailbox argument is in modified UTF7 rather than UTF8\n");
-    fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
-    fprintf(stderr,"\t-i\tprint ID of each mailbox\n");
-    fprintf(stderr,"\t-l\tlong listing format\n");
-    fprintf(stderr,"\t-R\tlist submailboxes recursively\n");
-    fprintf(stderr,"\t-1\tlist one file per line\n");
+    fprintf(stderr, "\t-p\targument is a UNIX path, not mailbox\n");
+    fprintf(stderr,
+            "\t-7\tmailbox argument is in modified UTF7 rather than UTF8\n");
+    fprintf(stderr,
+            "\t-m\tlist the contents of the metadata directory (if different "
+            "from the data directory)\n");
+    fprintf(stderr, "\t-i\tprint ID of each mailbox\n");
+    fprintf(stderr, "\t-l\tlong listing format\n");
+    fprintf(stderr, "\t-R\tlist submailboxes recursively\n");
+    fprintf(stderr, "\t-1\tlist one file per line\n");
     if (error) {
-        fprintf(stderr,"\n");
-        fprintf(stderr,"ERROR: %s", error);
+        fprintf(stderr, "\n");
+        fprintf(stderr, "ERROR: %s", error);
     }
     exit(-1);
 }
 
-#define SECONDS_PER_YEAR 31536000  /* 365 * 24 * 60 * 60 */
+#define SECONDS_PER_YEAR 31536000 /* 365 * 24 * 60 * 60 */
 
-#define ANSI_COLOR_RESET   "\x1b[0m"
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
+#define ANSI_COLOR_RESET "\x1b[0m"
+#define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_BLUE "\x1b[34m"
 #define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
+#define ANSI_COLOR_CYAN "\x1b[36m"
 
-#define ANSI_COLOR_GRAY    "\x1b[90m"
+#define ANSI_COLOR_GRAY "\x1b[90m"
 #define ANSI_COLOR_BR_BLUE "\x1b[94m"
 
-#define SPECIALS           " !\"#$&'()*,;<>?[\\]^`{|}~"
+#define SPECIALS " !\"#$&'()*,;<>?[\\]^`{|}~"
 
 static int print_name(const char *name, int utf8)
 {
@@ -127,7 +132,8 @@ static int print_name(const char *name, int utf8)
 
     if (utf8) {
         charset_t imaputf7 = charset_lookupname("imap-mailbox-name");
-        utf8name = charset_to_utf8cstr(name, strlen(name), imaputf7, ENCODING_NONE);
+        utf8name =
+            charset_to_utf8cstr(name, strlen(name), imaputf7, ENCODING_NONE);
         name = utf8name;
     }
 
@@ -143,8 +149,12 @@ static int print_name(const char *name, int utf8)
             putchar('\'');
 
             for (n = 0; *name; name++, n++) {
-                if (*name == '\'') printf("\\'");
-                else putchar(*name);
+                if (*name == '\'') {
+                    printf("\\'");
+                }
+                else {
+                    putchar(*name);
+                }
             }
 
             putchar('\'');
@@ -177,8 +187,9 @@ static void long_list(struct stat *statp)
     pwd = getpwuid(statp->st_uid);
     grp = getgrgid(statp->st_gid);
 
-    if (now - statp->st_ctime > SECONDS_PER_YEAR)
+    if (now - statp->st_ctime > SECONDS_PER_YEAR) {
         datefmt = "%b %d  %Y";
+    }
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
@@ -201,22 +212,26 @@ static void long_list(struct stat *statp)
            (statp->st_mode & S_IWOTH) ? 'w' : '-',
            (statp->st_mode & S_IXOTH) ? 'x' : '-',
            (uintmax_t) statp->st_nlink, // int size differs by platform
-           pwd->pw_name, grp->gr_name,
-           (int64_t) statp->st_size, datestr);
+           pwd->pw_name,
+           grp->gr_name,
+           (int64_t) statp->st_size,
+           datestr);
 }
 
-struct list_opts {
-    unsigned utf8     : 1;
-    unsigned recurse  : 1;
-    unsigned ids      : 1;
-    unsigned longlist : 1;
-    unsigned meta     : 1;
-    unsigned colorize : 1;
+struct list_opts
+{
+    unsigned utf8:1;
+    unsigned recurse:1;
+    unsigned ids:1;
+    unsigned longlist:1;
+    unsigned meta:1;
+    unsigned colorize:1;
     unsigned columns;
     unsigned column_size;
 };
 
-struct list_rock {
+struct list_rock
+{
     struct list_opts *opts;
     int count;
     int magic_inbox;
@@ -230,7 +245,9 @@ static int list_cb(struct findall_data *data, void *rock)
     int r = 0;
 
     /* don't want partial matches */
-    if (!data || !data->is_exactmatch) return 0;
+    if (!data || !data->is_exactmatch) {
+        return 0;
+    }
 
     const char *child_name = strarray_nth(mbname_boxes(data->mbname), -1);
     const char *color = "";
@@ -245,7 +262,9 @@ static int list_cb(struct findall_data *data, void *rock)
 
     printf("%s", !(lrock->count++ % lrock->opts->columns) ? "\n" : "    ");
 
-    if (lrock->opts->ids) printf("%-40s ", data->mbentry->uniqueid);
+    if (lrock->opts->ids) {
+        printf("%-40s ", data->mbentry->uniqueid);
+    }
 
     if (lrock->opts->longlist || lrock->opts->colorize) {
         struct stat sbuf;
@@ -253,15 +272,20 @@ static int list_cb(struct findall_data *data, void *rock)
         memset(&sbuf, 0, sizeof(struct stat));
         r = stat(path, &sbuf);
 
-        if (lrock->opts->longlist) long_list(&sbuf);
+        if (lrock->opts->longlist) {
+            long_list(&sbuf);
+        }
 
         if (lrock->opts->colorize) {
-            if (r != 0)
+            if (r != 0) {
                 color = ANSI_COLOR_RED;
-            else if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL)
+            }
+            else if (mbtype_isa(data->mbentry->mbtype) != MBTYPE_EMAIL) {
                 color = ANSI_COLOR_MAGENTA;
-            else
+            }
+            else {
                 color = ANSI_COLOR_BR_BLUE;
+            }
         }
     }
 
@@ -272,7 +296,9 @@ static int list_cb(struct findall_data *data, void *rock)
         child_name = buf_cstring(&lrock->buf);
     }
     r = print_name(child_name, lrock->opts->utf8);
-    if (*color) printf("%s", ANSI_COLOR_RESET);
+    if (*color) {
+        printf("%s", ANSI_COLOR_RESET);
+    }
 
     if (lrock->opts->column_size) {
         /* fill column */
@@ -281,7 +307,9 @@ static int list_cb(struct findall_data *data, void *rock)
         printf("%-*s", fill > 0 ? fill : 0, "");
     }
 
-    if (lrock->children) strarray_append(lrock->children, data->extname);
+    if (lrock->children) {
+        strarray_append(lrock->children, data->extname);
+    }
 
     return 0;
 }
@@ -297,16 +325,22 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
     if (!r) {
         printf("\n%s:\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
 
-        if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_NONEXISTENT;
-        else if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
+        if (mbentry->mbtype & MBTYPE_RESERVE) {
+            r = IMAP_MAILBOX_NONEXISTENT;
+        }
+        else if (mbentry->mbtype & MBTYPE_DELETED) {
+            r = IMAP_MAILBOX_NONEXISTENT;
+        }
         else if (mbentry->mbtype & MBTYPE_REMOTE) {
             printf("Non-local mailbox: %s!%s\n",
-                   mbentry->server, mbentry->partition);
+                   mbentry->server,
+                   mbentry->partition);
             r = IMAP_MAILBOX_NOTSUPPORTED;
         }
     }
     else {
-        fprintf(stderr, "Invalid mailbox name: '%s'\n",
+        fprintf(stderr,
+                "Invalid mailbox name: '%s'\n",
                 mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
     }
 
@@ -316,12 +350,18 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
         /* List children */
         int isinbox = mboxname_isusermailbox(mbname_intname(mbname), 1);
 
-        if (opts->recurse) lrock.children = &names;
+        if (opts->recurse) {
+            lrock.children = &names;
+        }
 
         mbname_push_boxes(mbname, "%");
         mboxlist_findall(&cyr_ls_namespace,
                          mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
-                         1, 0, 0, &list_cb, &lrock);
+                         1,
+                         0,
+                         0,
+                         &list_cb,
+                         &lrock);
 
         if (isinbox) {
             free(mbname_pop_boxes(mbname));
@@ -330,7 +370,11 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
             lrock.magic_inbox = 1;
             mboxlist_findall(&cyr_ls_namespace,
                              mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
-                             1, 0, 0, &list_cb, &lrock);
+                             1,
+                             0,
+                             0,
+                             &list_cb,
+                             &lrock);
         }
         printf("\n");
 
@@ -338,7 +382,8 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
             for (i = 0; i < strarray_size(lrock.children); i++) {
                 mbname_t *mbname =
                     mbname_from_extname(strarray_nth(lrock.children, i),
-                                        &cyr_ls_namespace, NULL);
+                                        &cyr_ls_namespace,
+                                        NULL);
                 do_list(mbname, opts);
                 mbname_free(&mbname);
             }
@@ -352,7 +397,7 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 int main(int argc, char **argv)
 {
     int r;
-    int opt;              /* getopt() returns an int */
+    int opt; /* getopt() returns an int */
     char *alt_config = NULL;
     int is_path = 0;
 
@@ -361,24 +406,26 @@ int main(int argc, char **argv)
 
     static const struct option long_options[] = {
         { "one-per-line", no_argument, NULL, '1' },
-        { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */
+        { "no-utf8",      no_argument, NULL, '7' }, /* XXX undocumented */
         /* n.b. no long option for -C */
-        { "recursive", no_argument, NULL, 'R' },
-        { "long", no_argument, NULL, 'l' },
-        { "metadata", no_argument, NULL, 'm' },
-        { "path", no_argument, NULL, 'p' }, /* XXX undocumented */
-        { 0, 0, 0, 0 },
+        { "recursive",    no_argument, NULL, 'R' },
+        { "long",         no_argument, NULL, 'l' },
+        { "metadata",     no_argument, NULL, 'm' },
+        { "path",         no_argument, NULL, 'p' }, /* XXX undocumented */
+        { 0,              0,           0,    0   },
     };
 
     // capture options
-    struct list_opts opts =
-        { 1 /* default to UTF8 */, 0, 0, 0, 0,
-          isatty(STDOUT_FILENO), 4 /* default to 4 columns */, 0 };
+    struct list_opts opts = {
+        1 /* default to UTF8 */,      0, 0, 0, 0, isatty(STDOUT_FILENO),
+        4 /* default to 4 columns */, 0
+    };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
-        switch(opt) {
+        switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
@@ -418,10 +465,11 @@ int main(int argc, char **argv)
         }
     }
 
-    if (opts.columns > 1) opts.column_size = 76 / opts.columns;
+    if (opts.columns > 1) {
+        opts.column_size = 76 / opts.columns;
+    }
 
     cyrus_init(alt_config, "cyr_ls", 0, 0);
-
 
     r = mboxname_init_namespace(&cyr_ls_namespace,
                                 NAMESPACE_OPTION_ADMIN | NAMESPACE_OPTION_UTF8);

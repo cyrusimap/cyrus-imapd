@@ -52,16 +52,15 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#define STATUS_FD   3
-#define LISTEN_FD   4
+#define STATUS_FD 3
+#define LISTEN_FD 4
 
-#define MASTER_SERVICE_AVAILABLE        1
-#define MASTER_SERVICE_UNAVAILABLE      2
+#define MASTER_SERVICE_AVAILABLE 1
+#define MASTER_SERVICE_UNAVAILABLE 2
 
 static volatile int gotsighup = 0;
 
-static void
-usage(void)
+static void usage(void)
 {
     fprintf(stderr, "Usage: lemming [-d DELAY] [-m FAILMODE] [-t TAG]\n");
     fflush(stderr);
@@ -78,8 +77,9 @@ static void no_cores(void)
     if (lim.rlim_cur) {
         lim.rlim_cur = 0;
         r = setrlimit(RLIMIT_CORE, &lim);
-        if (r)
+        if (r) {
             syslog(LOG_ERR, "setrlimit failed: %m");
+        }
     }
 }
 
@@ -108,63 +108,62 @@ static void set_sighup_handler(int restartable)
     }
 }
 
-static int
-retry_write(int fd, const void *vbuf, int len)
+static int retry_write(int fd, const void *vbuf, int len)
 {
     int n;
     const char *buf = vbuf;
 
-    do
-    {
+    do {
         n = write(fd, buf, len);
-        if (n < 0)
+        if (n < 0) {
             return -1;
-        if (n == 0)
-            return -1;  /* WTF? */
+        }
+        if (n == 0) {
+            return -1; /* WTF? */
+        }
         buf += n;
         len -= n;
-    }
-    while (len > 0);
+    } while (len > 0);
     return 0;
 }
 
-static void
-tell_master(int message)
+static void tell_master(int message)
 {
-    struct { int message; pid_t pid; } msg;
+    struct
+    {
+        int message;
+        pid_t pid;
+    } msg;
 
     memset(&msg, 0, sizeof(msg));
     msg.message = message;
     msg.pid = getpid();
-    if (retry_write(STATUS_FD, &msg, sizeof(msg)) < 0)
-    {
+    if (retry_write(STATUS_FD, &msg, sizeof(msg)) < 0) {
         syslog(LOG_ERR, "Couldn't write status message to master: %m");
         exit(1);
     }
 }
 
-static const char *
-read_line_from_client(void)
+static const char *read_line_from_client(void)
 {
     int fd;
     int n;
     int len = 0;
     uint32_t pid = getpid();
     static char line[128];
-    static const int maxlen = sizeof(line)-1;
+    static const int maxlen = sizeof(line) - 1;
 
     syslog(LOG_ERR, "lemming serving");
     /* While 'accept'ing, let SIGHUP wake us up */
     set_sighup_handler(0);
     fd = accept(LISTEN_FD, NULL, NULL);
     set_sighup_handler(1);
-    if (fd < 0)
-    {
+    if (fd < 0) {
         if (gotsighup) {
             syslog(LOG_ERR, "lemming exiting normally on SIGHUP");
             exit(0);
         }
-        syslog(LOG_ERR,  "cannot accept: %m");
+        syslog(LOG_ERR, "cannot accept: %m");
         exit(1);
     }
 
@@ -172,41 +171,39 @@ read_line_from_client(void)
 
     /* write out our pid, the Perl test code wants it */
     n = write(fd, &pid, sizeof(pid));
-    if (n < 0)
-    {
-        syslog(LOG_ERR,  "cannot write pid: %m");
+    if (n < 0) {
+        syslog(LOG_ERR, "cannot write pid: %m");
         exit(1);
     }
-    if (n < (int)sizeof(pid))
-    {
-        syslog(LOG_ERR,  "short write of pid");
+    if (n < (int) sizeof(pid)) {
+        syslog(LOG_ERR, "short write of pid");
         exit(1);
     }
 
     /* read the command line from the Perl test code */
-    for (;;)
-    {
-        n = read(fd, line+len, maxlen-len);
-//      syslog(LOG_ERR, "read returned %d", n);
-        if (n < 0)
-        {
-            syslog(LOG_ERR,  "cannot read command: %m");
+    for (;;) {
+        n = read(fd, line + len, maxlen - len);
+        //      syslog(LOG_ERR, "read returned %d", n);
+        if (n < 0) {
+            syslog(LOG_ERR, "cannot read command: %m");
             exit(1);
         }
-        if (n == 0)
-            break;      /* EOF */
+        if (n == 0) {
+            break; /* EOF */
+        }
         len += n;
-        if (line[len-1] == '\r' ||
-            line[len-1] == '\n')
-            break;      /* have a whole line */
+        if (line[len - 1] == '\r' || line[len - 1] == '\n') {
+            break; /* have a whole line */
+        }
     }
     close(fd);
-//     syslog(LOG_ERR, "read total of %d bytes", len);
+    //     syslog(LOG_ERR, "read total of %d bytes", len);
 
     /* nul-terminate and trim the line */
     line[len] = '\0';
-    while (len > 0 && isspace(line[len-1]))
+    while (len > 0 && isspace(line[len - 1])) {
         line[--len] = '\0';
+    }
 
     return line;
 }
@@ -223,9 +220,7 @@ static void lemming_exit(void)
     exit(1);
 }
 
-
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     const char *mode = "success";
     const char *tag = "X";
@@ -234,7 +229,7 @@ main(int argc, char **argv)
     char filename[256];
     socklen_t salen;
     struct sockaddr_storage localaddr;
-    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
+    struct sockaddr *localsock = (struct sockaddr *) &localaddr;
     int family = AF_UNSPEC;
 
     /* don't interrupt me on SIGHUP */
@@ -242,10 +237,8 @@ main(int argc, char **argv)
     no_cores();
 
     /* parse arguments */
-    while ((c = getopt(argc, argv, "C:d:m:t:")) > 0)
-    {
-        switch (c)
-        {
+    while ((c = getopt(argc, argv, "C:d:m:t:")) > 0) {
+        switch (c) {
         case 'C':
             /* Cyrus alt-config option, ignored */
             break;
@@ -262,12 +255,13 @@ main(int argc, char **argv)
             usage();
         }
     }
-    if (optind < argc)
+    if (optind < argc) {
         usage();
+    }
 
     openlog("lemming", LOG_PID, LOG_LOCAL6);
 
-    snprintf(filename, sizeof(filename), "lemming.%s.%d", tag, (int)getpid());
+    snprintf(filename, sizeof(filename), "lemming.%s.%d", tag, (int) getpid());
     creat(filename, 0644);
 
     salen = sizeof(struct sockaddr_storage);
@@ -278,8 +272,7 @@ main(int argc, char **argv)
         syslog(LOG_ERR, "unable to determine socket family: %m");
     }
 
-    if (!strcmp(mode, "exit-ipv4/serve"))
-    {
+    if (!strcmp(mode, "exit-ipv4/serve")) {
         switch (family) {
         case AF_INET:
             lemming_exit();
@@ -290,8 +283,7 @@ main(int argc, char **argv)
             break;
         }
     }
-    else if (!strcmp(mode, "exit-ipv6/serve"))
-    {
+    else if (!strcmp(mode, "exit-ipv6/serve")) {
         switch (family) {
         case AF_INET6:
             lemming_exit();
@@ -303,31 +295,28 @@ main(int argc, char **argv)
         }
     }
 
-    if (!strcmp(mode, "serve"))
+    if (!strcmp(mode, "serve")) {
         mode = read_line_from_client();
-    else if (delay_ms)
+    }
+    else if (delay_ms) {
         poll(NULL, 0, delay_ms);
+    }
 
-    if (!strcmp(mode, "success"))
-    {
+    if (!strcmp(mode, "success")) {
         lemming_success();
     }
-    else if (!strcmp(mode, "exit"))
-    {
+    else if (!strcmp(mode, "exit")) {
         lemming_exit();
     }
-    else if (!strcmp(mode, "abort"))
-    {
+    else if (!strcmp(mode, "abort")) {
         syslog(LOG_ERR, "lemming abort()ing");
         abort();
     }
-    else if (!strcmp(mode, "segv"))
-    {
+    else if (!strcmp(mode, "segv")) {
         syslog(LOG_ERR, "lemming receiving SEGV");
-        *(char *)0 = 0;
+        *(char *) 0 = 0;
     }
-    else
-    {
+    else {
         syslog(LOG_ERR, "unknown failure mode \"%s\"", mode);
         fprintf(stderr, "lemming: unknown failure mode \"%s\"\n", mode);
         return 1;

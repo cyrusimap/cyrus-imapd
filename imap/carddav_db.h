@@ -61,8 +61,9 @@ struct carddav_db;
 #define CARDDAV_KIND_GROUP 1
 #define CARDDAV_KIND_ANY 255
 
-struct carddav_data {
-    struct dav_data dav;  /* MUST be first so we can typecast */
+struct carddav_data
+{
+    struct dav_data dav; /* MUST be first so we can typecast */
     unsigned version;
     const char *vcard_uid;
     unsigned kind;
@@ -85,7 +86,6 @@ enum carddav_sort {
 
 typedef int carddav_cb_t(void *rock, struct carddav_data *cdata);
 
-
 /* prepare for carddav operations in this process */
 int carddav_init(void);
 
@@ -105,44 +105,57 @@ int carddav_close(struct carddav_db *carddavdb);
 /* lookup an entry from 'carddavdb' by resource
    (optionally inside a transaction for updates) */
 int carddav_lookup_resource(struct carddav_db *carddavdb,
-                           const mbentry_t *mbentry, const char *resource,
-                           struct carddav_data **result,
-                           int tombstones);
+                            const mbentry_t *mbentry,
+                            const char *resource,
+                            struct carddav_data **result,
+                            int tombstones);
 
 /* lookup an entry from 'carddavdb' by mailbox and IMAP uid
    (optionally inside a transaction for updates) */
 int carddav_lookup_imapuid(struct carddav_db *carddavdb,
-                           const mbentry_t *mbentry, int uid,
+                           const mbentry_t *mbentry,
+                           int uid,
                            struct carddav_data **result,
                            int tombstones);
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
-int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
+int carddav_lookup_uid(struct carddav_db *carddavdb,
+                       const char *ical_uid,
                        struct carddav_data **result);
 
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
 strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
-strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *key,
-                                     const mbentry_t *mbentry, int *ispinned);
-strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
-                                  const mbentry_t *mbentry, const char *otheruser);
+strarray_t *carddav_getemail2details(struct carddav_db *carddavdb,
+                                     const char *key,
+                                     const mbentry_t *mbentry,
+                                     int *ispinned);
+strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
+                                  const char *key,
+                                  const mbentry_t *mbentry,
+                                  const char *otheruser);
 
 /* checks if a group exists (by id), optionally filtered by addressbook mailbox.
  * Looks up groups across addressbooks if mbentry is NULL.
    returns emails of its members (if any) */
 strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
-                             const mbentry_t *mbentry, const char *group,
+                             const mbentry_t *mbentry,
+                             const char *group,
                              const mbentry_t *othermb);
 
 /* get a list of groups the given uid is a member of */
-strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
+strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb,
+                                  const char *uid);
 
 /* process each entry of type 'kind' for 'mailbox' in 'carddavdb' with cb() */
-int carddav_get_cards(struct carddav_db *carddavdb, const mbentry_t *mbentry,
-                      const char *userid, const char *vcard_uid, int kind,
-                      carddav_cb_t *cb, void *rock);
+int carddav_get_cards(struct carddav_db *carddavdb,
+                      const mbentry_t *mbentry,
+                      const char *userid,
+                      const char *vcard_uid,
+                      int kind,
+                      carddav_cb_t *cb,
+                      void *rock);
 
 /* Process each entry for 'carddavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
@@ -150,34 +163,48 @@ int carddav_get_cards(struct carddav_db *carddavdb, const mbentry_t *mbentry,
  * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int carddav_get_updates(struct carddav_db *carddavdb,
-                        modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
-                        int max_records, carddav_cb_t *cb, void *rock);
+                        modseq_t oldmodseq,
+                        const mbentry_t *mbentry,
+                        int kind,
+                        int max_records,
+                        carddav_cb_t *cb,
+                        void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
-int carddav_foreach(struct carddav_db *carddavdb, const mbentry_t *mbentry,
-                    carddav_cb_t *cb, void *rock);
+int carddav_foreach(struct carddav_db *carddavdb,
+                    const mbentry_t *mbentry,
+                    carddav_cb_t *cb,
+                    void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb()
  * The callback is called in order of sort, or by descending
  * modseq if no sort is specified. */
-int carddav_foreach_sort(struct carddav_db *carddavdb, const mbentry_t *mbentry,
-                         enum carddav_sort* sort, size_t nsort,
-                         carddav_cb_t *cb, void *rock);
+int carddav_foreach_sort(struct carddav_db *carddavdb,
+                         const mbentry_t *mbentry,
+                         enum carddav_sort *sort,
+                         size_t nsort,
+                         carddav_cb_t *cb,
+                         void *rock);
 
 int carddav_write_jscardcache(struct carddav_db *carddavdb,
-                              int rowid, const char *userid,
-                              int version, const char *data);
+                              int rowid,
+                              const char *userid,
+                              int version,
+                              const char *data);
 
 /* update an entry in 'carddavdb' */
 int carddav_update(struct carddav_db *carddavdb,
-                   struct carddav_data *cdata, int ispinned);
+                   struct carddav_data *cdata,
+                   int ispinned);
 
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
 /* write an entry form a vcard */
-int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
-                      struct vparse_card *vcard, int ispinned);
+int carddav_writecard(struct carddav_db *carddavdb,
+                      struct carddav_data *cdata,
+                      struct vparse_card *vcard,
+                      int ispinned);
 
 /* delete an entry from 'carddavdb' */
 int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);
@@ -195,15 +222,21 @@ int carddav_commit(struct carddav_db *carddavdb);
 int carddav_abort(struct carddav_db *carddavdb);
 
 /* store a vcard to mailbox/resource */
-int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                  const char *resource, modseq_t createdmodseq,
-                  strarray_t *flags, struct entryattlist **annots,
-                  const char *userid, struct auth_state *authstate,
-                  int ignorequota, uint32_t oldsize);
+int carddav_store(struct mailbox *mailbox,
+                  struct vparse_card *vcard,
+                  const char *resource,
+                  modseq_t createdmodseq,
+                  strarray_t *flags,
+                  struct entryattlist **annots,
+                  const char *userid,
+                  struct auth_state *authstate,
+                  int ignorequota,
+                  uint32_t oldsize);
 
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
-                   uint32_t olduid, int isreplace,
+                   uint32_t olduid,
+                   int isreplace,
                    const char *userid);
 
 /* calculate a mailbox name */
@@ -211,16 +244,22 @@ char *carddav_mboxname(const char *userid, const char *name);
 
 #ifdef HAVE_LIBICALVCARD
 
-#include "vcard_support.h"
+# include "vcard_support.h"
 
-int carddav_writecard_x(struct carddav_db *carddavdb, struct carddav_data *cdata,
-                        vcardcomponent *vcard, int ispinned);
+int carddav_writecard_x(struct carddav_db *carddavdb,
+                        struct carddav_data *cdata,
+                        vcardcomponent *vcard,
+                        int ispinned);
 
-int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
-                    const char *resource, modseq_t createdmodseq,
+int carddav_store_x(struct mailbox *mailbox,
+                    vcardcomponent *vcard,
+                    const char *resource,
+                    modseq_t createdmodseq,
                     struct entryattlist **annots,
-                    const char *userid, struct auth_state *authstate,
-                    int ignorequota, uint32_t oldsize);
+                    const char *userid,
+                    struct auth_state *authstate,
+                    int ignorequota,
+                    uint32_t oldsize);
 
 #endif /* HAVE_LIBICALVCARD */
 

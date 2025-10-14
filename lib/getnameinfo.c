@@ -63,45 +63,59 @@
 #include <stdio.h>
 #include <string.h>
 
-int
-getnameinfo(const struct sockaddr *sa, socklen_t salen __attribute__((unused)),
-            char *host, size_t hostlen, char *serv, size_t servlen, int flags)
+int getnameinfo(const struct sockaddr *sa,
+                socklen_t salen __attribute__((unused)),
+                char *host,
+                size_t hostlen,
+                char *serv,
+                size_t servlen,
+                int flags)
 {
-    struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+    struct sockaddr_in *sin = (struct sockaddr_in *) sa;
     struct hostent *hp;
     char tmpserv[16];
 
     if (serv) {
         snprintf(tmpserv, sizeof(tmpserv), "%d", ntohs(sin->sin_port));
-        if (strlen(tmpserv) > servlen)
+        if (strlen(tmpserv) > servlen) {
             return EAI_MEMORY;
-        else
+        }
+        else {
             strcpy(serv, tmpserv);
+        }
     }
     if (host) {
         if (flags & NI_NUMERICHOST) {
-            if (flags & NI_NAMEREQD)
+            if (flags & NI_NAMEREQD) {
                 return EAI_NONAME;
-            if (strlen(inet_ntoa(sin->sin_addr)) >= hostlen)
+            }
+            if (strlen(inet_ntoa(sin->sin_addr)) >= hostlen) {
                 return EAI_MEMORY;
+            }
             else {
                 strcpy(host, inet_ntoa(sin->sin_addr));
                 return 0;
             }
-        } else {
-            hp = gethostbyaddr((char *)&sin->sin_addr,
-                               sizeof(struct in_addr), AF_INET);
-            if (hp)
-                if (strlen(hp->h_name) >= hostlen)
+        }
+        else {
+            hp = gethostbyaddr((char *) &sin->sin_addr,
+                               sizeof(struct in_addr),
+                               AF_INET);
+            if (hp) {
+                if (strlen(hp->h_name) >= hostlen) {
                     return EAI_MEMORY;
+                }
                 else {
                     strcpy(host, hp->h_name);
                     return 0;
                 }
-            else if (flags & NI_NAMEREQD)
+            }
+            else if (flags & NI_NAMEREQD) {
                 return EAI_NONAME;
-            else if (strlen(inet_ntoa(sin->sin_addr)) >= hostlen)
+            }
+            else if (strlen(inet_ntoa(sin->sin_addr)) >= hostlen) {
                 return EAI_MEMORY;
+            }
             else {
                 strcpy(host, inet_ntoa(sin->sin_addr));
                 return 0;

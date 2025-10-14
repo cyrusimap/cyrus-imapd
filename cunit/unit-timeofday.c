@@ -51,8 +51,8 @@
 
 extern int verbose;
 
-#define NANOSEC_PER_SEC     (1000000000)
-#define NANOSEC_PER_USEC    (1000)
+#define NANOSEC_PER_SEC (1000000000)
+#define NANOSEC_PER_USEC (1000)
 
 struct trans
 {
@@ -94,11 +94,10 @@ static void to_timespec(int64_t t, struct timespec *ts)
     ts->tv_nsec = t % NANOSEC_PER_SEC;
 }
 
-__attribute__((unused))
-static int64_t from_timeval(const struct timeval *tv)
+__attribute__((unused)) static int64_t from_timeval(const struct timeval *tv)
 {
-    return (int64_t)tv->tv_usec * NANOSEC_PER_USEC
-           + (int64_t)tv->tv_sec * NANOSEC_PER_SEC;
+    return (int64_t) tv->tv_usec * NANOSEC_PER_USEC
+           + (int64_t) tv->tv_sec * NANOSEC_PER_SEC;
 }
 
 static void to_timeval(int64_t t, struct timeval *tv)
@@ -109,7 +108,7 @@ static void to_timeval(int64_t t, struct timeval *tv)
 
 static int64_t from_time_t(time_t tt)
 {
-    return (int64_t)tt * NANOSEC_PER_SEC;
+    return (int64_t) tt * NANOSEC_PER_SEC;
 }
 
 static time_t to_time_t(int64_t t)
@@ -133,13 +132,14 @@ static int64_t now(void)
 
 static const struct trans *trans_top(void)
 {
-    return (n_trans_stack ? &trans_stack[n_trans_stack-1] : &identity);
+    return (n_trans_stack ? &trans_stack[n_trans_stack - 1] : &identity);
 }
 
 static int64_t transform(int64_t t)
 {
     const struct trans *tr = trans_top();
-    int64_t tt = ((t - tr->start) * tr->factor_num) / tr->factor_den + tr->epoch;
+    int64_t tt =
+        ((t - tr->start) * tr->factor_num) / tr->factor_den + tr->epoch;
     return tt;
 }
 
@@ -206,7 +206,7 @@ void time_restore(void)
  * replace them.  So we need to define EXPORTED ourselves rather than rely on
  * config.h to figure it out. Just assume __attribute__ is supported.
  */
-#define EXPORTED __attribute__((__visibility__("default")))
+# define EXPORTED __attribute__((__visibility__("default")))
 
 /*
  * "real" functions for internal use and tests
@@ -229,23 +229,23 @@ EXPORTED int real_gettimeofday(struct timeval *tv, ...)
      * So we need to check the glibc version to figure out which macro to base
      * our feature check on.
      */
-#if __GLIBC__ > 2 || ( __GLIBC__ == 2 && __GLIBC_MINOR__ >= 39 )
-# if defined(__USE_TIME64_REDIRECTS)
+# if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 39)
+#  if defined(__USE_TIME64_REDIRECTS)
     extern int __gettimeofday64(struct timeval *, ...);
     return __gettimeofday64(tv, NULL);
-# else
+#  else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
-# endif
-#else
-# if defined(__USE_TIME_BITS64)
+#  endif
+# else
+#  if defined(__USE_TIME_BITS64)
     extern int __gettimeofday64(struct timeval *, ...);
     return __gettimeofday64(tv, NULL);
-# else
+#  else
     extern int __gettimeofday(struct timeval *, ...);
     return __gettimeofday(tv, NULL);
+#  endif
 # endif
-#endif
 }
 
 EXPORTED time_t real_time(time_t *tp)
@@ -254,7 +254,9 @@ EXPORTED time_t real_time(time_t *tp)
     struct timeval tv;
 
     real_gettimeofday(&tv, NULL);
-    if (tp) *tp = tv.tv_sec;
+    if (tp) {
+        *tp = tv.tv_sec;
+    }
     return tv.tv_sec;
 }
 
@@ -267,8 +269,9 @@ EXPORTED unsigned int real_sleep(unsigned int seconds)
     errno = 0;
     r = real_nanosleep(&duration, &remainder);
 
-    if (r && errno == EINTR)
+    if (r && errno == EINTR) {
         return remainder.tv_sec;
+    }
 
     return 0;
 }
@@ -277,29 +280,29 @@ EXPORTED int real_nanosleep(const struct timespec *duration,
                             struct timespec *remainder)
 {
     /* see comments in real_gettimeofday */
-#if __GLIBC__ > 2 || ( __GLIBC__ == 2 && __GLIBC_MINOR__ >= 39 )
-# if defined(__USE_TIME64_REDIRECTS)
+# if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 39)
+#  if defined(__USE_TIME64_REDIRECTS)
     extern int __nanosleep64(const struct timespec *, struct timespec *);
     return __nanosleep64(duration, remainder);
-# else
+#  else
     extern int __nanosleep(const struct timespec *, struct timespec *);
     return __nanosleep(duration, remainder);
-# endif
-#else
-# if defined(__USE_TIME_BITS64)
+#  endif
+# else
+#  if defined(__USE_TIME_BITS64)
     extern int __nanosleep64(const struct timespec *, struct timespec *);
     return __nanosleep64(duration, remainder);
-# else
+#  else
     extern int __nanosleep(const struct timespec *, struct timespec *);
     return __nanosleep(duration, remainder);
+#  endif
 # endif
-#endif
 }
 
 /*
  * our mocked versions of the time functions
  */
-#define MOCKED __attribute__((__visibility__("default")))
+# define MOCKED __attribute__((__visibility__("default")))
 
 /* n.b. now_ms() from lib/util.c uses cyrus_gettime(), so it will return
  * mocked time values under testing, even though there's no MOCKED
@@ -328,14 +331,16 @@ MOCKED int gettimeofday(struct timeval *tv, ...)
 MOCKED time_t time(time_t *tp)
 {
     time_t tt = to_time_t(transform(now()));
-    if (tp) *tp = tt;
+    if (tp) {
+        *tp = tt;
+    }
     return tt;
 }
 
 static int64_t do_transformed_sleep(int64_t ns)
 {
     const struct trans *tr = trans_top();
-    struct timespec sleep_time, remainder = {0};
+    struct timespec sleep_time, remainder = { 0 };
     int r;
 
     if (tr->factor_num <= 0) {
@@ -371,10 +376,12 @@ MOCKED unsigned int sleep(unsigned int seconds)
 
     remainder = do_transformed_sleep((int64_t) seconds * NANOSEC_PER_SEC);
 
-    if (remainder > 0)
+    if (remainder > 0) {
         return remainder / NANOSEC_PER_SEC;
-    else
+    }
+    else {
         return 0;
+    }
 }
 
 MOCKED int nanosleep(const struct timespec *duration,
@@ -395,5 +402,5 @@ MOCKED int nanosleep(const struct timespec *duration,
 }
 
 #else
-#error "Don't know how to intercept clock functions for this libc"
+# error "Don't know how to intercept clock functions for this libc"
 #endif

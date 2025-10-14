@@ -58,6 +58,7 @@ extern int caldav_caluseraddr_write(struct mailbox *mbox,
                                     strarray_t *addresses);
 
 extern void get_schedule_addresses(const char *mboxname,
-                                   const char *userid, strarray_t *addresses);
+                                   const char *userid,
+                                   strarray_t *addresses);
 
 #endif /* SCHED_UTIL_H */

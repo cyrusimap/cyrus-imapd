@@ -47,7 +47,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <fcntl.h>
 #include <signal.h>
@@ -79,7 +79,9 @@ static int verbose = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose) {
+        syslog(LOG_DEBUG, "telling master %x", msg);
+    }
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
@@ -88,7 +90,7 @@ void notify_master(int fd, int msg)
 }
 
 #ifdef HAVE_LIBWRAP
-#include <tcpd.h>
+# include <tcpd.h>
 
 int allow_severity = LOG_DEBUG;
 int deny_severity = LOG_ERR;
@@ -101,7 +103,7 @@ static void libwrap_init(struct request_info *req, char *service)
 static int libwrap_ask(struct request_info *req, int fd)
 {
     struct sockaddr_storage sin_storage;
-    struct sockaddr *sin = (struct sockaddr *)&sin_storage;
+    struct sockaddr *sin = (struct sockaddr *) &sin_storage;
     socklen_t sinlen;
     int a;
 
@@ -130,12 +132,14 @@ static int libwrap_ask(struct request_info *req, int fd)
 }
 
 #else
-struct request_info { int x; };
+struct request_info
+{
+    int x;
+};
 
 static void libwrap_init(struct request_info *r __attribute__((unused)),
                          char *service __attribute__((unused)))
 {
-
 }
 
 static int libwrap_ask(struct request_info *r __attribute__((unused)),
@@ -187,24 +191,28 @@ int main(int argc, char **argv, char **envp)
             call_debugger = 1;
             break;
         default:
-            strarray_appendm(&service_argv, argv[optind-1]);
+            strarray_appendm(&service_argv, argv[optind - 1]);
 
             /* option has an argument */
-            if (optind < argc && argv[optind][0] != '-')
+            if (optind < argc && argv[optind][0] != '-') {
                 strarray_appendm(&service_argv, argv[optind++]);
+            }
 
             break;
         }
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++)
+    for (; optind < argc; optind++) {
         strarray_appendm(&service_argv, argv[optind]);
+    }
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
 
     p = getenv("CYRUS_VERBOSE");
-    if (p) verbose = atoi(p) + 1;
+    if (p) {
+        verbose = atoi(p) + 1;
+    }
 
     if (verbose > 30) {
         syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
@@ -235,8 +243,12 @@ int main(int argc, char **argv, char **envp)
              * they're about to attach a debugger, so worrying about leaking
              * contents of memory here is a little silly! :)
              */
-            snprintf(debugbuf, sizeof(debugbuf), debugger,
-                     argv[0], getpid(), service);
+            snprintf(debugbuf,
+                     sizeof(debugbuf),
+                     debugger,
+                     argv[0],
+                     getpid(),
+                     service);
 #pragma GCC diagnostic pop
             syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
             ret = system(debugbuf); /* run debugger */
@@ -247,27 +259,32 @@ int main(int argc, char **argv, char **envp)
 
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
+    if (fdflags != -1) {
+        fdflags = fcntl(LISTEN_FD, F_SETFD, fdflags | FD_CLOEXEC);
+    }
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
     fdflags = fcntl(STATUS_FD, F_GETFD, 0);
-    if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
-                                       fdflags | FD_CLOEXEC);
+    if (fdflags != -1) {
+        fdflags = fcntl(STATUS_FD, F_SETFD, fdflags | FD_CLOEXEC);
+    }
     if (fdflags == -1) {
         syslog(LOG_ERR, "unable to set close on exec: %m");
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
 
     if (service_init(service_argv.count, service_argv.data, envp) != 0) {
-        if (MESSAGE_MASTER_ON_EXIT)
+        if (MESSAGE_MASTER_ON_EXIT) {
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+        }
         return 1;
     }
 
@@ -279,7 +296,7 @@ int main(int argc, char **argv, char **envp)
             if (fd < 0) {
                 switch (errno) {
                 case EINTR:
-        signals_poll();
+                    signals_poll();
                 case ENETDOWN:
 #ifdef EPROTO
                 case EPROTO:
@@ -297,8 +314,9 @@ int main(int argc, char **argv, char **envp)
                     break;
                 default:
                     syslog(LOG_ERR, "accept failed: %m");
-                    if (MESSAGE_MASTER_ON_EXIT)
+                    if (MESSAGE_MASTER_ON_EXIT) {
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+                    }
                     service_abort(EX_OSERR);
                 }
             }
@@ -317,13 +335,16 @@ int main(int argc, char **argv, char **envp)
 
         use_count++;
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
-        if (service_main_fd(fd, service_argv.count, service_argv.data, envp) < 0) {
+        if (service_main_fd(fd, service_argv.count, service_argv.data, envp)
+            < 0)
+        {
             break;
         }
     }
 
-    if (MESSAGE_MASTER_ON_EXIT)
+    if (MESSAGE_MASTER_ON_EXIT) {
         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
+    }
     service_abort(0);
     return 0;
 }

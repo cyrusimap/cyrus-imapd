@@ -53,10 +53,8 @@
 #define TIMSIEVE_NOEXIST -6
 #define TIMSIEVE_EXISTS -7
 
-
 #define TRUE 1
 #define FALSE 0
-
 
 #define BLOCKSIZE 1024
 
