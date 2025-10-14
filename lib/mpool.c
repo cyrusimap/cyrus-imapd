@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include <stdio.h>
@@ -63,8 +63,8 @@ struct mpool
 struct mpool_blob
 {
     size_t size;
-    unsigned char *base; /* Base of allocated section */
-    unsigned char *ptr; /* End of allocated section */
+    unsigned char *base;     /* Base of allocated section */
+    unsigned char *ptr;      /* End of allocated section */
     struct mpool_blob *next; /* Next Pool */
 };
 
@@ -72,7 +72,9 @@ static struct mpool_blob *new_mpool_blob(size_t size)
 {
     struct mpool_blob *blob = xmalloc(sizeof(struct mpool_blob));
 
-    if(!size) size = DEFAULT_MPOOL_SIZE;
+    if (!size) {
+        size = DEFAULT_MPOOL_SIZE;
+    }
 
     blob->base = blob->ptr = xmalloc(size);
     blob->size = size;
@@ -96,7 +98,9 @@ EXPORTED void free_mpool(struct mpool *pool)
 {
     struct mpool_blob *p, *p_next;
 
-    if (!pool) return;
+    if (!pool) {
+        return;
+    }
     if (!pool->blob) {
         fatal("memory pool without a blob", EX_TEMPFAIL);
         return;
@@ -104,7 +108,7 @@ EXPORTED void free_mpool(struct mpool *pool)
 
     p = pool->blob;
 
-    while(p) {
+    while (p) {
         p_next = p->next;
         free(p->base);
         free(p);
@@ -115,7 +119,7 @@ EXPORTED void free_mpool(struct mpool *pool)
 }
 
 #ifdef ROUNDUP
-#undef ROUNDUP
+# undef ROUNDUP
 #endif
 
 /* round up to the next multiple of 16 bytes if necessary */
@@ -129,10 +133,10 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
     struct mpool_blob *p;
     size_t remain;
 
-    if(!pool || !pool->blob) {
+    if (!pool || !pool->blob) {
         fatal("mpool_malloc called without a valid pool", EX_TEMPFAIL);
     }
-    if(!size) {
+    if (!size) {
         /* This is legal under ANSI C, so we should allow it too */
         size = 1;
     }
@@ -143,10 +147,9 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
      * pool has enough room, we need to be sure that we haven't rounded p->ptr
      * outside of the current pool anyway */
 
-    remain = p->size - ((char *)p->ptr - (char *)p->base);
+    remain = p->size - ((char *) p->ptr - (char *) p->base);
 
-    if (remain < size ||
-        (char *) p->ptr > (p->size + (char *) p->base)) {
+    if (remain < size || (char *) p->ptr > (p->size + (char *) p->base)) {
         /* Need a new pool */
         struct mpool_blob *new_pool;
         size_t new_pool_size = 2 * ((size > p->size) ? size : p->size);
@@ -169,21 +172,24 @@ EXPORTED char *mpool_strndup(struct mpool *pool, const char *str, size_t n)
 {
     char *ret;
 
-    if(!str) return NULL;
+    if (!str) {
+        return NULL;
+    }
 
-    ret = mpool_malloc(pool, n+1);
+    ret = mpool_malloc(pool, n + 1);
     strncpy(ret, str, n);
     ret[n] = '\0';
 
     return ret;
 }
 
-
 EXPORTED char *mpool_strdup(struct mpool *pool, const char *str)
 {
     size_t len;
 
-    if(!str) return NULL;
+    if (!str) {
+        return NULL;
+    }
 
     len = strlen(str);
 

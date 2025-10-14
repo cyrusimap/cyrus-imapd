@@ -45,6 +45,6 @@
 
 #include <time.h>
 
-extern time_t mkgmtime(struct tm * const tmp);
+extern time_t mkgmtime(struct tm *const tmp);
 
 #endif /* INCLUDED_MKGMTIME_H */
