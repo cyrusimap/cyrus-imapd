@@ -44,18 +44,22 @@
 #define __CYRUS_SEARCH_SORT_H__
 
 /* Sort criterion */
-struct sortcrit {
-    unsigned key;               /* sort key */
-    int flags;                  /* key modifiers as defined below */
-    union {                     /* argument(s) to the sort key */
-        struct {
+struct sortcrit
+{
+    unsigned key; /* sort key */
+    int flags;    /* key modifiers as defined below */
+    union {       /* argument(s) to the sort key */
+        struct
+        {
             char *entry;
             char *userid;
         } annot;
-        struct {
+        struct
+        {
             char *name;
         } flag;
-        struct {
+        struct
+        {
             char *id;
         } mailbox;
     } args;
@@ -94,7 +98,6 @@ enum {
 };
 
 /* Sort key modifier flag bits */
-#define SORT_REVERSE            (1<<0)      /* RFC 5256 */
-
+#define SORT_REVERSE (1 << 0) /* RFC 5256 */
 
 #endif /* __CYRUS_SEARCH_SORT_H__ */

@@ -53,18 +53,20 @@
 #include "dynarray.h"
 #include "search_engines.h"
 
-struct sortcrit;            /* imapd.h */
-struct searchargs;          /* imapd.h */
+struct sortcrit;   /* imapd.h */
+struct searchargs; /* imapd.h */
 typedef struct search_subquery search_subquery_t;
 typedef struct search_query search_query_t;
 typedef struct search_folder search_folder_t;
 
-struct search_folder_partnum {
+struct search_folder_partnum
+{
     uint32_t uid;
     uint32_t partnum;
 };
 
-struct search_folder {
+struct search_folder
+{
     char *mboxname;
     uint32_t uidvalidity;
     int id;
@@ -72,34 +74,38 @@ struct search_folder {
     bitvector_t found_uids;
     int found_dirty;
     dynarray_t partnums; /* list of struct search_folder_partnum */
-    struct {
+    struct
+    {
         /* RFC 4731 result items */
-        bitvector_t all_uids;    /* for SAVE + ALL and/or COUNT) */
-        uint32_t all_count;      /* for COUNT (of all matching messages) */
-        uint32_t uid_count;      /* number of returned messages */
-        uint32_t min_uid;        /* for MIN */
-        uint32_t max_uid;        /* for MAX */
-        uint32_t last_match;     /* msgno of last match (to inform next PARTIAL) */
+        bitvector_t all_uids; /* for SAVE + ALL and/or COUNT) */
+        uint32_t all_count;   /* for COUNT (of all matching messages) */
+        uint32_t uid_count;   /* number of returned messages */
+        uint32_t min_uid;     /* for MIN */
+        uint32_t max_uid;     /* for MAX */
+        uint32_t last_match;  /* msgno of last match (to inform next PARTIAL) */
         uint64_t first_modseq;   /* of min_uid, not the folder */
         uint64_t last_modseq;    /* of max_uid, not the folder */
         uint64_t highest_modseq; /* of returned messages, not the folder */
     } esearch;
 };
 
-struct search_subquery {
-    char *mboxname;             /* may be NULL */
-    search_expr_t *indexed;     /* may be NULL */
+struct search_subquery
+{
+    char *mboxname;         /* may be NULL */
+    search_expr_t *indexed; /* may be NULL */
     search_expr_t *expr;
 };
 
-struct search_saved_msgdata {
+struct search_saved_msgdata
+{
     /* Used to remember MsgData** arrays returned by
      * index_msgdata_load() for later freeing. */
     struct msgdata **msgdata;
     int n;
 };
 
-struct search_query {
+struct search_query
+{
 
     /*
      * A query may report results from multiple folders, but we need
@@ -203,10 +209,9 @@ extern uint32_t search_folder_get_min(const search_folder_t *);
 extern uint32_t search_folder_get_max(const search_folder_t *);
 extern unsigned int search_folder_get_count(const search_folder_t *);
 extern unsigned int search_folder_get_all_count(const search_folder_t *);
-#define search_folder_foreach(folder, u) \
-    for ((u) = bv_next_set(&(folder)->uids, 0) ; \
-         (u) != -1 ; \
-         (u) = bv_next_set(&(folder)->uids, (u)+1))
+#define search_folder_foreach(folder, u)                                       \
+    for ((u) = bv_next_set(&(folder)->uids, 0); (u) != -1;                     \
+         (u) = bv_next_set(&(folder)->uids, (u) + 1))
 extern uint64_t search_folder_get_highest_modseq(const search_folder_t *);
 extern uint64_t search_folder_get_first_modseq(const search_folder_t *);
 extern uint64_t search_folder_get_last_modseq(const search_folder_t *);
@@ -214,6 +219,5 @@ extern uint64_t search_folder_get_last_modseq(const search_folder_t *);
 extern void search_build_query(search_builder_t *bx, search_expr_t *e);
 
 extern int search_is_mutable(struct sortcrit *sortcrit, search_expr_t *e);
-
 
 #endif /* __CYRUS_SEARCH_RESULT_H__ */
