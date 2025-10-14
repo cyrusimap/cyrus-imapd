@@ -49,7 +49,7 @@
 #include <stdlib.h>
 #include <sysexits.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 
 #include "assert.h"
@@ -58,8 +58,8 @@
 #include "util.h"
 #include "xmalloc.h"
 
-__attribute__((noreturn))
-void usage(const char *name) {
+__attribute__((noreturn)) void usage(const char *name)
+{
     fprintf(stderr, "Usage: %s [-C altconfig] [-{type}] value\n", name);
 
     fprintf(stderr, "\n");
@@ -75,8 +75,9 @@ void usage(const char *name) {
     fprintf(stderr, "  -s   SEEN\n");
     fprintf(stderr, "  -b   SUBSCRIPTION\n");
     fprintf(stderr, "\n");
-    fprintf(stderr,
-            "You may omit the type flag and just specify a complete log line\n");
+    fprintf(
+        stderr,
+        "You may omit the type flag and just specify a complete log line\n");
     exit(-1);
 }
 
@@ -91,22 +92,23 @@ int main(int argc, char *argv[])
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
-        { "unmailbox", no_argument, NULL, 'M' },
-        { "unuser", no_argument, NULL, 'U' },
-        { "append", no_argument, NULL, 'a' },
+        { "unmailbox",    no_argument, NULL, 'M' },
+        { "unuser",       no_argument, NULL, 'U' },
+        { "append",       no_argument, NULL, 'a' },
         { "subscription", no_argument, NULL, 'b' },
-        { "acl", no_argument, NULL, 'c' },
-        { "mailbox", no_argument, NULL, 'm' },
-        { "annotation", no_argument, NULL, 'n' },
-        { "quota", no_argument, NULL, 'q' },
-        { "seen", no_argument, NULL, 's' },
-        { "user", no_argument, NULL, 'u' },
-        { "sieve", no_argument, NULL, 'v' },
-        { 0, 0, 0, 0 },
+        { "acl",          no_argument, NULL, 'c' },
+        { "mailbox",      no_argument, NULL, 'm' },
+        { "annotation",   no_argument, NULL, 'n' },
+        { "quota",        no_argument, NULL, 'q' },
+        { "seen",         no_argument, NULL, 's' },
+        { "user",         no_argument, NULL, 'u' },
+        { "sieve",        no_argument, NULL, 'v' },
+        { 0,              0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -149,52 +151,60 @@ int main(int argc, char *argv[])
     }
 
     /* need at least one value */
-    if ((argc - optind) < 1) usage(argv[0]);
+    if ((argc - optind) < 1) {
+        usage(argv[0]);
+    }
     /* and not an empty string */
-    if (!argv[optind][0]) usage(argv[0]);
+    if (!argv[optind][0]) {
+        usage(argv[0]);
+    }
 
     if (cmd == 's' || cmd == 'b') {
         /* need a second value */
-        if ((argc - optind) < 2) usage(argv[0]);
+        if ((argc - optind) < 2) {
+            usage(argv[0]);
+        }
         /* and not an empty string */
-        if (!argv[optind+1][0]) usage(argv[0]);
+        if (!argv[optind + 1][0]) {
+            usage(argv[0]);
+        }
     }
 
     cyrus_init(alt_config, "cyr_synclog", 0, 0);
     sync_log_init();
 
-    switch(cmd) {
-        case 'u': /* User */
-            sync_log_user(argv[optind]);
-            break;
-        case 'U': /* UnUser */
-            sync_log_unuser(argv[optind]);
-            break;
-        case 'v': /* sieVe */
-            sync_log_sieve(argv[optind]);
-            break;
-        case 'm': /* Mailbox */
-            sync_log_mailbox(argv[optind]);
-            break;
-        case 'M': /* UnMailbox */
-            sync_log_unmailbox(argv[optind]);
-            break;
-        case 'q': /* Quota */
-            sync_log_quota(argv[optind]);
-            break;
-        case 'n': /* aNnotation */
-            sync_log_annotation(argv[optind]);
-            break;
-        case 's': /* Seen */
-            sync_log_seen(argv[optind], argv[optind+1]);
-            break;
-        case 'b': /* suBscription */
-            sync_log_subscribe(argv[optind], argv[optind+1]);
-            break;
-        default:
-            /* just as is! */
-            sync_log(argv[optind]);
-            break;
+    switch (cmd) {
+    case 'u': /* User */
+        sync_log_user(argv[optind]);
+        break;
+    case 'U': /* UnUser */
+        sync_log_unuser(argv[optind]);
+        break;
+    case 'v': /* sieVe */
+        sync_log_sieve(argv[optind]);
+        break;
+    case 'm': /* Mailbox */
+        sync_log_mailbox(argv[optind]);
+        break;
+    case 'M': /* UnMailbox */
+        sync_log_unmailbox(argv[optind]);
+        break;
+    case 'q': /* Quota */
+        sync_log_quota(argv[optind]);
+        break;
+    case 'n': /* aNnotation */
+        sync_log_annotation(argv[optind]);
+        break;
+    case 's': /* Seen */
+        sync_log_seen(argv[optind], argv[optind + 1]);
+        break;
+    case 'b': /* suBscription */
+        sync_log_subscribe(argv[optind], argv[optind + 1]);
+        break;
+    default:
+        /* just as is! */
+        sync_log(argv[optind]);
+        break;
     }
 
     sync_log_done();
