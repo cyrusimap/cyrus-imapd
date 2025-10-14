@@ -43,7 +43,7 @@
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+# include <unistd.h>
 #endif
 #include <getopt.h>
 #include <stdlib.h>
@@ -79,8 +79,10 @@ static struct namespace reloc_namespace;
 static const char *progname = NULL;
 
 /* forward declarations */
-static int add_xapian_paths(const char *userid, const char *userpath,
-                            strarray_t *oldpaths, strarray_t *newpaths);
+static int add_xapian_paths(const char *userid,
+                            const char *userpath,
+                            strarray_t *oldpaths,
+                            strarray_t *newpaths);
 static int find_p(const mbentry_t *mbentry, void *rock);
 static void get_searchparts(const char *key, const char *val, void *rock);
 static int relocate(const char *old, const char *new);
@@ -89,12 +91,14 @@ static void usage(void);
 static int quiet = 0;
 static int nochanges = 0;
 
-struct mboxlist_rock {
+struct mboxlist_rock
+{
     ptrarray_t *mboxlist;
     int matched;
 };
 
-struct search_rock {
+struct search_rock
+{
     const char *userid;
     const char *userpath;
     strarray_t tiernames;
@@ -120,14 +124,15 @@ int main(int argc, char **argv)
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "dry-run", no_argument, NULL, 'n' },
-        { "quiet", no_argument, NULL, 'q' },
+        { "quiet",   no_argument, NULL, 'q' },
         { "userids", no_argument, NULL, 'u' },
 
-        { 0, 0, 0, 0 },
+        { 0,         0,           0,    0   },
     };
 
-    while (-1 != (opt = getopt_long(argc, argv,
-                                    short_options, long_options, NULL)))
+    while (
+        -1
+        != (opt = getopt_long(argc, argv, short_options, long_options, NULL)))
     {
         switch (opt) {
         case 'C': /* alt config file */
@@ -156,7 +161,8 @@ int main(int argc, char **argv)
     config_search_engine = config_getenum(IMAPOPT_SEARCH_ENGINE);
 
     /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&reloc_namespace, NAMESPACE_OPTION_ADMIN))) {
+    if ((r = mboxname_init_namespace(&reloc_namespace, NAMESPACE_OPTION_ADMIN)))
+    {
         syslog(LOG_ERR, "%s", error_message(r));
         fatal(error_message(r), EX_CONFIG);
     }
@@ -177,10 +183,15 @@ int main(int argc, char **argv)
 
         /* Make a list of all mailboxes in tree */
         if (dousers) {
-            r = mboxlist_usermboxtree(argv[i], NULL, find_p, &mboxlist_rock, flags);
+            r = mboxlist_usermboxtree(argv[i],
+                                      NULL,
+                                      find_p,
+                                      &mboxlist_rock,
+                                      flags);
         }
         else {
-            char *intname = mboxname_from_external(argv[i], &reloc_namespace, NULL);
+            char *intname =
+                mboxname_from_external(argv[i], &reloc_namespace, NULL);
             r = mboxlist_mboxtree(intname, find_p, &mboxlist_rock, flags);
             free(intname);
         }
@@ -188,17 +199,19 @@ int main(int argc, char **argv)
         /* Make sure we have some work to do */
         if (!mboxlist_rock.matched) {
             /* usage error: nothing found with this name */
-            fprintf(stderr, "%s: %s not found\n",
-                            argv[i],
-                            dousers ? "user" : "mailbox");
+            fprintf(stderr,
+                    "%s: %s not found\n",
+                    argv[i],
+                    dousers ? "user" : "mailbox");
             ptrarray_free(mboxlist_rock.mboxlist);
             continue;
         }
         else if (!ptrarray_size(mboxlist_rock.mboxlist)) {
             /* everything below this name already relocated */
-            fprintf(stderr, "%s: %s already relocated\n",
-                            argv[i],
-                            dousers ? "user" : "mailbox");
+            fprintf(stderr,
+                    "%s: %s already relocated\n",
+                    argv[i],
+                    dousers ? "user" : "mailbox");
             ptrarray_free(mboxlist_rock.mboxlist);
             continue;
         }
@@ -219,24 +232,36 @@ int main(int argc, char **argv)
             strarray_t *newpaths = strarray_new();
             strarray_t *subs = NULL;
             int j, metafile;
-            char *(*datapath[])(const char *, const char *,
-                                const char *, unsigned long) =
-                { &mboxname_datapath, &mboxname_archivepath, NULL };
+            char *(*datapath[])(const char *,
+                                const char *,
+                                const char *,
+                                unsigned long) = { &mboxname_datapath,
+                                                   &mboxname_archivepath,
+                                                   NULL };
 
-            char *extname = mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
+            char *extname =
+                mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
 
-            if (!quiet) printf("\nRelocating: %s\n", extname);
+            if (!quiet) {
+                printf("\nRelocating: %s\n", extname);
+            }
 
             user_nslock_t *user_nslock = user_nslock_lockmb_w(mbentry->name);
 
             /* If we're missing a partition, use the partition of child */
-            if (!partition || !*partition) partition = buf_cstring(&part_buf);
-            else buf_setcstr(&part_buf, partition);
+            if (!partition || !*partition) {
+                partition = buf_cstring(&part_buf);
+            }
+            else {
+                buf_setcstr(&part_buf, partition);
+            }
 
             /* Add data & archive paths */
             for (j = 0; datapath[j]; j++) {
                 path = datapath[j](partition, name, NULL, 0);
-                if (!path || strarray_contains(oldpaths, path)) continue;
+                if (!path || strarray_contains(oldpaths, path)) {
+                    continue;
+                }
 
                 strarray_append(oldpaths, path);
                 strarray_append(newpaths,
@@ -246,31 +271,33 @@ int main(int argc, char **argv)
             /* Add metadata paths */
             for (metafile = 0; metafile <= META_ARCHIVECACHE; metafile++) {
                 path = mboxname_metapath(partition, name, NULL, metafile, 0);
-                if (!path || strarray_contains(oldpaths, path)) continue;
+                if (!path || strarray_contains(oldpaths, path)) {
+                    continue;
+                }
 
                 strarray_append(oldpaths, path);
-                strarray_append(newpaths,
-                                mboxname_metapath(partition, name,
-                                                  uniqueid, metafile, 0));
+                strarray_append(
+                    newpaths,
+                    mboxname_metapath(partition, name, uniqueid, metafile, 0));
             }
 
             if (mboxname_isusermailbox(mbentry->name, 1)) {
                 /* User INBOX */
-                char userpath[MAX_MAILBOX_PATH+1];
-                const char *usermeta[] = { FNAME_SUBSSUFFIX,
-                                           FNAME_SEENSUFFIX,
-                                           FNAME_CONVERSATIONS_SUFFIX,
-                                           FNAME_COUNTERSSUFFIX,
-                                           FNAME_MBOXKEYSUFFIX,
-                                           FNAME_DAVSUFFIX,
-                                           FNAME_XAPIANSUFFIX,
-                                           NULL };
+                char userpath[MAX_MAILBOX_PATH + 1];
+                const char *usermeta[] = {
+                    FNAME_SUBSSUFFIX,           FNAME_SEENSUFFIX,
+                    FNAME_CONVERSATIONS_SUFFIX, FNAME_COUNTERSSUFFIX,
+                    FNAME_MBOXKEYSUFFIX,        FNAME_DAVSUFFIX,
+                    FNAME_XAPIANSUFFIX,         NULL
+                };
 
                 userid = mboxname_to_userid(mbentry->name);
 
                 /* Get user subdir */
-                mboxname_id_hash(userpath, MAX_MAILBOX_PATH,
-                                 NULL, mbentry->uniqueid);
+                mboxname_id_hash(userpath,
+                                 MAX_MAILBOX_PATH,
+                                 NULL,
+                                 mbentry->uniqueid);
 
                 /* Add user metadata paths */
                 for (j = 0; usermeta[j]; j++) {
@@ -280,8 +307,11 @@ int main(int argc, char **argv)
                         strarray_appendm(oldpaths, mpath);
 
                         buf_setcstr(&buf, config_dir);
-                        buf_printf(&buf, "%s%s/%s.db",
-                                   FNAME_USERDIR, userpath, usermeta[j]);
+                        buf_printf(&buf,
+                                   "%s%s/%s.db",
+                                   FNAME_USERDIR,
+                                   userpath,
+                                   usermeta[j]);
                         strarray_append(newpaths, buf_cstring(&buf));
                     }
                 }
@@ -299,7 +329,9 @@ int main(int argc, char **argv)
                 if (config_search_engine == IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
                     /* Add xapian tier paths */
                     r = add_xapian_paths(userid, userpath, oldpaths, newpaths);
-                    if (r) goto cleanup;
+                    if (r) {
+                        goto cleanup;
+                    }
                 }
                 /* squat index, if any, was taken care of earlier as metadata */
             }
@@ -308,7 +340,9 @@ int main(int argc, char **argv)
             for (j = 0; j < strarray_size(oldpaths); j++) {
                 r = relocate(strarray_nth(oldpaths, j),
                              strarray_nth(newpaths, j));
-                if (r) break;
+                if (r) {
+                    break;
+                }
             }
             if (r) {
                 /* Something failed - move everything back */
@@ -325,7 +359,8 @@ int main(int argc, char **argv)
                 if (r) {
                     fprintf(stderr,
                             "Failed to rewrite mailboxes.db entry for %s: %s\n",
-                            extname, error_message(r));
+                            extname,
+                            error_message(r));
                 }
                 else {
                     /* Rewrite mailbox header */
@@ -340,7 +375,8 @@ int main(int argc, char **argv)
                     if (r) {
                         fprintf(stderr,
                                 "Failed to rewrite cyrus.header for %s: %s\n",
-                                extname, error_message(r));
+                                extname,
+                                error_message(r));
                     }
                     else if (userid) {
                         /* Rewrite dav.db */
@@ -348,21 +384,24 @@ int main(int argc, char **argv)
                         if (r) {
                             fprintf(stderr,
                                     "Failed to rewrite dav.db for %s: %s\n",
-                                    userid, error_message(r));
+                                    userid,
+                                    error_message(r));
                         }
 
                         /* Rewrite search database */
                         r = search_upgrade(userid);
                         if (r) {
-                            fprintf(stderr,
-                                    "Failed to upgrade search index for %s: %s\n",
-                                    userid, error_message(r));
+                            fprintf(
+                                stderr,
+                                "Failed to upgrade search index for %s: %s\n",
+                                userid,
+                                error_message(r));
                         }
                     }
                 }
             }
 
-          cleanup:
+        cleanup:
             user_nslock_release(&user_nslock);
             mboxlist_entry_free(&mbentry);
             strarray_free(oldpaths);
@@ -389,10 +428,13 @@ static void usage(void)
     fprintf(stderr, "A tool to relocate mailbox trees by their ids.\n");
     fprintf(stderr, "\n");
 
-    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf\n");
+    fprintf(stderr,
+            "-C <config-file>   use <config-file> instead of config from "
+            "imapd.conf\n");
     fprintf(stderr, "-q                 run quietly\n");
     fprintf(stderr, "-n                 do not make changes\n");
-    fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");
+    fprintf(stderr,
+            "-u                 give usernames instead of mailbox prefixes\n");
 
     fprintf(stderr, "\n");
 
@@ -411,7 +453,7 @@ static int find_p(const mbentry_t *mbentry, void *rock)
     }
 
     /* lookup has found something (whether or not it needs relocating) */
-    mboxlist_rock->matched ++;
+    mboxlist_rock->matched++;
 
     if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
         mbentry_t *mbentry_copy = NULL;
@@ -421,16 +463,20 @@ static int find_p(const mbentry_t *mbentry, void *rock)
                 mboxname_to_external(mbentry->name, &reloc_namespace, NULL);
             int r = 0;
 
-            if (!quiet) printf("\nPromoting intermediary: %s\n", extname);
+            if (!quiet) {
+                printf("\nPromoting intermediary: %s\n", extname);
+            }
 
             if (!nochanges) {
-                user_nslock_t *user_nslock = user_nslock_lockmb_w(mbentry->name);
+                user_nslock_t *user_nslock =
+                    user_nslock_lockmb_w(mbentry->name);
                 r = mboxlist_promote_intermediary(mbentry->name);
                 user_nslock_release(&user_nslock);
                 if (r) {
                     fprintf(stderr,
                             "\tFailed to promote intermediary %s: %s\n",
-                            extname, error_message(r));
+                            extname,
+                            error_message(r));
                 }
                 else {
                     r = mboxlist_lookup(mbentry->name, &mbentry_copy, NULL);
@@ -438,7 +484,9 @@ static int find_p(const mbentry_t *mbentry, void *rock)
             }
             free(extname);
 
-            if (r) return r;
+            if (r) {
+                return r;
+            }
         }
         else {
             mbentry_copy = mboxlist_entry_copy(mbentry);
@@ -467,7 +515,9 @@ static int relocate(const char *old, const char *new)
         }
     }
 
-    if (!quiet) printf("\tRenaming: %s\t -> %s\n", old, new);
+    if (!quiet) {
+        printf("\tRenaming: %s\t -> %s\n", old, new);
+    }
 
     if (!nochanges) {
         r = cyrus_rename(old, new);
@@ -476,7 +526,9 @@ static int relocate(const char *old, const char *new)
             r = cyrus_rename(old, new);
         }
 
-        if (r) fprintf(stderr, "\tFailed to rename %s\t -> %s: %m\n", old, new);
+        if (r) {
+            fprintf(stderr, "\tFailed to rename %s\t -> %s: %m\n", old, new);
+        }
     }
 
     return r;
@@ -489,7 +541,9 @@ static int relocate(const char *old, const char *new)
 static void get_searchparts(const char *key, const char *val, void *rock)
 {
     const char *p = strstr(key, "searchpartition-");
-    if (!p) return;
+    if (!p) {
+        return;
+    }
 
     struct search_rock *srock = (struct search_rock *) rock;
     char *tier = NULL;
@@ -497,7 +551,9 @@ static void get_searchparts(const char *key, const char *val, void *rock)
     struct buf buf = BUF_INITIALIZER;
 
     basedir = user_hash_xapian(srock->userid, val);
-    if (!basedir) goto done;
+    if (!basedir) {
+        goto done;
+    }
 
     tier = xstrndup(key, p - key);
 
@@ -508,12 +564,18 @@ static void get_searchparts(const char *key, const char *val, void *rock)
 
             buf_setcstr(&buf, basedir);
             buf_appendcstr(&buf, XAPIAN_DIRNAME);
-            if (gen) buf_printf(&buf, ".%" PRIu64, gen);
+            if (gen) {
+                buf_printf(&buf, ".%" PRIu64, gen);
+            }
             strarray_append(srock->oldpaths, buf_cstring(&buf));
 
             buf_setcstr(&buf, val);
-            buf_printf(&buf, FNAME_USERDIR "%s" XAPIAN_DIRNAME, srock->userpath);
-            if (gen) buf_printf(&buf, ".%" PRIu64, gen);
+            buf_printf(&buf,
+                       FNAME_USERDIR "%s" XAPIAN_DIRNAME,
+                       srock->userpath);
+            if (gen) {
+                buf_printf(&buf, ".%" PRIu64, gen);
+            }
             strarray_append(srock->newpaths, buf_cstring(&buf));
         }
     }
@@ -524,42 +586,48 @@ done:
     buf_free(&buf);
 }
 
-static int add_xapian_paths(const char *userid, const char *userpath,
-                            strarray_t *oldpaths, strarray_t *newpaths)
+static int add_xapian_paths(const char *userid,
+                            const char *userpath,
+                            strarray_t *oldpaths,
+                            strarray_t *newpaths)
 {
     char *activefname = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
     struct mappedfile *activefile = NULL;
     int r;
 
-    r = mappedfile_open(&activefile, activefname,
+    r = mappedfile_open(&activefile,
+                        activefname,
                         MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     if (r) {
         fprintf(stderr,
                 "Failed to open activefile for %s: %s\n",
-                activefname, error_message(r));
+                activefname,
+                error_message(r));
         free(activefname);
         return r;
     }
 
     strarray_t *items = strarray_nsplit(mappedfile_base(activefile),
-                                        mappedfile_size(activefile), NULL, 1);
+                                        mappedfile_size(activefile),
+                                        NULL,
+                                        1);
 
     struct buf buf = BUF_INITIALIZER;
     if (items) {
         struct search_rock rock = {
-            userid, userpath,
-            STRARRAY_INITIALIZER,
-            ARRAYU64_INITIALIZER,
+            userid,   userpath, STRARRAY_INITIALIZER, ARRAYU64_INITIALIZER,
             oldpaths, newpaths,
         };
         int j;
         for (j = 0; j < strarray_size(items); j++) {
             const char *item = strarray_nth(items, j);
             const char *col = strrchr(item, ':');
-            if (!col) continue;
-            buf_setmap(&buf, item, col-item);
+            if (!col) {
+                continue;
+            }
+            buf_setmap(&buf, item, col - item);
             strarray_append(&rock.tiernames, buf_cstring(&buf));
-            arrayu64_append(&rock.tiergens, atoi(col+1));
+            arrayu64_append(&rock.tiergens, atoi(col + 1));
         }
         config_foreachoverflowstring(get_searchparts, &rock);
 

@@ -57,27 +57,26 @@
 
 /* Define the proper quota type, which is 64 bit and signed */
 typedef long long int quota_t;
-#define QUOTA_T_FMT      "%lld"
+#define QUOTA_T_FMT "%lld"
 
 enum quota_resource {
-    QUOTA_STORAGE       =0,
-    QUOTA_MESSAGE       =1,
-    QUOTA_ANNOTSTORAGE  =2,
-    QUOTA_NUMFOLDERS    =3,
-#define QUOTA_NUMRESOURCES  (QUOTA_NUMFOLDERS+1)
+    QUOTA_STORAGE = 0,
+    QUOTA_MESSAGE = 1,
+    QUOTA_ANNOTSTORAGE = 2,
+    QUOTA_NUMFOLDERS = 3,
+#define QUOTA_NUMRESOURCES (QUOTA_NUMFOLDERS + 1)
 };
 
-#define QUOTA_DIFFS_INITIALIZER \
-        { 0, 0, 0, 0 }
-#define QUOTA_DIFFS_DONTCARE_INITIALIZER \
-        { -1, -1, -1, -1 }
+#define QUOTA_DIFFS_INITIALIZER { 0, 0, 0, 0 }
+#define QUOTA_DIFFS_DONTCARE_INITIALIZER { -1, -1, -1, -1 }
 
-struct quota {
+struct quota
+{
     char *root;
 
     /* Information in quota entry */
     quota_t useds[QUOTA_NUMRESOURCES];
-    quota_t limits[QUOTA_NUMRESOURCES];         /* in QUOTA_UNITS */
+    quota_t limits[QUOTA_NUMRESOURCES]; /* in QUOTA_UNITS */
 
     /* information for scanning */
     char *scanmbox;
@@ -89,10 +88,10 @@ struct quota {
 };
 
 /* special value to indicate no limit applies */
-#define QUOTA_UNLIMITED     (-1)
+#define QUOTA_UNLIMITED (-1)
 
-extern const char * const quota_names[QUOTA_NUMRESOURCES];
-extern const char * const legacy_quota_names[QUOTA_NUMRESOURCES];
+extern const char *const quota_names[QUOTA_NUMRESOURCES];
+extern const char *const legacy_quota_names[QUOTA_NUMRESOURCES];
 extern const quota_t quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
@@ -108,9 +107,11 @@ extern int quota_read_withconversations(struct quota *quota);
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
 extern int quota_check(const struct quota *quota,
-                       enum quota_resource res, quota_t delta);
+                       enum quota_resource res,
+                       quota_t delta);
 extern void quota_use(struct quota *quota,
-                      enum quota_resource res, quota_t delta);
+                      enum quota_resource res,
+                      quota_t delta);
 
 extern void quota_commit(struct txn **tid);
 
@@ -129,17 +130,23 @@ extern int quota_deleteroot(const char *quotaroot, int silent);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
 
-#define QUOTA_USE_CONV (1<<0)
+#define QUOTA_USE_CONV (1 << 0)
 
-extern int quota_foreach(const char *prefix, quotaproc_t *proc,
-                         void *rock, struct txn **, unsigned flags);
+extern int quota_foreach(const char *prefix,
+                         quotaproc_t *proc,
+                         void *rock,
+                         struct txn **,
+                         unsigned flags);
 
 /* open the quotas db */
 void quotadb_open(const char *fname);
 
 /* iterate all entries starting with prefix */
-extern int quotadb_foreach(const char *prefix, size_t prefixlen,
-                           foreach_p *p, foreach_cb *cb, void *rock);
+extern int quotadb_foreach(const char *prefix,
+                           size_t prefixlen,
+                           foreach_p *p,
+                           foreach_cb *cb,
+                           void *rock);
 
 /* close the database */
 void quotadb_close(void);
@@ -150,6 +157,7 @@ void quotadb_init(void);
 /* done with database stuff */
 void quotadb_done(void);
 
-int quota_is_overquota(const struct quota *quota, enum quota_resource res,
+int quota_is_overquota(const struct quota *quota,
+                       enum quota_resource res,
                        quota_t newquotas[QUOTA_NUMRESOURCES]);
 #endif /* INCLUDED_QUOTA_H */
