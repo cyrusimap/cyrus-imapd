@@ -67,20 +67,29 @@ EXPORTED void session_new_id(void)
     }
     ++session_id_count;
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
-    if (!base) base = config_servername;
+    if (!base) {
+        base = config_servername;
+    }
 
     unsigned long long random;
     RAND_bytes((unsigned char *) &random, sizeof(random));
-    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
-             base, session_id_time, getpid(), session_id_count, random);
+    snprintf(session_id_buf,
+             MAX_SESSIONID_SIZE,
+             "%.128s-%d-%d-%d-%llu",
+             base,
+             session_id_time,
+             getpid(),
+             session_id_count,
+             random);
 }
 
 /* Return the session id */
 EXPORTED const char *session_id(void)
 {
-    if (!session_id_count)
+    if (!session_id_count) {
         session_new_id();
-    return (const char *)session_id_buf;
+    }
+    return (const char *) session_id_buf;
 }
 
 /* Do we have a session id? */
@@ -103,27 +112,29 @@ EXPORTED void parse_sessionid(const char *str, char *sessionid)
     char *sp, *ep;
     int len;
 
-    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
-    {
+    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>'))) {
         sp += 11;
         len = ep - sp;
-        if (len < MAX_SESSIONID_SIZE)
-        {
+        if (len < MAX_SESSIONID_SIZE) {
             strncpy(sessionid, sp, len);
             ep = sessionid + len;
             *ep = '\0';
         }
-        else
+        else {
             strcpy(sessionid, "invalid");
+        }
     }
-    else
+    else {
         strcpy(sessionid, "unknown");
+    }
 }
 
 EXPORTED int trace_set_id(const char *traceid, size_t len)
 {
     if (traceid && traceid[0]) {
-        if (!len) len = strlen(traceid);
+        if (!len) {
+            len = strlen(traceid);
+        }
 
         if (len >= MAX_TRACEID_SIZE
             || len > strspn(traceid, TRACE_ID_GOODCHARS))
@@ -131,8 +142,11 @@ EXPORTED int trace_set_id(const char *traceid, size_t len)
             return -1;
         }
 
-        snprintf(trace_id_buf, sizeof(trace_id_buf), "%.*s",
-                 (int) len, traceid);
+        snprintf(trace_id_buf,
+                 sizeof(trace_id_buf),
+                 "%.*s",
+                 (int) len,
+                 traceid);
         return 0;
     }
     else {

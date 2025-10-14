@@ -47,18 +47,25 @@
 #include <time.h>
 
 #ifdef ENABLE_DEBUG_SLOWIO
-#define slowio_reset()              slowio_reset_impl()
-#define slowio_maybe_delay_read(n)  slowio_maybe_delay_read_impl(n)
-#define slowio_maybe_delay_write(n) slowio_maybe_delay_write_impl(n)
+# define slowio_reset() slowio_reset_impl()
+# define slowio_maybe_delay_read(n) slowio_maybe_delay_read_impl(n)
+# define slowio_maybe_delay_write(n) slowio_maybe_delay_write_impl(n)
 #else
-#define slowio_reset()              do {} while(0)
-#define slowio_maybe_delay_read(n)  do {} while(0)
-#define slowio_maybe_delay_write(n) do {} while(0)
+# define slowio_reset()                                                        \
+     do {                                                                      \
+     } while (0)
+# define slowio_maybe_delay_read(n)                                            \
+     do {                                                                      \
+     } while (0)
+# define slowio_maybe_delay_write(n)                                           \
+     do {                                                                      \
+     } while (0)
 #endif /* ENABLE_DEBUG_SLOWIO */
 
 #define SLOWIO_MAX_BYTES_SEC (6250000) /* ~50Mbps */
 
-struct slowio {
+struct slowio
+{
     struct timespec last_delay;
     size_t bytes_since_last_delay;
 };
