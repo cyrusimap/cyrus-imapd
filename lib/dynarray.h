@@ -44,7 +44,8 @@
 #ifndef __CYRUS_DYNARRAY_H__
 #define __CYRUS_DYNARRAY_H__
 
-typedef struct dynarray {
+typedef struct dynarray
+{
     size_t membsize;
     int count;
     int alloc;
