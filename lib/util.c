@@ -1560,6 +1560,9 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         case LF_S:
             logfmt_push(&lf, name, arg->data[i].s);
             break;
+        case LF_UTF8:
+            logfmt_push_utf8(&lf, name, arg->data[i].s);
+            break;
         case LF_RAW:
             logfmt_push(&lf, name, arg->data[i].s);
             free((char *)arg->data[i].s);
