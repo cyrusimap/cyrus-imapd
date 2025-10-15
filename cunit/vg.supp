@@ -61,3 +61,20 @@
    fun:dlopen_implementation
    ...
 }
+{
+   # probably a duplicate of backend_child_process_sasl_state,
+   # but the shape changed
+   backend_sasl_client_init
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:xmalloc
+   obj:*
+   obj:*
+   fun:sasl_client_add_plugin
+   obj:/usr/lib/x86_64-linux-gnu/libsasl2.so.*
+   fun:sasl_client_init
+   fun:init_sasl
+   fun:set_up
+   ...
+}
