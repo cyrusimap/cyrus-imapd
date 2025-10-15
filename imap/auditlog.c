@@ -254,6 +254,7 @@ EXPORTED void auditlog_mboxname(const char *action,
 
 EXPORTED void auditlog_message(const char *action,
                                struct mailbox *mailbox,
+                               const struct index_record *oldrecord,
                                const struct index_record *record,
                                const char *message_id)
 {
@@ -278,6 +279,12 @@ EXPORTED void auditlog_message(const char *action,
     buf_printf(&buf, " uid=<%u> modseq=<" MODSEQ_FMT ">",
                      record->uid, record->modseq);
     auditlog_push(&buf, "sysflags", flagstr);
+
+    if (oldrecord) {
+        flags_to_str(oldrecord, flagstr);
+        auditlog_push(&buf, "oldflags", flagstr);
+    }
+
     auditlog_push(&buf, "guid", message_guid_encode(&record->guid));
     auditlog_push(&buf, "emailid", emailid);
     auditlog_push(&buf, "cid", threadid);
