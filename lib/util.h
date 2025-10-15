@@ -460,22 +460,24 @@ enum xsyslog_ev_arg_type {
     LF_F,
     LF_M,
     LF_S,
+    LF_UTF8,
     LF_RAW
 };
 
-#define lf_c(key, value)   (xsyslog_ev_arg){ key, LF_C,   { .c   = value } }
-#define lf_d(key, value)   (xsyslog_ev_arg){ key, LF_D,   { .d   = value } }
-#define lf_ld(key, value)  (xsyslog_ev_arg){ key, LF_LD,  { .ld  = value } }
-#define lf_lld(key, value) (xsyslog_ev_arg){ key, LF_LLD, { .lld = value } }
-#define lf_u(key, value)   (xsyslog_ev_arg){ key, LF_U,   { .u   = value } }
-#define lf_lu(key, value)  (xsyslog_ev_arg){ key, LF_LU,  { .lu  = value } }
-#define lf_llu(key, value) (xsyslog_ev_arg){ key, LF_LLU, { .llu = value } }
-#define lf_zd(key, value)  (xsyslog_ev_arg){ key, LF_ZD,  { .zd  = value } }
-#define lf_zu(key, value)  (xsyslog_ev_arg){ key, LF_ZU,  { .zu  = value } }
-#define lf_llx(key, value) (xsyslog_ev_arg){ key, LF_LLX, { .llu = value } }
-#define lf_f(key, value)   (xsyslog_ev_arg){ key, LF_F,   { .f   = value } }
-#define lf_m(key)          (xsyslog_ev_arg){ key, LF_M,   {              } }
-#define lf_s(key, value)   (xsyslog_ev_arg){ key, LF_S,   { .s   = value } }
+#define lf_c(key, value)    (xsyslog_ev_arg){ key, LF_C,    { .c   = value } }
+#define lf_d(key, value)    (xsyslog_ev_arg){ key, LF_D,    { .d   = value } }
+#define lf_ld(key, value)   (xsyslog_ev_arg){ key, LF_LD,   { .ld  = value } }
+#define lf_lld(key, value)  (xsyslog_ev_arg){ key, LF_LLD,  { .lld = value } }
+#define lf_u(key, value)    (xsyslog_ev_arg){ key, LF_U,    { .u   = value } }
+#define lf_lu(key, value)   (xsyslog_ev_arg){ key, LF_LU,   { .lu  = value } }
+#define lf_llu(key, value)  (xsyslog_ev_arg){ key, LF_LLU,  { .llu = value } }
+#define lf_zd(key, value)   (xsyslog_ev_arg){ key, LF_ZD,   { .zd  = value } }
+#define lf_zu(key, value)   (xsyslog_ev_arg){ key, LF_ZU,   { .zu  = value } }
+#define lf_llx(key, value)  (xsyslog_ev_arg){ key, LF_LLX,  { .llu = value } }
+#define lf_f(key, value)    (xsyslog_ev_arg){ key, LF_F,    { .f   = value } }
+#define lf_m(key)           (xsyslog_ev_arg){ key, LF_M,    {              } }
+#define lf_s(key, value)    (xsyslog_ev_arg){ key, LF_S,    { .s   = value } }
+#define lf_utf8(key, value) (xsyslog_ev_arg){ key, LF_UTF8, { .s   = value } }
 
 #define lf_raw(key, fmt, ...) ({                                            \
     struct buf value = BUF_INITIALIZER;                                     \
