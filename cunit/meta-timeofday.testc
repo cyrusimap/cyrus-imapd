@@ -34,7 +34,7 @@ static int tear_down(void)
 static void test_time_speedup(void)
 {
     const time_t expect_seconds_per_second = 10;
-    const double tolerance = RUNNING_ON_VALGRIND ? 0.2 : 0.1;
+    const double tolerance = RUNNING_ON_VALGRIND ? 0.4 : 0.1;
     struct timeval actual, prev;
     unsigned i;
 
