@@ -317,7 +317,7 @@ sub new_email_blob ($self, $email_set_params)
     return wantarray ? ($email_blob_id, $res->[0][1]{created}{"1"}) : $email_blob_id;
 }
 
-sub run_sieve_test ($self, $sieve_blob_id, $email_blob_id, $expect, $variables)
+sub run_sieve_test ($self, $sieve_blob_id, $email_blob_id, $expect, $variables=undef)
 {
 
     my $jmap = $self->{jmap};
