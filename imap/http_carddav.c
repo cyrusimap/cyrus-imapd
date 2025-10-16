@@ -1599,14 +1599,12 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
+    /* Check for changed UID */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
     
     const char *olduid = cdata->vcard_uid;
     const char *newuid = uid;
-    while (!strncmp(newuid, "urn:uuid:", 9)) newuid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
     if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
@@ -1978,13 +1976,11 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
+    /* Check for changed UID */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
     
     const char *olduid = cdata->vcard_uid;
-    while (!strncmp(uid, "urn:uuid:", 9)) uid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
     if (cdata->dav.imap_uid && strcmpsafe(olduid, uid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;

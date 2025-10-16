@@ -32,7 +32,7 @@ sub test_card_set_create_basic
     my $created = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
     my $prodid = '-//Example Corp.//CardDAV Client//EN';
     my $name = 'Mr. John Q. Public, Esq.';
-    my $id = 'urn:uuid:ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
     $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -41,7 +41,7 @@ sub test_card_set_create_basic
                     '@type' => 'Card',
                     version => '1.0',
                     addressBookIds => { $abookid => JSON::true },
-                    uid => $id,
+                    uid => $uid,
                     prodId => $prodid,
                     kind => 'individual',
                     created => $created,
@@ -67,7 +67,7 @@ sub test_card_set_create_basic
 
     $self->assert_matches(qr/VERSION:4.0/, $card);
     $self->assert_matches(qr/KIND:INDIVIDUAL/, $card);
-    $self->assert_matches(qr/UID:$id/, $card);
+    $self->assert_matches(qr/UID;VALUE=TEXT:$uid/, $card);
     $self->assert_matches(qr/PRODID:$prodid/, $card);
     $self->assert_matches(qr/CREATED:$created/, $card);
     $self->assert_matches(qr/FN:$name/, $card);

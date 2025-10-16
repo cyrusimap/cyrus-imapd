@@ -24,12 +24,12 @@ sub test_card_get_v3
     my $abookId = $res->[0][1]{list}[0]{id};
 
     # PROP-IDs added so we can easily compare the results
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:$id
+UID:$uid
 BDAY;PROP-ID=A1:1944-06-07
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
@@ -59,10 +59,10 @@ EOF
         version => '1.0',
         addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        uid => $id,
+        uid => $uid,
         updated => '2008-04-24T19:52:43Z',
         vCardProps => [
-            [ 'version', {}, 'text', '3.0' ]
+            [ 'version', {}, 'text', '4.0' ]
         ],
         name => {
             full => 'Forrest Gump',
