@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_connect_once
     :CSyncReplication :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
 
     # stop the replica
     $self->{replica}->stop();

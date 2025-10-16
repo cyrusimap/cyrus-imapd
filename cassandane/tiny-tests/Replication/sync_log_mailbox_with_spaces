@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sync_log_mailbox_with_spaces
     :DelayedDelete :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     my $channel = 'eggplant'; # look it's gotta be called something
 

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_blob_upload_repair_acl
     :min_version_3_7 :JMAPExtensions
+    ($self)
 {
-    my $self = shift;
     my $jmap = $self->{jmap};
     my $admin = $self->{adminstore}->get_client();
 

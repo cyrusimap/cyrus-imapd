@@ -7,8 +7,8 @@ use Cassandane::Tiny;
 sub test_shared_global_annot_replication
     :Replication :SyncLog :AnnotationAllowUndefined
     :needs_component_idled :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing /shared/foobar";
 

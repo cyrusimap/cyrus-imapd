@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_user_rename
     :AllowMoves
+    ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

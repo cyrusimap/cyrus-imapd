@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_test_upload
     :min_version_3_3 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     my $email1 = <<'EOF';
 From: "Some Example Sender" <example@example.com>

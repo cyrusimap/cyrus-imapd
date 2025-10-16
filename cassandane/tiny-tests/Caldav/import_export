@@ -2,9 +2,8 @@
 use Cassandane::Tiny;
 use utf8;
 
-sub test_import_export
+sub test_import_export ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

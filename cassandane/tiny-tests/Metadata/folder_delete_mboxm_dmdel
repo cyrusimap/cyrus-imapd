@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_folder_delete_mboxm_dmdel
     :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test that per-mailbox GETMETADATA annotations are";
     xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";

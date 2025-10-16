@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_appendone_diskfull
     :NoStartInstances :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
 
     my $canary = << 'EOF';
 From: Fred J. Bloggs <fbloggs@fastmail.fm>

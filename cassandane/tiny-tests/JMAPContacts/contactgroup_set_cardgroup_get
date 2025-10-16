@@ -1,10 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_contactgroup_set_cardgroup_get
+sub test_contactgroup_set_cardgroup_get ($self)
 {
 
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
 

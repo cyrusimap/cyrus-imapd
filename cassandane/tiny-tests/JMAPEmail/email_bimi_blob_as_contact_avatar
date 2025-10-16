@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_bimi_blob_as_contact_avatar
     :min_version_3_5 :needs_component_sieve
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # we need 'https://cyrusimap.org/ns/jmap/mail' capability for

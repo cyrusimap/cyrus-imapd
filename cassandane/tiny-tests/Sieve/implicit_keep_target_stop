@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_implicit_keep_target_stop
     :min_version_3_9 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     my $folder = "INBOX.foo";
 

@@ -2,8 +2,8 @@
 use Cassandane::Tiny;
 use Data::UUID;
 
-sub initialize_test {
-    my ($self, $now) = @_;
+sub initialize_test ($self, $now)
+{
     my $caldav = $self->{caldav};
 
     xlog $self, "Create calendars for VEVENT and VTODO";
@@ -24,9 +24,9 @@ sub initialize_test {
 }
 
 sub test_supported_components
-  : needs_component_calalarmd {
-
-    my ($self) = @_;
+  : needs_component_calalarmd
+    ($self)
+{
     my $now = DateTime->now();
 
     $self->initialize_test($now);
@@ -43,9 +43,9 @@ sub test_supported_components
 }
 
 sub test_supported_components_only_vevent
-  : needs_component_calalarmd : CaldavAlarmOnlyVevent {
-
-    my ($self) = @_;
+  : needs_component_calalarmd : CaldavAlarmOnlyVevent
+    ($self)
+{
     my $now = DateTime->now();
 
     $self->initialize_test($now);
@@ -61,8 +61,8 @@ sub test_supported_components_only_vevent
     $self->assert_alarms();
 }
 
-sub create_component {
-    my ($self, $calendarId, $compName, $summary, $start) = @_;
+sub create_component ($self, $calendarId, $compName, $summary, $start)
+{
     my $caldav = $self->{caldav};
 
     my $dtStamp = DateTime->now();

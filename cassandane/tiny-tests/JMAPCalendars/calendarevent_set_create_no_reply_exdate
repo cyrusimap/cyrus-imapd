@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_create_no_reply_exdate
   : needs_component_jmap
+    ($self)
 {
-  my ($self) = @_;
 
   my $jmap = $self->{jmap};
 

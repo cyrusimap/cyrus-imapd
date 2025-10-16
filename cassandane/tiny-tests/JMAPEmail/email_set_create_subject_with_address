@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_set_create_subject_with_address
+sub test_email_set_create_subject_with_address ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # This is a regression test for encoding of the Subject header: everything

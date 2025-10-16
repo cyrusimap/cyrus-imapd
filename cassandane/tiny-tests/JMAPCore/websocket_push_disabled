@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_websocket_push_disabled
     :JMAPExtensions :NoAltNameSpace :NoStartInstances
     :needs_dependency_wslay
+    ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->{config}->set('jmap_pushpoll' => 0);
     $self->_start_instances();

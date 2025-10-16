@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_striphtml_plain
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
     my $talk = $self->{store}->get_client();
 
     xlog "Index message with only plain text part";

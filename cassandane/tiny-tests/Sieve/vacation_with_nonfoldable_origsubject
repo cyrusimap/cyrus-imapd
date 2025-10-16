@@ -5,8 +5,8 @@ sub test_vacation_with_nonfoldable_origsubject
     :min_version_3_5
     :NoAltNameSpace
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
 
     my $target = 'INBOX.Sent';
 

@@ -20,9 +20,8 @@ use Cassandane::Tiny;
 #       - returns an OK response
 #       - but reports the UID in the MODIFIED response code
 #
-sub test_unchangedsince
+sub test_unchangedsince ($self)
 {
-    my ($self) = @_;
 
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();

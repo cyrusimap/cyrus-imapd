@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_itip_rsvp_organizer_change
     :min_version_3_7 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $uid = '7e017102-0caf-490a-bbdf-422141d34e75';
 

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_control_chars_repaired
     :min_version_3_0 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     # from 3.0-3.2, this behaviour was optional and required the
     # carddav_repair_vcard switch to be set

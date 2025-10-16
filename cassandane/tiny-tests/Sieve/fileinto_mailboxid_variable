@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_fileinto_mailboxid_variable
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing the \"mailboxid\" action";
 

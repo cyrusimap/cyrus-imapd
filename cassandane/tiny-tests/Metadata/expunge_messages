@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_expunge_messages
+sub test_expunge_messages ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing expunge of messages with message scope";
     xlog $self, "annotations [IRIS-1553]";

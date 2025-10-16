@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_fromanycontact_shared
     :min_version_3_5 :needs_component_sieve
     :JMAPExtensions :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     my $admin = $self->{adminstore}->get_client();

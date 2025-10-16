@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_replication_repair_zero_msgs
     :NoReplicaOnly
+    ($self)
 {
-    my ($self) = @_;
 
     my $mastertalk = $self->{master_store}->get_client();
     my $replicatalk = $self->{replica_store}->get_client();

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_toarchive
     :NoStartInstances :ArchivePartition :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
 
     my $repcfg = $self->{replica}->{config};
     $repcfg->set('debug_log_sync_partition_choice' => 'yes');

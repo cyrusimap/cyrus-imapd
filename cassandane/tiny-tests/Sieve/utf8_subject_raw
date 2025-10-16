@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_utf8_subject_raw
     :min_version_3_0
     :NoMunge8bit
+    ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

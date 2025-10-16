@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_header_cache_control
+sub test_header_cache_control ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

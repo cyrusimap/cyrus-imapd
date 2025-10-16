@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_num_folders_rename
+sub test_num_folders_rename ($self)
 {
-    my ($self) = @_;
     $self->set_quotaroot('user.cassandane');
     $self->set_quotalimits(storage => 12345, $self->res_mailbox => 500);
 

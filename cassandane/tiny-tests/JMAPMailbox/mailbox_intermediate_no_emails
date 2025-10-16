@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 # This is to test for a bug where a query against an intermediate mailbox was returning all emails!
 sub test_mailbox_intermediate_no_emails
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};

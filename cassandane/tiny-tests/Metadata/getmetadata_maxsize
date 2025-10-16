@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_getmetadata_maxsize
+sub test_getmetadata_maxsize ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test the GETMETADATA command with the MAXSIZE option";
 

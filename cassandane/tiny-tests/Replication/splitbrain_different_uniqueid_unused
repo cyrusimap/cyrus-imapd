@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_splitbrain_different_uniqueid_unused
     :min_version_3_5 :NoReplicaonly :Conversations
+    ($self)
 {
-    my ($self) = @_;
 
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};

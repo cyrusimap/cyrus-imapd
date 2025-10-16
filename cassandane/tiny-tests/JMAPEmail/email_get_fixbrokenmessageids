@@ -3,11 +3,11 @@ use Cassandane::Tiny;
 
 sub test_email_get_fixbrokenmessageids
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
 
     # See issue https://github.com/cyrusimap/cyrus-imapd/issues/2601
 
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # An email with a folded reference id.

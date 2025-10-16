@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailbox_counts_add_remove
     :min_version_3_1 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     $imap->uid(1);

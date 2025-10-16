@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_replication_delete_unactivate_unixhs
     :needs_component_sieve :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
 
     my $user = 'some.body';
     my $scriptname = 'test1';

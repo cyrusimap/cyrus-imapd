@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_variables_basic
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();

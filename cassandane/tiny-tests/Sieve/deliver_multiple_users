@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_deliver_multiple_users
     :NoAltNameSpace
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
 
     # create 2 other users
     $self->{instance}->create_user('other1');

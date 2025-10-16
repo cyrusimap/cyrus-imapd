@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 # trying to reproduce error reported in https://git.cyrus.foundation/T228
 sub test_alternate_globalannots
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     # first, set a different annotation_db_path on the master server
     my $annotation_db_path = $self->{instance}->get_basedir()

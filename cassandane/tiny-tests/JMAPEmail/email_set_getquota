@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_set_getquota
     :min_version_3_1 :needs_component_sieve
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     $self->set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";

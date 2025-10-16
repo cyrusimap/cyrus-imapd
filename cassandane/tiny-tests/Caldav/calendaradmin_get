@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendaradmin_get
     :min_version_3_8 :AllowCalendarAdmin
+    ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     my $res = $caldav->ua->request('GET', $caldav->request_url(""), {

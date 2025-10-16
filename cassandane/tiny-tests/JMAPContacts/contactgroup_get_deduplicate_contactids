@@ -3,9 +3,9 @@ use Cassandane::Tiny;
 
 sub test_contactgroup_get_deduplicate_contactids
     :min_version_3_7
+    ($self)
 {
 
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $carddav = $self->{carddav};
 

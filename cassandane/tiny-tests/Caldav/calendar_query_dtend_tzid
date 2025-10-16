@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendar_query_dtend_tzid
+sub test_calendar_query_dtend_tzid ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

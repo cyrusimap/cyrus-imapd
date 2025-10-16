@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendar_user_address_set_principal
     : VirtDomains
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Assert default value";
     $self->assert_address_set([
@@ -87,8 +87,8 @@ sub test_calendar_user_address_set_principal
     ]);
 }
 
-sub assert_address_set {
-    my ($self, $want_addrs) = @_;
+sub assert_address_set ($self, $want_addrs)
+{
     # Fetch calendar-user-address-set DAV property.
     my $res = $self->{caldav}->Request(
         'PROPFIND',
@@ -115,8 +115,8 @@ sub assert_address_set {
 }
 
 
-sub write_address_set {
-    my ($self, $addrs) = @_;
+sub write_address_set ($self, $addrs)
+{
     if (defined $addrs) {
         my @hrefs = map {
             if ($_->{preferred}) {

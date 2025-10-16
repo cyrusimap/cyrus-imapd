@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_rename_old_synccache
     :NoAltNameSpace :AllowMoves :Replication :SyncLog :DelayedDelete :SyncCache
+    ($self)
 {
-    my ($self) = @_;
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
     my $cachefname = "$self->{instance}->{basedir}/sync_cache.db";

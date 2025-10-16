@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_alerts
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
     my ($maj, $min) = Cassandane::Instance->get_version();
 
     my ($id, $ical) = $self->icalfile('alerts');

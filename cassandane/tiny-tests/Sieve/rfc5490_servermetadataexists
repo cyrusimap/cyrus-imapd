@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rfc5490_servermetadataexists
     :min_version_3_0 :AnnotationAllowUndefined
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing the \"servermetadataexists\" test";
 

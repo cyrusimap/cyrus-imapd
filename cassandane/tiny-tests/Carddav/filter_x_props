@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_filter_x_props
+sub test_filter_x_props ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
 

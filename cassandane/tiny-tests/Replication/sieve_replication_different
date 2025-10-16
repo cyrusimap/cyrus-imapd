@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_replication_different
     :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
 
     my $user = 'cassandane';
     my $script1name = 'test1';

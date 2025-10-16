@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_carddav_rewrite_v4card_on_get
     :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
     my $CardDAV = $self->{carddav};
 
     my $Id = $CardDAV->NewAddressBook('foo');

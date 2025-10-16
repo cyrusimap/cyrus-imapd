@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_querychanges_sortflagged_topmessage
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $res;
     my $state;

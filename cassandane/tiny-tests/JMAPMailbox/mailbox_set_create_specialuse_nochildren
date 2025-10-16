@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailbox_set_create_specialuse_nochildren
     :min_version_3_7 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
     $self->_start_instances();

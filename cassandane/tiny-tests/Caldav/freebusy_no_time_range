@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_freebusy_no_time_range
+sub test_freebusy_no_time_range ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

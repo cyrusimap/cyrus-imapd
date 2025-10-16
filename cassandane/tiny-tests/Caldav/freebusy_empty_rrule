@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_freebusy_empty_rrule
+sub test_freebusy_empty_rrule ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

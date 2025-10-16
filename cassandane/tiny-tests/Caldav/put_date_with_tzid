@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_put_date_with_tzid
+sub test_put_date_with_tzid ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

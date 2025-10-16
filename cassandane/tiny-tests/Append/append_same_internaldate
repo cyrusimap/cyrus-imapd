@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 # This test is used to verify that our JMAPID conflict detection/resolution works
 # but it takes a very long time to run and may not even generate a conflict
-sub bogus_test_append_same_internaldate
+sub bogus_test_append_same_internaldate ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

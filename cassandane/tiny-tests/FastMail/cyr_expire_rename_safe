@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_cyr_expire_rename_safe
     :DelayedDelete :NoMailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
 
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();

@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_multiinvite_add_person_changes
+sub test_multiinvite_add_person_changes ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

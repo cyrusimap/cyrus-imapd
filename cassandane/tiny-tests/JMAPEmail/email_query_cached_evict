@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_cached_evict
     :min_version_3_5 :needs_component_sieve
     :JMAPQueryCacheMaxAge1s :JMAPExtensions :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     $self->make_message("foo") || die;

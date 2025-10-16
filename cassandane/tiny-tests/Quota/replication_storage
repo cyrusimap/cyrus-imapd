@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_storage
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing replication of STORAGE quota";
 

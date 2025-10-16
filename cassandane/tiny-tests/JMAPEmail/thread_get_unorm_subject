@@ -1,8 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_thread_get_unorm_subject {
-    my ($self) = @_;
+sub test_thread_get_unorm_subject ($self)
+{
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 

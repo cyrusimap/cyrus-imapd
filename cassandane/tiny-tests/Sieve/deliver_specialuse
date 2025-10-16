@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_deliver_specialuse
     :min_version_3_0
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     my $target = "INBOX.target";
 

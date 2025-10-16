@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_virtdomains_return_subscribed_altns
     :VirtDomains :UnixHierarchySep :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user/foo\@example.com");

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_multiget
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');

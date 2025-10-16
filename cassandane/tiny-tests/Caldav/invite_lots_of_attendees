@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_invite_lots_of_attendees
     :VirtDomains :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(

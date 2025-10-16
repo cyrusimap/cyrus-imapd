@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_getmetadata_depth
     :AnnotationAllowUndefined
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test the GETMETADATA command with DEPTH option";
 

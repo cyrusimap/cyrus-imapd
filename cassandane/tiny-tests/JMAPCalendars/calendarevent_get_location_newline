@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_location_newline
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
     my ($id, $ical) = $self->icalfile('location-newline');
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values(%{$event->{locations}});

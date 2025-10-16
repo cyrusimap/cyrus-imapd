@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_variable_modifiers
+sub test_variable_modifiers ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["variables", "editheader", "regex", "enotify"];

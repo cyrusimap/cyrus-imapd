@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_baseeventid
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $event1Uid = '1cf5da26-38e9-47ac-8449-04354ae3772d';

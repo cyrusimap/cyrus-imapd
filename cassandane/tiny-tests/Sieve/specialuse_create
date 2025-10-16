@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_specialuse_create
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing the \":specialuse\" + \":create\" arguments";
 

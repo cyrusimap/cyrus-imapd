@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_comment_repl
     :Replication :SyncLog :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing /shared/comment";
 

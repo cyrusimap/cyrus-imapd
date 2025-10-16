@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_caldavcreate
+sub test_caldavcreate ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

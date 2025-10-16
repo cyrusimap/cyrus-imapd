@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_rename_withannot
+sub test_rename_withannot ($self)
 {
-    my ($self) = @_;
     my ($cyrus_version) = Cassandane::Instance->get_version();
 
     xlog $self, "test resources usage survives rename";

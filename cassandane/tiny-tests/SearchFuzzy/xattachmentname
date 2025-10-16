@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_xattachmentname
+sub test_xattachmentname ($self)
 {
-    my ($self) = @_;
 
     my $talk = $self->{store}->get_client();
 

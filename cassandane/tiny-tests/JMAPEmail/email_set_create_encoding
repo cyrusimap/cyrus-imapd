@@ -6,9 +6,8 @@ use File::Temp qw(tempfile);
 use Clone 'clone';
 use Data::UUID;
 
-sub test_email_set_create_encoding
+sub test_email_set_create_encoding ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
 

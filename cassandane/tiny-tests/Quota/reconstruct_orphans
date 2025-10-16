@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_reconstruct_orphans
+sub test_reconstruct_orphans ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test resources usage calculated when reconstructing an index";
     xlog $self, "with messages disappearing, resulting in orphan annotations";

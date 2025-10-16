@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_query_with_timezone
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog "Create event";

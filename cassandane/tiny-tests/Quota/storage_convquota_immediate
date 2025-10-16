@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_storage_convquota_immediate
     :min_version_3_3 :Conversations :ConversationsQuota :ImmediateDelete
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";
     $self->set_quotaroot('user.cassandane');

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_replication
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
 

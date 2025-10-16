@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_using_storage
+sub test_using_storage ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";
     $self->set_quotaroot('user.cassandane');

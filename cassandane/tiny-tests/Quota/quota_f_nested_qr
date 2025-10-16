@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_quota_f_nested_qr
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Test that quota -f correctly calculates the STORAGE quota";
     xlog $self, "with a nested quotaroot and a folder whose name sorts after";

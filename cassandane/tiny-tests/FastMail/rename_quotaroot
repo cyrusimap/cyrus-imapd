@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_rename_quotaroot
     :AllowMoves :Replication :min_version_3_2
     :needs_component_replication :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 

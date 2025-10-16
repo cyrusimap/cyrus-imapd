@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_apple_location_tz
+sub test_apple_location_tz ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

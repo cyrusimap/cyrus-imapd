@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_copy_state
+sub test_email_copy_state ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();

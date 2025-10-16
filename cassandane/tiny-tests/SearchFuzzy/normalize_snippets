@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_normalize_snippets
     :min_version_3_0
     :needs_component_jmap
+    ($self)
 {
-    my ($self) = @_;
 
     # Set up test message with funny characters
 use utf8;

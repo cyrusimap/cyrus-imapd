@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_19_to_20_delete_tree
     :min_version_3_7 :MailboxVersion(19)
+    ($self)
 {
-    my ($self) = @_;
 
     # Check for a bug found during testing - randomly deleting a mailbox
     # tree would fail after upgrade because the ancestor sorting code was

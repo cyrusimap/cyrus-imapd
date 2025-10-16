@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_badscript_timsieved
+sub test_badscript_timsieved ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing sieve script compile failures, via timsieved";
     $self->{compile_method} = 'timsieved';

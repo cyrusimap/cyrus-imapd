@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_bug3735
     :Bug3735
+    ($self)
 {
-    my ($self) = @_;
     $self->{instance}->create_user("a");
     $self->{instance}->create_user("ab");
     $self->set_quotaroot('user.a');

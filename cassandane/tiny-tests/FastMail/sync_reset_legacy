@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_sync_reset_legacy
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();

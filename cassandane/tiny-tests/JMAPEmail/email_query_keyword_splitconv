@@ -2,8 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_email_query_keyword_splitconv
-  : ConversationsMaxThread10 {
-    my ($self) = @_;
+  : ConversationsMaxThread10
+    ($self)
+{
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 
@@ -120,8 +121,8 @@ sub test_email_query_keyword_splitconv
     $self->assert_deep_equals($bothIds, $ids->{allHaveKeywordGuidSearch});
 }
 
-sub query_emails {
-    my ($self) = @_;
+sub query_emails ($self)
+{
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods(
@@ -228,8 +229,8 @@ sub query_emails {
     };
 }
 
-sub create_splitconv {
-    my ($self) = @_;
+sub create_splitconv ($self)
+{
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 
