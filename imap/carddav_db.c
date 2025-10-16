@@ -1479,7 +1479,9 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
          */
         free(propval);
         propval = vcardproperty_get_value_as_string_r(prop);
-        const char *userid = "";
+        const char *userid = "", *member;
+        char *buf = NULL, *buf_ptr;
+        size_t buf_size;
 
         if (!propval) continue;
 
@@ -1537,10 +1539,11 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             /* default case is CARDDAV_KIND_CONTACT */
             break;
 
-        member:
         case VCARD_MEMBER_PROPERTY:
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            strarray_append(&member_uids, propval+9);
+            member = propval;
+
+        member:
+            strarray_append(&member_uids, member);
             strarray_append(&member_uids, userid);
             break;
 
@@ -1552,11 +1555,23 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             const char *name = vcardproperty_get_property_name(prop);
             if (!strcasecmp(name, "x-addressbookserver-kind"))
                 goto kind;
-            else if (!strcasecmp(name, "x-addressbookserver-member"))
+            else if (!strcasecmp(name, "x-addressbookserver-member")) {
+                /* strip urn:uuid: prefix and RFC6868-decode string */
+                if (strncmp(propval, "urn:uuid:", 9)) continue;
+                member = propval + 9;
+                buf_size = strlen(member) + 1;
+                buf_ptr = buf = icalmemory_new_buffer(buf_size);
+                icalmemory_append_decoded_string(&buf, &buf_ptr, &buf_size,
+                                                 member);
+                member = buf;
                 goto member;
+            }
             else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
+                /* strip urn:uuid: prefix */
                 userid = vcardproperty_get_xparam_value(prop, "userid");
                 if (!userid) continue;
+                if (strncmp(propval, "urn:uuid:", 9)) continue;
+                member = propval + 9;
                 goto member;
             }
             break;
@@ -1565,6 +1580,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         default:
             break;
         }
+
+        if (buf) icalmemory_free_buffer(buf);
     }
 
     int r;

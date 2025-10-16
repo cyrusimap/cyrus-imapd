@@ -7975,6 +7975,11 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         goto done;
     }
 
+    /* Always work with a v4 card so we have "clean" MEMBER properties */
+    if (cdata->version == 3) {
+        vcardcomponent_transform(vcard, VCARD_VERSION_40);
+    }
+
     /* Convert the vCard to a JSContact Card. */
     int from_vcard_flags = IGNORE_DERIVED_PROPS;
     if (crock->args.disable_uri_as_blobid)
@@ -9014,7 +9019,6 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
                                     const char *key, vcardcomponent *card,
                                     vcardproperty_kind pkind)
 {
-    struct buf buf = BUF_INITIALIZER;
     vcardstrarray *text = NULL;
     const char *id;
     json_t *obj;
@@ -9041,15 +9045,7 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
         else {
             vcardproperty *prop = vcardproperty_new(pkind);
 
-            buf_reset(&buf);
-
-            if (pkind == VCARD_MEMBER_PROPERTY &&
-                strncmpsafe("urn:uuid:", id, 9)) {
-                buf_setcstr(&buf, "urn:uuid:");
-            }
-
-            buf_appendcstr(&buf, id);
-            vcardproperty_set_value_from_string(prop, buf_cstring(&buf), "NO");
+            vcardproperty_set_value_from_string(prop, id, "NO");
 
             vcardcomponent_add_property(card, prop);
             r = 1;
@@ -9067,7 +9063,6 @@ static unsigned _jsmultikey_to_card(struct jmap_parser *parser, json_t *jval,
     }
 
     jmap_parser_pop(parser);
-    buf_free(&buf);
 
     return r;
 }
