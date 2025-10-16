@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_set_create_memo_ignore_convsubject
+sub test_email_set_create_memo_ignore_convsubject ($self)
 {
-    my ($self) = @_;
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 

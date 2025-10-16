@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #
 # Test replication of messages APPENDed to the master
 #
-sub test_append
+sub test_append ($self)
 {
-    my ($self) = @_;
 
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};

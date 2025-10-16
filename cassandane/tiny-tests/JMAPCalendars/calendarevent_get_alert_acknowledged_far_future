@@ -2,8 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_alert_acknowledged_far_future
-  : needs_component_jmap {
-    my ($self) = @_;
+  : needs_component_jmap
+    ($self)
+{
 
     my $jmap   = $self->{jmap};
     my $caldav = $self->{caldav};

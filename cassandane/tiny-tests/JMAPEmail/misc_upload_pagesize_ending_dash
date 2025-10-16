@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_misc_upload_pagesize_ending_dash
+sub test_misc_upload_pagesize_ending_dash ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # We need a page-size email (4096 bytes)

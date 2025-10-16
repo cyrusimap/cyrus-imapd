@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_schedule_request_add_participant
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};

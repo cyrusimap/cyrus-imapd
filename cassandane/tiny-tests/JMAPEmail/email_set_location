@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_set_location
+sub test_email_set_location ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_date_local_zone
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
 
     my $date = "Wed, 16 May 2018 22:06:18 -0700";
     my $dt = DateTime->from_epoch(epoch => str2time($date), time_zone => 'local');

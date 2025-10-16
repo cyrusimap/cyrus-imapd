@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_replication_withalarms_in_tz_with_dst
     :min_version_3_0 :NoReplicaOnly
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

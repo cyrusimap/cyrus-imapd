@@ -4,8 +4,8 @@ use utf8;
 
 sub test_card_get_ordered_phonetics
     :min_version_3_9 :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $service = $self->{instance}->get_service("http");

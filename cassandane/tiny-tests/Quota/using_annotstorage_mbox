@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_using_annotstorage_mbox
+sub test_using_annotstorage_mbox ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test setting X-ANNOTATION-STORAGE quota resource after";
     xlog $self, "per-mailbox annotations are added";

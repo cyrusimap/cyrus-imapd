@@ -2,9 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_card_set_vcardprops
-  : needs_dependency_icalvcard
+    :needs_dependency_icalvcard :MailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog $self, "Create card";

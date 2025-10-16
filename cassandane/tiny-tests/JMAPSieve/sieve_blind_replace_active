@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_blind_replace_active
     :min_version_3_3 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
 

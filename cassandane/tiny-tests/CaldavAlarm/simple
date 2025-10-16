@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_simple
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
 
     my $CalDAV = $self->{caldav};
 

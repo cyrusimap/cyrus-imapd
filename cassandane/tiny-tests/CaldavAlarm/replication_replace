@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_replication_replace
     :min_version_3_0 :NoReplicaOnly
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     $self->assert_not_null($self->{replica});
 

@@ -7,9 +7,8 @@ use Cassandane::Tiny;
 # Note: this needs the Mail::IMAPTalk install to have commit
 # "Alert reponse is remainder of line, put that in the response code"
 #
-sub test_motd
+sub test_motd ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing /shared/motd";
 

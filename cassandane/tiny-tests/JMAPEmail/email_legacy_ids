@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_legacy_ids
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
 

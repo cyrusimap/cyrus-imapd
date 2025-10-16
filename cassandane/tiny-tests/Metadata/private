@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_private
+sub test_private ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

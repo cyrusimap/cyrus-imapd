@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_virtuallocation_xprop
+sub test_calendarevent_set_virtuallocation_xprop ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $virtualLocations = {

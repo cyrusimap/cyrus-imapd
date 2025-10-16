@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_invite_plusaddr
-#    :VirtDomains
+sub test_invite_plusaddr ($self)
 {
-    my ($self) = @_;
 
     my $service = $self->{instance}->get_service("http");
     my $caldav  = $self->{caldav};

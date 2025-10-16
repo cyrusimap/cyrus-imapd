@@ -3,10 +3,10 @@ use Cassandane::Tiny;
 
 sub test_imip_update_master_and_add_override
     :needs_component_httpd :want_service_http
+    ($self)
 {
     # this test is mainly here to test that a crasher caused by Cyrus using
     # a libical component after it was freed
-    my ($self) = @_;
 
     my $IMAP = $self->{store}->get_client();
     $self->{store}->_select();

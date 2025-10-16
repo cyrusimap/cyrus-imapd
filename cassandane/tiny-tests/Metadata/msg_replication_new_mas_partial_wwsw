@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_msg_replication_new_mas_partial_wwsw
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing partial replication of message scope annotations";
     xlog $self, "case master to replica: write, write, sync, write";

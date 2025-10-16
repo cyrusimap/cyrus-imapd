@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 sub test_email_query_window_cached
     :min_version_3_1 :needs_component_sieve
     :JMAPQueryCacheMaxAge1s :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     $self->email_query_window_internal();
 }

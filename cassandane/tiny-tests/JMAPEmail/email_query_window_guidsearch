@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_window_guidsearch
     :min_version_3_1 :needs_component_sieve
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     # guidsearch supports calculating total if version >= 3.5
     my ($maj, $min) = Cassandane::Instance->get_version();

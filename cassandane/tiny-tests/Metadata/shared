@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #
 # Test the cyrus annotations
 #
-sub test_shared
+sub test_shared ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

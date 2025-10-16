@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_put_get_v3_v4
+sub test_put_get_v3_v4 ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');

@@ -5,8 +5,8 @@ sub test_rename_deepuser_standardfolders_rightnow
     :AllowMoves :Replication :min_version_3_3
     :JMAPExtensions :RightNow
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
 

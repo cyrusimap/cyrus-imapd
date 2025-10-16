@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_quota_f
+sub test_quota_f ($self)
 {
-    my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
 

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_editheader_encoded_address_list
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Install a sieve script with editheader actions";
     my $script = <<EOF;

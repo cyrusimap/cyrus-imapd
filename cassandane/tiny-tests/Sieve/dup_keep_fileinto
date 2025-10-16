@@ -7,9 +7,8 @@ use Cassandane::Tiny;
 # really broken, although perhaps unexpected, and it not
 # tested for here.
 
-sub test_dup_keep_fileinto
+sub test_dup_keep_fileinto ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing duplicate suppression between 'keep' & 'fileinto'";
 

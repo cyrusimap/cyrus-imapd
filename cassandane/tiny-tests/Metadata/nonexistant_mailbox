@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_nonexistant_mailbox
+sub test_nonexistant_mailbox ($self)
 {
-    my ($self) = @_;
     my $imaptalk = $self->{store}->get_client();
     my $entry = '/shared/comment';
     my $folder = 'INBOX.nonesuch';

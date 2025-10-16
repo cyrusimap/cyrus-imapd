@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_delete_recur_extraattendee
+sub test_delete_recur_extraattendee ($self)
 {
-    my ($self) = @_;
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});

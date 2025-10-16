@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_search_subjectsnippet
     :min_version_3_0
     :needs_component_jmap
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Generate and index test messages.";
     $self->make_message("[plumbing] Re: log server v0 live",

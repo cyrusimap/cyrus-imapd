@@ -2,8 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_email_query_keyword_splitconv_sieve
-  : needs_component_sieve : ConversationsMaxThread10 {
-    my ($self) = @_;
+  : needs_component_sieve : ConversationsMaxThread10
+    ($self)
+{
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 

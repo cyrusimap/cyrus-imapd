@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_organizer_noattendees_legacy
     :min_version_3_4 :max_version_3_4
+    ($self)
 {
-    my ($self) = @_;
 
     # It's allowed to have an ORGANIZER even if there are no ATTENDEEs.
     # The expected behaviour is that there's just a single organizer in the

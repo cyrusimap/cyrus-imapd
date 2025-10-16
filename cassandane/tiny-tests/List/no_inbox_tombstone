@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_no_inbox_tombstone
     :UnixHierarchySep :ReverseACLs :AllowMoves
+    ($self)
 {
-    my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
 

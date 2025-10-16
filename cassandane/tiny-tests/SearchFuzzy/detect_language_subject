@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_detect_language_subject
     :min_version_3_2 :needs_dependency_cld2 :SearchLanguage
     :needs_component_jmap
+    ($self)
 {
-    my ($self) = @_;
 
     my $body = ""
     . "--boundary\r\n"

@@ -4,8 +4,8 @@ use Data::UUID;
 
 sub test_calendar_set_defaultalerts_shared
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
 
     my $t = $self->create_test;
 
@@ -140,9 +140,8 @@ sub test_calendar_set_defaultalerts_shared
     $self->assert_shared_defaultalerts($t, 'no alarm!', 'no alarm!');
 }
 
-sub _can_match_b {
-    my $event = shift;
-    my $want = shift;
+sub _can_match_b ($event, $want)
+{
 
     # I wrote a really good one of these for Caldav, but this will do for now
     foreach my $key (keys %$want) {
@@ -153,9 +152,8 @@ sub _can_match_b {
     return 1;
 }
 
-sub assert_alarm_notifs {
-    my $self = shift;
-    my @want = @_;
+sub assert_alarm_notifs ($self, @want)
+{
     # pick first calendar alarm from notifications
     my $data = $self->{instance}->getnotify();
     if ($self->{replica}) {
@@ -199,9 +197,8 @@ sub assert_alarm_notifs {
     }
 }
 
-sub assert_shared_defaultalerts
+sub assert_shared_defaultalerts ($self, $t, $owneralarmid, $shareealarmid)
 {
-    my ($self, $t, $owneralarmid, $shareealarmid) = @_;
 
     for my $who (qw/owner sharee/) {
         my $jmap = $t->{$who}->{jmap};
@@ -277,9 +274,8 @@ sub assert_shared_defaultalerts
     $t->{start}->add(DateTime::Duration->new(days =>7));
 }
 
-sub create_test
+sub create_test ($self)
 {
-    my ($self) = @_;
 
     my ($ownerJmap, $ownerCaldav) = $self->create_user('owner');
     my ($shareeJmap, $shareeCaldav) = $self->create_user('sharee');

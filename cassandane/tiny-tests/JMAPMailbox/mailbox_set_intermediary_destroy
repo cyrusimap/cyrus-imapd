@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailbox_set_intermediary_destroy
     :min_version_3_1 :max_version_3_4 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();

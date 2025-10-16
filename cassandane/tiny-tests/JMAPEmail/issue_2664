@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_issue_2664
     :min_version_3_1 :needs_component_sieve
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};

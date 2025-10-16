@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_guidsearch_scanmode
     :min_version_3_1 :needs_component_sieve
     :JMAPExtensions :SearchSetForceScanMode
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     for (my $i = 0; $i < 10; $i++) {

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_version_ignore_whitespace
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');

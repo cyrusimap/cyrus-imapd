@@ -6,8 +6,8 @@ sub test_snooze
     :needs_component_jmap
     :min_version_3_1
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     my $snoozed = "INBOX.snoozed";
     my $awakened = "INBOX.awakened";

@@ -3,13 +3,13 @@ use Cassandane::Tiny;
 
 sub test_email_import_encoded_contenttype
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
     # Very old macOS Mail.app versions encode the complete
     # Content-Type header value, when they really should
     # just encode its file name parameter value.
     # See: https://github.com/cyrusimap/cyrus-imapd/issues/2622
 
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};

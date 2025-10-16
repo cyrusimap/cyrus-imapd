@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_permessage_unknown
+sub test_permessage_unknown ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing getting and setting unknown annotations on a message";
     xlog $self, "where this is forbidden by the default config";

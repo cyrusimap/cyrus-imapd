@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_get_calendarevents_itip_schedprops
     :min_version_3_5 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     my ($maj, $min) = Cassandane::Instance->get_version();

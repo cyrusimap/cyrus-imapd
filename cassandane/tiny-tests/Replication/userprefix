@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 # to delete the wrong user's mailbox.
 sub test_userprefix
     :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
     $self->{instance}->create_user("ua");
     $self->{instance}->create_user("uab");
 

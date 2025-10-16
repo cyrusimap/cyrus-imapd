@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # If we handle the large number of properties properly, this test will succeed.
 # If we overrun the libical ring buffer, this test might fail,
 # but it will definitely cause valgrind errors.
-sub test_huge_group
+sub test_huge_group ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
 

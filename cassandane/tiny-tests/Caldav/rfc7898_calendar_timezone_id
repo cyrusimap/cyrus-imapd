@@ -2,8 +2,8 @@
 use Cassandane::Tiny;
 use XML::Spice;
 
-sub test_rfc7898_calendar_timezone_id {
-    my ($self) = @_;
+sub test_rfc7898_calendar_timezone_id ($self)
+{
     my $caldav = $self->{caldav};
 
     my $vtimezone = <<EOF;
@@ -119,8 +119,8 @@ EOF
     $self->assert_timezone_id(undef);
 }
 
-sub assert_timezone_id {
-    my ($self, $tzid) = @_;
+sub assert_timezone_id ($self, $tzid)
+{
     my $caldav = $self->{caldav};
 
     my $res = $caldav->Request(

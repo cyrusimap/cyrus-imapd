@@ -8,8 +8,8 @@ use Data::UUID;
 sub test_imip_encode_address
     :NoStartInstances
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->{config}->set('imipnotifier' => undef);
     $self->_start_instances();

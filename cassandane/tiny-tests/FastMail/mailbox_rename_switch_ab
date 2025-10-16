@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_mailbox_rename_switch_ab
     :AllowMoves :Replication :SyncLog :min_version_3_3
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
 
     my $mtalk = $self->{master_store}->get_client();
 

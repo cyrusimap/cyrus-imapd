@@ -154,8 +154,8 @@ add_sieve_tests(
 ### someInThreadHaveKeyword
 sub test_sieve_test_extensive_some_in_thread_have_keyword
     :min_version_3_3 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
 
     # Create two messages, where the first is muted and the second is in
     # the same conversation
@@ -186,8 +186,8 @@ sub test_sieve_test_extensive_some_in_thread_have_keyword
     );
 }
 
-sub add_sieve_tests {
-    my (@tests) = @_;
+sub add_sieve_tests (@tests)
+{
 
     while (@tests) {
         my ($name, $sieve, $expect) = (
@@ -214,8 +214,8 @@ sub add_sieve_tests {
     }
 }
 
-sub add_sieve_test {
-    my ($name, $sieve, $expect, $opts) = @_;
+sub add_sieve_test ($name, $sieve, $expect, $opts)
+{
 
     unless ($name =~ /^[a-zA-Z][a-zA-Z0-9_]+$/) {
         die "Test name '$name' invalid. Must look like a perl subroutine name (start with a letter, a-zA-Z0-9_ only after that...\n";
@@ -229,8 +229,8 @@ sub add_sieve_test {
     });
 }
 
-sub _do_test {
-    my ($self, $sieve, $expect, $opts) = @_;
+sub _do_test ($self, $sieve, $expect, $opts)
+{
 
     my $variables = $opts->{variables};
     my $email_set_params = $opts->{email_set_params};
@@ -246,8 +246,8 @@ sub _do_test {
     );
 }
 
-sub new_sieve_blob {
-    my ($self, $sieve) = @_;
+sub new_sieve_blob ($self, $sieve)
+{
 
     my $jmap = $self->{jmap};
 
@@ -283,8 +283,8 @@ EOF
     return $script_blob_id;
 }
 
-sub new_email_blob {
-    my ($self, $email_set_params) = @_;
+sub new_email_blob ($self, $email_set_params)
+{
 
     my $jmap = $self->{jmap};
 
@@ -317,8 +317,8 @@ sub new_email_blob {
     return wantarray ? ($email_blob_id, $res->[0][1]{created}{"1"}) : $email_blob_id;
 }
 
-sub run_sieve_test {
-    my ($self, $sieve_blob_id, $email_blob_id, $expect, $variables) = @_;
+sub run_sieve_test ($self, $sieve_blob_id, $email_blob_id, $expect, $variables)
+{
 
     my $jmap = $self->{jmap};
 

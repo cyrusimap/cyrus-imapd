@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_account_get_capabilities
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $http = $self->{instance}->get_service("http");

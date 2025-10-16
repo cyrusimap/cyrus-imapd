@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_list_subscribed_return_children_noaltns
     :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

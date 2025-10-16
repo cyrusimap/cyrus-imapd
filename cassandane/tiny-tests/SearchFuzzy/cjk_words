@@ -5,8 +5,8 @@ sub test_cjk_words
     :min_version_3_0
     :needs_search_xapian_cjk_tokens(words)
     :needs_component_jmap
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Generate and index test messages.";
 

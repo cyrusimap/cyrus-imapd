@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_dup_fileinto_implicit_keep_flags
+sub test_dup_fileinto_implicit_keep_flags ($self)
 {
-    my ($self) = @_;
 
     $self->{store}->set_fetch_attributes(qw(uid flags));
 

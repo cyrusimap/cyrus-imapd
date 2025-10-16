@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_get_bodyvalues_iso2022jp
+sub test_email_get_bodyvalues_iso2022jp ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 

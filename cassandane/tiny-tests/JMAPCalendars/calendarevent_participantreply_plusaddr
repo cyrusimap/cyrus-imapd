@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_participantreply_plusaddr
     :min_version_3_7 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     my $instance = $self->{instance};
     $instance->{config}->set(defaultdomain => 'internal');

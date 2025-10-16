@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_bz3529
+sub test_bz3529 ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing annot storage quota when setting annots on multiple";
     xlog $self, "messages in a single STORE command, using quotalegacy backend.";

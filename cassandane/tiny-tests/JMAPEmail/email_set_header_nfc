@@ -5,8 +5,8 @@ use MIME::QuotedPrint qw(encode_qp);
 
 sub test_email_set_header_nfc
     :NoMunge8Bit :RFC2047_UTF8
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
     my $jmap = $self->{jmap};
     $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');

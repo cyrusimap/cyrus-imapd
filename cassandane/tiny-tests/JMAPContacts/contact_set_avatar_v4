@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_contact_set_avatar_v4
+sub test_contact_set_avatar_v4 ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $carddav = $self->{carddav};
 

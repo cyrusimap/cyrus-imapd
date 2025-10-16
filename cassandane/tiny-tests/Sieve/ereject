@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_ereject
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Install a sieve script rejecting all mail";
     $self->{instance}->install_sieve_script(<<EOF

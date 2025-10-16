@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_createspecialuse
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing create specialuse";
 

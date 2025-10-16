@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_not_match
     :min_version_3_0 :needs_dependency_cld2
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
     my $store = $self->{store};
 

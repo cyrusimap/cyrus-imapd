@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_squatter_attachextract_cacheonly
     :min_version_3_9 :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
 {
-    my ($self) = @_;
     my $instance = $self->{instance};
     my $imap = $self->{store}->get_client();
 

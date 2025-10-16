@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #
 # Test the capabilities
 #
-sub test_capabilities
+sub test_capabilities ($self)
 {
-    my ($self) = @_;
     my $imaptalk = $self->{store}->get_client();
 
     my $caps = $imaptalk->capability();

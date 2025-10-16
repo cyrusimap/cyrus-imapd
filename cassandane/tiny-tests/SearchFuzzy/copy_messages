@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_copy_messages
+sub test_copy_messages ($self)
 {
-    my ($self) = @_;
 
     $self->create_testmessages();
 

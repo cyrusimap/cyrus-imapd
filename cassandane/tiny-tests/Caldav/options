@@ -1,8 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_options {
-    my ($self) = @_;
+sub test_options ($self)
+{
 
     my $caldav = $self->{caldav};
 

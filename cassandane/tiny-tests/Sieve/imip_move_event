@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_imip_move_event
     :needs_component_jmap :want_service_http
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};

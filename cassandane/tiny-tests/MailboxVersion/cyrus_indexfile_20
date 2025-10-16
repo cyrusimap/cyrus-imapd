@@ -10,9 +10,8 @@ use Test::Deep ':v1';
 # failing. When that happens, we should explicitly set :MailboxVersion(20)
 # here, and create a new test (probably copied mostly from this one) for the
 # new version. Repeat to infinity.
-sub test_cyrus_indexfile_20
+sub test_cyrus_indexfile_20 ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $ns_in_a_sec = 1_000_000_000;

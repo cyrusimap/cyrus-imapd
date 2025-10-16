@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rfc5258_ex02_list_subscribed
     :UnixHierarchySep :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

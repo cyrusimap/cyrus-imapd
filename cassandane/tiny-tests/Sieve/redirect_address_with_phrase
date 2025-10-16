@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_redirect_address_with_phrase
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Install a script";
     $self->{instance}->install_sieve_script(<<EOF

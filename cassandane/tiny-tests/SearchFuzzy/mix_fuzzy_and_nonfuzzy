@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mix_fuzzy_and_nonfuzzy
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
     $self->create_testmessages();
     my $talk = $self->{store}->get_client();
 

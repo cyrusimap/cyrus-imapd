@@ -1,8 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_parse_multi_icalobj {
-    my ($self) = @_;
+sub test_calendarevent_parse_multi_icalobj ($self)
+{
     my $jmap = $self->{jmap};
 
     # Parse iCalendar stream with two iCalendar objects

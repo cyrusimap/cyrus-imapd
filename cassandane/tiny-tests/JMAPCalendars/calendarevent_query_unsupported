@@ -4,8 +4,8 @@ use Data::UUID;
 
 sub test_calendarevent_query_unsupported
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};

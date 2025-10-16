@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_control_chars_unrepaired
     :min_version_3_0 :max_version_3_2
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
 
     # make sure we don't try to repair by default
     $self->{instance}->{config}->set('carddav_repair_vcard' => 'no');

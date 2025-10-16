@@ -4,8 +4,8 @@ use base qw(Cassandane::Cyrus::TestCase);
 
 sub test_email_query_notes
     :min_version_3_1 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # we need 'https://cyrusimap.org/ns/jmap/notes' capability

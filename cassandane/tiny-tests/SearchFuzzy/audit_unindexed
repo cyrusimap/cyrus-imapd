@@ -3,13 +3,13 @@ use Cassandane::Tiny;
 
 sub test_audit_unindexed
     :min_version_3_1 :needs_component_jmap
+    ($self)
 {
     # This test does some sneaky things to cyrus.indexed.db to force squatter
     # report audit errors. It assumes a specific format for cyrus.indexed.db
     # and Cyrus to preserve UIDVALDITY across two consecutive APPENDs.
     # As such, it's likely to break for internal changes.
 
-    my ($self) = @_;
 
     my $talk = $self->{store}->get_client();
 

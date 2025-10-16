@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_list_return_uidvalidity
     :UnixHierarchySep :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 

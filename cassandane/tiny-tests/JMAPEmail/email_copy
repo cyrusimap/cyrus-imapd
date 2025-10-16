@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_copy
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $user = $self->default_user;
     my $jmap = $user->jmap;
     my $imaptalk = $user->imap;

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_deliver_fileinto_dot
     :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "Testing a sieve script which does a 'fileinto' a mailbox";
     xlog $self, "when the user has a dot in their name.  Bug 3664";

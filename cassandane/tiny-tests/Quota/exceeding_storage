@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_exceeding_storage
+sub test_exceeding_storage ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test exceeding the STORAGE quota limit";
 

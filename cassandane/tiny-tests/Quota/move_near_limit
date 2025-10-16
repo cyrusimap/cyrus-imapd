@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_move_near_limit
+sub test_move_near_limit ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test move near the STORAGE quota limit";
 

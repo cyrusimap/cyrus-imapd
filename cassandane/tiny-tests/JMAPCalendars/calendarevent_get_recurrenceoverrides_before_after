@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_recurrenceoverrides_before_after
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};

@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #
 # Test the /private/specialuse annotation defined by RFC6154.
 #
-sub test_specialuse
+sub test_specialuse ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing /private/specialuse";
 

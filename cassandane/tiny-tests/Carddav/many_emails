@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_many_emails
+sub test_many_emails ($self)
 {
-    my ($self) = @_;
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');

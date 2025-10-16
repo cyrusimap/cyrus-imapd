@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lookup_only_otheruser_noaltns_racl
     :UnixHierarchySep :NoAltNamespace :ReverseACLs
+    ($self)
 {
-    my ($self) = @_;
 
     $self->{instance}->create_user("other");
 

@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_using_message_late
+sub test_using_message_late ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "test setting MESSAGE quota resource after messages are added";
 

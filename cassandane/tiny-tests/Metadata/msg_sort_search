@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_msg_sort_search
+sub test_msg_sort_search ($self)
 {
-    my ($self) = @_;
 
     xlog $self, "testing RFC5257 SORT command ANNOTATION search criterion";
 

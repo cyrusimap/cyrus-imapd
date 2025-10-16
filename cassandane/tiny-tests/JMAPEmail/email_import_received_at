@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_import_received_at
+sub test_email_import_received_at ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my ($maj, $min) = Cassandane::Instance->get_version();
 

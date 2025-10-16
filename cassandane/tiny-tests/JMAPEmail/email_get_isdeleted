@@ -3,10 +3,10 @@ use Cassandane::Tiny;
 
 sub test_email_get_isdeleted
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
     # This is a FastMail-extension
 
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};

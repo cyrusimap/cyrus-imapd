@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_attachmenttype_legacy
     :min_version_3_1 :max_version_3_4
     :needs_component_sieve :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $blobId = $jmap->Upload('some_data', "application/octet")->{blobId};

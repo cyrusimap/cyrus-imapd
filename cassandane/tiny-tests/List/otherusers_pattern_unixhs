@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_otherusers_pattern_unixhs
     :UnixHierarchySep :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
     $self->{instance}->create_user("foo");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(

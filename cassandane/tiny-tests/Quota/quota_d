@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_quota_d
     :UnixHierarchySep :AltNamespace :VirtDomains
+    ($self)
 {
-    my ($self) = @_;
 
     my @users = qw(
         alice@foo.com
