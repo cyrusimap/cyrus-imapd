@@ -56,6 +56,12 @@ extern void loginlog_good_imap(const char *clienthost,
                                const char *magicplus,
                                bool nopassword);
 
+extern void loginlog_good_pop(const char *clienthost,
+                              const char *username,
+                              const char *mech,
+                              bool tls,
+                              const char *subfolder);
+
 extern void loginlog_anon(const char *clienthost,
                           const char *mech,
                           bool tls,
