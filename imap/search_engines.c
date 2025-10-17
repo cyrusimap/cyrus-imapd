@@ -136,13 +136,43 @@ EXPORTED const char *search_part_as_string(int part)
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
 }
 
-EXPORTED int search_part_is_body(int part)
+EXPORTED int search_part_is_body(enum search_part part)
 {
     return part == SEARCH_PART_BODY ||
            part == SEARCH_PART_LOCATION ||
            part == SEARCH_PART_ATTACHMENTBODY;
 }
 
+EXPORTED int search_part_is_header(enum search_part part)
+{
+    switch (part) {
+    case SEARCH_PART_FROM:
+    case SEARCH_PART_TO:
+    case SEARCH_PART_CC:
+    case SEARCH_PART_BCC:
+    case SEARCH_PART_SUBJECT:
+    case SEARCH_PART_LISTID:
+    case SEARCH_PART_TYPE:
+    case SEARCH_PART_HEADERS:
+    case SEARCH_PART_DELIVEREDTO:
+    case SEARCH_PART_PRIORITY:
+    case SEARCH_PART_MESSAGEID:
+    case SEARCH_PART_REFERENCES:
+    case SEARCH_PART_INREPLYTO:
+        return 1;
+    case SEARCH_PART_NONE:
+    case SEARCH_PART_ANY:
+    case SEARCH_PART_BODY:
+    case SEARCH_PART_LOCATION:
+    case SEARCH_PART_ATTACHMENTNAME:
+    case SEARCH_PART_ATTACHMENTBODY:
+    case SEARCH_PART_LANGUAGE:
+    case SEARCH_NUM_PARTS:
+        return 0;
+    }
+
+    return 0;
+}
 
 EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
 {

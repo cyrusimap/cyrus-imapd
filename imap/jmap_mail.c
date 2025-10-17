@@ -4828,6 +4828,7 @@ static void emailquery_buildresult(struct emailquery *q,
             q->thread_emailids = json_object();
         }
         if (q->want_partids) {
+            json_decref(q->partids);
             q->partids = json_null();
         }
         return;

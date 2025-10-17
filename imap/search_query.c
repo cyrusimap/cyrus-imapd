@@ -42,6 +42,7 @@
 
 #include <config.h>
 
+#include <errno.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -472,6 +473,7 @@ struct subquery_rock {
     search_query_t *query;
     search_subquery_t *sub;
     int is_excluded;
+    int filters_by_header;
 };
 
 static int folder_partnum_cmp QSORT_R_COMPAR_ARGS(const void *va,
@@ -836,6 +838,13 @@ static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
                              void *rock)
 {
     struct subquery_rock *qr = rock;
+
+    if (partid && qr->filters_by_header) {
+        /* This query filters by some header criteria, which means
+         * we must only count results that are a top-level message. */
+        return 0;
+    }
+
     search_folder_t *folder = query_get_valid_folder(qr->query, mboxname, uidvalidity);
     if (folder) {
         bv_set(&folder->found_uids, uid);
@@ -865,7 +874,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     search_query_t *query = rock;
     search_expr_t *excluded = NULL;
     search_builder_t *bx;
-    struct subquery_rock qr;
+    struct subquery_rock qr = { 0 };
     int r;
 
     if (query->error) return;
@@ -918,6 +927,40 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         goto out;
     }
 
+    /* Determine if the query filters by header.*/
+    ptrarray_t nodes = PTRARRAY_INITIALIZER;
+    ptrarray_push(&nodes, sub->indexed);
+    for (search_expr_t *e = ptrarray_pop(&nodes); e && !qr.filters_by_header;
+         e = ptrarray_pop(&nodes))
+    {
+        switch (e->op) {
+        case SEOP_OR: {
+            // XXX this shouldn't happen, we expect DNF subclauses here
+            // only. But in lack of debug_assert let's rather log and
+            // continue evaluating the query instead of aborting.
+            char *s = search_expr_serialise(sub->indexed);
+            xsyslog_ev(LOG_ERR,
+                       "unexpected OR, expected DNF subclause",
+                       lf_s("indexed", s));
+            free(s);
+        }
+        /* fall through */
+        case SEOP_AND:
+        case SEOP_NOT:
+            for (search_expr_t *c = e->children; c; c = c->next)
+                ptrarray_push(&nodes, c);
+            break;
+        case SEOP_MATCH:
+        case SEOP_FUZZYMATCH:
+            if (e->attr && search_part_is_header(e->attr->part))
+                qr.filters_by_header = 1;
+            break;
+        default:;
+        }
+    }
+    ptrarray_fini(&nodes);
+
+    /* Run the query */
     qr.query = query;
     qr.sub = sub;
     qr.is_excluded = excluded != NULL;
