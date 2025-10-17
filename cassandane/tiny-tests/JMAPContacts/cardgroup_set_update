@@ -36,6 +36,7 @@ sub test_cardgroup_set_update
         }, 'R1']
     ]);
 
+    my $id1 = $res->[0][1]{created}{1}{id};
     my $uid1 = $res->[0][1]{created}{1}{uid};
     $self->assert_not_null($uid1);
     my $uid2 = $res->[0][1]{created}{2}{uid};
@@ -62,6 +63,16 @@ sub test_cardgroup_set_update
     my $id = $res->[0][1]{created}{1}{id};
     my $guid = $res->[0][1]{created}{1}{uid};
     $self->assert_not_null($id);
+
+    # make sure that the group and member hrefs are different
+    $res = $jmap->CallMethods([[ "ContactCard/get" => {
+        ids => [ $id1 ], properties => [ 'cyrusimap.org:href' ] }, 'thecard' ]]);
+    my $href1 = $res->[0][1]{list}[0]{'cyrusimap.org:href'};
+
+    $res = $jmap->CallMethods([[ "ContactCard/get" => {
+        ids => [ $id ], properties => [ 'cyrusimap.org:href' ] }, 'thegroup' ]]);
+    $self->assert_not_equals($href1,
+                             $res->[0][1]{list}[0]{'cyrusimap.org:href'});
 
     my $href = "Default/$guid.vcf";
 
