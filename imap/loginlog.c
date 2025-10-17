@@ -74,6 +74,17 @@ static void loginlog_good_finish(struct logfmt *lf)
     logfmt_fini(lf);
 }
 
+EXPORTED void loginlog_good(const char *clienthost,
+                            const char *username,
+                            const char *mech,
+                            bool tls)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    loginlog_good_begin(&lf, clienthost, username, mech, tls);
+    loginlog_good_finish(&lf);
+}
+
 EXPORTED void loginlog_anon(const char *clienthost,
                             const char *mech,
                             bool tls,

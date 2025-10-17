@@ -2023,11 +2023,8 @@ static void cmd_authinfo_pass(char *pass)
         return;
     }
     else {
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("r.clienthost", nntp_clienthost),
-                   lf_s("u.username", nntp_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_d("login.tls", nntp_starttls_done ? 1 : 0));
+        loginlog_good(nntp_clienthost, nntp_userid, "plaintext",
+                      nntp_starttls_done);
 
         prot_printf(nntp_out, "281 User logged in\r\n");
 
@@ -2241,11 +2238,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         return;
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("r.clienthost", nntp_clienthost),
-               lf_s("u.username", nntp_userid),
-               lf_s("login.mech", mech),
-               lf_d("login.tls", nntp_starttls_done ? 1 : 0));
+    loginlog_good(nntp_clienthost, nntp_userid, mech, nntp_starttls_done);
 
     if (success_data) {
         prot_printf(nntp_out, "283 %s\r\n", success_data);

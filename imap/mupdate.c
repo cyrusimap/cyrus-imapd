@@ -1522,11 +1522,7 @@ static void cmd_authenticate(struct conn *C,
     }
 
     C->userid = (char *) val;
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("r.clienthost", C->clienthost),
-               lf_s("u.username", C->userid),
-               lf_s("login.mech", mech),
-               lf_d("login.tls", C->tlsconn ? 1 : 0));
+    loginlog_good(C->clienthost, C->userid, mech, !!C->tlsconn);
 
     prot_printf(C->pout, "%s OK \"Authenticated\"\r\n", tag);
 

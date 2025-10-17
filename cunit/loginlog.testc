@@ -216,4 +216,94 @@ static void test_loginlog_bad(void)
     }
 }
 
+static void test_loginlog_good(void)
+{
+    static const struct {
+        bool set_sessionid;
+        bool set_traceid;
+        const char *clienthost;
+        const char *username;
+        const char *mech;
+        bool tls;
+    } tests[] = {
+        { false, false, NULL,          NULL,    NULL,        false },
+        { true,  true,  "example.net", "cunit", "plaintext", true  },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        unsigned pat_event = 0;
+        unsigned pat_sessid = 0;
+        unsigned pat_traceid = 0;
+        unsigned pat_clienthost = 0;
+        unsigned pat_username = 0;
+        unsigned pat_mech = 0;
+        unsigned pat_tls = 0;
+        char expect[32 + MAX_SESSIONID_SIZE] = {0};
+
+        pat_event = CU_SYSLOG_MATCH_SUBSTR("event=login.good");
+
+        if (tests[i].set_sessionid) {
+            session_new_id();
+            snprintf(expect, sizeof(expect), "sessionid=%s", session_id());
+            pat_sessid = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+
+        if (tests[i].set_traceid) {
+            trace_set_id("sometraceid", 0);
+            pat_traceid = CU_SYSLOG_MATCH_SUBSTR("r.tid=sometraceid");
+        }
+
+        if (tests[i].clienthost) {
+            snprintf(expect, sizeof(expect), "r.clienthost=%s",
+                     tests[i].clienthost);
+            pat_clienthost = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+        else {
+            pat_clienthost = CU_SYSLOG_MATCH_SUBSTR("r.clienthost=~null~");
+        }
+
+        if (tests[i].username) {
+            snprintf(expect, sizeof(expect), "u.username=%s",
+                     tests[i].username);
+            pat_username = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+
+        if (tests[i].mech) {
+            snprintf(expect, sizeof(expect), "login.mech=%s", tests[i].mech);
+            pat_mech = CU_SYSLOG_MATCH_SUBSTR(expect);
+        }
+
+        snprintf(expect, sizeof(expect), "login.tls=%d", (int) tests[i].tls);
+        pat_tls = CU_SYSLOG_MATCH_SUBSTR(expect);
+
+        loginlog_good(tests[i].clienthost, tests[i].username,
+                      tests[i].mech, tests[i].tls);
+
+        if (pat_event)
+            CU_ASSERT_SYSLOG(pat_event, 1);
+
+        if (pat_sessid)
+            CU_ASSERT_SYSLOG(pat_sessid, 1);
+
+        if (pat_traceid)
+            CU_ASSERT_SYSLOG(pat_traceid, 1);
+
+        if (pat_clienthost)
+            CU_ASSERT_SYSLOG(pat_clienthost, 1);
+
+        if (pat_username)
+            CU_ASSERT_SYSLOG(pat_username, 1);
+
+        if (pat_mech)
+            CU_ASSERT_SYSLOG(pat_mech, 1);
+
+        if (pat_tls)
+            CU_ASSERT_SYSLOG(pat_tls, 1);
+
+        CU_syslogMatchReset();
+    }
+}
+
 /* vim: set ft=c: */
