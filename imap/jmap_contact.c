@@ -6132,7 +6132,7 @@ static const jmap_property_t card_props[] = {
     },
     {
         "cyrusimap.org:href", 
-        JMAP_DEBUG_EXTENSION,
+        JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
     },
 
