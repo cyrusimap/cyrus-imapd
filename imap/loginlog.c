@@ -85,6 +85,25 @@ EXPORTED void loginlog_good(const char *clienthost,
     loginlog_good_finish(&lf);
 }
 
+EXPORTED void loginlog_good_imap(const char *clienthost,
+                                 const char *username,
+                                 const char *mech,
+                                 bool tls,
+                                 const char *magicplus,
+                                 bool nopassword)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    loginlog_good_begin(&lf, clienthost, username, mech, tls);
+
+    logfmt_push(&lf, "login.magic", magicplus);
+
+    if (nopassword)
+        logfmt_push(&lf, "login.nopassword", "1");
+
+    loginlog_good_finish(&lf);
+}
+
 EXPORTED void loginlog_anon(const char *clienthost,
                             const char *mech,
                             bool tls,
