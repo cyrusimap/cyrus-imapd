@@ -880,11 +880,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       prot_printf(sieved_out, "OK\r\n");
   }
 
-  xsyslog_ev(LOG_NOTICE, "login.good",
-             lf_s("r.clienthost", sieved_clienthost),
-             lf_s("u.username", username),
-             lf_s("login.mech", mech),
-             lf_d("login.tls", starttls_done ? 1 : 0));
+  loginlog_good(sieved_clienthost, username, mech, starttls_done);
 
   authenticated = 1;
 

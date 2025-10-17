@@ -788,11 +788,7 @@ static void cmd_authenticate(char *mech, char *resp)
     if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("r.clienthost", sync_clienthost),
-               lf_s("u.username", sync_userid),
-               lf_s("login.mech", mech),
-               lf_d("login.tls", sync_starttls_done ? 1 : 0));
+    loginlog_good(sync_clienthost, sync_userid, mech, sync_starttls_done);
 
     sasl_getprop(sync_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);
