@@ -1107,6 +1107,7 @@ EXPORTED int mboxlist_lookup_by_jmapid(const char *inboxid, const char *jmapid,
 
     if (entryptr) {
         *entryptr = entry;
+        if (!entry->jmapid) entry->jmapid = xstrdup(jmapid);
     }
     else mboxlist_entry_free(&entry);
 

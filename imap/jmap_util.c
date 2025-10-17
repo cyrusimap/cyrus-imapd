@@ -1347,6 +1347,38 @@ EXPORTED void jmap_set_threadid(struct conversations_state *cstate,
              prefix, conversation_id_encode(cstate, cid));
 }
 
+EXPORTED void jmap_set_addrbookid(struct conversations_state *cstate,
+                                  const mbentry_t *mbentry, char *abookid)
+{
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        strlcpy(abookid, mbentry->jmapid, JMAP_MAX_ADDRBOOKID_SIZE);
+        // replace MAILBOXID prefix with ADDRBOOK prefix
+        abookid[0] = JMAP_ADDRBOOKID_PREFIX;
+    }
+    else {
+        // last segment of mailbox name
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        const strarray_t *boxes = mbname_boxes(mbname);
+        const char *id = strarray_nth(boxes, boxes->count-1);
+        strlcpy(abookid, id, JMAP_MAX_ADDRBOOKID_SIZE);
+        mbname_free(&mbname);
+    }
+}
+
+EXPORTED void jmap_set_contactid(struct conversations_state *cstate,
+                                 const struct carddav_data *cdata,
+                                 struct buf *cid)
+{
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        buf_reset(cid);
+        buf_putc(cid, JMAP_CONTACTID_PREFIX);
+        MODSEQ_TO_JMAPID(cid, cdata->dav.createdmodseq);
+    }
+    else {
+        buf_setcstr(cid, cdata->vcard_uid);
+    }
+}
+
 EXPORTED char *jmap_role_to_specialuse(const char *role)
 {
     if (!role) return NULL;

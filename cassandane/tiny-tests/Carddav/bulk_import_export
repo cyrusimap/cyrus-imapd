@@ -8,7 +8,7 @@ sub test_bulk_import_export
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
 
-    my $uid1 = "3b678b69-ca41-461e-b2c7-f96b9fe48d68";
+    my $uid1 = "urn:uuid:3b678b69-ca41-461e-b2c7-f96b9fe48d68";
     my $uid2 = "addr1\@example.com";
     my $uid3 = "addr2\@example.com";
 
@@ -35,7 +35,7 @@ END:VCARD
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:eric
-UID:urn:uuid:$uid1
+UID:$uid1
 FN:Eric York
 END:VCARD
 EOF
@@ -64,7 +64,7 @@ EOF
 
     $xml = XMLin($res->{content});
     $self->assert_str_equals($uid2, $xml->{'D:response'}[0]{'D:propstat'}{'D:prop'}{'CS:uid'});
-    $self->assert_str_equals("urn:uuid:$uid1", $xml->{'D:response'}[1]{'D:propstat'}{'D:prop'}{'CS:uid'});
+    $self->assert_str_equals($uid1, $xml->{'D:response'}[1]{'D:propstat'}{'D:prop'}{'CS:uid'});
 
     xlog $self, "Export the vCards";
     $res = $CardDAV->{ua}->request('GET', $CardDAV->request_url($Id), {
