@@ -4075,12 +4075,10 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     txn->userid = httpd_userid = xstrdup(userid);
     httpd_userisanonymous = is_userid_anonymous(httpd_userid);
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", txn->conn->clienthost),
-               lf_s("u.username", httpd_userid),
-               lf_s("login.scheme", scheme->name),
-               lf_d("login.tls", txn->conn->tls_ctx ? 1 : 0));
+    loginlog_good_http(txn->conn->clienthost,
+                       httpd_userid,
+                       scheme->name,
+                       !!txn->conn->tls_ctx);
 
     /* Recreate telemetry log entry for request (w/ credentials redacted) */
     assert(!buf_len(&txn->buf));

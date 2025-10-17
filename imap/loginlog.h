@@ -49,6 +49,11 @@ extern void loginlog_good(const char *clienthost,
                           const char *mech,
                           bool tls);
 
+extern void loginlog_good_http(const char *clienthost,
+                               const char *username,
+                               const char *scheme,
+                               bool tls);
+
 extern void loginlog_good_imap(const char *clienthost,
                                const char *username,
                                const char *mech,

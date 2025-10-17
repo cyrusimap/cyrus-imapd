@@ -85,6 +85,20 @@ EXPORTED void loginlog_good(const char *clienthost,
     loginlog_good_finish(&lf);
 }
 
+EXPORTED void loginlog_good_http(const char *clienthost,
+                                 const char *username,
+                                 const char *scheme,
+                                 bool tls)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    loginlog_good_begin(&lf, clienthost, username, NULL, tls);
+
+    logfmt_push(&lf, "login.scheme", scheme);
+
+    loginlog_good_finish(&lf);
+}
+
 EXPORTED void loginlog_good_imap(const char *clienthost,
                                  const char *username,
                                  const char *mech,
