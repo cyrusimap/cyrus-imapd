@@ -36,7 +36,7 @@ TITLE:Shrimp Man
 REV:2008-04-24T19:52:43Z
 GEO:$lat;$lon
 TEL;TYPE=pref,foo,work:$tel
-EMAIL;TYPE=pref:$email1
+EMAIL;TYPE=home;TYPE=pref:$email1
 EMAIL:$email2
 TZ:-05:00
 TZ;VALUE=TEXT:$tzid
@@ -81,7 +81,7 @@ EOF
     $self->assert_matches(qr/LOGO;MEDIATYPE=image\/jpeg:$logo/, $newcard);
     $self->assert_matches(qr/GEO(;VALUE=$uri)?:geo:$lat,$lon/, $newcard);
     $self->assert_matches(qr/TEL;TYPE=foo$typesep$work;PREF=1:/, $newcard);
-    $self->assert_matches(qr/EMAIL;PREF=1:$email1/, $newcard);
+    $self->assert_matches(qr/EMAIL;TYPE=HOME;PREF=1:$email1/, $newcard);
     $self->assert_matches(qr/EMAIL:$email2/, $newcard);
     $self->assert_matches(qr/TZ;VALUE=$utcoff:-05(00)?/, $newcard);
     $self->assert_matches(qr/TZ(;VALUE=$text)?:$tzid/, $newcard);
@@ -92,7 +92,7 @@ EOF
     xlog $self, "PUT same vCard as v4 with some edits";
     $newcard =~ s|END:|SOUND;MEDIATYPE=audio/mp3:data:;base64,$sound\r\nEND:|;
     $newcard =~ s/:\+1/;VALUE=URI:tel:+1/;
-    $newcard =~ s/EMAIL;PREF=1:/EMAIL;PREF=2:/;
+    $newcard =~ s/;PREF=1:$email1/;PREF=2:$email1/;
     $newcard =~ s/:$email2/;PREF=1:$email2/;
     $newcard =~ s/-0500/-05/;
     $newcard =~ s/TZ;VALUE=TEXT:/TZ:/;
@@ -119,7 +119,7 @@ EOF
     $self->assert_matches(qr/GEO:$lat;$lon/, $newcard);
     $self->assert_matches(qr/TEL;TYPE=foo$typesep$work$typesep$pref(;PREF=1)?:$tel/,
                           $newcard);
-    $self->assert_matches(qr/EMAIL(;PREF=2)?:$email1/, $newcard);
+    $self->assert_matches(qr/EMAIL;TYPE=HOME(;PREF=2)?:$email1/, $newcard);
     $self->assert_matches(qr/EMAIL(;PREF=1)?;TYPE=$pref:$email2/, $newcard);
     $self->assert_matches(qr/TZ(;VALUE=$utcoff)?:-05(:)?00/, $newcard);
     $self->assert_matches(qr/TZ;VALUE=$text:$tzid/, $newcard);
