@@ -104,6 +104,21 @@ EXPORTED void loginlog_good_imap(const char *clienthost,
     loginlog_good_finish(&lf);
 }
 
+EXPORTED void loginlog_good_pop(const char *clienthost,
+                                const char *username,
+                                const char *mech,
+                                bool tls,
+                                const char *subfolder)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    loginlog_good_begin(&lf, clienthost, username, mech, tls);
+
+    logfmt_push(&lf, "pop.subfolder", subfolder);
+
+    loginlog_good_finish(&lf);
+}
+
 EXPORTED void loginlog_anon(const char *clienthost,
                             const char *mech,
                             bool tls,
