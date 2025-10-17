@@ -76,6 +76,7 @@
 
 #include "auditlog.h"
 #include "imapd.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "mboxevent.h"
 #include "version.h"
@@ -1244,9 +1245,11 @@ static void cmd_apop(char *response)
     /* failed authentication */
     if (sasl_result != SASL_OK)
     {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("error", sasl_errdetail(popd_saslconn)));
+        /* XXX username is embedded in `response`, if we want to log it we
+         * XXX could parse it out, or it might be available from sasl_getprop
+         */
+        loginlog_bad(popd_clienthost, NULL, NULL, NULL,
+                     sasl_errdetail(popd_saslconn));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -1281,12 +1284,8 @@ static void cmd_apop(char *response)
     }
     popd_userid = xstrdup((const char *) canon_user);
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", popd_clienthost),
-               lf_s("u.username", popd_userid),
-               lf_s("pop.folder", popd_subfolder ? popd_subfolder : ""),
-               lf_d("login.tls", popd_starttls_done ? 1 : 0));
+    loginlog_good_pop(popd_clienthost, popd_userid, NULL, popd_starttls_done,
+                      popd_subfolder);
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1314,18 +1313,18 @@ static void cmd_user(char *user)
 
     if (popd_canon_user(popd_saslconn, NULL, user, 0,
                         SASL_CU_AUTHID | SASL_CU_AUTHZID,
-                        NULL, userbuf, sizeof(userbuf), &userlen) ||
-             /* '.' isn't allowed if '.' is the hierarchy separator */
-             (popd_namespace.hier_sep == '.' && (dot = strchr(userbuf, '.')) &&
-              !(config_virtdomains &&  /* allow '.' in dom.ain */
-                (domain = strchr(userbuf, '@')) && (dot > domain))) ||
-             strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER) {
+                        NULL, userbuf, sizeof(userbuf), &userlen)
+        ||
+        /* '.' isn't allowed if '.' is the hierarchy separator */
+        (popd_namespace.hier_sep == '.'
+         && (dot = strchr(userbuf, '.'))
+         && !(config_virtdomains  /* allow '.' in dom.ain */
+              && (domain = strchr(userbuf, '@')) && (dot > domain)))
+        ||
+        strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER)
+    {
         prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", beautify_string(user)),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", "invalid user"));
+        loginlog_bad(popd_clienthost, user, "plaintext", NULL, "invalid user");
     }
     else {
         popd_userid = xstrdup(userbuf);
@@ -1345,32 +1344,25 @@ static void cmd_pass(char *pass)
 
     if (!strcmp(popd_userid, "anonymous")) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
-            pass = beautify_string(pass);
             if (strlen(pass) > 500) pass[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", popd_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.password", pass));
+            loginlog_anon(popd_clienthost, NULL, popd_starttls_done, pass);
         }
         else {
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", popd_clienthost),
-                       lf_s("error", "anonymous login refused"));
+            loginlog_bad(popd_clienthost, popd_userid, NULL, NULL,
+                         "anonymous login refused");
             prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
             return;
         }
     }
-    else if (sasl_checkpass(popd_saslconn,
-                            popd_userid,
-                            strlen(popd_userid),
-                            pass,
-                            strlen(pass))!=SASL_OK) {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", popd_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", sasl_errdetail(popd_saslconn)));
+    else if (SASL_OK != sasl_checkpass(popd_saslconn,
+                                       popd_userid,
+                                       strlen(popd_userid),
+                                       pass,
+                                       strlen(pass)))
+    {
+        loginlog_bad(popd_clienthost, popd_userid, "plaintext", NULL,
+                     sasl_errdetail(popd_saslconn));
+
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
@@ -1406,13 +1398,8 @@ static void cmd_pass(char *pass)
         }
         popd_userid = xstrdup((const char *) val);
 
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("session_id", session_id()),
-                   lf_s("r.clienthost", popd_clienthost),
-                   lf_s("u.username", popd_userid),
-                   lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
-                   lf_s("login.mech", "plaintext"),
-                   lf_d("login.tls", popd_starttls_done ? 1 : 0));
+        loginlog_good_pop(popd_clienthost, popd_userid, "plaintext",
+                          popd_starttls_done, popd_subfolder);
 
         if ((!popd_starttls_done) &&
             (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
@@ -1549,7 +1536,7 @@ static void cmd_auth(char *arg)
 
     if (r) {
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
+        const char *userid = NULL;
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -1565,21 +1552,13 @@ static void cmd_auth(char *arg)
             break;
         default:
             /* failed authentication */
-            if (authtype) {
-                if (sasl_result != SASL_NOUSER)
-                    sasl_getprop(popd_saslconn, SASL_USERNAME,
-                                 (const void **) &userid);
-
-                xsyslog_ev(LOG_NOTICE, "login.bad",
-                           lf_s("r.clienthost", popd_clienthost),
-                           lf_s("u.username", userid),
-                           lf_s("login.mech", authtype),
-                           lf_s("error", sasl_errstring(sasl_result, NULL, NULL)));
-            } else {
-                xsyslog_ev(LOG_NOTICE, "login.bad",
-                           lf_s("r.clienthost", popd_clienthost),
-                           lf_s("login.mech", authtype));
+            if (sasl_result != SASL_NOUSER) {
+                sasl_getprop(popd_saslconn, SASL_USERNAME,
+                             (const void **) &userid);
             }
+
+            loginlog_bad(popd_clienthost, userid, authtype, NULL,
+                         sasl_errstring(sasl_result, NULL, NULL));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
@@ -1635,13 +1614,8 @@ static void cmd_auth(char *arg)
         popd_userid = xstrdup(canon_user);
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", popd_clienthost),
-               lf_s("u.username", popd_userid),
-               lf_s("pop.subfolder", popd_subfolder ? popd_subfolder : ""),
-               lf_s("login.mech", authtype),
-               lf_d("login.tls", popd_starttls_done ? 1 : 0));
+    loginlog_good_pop(popd_clienthost, popd_userid, authtype, popd_starttls_done,
+                      popd_subfolder);
 
     if (!openinbox()) {
         sasl_getprop(popd_saslconn, SASL_SSF, &val);

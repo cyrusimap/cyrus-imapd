@@ -83,6 +83,7 @@
 #include "hash.h"
 #include "imparse.h"
 #include "imap_proxy.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -725,7 +726,7 @@ static void cmd_authenticate(char *mech, char *resp)
 
     if (r) {
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
+        const char *userid = NULL;
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -746,11 +747,8 @@ static void cmd_authenticate(char *mech, char *resp)
             if (r != SASL_NOUSER)
                 sasl_getprop(sync_saslconn, SASL_USERNAME, (const void **) &userid);
 
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", sync_clienthost),
-                       lf_s("login.mech", mech),
-                       lf_s("u.username", userid),
-                       lf_s("error", sasl_errdetail(sync_saslconn)));
+            loginlog_bad(sync_clienthost, userid, mech, NULL,
+                         sasl_errdetail(sync_saslconn));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
@@ -790,11 +788,7 @@ static void cmd_authenticate(char *mech, char *resp)
     if (r) fatal("unable to register process", EX_IOERR);
     proc_settitle(config_ident, sync_clienthost, sync_userid, NULL, NULL);
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("r.clienthost", sync_clienthost),
-               lf_s("u.username", sync_userid),
-               lf_s("login.mech", mech),
-               lf_d("login.tls", sync_starttls_done ? 1 : 0));
+    loginlog_good(sync_clienthost, sync_userid, mech, sync_starttls_done);
 
     sasl_getprop(sync_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);

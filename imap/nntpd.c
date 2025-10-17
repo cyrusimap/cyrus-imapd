@@ -85,6 +85,7 @@
 #include "hash.h"
 #include "idle.h"
 #include "index.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -1959,11 +1960,7 @@ static void cmd_authinfo_user(char *user)
 
     if (!(p = canonify_userid(user, NULL, NULL))) {
         prot_printf(nntp_out, "481 Invalid user\r\n");
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", nntp_clienthost),
-                   lf_s("u.username", beautify_string(user)),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", "invalid user"));
+        loginlog_bad(nntp_clienthost, user, "plaintext", NULL, "invalid user");
     }
     else {
         nntp_userid = xstrdup(p);
@@ -1998,20 +1995,12 @@ static void cmd_authinfo_pass(char *pass)
 
     if (!strcmp(nntp_userid, "anonymous")) {
         if (allowanonymous) {
-            pass = beautify_string(pass);
-            if (strlen(pass) > 500) pass[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", nntp_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("login.password", pass));
+            loginlog_anon(nntp_clienthost, "plaintext",
+                          nntp_starttls_done, pass);
         }
         else {
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", nntp_clienthost),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("error", "anonymous login refused"));
+            loginlog_bad(nntp_clienthost, nntp_userid, "plaintext", NULL,
+                         "anonymous login refused");
             prot_printf(nntp_out, "481 Invalid login\r\n");
             return;
         }
@@ -2021,11 +2010,8 @@ static void cmd_authinfo_pass(char *pass)
                             strlen(nntp_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", nntp_clienthost),
-                   lf_s("u.username", nntp_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", sasl_errdetail(nntp_saslconn)));
+        loginlog_bad(nntp_clienthost, nntp_userid, "plaintext", NULL,
+                     sasl_errdetail(nntp_saslconn));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
@@ -2037,11 +2023,8 @@ static void cmd_authinfo_pass(char *pass)
         return;
     }
     else {
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("r.clienthost", nntp_clienthost),
-                   lf_s("u.username", nntp_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_d("login.tls", nntp_starttls_done ? 1 : 0));
+        loginlog_good(nntp_clienthost, nntp_userid, "plaintext",
+                      nntp_starttls_done);
 
         prot_printf(nntp_out, "281 User logged in\r\n");
 
@@ -2133,7 +2116,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     if (r) {
         int code;
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
+        const char *userid = NULL;
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -2167,11 +2150,8 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
             if (sasl_result != SASL_NOUSER)
                 sasl_getprop(nntp_saslconn, SASL_USERNAME, (const void **) &userid);
 
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", nntp_clienthost),
-                       lf_s("u.username", userid),
-                       lf_s("login.mech", mech),
-                       lf_s("error", sasl_errdetail(nntp_saslconn)));
+            loginlog_bad(nntp_clienthost, userid, mech, NULL,
+                         sasl_errdetail(nntp_saslconn));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
@@ -2258,11 +2238,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
         return;
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("r.clienthost", nntp_clienthost),
-               lf_s("u.username", nntp_userid),
-               lf_s("login.mech", mech),
-               lf_d("login.tls", nntp_starttls_done ? 1 : 0));
+    loginlog_good(nntp_clienthost, nntp_userid, mech, nntp_starttls_done);
 
     if (success_data) {
         prot_printf(nntp_out, "283 %s\r\n", success_data);
