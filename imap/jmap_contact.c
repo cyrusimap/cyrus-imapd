@@ -7936,6 +7936,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     struct jmap_req *req = crock->req;
     struct index_record record;
     json_t *obj = NULL;
+    char *href = NULL;
     int r = 0;
 
     mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -7954,6 +7955,16 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
     if (r) goto done;
+
+    /* Calculate href if wanted.
+     *
+     * We need to do here since we need it for a cached response
+     * and because jmap_card_from_vcard() will lookup group card members
+     * and overwrite cdata.
+     */
+    if (jmap_wantprop(crock->get->props, "cyrusimap.org:href")) {
+        href = jmap_xhref(mbentry->name, cdata->dav.resource);
+    }
 
     if (!crock->args.disable_uri_as_blobid &&
         cdata->jmapversion == JMAPCACHE_CARDVERSION) {
@@ -7995,41 +8006,17 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     jmap_filterprops(obj, crock->get->props);
 
-    if (jmap_wantprop(crock->get->props, "cyrusimap.org:href")) {
-        char *xhref = jmap_xhref(mbentry->name, cdata->dav.resource);
-        json_object_set_new(obj, "cyrusimap.org:href", json_string(xhref));
-        free(xhref);
+    if (href) {
+        json_object_set_new(obj, "cyrusimap.org:href", json_string(href));
     }
     if (jmap_wantprop(crock->get->props, "cyrusimap.org:blobId")) {
-        json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
-        const char *uniqueid = NULL;
 
-        /* Get uniqueid of calendar mailbox */
-        if (!crock->mailbox ||
-            strcmp(mailbox_uniqueid(crock->mailbox), cdata->dav.mailbox)) {
-            if (!crock->mbentry ||
-                strcmp(crock->mbentry->uniqueid, cdata->dav.mailbox)) {
-                mboxlist_entry_free(&crock->mbentry);
-                crock->mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
-            }
-            if (crock->mbentry &&
-                jmap_hasrights_mbentry(req,
-                                       crock->mbentry, JACL_READITEMS)) {
-                uniqueid = crock->mbentry->uniqueid;
-            }
-        }
-        else {
-            uniqueid = mailbox_uniqueid(crock->mailbox);
-        }
-
-        if (uniqueid &&
-            jmap_encode_rawdata_blobid('V', uniqueid, record.uid,
-                                       NULL, NULL, NULL, NULL, &blobid)) {
-            jblobid = json_string(buf_cstring(&blobid));
-        }
+        jmap_encode_rawdata_blobid('V', mbentry->uniqueid, record.uid,
+                                   NULL, NULL, NULL, NULL, &blobid);
+        json_object_set_new(obj, "cyrusimap.org:blobId",
+                            json_string(buf_cstring(&blobid)));
         buf_free(&blobid);
-        json_object_set_new(obj, "cyrusimap.org:blobId", jblobid);
     }
     if (jmap_wantprop(crock->get->props, "cyrusimap.org:size")) {
         json_object_set_new(obj, "cyrusimap.org:size",
@@ -8048,6 +8035,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
  done:
     mboxlist_entry_free(&mbentry);
+    free(href);
 
     return 0;
 }
