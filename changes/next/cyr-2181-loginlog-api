@@ -1,0 +1,23 @@
+Description:
+
+Login logs have been changed to logfmt
+
+
+Documentation:
+
+https://metacpan.org/pod/Log::Fmt#The-logfmt-text-format
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
