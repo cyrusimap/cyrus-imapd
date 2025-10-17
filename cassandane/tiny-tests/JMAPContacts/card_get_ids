@@ -208,11 +208,13 @@ sub test_card_get_ids
     $res = $jmap->CallMethods([
         ['ContactCard/get', {
             ids => [ $id1, $id3, $id5],
-            properties => [ 'id', 'name' ]
         }, 'R1']
     ]);
 
     $self->assert_str_equals($id1, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals($id3, $res->[0][1]{list}[1]{id});
     $self->assert_str_equals($id5, $res->[0][1]{list}[2]{id});
+    $self->assert_not_null($res->[0][1]{list}[0]{'cyrusimap.org:href'});
+    $self->assert_not_null($res->[0][1]{list}[1]{'cyrusimap.org:href'});
+    $self->assert_not_null($res->[0][1]{list}[2]{'cyrusimap.org:href'});
 }
