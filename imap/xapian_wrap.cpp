@@ -2018,8 +2018,12 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
                                                       int convert_flags)
 {
     charset_t utf8 = charset_lookupname("utf-8");
-    char *mystr = charset_convert(str, utf8, convert_flags);
+    struct buf buf = BUF_INITIALIZER;
+    buf_init_ro_cstr(&buf, str);
+    buf_trim(&buf);
+    char *mystr = charset_convert(buf_cstring(&buf), utf8, convert_flags);
     charset_free(&utf8);
+    buf_free(&buf);
     if (!mystr) return NULL;
 
     static Xapian::Query *q = NULL;
