@@ -15,4 +15,5 @@ sub test_addressbook_get_default
     my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
     $self->assert_str_equals("/dav/addressbooks/user/cassandane/Default",
                              $res->[0][1]{list}[0]{'cyrusimap.org:href'});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isDefault});
 }
