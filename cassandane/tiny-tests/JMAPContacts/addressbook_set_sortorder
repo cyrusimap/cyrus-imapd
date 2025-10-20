@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_sortorder
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create addressbook
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => {
+                '1' => {
+                    name => 'A',
+                    sortOrder => 5
+                }
+            },
+        }, 'R1'],
+        ['AddressBook/get', {
+            ids => ['#1'],
+            properties => ['sortOrder']
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{created}{1});
+    $self->assert_num_equals(5, $res->[1][1]{list}[0]{sortOrder});
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    # Attempt to update sortOrder with illegal values
+    $res = $jmap->CallMethods([
+        ['AddressBook/set',
+            { update => {
+                $id => {
+                    sortOrder => -1
+                }
+            }
+        }, "R1"],
+        ['AddressBook/set',
+            { update => {
+                $id => {
+                    sortOrder => 2147483647
+                }
+            }
+        }, "R2"],
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+    $self->assert_str_equals('sortOrder',
+                             $res->[0][1]{notUpdated}{$id}{properties}[0]);
+    $self->assert_not_null($res->[1][1]{notUpdated}{$id});
+    $self->assert_str_equals('sortOrder',
+                             $res->[1][1]{notUpdated}{$id}{properties}[0]);
+
+    # Update sortOrder
+    $res = $jmap->CallMethods([
+        ['AddressBook/set',
+            { update => {
+                $id => {
+                    sortOrder => 10
+                }
+            }
+        }, "R1"],
+        ['AddressBook/get', {
+            ids => [$id],
+            properties => ['sortOrder']
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_num_equals(10, $res->[1][1]{list}[0]{sortOrder});
+}

@@ -37,6 +37,7 @@ sub test_addressbook_get
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isDefault});
 
     xlog $self, "get existing addressbook with select properties";
     $res = $jmap->CallMethods([['AddressBook/get', { ids => [$id], properties => ["name"] }, "R1"]]);

@@ -5088,6 +5088,43 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
+    if (jmap_wantprop(rock->get->props, "description")) {
+        buf_reset(&attrib);
+        static const char *description_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">addressbook-description";
+        r = annotatemore_lookupmask_mbe(mbentry, description_annot,
+                                        req->userid, &attrib);
+        json_object_set_new(obj, "description", buf_len(&attrib) ?
+                            json_string(buf_cstring(&attrib)) : json_null());
+        buf_free(&attrib);
+    }
+
+    if (jmap_wantprop(rock->get->props, "sortOrder")) {
+        buf_reset(&attrib);
+        static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
+        int sort_order = 0;
+        r = annotatemore_lookupmask_mbe(mbentry, sortorder_annot,
+                                        req->userid, &attrib);
+        if (buf_len(&attrib)) {
+            uint64_t t = str2uint64(buf_cstring(&attrib));
+            if (t < INT_MAX) {
+                sort_order = (int) t;
+            } else {
+                syslog(LOG_ERR, "%s: bogus sortorder annotation value for %s",
+                       mbentry->name, httpd_userid);
+            }
+        }
+        json_object_set_new(obj, "sortOrder", json_integer(sort_order));
+        buf_free(&attrib);
+    }
+
+    if (jmap_wantprop(rock->get->props, "isDefault")) {
+        char *addrbook = mboxname_abook(req->accountid, DEFAULT_ADDRBOOK);
+        json_object_set_new(obj, "isDefault",
+                            json_boolean(!strcmp(addrbook, mbentry->name)));
+        free(addrbook);
+    }
+
     if (jmap_wantprop(rock->get->props, "isSubscribed")) {
         int is_subscribed;
         if (mboxname_userownsmailbox(req->userid, mbentry->name)) {
@@ -5130,6 +5167,21 @@ static const jmap_property_t addressbook_props[] = {
         0
     },
     {
+        "description",
+        NULL,
+        0
+    },
+    {
+        "sortOrder",
+        NULL,
+        0
+    },
+    {
+        "isDefault",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
         "isSubscribed",
         NULL,
         0
@@ -5148,7 +5200,7 @@ static const jmap_property_t addressbook_props[] = {
     /* FM extensions (do ALL of these get through to Cyrus?) */
     {
         "cyrusimap.org:href",
-        JMAP_DEBUG_EXTENSION,
+        JMAP_CONTACTS_EXTENSION,
         JMAP_PROP_SERVER_SET
     },
 
@@ -5311,6 +5363,8 @@ static int jmap_addressbook_changes(struct jmap_req *req)
 
 struct setaddressbook_props {
     const char *name;
+    const char *description;
+    int sortOrder;
     int isSubscribed;
     struct {
         json_t *With;
@@ -5347,6 +5401,30 @@ static void setaddressbook_readprops(jmap_req_t *req,
     }
     else if (is_create || JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "name");
+    }
+
+    /* description */
+    jprop = json_object_get(arg, "description");
+    if (json_is_string(jprop)) {
+        props->description = json_string_value(jprop);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "description");
+    }
+
+    /* sortOrder */
+    jprop = json_object_get(arg, "sortOrder");
+    if (json_is_integer(jprop)) {
+        json_int_t t = json_integer_value(jprop);
+        if (t < 0 || t >= INT_MAX) {
+            jmap_parser_invalid(parser, "sortOrder");
+        }
+        else {
+            props->sortOrder = t;
+        }
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "sortOrder");
     }
 
     /* isSubscribed */
@@ -5453,6 +5531,32 @@ static int setaddressbook_writeprops(jmap_req_t *req,
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     displayname_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+
+    /* description */
+    if (!r && props->description) {
+        buf_setcstr(&val, props->description);
+        static const char *description_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">addressbook-description";
+        r = annotate_state_writemask(astate, description_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                   description_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+
+    /* sortOrder */
+    if (!r && props->sortOrder >= 0) {
+        buf_reset(&val);
+        buf_printf(&val, "%d", props->sortOrder);
+        static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
+        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    sortorder_annot, error_message(r));
         }
         buf_reset(&val);
     }
