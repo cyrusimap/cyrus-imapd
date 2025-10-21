@@ -155,7 +155,7 @@ sub test_card_set_update
     $card = $res->{content};
     $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
-    $self->assert_matches(qr/UID:$id/, $card);
+    $self->assert_matches(qr/UID(;VALUE=TEXT)?:$id/, $card);
     $self->assert_matches(qr/NICKNAME;PROP-ID=foo:Doey/, $card);
     $self->assert_matches(qr/CATEGORIES:foo/, $card);
     $self->assert_matches(qr/REV:/, $card);
