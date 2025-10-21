@@ -2012,6 +2012,170 @@ static Xapian::Query *xapian_query_new_match_word_break(const xapian_db_t *db,
     return q;
 }
 
+/**
+ * Attempt to query the input term 'str' as a number.
+ *
+ * We currently do not normalize numbers before indexing, so
+ * depending on the locale of the text the same number might
+ * be indexed differently. For decimals, either the '.' or ','
+ * characters might separate the whole number part from the
+ * fraction. Similarly, thousands in the whole number might
+ * be separated with either of these characters.
+ *
+ * This function attempts to parse the term 'str' as a number,
+ * optionally ending with a wildcard character. If it determines
+ * the input to be a number, then it returns a query that matches
+ * all typical representations of that number. Otherwise it
+ * returns NULL.
+ */
+static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
+                                                   const char *str)
+{
+    std::string prefix(get_term_prefix(partnum));
+    std::string_view s(str);
+
+    if (s.empty() || !isdigit(s.front()))
+        return NULL;
+
+    // Remove trailing wildcard character, if any.
+    bool is_wildcard = false;
+    if (s.back() == '*') {
+        is_wildcard = true;
+        s.remove_suffix(1);
+    }
+
+    // Split number in whole number and fractional part.
+    // Determine thousands separator character, if any.
+    std::string_view num = s;
+    std::string_view frac; // starts with decimal point
+    char thd_sep = 0;      // thousands separator
+    size_t i = s.find_last_of(".,");
+    if (i != std::string_view::npos) {
+        size_t j = s.substr(0, i).find_last_of(".,");
+        if (j != std::string_view::npos) {
+            if (s[i] != s[j]) {
+                num = s.substr(0, i);
+                frac = s.substr(i);
+            }
+            thd_sep = s[j];
+        }
+        else {
+            num = s.substr(0, i);
+            frac = s.substr(i);
+        }
+    }
+
+    // Validate fractional part.
+    if (!frac.empty()) {
+        // Fractional part may just be the wildcard.
+        if (frac.size() < 2 && !is_wildcard) {
+            return NULL;
+        }
+        // Or it must be one or more digits.
+        for (size_t i = 1; i < frac.size(); ++i) {
+            if (!isdigit(frac[i])) return NULL;
+        }
+    }
+
+    // Validate whole number part.
+    if (thd_sep) {
+        // First thousands separator must be preceeded
+        // by at least one and at most three digits.
+        size_t first = num.find(thd_sep);
+        if (first < 1 || first > 3) {
+            return NULL;
+        }
+        for (size_t i = 0; i < first; ++i) {
+            if (!isdigit(num[i])) return NULL;
+        }
+        // Last thousands separator must be followed
+        // by three digits, or less than three digits
+        // and the wildcard.
+        size_t last = num.rfind(thd_sep);
+        if (num.size() - last != 4
+            || (num.size() - last < 4 && (!is_wildcard || !frac.empty())))
+        {
+            return NULL;
+        }
+        for (size_t i = last + 1; i < num.size(); ++i) {
+            if (!isdigit(num[i])) return NULL;
+        }
+        // All quadruplets between the first and the last
+        // thousands separator must start with the separator,
+        // followed by three digits.
+        for (size_t i = first; i < last; i += 4) {
+            if (last - i < 4 || num[i] != thd_sep) {
+                return NULL;
+            }
+            for (size_t j = i + 1; j < i + 4; ++j) {
+                if (!isdigit(num[j])) return NULL;
+            }
+        }
+    }
+    else {
+        // No thousands separator detected, the whole number must
+        // not be empty and must only contain digits.
+        if (num.empty()) {
+            return NULL;
+        }
+        for (size_t i = 0; i < num.size(); ++i) {
+            if (!isdigit(num[i])) return NULL;
+        }
+    }
+
+    // The input string is a number, now build the query terms.
+    std::vector<std::string> terms;
+    std::string barenum; // whole number without thousand separator
+    for (size_t i = 0; i < num.size(); i++) {
+        if (isdigit(num[i])) barenum.push_back(num[i]);
+    }
+
+    // Format number without thousands separator.
+    std::string term = barenum;
+    if (frac.size()) {
+        size_t n = term.size();
+        term.append(frac);
+        term[n] = '.';
+        terms.push_back(term);
+        term[n] = ',';
+        terms.push_back(term);
+    }
+    else {
+        terms.push_back(term);
+    }
+
+    // Format number with thousands separator.
+    if (barenum.size() > 3) {
+        for (char sep : { '.', ',' }) {
+            term.clear();
+            size_t count = 0;
+            for (size_t i = barenum.size(); i > 0; --i) {
+                if (count == 3) {
+                    term.push_back(sep);
+                    count = 0;
+                }
+                term.push_back(barenum[i - 1]);
+                count++;
+            }
+            std::reverse(term.begin(), term.end());
+            if (frac.size()) {
+                size_t n = term.size();
+                term.append(frac);
+                term[n] = sep == '.' ? ',' : '.';
+            }
+            terms.push_back(term);
+        }
+    }
+
+    // Build query from terms.
+    Xapian::Query q;
+    for (size_t i = 0; i < terms.size(); i++) {
+        q |= is_wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, terms[i])
+                         : Xapian::Query(terms[i]);
+    }
+    return new Xapian::Query(q);
+}
+
 static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
                                                       enum search_part partnum,
                                                       const char *str,
@@ -2026,7 +2190,7 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
     buf_free(&buf);
     if (!mystr) return NULL;
 
-    static Xapian::Query *q = NULL;
+    static Xapian::Query *q = NULL; // FIXME static????
 
     try {
         // Handle special value search parts.
@@ -2055,6 +2219,13 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
             q = query_new_messageid(db, partnum, mystr);
         }
         else {
+            if (isdigit(mystr[0])) {
+                // Try parsing the query string as a number.
+                q = xapian_query_new_numbermatch(partnum, mystr);
+                if (q) goto done;
+                // Fall through handling it as arbitrary text.
+            }
+
             // Match unstructured search parts
             int need_word_break = 0;
             for (const unsigned char *p = (const unsigned char *)mystr; *p; p++) {
@@ -2085,6 +2256,7 @@ static Xapian::Query *xapian_query_new_match_internal(const xapian_db_t *db,
                          err.get_description().c_str());
     }
 
+done:
     free(mystr);
     return q;
 }
