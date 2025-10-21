@@ -70,7 +70,7 @@ EOF
                                      'Accept' => 'text/vcard; version=4.0');
     my $newcard = $response->{content};
     $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr/UID:urn:uuid:$uid/, $newcard);
+    $self->assert_matches(qr/UID(;VALUE=TEXT)?:$uid/, $newcard);
     $self->assert_matches(qr/PHOTO;TYPE=$video:data:image\/gif;base64,$photo/,
                           $newcard);
     $self->assert_matches(qr/LOGO;MEDIATYPE=image\/jpeg:$logo/, $newcard);
