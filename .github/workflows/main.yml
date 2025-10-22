@@ -43,9 +43,14 @@ jobs:
           - compiler: "--gcc"
             desc: "Non-UTC timezone"
             pretest: "ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime && sudo dpkg-reconfigure --frontend noninteractive tzdata"
+          - compiler: "--gcc"
+            desc: "gcc -Og debian trixie"
+            cflags: "-Og"
+            cxxflags: "-Og"
+            image: "ghcr.io/cyrusimap/cyrus-docker:trixie"
     runs-on: ubuntu-latest
     container:
-        image: ghcr.io/cyrusimap/cyrus-docker:bookworm
+        image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
         options: --init
     steps:
     - uses: actions/checkout@v4
