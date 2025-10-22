@@ -275,7 +275,7 @@ static void test_reschedule_event_bad(void)
     volatile unsigned i;
 
     for (i = 0; i < n_tests; i++) {
-        struct timeval now = TV_INIT(time(NULL), 0);
+        volatile struct timeval now = TV_INIT(time(NULL), 0);
         struct timeval mark = TV_INIT(tests[i].mark, 0);
         struct event *event;
 
