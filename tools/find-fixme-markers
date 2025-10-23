@@ -19,6 +19,13 @@ if (!$getopt_ok || $help) {
   die "usage: tab-tool [--really] PATH...";
 }
 
+my @skipmatch;
+if (open my $fh, '<', '.fixme_ignore') {
+  @skipmatch = <$fh>;
+  chomp for @skipmatch;
+  close $fh;
+}
+
 my @errors = scan([@ARGV]);
 
 say for @errors;
@@ -80,6 +87,10 @@ sub scan_file {
 
 sub file_is_interesting {
   (local $_) = @_;
+
+  for my $expr (@skipmatch) {
+    return if m{\A$expr\z};
+  }
 
   return if -l $_;
 
