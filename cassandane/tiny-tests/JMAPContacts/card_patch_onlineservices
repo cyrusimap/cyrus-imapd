@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+use experimental 'signatures';
+
+sub test_card_patch_onlineservices
+    :min_version_3_9 :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $service = $self->{instance}->get_service("http");
+    my $carddav = Net::CardDAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my sub get_vcard ($uid) {
+        my $href = "Default/$uid.vcf";
+        my $res = $carddav->Request('GET', $href);
+        return $res->{content};
+    }
+
+    xlog $self, "create contact";
+    my $name = 'Mr. John Q. Public, Esq.';
+    my $uid = '8ec9d0b4-b025-11f0-b838-d52d526566fe';
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $uid,
+                    name => { full => $name },
+                    onlineServices => { foo => {
+                        service => 'My Page',
+                        user    => 'https://example.com/userpage',
+                    } },
+                }
+            }
+        }, 'R1']
+    ]);
+
+    my $id = $res->[0][1]{created}{1}{id};
+
+    my sub update_card ($patch) {
+        my $res = $jmap->CallMethods([
+            [ 'ContactCard/set', { update => { $id => $patch } }, 'set' ],
+        ]);
+
+        die unless $res->[0][0] eq 'ContactCard/set';
+        return $res->[0][1]{updated}{$id};
+    }
+
+    # Our initial creation of the card should not have inserted this.
+    $self->assert_does_not_match(qr/^X;/m, get_vcard($uid));
+
+    update_card({
+        'onlineServices/xyzzy' => {
+            service => 'Other Page',
+            user    => 'https://example.com/otherpage',
+        },
+    });
+
+    # ...and if it wasn't there before, it certainly shouldn't be there now.
+    $self->assert_does_not_match(qr/^X;/m, get_vcard($uid));
+}
