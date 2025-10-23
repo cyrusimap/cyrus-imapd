@@ -38,6 +38,9 @@ EOF
         '1.234,5*'  => 1,
         '1,234*'   => 1,
         '1.234*'   => 1,
+        ' 1234.56'  => 1,
+        ' 1234,56 '  => 1,
+        '1234,56 '  => 1,
         '1,234'    => 0,
         '1.234'    => 0,
         '1,234,*'  => 0,
@@ -55,8 +58,27 @@ EOF
                     body => $term,
                 },
             }, 'R1'],
+            [ 'SearchSnippet/get', {
+                filter => {
+                    body => $term,
+                },
+                '#emailIds' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/ids',
+                },
+            }, 'R2'],
         ]);
         my $wantMatch = $testCases{$term};
         $self->assert_num_equals($wantMatch, scalar @{$res->[0][1]{ids}});
+
+        if ($wantMatch) {
+            $self->assert_str_equals(
+                'The total amount is $<mark>1,234.56</mark> USD.',
+                $res->[1][1]{list}[0]{preview});
+        } else {
+            $self->assert_null($res->[1][1]{list}[0]{preview});
+        }
+
     }
 }

@@ -2544,6 +2544,7 @@ struct xapian_snipgen
     Xapian::Database *memdb;
     std::vector<std::string> *loose_terms;
     std::vector<std::string> *queries;
+    std::vector<Xapian::Query> *numbers;
     char *cyrusid;
     char doctype;
     struct buf *buf;
@@ -2575,6 +2576,7 @@ EXPORTED void xapian_snipgen_free(xapian_snipgen_t *snipgen)
     delete snipgen->default_stemmer;
     delete snipgen->loose_terms;
     delete snipgen->queries;
+    delete snipgen->numbers;
     delete snipgen->memdb;
     free(snipgen->cyrusid);
     buf_destroy(snipgen->buf);
@@ -2627,17 +2629,35 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
         }
     }
 
+    if (snipgen->numbers) {
+        for(size_t i = 0; i < snipgen->numbers->size(); ++i) {
+            q |= (*snipgen->numbers)[i];
+        }
+    }
+
     return q;
 }
 
 EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
                                       const char *match)
 {
-    size_t len = strlen(match);
+    struct buf buf = BUF_INITIALIZER;
+    buf_init_ro_cstr(&buf, match);
+    buf_trim(&buf);
+    match = buf_cstring(&buf);
+    size_t len = buf_len(&buf);
     bool is_query = len > 1 && ((match[0] == '"' && match[len-1] == '"') ||
                                 (strchr(match, '*') != NULL));
 
-    if (is_query) {
+    Xapian::Query *q = xapian_query_new_numbermatch(SEARCH_PART_BODY, match);
+    if (q) {
+        if (!snipgen->numbers) {
+            snipgen->numbers = new std::vector<Xapian::Query>;
+        }
+        snipgen->numbers->push_back(*q);
+        delete q;
+    }
+    else if (is_query) {
         if (!snipgen->queries) {
             snipgen->queries = new std::vector<std::string>;
         }
@@ -2649,6 +2669,7 @@ EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
         snipgen->loose_terms->push_back(match);
     }
 
+    buf_free(&buf);
     return 0;
 }
 
@@ -2710,7 +2731,7 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
                                      const struct buf *part)
 {
     // Ignore empty queries.
-    if (!snipgen->loose_terms && !snipgen->queries) return 0;
+    if (!snipgen->loose_terms && !snipgen->queries && !snipgen->numbers) return 0;
 
     // Don't exceed allowed snippet length.
     if (buf_len(snipgen->buf) >= snipgen->max_len) return 0;
@@ -2764,6 +2785,9 @@ EXPORTED int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 
     delete snipgen->queries;
     snipgen->queries = NULL;
+
+    delete snipgen->numbers;
+    snipgen->numbers = NULL;
 
     free(snipgen->cyrusid);
     snipgen->cyrusid = NULL;
