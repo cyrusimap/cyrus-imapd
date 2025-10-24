@@ -118,7 +118,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "xstats.h"
 #include "xunlink.h"
 
 
@@ -911,8 +910,6 @@ static int _map_local_record(const struct mailbox *mailbox, const char *fname, s
 
 EXPORTED int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf)
 {
-    xstats_inc(MESSAGE_MAP);
-
     const char *fname = mailbox_record_fname(mailbox, record);
     int r = _map_local_record(mailbox, fname, buf);
     if (!r) return 0;

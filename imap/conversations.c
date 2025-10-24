@@ -81,7 +81,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "xstats.h"
 #include "times.h"
 #include "vparse.h"
 #include "vcard_support.h"
@@ -1191,7 +1190,6 @@ EXPORTED int conversation_save(struct conversations_state *state,
     /* old pre-conversations message, nothing to do */
     if (!cid)
         return 0;
-    xstats_inc(CONV_SAVE);
 
     snprintf(bkey, sizeof(bkey), "B" CONV_FMT, cid);
 
@@ -1644,7 +1642,6 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
     } else if (r != CYRUSDB_OK) {
         return IMAP_INTERNAL;
     }
-    xstats_inc(CONV_LOAD);
 
     r = conversation_parse(data, datalen, conv, flags);
 
@@ -1722,7 +1719,6 @@ EXPORTED int conversation_get_modseq(struct conversations_state *state,
     } else if (r != CYRUSDB_OK) {
         return r;
     }
-    xstats_inc(CONV_GET_MODSEQ);
 
     r = _conversation_load_modseq(data, datalen, modseqp);
     if (r) {
@@ -3002,7 +2998,6 @@ EXPORTED conversation_t *conversation_new()
     conv = xzmalloc(sizeof(conversation_t));
     conv->version = CONVERSATIONS_RECORD_VERSION;
     conv->flags |= CONV_ISDIRTY;
-    xstats_inc(CONV_NEW);
 
     return conv;
 }
