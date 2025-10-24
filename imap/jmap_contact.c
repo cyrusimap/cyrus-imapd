@@ -10344,6 +10344,8 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     const char *service = NULL, *user = NULL, *val = NULL, *val_kind = "TEXT";
     vcardproperty_kind kind = VCARD_SOCIALPROFILE_PROPERTY;
     vcardproperty *prop = NULL;
+    const char *propname = NULL;
+    struct buf buf = BUF_INITIALIZER;
     json_t *jprop;
 
     jprop = json_object_get(obj, "service");
@@ -10381,10 +10383,18 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
 
     jprop = json_object_get(obj, "vCardName");
     if (json_is_string(jprop)) {
-        kind = vcardproperty_string_to_kind(json_string_value(jprop));
+        propname = json_string_value(jprop);
+        kind = vcardproperty_string_to_kind(propname);
 
         if (kind == VCARD_NO_PROPERTY) {
             jmap_parser_invalid(parser, "vCardName");
+        }
+        else if (kind == VCARD_X_PROPERTY) {
+            buf_setcstr(&buf, propname);
+            propname = buf_ucase(&buf);
+            if (!strcmp(propname, "X-SOCIALPROFILE")) {
+                kind = VCARD_SOCIALPROFILE_PROPERTY;
+            }
         }
     }
     else if (jprop) {
@@ -10410,6 +10420,8 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
         }
         else {
             prop = vcardproperty_new(kind);
+            if (kind == VCARD_X_PROPERTY && propname)
+                vcardproperty_set_x_name(prop, propname);
             
             if (service) {
                 vcardproperty_add_parameter(prop,
@@ -10428,6 +10440,8 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
     json_object_del(obj, "user");
     json_object_del(obj, "uri");
     json_object_del(obj, "vCardName");
+
+    buf_free(&buf);
 
     return prop;
 }
