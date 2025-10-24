@@ -21,6 +21,12 @@ sub test_addressbook_set_sharewith_acl
     ]);
     my $addressbookId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($addressbookId);
+    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    $self->assert_not_null($href);
+
+    # parse href into an mboxname
+    my @comps = split(/\//, $href);
+    my $mboxname = $comps[-1];
 
     my @testCases = ({
         rights => {
@@ -78,7 +84,7 @@ sub test_addressbook_set_sharewith_acl
 
         $self->assert_deep_equals(\%mergedrights,
             $res->[1][1]{list}[0]{shareWith}{test1});
-        my %acl = @{$admin->getacl("user.cassandane.#addressbooks.$addressbookId")};
+        my %acl = @{$admin->getacl("user.cassandane.#addressbooks.$mboxname")};
         $self->assert_str_equals($_->{acl}, $acl{test1});
     }
 }

@@ -103,7 +103,6 @@ sub test_card_copy
     my $blobid = $res->{blobId};
 
     my $card =  {
-        addressBookIds => { Default => JSON::true },
         name => { full => "foo bar" },
 #        "avatar" => {
 #            "blobId" => $blobid,

@@ -19,6 +19,10 @@ sub test_card_get_v3
         expandurl => 1,
     );
 
+    # get id of Default addressbook
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my $abookId = $res->[0][1]{list}[0]{id};
+
     # PROP-IDs added so we can easily compare the results
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
@@ -47,7 +51,7 @@ EOF
     $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/get', {
         }, 'R1']
     ]);
@@ -55,7 +59,7 @@ EOF
     my $want_jscard = {
         '@type' => 'Card',
         version => '1.0',
-        addressBookIds => { Default => JSON::true },
+        addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         id => $id,
         uid => $id,

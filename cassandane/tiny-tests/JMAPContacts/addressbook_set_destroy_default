@@ -7,12 +7,13 @@ sub test_addressbook_set_destroy_default
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
-    my $carddav = $self->{carddav};
 
-    my $defaultId = 'Default';
+    xlog $self, "get addressbook ids";
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my $defaultId = $res->[0][1]{list}[0]{id};
 
     xlog "Attempt to destroy default addressbook";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['AddressBook/set', {
             destroy => [$defaultId],
         }, 'R1'],
