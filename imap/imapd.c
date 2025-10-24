@@ -122,7 +122,6 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "ptrarray.h"
-#include "xstats.h"
 #include "xunlink.h"
 
 /* generated headers are not necessarily in current directory */
@@ -571,8 +570,6 @@ static void cmd_upgradesieve(char *tag, char *name);
 static void cmd_idle(char* tag);
 
 static void cmd_starttls(char *tag, int imaps);
-
-static void cmd_xstats(char *tag);
 
 static void cmd_xapplepushservice(const char *tag,
                                   struct applepushserviceargs *applepushserviceargs);
@@ -2753,10 +2750,6 @@ static void cmdloop(void)
                 }
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
                 cmd_rename(tag.s, arg1.s, arg2.s, havepartition ? arg3.s : 0, /*noisy*/1);
-            }
-            else if (!strcmp(cmd.s, "Xstats")) {
-                if (!IS_EOL(c, imapd_in)) goto extraargs;
-                cmd_xstats(tag.s);
             }
             else if (!strcmp(cmd.s, "Xwarmup")) {
                 /* XWARMUP doesn't need a mailbox to be selected */
@@ -6626,31 +6619,6 @@ error:
     buf_free(&arg);
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
-}
-
-static void cmd_xstats(char *tag)
-{
-    int metric;
-
-    if (backend_current) {
-        /* remote mailbox */
-        const char *cmd = "Xstats";
-
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
-        return;
-    }
-
-    prot_printf(imapd_out, "* XSTATS");
-    for (metric = 0 ; metric < XSTATS_NUM_METRICS ; metric++)
-        prot_printf(imapd_out, " %s %u", xstats_names[metric], xstats[metric]);
-    prot_printf(imapd_out, "\r\n");
-
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                error_message(IMAP_OK_COMPLETED));
-    return;
 }
 
 /*

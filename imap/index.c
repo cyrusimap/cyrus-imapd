@@ -89,7 +89,6 @@
 #include "attachextract.h"
 #include "user.h"
 #include "util.h"
-#include "xstats.h"
 #include "ptrarray.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -4518,8 +4517,6 @@ EXPORTED int index_search_evaluate(struct index_state *state,
     int r = index_reload_record(state, msgno, &record);
     if (r) return 0;
 
-    xstats_inc(SEARCH_EVALUATE);
-
     int flags = (im->isrecent ? MESSAGE_RECENT : 0)
               | (im->isseen ? MESSAGE_SEEN : 0);
     if (state->m) message_set_from_index(state->mailbox, &record, msgno, flags, state->m);
@@ -5434,7 +5431,6 @@ MsgData **index_msgdata_load(struct index_state *state,
     /* create an array of MsgData */
     ptrs = (MsgData **) xzmalloc(n * sizeof(MsgData *) + n * sizeof(MsgData));
     md = (MsgData *)(ptrs + n);
-    xstats_add(MSGDATA_LOAD, n);
 
     if (found_anchor)
         *found_anchor = 0;
