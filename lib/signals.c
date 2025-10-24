@@ -103,8 +103,6 @@ EXPORTED void signals_add_handlers(int alarm)
         fatal("unable to install signal handler for SIGINT", EX_TEMPFAIL);
     if (sigaction(SIGTERM, &action, NULL) < 0)
         fatal("unable to install signal handler for SIGTERM", EX_TEMPFAIL);
-    if (sigaction(SIGUSR2, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGUSR2", EX_TEMPFAIL);
 
     /* don't reset SIGUSR1 handler on signal */
 #ifdef SA_RESETHAND
@@ -219,8 +217,6 @@ static int signals_poll_mask(sigset_t *oldmaskp)
                 config_toggle_debug();
             }
             break;
-        case SIGUSR2:
-            continue; /* only ever polled explicitly */
         default:
             if (gotsignal[sig]) return sig;
             break;
@@ -304,14 +300,4 @@ EXPORTED void signals_clear(int sig)
 {
     if (sig >= 0 && sig < _NSIG)
         gotsignal[sig] = 0;
-}
-
-EXPORTED int signals_cancelled()
-{
-    if (gotsignal[SIGUSR2]) {
-        gotsignal[SIGUSR2] = 0;
-        return 1;
-    }
-
-    return 0;
 }
