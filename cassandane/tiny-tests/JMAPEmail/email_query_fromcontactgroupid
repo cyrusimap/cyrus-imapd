@@ -111,22 +111,6 @@ sub test_email_query_fromcontactgroupid
     $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
 
-    # Filter by contact group and addressbook.
-    $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                fromContactGroupId => $contactGroupId2
-            },
-            sort => [
-                { property => "subject" }
-            ],
-            addressbookId => 'Addrbook2'
-        }, 'R1']
-    ], $using);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
-
-
     # Negate filter by contact group.
     $res = $jmap->CallMethods([
         ['Email/query', {
@@ -153,34 +137,6 @@ sub test_email_query_fromcontactgroupid
             sort => [
                 { property => "subject" }
             ],
-        }, 'R1']
-    ], $using);
-    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-
-    # Reject contact groups in wrong addressbook.
-    $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                fromContactGroupId => $contactGroupId1
-            },
-            sort => [
-                { property => "subject" }
-            ],
-            addressbookId => 'Addrbook2',
-        }, 'R1']
-    ], $using);
-    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-
-    # Reject unknown addressbooks.
-    $res = $jmap->CallMethods([
-        ['Email/query', {
-            filter => {
-                fromContactGroupId => $contactGroupId1,
-            },
-            sort => [
-                { property => "subject" }
-            ],
-            addressbookId => 'doesnotexist',
         }, 'R1']
     ], $using);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
