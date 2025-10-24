@@ -6117,9 +6117,12 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
                                   vcardproperty_version version,
                                   char **type, char **blobid)
 {
+    const char *val;
+
+    val = vcardvalue_as_vcard_string(vcardproperty_get_value(prop));
+
     if (!blobid && version == VCARD_VERSION_40) {
-        const char *uri = vcardvalue_get_uri(vcardproperty_get_value(prop));
-        if (uri) return xstrdup(uri);
+        return xstrdup(val);
     }
 
     struct message_guid guid;
@@ -6154,7 +6157,7 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
         }
     }
 
-    return xstrdup(vcardvalue_get_uri(vcardproperty_get_value(prop)));
+    return xstrdup(val);
 }
 
 static json_t *vcardtime_to_jmap_utcdate(vcardtimetype t)
