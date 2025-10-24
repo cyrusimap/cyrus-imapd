@@ -32,6 +32,8 @@ FN:Forrest Gump
 ORG;PROP-ID=O1:Bubba Gump Shrimp Co.;foo
 TITLE;PROP-ID=T1:Shrimp Man
 PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
+PHOTO;PROP-ID=P2;VALUE=X:
+ https://example.com/contacts/foo/bar
 foo.ADR;PROP-ID=A1;JSCOMPS="s, ;2;3;4;5;6":;;1501 Broadway;New York;NY;10036;USA
 foo.GEO:40.7571383482188;-73.98695548990568
 foo.TZ:-05:00
@@ -121,6 +123,10 @@ EOF
             P1 => {
                 kind => 'photo',
                 mediaType => 'image/jpeg'
+            },
+            P2 => {
+                kind => 'photo',
+                uri => 'https://example.com/contacts/foo/bar'
             }
         }
     };
