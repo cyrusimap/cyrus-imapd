@@ -1,0 +1,23 @@
+Description:
+
+The undocumented XKILLMY command and SIGUSR2 handler have been removed.
+
+
+Documentation:
+
+There is none.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+If you somehow had found XKILLMY or SIGUSR and were using it, stop doing so!
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/pull/5658
