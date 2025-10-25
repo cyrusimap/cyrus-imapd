@@ -231,10 +231,7 @@ sub test_email_query_fromcontactcarduid_shared
                               $res->[1][1]{ids});
     $self->assert_deep_equals([$emailIds->[0],$emailIds->[1]],
                               $res->[2][1]{ids});
-    $self->assert_str_equals('error', $res->[3][0]);
-    $self->assert_str_equals('invalidArguments', $res->[3][1]{type});
-    $self->assert_str_equals('filter/fromContactCardUid',
-                             $res->[3][1]{arguments}[0]);
+    $self->assert_deep_equals([], $res->[3][1]{ids});
 
     xlog "Assert Sieve";
     $imap->create("INBOX.matches") or die;

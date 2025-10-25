@@ -2948,7 +2948,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     if (json_array_size(parser->invalid)) return;
 
     /* Gather contactgroups */
-    int r = jmap_email_contactfilter_from_filtercondition(parser, filter, cfilter);
+    int r = jmap_email_contactfilter_from_filtercondition(filter, cfilter);
     if (r) {
         *err = jmap_server_error(r);
         return;

@@ -128,7 +128,7 @@ sub test_email_query_fromcontactgroupid
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($emailId3, $res->[0][1]{ids}[0]);
 
-    # Reject unknown contact groups.
+    # Unknown contact group should return an empty set.
     $res = $jmap->CallMethods([
         ['Email/query', {
             filter => {
@@ -139,7 +139,7 @@ sub test_email_query_fromcontactgroupid
             ],
         }, 'R1']
     ], $using);
-    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+    $self->assert_deep_equals([], $res->[0][1]{ids});
 
     # Support also to, cc, bcc
     $res = $jmap->CallMethods([

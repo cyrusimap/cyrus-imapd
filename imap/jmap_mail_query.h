@@ -75,8 +75,7 @@ extern void jmap_email_contactfilter_init(const char *accountid,
                                           struct email_contactfilter *cfilter);
 extern void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter);
 
-extern int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *parser,
-                                                         json_t *filter,
+extern int jmap_email_contactfilter_from_filtercondition(json_t *filter,
                                                          struct email_contactfilter *cfilter);
 
 struct emailbodies {

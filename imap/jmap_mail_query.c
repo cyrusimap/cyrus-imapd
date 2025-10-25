@@ -234,8 +234,7 @@ static const struct contactfilters_t {
   { NULL, 0 }
 };
 
-HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *parser,
-                                                         json_t *filter,
+HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
                                                          struct email_contactfilter *cfilter)
 {
     int havefield = 0;
@@ -306,13 +305,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         _get_emails(member_uids, CARDDAV_KIND_ANY, &abook_sets, emails, NULL);
         strarray_free(member_uids);
 
-        if (!strarray_size(emails)) {
-            jmap_parser_invalid(parser, c->field);
-            strarray_free(emails);
-        }
-        else {
-            hash_insert(groupid, emails, &cfilter->contactgroups);
-        }
+        hash_insert(groupid, emails, &cfilter->contactgroups);
     }
 
     /* cleanup */
@@ -1784,7 +1777,7 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         json_array_foreach(json_object_get(jf, "conditions"), i, jval) {
             ptrarray_push(&work, jval);
         }
-        r = jmap_email_contactfilter_from_filtercondition(&parser, jf, &cfilter);
+        r = jmap_email_contactfilter_from_filtercondition(jf, &cfilter);
         if (r) break;
 
     }
