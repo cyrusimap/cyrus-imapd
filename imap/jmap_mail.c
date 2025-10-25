@@ -2552,16 +2552,20 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if (json_is_true(json_object_get(filter, "bccAnyContact"))) {
             _email_search_contactgroup(this, "", "bcclist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "fromContactCardUid"))) ||
+            (s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
             _email_search_contactgroup(this, s, "fromlist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "toContactCardUid"))) ||
+            (s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
             _email_search_contactgroup(this, s, "tolist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "ccContactCardUid"))) ||
+            (s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
             _email_search_contactgroup(this, s, "cclist", contactgroups);
         }
-        if ((s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
+        if ((s = json_string_value(json_object_get(filter, "bccContactCardUid"))) ||
+            (s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
             _email_search_contactgroup(this, s, "bcclist", contactgroups);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
@@ -2921,13 +2925,6 @@ static int emailsearch_normalise(struct emailsearch *search, jmap_req_t *req)
     return 0;
 }
 
-static void _email_contactfilter_initreq(jmap_req_t *req, struct email_contactfilter *cfilter)
-{
-    const char *addressbookid = json_string_value(json_object_get(req->args, "addressbookId"));
-    jmap_email_contactfilter_init(req->accountid, req->authstate,
-            &jmap_namespace, addressbookid, cfilter);
-}
-
 static void _email_parse_filter_cb(jmap_req_t *req,
                                    struct jmap_parser *parser,
                                    json_t *filter,
@@ -2951,7 +2948,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     if (json_array_size(parser->invalid)) return;
 
     /* Gather contactgroups */
-    int r = jmap_email_contactfilter_from_filtercondition(parser, filter, cfilter);
+    int r = jmap_email_contactfilter_from_filtercondition(filter, cfilter);
     if (r) {
         *err = jmap_server_error(r);
         return;
@@ -5104,21 +5101,6 @@ static int emailquery_args_parse(jmap_req_t *req,
     if (!strcmp(key, "collapseThreads") && json_is_boolean(arg)) {
         query->collapse_threads = json_boolean_value(arg);
     }
-    else if (!strcmp(key, "addressbookId") && json_is_string(arg) &&
-             jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
-
-        /* Lookup addrbook */
-        char *addrbookname = carddav_mboxname(req->accountid, json_string_value(arg));
-        mbentry_t *mbentry = NULL;
-        int is_valid = 0;
-        if (!mboxlist_lookup(addrbookname, &mbentry, NULL)) {
-            is_valid = jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) &&
-                mbtype_isa(mbentry->mbtype) == MBTYPE_ADDRESSBOOK;
-        }
-        mboxlist_entry_free(&mbentry);
-        free(addrbookname);
-        return is_valid;
-    }
     else if (!strcmp(key, "findMatchingParts") && json_is_boolean(arg) &&
             jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         query->want_partids = json_boolean_value(arg);
@@ -5143,7 +5125,8 @@ static int jmap_email_query(jmap_req_t *req)
     struct email_contactfilter contactfilter;
     int r = 0;
 
-    _email_contactfilter_initreq(req, &contactfilter);
+    jmap_email_contactfilter_init(req->accountid, req->authstate,
+                                  &jmap_namespace, &contactfilter);
     jmap_emailquery_init(&query);
 
     /* Parse request */
@@ -5573,7 +5556,8 @@ static int jmap_email_querychanges(jmap_req_t *req)
     struct emailquery emailquery;
     struct email_contactfilter contactfilter;
 
-    _email_contactfilter_initreq(req, &contactfilter);
+    jmap_email_contactfilter_init(req->accountid, req->authstate,
+                                  &jmap_namespace, &contactfilter);
     jmap_emailquery_init(&emailquery);
 
     /* Parse arguments */
@@ -6337,7 +6321,8 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     struct email_contactfilter contactfilter;
     json_t *err = NULL;
 
-    _email_contactfilter_initreq(req, &contactfilter);
+    jmap_email_contactfilter_init(req->accountid, req->authstate,
+                                  &jmap_namespace, &contactfilter);
 
     /* Parse and validate arguments. */
     json_t *unsupported_filter = json_array();

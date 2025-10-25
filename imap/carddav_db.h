@@ -118,12 +118,17 @@ int carddav_lookup_imapuid(struct carddav_db *carddavdb,
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
-int carddav_lookup_uid(struct carddav_db *carddavdb, const char *ical_uid,
+int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
                        struct carddav_data **result);
+
+/* lookup an entry from 'carddavdb' by JMAP ID
+   (optionally inside a transaction for updates) */
+int carddav_lookup_jmapid(struct carddav_db *carddavdb, const char *jmapid,
+                          struct carddav_data **result);
 
 /* check if an email address exists on any card.
    returns the groups its in (if any) */
-strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *key);
+strarray_t *carddav_getemail_groups(struct carddav_db *carddavdb, const char *key);
 strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *key,
                                      const mbentry_t *mbentry, int *ispinned);
 strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
@@ -132,9 +137,10 @@ strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
 /* checks if a group exists (by id), optionally filtered by addressbook mailbox.
  * Looks up groups across addressbooks if mbentry is NULL.
    returns emails of its members (if any) */
-strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
-                             const mbentry_t *mbentry, const char *group,
-                             const mbentry_t *othermb);
+int carddav_getemails(struct carddav_db *carddavdb,
+                      const mbentry_t *mbentry,
+                      const char *vcard_uid, unsigned kind,
+                      strarray_t *members, strarray_t **group_uids);
 
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);

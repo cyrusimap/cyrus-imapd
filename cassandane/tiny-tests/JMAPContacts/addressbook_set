@@ -11,7 +11,8 @@ sub test_addressbook_set
     xlog $self, "create addressbook";
     my $res = $jmap->CallMethods([
             ['AddressBook/set', { create => { "1" => {
-                            name => "foo"
+                            name => "foo",
+                            description => "My foo",
              }}}, "R1"]
     ]);
     $self->assert_not_null($res);
@@ -21,6 +22,7 @@ sub test_addressbook_set
     $self->assert_not_null($res->[0][1]{created});
 
     my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_matches(qr/^R.*/, $id);
 
     xlog $self, "get addressbook $id";
     $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
@@ -28,11 +30,13 @@ sub test_addressbook_set
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
+    $self->assert_str_equals('My foo', $res->[0][1]{list}[0]{description});
 
     xlog $self, "update addressbook $id";
     $res = $jmap->CallMethods([
             ['AddressBook/set', {update => {"$id" => {
-                            name => "bar"
+                            name => "bar",
+                            description => "My bar",
             }}}, "R1"]
     ]);
     $self->assert_not_null($res);
@@ -43,6 +47,7 @@ sub test_addressbook_set
     xlog $self, "get addressbook $id";
     $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
+    $self->assert_str_equals('My bar', $res->[0][1]{list}[0]{description});
 
     xlog $self, "destroy addressbook $id";
     $res = $jmap->CallMethods([['AddressBook/set', {destroy => ["$id"]}, "R1"]]);

@@ -51,6 +51,7 @@
 #include "cyrusdb.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "jmap_util.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "times.h"
@@ -377,6 +378,33 @@ EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_
 }
 
 
+#define CMD_SELJMAPID CMD_GETFIELDS \
+    " WHERE createdmodseq = :cmodseq AND alive = 1;"
+
+EXPORTED int carddav_lookup_jmapid(struct carddav_db *carddavdb,
+                                   const char *jmapid,
+                                   struct carddav_data **result)
+{
+    struct sqldb_bindval bval[] = {
+        { ":cmodseq", SQLITE_INTEGER, { .i = 0    } },
+        { NULL,       SQLITE_NULL,    { .s = NULL } } };
+    static struct carddav_data cdata;
+    struct read_rock rrock = { carddavdb, &cdata, 0, NULL, NULL };
+    modseq_t cmodseq;
+    int r;
+
+    MODSEQ_FROM_JMAPID(jmapid, &cmodseq);
+    bval[0].val.i = cmodseq;
+
+    *result = memset(&cdata, 0, sizeof(struct carddav_data));
+
+    r = sqldb_exec(carddavdb->db, CMD_SELJMAPID, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELMBOX CMD_GETFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1"
 
@@ -527,7 +555,7 @@ static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *email)
+EXPORTED strarray_t *carddav_getemail_groups(struct carddav_db *carddavdb, const char *email)
 {
     struct sqldb_bindval bval[] = {
         { ":email", SQLITE_TEXT, { .s = email } },
@@ -615,155 +643,100 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
     return groups;
 }
 
-/* FUNCTIONS FOR LOOKING UP headerAllContacts */
+/* FUNCTIONS FOR LOOKING UP Contacts */
 
-#define GETALL_LOCAL \
+#define GETEMAILS \
     "SELECT DISTINCT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
-    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
+    " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
+    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox);"
 
-#define GETALL_MEMBERS GETALL_LOCAL ";"
-
-#define GETALL_OTHERMEMBERS \
-    GETALL_LOCAL " UNION " \
-    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
-    " JOIN other.vcard_objs CO" \
-    " WHERE E.objid = CO.rowid AND CO.alive = 1" \
-    " AND CO.mailbox = :othermailbox;"
-
-/* FUNCTIONS FOR LOOKING UP headerContactGroupId on own groups */
-
-#define GETGROUP_EXISTS \
-    "SELECT rowid " \
+#define GETCARD_EXISTS \
+    "SELECT kind " \
     " FROM vcard_objs" \
-    " WHERE kind = :kind AND vcard_uid = :group AND alive = 1" \
+    " WHERE (:kind = 255 OR kind = :kind)"              \
+    " AND vcard_uid = :vcard_uid AND alive = 1"         \
     " AND (:mailbox IS NULL OR mailbox = :mailbox);"
 
-#define GETGROUP_LOCAL \
-    "SELECT DISTINCT E.email FROM vcard_emails E" \
-    " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
-    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND G.otheruser = '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
-    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox)"
+#define GETGROUP_MEMBERS                                  \
+    "SELECT DISTINCT G.member_uid FROM vcard_groups G"    \
+    " JOIN vcard_objs CO"                                 \
+    " WHERE G.objid = CO.rowid AND CO.alive = 1"          \
+    " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
+    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox);"
 
-#define GETGROUP_MEMBERS GETGROUP_LOCAL ";"
-
-#define GETGROUP_OTHERMEMBERS \
-    GETGROUP_LOCAL " UNION " \
-    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
-    " JOIN other.vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
-    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND G.otheruser = :otheruser AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
-    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox) AND CO.mailbox = :othermailbox;"
-
-/* FUNCTIONS FOR LOOKING UPO headerContactGroupId on shared groups:
- * this is different than GROUP_OTHERMEMBERS in the following way,
- * GROUP_OTHERMEMBERS: the group is in the user, but contains a member in the masteruser
- * OTHERGROUP_MEMBERS: the group is in the masteruser, containing members in the masteruser
- */
-
-#define GETOTHERGROUP_EXISTS \
-    "SELECT rowid " \
-    " FROM other.vcard_objs" \
-    " WHERE kind = :kind AND vcard_uid = :group AND alive = 1" \
-    " AND mailbox = :othermailbox;"
-
-// need to make sure all the contacts are only in 'Shared' as well!
-#define GETOTHERGROUP_MEMBERS \
-    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
-    " JOIN other.vcard_objs CO JOIN other.vcard_groups G JOIN other.vcard_objs GO" \
-    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND G.otheruser = '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
-    " AND GO.mailbox = :othermailbox AND CO.mailbox = :othermailbox;"
-
-static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
+static int cardexists_cb(sqlite3_stmt *stmt, void *rock)
 {
-    int *exists = (int *)rock;
-    if (sqlite3_column_int(stmt, 0))
-        *exists = 1;
+    int *kind = (int *)rock;
+    *kind = sqlite3_column_int(stmt, 0);
     return 0;
 }
 
-static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
+static int appendarray_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
-    strarray_append(array, (const char *)sqlite3_column_text(stmt, 0));
+    const char *value = (const char *)sqlite3_column_text(stmt, 0);
+    if (value) strarray_append(array, value);
     return 0;
 }
 
-EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
-                                      const mbentry_t *mbentry, const char *group,
-                                      const mbentry_t *othermb)
+EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
+                               const mbentry_t *mbentry,
+                               const char *vcard_uid, unsigned kind,
+                               strarray_t *emails, strarray_t **group_uids)
 {
-    int r = 0;
-    int isshared = 0;
-    if (!strncmpsafe(group, "shared/", 7)) {
-        assert(!mbentry); // no mailbox filter on shared groups
-        if (!carddavdb->db->attached) return NULL;
-        if (!*group) return NULL; // can't just be "shared/"
-        isshared = 1;
-        group += 7;
+    int r, found = 0;
+
+    if (!strncmpsafe(vcard_uid, "shared/", 7)) {
+        /* strip legacy "shared/" prefix -- no longer needed*/
+        vcard_uid += 7;
+        if (!*vcard_uid) return 0; // can't just be "shared/"
     }
 
     const char *mailbox = !mbentry ? NULL :
         (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         mbentry->uniqueid : mbentry->name;
 
-    const char *othermailbox = !othermb ? NULL :
-        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
-        othermb->uniqueid : othermb->name;
-
-    const char *otheruser = NULL;
-    mbname_t *othermbname = NULL;
-    if (othermb) {
-        othermbname = mbname_from_intname(othermb->name);
-        otheruser = mbname_userid(othermbname);
-    }
-
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox } },
-        { ":group",        SQLITE_TEXT,    { .s = group   } },
-        { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
-        { ":otheruser",    SQLITE_TEXT,    { .s = otheruser } },
-        { ":othermailbox", SQLITE_TEXT,    { .s = othermailbox } },
+        { ":vcard_uid",    SQLITE_TEXT,    { .s = vcard_uid } },
+        { ":kind",         SQLITE_INTEGER, { .i = kind } },
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
 
-    strarray_t *members = NULL;
+    int this_kind = -1;
 
-    if (*group) {
-        // first check that the group exists
-
-        const char *existsql = isshared ? GETOTHERGROUP_EXISTS : GETGROUP_EXISTS;
-        int exists = 0;
-        r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
+    if (*vcard_uid) {
+        // first check that the card exists by fetching it's kind
+        r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
+                       &cardexists_cb, &this_kind);
         if (r) {
             /* XXX syslog */
-            goto done;
+            return 0;
         }
 
-        if (!exists) goto done;
+        if (this_kind < 0) return 0;
+
+        found = 1;
     }
 
-    // pick which filter to use!
-    const char *membersql = GETGROUP_MEMBERS;
-    if (carddavdb->db->attached) {
-        if (isshared) membersql = GETOTHERGROUP_MEMBERS;
-        else if (!*group) membersql = GETALL_OTHERMEMBERS;
-        else membersql = GETGROUP_OTHERMEMBERS;
-    }
-    else if (!*group) membersql = GETALL_MEMBERS;
+    // get emails in the card(s) itself
+    r = sqldb_exec(carddavdb->db, GETEMAILS, bval, &appendarray_cb, emails);
 
-    members = strarray_new();
-    r = sqldb_exec(carddavdb->db, membersql, bval, &groupmembers_cb, members);
+    if (!r && group_uids &&
+        (this_kind == CARDDAV_KIND_GROUP || this_kind == -1)) {
+        // get group members
+        if (!*group_uids) *group_uids = strarray_new();
+        r = sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
+                       &appendarray_cb, *group_uids);
+    }
+
     if (r) {
         /* XXX syslog */
     }
 
-done:
-    mbname_free(&othermbname);
-    return members;
+    return found;
 }
 
 
@@ -1275,6 +1248,9 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
+    buf_appendcstr(&value, ";\r\n\tjmapid=");
+    buf_putc(&value, JMAP_CONTACTID_PREFIX);
+    MODSEQ_TO_JMAPID(&value, createdmodseq);
     fprintf(f, "Content-Disposition: inline%s\r\n", buf_cstring(&value));
     buf_free(&value);
 
@@ -1440,7 +1416,9 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
          */
         free(propval);
         propval = vcardproperty_get_value_as_string_r(prop);
-        const char *userid = "";
+        const char *userid = "", *member;
+        char *buf = NULL, *buf_ptr;
+        size_t buf_size;
 
         if (!propval) continue;
 
@@ -1498,10 +1476,11 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             /* default case is CARDDAV_KIND_CONTACT */
             break;
 
-        member:
         case VCARD_MEMBER_PROPERTY:
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
-            strarray_append(&member_uids, propval+9);
+            member = propval;
+
+        member:
+            strarray_append(&member_uids, member);
             strarray_append(&member_uids, userid);
             break;
 
@@ -1513,11 +1492,23 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             const char *name = vcardproperty_get_property_name(prop);
             if (!strcasecmp(name, "x-addressbookserver-kind"))
                 goto kind;
-            else if (!strcasecmp(name, "x-addressbookserver-member"))
+            else if (!strcasecmp(name, "x-addressbookserver-member")) {
+                /* strip urn:uuid: prefix and RFC6868-decode string */
+                if (strncmp(propval, "urn:uuid:", 9)) continue;
+                member = propval + 9;
+                buf_size = strlen(member) + 1;
+                buf_ptr = buf = icalmemory_new_buffer(buf_size);
+                icalmemory_append_decoded_string(&buf, &buf_ptr, &buf_size,
+                                                 member);
+                member = buf;
                 goto member;
+            }
             else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
+                /* strip urn:uuid: prefix */
                 userid = vcardproperty_get_xparam_value(prop, "userid");
                 if (!userid) continue;
+                if (strncmp(propval, "urn:uuid:", 9)) continue;
+                member = propval + 9;
                 goto member;
             }
             break;
@@ -1526,6 +1517,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         default:
             break;
         }
+
+        if (buf) icalmemory_free_buffer(buf);
     }
 
     int r;

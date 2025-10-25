@@ -9,27 +9,11 @@ sub test_addressbook_get
     my $jmap = $self->{jmap};
     my $carddav = $self->{carddav};
 
-    my $id = $carddav->NewAddressBook("bookname");
+    $carddav->NewAddressBook("bookname");
     my $unknownId = "foo";
 
-    xlog $self, "get existing addressbook";
-    my $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('AddressBook/get', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
-    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
-
-    xlog $self, "get existing addressbook with select properties";
-    $res = $jmap->CallMethods([['AddressBook/get', { ids => [$id], properties => ["name"] }, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
-    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
-    $self->assert_str_equals("bookname", $res->[0][1]{list}[0]{name});
-    $self->assert_null($res->[0][1]{list}[0]{isSubscribed});
-
     xlog $self, "get unknown addressbook";
-    $res = $jmap->CallMethods([['AddressBook/get', {ids => [$unknownId]}, "R1"]]);
+    my $res = $jmap->CallMethods([['AddressBook/get', {ids => [$unknownId]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(0, scalar(@{$res->[0][1]{list}}));
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{notFound}}));
@@ -42,4 +26,24 @@ sub test_addressbook_get
     $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $id = $m{"bookname"}{id};
+    $self->assert_matches(qr/^R.*/, $id);
+
+    xlog $self, "get existing addressbook";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => [$id]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('AddressBook/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isDefault});
+
+    xlog $self, "get existing addressbook with select properties";
+    $res = $jmap->CallMethods([['AddressBook/get', { ids => [$id], properties => ["name"] }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals("bookname", $res->[0][1]{list}[0]{name});
+    $self->assert_null($res->[0][1]{list}[0]{isSubscribed});
 }

@@ -12,6 +12,8 @@ sub test_addressbook_get_default
     # addressbook already. To make this test self-sufficient, we need
     # to create a test user just for this test. How?
     xlog $self, "get default addressbook";
-    my $res = $jmap->CallMethods([['AddressBook/get', {ids => ["Default"]}, "R1"]]);
-    $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    $self->assert_str_equals("/dav/addressbooks/user/cassandane/Default",
+                             $res->[0][1]{list}[0]{'cyrusimap.org:href'});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isDefault});
 }
