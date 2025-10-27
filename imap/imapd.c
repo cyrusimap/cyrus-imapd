@@ -599,7 +599,6 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
                        int realloc);
 static void cmd_syncrestore(const char *tag, struct dlist *kin,
                             struct sync_reserve_list *reserve_list);
-static void cmd_xkillmy(const char *tag, const char *cmdname);
 static void cmd_xforever(const char *tag);
 static void cmd_xmeid(const char *tag, const char *id);
 static void cmd_replace(char *tag, char *seqno, char *name, int usinguid);
@@ -2756,13 +2755,6 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 cmd_xwarmup(tag.s);
                 /* XXX prometheus_increment(CYRUS_IMAP_XWARMUP_TOTAL); */
-            }
-            else if (!strcmp(cmd.s, "Xkillmy")) {
-                if (c != ' ') goto missingargs;
-                c = getastring(imapd_in, imapd_out, &arg1);
-                if (c == EOF) goto missingargs;
-                if (!IS_EOL(c, imapd_in)) goto extraargs;
-                cmd_xkillmy(tag.s, arg1.s);
             }
             else if (!strcmp(cmd.s, "Xforever")) {
                 if (!IS_EOL(c, imapd_in)) goto extraargs;
@@ -14758,26 +14750,6 @@ static void cmd_enable(char *tag)
 
     /* track the new capabilities */
     client_capa |= new_capa;
-
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                error_message(IMAP_OK_COMPLETED));
-}
-
-static void cmd_xkillmy(const char *tag, const char *cmdname)
-{
-    char *cmd = xstrdup(cmdname);
-    char *p;
-
-    /* normalise to imapd conventions */
-    if (Uislower(cmd[0]))
-        cmd[0] = toupper((unsigned char) cmd[0]);
-    for (p = cmd+1; *p; p++) {
-        if (Uisupper(*p)) *p = tolower((unsigned char) *p);
-    }
-
-    proc_killusercmd(imapd_userid, cmd, SIGUSR2);
-
-    free(cmd);
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
                 error_message(IMAP_OK_COMPLETED));
