@@ -66,7 +66,6 @@
 #include "mappedfile.h"
 #include "mboxlist.h"
 #include "mboxname.h"
-#include "xstats.h"
 #include "search_engines.h"
 #include "seqset.h"
 #include "cyr_lock.h"

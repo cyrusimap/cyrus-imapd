@@ -1,0 +1,24 @@
+Description:
+
+The undocumented XSTATS metrics system has been removed.
+
+
+Documentation:
+
+There is none.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+If you somehow had found XSTATS and were using it, stop!  Look at the
+Prometheus metrics instead.
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/pull/5659
