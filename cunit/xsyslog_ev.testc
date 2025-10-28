@@ -220,15 +220,6 @@ static void test_lf_s(void)
 {
     const char *third = "three";
 
-    /*
-     * Escaping rules are, for now:
-     * \x21 \x23-x7E: do not force quoting and remain as is
-     *                (except 3D '=' and 5C '\')
-     * existing special cases ([\\ \n \r "]) force quoting and become two chars
-     * literal space forces quoting and remains space
-     * any other character forces quoting and remains self for now
-     */
-
     // simple
     CU_SYSLOG_MATCH("event=\"lf_s test\" first=one second=two third=three");
     xsyslog_ev(LOG_ERR, "lf_s test",
@@ -246,7 +237,7 @@ static void test_lf_s(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     // tabs
-    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with\ttabs\"");
+    CU_SYSLOG_MATCH("event=\"lf_s test\" first=\"with\\\\ttabs\"");
     xsyslog_ev(LOG_ERR, "lf_s test", lf_s("first", "with\ttabs"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
@@ -280,10 +271,11 @@ static void test_lf_s(void)
     int iter;
     buf_setcstr(&str, "\x21");
 
-    for (iter = 0x23; iter <= 0x7E; iter++) {
-      if (iter == 0x3D || iter == 0x5C)
-          continue;
-      buf_printf(&str, "%c", iter);
+    // okchr = %x21 / %x23-3c / %x3e-5b / %x5d-7e ; graphic ASCII, less: \ " = DEL
+    for (iter = 0x21; iter <= 0x7E; iter++) {
+        if (iter == 0x22 || iter == 0x3D || iter == 0x5C)
+            continue;
+        buf_printf(&str, "%c", iter);
     }
 
     struct buf want = BUF_INITIALIZER;
@@ -296,9 +288,87 @@ static void test_lf_s(void)
     buf_free(&want);
     buf_free(&str);
 
-    // characters outside that range stay as they are but force quoting
-    CU_SYSLOG_MATCH("event=\"lf_s test\" build=\"☃\"");
+    // in a "bytestring" eightbits are quoted like control chars
+    CU_SYSLOG_MATCH("event=\"lf_s test\" build=\"\\\\x\\{e2}\\\\x\\{98}\\\\x\\{83}\"");
     xsyslog_ev(LOG_ERR, "lf_s test", lf_s("build", "☃"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_lf_utf8(void)
+{
+    const char *third = "three";
+
+    // simple
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=one second=two third=three");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test",
+        lf_utf8("first", "one"), lf_utf8("second", "two"), lf_utf8("third", third));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // empty string
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", ""));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // spaces
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"with spaces\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "with spaces"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // tabs
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"with\\\\ttabs\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "with\ttabs"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // quotes
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"\\\\\"quotes\\\\\"\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "\"quotes\""));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // \r and \n
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"\\\\r\\\\n\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "\r\n"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // =
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"=\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "="));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // backslashes
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=\"\\\\\\\\\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", "\\"));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // null
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" first=~null~");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", NULL));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    // no quoting or escaping
+    struct buf str = BUF_INITIALIZER;
+    int iter;
+    buf_setcstr(&str, "\x21");
+
+    // okchr = %x21 / %x23-3c / %x3e-5b / %x5d-7e ; graphic ASCII, less: \ " = DEL
+    for (iter = 0x21; iter <= 0x7E; iter++) {
+        if (iter == 0x22 || iter == 0x3D || iter == 0x5C)
+            continue;
+        buf_printf(&str, "%c", iter);
+    }
+
+    struct buf want = BUF_INITIALIZER;
+    buf_printf(&want, "event=\"lf_utf8 test\" first=%s", buf_cstring(&str));
+
+    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&want));
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("first", buf_cstring(&str)));
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    buf_free(&want);
+    buf_free(&str);
+
+    // non-special utf8 allowed as is
+    CU_SYSLOG_MATCH("event=\"lf_utf8 test\" build=\"☃\"");
+    xsyslog_ev(LOG_ERR, "lf_utf8 test", lf_utf8("build", "☃"));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 
