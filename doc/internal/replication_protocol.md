@@ -133,4 +133,78 @@ There are two broad classes of commands: "GET" which fetches information from a 
 
 ### GET commands
 
-#### GET 
+SYNTAX: "GET" get-type dlist-kvlist
+
+```
+sync-get = "GET" get-type dlist-kvlist
+get-type = "ANNOTATION" / "FETCH" / "FETCH_SIEVE" / "FULLMAILBOX" / 
+           "MAILBOXES" / "UNIQUEIDS" / "META" / "QUOTA" / "USER"
+```
+
+The kvlist contains the ar
+
+#### GET USER
+
+This expands into:
+
+* GET MAILBOX (for every mailbox in the user's tree, including the DELETED namespace and tombstones)
+* GET QUOTA (for every quotaroot for those mailboxes)
+* GET SIEVE (for the userid)
+* GET META (for the userid)
+
+#### GET MAILBOXES mboxname-list
+
+Gets a list of mboxnames in dlist-list.
+
+Fetches data for each of the named mailboxes:
+
+Example:
+
+
+#### GET UNIQUEIDS uniquid-list
+
+An alternative form of GET MAILBOXES which takes uniqueids instead of mboxnames.
+
+#### GET FULLMAILBOX mboxname
+
+Fetches the data for the single named mailbox, with the UID records filled in.
+
+This is used for split-brain recovery, to allow the client to compare the entire state of the mailbox at both ends.
+
+Example:
+
+
+
+#### GET QUOTA quotaroot
+
+Gets the quota for the named quotaroot:
+
+Example:
+
+
+### GET SIEVE userid
+
+Gets the list of sieve scripts for the user (if not using the `#sieve` mailbox).
+
+Example:
+
+
+#### GET META userid
+
+Gets the per-user seen data for the user (by uniqueid, for the mailboxes for which the seen data is non-internal) and
+the list of subscribed mailboxes for the user (in internal namespace).
+
+This is the content of the user.sub file.
+
+
+#### GET FETCH mboxname uid
+
+Returns the content of a single email file.
+
+Used by split-brain recovery when an email only exists on the replica.
+
+#### GET FETCH\_SIEVE userid scriptname
+
+Returns the content of the named sieve script for the named user.
+
+Used by split-brain recovery when a script only exists on the replica.
