@@ -8,7 +8,7 @@ Synopsis
 .. parsed-literal::
 
     **imapd** [ **-C** *config-file* ] [ **-U** *uses* ] [ **-T** *timeout* ] [ **-D** ]
-        [ **-H** ] [ **-s** ] [ **-N** ] [ **-p** *ssf* ]
+        [ **-H** ] [ **-s** ] [ **-N** ] [ **-p** *ssf* ] [ **-q** ]
 
 Description
 ===========
@@ -85,6 +85,12 @@ Options
     Tell **imapd** that an external layer exists.  An *SSF* (security
     strength factor) of 1 means an integrity protection layer exists.
     Any higher SSF implies some form of privacy protection.
+
+.. option:: -q
+
+    Tell **imapd** to skip all quota checks, allowing users to go over
+    quota.  Useful for internal tooling and admin connections.  Not
+    recommended for public-facing ports.
 
 Examples
 ========
