@@ -2131,8 +2131,8 @@ static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
     }
 
     // Format number without thousands separator.
-    std::string term = barenum;
     if (frac.size()) {
+        std::string term = barenum;
         size_t n = term.size();
         term.append(frac);
         term[n] = '.';
@@ -2141,13 +2141,13 @@ static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
         terms.push_back(term);
     }
     else {
-        terms.push_back(term);
+        terms.push_back(barenum);
     }
 
     // Format number with thousands separator.
     if (barenum.size() > 3) {
         for (char sep : { '.', ',' }) {
-            term.clear();
+            std::string term;
             size_t count = 0;
             for (size_t i = barenum.size(); i > 0; --i) {
                 if (count == 3) {
@@ -2169,9 +2169,9 @@ static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
 
     // Build query from terms.
     Xapian::Query q;
-    for (size_t i = 0; i < terms.size(); i++) {
-        q |= is_wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, terms[i])
-                         : Xapian::Query(terms[i]);
+    for(const std::string &t: terms) {
+        q |= is_wildcard ? Xapian::Query(Xapian::Query::OP_WILDCARD, t)
+                         : Xapian::Query(t);
     }
     return new Xapian::Query(q);
 }
@@ -2649,8 +2649,7 @@ EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
     bool is_query = len > 1 && ((match[0] == '"' && match[len-1] == '"') ||
                                 (strchr(match, '*') != NULL));
 
-    Xapian::Query *q = xapian_query_new_numbermatch(SEARCH_PART_BODY, match);
-    if (q) {
+    if (Xapian::Query *q = xapian_query_new_numbermatch(SEARCH_PART_BODY, match)) {
         if (!snipgen->numbers) {
             snipgen->numbers = new std::vector<Xapian::Query>;
         }
