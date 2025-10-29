@@ -245,9 +245,8 @@ static std::string format_doclangs(const std::set<std::string>& doclangs)
     return val.str();
 }
 
-static std::string parse_langcode(const char *str)
+static std::string parse_langcode(std::string lstr)
 {
-    std::string lstr(str);
     std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
     // accept syntax for two and three letter ISO 639 codes
     if (!(isalpha(lstr[0]) && isalpha(lstr[1]) &&
@@ -449,7 +448,7 @@ static std::string detect_language(const struct buf *part)
         else if (code == "xxx") {
             code = "";
         }
-        iso_lang = parse_langcode(code.c_str());
+        iso_lang = parse_langcode(code);
     }
 
     return iso_lang;
@@ -493,7 +492,7 @@ class CyrusMetadataCompactor : public Xapian::Compactor
 
         std::string resolve_duplicate_metadata(const std::string &key,
                                                size_t num_tags,
-                                               const std::string tags[])
+                                               const std::string tags[]) override
         {
             if (key.rfind("cyrusid.", 0) == 0) {
                 uint8_t indexlevel = parse_indexlevel(tags[0]);
@@ -1195,7 +1194,7 @@ static int add_text_part(xapian_dbw_t *dbw, const struct buf *part, enum search_
             }
             else if (partnum == SEARCH_PART_SUBJECT) {
                 // Keep subject text to index by language later.
-                dbw->subjects->push_back(buf_cstring(part));
+                dbw->subjects->emplace_back(buf_cstring(part));
             }
 #endif /* HAVE_CLD2 */
         }
@@ -1856,9 +1855,9 @@ static Xapian::Query *query_new_email(const xapian_db_t *db,
         }
 
         if (!domain_queries.empty()) {
-            queries.push_back(Xapian::Query(Xapian::Query::OP_OR,
+            queries.emplace_back(Xapian::Query::OP_OR,
                         domain_queries.begin(),
-                        domain_queries.end()));
+                        domain_queries.end());
         }
 
         free(utf8_domain);
@@ -2363,32 +2362,28 @@ EXPORTED void xapian_query_serialize(xapian_query_t *xq, struct buf *buf)
 
 struct xapian_snipgen
 {
-    Xapian::Stem *default_stemmer;
+    Xapian::Stem default_stemmer{new CyrusSearchStemmer};
     xapian_db_t *db;
-    Xapian::Database *memdb;
-    std::vector<std::string> *loose_terms;
-    std::vector<std::string> *queries;
-    char *cyrusid;
-    char doctype;
-    struct buf *buf;
+    Xapian::WritableDatabase memdb{std::string(), Xapian::DB_BACKEND_INMEMORY};
+    std::vector<std::string> loose_terms;
+    std::vector<std::string> queries;
+    char *cyrusid = nullptr;
+    char doctype = 0;
+    struct buf *buf = buf_new();
     const char *hi_start;
     const char *hi_end;
     const char *omit;
-    size_t max_len;
+    size_t max_len = (size_t) config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 };
 
 EXPORTED xapian_snipgen_t *
 xapian_snipgen_new(xapian_db_t *db, const struct search_snippet_markup *markup)
 {
-    xapian_snipgen_t *snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
-    snipgen->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer);
+    xapian_snipgen *snipgen = new xapian_snipgen;
     snipgen->db = db;
-    snipgen->memdb = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
-    snipgen->buf = buf_new();
     snipgen->hi_start = markup->hi_start;
     snipgen->hi_end = markup->hi_end;
     snipgen->omit = markup->omit;
-    snipgen->max_len = (size_t) config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 
     return snipgen;
 }
@@ -2396,21 +2391,17 @@ xapian_snipgen_new(xapian_db_t *db, const struct search_snippet_markup *markup)
 EXPORTED void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
     if (!snipgen) return;
-    delete snipgen->default_stemmer;
-    delete snipgen->loose_terms;
-    delete snipgen->queries;
-    delete snipgen->memdb;
     free(snipgen->cyrusid);
     buf_destroy(snipgen->buf);
-    free(snipgen);
+    delete snipgen;
 }
 
-static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapian::Stem& stemmer)
+static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, const Xapian::Stem& stemmer)
 {
     Xapian::TermGenerator term_generator;
     Xapian::Query q;
 
-    if (snipgen->loose_terms) {
+    if (!snipgen->loose_terms.empty()) {
         /* Add loose query terms */
         term_generator.set_stemmer(stemmer);
 #if defined(USE_XAPIAN_WORD_BREAKS)
@@ -2424,16 +2415,16 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
                 ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
 #endif
 
-        for(size_t i = 0; i < snipgen->loose_terms->size(); ++i)
+        for(const std::string& term : snipgen->loose_terms)
         {
-            term_generator.index_text(Xapian::Utf8Iterator((*snipgen->loose_terms)[i]));
+            term_generator.index_text(Xapian::Utf8Iterator(term));
         }
 
         const Xapian::Document& doc = term_generator.get_document();
         q = Xapian::Query(Xapian::Query::OP_OR, doc.termlist_begin(), doc.termlist_end());
     }
 
-    if (snipgen->queries) {
+    if (!snipgen->queries.empty()) {
         /* Add phrase queries */
         unsigned flags = Xapian::QueryParser::FLAG_PHRASE|
                          Xapian::QueryParser::FLAG_WILDCARD|
@@ -2446,8 +2437,8 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
 #endif
         Xapian::QueryParser queryparser;
         queryparser.set_stemmer(stemmer);
-        for(size_t i = 0; i < snipgen->queries->size(); ++i) {
-            q |= queryparser.parse_query((*snipgen->queries)[i], flags);;
+        for(const std::string& query: snipgen->queries) {
+            q |= queryparser.parse_query(query, flags);
         }
     }
 
@@ -2462,15 +2453,9 @@ EXPORTED int xapian_snipgen_add_match(xapian_snipgen_t *snipgen,
                                 (strchr(match, '*') != NULL));
 
     if (is_query) {
-        if (!snipgen->queries) {
-            snipgen->queries = new std::vector<std::string>;
-        }
-        snipgen->queries->push_back(match);
+        snipgen->queries.emplace_back(match);
     } else {
-        if (!snipgen->loose_terms) {
-            snipgen->loose_terms = new std::vector<std::string>;
-        }
-        snipgen->loose_terms->push_back(match);
+        snipgen->loose_terms.emplace_back(match);
     }
 
     return 0;
@@ -2489,16 +2474,16 @@ EXPORTED int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
     return 0;
 }
 
-EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
-                                         const struct buf *part,
-                                         Xapian::Stem* stemmer)
+static int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
+                                       const struct buf *part,
+                                       const Xapian::Stem& stemmer)
 {
     int r = 0;
     try {
-        std::string text {buf_base(part), buf_len(part)};
-        Xapian::Enquire enquire(*snipgen->memdb);
-        Xapian::Query qq = xapian_snipgen_build_query(snipgen, *stemmer);
+        Xapian::Query qq = xapian_snipgen_build_query(snipgen, stemmer);
         if (qq.empty()) return 0;
+        std::string text {buf_base(part), buf_len(part)};
+        Xapian::Enquire enquire(snipgen->memdb);
         enquire.set_query(qq);
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
@@ -2511,7 +2496,7 @@ EXPORTED int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
 
         const std::string snippet = enquire.get_mset(0, 0).snippet(text,
                 snipgen->max_len - buf_len(snipgen->buf),
-                *stemmer, flags,
+                stemmer, flags,
                 snipgen->hi_start,
                 snipgen->hi_end,
                 snipgen->omit);
@@ -2534,7 +2519,7 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
                                      const struct buf *part)
 {
     // Ignore empty queries.
-    if (!snipgen->loose_terms && !snipgen->queries) return 0;
+    if (snipgen->loose_terms.empty() && snipgen->queries.empty()) return 0;
 
     // Don't exceed allowed snippet length.
     if (buf_len(snipgen->buf) >= snipgen->max_len) return 0;
@@ -2557,8 +2542,7 @@ EXPORTED int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen,
         for (const std::string& iso_lang : doclangs) {
             if (iso_lang != "en") {
                 try {
-                    Xapian::Stem stemmer = get_stemmer(iso_lang);
-                    int r = xapian_snipgen_make_snippet(snipgen, part, &stemmer);
+                    int r = xapian_snipgen_make_snippet(snipgen, part, get_stemmer(iso_lang));
                     if (!r && prev_size != buf_len(snipgen->buf)) {
                         return 0;
                     }
@@ -2582,12 +2566,8 @@ EXPORTED int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
     buf_copy(buf, snipgen->buf);
     buf_cstring(buf);
     buf_reset(snipgen->buf);
-
-    delete snipgen->loose_terms;
-    snipgen->loose_terms = NULL;
-
-    delete snipgen->queries;
-    snipgen->queries = NULL;
+    snipgen->loose_terms.clear();
+    snipgen->queries.clear();
 
     free(snipgen->cyrusid);
     snipgen->cyrusid = NULL;
@@ -2618,8 +2598,7 @@ EXPORTED int xapian_filter(const char *dest, const char **sources,
         // Open databases and aggregate database-level metadata.
         while (*sources) {
             thispath = *sources++;
-            const Xapian::Database srcdb {thispath};
-            srcdbs.push_back(srcdb);
+            srcdbs.emplace_back(thispath);
         }
 
         // Copy all matching documents.
