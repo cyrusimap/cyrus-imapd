@@ -123,19 +123,18 @@ vlog(int prio, const char *fmt, va_list args)
                 if (verbose >= 2)
                     fprintf(stderr, "\nSYSLOG matched /%s/\n", slmatches[i].re);
                 slmatches[i].count++;
-                break;
             } else {
                 /* don't naively report mismatches when we're looking for multiple patterns */
                 if (nslmatches == 1 || verbose >= 2)
                     fprintf(stderr, "\nSYSLOG didn't match '%s' against '%s'\n", line, slmatches[i].re);
-            }
 
-            if (r != REG_NOMATCH) {
-                /* error */
-                const char *msg = match_error(&slmatches[i], r);
-                CU_assertImplementation(0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
-                /* NOTREACHED */
-                break;
+                if (r != REG_NOMATCH) {
+                    /* error */
+                    const char *msg = match_error(&slmatches[i], r);
+                    CU_assertImplementation(0, __LINE__, msg, __FILE__, NULL, CU_TRUE);
+                    /* NOTREACHED */
+                    break;
+                }
             }
         }
 

@@ -93,6 +93,7 @@
 #include "imparse.h"
 #include "index.h"
 #include "jmap_util.h"
+#include "loginlog.h"
 #include "mailbox.h"
 #include "message.h"
 #include "mboxevent.h"
@@ -3080,11 +3081,7 @@ static void cmd_login(char *tag, char *user)
 
     if (r) {
         eatline(imapd_in, ' ');
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", imapd_clienthost),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("u.username", user),
-                   lf_s("error", "invalid user"));
+        loginlog_bad(imapd_clienthost, user, "plaintext", NULL, "invalid user");
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
                     error_message(IMAP_INVALID_USER));
         return;
@@ -3121,22 +3118,15 @@ static void cmd_login(char *tag, char *user)
 
     if (is_userid_anonymous(canon_user)) {
         if (config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN)) {
-            passwd = beautify_string(passwd);
             if (strlen(passwd) > 500) passwd[500] = '\0';
-            xsyslog_ev(LOG_NOTICE, "login.good",
-                       lf_s("r.clienthost", imapd_clienthost),
-                       lf_s("u.username", ""),
-                       lf_d("login.anonymous", 1),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("login.password", passwd));
+            loginlog_anon(imapd_clienthost, "plaintext",
+                          imapd_starttls_done, passwd);
             reply = "Anonymous access granted";
             imapd_userid = xstrdup("anonymous");
         }
         else {
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", imapd_clienthost),
-                       lf_s("login.mech", "plaintext"),
-                       lf_s("error", "anonymous login refused"));
+            loginlog_bad(imapd_clienthost, canon_user, "plaintext", NULL,
+                         "anonymous login refused");
             prot_printf(imapd_out, "%s NO %s\r\n", tag,
                    error_message(IMAP_ANONYMOUS_NOT_PERMITTED));
             buf_free(&passwdbuf);
@@ -3149,25 +3139,16 @@ static void cmd_login(char *tag, char *user)
         reply = replybuf;
         imapd_userid = xstrdup(canon_user);
         imapd_authstate = auth_newstate(canon_user);
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("session_id", session_id()),
-                   lf_s("r.clienthost", imapd_clienthost),
-                   lf_s("u.username", imapd_userid),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("login.magic", imapd_magicplus ? imapd_magicplus : ""),
-                   lf_d("login.nopassword", 1),
-                   lf_d("login.tls", imapd_starttls_done ? 1 : 0));
+        loginlog_good_imap(imapd_clienthost, imapd_userid, "plaintext",
+                           imapd_starttls_done, imapd_magicplus, true);
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
                                  canon_user,
                                  strlen(canon_user),
                                  passwd,
                                  strlen(passwd))) != SASL_OK) {
-        xsyslog_ev(LOG_NOTICE, "login.bad",
-                   lf_s("r.clienthost", imapd_clienthost),
-                   lf_s("u.username", canon_user),
-                   lf_s("login.mech", "plaintext"),
-                   lf_s("error", sasl_errdetail(imapd_saslconn)));
+        loginlog_bad(imapd_clienthost, canon_user, "plaintext", NULL,
+                     sasl_errdetail(imapd_saslconn));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -3208,13 +3189,8 @@ static void cmd_login(char *tag, char *user)
         reply = replybuf;
         imapd_userid = xstrdup((const char *) val);
         prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_YES);
-        xsyslog_ev(LOG_NOTICE, "login.good",
-                   lf_s("session_id", session_id()),
-                   lf_s("r.clienthost", imapd_clienthost),
-                   lf_s("u.username", imapd_userid),
-                   lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
-                   lf_s("login.mech", "plaintext"),
-                   lf_d("login.tls", imapd_starttls_done ? 1 : 0));
+        loginlog_good_imap(imapd_clienthost, imapd_userid, "plaintext",
+                           imapd_starttls_done, imapd_magicplus, false);
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
@@ -3262,7 +3238,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     if (r) {
         const char *errorstring = NULL;
-        const char *userid = "-notset-";
+        const char *userid = NULL;
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -3281,11 +3257,8 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             if (sasl_result != SASL_NOUSER)
                 sasl_getprop(imapd_saslconn, SASL_USERNAME, (const void **) &userid);
 
-            xsyslog_ev(LOG_NOTICE, "login.bad",
-                       lf_s("r.clienthost", imapd_clienthost),
-                       lf_s("login.mech", authtype),
-                       lf_s("u.username", userid),
-                       lf_s("error", sasl_errdetail(imapd_saslconn)));
+            loginlog_bad(imapd_clienthost, userid, authtype, NULL,
+                         sasl_errdetail(imapd_saslconn));
 
             prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
@@ -3346,13 +3319,8 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
         imapd_userid = xstrdup(canon_user);
     }
 
-    xsyslog_ev(LOG_NOTICE, "login.good",
-               lf_s("session_id", session_id()),
-               lf_s("r.clienthost", imapd_clienthost),
-               lf_s("u.username", imapd_userid),
-               lf_s("login.magic", imapd_magicplus ? imapd_magicplus : "none"),
-               lf_s("login.mech", authtype),
-               lf_d("login.tls", imapd_starttls_done ? 1 : 0));
+    loginlog_good_imap(imapd_clienthost, imapd_userid, authtype,
+                       imapd_starttls_done, imapd_magicplus, false);
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);
