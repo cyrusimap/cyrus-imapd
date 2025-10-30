@@ -263,6 +263,32 @@ void test_mappedfile(void)
     puts("mappedfile ok");
 }
 
+void test_parseaddr(void)
+{
+    const char *str = "Fred Bloggs <fbloggs@example.net>,"
+                      " Sarah Jane Smith <sjsmith@example.net>";
+
+    struct address *list = NULL;
+    parseaddr_list(str, &list);
+    parseaddr_free(list);
+
+    const struct address *addr;
+    struct address_itr iter;
+    address_itr_init(&iter, str, 0);
+    for (addr = address_itr_next(&iter);
+         addr != NULL;
+         addr = address_itr_next(&iter))
+    {
+        char *x = address_get_all(addr, 1);
+
+        (void) x;
+        free(x);
+    }
+    address_itr_fini(&iter);
+
+    puts("parseaddr ok");
+}
+
 void test_rfc822tok(void)
 {
     const char *str = "lorem ipsum dolor sit amet";
@@ -310,5 +336,6 @@ int main(int argc, char **argv)
     test_glob();
     test_imapurl();
     test_mappedfile();
+    test_parseaddr();
     test_rfc822tok();
 }
