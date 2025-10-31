@@ -1477,7 +1477,8 @@ EXPORTED void tcp_disable_nagle(int fd)
 }
 
 EXPORTED void xsyslog_fn(int priority, const char *description,
-                         const char *func, const char *extra_fmt, ...)
+                         const char *file, int line, const char *func,
+                         const char *extra_fmt, ...)
 {
     struct buf buf = BUF_INITIALIZER;
     const char *traceid = trace_id();
@@ -1512,9 +1513,14 @@ EXPORTED void xsyslog_fn(int priority, const char *description,
             buf_appendcstr(&buf, strerror(saved_errno));
             buf_appendmap(&buf, "> ", 2);
         }
-        buf_appendmap(&buf, "func=<", 6);
-        if (func) buf_appendcstr(&buf, func);
-        buf_putc(&buf, '>');
+        if (file && line) {
+            buf_printf(&buf, "source=<%s:%d> ", file, line);
+        }
+        if (func) {
+            buf_appendmap(&buf, "func=<", 6);
+            buf_appendcstr(&buf, func);
+            buf_putc(&buf, '>');
+        }
     }
 
     syslog(priority, "%s", buf_cstring(&buf));

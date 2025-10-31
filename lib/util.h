@@ -392,11 +392,12 @@ const char *makeuuid();
 void tcp_enable_keepalive(int fd);
 void tcp_disable_nagle(int fd);
 
+__attribute__((format(printf, 6, 7)))
 void xsyslog_fn(int priority, const char *description,
-                const char *func, const char *extra_fmt, ...)
-               __attribute__((format(printf, 4, 5)));
+                const char *file, int line, const char *func,
+                const char *extra_fmt, ...);
 #define xsyslog(pri, desc, ...)  \
-    xsyslog_fn(pri, desc, __func__, __VA_ARGS__)
+    xsyslog_fn(pri, desc, __FILE__, __LINE__, __func__, __VA_ARGS__)
 
 /*
  * GCC_VERSION macro usage:
