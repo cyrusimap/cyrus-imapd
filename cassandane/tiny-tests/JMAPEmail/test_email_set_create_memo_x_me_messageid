@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_set_create_memo_ignore_convsubject
+sub test_email_set_create_memo_x_me_messageid
 {
     my ($self) = @_;
     my $jmap   = $self->{jmap};
