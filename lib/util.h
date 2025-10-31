@@ -439,12 +439,15 @@ typedef struct xsyslog_ev_arg_list {
     }
 
 void _xsyslog_ev(int saved_errno, int priority, const char *event,
+                 const char *file, int line, const char *func,
                  xsyslog_ev_arg_list *arg);
 
 #define xsyslog_ev(priority, event, ...)                                    \
     do {                                                                    \
         int se = errno;                                                     \
-        _xsyslog_ev(se, priority, event, XSYSLOG_EV_ARG_LIST(__VA_ARGS__)); \
+        _xsyslog_ev(se, priority, event,                                    \
+                    __FILE__, __LINE__, __func__,                           \
+                    XSYSLOG_EV_ARG_LIST(__VA_ARGS__));                      \
     } while (0)
 
 enum xsyslog_ev_arg_type {
@@ -459,7 +462,6 @@ enum xsyslog_ev_arg_type {
     LF_ZU,
     LF_LLX,
     LF_F,
-    LF_M,
     LF_S,
     LF_UTF8,
     LF_RAW
@@ -476,7 +478,6 @@ enum xsyslog_ev_arg_type {
 #define lf_zu(key, value)   (xsyslog_ev_arg){ key, LF_ZU,   { .zu  = value } }
 #define lf_llx(key, value)  (xsyslog_ev_arg){ key, LF_LLX,  { .llu = value } }
 #define lf_f(key, value)    (xsyslog_ev_arg){ key, LF_F,    { .f   = value } }
-#define lf_m(key)           (xsyslog_ev_arg){ key, LF_M,    {              } }
 #define lf_s(key, value)    (xsyslog_ev_arg){ key, LF_S,    { .s   = value } }
 #define lf_utf8(key, value) (xsyslog_ev_arg){ key, LF_UTF8, { .s   = value } }
 

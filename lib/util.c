@@ -1536,10 +1536,13 @@ EXPORTED char *modseqtoa(modseq_t modseq)
 }
 
 EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
+                          const char *file, int line, const char *func,
                           xsyslog_ev_arg_list *arg)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
     struct buf errbuf = BUF_INITIALIZER;
+    bool want_diag = (LOG_PRI(priority) != LOG_NOTICE
+                      && LOG_PRI(priority) != LOG_INFO);
 
     logfmt_init(&lf, event);
     logfmt_push_session(&lf);
@@ -1560,9 +1563,6 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
         case LF_LLX: logfmt_pushf(&lf, name, "%llx", arg->data[i].llu); break;
         case LF_F:   logfmt_pushf(&lf, name, "%f", arg->data[i].f);     break;
 
-        case LF_M:
-            logfmt_push(&lf, name, strerror(saved_errno));
-            break;
         case LF_S:
             logfmt_push(&lf, name, arg->data[i].s);
             break;
@@ -1579,6 +1579,12 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
             fatal(buf_cstring(&errbuf), EX_SOFTWARE);
             break;
         }
+    }
+
+    if (want_diag) {
+        if (saved_errno)
+            logfmt_push(&lf, "sys.error", strerror(saved_errno));
+        logfmt_push_caller(&lf, file, line, func);
     }
 
     syslog(priority, "%s", logfmt_cstring(&lf));
