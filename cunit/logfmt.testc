@@ -351,4 +351,33 @@ static void test_logfmt_push_session(void)
     }
 }
 
+static void test_logfmt_push_caller(void)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    char expect_file[1024], expect_line[1024], expect_func[1024];
+    const char *actual_file, *actual_line, *actual_func;
+    int line;
+
+    logfmt_init(&lf, "test_logfmt_push_caller");
+
+    // clang-format off
+    line = __LINE__, logfmt_push_caller(&lf, __FILE__, __LINE__, __func__);
+    // clang-format on
+
+    snprintf(expect_file, sizeof(expect_file), "caller.file=%s", __FILE__);
+    snprintf(expect_line, sizeof(expect_line), "caller.line=%d", line);
+    snprintf(expect_func, sizeof(expect_func), "caller.func=%s", __func__);
+
+    actual_file = strstr(logfmt_cstring(&lf), "caller.file");
+    CU_ASSERT_SUBSTR_EQUAL(actual_file, expect_file, strlen(expect_file));
+
+    actual_line = strstr(logfmt_cstring(&lf), "caller.line");
+    CU_ASSERT_SUBSTR_EQUAL(actual_line, expect_line, strlen(expect_line));
+
+    actual_func = strstr(logfmt_cstring(&lf), "caller.func");
+    CU_ASSERT_SUBSTR_EQUAL(actual_func, expect_func, strlen(expect_func));
+
+    logfmt_fini(&lf);
+}
+
 /* vim: set ft=c: */

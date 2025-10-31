@@ -73,4 +73,9 @@ extern void logfmt_pushf(struct logfmt *lf, const char *key,
 
 extern void logfmt_push_session(struct logfmt *lf);
 
+extern void logfmt_push_caller(struct logfmt *lf,
+                               const char *file,
+                               int line,
+                               const char *func);
+
 #endif
