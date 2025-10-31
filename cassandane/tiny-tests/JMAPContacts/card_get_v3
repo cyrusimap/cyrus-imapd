@@ -63,9 +63,6 @@ EOF
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         uid => $uid,
         updated => '2008-04-24T19:52:43Z',
-        vCardProps => [
-            [ 'version', {}, 'text', '4.0' ]
-        ],
         name => {
             full => 'Forrest Gump',
             components => [
@@ -110,11 +107,9 @@ EOF
         onlineServices => {
             OS1 => {
                 user => 'foo',
-                vCardName => 'impp',
                 service => 'Facebook'
             },
             OS2 => {
-                vCardName => 'x-socialprofile',
                 service => 'GitHub',
                 user => 'foo'
             },

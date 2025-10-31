@@ -53,9 +53,6 @@ EOF
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         uid => $id,
         kind => 'group',
-        vCardProps => [
-            [ 'version', {}, 'text', '4.0' ]
-        ],
         name => {
             full => 'The Doe Family'
         },

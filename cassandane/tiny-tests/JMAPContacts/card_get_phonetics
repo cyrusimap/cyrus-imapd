@@ -53,9 +53,6 @@ EOF
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
         uid => $id,
         language => 'zho-Hant',    
-        vCardProps => [
-            [ 'version', {}, 'text', '4.0' ]
-        ],
         name => {
             full => '孫中山文逸仙',
             components => [

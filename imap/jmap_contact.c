@@ -634,8 +634,20 @@ static const jmap_property_t contact_props[] = {
         NULL,
         0
     },
+
+    /* RFC 9555 conversion properties - for internal use only */
     {
         "vCardProps",
+        NULL,
+        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
+    },
+    {
+        "vCardName",
+        NULL,
+        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
+    },
+    {
+        "vCardParams",
         NULL,
         JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
     },
@@ -1113,6 +1125,74 @@ static void property_blob_free(property_blob_t **blob)
     *blob = NULL;
 }
 
+static void reject_convprops_internal(struct jmap_parser *parser,
+                                      struct buf *buf,
+                                      json_t *jpatch,
+                                      json_t *invalid)
+{
+    if (json_is_object(jpatch)) {
+        const char *key;
+        json_t *jval;
+        json_object_foreach(jpatch, key, jval)
+        {
+            if (strchr(key, '/'))
+                jmap_parser_push_path(parser, key);
+            else
+                jmap_parser_push(parser, key);
+
+            const char *subpath = key;
+            bool did_reject = false;
+            while (subpath) {
+                if (!strncasecmp(subpath, "vCard", 5)) {
+                    did_reject = true;
+                    json_array_append_new(
+                        invalid, json_string(jmap_parser_path(parser, buf)));
+                    break;
+                }
+                else {
+                    subpath = strchr(subpath, '/');
+                    if (subpath) subpath++;
+                }
+            }
+
+            if (!did_reject) {
+                reject_convprops_internal(parser, buf, jval, invalid);
+            }
+
+            jmap_parser_pop(parser);
+        }
+    }
+    else if (json_is_array(jpatch)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(jpatch, i, jval) {
+            buf_reset(buf);
+            buf_printf(buf, "%zu", i);
+            jmap_parser_push(parser, buf_cstring(buf));
+            reject_convprops_internal(parser, buf, jval, invalid);
+            jmap_parser_pop(parser);
+        }
+    }
+}
+
+/* Reject any JSON pointer containing a vCard-conversion
+ * property from the PatchObject "jpatch". Report the full path
+ * of the removed patch entry in "invalid".
+ *
+ * Any property starting with "vCard" is assumed to be
+ * a conversion property, e.g. such as vCardProps, vCardName
+ * et al defined in RFC 9555.
+ */
+static void reject_convprops(json_t *jpatch, json_t *invalid) {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+
+    reject_convprops_internal(&parser, &buf, jpatch, invalid);
+
+    buf_free(&buf);
+    jmap_parser_fini(&parser);
+}
+
 static void _contacts_set(struct jmap_req *req, unsigned kind,
                           const jmap_property_t *props,
                           int (*_set_create)(jmap_req_t *req,
@@ -1175,6 +1255,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = json_object();
+        reject_convprops(arg, invalid);
         r = _set_create(req, kind, arg, &mailbox, item, &errors);
         if (r) {
             json_t *err;
@@ -1231,6 +1312,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
+        reject_convprops(arg, invalid);
         r = _set_update(req, set.apply_empty_updates,
                         kind, uid, arg, db, &mailbox, &item, &errors);
         if (r) {
@@ -4739,12 +4821,14 @@ static void _contact_copy(jmap_req_t *req,
         goto done;
     }
 
+    // Apply patch.
+    json_t *invalid = json_array();
+    reject_convprops(jcard, invalid);
     dst_card = jmap_patchobject_apply(src_card, jcard, NULL, 0);
     json_object_del(dst_card, "id");  // immutable and WILL change
     json_decref(src_card);
 
     /* Create vcard */
-    json_t *invalid = json_array();
     jmap_contact_errors_t errors = { invalid, NULL };
     json_t *item = json_object();
     r = _set_create(req, CARDDAV_KIND_CONTACT, dst_card,
@@ -6469,7 +6553,7 @@ static void _unmapped_param(json_t *obj,
 }
 
 static void _add_vcard_params(json_t *obj, vcardproperty *prop,
-                              unsigned param_flags)
+                              unsigned param_flags, bool convert_unknown)
 {
     vcardproperty_kind prop_kind = vcardproperty_isa(prop);
     struct buf buf = BUF_INITIALIZER;
@@ -6747,8 +6831,10 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
             break;
         }
 
-        /* Unknown/unexpected parameter [value]*/
-        _unmapped_param(obj, param, param_value);
+        if (convert_unknown) {
+            /* Unknown/unexpected parameter [value]*/
+            _unmapped_param(obj, param, param_value);
+        }
     }
 
     buf_free(&buf);
@@ -6757,6 +6843,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 #define IGNORE_VCARD_VERSION  (1<<0)
 #define IGNORE_DERIVED_PROPS  (1<<1)
 #define DISABLE_URI_AS_BLOBID (1<<2)
+#define SET_VCARD_CONVPROPS   (1<<3)
 
 struct card_rock {
     json_t *card;
@@ -7306,8 +7393,10 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 param_flags |= ALLOW_USERNAME_PARAM;
             }
 
-            jprop = json_pack("{s:o* s:o* s:s*}",
-                              "user", user, "uri", uri, "vCardName", kind);
+            jprop = json_pack("{s:o* s:o*}", "user", user, "uri", uri);
+
+            if (kind && (crock->flags & SET_VCARD_CONVPROPS))
+                json_object_set_new(jprop, "vCardName", json_string(kind));
 
             json_object_set_new(services, prop_id, jprop);
         }
@@ -7659,7 +7748,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         /* Unmapped Properties (jCard-encoded) */
     unmapped:
-    default: {
+    default: if (crock->flags & SET_VCARD_CONVPROPS) {
         json_t *props = json_object_get_vanew(obj, "vCardProps", "[]");
         json_t *jtype, *jparams = json_object();
         const char *type = NULL;
@@ -7791,7 +7880,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     }
 
     if (jprop) {
-        _add_vcard_params(jprop, prop, param_flags);
+        _add_vcard_params(jprop, prop, param_flags,
+                !!(crock->flags & SET_VCARD_CONVPROPS));
 
         if (label && (param_flags & ALLOW_LABEL_PARAM)) {
             /* Apple label */
@@ -12299,7 +12389,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         /* Convert the vCard to a JSContact Card. */
         json_t *old_obj = jmap_card_from_vcard(req->userid, vcard,
                                                db, *mailbox, &record,
-                                               IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS);
+                                               IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS | SET_VCARD_CONVPROPS);
         vcardcomponent_free(vcard);
         vcard = NULL;
 

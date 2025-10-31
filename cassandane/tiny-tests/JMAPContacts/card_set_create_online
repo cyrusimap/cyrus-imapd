@@ -33,7 +33,6 @@ sub test_card_set_create_online
                         x1 => {
                             '@type' => 'OnlineService',
                             uri => 'xmpp:alice@example.com',
-                            vCardName => 'impp',    
                             pref => 1
                         },
                         x2 => {

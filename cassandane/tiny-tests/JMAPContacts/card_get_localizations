@@ -69,9 +69,6 @@ EOF
         uid => $id,
         kind => 'individual',
         language => 'es',    
-        vCardProps => [
-            [ 'version', {}, 'text', '4.0' ]
-        ],
         name => {
             full => 'Gabriel García Márquez',
             components => [
