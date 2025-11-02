@@ -1836,7 +1836,7 @@ corresponding user.
 
 
 Note that in the above example, the C<unixhierarchysep> setting in
-imapd.conf is set to C<0>. When using the UNIX
+imapd.conf is set to C<0>, which was the default before 3.0. When using the UNIX
 hierarchy separator, the C</> (forward slash) character would be
 used as the hierarchy separator, and the example would look as
 follows:
