@@ -245,6 +245,7 @@ enum {
     STATUS_MAILBOXID =          (1<<8),  /* RFC 8474 */
     STATUS_DELETED =            (1<<9),  /* RFC 9051 */
     STATUS_DELETED_STORAGE =    (1<<10), /* RFC 9208 */
+    STATUS_ACCOUNTID =          (1<<11), /* draft-degennaro-imap-objectid-accountid */
 
     /* Non-standard */
     STATUS_UNIQUEID =           (1<<13),
