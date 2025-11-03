@@ -98,6 +98,7 @@ struct statusdata {
     uint32_t uidnext;
     uint32_t uidvalidity;
     const char *mailboxid;
+    const char *accountid;
     const char *uniqueid;
     uint32_t unseen;
     uint32_t mboptions;
@@ -109,7 +110,7 @@ struct statusdata {
     conv_status_t xconv;
 };
 
-#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
+#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
 // sorting for good packing rather than on-disk file order, since not
 // all target datastructures are neat sizes
