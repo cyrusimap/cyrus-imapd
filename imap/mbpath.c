@@ -115,105 +115,10 @@ struct options_t {
 #define MODE_USER   1
 #define MODE_PATH   2
 
-#ifdef USE_XAPIAN
-static void find_tier(const char *key, const char *val __attribute__((unused)), void *rock)
-{
-    strarray_t *tiers = (strarray_t *)rock;
-    const char *partition = strstr(key, "searchpartition-");
-    if (!partition) return;
-    strarray_appendm(tiers, xstrndup(key, partition - key));
-}
-#endif /* USE_XAPIAN */
-
-static void print_json(const mbname_t *mbname, const mbentry_t *mbentry)
+static void print_json(const mbentry_t *mbentry)
 {
     // we always print everything in JSON format
-    int i;
-
-    json_t *jres = json_object();
-
-    const char *userid = mbname_userid(mbname);
-
-    // mbname
-    json_t *jmbname = json_object();
-    if (mbname_userid(mbname))
-        json_object_set_new(jmbname, "userid", json_string(userid));
-    if (mbname_domain(mbname))
-        json_object_set_new(jmbname, "domain", json_string(mbname_domain(mbname)));
-    if (mbname_localpart(mbname))
-        json_object_set_new(jmbname, "localpart", json_string(mbname_localpart(mbname)));
-    if (mbname_isdeleted(mbname))
-        json_object_set_new(jmbname, "isdeleted", json_integer(mbname_isdeleted(mbname)));
-    json_t *jboxes = json_array();
-    const strarray_t *boxes = mbname_boxes(mbname);
-    for (i = 0; i < strarray_size(boxes); i++)
-        json_array_append_new(jboxes, json_string(strarray_nth(boxes, i)));
-    json_object_set_new(jmbname, "boxes", jboxes);
-    json_object_set_new(jmbname, "intname", json_string(mbname_intname(mbname)));
-    json_object_set_new(jres, "mbname", jmbname);
-
-    // we don't do quota paths because that's hard to extract from the quota db interface right now
-
-    if (userid) {
-        // user paths
-        json_t *juser = json_object();
-        char *val; // jansson has no API to transfer string ownership
-
-        val = user_hash_meta(userid, "conversations");
-        json_object_set_new(juser, "conversations", json_string(val));
-        free(val);
-
-        val = user_hash_meta(userid, "counters");
-        json_object_set_new(juser, "counters", json_string(val));
-        free(val);
-
-        val = user_hash_meta(userid, "dav");
-        json_object_set_new(juser, "dav", json_string(val));
-        free(val);
-
-        json_object_set_new(juser, "sieve", json_string(user_sieve_path(userid)));
-
-        val = user_hash_meta(userid, "seen");
-        json_object_set_new(juser, "seen", json_string(val));
-        free(val);
-
-        val = user_hash_meta(userid, "sub");
-        json_object_set_new(juser, "sub", json_string(val));
-        free(val);
-
-#ifdef USE_XAPIAN
-        val = user_hash_meta(userid, "xapianactive");
-        json_object_set_new(juser, "xapianactive", json_string(val));
-        free(val);
-#endif /* USE_XAPIAN */
-
-        json_object_set_new(jres, "user", juser);
-
-#ifdef USE_XAPIAN
-        // xapian tiers
-        json_t *jxapian = json_object();
-        strarray_t tiers = STRARRAY_INITIALIZER;
-        config_foreachoverflowstring(find_tier, &tiers);
-        for (i = 0; i < strarray_size(&tiers); i++) {
-            const char *tier = strarray_nth(&tiers, i);
-            char *basedir = NULL;
-            xapian_basedir(tier, mbentry->name, mbentry->partition, NULL, &basedir);
-            if (basedir) {
-                json_object_set_new(jxapian, tier, json_string(basedir));
-                free(basedir);
-            }
-        }
-        strarray_fini(&tiers);
-
-        json_object_set_new(jres, "xapian", jxapian);
-#endif /* USE_XAPIAN */
-    }
-
-    // mailbox paths
-    json_object_set_new(jres, "archive", json_string(mbentry_archivepath(mbentry, 0)));
-    json_object_set_new(jres, "data", json_string(mbentry_datapath(mbentry, 0)));
-    json_object_set_new(jres, "meta", json_string(mbentry_metapath(mbentry, 0, 0)));
-
+    json_t *jres = mbentry_paths_json(mbentry);
     char *out = json_dumps(jres, JSON_INDENT(2)|JSON_SORT_KEYS);
     printf("%s\n", out);
     free(out);
@@ -271,7 +176,7 @@ static int do_paths(struct findall_data *data, void *rock)
         return IMAP_MAILBOX_BADFORMAT;
     }
     else if (opts->do_json) {
-        print_json(data->mbname, data->mbentry);
+        print_json(data->mbentry);
     }
     else {
         if (opts->paths & DO_ARCHIVE) {
