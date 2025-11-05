@@ -20,6 +20,9 @@ spell out some of the standards of formatting and construction.  This document
 is, at present, quite out of date.  You are probably best served by just
 copying the style of the surrounding code.
 
+The repostitory contains a `.clang-format` file that reflects our preferred
+style.  This isn't applied automatically, and existing files are not already in
+that style -- so it's not a silver bullet for styling.  But it might help.
 
 ## The Tests
 
