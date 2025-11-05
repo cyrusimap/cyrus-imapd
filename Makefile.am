@@ -179,6 +179,7 @@ libexec_PROGRAMS += \
     imap/imapd \
     imap/lmtpd \
     imap/pop3d \
+    imap/backupcyrusd \
     imap/promstatsd \
     imap/smmapd \
     ptclient/ptloader
@@ -1366,6 +1367,11 @@ endif # CUNIT
 
 endif # JMAP
 
+imap_backupcyrusd_SOURCES = \
+    imap/mutex_fake.c \
+    imap/backupcyrusd.c \
+    master/service.c
+
 imap_pop3d_SOURCES = \
     imap/mutex_fake.c \
     imap/pop3d.c \
@@ -1381,6 +1387,8 @@ imap_pop3d_SOURCES += \
 endif # AUTOCREATE
 
 imap_pop3d_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
+
+imap_backupcyrusd_LDADD = $(LD_SERVER_ADD)
 
 PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
 
