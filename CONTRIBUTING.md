@@ -41,6 +41,10 @@ There are two kinds of tests:
   are located in the Cyrus IMAP repository, in `./cunit` and run by `make
   check`.  You should run these, too.
 
+The simplest way to run these is by using the `dar` tool along with
+`cyrus-docker`.  You can read more about those in the [Cyrus IMAP Developer
+Guide](https://www.cyrusimap.org/dev/imap/developer/overview.html).
+
 ## Submitting Your Work
 
 We use GitHub, including pull requests.  Submit a pull request.  One of the
