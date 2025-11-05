@@ -152,6 +152,8 @@ char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int i
 char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
 char *mbentry_archivepath(const struct mboxlist_entry *mbentry, uint32_t);
 
+json_t *mbentry_paths_json(const struct mboxlist_entry *mbentry);
+
 int mbentry_is_local_mailbox(const struct mboxlist_entry *mbentry);
 #define mbentry_is_remote_mailbox(mbentry) (!mbentry_is_local_mailbox(mbentry))
 
