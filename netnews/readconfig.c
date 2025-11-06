@@ -154,9 +154,10 @@ STATIC int EXPsplit(char *p, char sep, char **argv, int count)
             for (; *p == sep; p++);
             if (!*p)
                 return i;
-            if (++i == count)
+            if (++i == count) {
                 /* Overflow. */
                 return -1;
+            }
             *argv++ = p;
         }
     return i;
