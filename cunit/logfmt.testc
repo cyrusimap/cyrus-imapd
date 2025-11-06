@@ -31,6 +31,7 @@ static void test_logfmt_escape_bytestring1(void)
         const char *expect;
     } tests[] = {
         { NULL,                 "~null~" },
+        { "~null~",             "~null~" }, /* n.b. ambiguity! */
         { "",                   "\"\"" }, /* empty string is quoted */
         { "basic",              "basic" }, /* basic string isn't quoted */
         { "equals=equals",      "\"equals=equals\"" },
@@ -176,6 +177,7 @@ static void test_logfmt_escape_utf8(void)
         const char *expect;
     } tests[] = {
         { NULL,                 "~null~" },
+        { "~null~",             "~null~" }, /* n.b. ambiguity! */
         { "",                   "\"\"" }, /* empty string is quoted */
         { "basic",              "basic" }, /* basic string isn't quoted */
         { "equals=equals",      "\"equals=equals\"" },
