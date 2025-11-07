@@ -45,6 +45,7 @@
 #include "carddav_db.h"
 #include "http_dav.h"
 #include "spool.h"
+#include "mboxlist.h"
 #include "util.h"
 #include "xstrlcpy.h"
 
@@ -303,6 +304,37 @@ done:
     return ret;
 }
 
+static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
+                      const char *userid, const char *key)
+{
+    mbname_t *mbname = NULL;
+    if (!strcasecmp(key, "mboxname")) {
+        mbname = mbname_from_extname(userid, &httpd_namespace, "cyrus");
+    }
+    else {
+        mbname = mbname_from_userid(userid);
+    }
+    if (!mbname) return HTTP_NOT_FOUND;
+
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+    mbname_free(&mbname);
+    if (r) return HTTP_NOT_FOUND;
+
+    json_t *jres = mbentry_paths_json(mbentry);
+    mboxlist_entry_free(&mbentry);
+
+    char *result = json_dumps(jres, JSON_INDENT(2)|JSON_SORT_KEYS);
+    json_decref(jres);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+
+    free(result);
+    return 0;
+}
+
 static int meth_get_db(struct transaction_t *txn,
                        void *params __attribute__((unused)))
 {
@@ -334,6 +366,9 @@ static int meth_get_db(struct transaction_t *txn,
 
     if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
         return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
+        return get_mbpath(txn, userhdrs[0], keyhdrs[0]);
 
     return HTTP_NOT_FOUND;
 }
