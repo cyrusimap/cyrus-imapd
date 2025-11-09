@@ -1,8 +1,9 @@
 #include "cunit/unit.h"
 #include "lib/util.h"
 
-#include "lib/sessionid.h"
 #include "lib/libconfig.h"
+#include "lib/logfmt.h"
+#include "lib/sessionid.h"
 
 #include <syslog.h>
 #include <limits.h>
@@ -148,72 +149,6 @@ static void test_lf_f(void)
     xsyslog_ev(LOG_ERR, "lf_f test",
         lf_f("first", 1.1), lf_f("second", 2.2), lf_f("third", third));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
-}
-
-int mess_with_errno()
-{
-    errno = errno + 1;
-
-    return 1;
-}
-
-static void test_lf_m(void)
-{
-    struct buf expect = BUF_INITIALIZER;
-    struct buf errbuf = BUF_INITIALIZER;
-    char *errstr = strerror(1);
-    size_t i;
-    int needs_quotes = 0;
-
-    buf_printf(&expect, "event=\"lf_m test\" a=1");
-
-    // escape error string if necessary...
-    for (i = 0; i < strlen(errstr); i++) {
-        switch (errstr[i]) {
-        case '\\':
-            buf_appendcstr(&errbuf, "\\\\");
-            needs_quotes = 1;
-            break;
-        case '"':
-            buf_appendcstr(&errbuf, "\\\"");
-            needs_quotes = 1;
-            break;
-        case '\r':
-            buf_appendcstr(&errbuf, "\\r");
-            needs_quotes = 1;
-            break;
-        case '\n':
-            buf_appendcstr(&errbuf, "\\n");
-            needs_quotes = 1;
-            break;
-        case ' ':
-            needs_quotes = 1;
-            GCC_FALLTHROUGH
-
-        default:
-            buf_printf(&errbuf, "%c", errstr[i]);
-        }
-    }
-
-    if (needs_quotes || strlen(errstr) == 0) {
-        buf_printf(&expect, " error=\"%s\"", buf_cstring(&errbuf));
-    } else {
-        buf_printf(&expect, " error=%s", buf_cstring(&errbuf));
-    }
-
-    buf_printf(&expect, " b=1");
-
-    CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&expect));
-    errno = 1;
-    xsyslog_ev(LOG_ERR, "lf_m test",
-        lf_d("a", mess_with_errno()),
-        lf_m("error"),
-        lf_d("b", mess_with_errno())
-    );
-    CU_ASSERT_SYSLOG(/*all*/0, 1);
-
-    buf_free(&errbuf);
-    buf_free(&expect);
 }
 
 static void test_lf_s(void)
@@ -420,6 +355,41 @@ static void test_trace_id(void)
     xsyslog_ev(LOG_ERR, "trace id test",
                         lf_d("first", 1));
     CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static int mess_with_errno(void)
+{
+    errno = errno + 1;
+
+    return 1;
+}
+
+static void test_syserror(void)
+{
+    struct buf expect = BUF_INITIALIZER;
+    struct buf errbuf = BUF_INITIALIZER;
+    unsigned pat_a = 0, pat_b = 0, pat_syserror = 0;
+    const int test_errno = 1;
+
+    // escape expected error string if necessary...
+    logfmt_escape_bytestring(&errbuf, strerror(test_errno));
+    buf_printf(&expect, "sys.error=%s", buf_cstring(&errbuf));
+
+    pat_a = CU_SYSLOG_MATCH_SUBSTR("a=1");
+    pat_b = CU_SYSLOG_MATCH_SUBSTR("b=1");
+    pat_syserror = CU_SYSLOG_MATCH_SUBSTR(buf_cstring(&expect));
+
+    errno = test_errno;
+    xsyslog_ev(LOG_ERR, "syserror test",
+               lf_d("a", mess_with_errno()),
+               lf_d("b", mess_with_errno())
+    );
+    CU_ASSERT_SYSLOG(pat_a, 1);
+    CU_ASSERT_SYSLOG(pat_b, 1);
+    CU_ASSERT_SYSLOG(pat_syserror, 1);
+
+    buf_free(&errbuf);
+    buf_free(&expect);
 }
 
 /* vim: set ft=c: */

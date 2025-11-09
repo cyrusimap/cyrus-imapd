@@ -198,6 +198,19 @@ extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
         #expected, _e ? _e : "(null)");                                 \
 } while(0)
 
+/* custom -- no prior definition to undef */
+#define CU_ASSERT_SUBSTR_EQUAL(actual,expected,len) do {                \
+    const char *_a = (actual), *_e = (expected);                        \
+    const int _l = (len);                                               \
+    const bool ok = !strncmp(_a ? _a : "", _e ? _e : "", _l);           \
+    CU_assertFormatImplementation(                                      \
+        ok, __LINE__, __FILE__, "", CU_FALSE,                           \
+        "CU_ASSERT_SUBSTR_EQUAL(%s=\"%.*s\", %s=\"%.*s\", %s=%d)",      \
+        #actual, _l, _a ? _a : "(null)",                                \
+        #expected, _l, _e ? _e : "(null)",                              \
+        #len, _l);                                                      \
+} while (0)
+
 #undef CU_ASSERT_STRING_NOT_EQUAL
 #define CU_ASSERT_STRING_NOT_EQUAL(actual,expected) do {                \
     const char *_a = (actual), *_e = (expected);                        \

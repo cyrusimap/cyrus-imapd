@@ -342,3 +342,13 @@ EXPORTED void logfmt_push_session(struct logfmt *lf)
         logfmt_push(lf, "r.tid", traceid);
     }
 }
+
+EXPORTED void logfmt_push_caller(struct logfmt *lf,
+                                 const char *file,
+                                 int line,
+                                 const char *func)
+{
+    logfmt_push(lf, "caller.file", file);
+    logfmt_pushf(lf, "caller.line", "%d", line);
+    logfmt_push(lf, "caller.func", func);
+}
