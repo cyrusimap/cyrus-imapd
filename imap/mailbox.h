@@ -391,24 +391,6 @@ struct mailbox_iter;
 #define OFFSET_RECENTUID             184 /* last UID the owner was told about */
 #define OFFSET_HEADER_CRC            188
 
-#define PRE20_OFFSET_LAST_UID             28
-#define PRE20_OFFSET_UIDVALIDITY          44
-#define PRE20_OFFSET_FIRST_EXPUNGED       88
-#define PRE20_OFFSET_LAST_REPACK_TIME     92
-#define PRE20_OFFSET_RECENTUID           104
-#define PRE20_OFFSET_RECENTTIME          108
-#define PRE20_OFFSET_QUOTA_ANNOT_USED    116
-#define PRE20_OFFSET_CHANGES_EPOCH       152
-
-#define PRE19_OFFSET_MAILBOX_OPTIONS      60
-#define PRE19_OFFSET_LEAKED_CACHE         64
-#define PRE19_OFFSET_HIGHESTMODSEQ        68
-#define PRE19_OFFSET_DELETEDMODSEQ        76
-#define PRE19_OFFSET_EXISTS               84
-#define PRE19_OFFSET_CHANGES_EPOCH       136
-#define PRE19_OFFSET_QUOTA_DELETED_USED  140
-#define PRE19_OFFSET_QUOTA_EXPUNGED_USED 148
-
 /* Offsets of index_record fields in index/expunge file
  *
  * NOTE: Since we might be using a 64-bit MODSEQ in the index record,
@@ -438,27 +420,6 @@ struct mailbox_iter;
 #define OFFSET_BASECID        128 /* base conversation id, added in v20 */
 #define OFFSET_CACHE_CRC      136 /* CRC32 of cache record */
 #define OFFSET_RECORD_CRC     140
-
-#define PRE20_OFFSET_INTERNALDATE    4
-#define PRE20_OFFSET_SENTDATE        8
-#define PRE20_OFFSET_SIZE           12
-#define PRE20_OFFSET_HEADER_SIZE    16
-#define PRE20_OFFSET_GMTIME         20
-#define PRE20_OFFSET_CACHE_OFFSET   24
-#define PRE20_OFFSET_LAST_UPDATED   28
-#define PRE20_OFFSET_SYSTEM_FLAGS   32
-#define PRE20_OFFSET_USER_FLAGS     36
-#define PRE20_OFFSET_SAVEDATE       52
-#define PRE20_OFFSET_CACHE_CRC     104
-#define PRE20_OFFSET_RECORD_CRC    108
-
-#define PRE16_OFFSET_CACHE_CRC      96
-#define PRE16_OFFSET_RECORD_CRC    100
-
-#define PRE13_OFFSET_CACHE_CRC      88
-#define PRE13_OFFSET_RECORD_CRC     92
-
-#define PRE10_OFFSET_MODSEQ         72
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
