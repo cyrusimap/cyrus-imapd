@@ -20,6 +20,9 @@ spell out some of the standards of formatting and construction.  This document
 is, at present, quite out of date.  You are probably best served by just
 copying the style of the surrounding code.
 
+The repostitory contains a `.clang-format` file that reflects our preferred
+style.  This isn't applied automatically, and existing files are not already in
+that style -- so it's not a silver bullet for styling.  But it might help.
 
 ## The Tests
 
@@ -37,6 +40,10 @@ There are two kinds of tests:
 * The [cunit tests](https://www.cyrusimap.org/imap/developer/unit-tests.html)
   are located in the Cyrus IMAP repository, in `./cunit` and run by `make
   check`.  You should run these, too.
+
+The simplest way to run these is by using the `dar` tool along with
+`cyrus-docker`.  You can read more about those in the [Cyrus IMAP Developer
+Guide](https://www.cyrusimap.org/dev/imap/developer/overview.html).
 
 ## Submitting Your Work
 
