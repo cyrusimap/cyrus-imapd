@@ -10,14 +10,14 @@ sub test_cardgroup_changes
 
 # Update to Card[Group]/[get|set] once implemented
     xlog $self, "create contacts";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {
+    my $res = $jmap->CallMethods([['ContactCard/set', {create => {
                         "a" => {firstName => "a", lastName => "a"},
                         "b" => {firstName => "b", lastName => "b"},
                         "c" => {firstName => "c", lastName => "c"},
                         "d" => {firstName => "d", lastName => "d"}
                     }}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $contactA = $res->[0][1]{created}{"a"}{id};
     my $contactB = $res->[0][1]{created}{"b"}{id};
@@ -25,17 +25,20 @@ sub test_cardgroup_changes
     my $contactD = $res->[0][1]{created}{"d"}{id};
 
     xlog $self, "get contact groups state";
-    $res = $jmap->CallMethods([['ContactGroup/get', {}, "R2"]]);
+    $res = $jmap->CallMethods([['ContactCard/get', {}, "R2"]]);
     my $state = $res->[0][1]{state};
 
     xlog $self, "create contact group 1";
-    $res = $jmap->CallMethods([['ContactGroup/set', {create => {
-                        "1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {create => {
+        "1" => {
+            kind => 'group',
+            name => { full => "group1" },
+            members => { $contactA => JSON::true, $contactB => JSON::true }
+        }}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
-
 
     xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactCard/changes', {
@@ -53,10 +56,14 @@ sub test_cardgroup_changes
     $state = $res->[0][1]{newState};
 
     xlog $self, "create contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {create => {
-                        "2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {create => {
+        "2" => {
+            kind => 'group',
+            name => { full => "group2" },
+            members =>  { $contactC => JSON::true, $contactD => JSON::true }
+        }}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
@@ -113,12 +120,12 @@ sub test_cardgroup_changes
     $state = $res->[0][1]{newState};
 
     xlog $self, "destroy contact group 1, update contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     destroy => [$id1],
-                    update => {$id2 => {name => "second (updated)"}}
+                    update => {$id2 => {name => { full => "group2 (updated)" }}}
                 }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog $self, "get contact group updates";
@@ -135,8 +142,8 @@ sub test_cardgroup_changes
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
     xlog $self, "destroy contact group 2";
-    $res = $jmap->CallMethods([['ContactGroup/set', {destroy => [$id2]}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 }

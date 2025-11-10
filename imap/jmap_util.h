@@ -46,6 +46,7 @@
 
 #include <jansson.h>
 
+#include "carddav_db.h"
 #include "hash.h"
 #include "ical_support.h"
 #include "message.h"
@@ -105,19 +106,22 @@ struct jmap_parser {
     strarray_t path;
     json_t *invalid;
     json_t *serverset;
+    bitvector_t is_encoded;
 };
 
 #define JMAP_PARSER_INITIALIZER { \
     BUF_INITIALIZER, \
     STRARRAY_INITIALIZER, \
     json_array(), \
-    json_object() \
+    json_object(), \
+    BV_INITIALIZER \
 }
 
 extern void jmap_parser_fini(struct jmap_parser *parser);
 extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
 extern void jmap_parser_push_index(struct jmap_parser *parser,
                                    const char *prop, size_t index, const char *name);
+extern void jmap_parser_push_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_pop(struct jmap_parser *parser);
 extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
@@ -220,6 +224,20 @@ extern void jmap_set_mailboxid(struct conversations_state *cstate,
 #define JMAP_THREADID_SIZE 18
 extern void jmap_set_threadid(struct conversations_state *cstate,
                               conversation_id_t cid, char *thrid);
+
+#define JMAP_ADDRBOOKID_PREFIX 'R'
+#define JMAP_ADDRBOOKID_SIZE JMAP_MAILBOXID_SIZE
+
+#define JMAP_MAX_ADDRBOOKID_SIZE MAX(JMAP_ADDRBOOKID_SIZE, MAX_MAILBOX_NAME+1)
+
+extern void jmap_set_addrbookid(struct conversations_state *cstate,
+                                const mbentry_t *mbentry, char *mboxid);
+
+#define JMAP_CONTACTID_PREFIX 'D'
+#define JMAP_CONTACTID_SIZE (CONV_JMAPID_SIZE + 2)  // +2 for prefix and NUL
+extern void jmap_set_contactid(struct conversations_state *cstate,
+                               const struct carddav_data *cdata,
+                               struct buf *cid);
 
 #ifdef HAVE_ICAL
 struct jmap_caleventid {

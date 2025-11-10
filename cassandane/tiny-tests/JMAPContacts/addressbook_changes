@@ -14,14 +14,21 @@ sub test_addressbook_changes
     my $state = $res->[0][1]{state};
 
     xlog $self, "create addressbooks";
-    my $id1 = $carddav->NewAddressBook("foo");
-    my $id2 = $carddav->NewAddressBook("bar");
+    my $path1 = $carddav->NewAddressBook("foo");
+    my $path2 = $carddav->NewAddressBook("bar");
+
+    xlog $self, "get addressbook ids";
+    $res = $jmap->CallMethods([['AddressBook/get', {ids => undef}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $id1 = $m{"foo"}{id};
+    my $id2 = $m{"bar"}{id};
 
     xlog $self, "get addressbook updates";
     $res = $jmap->CallMethods([['AddressBook/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
+    $self->assert_matches(qr/^R.*/, $res->[0][1]{created}[0]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
@@ -39,8 +46,8 @@ sub test_addressbook_changes
 
     my $basepath = $carddav->{basepath};
     xlog $self, "update name of addressbook $id1, destroy addressbook $id2";
-    $carddav->UpdateAddressBook($basepath . "/" . $id1, name => "foo (upd)");
-    $carddav->DeleteAddressBook($basepath . "/" . $id2);
+    $carddav->UpdateAddressBook($basepath . "/" . $path1, name => "foo (upd)");
+    $carddav->DeleteAddressBook($basepath . "/" . $path2);
 
     xlog $self, "get addressbook updates";
     $res = $jmap->CallMethods([['AddressBook/changes', {
@@ -53,8 +60,10 @@ sub test_addressbook_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id1, $res->[0][1]{updated}[0]);
+    $self->assert_matches(qr/^R.*/, $id1);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
+    $self->assert_matches(qr/^R.*/, $id2);
     $state = $res->[0][1]{newState};
 
     xlog $self, "get empty addressbook updates";

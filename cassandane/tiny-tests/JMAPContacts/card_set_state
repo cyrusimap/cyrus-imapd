@@ -60,7 +60,7 @@ sub test_card_set_state
     $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
     xlog $self, "get contact $id to make sure state didn't change";
-    $res = $jmap->CallMethods([['Contact/get', {ids => [$id]}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{state});
 
     xlog $self, "destroy $id with expired state token $oldState";

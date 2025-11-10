@@ -10,7 +10,7 @@ sub test_card_changes
 
 # Update to ContactCard/[get|set] once implemented
     xlog $self, "get contacts";
-    my $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
+    my $res = $jmap->CallMethods([['ContactCard/get', {}, "R2"]]);
     my $state = $res->[0][1]{state};
 
     xlog $self, "get contact updates";
@@ -23,9 +23,9 @@ sub test_card_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
     xlog $self, "create contact 1";
-    $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
@@ -45,9 +45,9 @@ sub test_card_changes
     $state = $res->[0][1]{newState};
 
     xlog $self, "create contact 2";
-    $res = $jmap->CallMethods([['Contact/set', {create => {"2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {create => {"2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
@@ -104,12 +104,12 @@ sub test_card_changes
     $state = $res->[0][1]{newState};
 
     xlog $self, "destroy contact 1, update contact 2";
-    $res = $jmap->CallMethods([['Contact/set', {
+    $res = $jmap->CallMethods([['ContactCard/set', {
                     destroy => [$id1],
                     update => {$id2 => {firstName => "foo"}}
                 }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
     xlog $self, "get contact updates";
@@ -126,8 +126,8 @@ sub test_card_changes
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
     xlog $self, "destroy contact 2";
-    $res = $jmap->CallMethods([['Contact/set', {destroy => [$id2]}, "R1"]]);
+    $res = $jmap->CallMethods([['ContactCard/set', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 }

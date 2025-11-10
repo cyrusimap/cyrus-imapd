@@ -51,9 +51,6 @@ EOF
     $self->assert_not_null($res->[0][1]{parsed}{$blobId});
     $self->assert_str_equals('Card', $res->[0][1]{parsed}{$blobId}{'@type'});
     $self->assert_str_equals($id, $res->[0][1]{parsed}{$blobId}{uid});
-    $self->assert_deep_equals([
-        [ 'version', {}, 'text', '3.0' ]
-    ], $res->[0][1]{parsed}{$blobId}{vCardProps});
     $self->assert_str_equals('Forrest Gump', $res->[0][1]{parsed}{$blobId}{name}{full});
 
     $self->assert_null($res->[0][1]{parsed}{$blobId}{version});

@@ -19,13 +19,17 @@ sub test_card_get_v3
         expandurl => 1,
     );
 
+    # get id of Default addressbook
+    my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
+    my $abookId = $res->[0][1]{list}[0]{id};
+
     # PROP-IDs added so we can easily compare the results
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/test.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:$id
+UID:$uid
 BDAY;PROP-ID=A1:1944-06-07
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
@@ -47,7 +51,7 @@ EOF
     $card =~ s/\r?\n/\r\n/gs;
     $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['ContactCard/get', {
         }, 'R1']
     ]);
@@ -55,14 +59,10 @@ EOF
     my $want_jscard = {
         '@type' => 'Card',
         version => '1.0',
-        addressBookIds => { Default => JSON::true },
+        addressBookIds => { $abookId => JSON::true },
         'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        id => $id,
-        uid => $id,
+        uid => $uid,
         updated => '2008-04-24T19:52:43Z',
-        vCardProps => [
-            [ 'version', {}, 'text', '3.0' ]
-        ],
         name => {
             full => 'Forrest Gump',
             components => [
@@ -107,11 +107,9 @@ EOF
         onlineServices => {
             OS1 => {
                 user => 'foo',
-                vCardName => 'impp',
                 service => 'Facebook'
             },
             OS2 => {
-                vCardName => 'x-socialprofile',
                 service => 'GitHub',
                 user => 'foo'
             },
@@ -139,6 +137,7 @@ EOF
     $self->assert_not_null($blobid);
 
     # Delete generated fields
+    delete $have_jscard->{id};
     delete $have_jscard->{blobId};
     delete $have_jscard->{media}{P1}{blobId};
     delete $have_jscard->{'cyrusimap.org:blobId'};

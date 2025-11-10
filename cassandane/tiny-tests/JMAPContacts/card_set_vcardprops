@@ -2,242 +2,85 @@
 use Cassandane::Tiny;
 
 sub test_card_set_vcardprops
-    :needs_dependency_icalvcard :MailboxLegacyDirs
+  : needs_dependency_icalvcard
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    my $service = $self->{instance}->get_service("http");
-    $ENV{DEBUGDAV} = 1;
-    my $carddav = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-
-    my $prodid = '-//Example Corp.//CardDAV Client//EN';
-    my $name = 'Mr. John Q. Public, Esq.';
-
-    xlog $self, "Create card with vCard X- properties";
-    my $res = $jmap->CallMethods([
-        ['ContactCard/set', {
+    xlog $self, "Create card";
+    my $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
             create => {
-                "1" => {
+                1 => {
                     '@type' => 'Card',
-                    version => '1.0',
-                    prodId => $prodid,
-                    kind => 'individual',
-                    name => { full => $name },
-                    vCardProps => [
-                        [
-                            'x-text',
-                            {},
-                            'text',
-                            'baz',
-                        ],
-                        [
-                            'x-text-multi',
-                            {},
-                            'text',
-                            'foo', "", 'bar',
-                        ],
-                        [
-                            'x-uri',
-                            {},
-                            'uri',
-                            'ldap://ldap.example.com/cn=foo',
-                        ],
-                        [
-                            'x-date',
-                            {},
-                            'date',
-                            '--04-12',
-                        ],
-                        [
-                            'x-time-utc',
-                            {},
-                            'time',
-                            '12:30:00Z',
-                        ],
-                        [
-                            'x-date-time',
-                            {},
-                            'date-time',
-                            '2013-08-15T09:45:00+01:00',
-                        ],
-                        [
-                            'x-time-standalone',
-                            {},
-                            'date-and-or-time',
-                            'T12:30',
-                        ],
-                        [
-                            'x-timestamp',
-                            {},
-                            'timestamp',
-                            '2013-02-14T12:30:00Z',
-                        ],
-                        [
-                            'x-boolean',
-                            {},
-                            'boolean',
-                            JSON::true,
-                        ],
-                        [
-                            'x-integer-min',
-                            {},
-                            'integer',
-                            -9223372036854775808,
-                        ],
-                        [
-                            'x-integer-max',
-                            {},
-                            'integer',
-                            9223372036854775807,
-                        ],
-                        [
-                            'x-integer-multi',
-                            {},
-                            'integer',
-                            1, 2, 3, 4, 5,
-                        ],
-                        [
-                            'x-float-min',
-                            {},
-                            'float',
-                            -9007199254740992.,
-                        ],
-                        [
-                            'x-float-max',
-                            {},
-                            'float',
-                            9007199254740991.,
-                        ],
-                        [
-                            'x-float-pi',
-                            {},
-                            'float',
-                            3.14159265358979,
-                        ],
-                        [
-                            'x-float-struct',
-                            {},
-                            'float',
-                            [ 1.2, 3.4 ],
-                        ],
-                        [
-                            'x-utc-offset',
-                            {},
-                            'utc-offset',
-                            '-05:00',
-                        ],
-                        [
-                            'x-lang-tag',
-                            {},
-                            'language-tag',
-                            'de',
-                        ],
-                        [
-                            'x-unknown',
-                            { group => 'group1' },
-                            'unknown',
-                            'foo',
-                        ],
-                    ]    
+                    name    => { full => 'Test1' },
+                    emails  => {
+                        email1 => {
+                            "address" => 'test1@example.com',
+                        }
+                    },
+                    onlineServices => {
+                        os1 => {
+                            uri => 'xmpp:test1@example.com',
+                        },
+                    }
                 }
             }
-        }, 'R1']
-    ]);
+        },
+        'R1'
+    ] ]);
 
-    my $id = $res->[0][1]{created}{1}{id};
-    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    my $cardId1 = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($cardId1);
 
-    xlog $self, "Verify that X- properties are converted correctly";
-    $res = $carddav->Request('GET', $href, '',
-                             'Accept' => 'text/vcard; version=4.0');
-    my $card = $res->{content};
-    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr|\nX-TEXT;VALUE=TEXT:baz\r|, $card);
-    $self->assert_matches(qr|\nX-TEXT-MULTI;VALUE=TEXT:foo,,bar\r|, $card);
-    $self->assert_matches(qr|\nX-URI;VALUE=URI:ldap://ldap.example.com/cn=foo\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-DATE;VALUE=DATE:--04-12\r|, $card);
-    $self->assert_matches(qr|\nX-TIME-UTC;VALUE=TIME:12:30:00Z\r|, $card);
-    $self->assert_matches(qr|\nX-DATE-TIME;VALUE=DATE-TIME:2013-08-15T09:45:00\+01:00\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-TIME-STANDALONE;VALUE=DATE-AND-OR-TIME:T12:30\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-TIMESTAMP;VALUE=TIMESTAMP:2013-02-14T12:30:00Z\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-BOOLEAN;VALUE=BOOLEAN:TRUE\r|, $card);
-    $self->assert_matches(qr|\nX-INTEGER-MIN;VALUE=INTEGER:-9223372036854775808\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-INTEGER-MAX;VALUE=INTEGER:9223372036854775807\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-INTEGER-MULTI;VALUE=INTEGER:1,2,3,4,5\r|, $card);
-    # XXX Last digit of the min/max float values gets rounded down by Jansson
-    $self->assert_matches(qr|\nX-FLOAT-MIN;VALUE=FLOAT:-9007199254740990\.\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-FLOAT-MAX;VALUE=FLOAT:9007199254740990\.\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-FLOAT-PI;VALUE=FLOAT:3\.14159265358979\r|, $card);
-    $self->assert_matches(qr|\nX-FLOAT-STRUCT;VALUE=FLOAT:1\.2\\;3\.4\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-UTC-OFFSET;VALUE=UTC-OFFSET:-05:00\r|, $card);
-    $self->assert_matches(qr|\nX-LANG-TAG;VALUE=LANGUAGE-TAG:de\r|, $card);
-    $self->assert_matches(qr|\ngroup1\.X-UNKNOWN:foo\r|, $card);
-    $self->assert_matches(qr|\nPRODID:-//Example Corp.//CardDAV Client//EN\r|,
-                          $card);
-
-    xlog $self, "Update the contact";
-    $res = $jmap->CallMethods([
-        ['ContactCard/set', {
+    xlog $self, "Try to create/update card with vCard conversion properties (should fail)";
+    $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            create => {
+                2 => {
+                    '@type' => 'Card',
+                    name    => { full => 'Test2' },
+                    emails  => {
+                        email1 => {
+                            "address"     => 'test2@example.com',
+                            "vCardParams" => { "x-foo" => "Bar" },
+                        }
+                    },
+                    onlineServices => {
+                        os1 => {
+                            uri       => 'xmpp:test2@example.com',
+                            vCardName => "impp",
+                        },
+                    },
+                    vCardProps => [ [ "x-foo", {}, "unknown", "Hello" ] ],
+                }
+            },
             update => {
-                $id => {
-                    prodId => 'foo'
-                }
-            }
-        }, 'R1']
-    ]);
-    $self->assert_not_null($res->[0][1]{updated}{$id});
+                $cardId1 => {
+                    'emails/email1/vCardParams' => { "x-foo" => "Bar" },
+                    'onlineServices/os1/vCardName' => 'impp',
+                    vCardProps => [ [ "x-foo", {}, "unknown", "Hello" ] ],
 
-    xlog $self, "Verify that vCardProps are round-tripped correctly";
-    $res = $carddav->Request('GET', $href, '',
-                             'Accept' => 'text/vcard; version=4.0');
-    $card = $res->{content};
-    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $self->assert_matches(qr|\nX-TEXT;VALUE=TEXT:baz\r|, $card);
-    $self->assert_matches(qr|\nX-TEXT-MULTI;VALUE=TEXT:foo,,bar\r|, $card);
-    $self->assert_matches(qr|\nX-URI;VALUE=URI:ldap://ldap.example.com/cn=foo\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-DATE;VALUE=DATE:--04-12\r|, $card);
-    $self->assert_matches(qr|\nX-TIME-UTC;VALUE=TIME:12:30:00Z\r|, $card);
-    $self->assert_matches(qr|\nX-DATE-TIME;VALUE=DATE-TIME:2013-08-15T09:45:00\+01:00\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-TIME-STANDALONE;VALUE=DATE-AND-OR-TIME:T12:30\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-TIMESTAMP;VALUE=TIMESTAMP:2013-02-14T12:30:00Z\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-BOOLEAN;VALUE=BOOLEAN:TRUE\r|, $card);
-    $self->assert_matches(qr|\nX-INTEGER-MIN;VALUE=INTEGER:-9223372036854775808\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-INTEGER-MAX;VALUE=INTEGER:9223372036854775807\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-INTEGER-MULTI;VALUE=INTEGER:1,2,3,4,5\r|, $card);
-    # XXX Last digit of the min/max float values gets rounded down by Jansson
-    $self->assert_matches(qr|\nX-FLOAT-MIN;VALUE=FLOAT:-9007199254740990\.\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-FLOAT-MAX;VALUE=FLOAT:9007199254740990\.\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-FLOAT-PI;VALUE=FLOAT:3\.14159265358979\r|, $card);
-    $self->assert_matches(qr|\nX-FLOAT-STRUCT;VALUE=FLOAT:1\.2\\;3\.4\r|,
-                          $card);
-    $self->assert_matches(qr|\nX-UTC-OFFSET;VALUE=UTC-OFFSET:-05:00\r|, $card);
-    $self->assert_matches(qr|\nX-LANG-TAG;VALUE=LANGUAGE-TAG:de\r|, $card);
-    $self->assert_matches(qr|\ngroup1\.X-UNKNOWN:foo\r|, $card);
-    $self->assert_matches(qr|\nPRODID:foo\r|, $card);
+                },
+            },
+        },
+        'R1'
+    ] ]);
+
+    my @wantInvalidProps = sort ('vCardProps', 'emails/email1/vCardParams',
+        'onlineServices/os1/vCardName',);
+
+    $self->assert_not_null($res->[0][1]{notCreated}{2});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{2}{type});
+    my @gotInvalidProps = sort @{$res->[0][1]{notCreated}{2}{properties}};
+    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+
+    $self->assert_not_null($res->[0][1]{notUpdated}{$cardId1});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$cardId1}{type});
+    @gotInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId1}{properties}};
+    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
 }

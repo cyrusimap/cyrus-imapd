@@ -1,0 +1,270 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_fromcontactcarduid_shared
+    :needs_component_sieve
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog "Create shared addressbooks";
+    $admin->create("user.other");
+    my $http = $self->{instance}->get_service("http");
+    my $otherJmap = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    $admin->create("user.other2");
+    my $otherJmap2 = Mail::JMAPTalk->new(
+        user => 'other2',
+        password => 'pass',
+        host => $http->host(),
+        port => $http->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    xlog $self, "Enable compactids";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'other');
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'ctl_conversationsdb', '-I', 'on', 'other2');
+
+    $admin->create("user.other.#addressbooks.Shared", ['TYPE', 'ADDRESSBOOK']);
+    my $abookId = $admin->get_response_code('mailboxid')->[0];
+    $admin->setacl("user.other.#addressbooks.Shared", "cassandane", "lr") or die;
+    $imap->subscribe("user.other.#addressbooks.Shared");
+
+    $admin->create("user.other2.#addressbooks.Shared", ['TYPE', 'ADDRESSBOOK']);
+    my $abookId2 = $admin->get_response_code('mailboxid')->[0];
+    $admin->setacl("user.other2.#addressbooks.Shared", "cassandane", "lr") or die;
+    $imap->subscribe("user.other2.#addressbooks.Shared");
+
+    $admin->create("user.other2.#addressbooks.Shared2", ['TYPE', 'ADDRESSBOOK']);
+    my $abookId3 = $admin->get_response_code('mailboxid')->[0];
+    $admin->setacl("user.other2.#addressbooks.Shared2", "cassandane", "lr") or die;
+    $imap->subscribe("user.other2.#addressbooks.Shared2");
+
+    $admin->create("user.other2.#addressbooks.Unshared", ['TYPE', 'ADDRESSBOOK']);
+    my $abookId4 = $admin->get_response_code('mailboxid')->[0];
+
+    # translate mailboxids to addressbookids
+    substr($abookId, 0, 1) = "R";
+    substr($abookId2, 0, 1) = "R";
+    substr($abookId3, 0, 1) = "R";
+    substr($abookId4, 0, 1) = "R";
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:contacts',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    xlog "Create contacts in shared addressbooks";
+    my $res = $otherJmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                sharedContact => {
+                    emails => {
+                        e1 => {
+                            address => 'sharedcontact@local'
+                        }
+                    },
+                    addressBookIds => { $abookId => JSON::true }
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $sharedContactUid = $res->[0][1]{created}{sharedContact}{uid};
+    $self->assert_not_null($sharedContactUid);
+
+    $res = $otherJmap2->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                sharedContact2 => {
+                    emails => {
+                        e1 => {
+                            address => 'sharedcontact2@local'
+                        }
+                    },
+                    addressBookIds => { $abookId2 => JSON::true }
+                },
+                unsharedContact => {
+                    emails => {
+                        e1 => {
+                            address => 'unsharedcontact@local'
+                        }
+                    },
+                    addressBookIds => { $abookId4 => JSON::true }
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $sharedContactUid2 = $res->[0][1]{created}{sharedContact2}{uid};
+    $self->assert_not_null($sharedContactUid2);
+    my $unsharedContactUid = $res->[0][1]{created}{unsharedContact}{uid};
+    $self->assert_not_null($unsharedContactUid);
+
+    xlog "Create contact in own addressbook";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                ownContact => {
+                    emails => {
+                        e1 => {
+                            address => 'ownContact@local'
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $ownContactUid = $res->[0][1]{created}{ownContact}{uid};
+    $self->assert_not_null($ownContactUid);
+
+    xlog "Create group in own addressbook";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                ownGroup => {
+                    kind => 'group',
+                    members => {
+                        $sharedContactUid => JSON::true,
+                        $sharedContactUid2 => JSON::true,
+                    },
+                    emails => {
+                        e1 => {
+                            address => 'ownGroup@local'
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $ownGroupUid = $res->[0][1]{created}{ownGroup}{uid};
+    $self->assert_not_null($ownGroupUid);
+
+    xlog "Create group in shared addressbook";
+    $res = $otherJmap2->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                sharedGroup => {
+                    kind => 'group',
+                    members => {
+                        $ownContactUid => JSON::true,
+                        $sharedContactUid => JSON::true,
+                    },
+                    addressBookIds => { $abookId3 => JSON::true }
+                },
+            },
+        }, 'R1'],
+    ], $using);
+    my $sharedGroupUid = $res->[0][1]{created}{sharedGroup}{uid};
+    $self->assert_not_null($sharedGroupUid);
+
+    xlog "Create emails";
+    $self->make_message("msg1", from => Cassandane::Address->new(
+        localpart => 'sharedContact', domain => 'local'
+    )) or die;
+    $self->make_message("msg2", from => Cassandane::Address->new(
+        localpart => 'ownContact', domain => 'local'
+    )) or die;
+    $self->make_message("msg3", from => Cassandane::Address->new(
+        localpart => 'noContact', domain => 'local'
+    )) or die;
+    $self->make_message("msg4", from => Cassandane::Address->new(
+        localpart => 'ownGroup', domain => 'local'
+    )) or die;
+    $self->make_message("msg5", from => Cassandane::Address->new(
+        localpart => 'sharedContact2', domain => 'local'
+    )) or die;
+    $self->make_message("msg6", from => Cassandane::Address->new(
+        localpart => 'unsharedContact', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(6, scalar @{$res->[0][1]{ids}});
+    my $emailIds = $res->[0][1]{ids};
+
+    xlog "Assert Email/querys";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $sharedContactUid,
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $ownGroupUid,
+            },
+            sort => [{ property => "subject" }],
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $sharedGroupUid,
+            },
+            sort => [{ property => "subject" }],
+        }, 'R3'],
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $unsharedContactUid,
+            },
+            sort => [{ property => "subject" }],
+        }, 'R4']
+    ], $using);
+    $self->assert_deep_equals([$emailIds->[0]], $res->[0][1]{ids});
+    $self->assert_deep_equals([$emailIds->[0],$emailIds->[3],$emailIds->[4]],
+                              $res->[1][1]{ids});
+    $self->assert_deep_equals([$emailIds->[0],$emailIds->[1]],
+                              $res->[2][1]{ids});
+    $self->assert_deep_equals([], $res->[3][1]{ids});
+
+    xlog "Assert Sieve";
+    $imap->create("INBOX.matches") or die;
+    $self->{instance}->install_sieve_script(<<"EOF"
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "\${stop}" "Y",
+    jmapquery text:
+  {
+      "fromContactCardUid" : "shared/$sharedContactUid"
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    my $rawMessage = <<'EOF';
+From: sharedContact@local
+To: to@local
+Subject: sieve1
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+hello
+EOF
+    $rawMessage =~ s/\r?\n/\r\n/gs;
+
+    my $msg = Cassandane::Message->new();
+    $msg->set_lines(split /\n/, $rawMessage);
+    $self->{instance}->deliver($msg);
+    $self->assert_num_equals(1, $imap->message_count('INBOX.matches'));
+}

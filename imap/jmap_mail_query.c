@@ -64,6 +64,12 @@
 #ifndef JMAP_MAIL_EXTENSION
 #define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
 #endif
+#ifndef JMAP_URN_CONTACTS
+#define JMAP_URN_CONTACTS            "urn:ietf:params:jmap:contacts"
+#endif
+#ifndef JMAP_CONTACTS_EXTENSION
+#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
+#endif
 
 static int _email_threadkeyword_is_valid(const char *keyword)
 {
@@ -110,41 +116,53 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 HIDDEN void jmap_email_contactfilter_init(const char *accountid,
                                           const struct auth_state *authstate,
                                           const struct namespace *namespace,
-                                          const char *addressbookid,
                                           struct email_contactfilter *cfilter)
 {
     memset(cfilter, 0, sizeof(struct email_contactfilter));
     cfilter->accountid = accountid;
     cfilter->authstate = authstate;
     cfilter->namespace = namespace;
-    if (addressbookid) {
-        cfilter->addrbook = carddav_mboxname(accountid, addressbookid);
-    }
 }
 
 HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
 {
-    if (cfilter->carddavdb) {
-        carddav_close(cfilter->carddavdb);
-    }
-    free(cfilter->addrbook);
     free_hash_table(&cfilter->contactgroups, (void(*)(void*))strarray_free);
 }
 
+/* Set of addressbooks owned by userid and accessible by accountId */
+struct abook_set {
+    char *userid;
+    struct carddav_db *carddavdb;  // DAV DB for userid
+    ptrarray_t mbentrys;           // NULL = ALL abooks owned by userid
+};
 
-static int _get_sharedaddressbook_cb(struct findall_data *data, void *rock)
+static int _get_sharedaddressbooks_cb(struct findall_data *data, void *rock)
 {
-    mbentry_t **mbentryp = rock;
+    ptrarray_t *abook_sets = rock;
+
     if (!data || !data->mbentry) return 0;
-    *mbentryp = mboxlist_entry_copy(data->mbentry);
-    return CYRUSDB_DONE;
+
+    char *userid = mboxname_to_userid(data->mbentry->name);
+    struct abook_set *set = ptrarray_tail(abook_sets);
+
+    if (strcmp(userid, set->userid)) {
+        set = xzmalloc(sizeof(struct abook_set));
+        set->userid = userid;
+        set->carddavdb = carddav_open_userid(userid);
+        ptrarray_append(abook_sets, set);
+    }
+    else {
+        free(userid);
+    }
+    ptrarray_append(&set->mbentrys, mboxlist_entry_copy(data->mbentry));
+
+    return 0;
 }
 
-static mbentry_t *_get_sharedaddressbook(const char *userid,
-                                         const struct auth_state *authstate,
-                                         const struct namespace *namespace)
+static void _get_sharedaddressbooks(struct email_contactfilter *cfilter,
+                                    ptrarray_t *abook_sets)
 {
-    mbentry_t *res = NULL;
+    const struct namespace *namespace = cfilter->namespace;
 
     strarray_t patterns = STRARRAY_INITIALIZER;
     struct buf pattern = BUF_INITIALIZER;
@@ -156,45 +174,79 @@ static mbentry_t *_get_sharedaddressbook(const char *userid,
     buf_putc(&pattern, namespace->hier_sep);
     buf_appendcstr(&pattern, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
     buf_putc(&pattern, namespace->hier_sep);
-    buf_appendcstr(&pattern, "Shared");
+    buf_appendcstr(&pattern, "*");
     buf_cstring(&pattern);
     strarray_appendm(&patterns, buf_release(&pattern));
-    mboxlist_findallmulti((struct namespace*)namespace, &patterns, 0, userid,
-            authstate, _get_sharedaddressbook_cb, &res);
+    mboxlist_findallmulti((struct namespace*)namespace, &patterns, 0,
+                          cfilter->accountid, cfilter->authstate,
+                          _get_sharedaddressbooks_cb, abook_sets);
     strarray_fini(&patterns);
-
-    return res;
 }
+
+static void _get_emails(strarray_t *card_uids, unsigned card_kind,
+                        ptrarray_t *abook_sets,
+                        strarray_t *emails, strarray_t **member_uids)
+
+{
+    int i, j, k;
+
+    // search for each card by UID
+    for (i = 0; i < strarray_size(card_uids); i++) {
+        const char *uid = strarray_nth(card_uids, i);
+        int found = 0;
+
+        /* search each addressbook in each set */
+        /* XXX  we quit on first matching UID -- remove found for ALL matches */
+        for (j = 0; !found && j < ptrarray_size(abook_sets); j++) {
+            struct abook_set *set = ptrarray_nth(abook_sets, j);
+
+            if (set->carddavdb) {
+                for (k = 0; !found && k < ptrarray_size(&set->mbentrys); k++) {
+                    mbentry_t *mbentry = ptrarray_nth(&set->mbentrys, k);
+
+                    found = carddav_getemails(set->carddavdb, mbentry,
+                                              uid, card_kind,
+                                              emails, member_uids);
+                }
+            }
+        }
+    }
+}
+
+enum { CF_GROUP = 0, CF_ANY, CF_CARD };
 
 static const struct contactfilters_t {
     const char *field;
-    int isany;
+    unsigned type;
 } contactfilters[] = {
-  { "fromContactGroupId", 0 },
-  { "toContactGroupId", 0 },
-  { "ccContactGroupId", 0 },
-  { "bccContactGroupId", 0 },
-  { "fromAnyContact", 1 },
-  { "toAnyContact", 1 },
-  { "ccAnyContact", 1 },
-  { "bccAnyContact", 1 },
+  { "fromContactCardUid", CF_CARD  },
+  { "toContactCardUid",   CF_CARD  },
+  { "ccContactCardUid",   CF_CARD  },
+  { "bccContactCardUid",  CF_CARD  },
+  { "fromContactGroupId", CF_GROUP },
+  { "toContactGroupId",   CF_GROUP },
+  { "ccContactGroupId",   CF_GROUP },
+  { "bccContactGroupId",  CF_GROUP },
+  { "fromAnyContact",     CF_ANY   },
+  { "toAnyContact",       CF_ANY   },
+  { "ccAnyContact",       CF_ANY   },
+  { "bccAnyContact",      CF_ANY   },
   { NULL, 0 }
 };
 
-HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *parser,
-                                                         json_t *filter,
+HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
                                                          struct email_contactfilter *cfilter)
 {
     int havefield = 0;
     const struct contactfilters_t *c;
-    mbentry_t *othermb = NULL;
     int r = 0;
 
     /* prefilter to see if there are any fields that we will need to look up */
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
         if (!arg) continue;
-        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        const char *groupid = (c->type == CF_ANY) ?
+            (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
         if (!groupid) continue; // avoid looking up if invalid!
         havefield = 1;
         break;
@@ -207,53 +259,70 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         construct_hash_table(&cfilter->contactgroups, 32, 0);
     }
 
-    if (!cfilter->carddavdb) {
-        /* Open CardDAV db first time we need it */
-        cfilter->carddavdb = carddav_open_userid(cfilter->accountid);
-        if (!cfilter->carddavdb) {
-            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
-                   cfilter->accountid);
-            r = CYRUSDB_INTERNAL;
-            goto done;
-        }
+    /* Open CardDAV db for accountid */
+    struct carddav_db *carddavdb = carddav_open_userid(cfilter->accountid);
+    if (!carddavdb) {
+        syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
+               cfilter->accountid);
+        r = CYRUSDB_INTERNAL;
+        goto done;
     }
 
-    othermb = _get_sharedaddressbook(cfilter->accountid, cfilter->authstate, cfilter->namespace);
-    if (othermb) {
-        mbname_t *mbname = mbname_from_intname(othermb->name);
-        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(mbname));
-        if (r2) syslog(LOG_NOTICE, "DBNOTICE: failed to open otheruser %s contacts for %s",
-                 mbname_userid(mbname), cfilter->accountid);
-        mbname_free(&mbname);
-    }
+    ptrarray_t abook_sets = PTRARRAY_INITIALIZER;
+    struct abook_set *set = xzmalloc(sizeof(struct abook_set));
+
+    /* Add accountid as the first abook set */
+    set->userid = xstrdup(cfilter->accountid);
+    set->carddavdb = carddavdb;
+    ptrarray_append(&set->mbentrys, NULL); // ALL accountid addressbooks
+    ptrarray_append(&abook_sets, set);
+
+    /* Fetch any shared addressbook sets */
+    _get_sharedaddressbooks(cfilter, &abook_sets);
 
     /* fetch members for each filter referenced */
 
     for (c = contactfilters; c->field; c++) {
         json_t *arg = json_object_get(filter, c->field);
         if (!arg) continue;
-        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        const char *groupid = (c->type == CF_ANY) ?
+            (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
         if (!groupid) continue;
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
-        /* Lookup group member email addresses */
-        mbentry_t *mbentry = NULL;
-        strarray_t *members = NULL;
-        if (!cfilter->addrbook ||
-            !mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
-            members = carddav_getgroup(cfilter->carddavdb, mbentry, groupid, othermb);
-        }
-        mboxlist_entry_free(&mbentry);
-        if (!members) {
-            jmap_parser_invalid(parser, c->field);
-        }
-        else {
-            hash_insert(groupid, members, &cfilter->contactgroups);
-        }
+        /* Lookup card email addresses and any group members */
+        unsigned card_kind =
+            (c->type == CF_GROUP) ? CARDDAV_KIND_GROUP : CARDDAV_KIND_ANY;
+        strarray_t card_uids = STRARRAY_INITIALIZER;
+        strarray_t *emails = strarray_new();
+        strarray_t *member_uids = NULL;
+
+        strarray_append(&card_uids, groupid);
+        _get_emails(&card_uids, card_kind, &abook_sets, emails, &member_uids);
+        strarray_fini(&card_uids);
+
+        /* Lookup group member email addresses (ignore subgroup members) */
+        _get_emails(member_uids, CARDDAV_KIND_ANY, &abook_sets, emails, NULL);
+        strarray_free(member_uids);
+
+        hash_insert(groupid, emails, &cfilter->contactgroups);
     }
 
-done:
-    mboxlist_entry_free(&othermb);
+    /* cleanup */
+    while ((set = ptrarray_pop(&abook_sets))) {
+        mbentry_t *mbentry;
+
+        while ((mbentry = ptrarray_pop(&set->mbentrys)))
+            mboxlist_entry_free(&mbentry);
+        ptrarray_fini(&set->mbentrys);
+
+        carddav_close(set->carddavdb);
+        free(set->userid);
+        free(set);
+    }
+    ptrarray_fini(&abook_sets);
+    
+ done:
     return r;
 }
 
@@ -1048,25 +1117,32 @@ static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
-             json_string_value(json_object_get(filter, "fromContactGroupId"))))
-    {
+             json_string_value(json_object_get(filter, "fromContactCardUid"))) ||
+        (match =
+             json_string_value(json_object_get(filter, "fromContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_FROM, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "toContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "toContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_TO, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "ccContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "ccContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_CC, xdb, cfilter);
         if (xq) ptrarray_append(&queries, _matchmime_query_new_xq(xq));
     }
     if ((match =
+             json_string_value(json_object_get(filter, "bccContactCardUid"))) ||
+        (match =
              json_string_value(json_object_get(filter, "bccContactGroupId")))) {
         xapian_query_t *xq = _matchmime_query_new_contactgroup(
             match, SEARCH_PART_BCC, xdb, cfilter);
@@ -1685,10 +1761,13 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
     /* Parse filter */
     strarray_append(&capabilities, JMAP_URN_MAIL);
     strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
+    /* for matching email addresses in contacts */
+    strarray_append(&capabilities, JMAP_URN_CONTACTS);
+    strarray_append(&capabilities, JMAP_CONTACTS_EXTENSION);
     jmap_email_filter_parse(jfilter, &parse_ctx);
 
     /* Gather contactgroup ids */
-    jmap_email_contactfilter_init(accountid, authstate, namespace, NULL, &cfilter);
+    jmap_email_contactfilter_init(accountid, authstate, namespace, &cfilter);
     ptrarray_t work = PTRARRAY_INITIALIZER;
     ptrarray_push(&work, jfilter);
     json_t *jf;
@@ -1698,7 +1777,7 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         json_array_foreach(json_object_get(jf, "conditions"), i, jval) {
             ptrarray_push(&work, jval);
         }
-        r = jmap_email_contactfilter_from_filtercondition(&parser, jf, &cfilter);
+        r = jmap_email_contactfilter_from_filtercondition(jf, &cfilter);
         if (r) break;
 
     }

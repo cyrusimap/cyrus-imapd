@@ -67,6 +67,7 @@
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "index.h"
+#include "jmap_util.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
@@ -633,6 +634,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     struct carddav_data *cdata;
     char *version = NULL, *uid = NULL, *fullname = NULL;
     struct index_record *oldrecord = NULL, record;
+    modseq_t cmodseq = 0;
     char *mimehdr;
     int r;
 
@@ -688,6 +690,12 @@ static int carddav_store_resource(struct transaction_t *txn,
                     "mailbox=<%s> record=<%u> error=<%s>",
                     mailbox_name(mailbox), cdata->dav.imap_uid, error_message(r));
         }
+
+        cmodseq = cdata->dav.createdmodseq;
+    }
+    else {
+        cmodseq =
+            mboxname_nextmodseq(mailbox_name(mailbox), 0, MBTYPE_ADDRESSBOOK, 0);
     }
 
     /* Check size of vCard (allow existing oversized cards to be updated) */
@@ -726,6 +734,9 @@ static int carddav_store_resource(struct transaction_t *txn,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
+    buf_appendcstr(&txn->buf, ";\r\n\tjmapid=");
+    buf_putc(&txn->buf, JMAP_CONTACTID_PREFIX);
+    MODSEQ_TO_JMAPID(&txn->buf, cmodseq);
     spool_replace_header(xstrdup("Content-Disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
@@ -733,8 +744,7 @@ static int carddav_store_resource(struct transaction_t *txn,
 
     /* Store the resource */
     r = dav_store_resource(txn, buf_cstring(buf), 0,
-                           mailbox, oldrecord, cdata->dav.createdmodseq,
-                           NULL, NULL);
+                           mailbox, oldrecord, cmodseq, NULL, NULL);
     buf_destroy(buf);
 
   done:
@@ -1589,14 +1599,12 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
+    /* Check for changed UID */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
     
     const char *olduid = cdata->vcard_uid;
     const char *newuid = uid;
-    while (!strncmp(newuid, "urn:uuid:", 9)) newuid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
     if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
@@ -1968,13 +1976,11 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID -- Allow for text uuid <-> urn:uuid */
+    /* Check for changed UID */
     struct carddav_data *cdata;
     carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
     
     const char *olduid = cdata->vcard_uid;
-    while (!strncmp(uid, "urn:uuid:", 9)) uid += 9;
-    while (!strncmpsafe(olduid, "urn:uuid:", 9)) olduid += 9;
     if (cdata->dav.imap_uid && strcmpsafe(olduid, uid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
