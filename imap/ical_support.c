@@ -629,7 +629,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         event_length = icalcomponent_get_duration(mastercomp);
         if (icaldurationtype_is_null_duration(event_length) &&
             icaltime_is_date(dtstart)) {
-            event_length = icaldurationtype_from_int(60 * 60 * 24);  /* P1D */
+            event_length = icaldurationtype_from_seconds(60 * 60 * 24);  /* P1D */
         }
 
         /* add any RDATEs first, since EXDATE items can override them */
@@ -1376,7 +1376,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 /* DTSTART is not DATE-TIME */
                 struct icaldurationtype dur;
 
-                dur = icaldurationtype_from_int(60*60*24 - 1);  /* P1D */
+                dur = icaldurationtype_from_seconds(60*60*24 - 1);  /* P1D */
                 icaltime_add(period.end, dur);
             }
         }
