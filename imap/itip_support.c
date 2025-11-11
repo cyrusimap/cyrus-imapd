@@ -1402,7 +1402,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     default:
         /* Unknown METHOD -- ignore it */
         syslog(LOG_ERR, "Unknown iTIP method: %s",
-               icalenum_method_to_string(method));
+               icalproperty_method_to_string(method));
 
         sched_data->flags &= ~SCHEDFLAG_IS_REPLY;
         goto inbox;
