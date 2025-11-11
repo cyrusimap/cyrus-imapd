@@ -47,7 +47,7 @@
 
 static int last_err = SQUAT_ERR_OK;
 
-EXPORTED char const squat_index_file_header[8] = "SQUAT 1\n";
+EXPORTED char const squat_index_file_header[] = "SQUAT 1\n";
 
 EXPORTED void squat_set_last_error(int err)
 {
