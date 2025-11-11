@@ -295,15 +295,22 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
             (c->type == CF_GROUP) ? CARDDAV_KIND_GROUP : CARDDAV_KIND_ANY;
         strarray_t card_uids = STRARRAY_INITIALIZER;
         strarray_t *emails = strarray_new();
-        strarray_t *member_uids = NULL;
 
         strarray_append(&card_uids, groupid);
-        _get_emails(&card_uids, card_kind, &abook_sets, emails, &member_uids);
-        strarray_fini(&card_uids);
+        if (!*groupid) {
+            /* Lookup emails in ALL cards */
+            _get_emails(&card_uids, card_kind, &abook_sets, emails, NULL);
+        }
+        else {
+            /* Lookup emails in the given card and any group members */
+            strarray_t *member_uids = NULL;
 
-        /* Lookup group member email addresses (ignore subgroup members) */
-        _get_emails(member_uids, CARDDAV_KIND_ANY, &abook_sets, emails, NULL);
-        strarray_free(member_uids);
+            _get_emails(&card_uids, card_kind, &abook_sets, emails, &member_uids);
+            /* Lookup group member email addresses (ignore subgroup members) */
+            _get_emails(member_uids, CARDDAV_KIND_ANY, &abook_sets, emails, NULL);
+            strarray_free(member_uids);
+        }
+        strarray_fini(&card_uids);
 
         hash_insert(groupid, emails, &cfilter->contactgroups);
     }
