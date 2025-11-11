@@ -554,7 +554,7 @@ static int process_alarm_cb(icalcomponent *comp,
                 base = end;
             }
             base.is_date = 0; /* need an actual time for triggers */
-            alarmtime = icaltime_add(base, trigger.duration);
+            alarmtime = icalduration_extend(base, trigger.duration);
         }
         else {
             /* absolute */

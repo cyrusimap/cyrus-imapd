@@ -2771,7 +2771,7 @@ static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
     struct jmapical_datetime enddt = JMAPICAL_DATETIME_INITIALIZER;
     icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, tz);
     struct icaldurationtype durical = jmapical_duration_to_icalduration(&dur);
-    icaltimetype endical = icaltime_add(startical, durical);
+    icaltimetype endical = icalduration_extend(startical, durical);
     jmapical_datetime_from_icaltime(endical, &enddt);
 
     /* Convert start and end to UTC */

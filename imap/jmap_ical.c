@@ -1413,7 +1413,7 @@ HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
 
     icaltimetype icaltx = icaltime_from_timet_with_zone(tx, 0, utc);
     icaltimetype icalty = icaltime_from_timet_with_zone(ty, 0, utc);
-    struct icaldurationtype icaldur = icaltime_subtract(icalty, icaltx);
+    struct icaldurationtype icaldur = icalduration_from_times(icalty, icaltx);
     icaldur.is_neg = is_neg;
     jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
@@ -1592,7 +1592,7 @@ static struct icaltimetype dtend_from_ical(icalcomponent *comp,
         } else {
             duration = icaldurationtype_null_duration();
         }
-        dtend = icaltime_add(dtstart, duration);
+        dtend = icalduration_extend(dtstart, duration);
     }
     else dtend = dtstart;
 
@@ -1952,7 +1952,7 @@ override_rdate_from_ical(icalproperty *prop)
         /* Determine duration */
         struct icaldurationtype icaldur;
         if (!icaltime_is_null_time(rdate.period.end)) {
-            icaldur = icaltime_subtract(rdate.period.end, rdate.period.start);
+            icaldur = icalduration_from_times(rdate.period.end, rdate.period.start);
         } else {
             icaldur = rdate.period.duration;
         }
@@ -4838,7 +4838,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     if (tzstart != tzend) {
         /* Add DTEND */
         struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
-        icaltimetype dtend = icaltime_add(dtstart, icaldur);
+        icaltimetype dtend = icalduration_extend(dtstart, icaldur);
         dtend = icaltime_convert_to_zone(dtend, tzend);
         icalproperty *prop = insert_icaltimeprop(comp, dtend, 1, ICAL_DTEND_PROPERTY);
         if (prop) xjmapid_to_ical(prop, endzone_location_id);

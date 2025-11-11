@@ -365,8 +365,8 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
         struct icaltimetype end = _get_datetime(master, endprop);
 
         // calculate and re-apply the diff
-        struct icaldurationtype diff = icaltime_subtract(end, start);
-        struct icaltimetype newend = icaltime_add(newstart, diff);
+        struct icaldurationtype diff = icalduration_from_times(end, start);
+        struct icaltimetype newend = icalduration_extend(newstart, diff);
 
         icaltimezone *endzone = (icaltimezone *)icaltime_get_timezone(end);
         icalproperty_set_dtend(endprop,

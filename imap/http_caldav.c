@@ -4778,7 +4778,7 @@ static int apply_prop_timerange(struct icalperiodtype *range,
 
     if (!icaldurationtype_is_null_duration(period.duration)) {
         /* Calculate end time from duration */
-        period.end = icaltime_add(period.start, period.duration);
+        period.end = icalduration_extend(period.start, period.duration);
     }
     else if (icaltime_is_null_time(period.end)) period.end = period.start;
 
@@ -5364,7 +5364,7 @@ static int expand_cb(icalcomponent *comp,
             
         case ICAL_DURATION_PROPERTY:
             /* Set DURATION to be for this occurrence */
-            icalproperty_set_duration(prop, icaltime_subtract(end, start));
+            icalproperty_set_duration(prop, icalduration_from_times(end, start));
             break;
             
         case ICAL_RECURRENCEID_PROPERTY:
@@ -5455,7 +5455,7 @@ static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
             /* Calculate duration of master component */
             dtstart = icalcomponent_get_dtstart(comp);
             dtend = icalcomponent_get_dtend(comp);
-            dtduration = icaltime_subtract(dtend, dtstart);
+            dtduration = icalduration_from_times(dtend, dtstart);
             break;
         }
     }
@@ -5480,7 +5480,7 @@ static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
 
         /* Check span of original occurrence */
         dtstart = recurid;
-        dtend = icaltime_add(dtstart, dtduration);
+        dtend = icalduration_extend(dtstart, dtduration);
         recurspan = icaltime_span_new(dtstart, dtend, 1);
         if (icaltime_span_overlaps(&recurspan, &limitspan)) continue;
 
@@ -7288,7 +7288,7 @@ static void add_freebusy(struct icaltimetype *recurid,
     if (recurid) newfb->recurid = *recurid;
 
     if (icaltime_is_date(*start)) {
-        newfb->per.duration = icaltime_subtract(*end, *start);
+        newfb->per.duration = icalduration_from_times(*end, *start);
         newfb->per.end = icaltime_null_time();
         start->is_date = 0;  /* MUST be DATE-TIME */
         newfb->per.start = icaltime_convert_to_zone(*start, utc_zone);
@@ -7787,7 +7787,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
 
         isdur = !icaldurationtype_is_null_duration(fb->per.duration);
         end = !isdur ? fb->per.end :
-            icaltime_add(fb->per.start, fb->per.duration);
+            icalduration_extend(fb->per.start, fb->per.duration);
 
         /* Skip periods of different type or that don't overlap */
         if ((fb->type != next_fb->type) ||
@@ -7796,7 +7796,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
         /* Coalesce into next busytime */
         next_isdur = !icaldurationtype_is_null_duration(next_fb->per.duration);
         next_end = !next_isdur ? next_fb->per.end :
-            icaltime_add(next_fb->per.start, next_fb->per.duration);
+            icalduration_extend(next_fb->per.start, next_fb->per.duration);
 
         if (icaltime_compare(end, next_end) >= 0) {
             /* Current period subsumes next */
@@ -7806,7 +7806,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
         else if (isdur && next_isdur) {
             /* Both periods are durations */
             struct icaldurationtype overlap =
-                icaltime_subtract(end, next_fb->per.start);
+                icalduration_from_times(end, next_fb->per.start);
 
             next_fb->per.duration.days += fb->per.duration.days - overlap.days;
         }
@@ -8190,7 +8190,7 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     }
     else {
         /* Set end based on period */
-        fbfilter.end = icaltime_add(fbfilter.start, period);
+        fbfilter.end = icalduration_extend(fbfilter.start, period);
     }
 
 
