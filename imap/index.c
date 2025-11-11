@@ -153,6 +153,7 @@ static int index_store_annotation(struct index_state *state, uint32_t msgno,
                            msgrecord_t *mrw, struct storeargs *storeargs,
                            int *dirty);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
+                            struct conversations_state *convstate,
                             const struct fetchargs *fetchargs,
                             struct buf *msg, struct buf *item);
 static void index_printflags(struct index_state *state, uint32_t msgno,
@@ -1112,6 +1113,7 @@ static int _fetch_setseen(struct index_state *state,
 EXPORTED int index_fetchresponses(struct index_state *state,
                                   seqset_t *seq,
                                   int usinguid,
+                                  struct conversations_state *convstate,
                                   const struct fetchargs *fetchargs,
                                   int *fetchedsomething)
 {
@@ -1187,7 +1189,8 @@ EXPORTED int index_fetchresponses(struct index_state *state,
 
         if (++count < fetchargs->partial.low) continue;
 
-        if ((r = index_fetchreply(state, msgno, fetchargs, &msg, &item)))
+        if ((r = index_fetchreply(state, msgno, convstate,
+                                  fetchargs, &msg, &item)))
             break;
         fetched = 1;
     }
@@ -1212,7 +1215,8 @@ EXPORTED int index_fetchresponses(struct index_state *state,
  */
 EXPORTED int index_fetch(struct index_state *state,
                          const char *sequence,
-                         int usinguid,
+                         int usinguid, int readonly,
+                         struct conversations_state *convstate,
                          const struct fetchargs *fetchargs,
                          int *fetchedsomething)
 {
@@ -1221,8 +1225,6 @@ EXPORTED int index_fetch(struct index_state *state,
     struct index_map *im;
     uint32_t msgno;
     int r;
-    // if FETCH_SETSEEN and ACLs permit, we need a writelock
-    int readonly = !(fetchargs->fetchitems & FETCH_SETSEEN && !state->examining && state->myrights & ACL_SETSEEN);
 
     r = index_lock(state, readonly);
     if (r) return r;
@@ -1292,7 +1294,8 @@ EXPORTED int index_fetch(struct index_state *state,
 
     seqset_free(&vanishedlist);
 
-    r = index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
+    r = index_fetchresponses(state, seq, usinguid,
+                             convstate, fetchargs, fetchedsomething);
 
     if (seq != state->searchres) seqset_free(&seq);
 
@@ -3327,6 +3330,7 @@ struct fetch_mailbox_rock {
     struct index_state *state;
     int sep;
     int wantname;
+    struct conversations_state *convstate;
     const struct fetchargs *fetchargs;
 };
 
@@ -3386,7 +3390,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
     else {
         mboxval = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
-        jmap_set_mailboxid(fmb_rock->fetchargs->convstate, mbentry, mboxval);
+        jmap_set_mailboxid(fmb_rock->convstate, mbentry, mboxval);
     }
 
     if (fmb_rock->sep)
@@ -3408,18 +3412,20 @@ done:
  */
 static int index_fetchmailboxes(struct index_state *state,
                                 uint32_t msgno,
+                                struct conversations_state *convstate,
                                 const struct fetchargs *fetchargs)
 {
-    struct fetch_mailbox_rock rock = { state, 0, /*wantname*/ 1, fetchargs};
+    struct fetch_mailbox_rock rock =
+        { state, 0, /*wantname*/ 1, convstate, fetchargs};
     struct index_record record;
     int r;
 
-    if (!fetchargs->convstate) return 0;
+    if (!convstate) return 0;
 
     r = index_reload_record(state, msgno, &record);
     if (r) return r;
 
-    return conversations_guid_foreach(fetchargs->convstate,
+    return conversations_guid_foreach(convstate,
                                       message_guid_encode(&record.guid),
                                       &fetch_mailbox_cb,
                                       &rock);
@@ -3431,18 +3437,20 @@ static int index_fetchmailboxes(struct index_state *state,
  */
 static int index_fetchmailboxids(struct index_state *state,
                                  uint32_t msgno,
+                                 struct conversations_state *convstate,
                                  const struct fetchargs *fetchargs)
 {
-    struct fetch_mailbox_rock rock = { state, 0, /*wantname*/ 0, fetchargs};
+    struct fetch_mailbox_rock rock =
+        { state, 0, /*wantname*/ 0, convstate, fetchargs};
     struct index_record record;
     int r;
 
-    if (!fetchargs->convstate) return 0;
+    if (!convstate) return 0;
 
     r = index_reload_record(state, msgno, &record);
     if (r) return r;
 
-    return conversations_guid_foreach(fetchargs->convstate,
+    return conversations_guid_foreach(convstate,
                                       message_guid_encode(&record.guid),
                                       &fetch_mailbox_cb,
                                       &rock);
@@ -3580,6 +3588,7 @@ static void loadbody(struct mailbox *mailbox, struct index_record *record,
  * Helper function to send requested * FETCH data for a message
  */
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
+                            struct conversations_state *convstate,
                             const struct fetchargs *fetchargs,
                             struct buf *msg, struct buf *item)
 {
@@ -3745,7 +3754,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_EMAILID) {
         char emailid[JMAP_MAX_EMAILID_SIZE];
 
-        jmap_set_emailid(fetchargs->convstate, &record.guid,
+        jmap_set_emailid(convstate, &record.guid,
                          0, &record.internaldate, emailid);
         prot_printf(state->out, "%cEMAILID (%s)", sepchar, emailid);
         sepchar = ' ';
@@ -3767,7 +3776,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             strcpy(threadid, "NIL");
         }
         else {
-            jmap_set_threadid(fetchargs->convstate, record.cid, threadid);
+            jmap_set_threadid(convstate, record.cid, threadid);
         }
 
         prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
@@ -3816,18 +3825,18 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                     state->mailbox->i.uidvalidity);
         sepchar = ' ';
     }
-    if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+    if (convstate) {
         if (fetchitems & FETCH_MAILBOXES) {
             prot_printf(state->out, "%cMAILBOXES (", sepchar);
             /* ignoring the result anyway, so don't conceal prior errors */
-            index_fetchmailboxes(state, msgno, fetchargs);
+            index_fetchmailboxes(state, msgno, convstate, fetchargs);
             prot_printf(state->out, ")");
             sepchar = ' ';
         }
         if (fetchitems & FETCH_MAILBOXIDS) {
             prot_printf(state->out, "%cMAILBOXIDS (", sepchar);
             /* ignoring the result anyway, so don't conceal prior errors */
-            index_fetchmailboxids(state, msgno, fetchargs);
+            index_fetchmailboxids(state, msgno, convstate, fetchargs);
             prot_printf(state->out, ")");
             sepchar = ' ';
         }

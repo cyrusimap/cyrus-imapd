@@ -142,7 +142,7 @@ sub test_bad
 }
 
 sub test_message
-    :needs_component_idled :min_version_3_9
+    :needs_component_idled :Conversations
 {
     my ($self) = @_;
 
@@ -178,7 +178,7 @@ sub test_message
     xlog $self, "Enable Notify";
     my $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET', 'STATUS',
                                "(SELECTED (MessageNew" .
-                               " (UID BODY.PEEK[HEADER.FIELDS (From Subject)])" .
+                               " (UID EMAILID MAILBOXIDS BODY.PEEK[HEADER.FIELDS (From Subject)])" .
                                " MessageExpunge FlagChange))",
                                "(PERSONAL (MessageNew MessageExpunge))");
 
@@ -242,6 +242,8 @@ sub test_message
     $self->assert_num_equals(3, $fetch->{2}{uid});
     $self->assert_str_equals('Message 3', $fetch->{2}{headers}{subject}[0]);
     $self->assert_not_null($fetch->{2}{headers}{from});
+    $self->assert_not_null($fetch->{2}{emailid}[0]);
+    $self->assert_not_null($fetch->{2}{mailboxids}[0]);
 
     xlog $self, "DELETE message from INBOX in other session";
     $res = $othertalk->store('1', '+flags', '(\\Deleted)');

@@ -259,11 +259,13 @@ struct progress_rock {
 int index_fetchresponses(struct index_state *state,
                          seqset_t *seq,
                          int usinguid,
+                         struct conversations_state *convstate,
                          const struct fetchargs *fetchargs,
                          int *fetchedsomething);
 extern int index_fetch(struct index_state *state,
                        const char* sequence,
-                       int usinguid,
+                       int usinguid, int readonly,
+                       struct conversations_state *convstate,
                        const struct fetchargs* fetchargs,
                        int* fetchedsomething);
 extern int index_store(struct index_state *state,

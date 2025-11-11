@@ -106,7 +106,6 @@ struct fetchargs {
     strarray_t attribs;
     int isadmin;
     struct auth_state *authstate;
-    struct conversations_state *convstate; /* for FETCH_*IDS */
 
     range_t partial;              /* For PARTIAL */
 };
