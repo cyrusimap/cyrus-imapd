@@ -82,6 +82,7 @@ EXPORTED void ical_support_init(void)
     /* Initialize libicalvcard extended property values */
     vcardparser_set_xprop_value_kind(vcard_xprop_value_func, NULL);
 #endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
+    icalproperty_set_allow_empty_properties(true);
 
     initialized = 1;
 }
