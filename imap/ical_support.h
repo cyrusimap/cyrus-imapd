@@ -257,7 +257,6 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 #endif
 
 /* Functions that should be declared in libical */
-#define icaltimezone_set_zone_directory set_zone_directory
 
 #define icalcomponent_get_tzuntil_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_TZUNTIL_PROPERTY)
