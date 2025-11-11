@@ -287,7 +287,7 @@ static icaltimetype icalcomponent_get_mydtend(icalcomponent *comp)
         } else {
             duration = icaldurationtype_null_duration();
         }
-        dtend = icaltime_add(dtstart, duration);
+        dtend = icalduration_extend(dtstart, duration);
     }
     else dtend = dtstart;
 
@@ -589,7 +589,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     if (!range_span.start) range_span.start = epoch;
     if (!range_span.end) {
         if (!icaldurationtype_is_null_duration(range.duration)) {
-            icaltimetype end = icaltime_add(range.start, range.duration);
+            icaltimetype end = icalduration_extend(range.start, range.duration);
             range_span.end = icaltime_to_timet(end, NULL);
         }
         else range_span.end = eternity;
@@ -644,14 +644,14 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             icaltimetype mystart, myend;
             if (icalperiodtype_is_null_period(rdate.period)) {
                 mystart = rdate.time;
-                myend = icaltime_add(mystart, event_length);
+                myend = icalduration_extend(mystart, event_length);
             }
             else {
                 mystart = rdate.period.start;
                 if (icaldurationtype_is_null_duration(rdate.period.duration))
                     myend = rdate.period.end;
                 else
-                    myend = icaltime_add(mystart, rdate.period.duration);
+                    myend = icalduration_extend(mystart, rdate.period.duration);
             }
             if (icaltime_is_null_time(mystart))
                 continue;
@@ -746,7 +746,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             }
             if (icaltime_compare(xitem, ritem)) {
                 /* not excluded - process this recurrence-id */
-                struct icaltimetype thisend = icaltime_add(ritem, event_length);
+                struct icaltimetype thisend = icalduration_extend(ritem, event_length);
                 icaltime_span this_span = {
                     rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
                 };
@@ -1297,7 +1297,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 struct icaldurationtype dur = icaldurationtype_null_duration();
 
                 dur.days = 1;
-                period.end = icaltime_add(period.start, dur);
+                period.end = icalduration_extend(period.start, dur);
             }
             else
                 memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
@@ -1377,7 +1377,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 struct icaldurationtype dur;
 
                 dur = icaldurationtype_from_seconds(60*60*24 - 1);  /* P1D */
-                icaltime_add(period.end, dur);
+                icalduration_extend(period.end, dur);
             }
         }
         else {
@@ -1492,9 +1492,9 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                     struct icaldurationtype duration;
                     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                    duration = icaltime_subtract(period.end, period.start);
+                    duration = icalduration_from_times(period.end, period.start);
                     icaltimetype end =
-                        icaltime_add(icaltime_convert_to_zone(recur->until, utc),
+                        icalduration_extend(icaltime_convert_to_zone(recur->until, utc),
                                      duration);
 
                     if (icaltime_compare(period.end, end) < 0)
@@ -2187,7 +2187,7 @@ static void apply_patch_component(struct path_segment_t *path_seg,
                     icalcomponent *override = NULL;
                     struct icaltimetype start = path_seg->match.comp.rid;
                     struct icaltimetype end =
-                        icaltime_add(start, icalcomponent_get_duration(master));
+                        icalduration_extend(start, icalcomponent_get_duration(master));
                     icalcomponent_foreach_recurrence(master, start, end,
                                                      &create_override,
                                                      &override);

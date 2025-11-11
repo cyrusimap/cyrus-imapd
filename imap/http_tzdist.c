@@ -1521,10 +1521,10 @@ static int action_expand(struct transaction_t *txn)
 
                 /* UT and local time 1 second before onset */
                 off.seconds = -1;
-                ut = icaltime_add(obs->onset, off);
+                ut = icalduration_extend(obs->onset, off);
 
                 off.seconds = obs->offset_from;
-                local = icaltime_add(ut, off);
+                local = icalduration_extend(ut, off);
 
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
@@ -1536,7 +1536,7 @@ static int action_expand(struct transaction_t *txn)
                 icaltime_adjust(&ut, 0, 0, 0, 1);
 
                 off.seconds = obs->offset_to;
-                local = icaltime_add(ut, off);
+                local = icalduration_extend(ut, off);
 
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
