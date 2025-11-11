@@ -645,7 +645,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         struct icalperiodtype p;
 
         p.start = p.end = icaltime_null_time();
-        p.duration = icaldurationtype_from_int(0);
+        p.duration = icaldurationtype_from_seconds(0);
 
         node = xmlFirstElementChild(xtype);
         if (!node) {
@@ -677,7 +677,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
             xmlFree(content);
             content = xmlNodeGetContent(node);
             p.duration = icaldurationtype_from_string((const char *) content);
-            if (icaldurationtype_as_int(p.duration) == 0) break;
+            if (icaldurationtype_as_seconds(p.duration) == 0) break;
         }
         else {
             syslog(LOG_WARNING,
