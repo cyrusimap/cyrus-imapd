@@ -124,6 +124,8 @@ struct protstream {
     struct protstream *flushonread;
     /* hack to write to an in-memory-string */
     struct buf *writetobuf;
+    /* for printf */
+    struct buf vbuf;
 
     int can_unget;
     uint64_t bytes_in;

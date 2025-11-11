@@ -195,6 +195,8 @@ EXPORTED int prot_free(struct protstream *s)
     if (s->zbuf) free(s->zbuf);
 #endif
 
+    buf_free(&s->vbuf);
+
     free(s);
 
     return 0;
@@ -1281,13 +1283,11 @@ EXPORTED int prot_printf(struct protstream *s, const char *fmt, ...)
 
 EXPORTED int prot_vprintf(struct protstream *s, const char *fmt, va_list pvar)
 {
-    struct buf buf = BUF_INITIALIZER;
-
     assert(s->write);
 
-    buf_vprintf(&buf, fmt, pvar);
-    prot_puts(s, buf_cstring(&buf));
-    buf_free(&buf);
+    buf_vprintf(&s->vbuf, fmt, pvar);
+    prot_write(s, buf_base(&s->vbuf), buf_len(&s->vbuf));
+    buf_reset(&s->vbuf);
 
     if (s->error || s->eof) return EOF;
     return 0;
