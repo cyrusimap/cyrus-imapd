@@ -3909,7 +3909,7 @@ calendarevent_from_ical(icalcomponent *comp,
         if (ical) {
             icalproperty_method icalmethod = icalcomponent_get_method(ical);
             if (icalmethod != ICAL_METHOD_NONE) {
-                char *method = xstrdupsafe(icalenum_method_to_string(icalmethod));
+                char *method = xstrdupsafe(icalproperty_method_to_string(icalmethod));
                 lcase(method);
                 json_object_set_new(event, "method", json_string(method));
                 free(method);
@@ -7936,7 +7936,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "method");
     if (json_is_string(jprop) && !is_exc) {
         const char *val = json_string_value(jprop);
-        icalproperty_method method = icalenum_string_to_method(val);
+        icalproperty_method method = icalproperty_string_to_method(val);
         if (method == ICAL_METHOD_NONE) {
             jmap_parser_invalid(parser, "method");
         }
