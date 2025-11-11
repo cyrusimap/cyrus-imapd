@@ -5775,15 +5775,6 @@ badannotation:
         fa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
         fa->authstate = imapd_authstate;
     }
-    if (config_getswitch(IMAPOPT_CONVERSATIONS)
-        && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES|FETCH_EMAILID|FETCH_THREADID))) {
-        int r = conversations_open_user(imapd_userid, 0/*shared*/, &fa->convstate);
-        if (r) {
-            syslog(LOG_WARNING, "error opening conversations for %s: %s",
-                                imapd_userid,
-                                error_message(r));
-        }
-    }
 
     strarray_free(newfields);
     return 0;
@@ -5803,7 +5794,6 @@ static void fetchargs_fini (struct fetchargs *fa)
     strarray_fini(&fa->headers_not);
     strarray_fini(&fa->entries);
     strarray_fini(&fa->attribs);
-    conversations_commit(&fa->convstate);
 
     memset(fa, 0, sizeof(struct fetchargs));
 }
@@ -5821,6 +5811,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     clock_t start = clock();
     char mytime[100];
     unsigned flags = FETCH_ALLOW_MODIFIERS;
+    struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
 
     if (backend_current) {
         /* remote mailbox */
@@ -5864,8 +5855,25 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.partial.low)
         client_behavior_mask |= CB_PARTIAL;
 
-    r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
-                &fetchedsomething);
+    // if FETCH_SETSEEN and ACLs permit, we need a writelock
+    int readonly = !((fetchargs.fetchitems & FETCH_SETSEEN) &&
+                     !imapd_index->examining &&
+                     (imapd_index->myrights & ACL_SETSEEN));
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+        (fetchargs.fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
+                                 FETCH_EMAILID | FETCH_THREADID))) {
+        r = conversations_open_user(imapd_userid, readonly, &convstate);
+        if (r) {
+            syslog(LOG_WARNING, "error opening conversations for %s: %s",
+                                imapd_userid,
+                                error_message(r));
+            goto freeargs;
+        }
+    }
+
+    r = index_fetch(imapd_index, sequence, usinguid, readonly,
+                    convstate, &fetchargs, &fetchedsomething);
 
     snprintf(mytime, sizeof(mytime), "%2.3f",
              (clock() - start) / (double) CLOCKS_PER_SEC);
@@ -5883,6 +5891,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     }
 
  freeargs:
+    conversations_commit(&convstate);
     fetchargs_fini(&fetchargs);
 }
 
@@ -15436,6 +15445,9 @@ static void cmd_notify(char *tag, int set)
                                     goto cleanup;
                                 }
 
+                                /* DO NOT set \Seen state for notifications */
+                                fetchargs->fetchitems &= ~FETCH_SETSEEN;
+
                                 c = prot_getc(imapd_in);
                             }
                         }
@@ -15691,9 +15703,26 @@ static void push_updates(int idling)
                 notify_event_groups->selected.fetchargs.fetchitems) {
                 const char *uidset =
                     json_string_value(json_object_get(msg, "uidset"));
+                struct fetchargs *fa = &notify_event_groups->selected.fetchargs;
+                struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
 
-                index_fetch(imapd_index, uidset ? uidset : "*", 1,
-                            &notify_event_groups->selected.fetchargs, NULL);
+                /* Open conv.db if we need it */
+                if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+                    (fa->fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
+                                       FETCH_EMAILID | FETCH_THREADID))) {
+                    int r = conversations_open_user(imapd_userid, 1/*shared*/,
+                                                    &convstate);
+                    if (r) {
+                        syslog(LOG_WARNING,
+                               "error opening conversations for %s: %s",
+                               imapd_userid, error_message(r));
+                    }
+                }
+
+                index_fetch(imapd_index, uidset ? uidset : "*",
+                            1/*usinguid*/, 1/*readonly*/, convstate, fa, NULL);
+
+                conversations_abort(&convstate);
             }
             else if (!(etype & IMAP_NOTIFY_MESSAGE_EXPUNGE) ||
                      idling || !notify_event_groups->selected.delayed) {
