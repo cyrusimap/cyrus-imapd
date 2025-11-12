@@ -308,7 +308,7 @@ static const index_field_t v08_rec_fields[] = {
 
 #define V10_RECORD_FIELDS                                               \
     V06_RECORD_FIELDS,                                                  \
-    { 20, 'B', offsetof(struct index_record, guid.value)           },   \
+    { 20, 'G', offsetof(struct index_record, guid)                 },   \
     {  8, '8', offsetof(struct index_record, modseq)               }
 
 static const index_field_t v10_rec_fields[] = {
@@ -340,7 +340,7 @@ static const index_field_t v13_rec_fields[] = {
     COMMON_RECORD_FIELDS,                                               \
     {  4, 't', offsetof(struct index_record, savedate)             },   \
     {  4, '4', offsetof(struct index_record, cache_version)        },   \
-    { 20, 'B', offsetof(struct index_record, guid.value)           },   \
+    { 20, 'G', offsetof(struct index_record, guid)                 },   \
     {  8, '8', offsetof(struct index_record, modseq)               },   \
     {  8, '8', offsetof(struct index_record, cid)                  }
 
@@ -371,7 +371,7 @@ static const index_field_t v20_rec_fields[] = {
     {  4, '4', offsetof(struct index_record, system_flags)         },
     USER_FLAGS_FIELDS,
     {  4, '4', offsetof(struct index_record, cache_version)        },
-    { 20, 'B', offsetof(struct index_record, guid.value)           },
+    { 20, 'G', offsetof(struct index_record, guid)                 },
     {  8, 'Q', offsetof(struct index_record, modseq)               },
     {  8, 'Q', offsetof(struct index_record, cid)                  },
     {  8, 'Q', offsetof(struct index_record, createdmodseq)        },
@@ -498,6 +498,10 @@ EXPORTED const unsigned char *index_file_read_fields(const unsigned char *bufp, 
             memcpy(datap, bufp, fields->disk_size);
             break;
 
+        case 'G':
+            message_guid_import((struct message_guid *)datap, (const char *)bufp);
+            break;
+
         case 'T':
             TIMESPEC_FROM_NANOSEC((struct timespec *) datap, ntohll(*((uint64_t *)(bufp))));
             break;
@@ -549,6 +553,10 @@ EXPORTED unsigned char *index_file_write_fields(void *base, unsigned char *bufp,
 
         case 'B':
             memcpy(bufp, datap, fields->disk_size);
+            break;
+
+        case 'G':
+            message_guid_export((struct message_guid *)datap, (char *)bufp);
             break;
 
         case 'T':

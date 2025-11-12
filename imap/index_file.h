@@ -56,7 +56,8 @@ struct opaque_index_field {
                        // '<' = 4 bytes on disk, 8 bytes in memory
                        // '8' = 8 bytes (uint64_t) - unaligned
                        // 'Q' = 8 bytes (uint64_t) - aligned
-                       // 'B' = byte array
+                       // 'B' = raw bytes
+                       // 'G' = message_guid types (20 bytes on disk)
                        // 'T' = struct timespec (8 bytes on disk)
                        // 't' = 4 bytes unix timestamp (tv_sec)
                        // 'E' = empty field (no storage)

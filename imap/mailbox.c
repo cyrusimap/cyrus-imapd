@@ -1864,7 +1864,6 @@ static int mailbox_buf_to_index_header(const unsigned char *buf, size_t len,
     memset(i, 0, sizeof(struct index_header));
     i->deletedmodseq = 1;
     i->highestmodseq = 1;
-    i->changes_epoch.tv_sec = time(0);
 
     /* Read "base" header fields */
     ptr = index_file_read_fields(buf, i, base_template->header_fields);
@@ -1990,8 +1989,6 @@ static int mailbox_buf_to_index_record(const unsigned char *buf, int version,
 
     /* tracking fields - initialise */
     memset(record, 0, sizeof(struct index_record));
-    record->internaldate.tv_nsec = UTIME_OMIT;
-    record->guid.status = GUID_UNKNOWN;
 
     ptr = index_file_read_fields(buf, record, template->record_fields);
 

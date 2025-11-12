@@ -60,6 +60,11 @@ static void assert_fieldset_invariants(size_t expect_data_size,
             field_data_size = field->disk_size;
             break;
 
+        case 'G':
+            CU_ASSERT_EQUAL(field->disk_size, 20);
+            field_data_size = field->disk_size;
+            break;
+
         case 'T':
             CU_ASSERT_EQUAL(field->disk_size, sizeof(uint64_t));
             field_data_size = sizeof(uint64_t);
