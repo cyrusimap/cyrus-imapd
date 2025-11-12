@@ -349,6 +349,7 @@ extern int message_get_spamscore(message_t *m, uint32_t *scorep);
 extern int message_get_savedate(message_t *m, time_t *);
 extern int message_get_sentdate(message_t *m, time_t *);
 extern int message_get_modseq(message_t *m, modseq_t *modseqp);
+extern int message_get_createdmodseq(message_t *m, modseq_t *modseqp);
 extern int message_get_internalflags(message_t *m, uint32_t *flagsp);
 extern int message_get_systemflags(message_t *m, uint32_t *);
 extern int message_get_userflags(message_t *m, uint32_t *flagsp);
@@ -381,6 +382,7 @@ extern uint32_t msg_size(const message_t *m);
 extern uint32_t msg_uid(const message_t *m);
 extern conversation_id_t msg_cid(const message_t *m);
 extern modseq_t msg_modseq(const message_t *m);
+extern modseq_t msg_createdmodseq(const message_t *m);
 extern uint32_t msg_msgno(const message_t *m);
 extern const struct message_guid *msg_guid(const message_t *m);
 
