@@ -25,12 +25,6 @@ sub test_mailbox_changes_notes
     push @using, 'https://cyrusimap.org/ns/jmap/notes';
     $jmap->DefaultUsing(\@using);
 
-    # force creation of notes mailbox prior to creating notes
-    $res = $jmap->CallMethods([
-        ['Note/set', {
-         }, "R0"]
-    ]);
-
     xlog "create note";
     $res = $jmap->CallMethods([['Note/set',
                                 { create => { "1" => {title => "foo"}, } },

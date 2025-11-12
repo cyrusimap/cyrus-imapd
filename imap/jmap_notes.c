@@ -217,6 +217,7 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                    mbentry->name, error_message(r));
         }
         else {
+            /* Add special-use flag */
             char *userid = mboxname_to_userid(mbentry->name);
             static const char *annot = "/specialuse";
             struct buf buf = BUF_INITIALIZER;
@@ -230,6 +231,12 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                        annot, error_message(r));
                 goto done;
             }
+
+            /* Re-fetch the mbentry so it is fully populated */
+            char *mboxname = xstrdup(mbentry->name);
+            mboxlist_entry_free(&mbentry);
+            r = mboxlist_lookup(mboxname, &mbentry, NULL);
+            free(mboxname);
         }
     }
 
