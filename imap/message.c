@@ -3511,6 +3511,9 @@ static void de_nstring_buf(struct buf *src, struct buf *dst)
     buf_cstring(src); /* ensure nstring parse doesn't overrun */
     q = src->s;
     p = parse_nstring(&q);
+    /* if parse_nstring results are bad, that's probably cache corruption! */
+    assert(p != NULL);
+    assert(q >= p);
     buf_setmap(dst, p, q-p);
     buf_cstring(dst);
 }
