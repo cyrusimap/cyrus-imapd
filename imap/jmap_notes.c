@@ -543,12 +543,14 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     }
 
     arg = json_object_get(args, "body");
-    if (arg && (!json_is_string(arg) || !json_object_get(args, "isHTML"))) {
+    if (arg && (!json_is_string(arg) ||
+                (is_create && !json_object_get(args, "isHTML")))) {
         jmap_parser_invalid(&parser, "body");
     }
 
     arg = json_object_get(args, "isHTML");
-    if (arg && (!json_is_boolean(arg) || !json_object_get(args, "body"))) {
+    if (arg && (!json_is_boolean(arg) ||
+                (is_create && !json_object_get(args, "body")))) {
         jmap_parser_invalid(&parser, "isHTML");
     }
 

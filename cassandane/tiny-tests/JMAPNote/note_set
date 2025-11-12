@@ -1,0 +1,99 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_set
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create note with body but without isHTML";
+    my $res = $jmap->CallMethods([['Note/set',
+                                { create => {
+                                    "1" => {
+                                        title => "HTML",
+                                        body => "<html><head></head><body>Hello World!</body></html>",
+                                    },
+                                  }
+                                },
+                                "R1"]]);
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('body',
+                             $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    xlog "create note with isHTML but without body";
+    $res = $jmap->CallMethods([['Note/set',
+                                { create => {
+                                    "1" => {
+                                        title => "HTML",
+                                        isHTML => JSON::true,
+                                    },
+                                  }
+                                },
+                                "R1"]]);
+    $self->assert_str_equals('invalidProperties',
+                             $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals('isHTML',
+                             $res->[0][1]{notCreated}{"1"}{properties}[0]);
+
+    xlog "create note with HTML body";
+    $res = $jmap->CallMethods([['Note/set',
+                                { create => {
+                                    "1" => {
+                                        title => "HTML",
+                                        body => "<html><head></head><body>Hello World</body></html>",
+                                        isHTML => JSON::true,
+                                    },
+                                  }
+                                },
+                                "R1"],
+                               ['Note/get', { }, "R2"]
+                              ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+    $self->assert_str_equals('HTML', $res->[1][1]{list}[0]{title});
+    $self->assert_str_equals(JSON::true, $res->[1][1]{list}[0]{isHTML});
+
+    xlog "update note with HTML body";
+    $res = $jmap->CallMethods([['Note/set',
+                                { update => {
+                                    $id => {
+                                        body => "<html><head></head><body>Hello World 2</body></html>",
+                                    },
+                                  }
+                                },
+                                "R1"],
+                               ['Note/get', { }, "R2"]
+                              ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('HTML', $res->[1][1]{list}[0]{title});
+    $self->assert_matches(qr/Hello World 2/, $res->[1][1]{list}[0]{body});
+    $self->assert_str_equals(JSON::true, $res->[1][1]{list}[0]{isHTML});
+
+    xlog "update note with plain text body";
+    $res = $jmap->CallMethods([['Note/set',
+                                { update => {
+                                    $id => {
+                                        title => "plain text",
+                                        body => "Hello World 3",
+                                        isHTML => JSON::false,
+                                    },
+                                  }
+                                },
+                                "R1"],
+                               ['Note/get', { }, "R2"]
+                              ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('plain text', $res->[1][1]{list}[0]{title});
+    $self->assert_str_equals('Hello World 3', $res->[1][1]{list}[0]{body});
+    $self->assert_str_equals(JSON::false, $res->[1][1]{list}[0]{isHTML});
+
+    xlog "destroy note";
+    $res = $jmap->CallMethods([['Note/set', { destroy => [ $id ] }, "R1"],
+                               ['Note/get', { }, "R2"]
+                              ]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_deep_equals([], $res->[1][1]{list});
+}
