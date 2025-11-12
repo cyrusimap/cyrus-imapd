@@ -148,26 +148,30 @@ struct statusdata {
 
 #define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
+// sorting for good packing rather than on-disk file order, since not
+// all target datastructures are neat sizes
 struct index_record {
     uint32_t uid;
-    struct timespec internaldate;
-    struct timespec sentdate;
-    uint64_t size;
     uint32_t header_size;
-    struct timespec gmtime;
-    size_t cache_offset;
-    struct timespec last_updated;
     uint32_t system_flags;
     uint32_t internal_flags;
-    uint32_t user_flags[MAX_USER_FLAGS/32];
+    uint32_t cache_crc;
+    uint32_t cache_version;
+    uint64_t cache_offset;
+    uint64_t size;
+    uint64_t modseq;
+    uint64_t createdmodseq;
+    uint64_t cid;
+    uint64_t basecid;
+    struct timespec internaldate;
+    struct timespec sentdate;
+    struct timespec gmtime;
+    struct timespec last_updated;
     struct timespec savedate;
-    uint16_t cache_version;
+    // this is 4x uint32_t
+    uint32_t user_flags[MAX_USER_FLAGS/32];
+    // this is 21x char - how annoyingly offset
     struct message_guid guid;
-    modseq_t modseq;
-    modseq_t createdmodseq;
-    bit64 cid;
-    bit64 basecid;
-    bit32 cache_crc;
 
     /* metadata */
     uint32_t recno;

@@ -52,10 +52,14 @@ struct opaque_index_field {
     uint8_t disk_size; // size of data on disk
                        // 0 = read w/o advancing, write nothing
     char data_type;    // data storage type:
-                       // '4' = 4 bytes (bit32)
-                       // '8' = 8 bytes (bit64)
-                       // 'B' = byte array
-                       // 'T' = struct timespec
+                       // '4' = 4 bytes (uint32_t)
+                       // '<' = 4 bytes on disk, 8 bytes in memory
+                       // '8' = 8 bytes (uint64_t) - unaligned
+                       // 'Q' = 8 bytes (uint64_t) - aligned
+                       // 'B' = raw bytes
+                       // 'G' = message_guid types (20 bytes on disk)
+                       // 'T' = struct timespec (8 bytes on disk)
+                       // 't' = 4 bytes unix timestamp (tv_sec)
                        // 'E' = empty field (no storage)
     off_t data_offset; // offset to data type in storage struct
 };
@@ -73,8 +77,8 @@ typedef struct index_file_template {
 extern const index_file_template_t *const index_files_by_version[];
 extern const size_t n_index_files;
 
-extern const char *index_file_read_fields(const char *bufp, void *base,
-                                          const index_field_t *fields)
+extern const unsigned char *index_file_read_fields(const unsigned char *bufp, void *base,
+                                                   const index_field_t *fields)
 #ifdef HAVE_DECLARE_OPTIMIZE
     __attribute__((optimize("-O3")))
 #endif

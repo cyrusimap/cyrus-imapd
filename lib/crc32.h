@@ -11,7 +11,8 @@
 # include <stdint.h>
 #endif
 
-uint32_t crc32_map(const char *base, unsigned len);
+#define crc32_map(buf, len) crc32_impl((const unsigned char *)(buf), (size_t)(len))
+uint32_t crc32_impl(const unsigned char *buf, size_t len);
 uint32_t crc32_buf(const struct buf *buf);
 uint32_t crc32_cstring(const char *buf);
 uint32_t crc32_iovec(struct iovec *iov, int iovcnt);

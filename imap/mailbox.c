@@ -1850,12 +1850,12 @@ EXPORTED struct entryattlist *mailbox_extract_annots(const struct mailbox *mailb
     return annots;
 }
 
-static int mailbox_buf_to_index_header(const char *buf, size_t len,
+static int mailbox_buf_to_index_header(const unsigned char *buf, size_t len,
                                        struct index_header *i)
 {
     /* Start with "base" template */
     const index_file_template_t *base_template = index_files_by_version[0];
-    const char *ptr;
+    const unsigned char *ptr;
 
     if (len < base_template->header_size)
         return IMAP_MAILBOX_BADFORMAT;
@@ -1864,7 +1864,6 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     memset(i, 0, sizeof(struct index_header));
     i->deletedmodseq = 1;
     i->highestmodseq = 1;
-    i->changes_epoch.tv_sec = time(0);
 
     /* Read "base" header fields */
     ptr = index_file_read_fields(buf, i, base_template->header_fields);
@@ -1874,7 +1873,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     }
 
     /* Sanity check pointer location in buffer */
-    assert(base_template->header_size == (unsigned) (ptr - buf));
+    assert(base_template->header_size == (ptr - buf));
 
     /* Get version-specific template */
     const index_file_template_t *template =
@@ -1906,7 +1905,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     }
 
     /* Sanity check pointer location in buffer */
-    assert(headerlen == (unsigned) (ptr - buf));
+    assert(headerlen == (size_t)(ptr - buf));
 
     /* Normalize header fields */
     if (!i->exists)
@@ -1962,8 +1961,8 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
     if (!mailbox->index_base)
         return IMAP_MAILBOX_BADFORMAT;
 
-    r = mailbox_buf_to_index_header(mailbox->index_base, mailbox->index_len,
-                                    &mailbox->i);
+    const unsigned char *buf = (unsigned char *)mailbox->index_base;
+    r = mailbox_buf_to_index_header(buf, mailbox->index_len, &mailbox->i);
     if (r) return r;
 
     r = mailbox_refresh_index_map(mailbox);
@@ -1976,22 +1975,20 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
  * Read an index record from a mapped index file
  */
 #ifdef HAVE_DECLARE_OPTIMIZE
-static int mailbox_buf_to_index_record(const char *buf, int version,
+static int mailbox_buf_to_index_record(const unsigned char *buf, int version,
                                        struct index_record *record, int dirty)
     __attribute__((optimize("-O3")));
 #endif
-static int mailbox_buf_to_index_record(const char *buf, int version,
+static int mailbox_buf_to_index_record(const unsigned char *buf, int version,
                                        struct index_record *record, int dirty)
 {
     const index_file_template_t *template = index_files_by_version[version];
-    unsigned recordlen = template->record_size;
-    const char *ptr;
+    size_t recordlen = template->record_size;
+    const unsigned char *ptr;
     int r = 0;
 
     /* tracking fields - initialise */
     memset(record, 0, sizeof(struct index_record));
-    record->internaldate.tv_nsec = UTIME_OMIT;
-    record->guid.status = GUID_UNKNOWN;
 
     ptr = index_file_read_fields(buf, record, template->record_fields);
 
@@ -2007,14 +2004,14 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     }
 
     /* Sanity check pointer location in buffer */
-    assert(recordlen == (unsigned) (ptr - buf));
+    assert(recordlen == (size_t) (ptr - buf));
 
     /* de-serialise system flags and internal flags */
     record->internal_flags = record->system_flags & 0xffff0000;
     record->system_flags &= 0x0000ffff;
 
     /* use the high bits of the version field to extend the cache offset */
-    record->cache_offset |= ((record->cache_version & 0xffff0000) << 16);
+    record->cache_offset |= (((uint64_t)(record->cache_version & 0xffff0000)) << 16);
     /* keep the low bits of the version field for the version */
     record->cache_version &= 0xffff;
 
@@ -2201,8 +2198,9 @@ static int _commit_changes(struct mailbox *mailbox)
 EXPORTED int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
                                                struct index_record *record)
 {
-    unsigned recno = record->recno;
-    unsigned offset = mailbox->i.start_offset + (recno-1) * mailbox->i.record_size;
+    uint32_t recno = record->recno;
+    assert(recno);
+    size_t offset = mailbox->i.start_offset + (recno-1) * mailbox->i.record_size;
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
         xsyslog(LOG_ERR, "IOERROR: index record past end of file",
@@ -2211,7 +2209,7 @@ EXPORTED int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
         return IMAP_IOERROR;
     }
 
-    const char *buf = mailbox->index_base + offset;
+    const unsigned char *buf = (unsigned char *)mailbox->index_base + offset;
     mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record, 1);
     record->recno = recno;
 
@@ -2226,9 +2224,6 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
                                      uint32_t recno,
                                      struct index_record *record)
 {
-    const char *buf;
-    unsigned offset;
-    int r;
     struct index_change *change = _find_change(mailbox, recno);
 
     if (change) {
@@ -2236,7 +2231,7 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
         return 0;
     }
 
-    offset = mailbox->i.start_offset + (recno-1) * mailbox->i.record_size;
+    size_t offset = mailbox->i.start_offset + (recno-1) * mailbox->i.record_size;
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
         xsyslog(LOG_ERR, "IOERROR: index record past end of file",
@@ -2245,9 +2240,8 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
         return IMAP_IOERROR;
     }
 
-    buf = mailbox->index_base + offset;
-
-    r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record, 0);
+    const unsigned char *buf = (unsigned char *)mailbox->index_base + offset;
+    int r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record, 0);
 
     record->recno = recno;
 
@@ -2982,8 +2976,8 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     memset(buf, 0, INDEX_RECORD_SIZE);
 
     /* mix in the high bits of the offset to the top half of the version field */
-    copyrecord.cache_version |= (copyrecord.cache_offset & 0xffff00000000) >> 16;
-    /* keep the low bits of the offset in the offset field */
+    copyrecord.cache_version |= ((copyrecord.cache_offset >> 16) & 0xffff0000);
+    /* and slice them off the top of the cache_offset */
     copyrecord.cache_offset &= 0xffffffff;
 
     /* serialise system flags and internal flags */
@@ -6990,8 +6984,8 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     unsigned long emapnum;
     uint32_t erecno;
     uint32_t eversion;
-    bit32 eoffset, expungerecord_size;
-    const char *bufp;
+    size_t eoffset, expungerecord_size;
+    const unsigned char *bufp;
     struct stat sbuf;
     int r;
 
@@ -7032,7 +7026,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     /* add every UID to the files list */
     for (erecno = 1; erecno <= expunge_num; erecno++) {
         struct index_record record;
-        bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
+        bufp = (unsigned char *)expunge_base + eoffset + (erecno-1)*expungerecord_size;
         mailbox_buf_to_index_record(bufp, eversion, &record, 0);
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox_record_cleanup(mailbox, &record);

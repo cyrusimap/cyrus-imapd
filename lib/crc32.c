@@ -767,15 +767,15 @@ static uint32_t crc32(uint32_t prev, const void *data, size_t length)
     return ~crc;
 }
 
-EXPORTED uint32_t crc32_map(const char *base, unsigned len)
+EXPORTED uint32_t crc32_impl(const unsigned char *base, size_t len)
 {
-    return crc32(0, (const unsigned char *)base, len);
+    return crc32(0, base, len);
 }
 
 EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
 {
     int n;
-    uint32_t crc = crc32(0L, 0, 0);
+    uint32_t crc = crc32(0, NULL, 0);
     for (n = 0; n < iovcnt; n++) {
         if (iov[n].iov_len)
             crc = crc32(crc, (const unsigned char *)iov[n].iov_base, iov[n].iov_len);
