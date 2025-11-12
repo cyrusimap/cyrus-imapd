@@ -471,18 +471,25 @@ static int jmap_note_get(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_notes_collection(req->accountid, &mbentry);
+    int r = lookup_notes_collection(req->accountid, &mbentry);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_note_get: ensure_notes_collection(%s): %s",
-               req->accountid, error_message(r));
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            /* Build response */
+            buf_printf(&buf, MODSEQ_FMT, 0UL);
+            get.state = buf_release(&buf);
+            jmap_ok(req, jmap_get_reply(&get));
+        }
+        else {
+            syslog(LOG_ERR,
+                   "jmap_note_get: lookup_notes_collection(%s): %s",
+                   req->accountid, error_message(r));
+        }
         goto done;
     }
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
     r = mailbox_open_irl(mbentry->name, &mbox);
-    mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
     /* Does the client request specific notes? */
@@ -515,6 +522,7 @@ static int jmap_note_get(jmap_req_t *req)
     mailbox_close(&mbox);
 
 done:
+    mboxlist_entry_free(&mbentry);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
 
@@ -1004,21 +1012,26 @@ static int jmap_note_changes(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_notes_collection(req->accountid, &mbentry);
+    int r = lookup_notes_collection(req->accountid, &mbentry);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_note_changes: ensure_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            /* Set new state */
+            changes.new_modseq = 0;
+            jmap_ok(req, jmap_changes_reply(&changes));
+        }
+        else {
+            syslog(LOG_ERR,
+                   "jmap_note_changes: lookup_submission_collection(%s): %s",
+                   req->accountid, error_message(r));
+        }
         goto done;
     }
 
     r = mailbox_open_irl(mbentry->name, &mbox);
-    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
     if (r) userflag = -1;
-
-    if (r) goto done;
 
     struct mailbox_iter *iter = mailbox_iter_init(mbox, changes.since_modseq, 0);
     modseq_t highest_modseq = mbox->i.highestmodseq;
@@ -1124,6 +1137,7 @@ static int jmap_note_changes(jmap_req_t *req)
     jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
+    mboxlist_entry_free(&mbentry);
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;
