@@ -194,6 +194,14 @@ static void test_setmap(void)
     CU_ASSERT_PTR_NOT_NULL(b.s);
     CU_ASSERT_STRING_EQUAL(b.s, WORD1);
 
+    /* zero length clears contents (base is ignored, can be NULL) */
+    buf_setmap(&b, NULL, 0);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+
+    /* NULL base with non-zero length throws an assertion */
+
     buf_free(&b);
 #undef WORD1
 }
