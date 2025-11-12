@@ -299,24 +299,31 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
 
     /* body */
     if (jmap_wantprop(props, "body")) {
-        int encoding = 0;
-        const char *charset_id = NULL;
-        charset_t charset = CHARSET_UNKNOWN_CHARSET;
-
         buf_reset(buf);
         r = message_get_body(msg, buf);
-        if (!r) r = message_get_encoding(msg, &encoding);
-        if (!r) r = message_get_charset_id(msg, &charset_id);
-        if (r) return r;
+        if (!r) {
+            struct body *body;
 
-        charset = charset_lookupname(charset_id);
-        if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
-            char *dec = charset_to_utf8cstr(buf_cstring(buf), buf_len(buf),
-                                            charset, encoding);
-            buf_setcstr(buf, dec);
-            free(dec);
+            message_read_bodystructure(msg_record(msg), &body);
+            if (body) {
+                int encoding = encoding_lookupname(body->encoding);
+                charset_t charset = charset_lookupname(body->charset_id);
+
+                if (encoding ||
+                    strcasecmp(charset_canon_name(charset), "utf-8")) {
+                    char *dec = charset_to_utf8cstr(buf_base(buf), buf_len(buf),
+                                                    charset, encoding);
+                    if (dec) {
+                        buf_setcstr(buf, dec);
+                        free(dec);
+                    }
+                }
+                charset_free(&charset);
+                message_free_body(body);
+                free(body);
+            }
         }
-        charset_free(&charset);
+        if (r) return r;
 
         json_object_set_new(note, "body", json_string(buf_cstring(buf)));
     }
