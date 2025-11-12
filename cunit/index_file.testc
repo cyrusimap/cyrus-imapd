@@ -24,6 +24,8 @@ static void assert_fieldset_invariants(size_t expect_data_size,
                 /* index_header.exists may overlap */
                 CU_ASSERT_EQUAL(field->data_offset,
                                 offsetof(struct index_header, exists));
+                /* has to be the same type */
+                CU_ASSERT_EQUAL((field+1)->data_type, field->data_type);
                 is_known_overlap = true;
             }
             else {
@@ -42,6 +44,8 @@ static void assert_fieldset_invariants(size_t expect_data_size,
                 /* index_header.deletedmodseq may overlap */
                 CU_ASSERT_EQUAL(field->data_offset,
                                 offsetof(struct index_header, deletedmodseq));
+                /* has to be the same type */
+                CU_ASSERT_EQUAL((field+1)->data_type, field->data_type);
                 is_known_overlap = true;
             }
             else {
@@ -75,6 +79,8 @@ static void assert_fieldset_invariants(size_t expect_data_size,
                 /* index_header.changes_epoch may overlap */
                 CU_ASSERT_EQUAL(field->data_offset,
                                 offsetof(struct index_header, changes_epoch));
+                /* has to be the same type */
+                CU_ASSERT_EQUAL((field+1)->data_type, field->data_type);
                 is_known_overlap = true;
             }
             else {
