@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_note_get
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $id = 'bfaf3ef9-6569-4aa1-be58-a53e1c701373';
+    my $note = <<"EOF";
+MIME-Version: 1.0 (Cyrus-JMAP/3.11.0-alpha0-2705-g73ba330e6)
+X-Uniform-Type-Identifier: com.apple.mail-note
+X-Universally-Unique-Identifier: $id
+X-Mail-Created-Date: Tue, 11 Nov 2025 09:24:17 -0500
+Date: Tue, 11 Nov 2025 09:24:17 -0500
+From: <cassandane\@local>
+Subject: snowman
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+=E2=98=83=0D
+EOF
+    $note =~ s/\r?\n/\r\n/gs;
+
+    my $imap = $self->{store}->get_client();
+    $imap->create('INBOX.Notes') || die $@;
+    $imap->append('INBOX.Notes', $note) || die $@;
+
+    my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
+    $self->assert_str_equals('snowman', $res->[0][1]{list}[0]{title});
+    $self->assert_str_equals("☃\n\n", $res->[0][1]{list}[0]{body});
+    $self->assert_str_equals(JSON::false, $res->[0][1]{list}[0]{isHTML});
+}

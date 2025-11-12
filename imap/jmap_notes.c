@@ -318,6 +318,9 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
         }
         charset_free(&charset);
 
+        buf_replace_all(buf, "\r\n", "\n");  // replace CRLF with LF
+        buf_replace_all(buf, "\r", "\n");    // replace CR with LF
+
         json_object_set_new(note, "body", json_string(buf_cstring(buf)));
     }
 
