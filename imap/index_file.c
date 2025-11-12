@@ -470,8 +470,8 @@ EXPORTED const index_file_template_t *const index_files_by_version[] = {
 EXPORTED const size_t n_index_files = sizeof(index_files_by_version)
                                       / sizeof(index_files_by_version[0]);
 
-EXPORTED const char *index_file_read_fields(const char *bufp, void *base,
-                                            const index_field_t *fields)
+EXPORTED const unsigned char *index_file_read_fields(const unsigned char *bufp, void *base,
+                                                     const index_field_t *fields)
 {
     for (; fields->data_type; fields++) {
         void *datap = (void *) ((off_t) base + fields->data_offset);

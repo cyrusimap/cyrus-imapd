@@ -76,8 +76,8 @@ typedef struct index_file_template {
 extern const index_file_template_t *const index_files_by_version[];
 extern const size_t n_index_files;
 
-extern const char *index_file_read_fields(const char *bufp, void *base,
-                                          const index_field_t *fields)
+extern const unsigned char *index_file_read_fields(const unsigned char *bufp, void *base,
+                                                   const index_field_t *fields)
 #ifdef HAVE_DECLARE_OPTIMIZE
     __attribute__((optimize("-O3")))
 #endif
