@@ -580,7 +580,8 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     return r;
 }
 
-static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note)
+static int _note_create(struct mailbox *mailbox, json_t *note,
+                        modseq_t cmodseq, json_t **new_note)
 {
     struct stagemsg *stage = NULL;
     struct appendstate as;
@@ -705,7 +706,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
 
     /* Append the message to the mailbox */
     if (isFlagged) strarray_append(&flags, "\\Flagged");
-    r = append_fromstage(&as, &bodypart, stage, &now, 0,
+    r = append_fromstage(&as, &bodypart, stage, &now, cmodseq,
                          &flags, 0, /*annots*/NULL);
 
     if (r) {
@@ -776,7 +777,8 @@ static void _notes_update_cb(const char *id, message_t *msg,
           json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
 
             if (new_note) {
-                r = _note_create(msg_mailbox(msg), new_note, &updated_note);
+                r = _note_create(msg_mailbox(msg), new_note,
+                                 msg_createdmodseq(msg), &updated_note);
                 json_decref(new_note);
             }
             else {
@@ -913,7 +915,7 @@ static int jmap_note_set(jmap_req_t *req)
             err = json_pack("{s:s}", "type", "forbidden");
         }
         else if (!_notes_setargs_check(NULL/*id*/, val, &err)) {
-            r = _note_create(mbox, val, &new_note);
+            r = _note_create(mbox, val, 0/*cmodseq*/, &new_note);
             if (r) err = jmap_server_error(r);
         }
         if (err) {

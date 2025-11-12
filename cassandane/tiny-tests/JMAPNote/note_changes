@@ -1,0 +1,137 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ':v1';
+
+sub test_note_changes
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
+    my $state = $res->[0][1]{state};
+
+    $res = $jmap->CallMethods([
+        ['Note/changes', {
+            sinceState => $state
+         },
+         "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldState       => $state,
+            newState       => $state,
+            hasMoreChanges => JSON::false,
+            created        => [],
+            updated        => [],
+            destroyed      => []
+        }),
+        $res->[0][1],
+    );
+
+    xlog "create note";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => {
+                "1" => {
+                    title  => 'Hello World',
+                },
+            }
+         },
+         "R1"],
+        ['Note/changes', {
+            sinceState => $state
+         },
+         "R2"]
+    ]);
+    my $oldstate = $state;
+    $state = $res->[0][1]{newState};
+    $self->assert_str_not_equals($oldstate, $state);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldState       => $oldstate,
+            newState       => $state,
+            hasMoreChanges => JSON::false,
+            created        => [ $id ],
+            updated        => [],
+            destroyed      => []
+        }),
+        $res->[1][1],
+    );
+
+    xlog "update note";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            update => {
+                $id => {
+                    title => 'Hello World 2',
+                },
+            }
+         },
+         "R1"],
+        ['Note/changes', {
+            sinceState => $state
+         },
+         "R2"]
+    ]);
+    $oldstate = $state;
+    $state = $res->[0][1]{newState};
+    $self->assert_str_not_equals($oldstate, $state);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldState       => $oldstate,
+            newState       => $state,
+            hasMoreChanges => JSON::false,
+            created        => [],
+            updated        => [ $id ],
+            destroyed      => []
+        }),
+        $res->[1][1],
+    );
+
+    xlog "destroy note";
+    $res = $jmap->CallMethods([
+        ['Note/set', { destroy => [ $id ] }, "R1"],
+        ['Note/changes', {
+            sinceState => $state
+         },
+         "R2"]
+    ]);
+    $oldstate = $state;
+    $state = $res->[0][1]{newState};
+    $self->assert_str_not_equals($oldstate, $state);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldState       => $oldstate,
+            newState       => $state,
+            hasMoreChanges => JSON::false,
+            created        => [],
+            updated        => [],
+            destroyed      => [ $id ]
+        }),
+        $res->[1][1],
+    );
+
+    $res = $jmap->CallMethods([
+        ['Note/changes', {
+            sinceState => $state
+         },
+         "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            oldState       => $state,
+            newState       => $state,
+            hasMoreChanges => JSON::false,
+            created        => [],
+            updated        => [],
+            destroyed      => []
+        }),
+        $res->[0][1],
+    );
+}
