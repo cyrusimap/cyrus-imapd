@@ -246,6 +246,9 @@ EXPORTED void buf_setmap(struct buf *buf, const char *base, size_t len)
 {
     buf_reset(buf);
     if (len) {
+        /* NULL base with non-zero length? caller has a logic problem! */
+        assert(base != NULL);
+
         buf_ensure(buf, len);
         memcpy(buf->s, base, len);
         buf->len = len;
