@@ -2014,7 +2014,7 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     record->system_flags &= 0x0000ffff;
 
     /* use the high bits of the version field to extend the cache offset */
-    record->cache_offset |= ((record->cache_version & 0xffff0000) << 16);
+    record->cache_offset |= (((uint64_t)(record->cache_version & 0xffff0000)) << 16);
     /* keep the low bits of the version field for the version */
     record->cache_version &= 0xffff;
 
@@ -2982,8 +2982,8 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record,
     memset(buf, 0, INDEX_RECORD_SIZE);
 
     /* mix in the high bits of the offset to the top half of the version field */
-    copyrecord.cache_version |= (copyrecord.cache_offset & 0xffff00000000) >> 16;
-    /* keep the low bits of the offset in the offset field */
+    copyrecord.cache_version |= ((copyrecord.cache_offset >> 16) & 0xffff0000);
+    /* and slice them off the top of the cache_offset */
     copyrecord.cache_offset &= 0xffffffff;
 
     /* serialise system flags and internal flags */

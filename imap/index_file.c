@@ -71,10 +71,10 @@ static const index_field_t v00_hdr_fields[] = {
 
 /* Common fields (by order and size) present in versions 6 through 19 */
 #define COMMON_HEADER_FIELDS                                            \
-    {  4, 'T', offsetof(struct index_header, last_appenddate)      },   \
+    {  4, 't', offsetof(struct index_header, last_appenddate)      },   \
     {  4, '4', offsetof(struct index_header, last_uid)             },   \
     {  8, '8', offsetof(struct index_header, quota_mailbox_used)   },   \
-    {  4, 'T', offsetof(struct index_header, pop3_last_login)      },   \
+    {  4, 't', offsetof(struct index_header, pop3_last_login)      },   \
     {  4, '4', offsetof(struct index_header, uidvalidity)          },   \
     {  4, '4', offsetof(struct index_header, deleted)              },   \
     {  4, '4', offsetof(struct index_header, answered)             },   \
@@ -124,13 +124,13 @@ static const index_field_t v09_hdr_fields[] = {
     V08_HEADER_FIELDS,                                                  \
     {  8, '8', offsetof(struct index_header, deletedmodseq)        },   \
     {  4, '4', offsetof(struct index_header, exists)               },   \
-    {  4, 'T', offsetof(struct index_header, first_expunged)       },   \
-    {  0, 'T', offsetof(struct index_header, changes_epoch)        },   \
-    {  4, 'T', offsetof(struct index_header, last_repack_time)     },   \
+    {  4, 't', offsetof(struct index_header, first_expunged)       },   \
+    {  0, 't', offsetof(struct index_header, changes_epoch)        },   \
+    {  4, 't', offsetof(struct index_header, last_repack_time)     },   \
     {  4, '4', offsetof(struct index_header, header_file_crc)      },   \
     {  4, '4', offsetof(struct index_header, synccrcs.basic)       },   \
     {  4, '4', offsetof(struct index_header, recentuid)            },   \
-    {  4, 'T', offsetof(struct index_header, recenttime)           }
+    {  4, 't', offsetof(struct index_header, recenttime)           }
 
 static const index_field_t v12_hdr_fields[] = {
     V12_HEADER_FIELDS,
@@ -141,8 +141,8 @@ static const index_field_t v12_hdr_fields[] = {
 
 #define V13_HEADER_FIELDS                                               \
     V12_HEADER_FIELDS,                                                  \
-    {  4, 'T', offsetof(struct index_header, pop3_show_after)      },   \
-    {  4, '8', offsetof(struct index_header, quota_annot_used)     },   \
+    {  4, 't', offsetof(struct index_header, pop3_show_after)      },   \
+    {  4, '<', offsetof(struct index_header, quota_annot_used)     },   \
     {  4, '4', offsetof(struct index_header, synccrcs.annot)       }
 
 static const index_field_t v13_hdr_fields[] = {
@@ -175,7 +175,7 @@ static const index_field_t v16_hdr_fields[] = {
 
 #define V17_HEADER_FIELDS                                               \
     V16_HEADER_FIELDS,                                                  \
-    {  4, 'T', offsetof(struct index_header, changes_epoch)        }
+    {  4, 't', offsetof(struct index_header, changes_epoch)        }
 
 static const index_field_t v17_hdr_fields[] = {
     V17_HEADER_FIELDS,
@@ -200,20 +200,20 @@ static const index_field_t v19_hdr_fields[] = {
     {  4, '4', offsetof(struct index_header, leaked_cache_records) },
     {  8, '8', offsetof(struct index_header, highestmodseq)        },
     {  8, '8', offsetof(struct index_header, deletedmodseq)        },
-    {  4, 'T', offsetof(struct index_header, first_expunged)       },
-    {  4, 'T', offsetof(struct index_header, last_repack_time)     },
+    {  4, 't', offsetof(struct index_header, first_expunged)       },
+    {  4, 't', offsetof(struct index_header, last_repack_time)     },
     {  4, '4', offsetof(struct index_header, header_file_crc)      },
     {  4, '4', offsetof(struct index_header, synccrcs.basic)       },
     {  4, '4', offsetof(struct index_header, recentuid)            },
-    {  4, 'T', offsetof(struct index_header, recenttime)           },
-    {  4, 'T', offsetof(struct index_header, pop3_show_after)      },
-    {  4, '8', offsetof(struct index_header, quota_annot_used)     },
+    {  4, 't', offsetof(struct index_header, recenttime)           },
+    {  4, 't', offsetof(struct index_header, pop3_show_after)      },
+    {  4, '<', offsetof(struct index_header, quota_annot_used)     },
     {  4, '4', offsetof(struct index_header, synccrcs.annot)       },
     {  4, '4', offsetof(struct index_header, unseen)               },
     {  8, '8', offsetof(struct index_header, createdmodseq)        },
     {  8, '8', offsetof(struct index_header, quota_deleted_used)   },
     {  8, '8', offsetof(struct index_header, quota_expunged_used)  },
-    {  4, 'T', offsetof(struct index_header, changes_epoch)        },
+    {  4, 't', offsetof(struct index_header, changes_epoch)        },
     END_FIELD
 };
 
@@ -222,7 +222,7 @@ static const index_field_t v19_hdr_fields[] = {
    and rearranged fields so that these would fall on 8-byte boundaries */
 static const index_field_t v20_hdr_fields[] = {
     {  8, 'T', offsetof(struct index_header, last_appenddate)      },
-    {  8, '8', offsetof(struct index_header, quota_mailbox_used)   },
+    {  8, 'Q', offsetof(struct index_header, quota_mailbox_used)   },
     {  8, 'T', offsetof(struct index_header, pop3_last_login)      },
     {  4, '4', offsetof(struct index_header, deleted)              },
     {  4, '4', offsetof(struct index_header, answered)             },
@@ -230,8 +230,8 @@ static const index_field_t v20_hdr_fields[] = {
     {  4, '4', offsetof(struct index_header, exists)               },
     {  4, '4', offsetof(struct index_header, options)              },
     {  4, '4', offsetof(struct index_header, leaked_cache_records) },
-    {  8, '8', offsetof(struct index_header, highestmodseq)        },
-    {  8, '8', offsetof(struct index_header, deletedmodseq)        },
+    {  8, 'Q', offsetof(struct index_header, highestmodseq)        },
+    {  8, 'Q', offsetof(struct index_header, deletedmodseq)        },
     {  4, '4', offsetof(struct index_header, last_uid)             },
     {  4, '4', offsetof(struct index_header, uidvalidity)          },
     {  4, '4', offsetof(struct index_header, header_file_crc)      },
@@ -240,10 +240,10 @@ static const index_field_t v20_hdr_fields[] = {
     {  8, 'T', offsetof(struct index_header, pop3_show_after)      },
     {  4, '4', offsetof(struct index_header, synccrcs.annot)       },
     {  4, '4', offsetof(struct index_header, unseen)               },
-    {  8, '8', offsetof(struct index_header, createdmodseq)        },
-    {  8, '8', offsetof(struct index_header, quota_deleted_used)   },
-    {  8, '8', offsetof(struct index_header, quota_expunged_used)  },
-    {  8, '8', offsetof(struct index_header, quota_annot_used)     },
+    {  8, 'Q', offsetof(struct index_header, createdmodseq)        },
+    {  8, 'Q', offsetof(struct index_header, quota_deleted_used)   },
+    {  8, 'Q', offsetof(struct index_header, quota_expunged_used)  },
+    {  8, 'Q', offsetof(struct index_header, quota_annot_used)     },
     {  8, 'T', offsetof(struct index_header, changes_epoch)        },
     {  8, 'T', offsetof(struct index_header, first_expunged)       },
     {  8, 'T', offsetof(struct index_header, last_repack_time)     },
@@ -256,7 +256,7 @@ static const index_field_t v20_hdr_fields[] = {
  * Index file record fields by version
  */
 
-/* Array of (MAX_USER_FLAGS/32) bit32 fields */
+/* Array of (MAX_USER_FLAGS/32) uint32_t fields */
 #define USER_FLAGS_FIELDS                                               \
     {  4, '4', offsetof(struct index_record, user_flags[0])        },   \
     {  4, '4', offsetof(struct index_record, user_flags[1])        },   \
@@ -267,13 +267,13 @@ static const index_field_t v20_hdr_fields[] = {
 /* Common fields (by order and size) present in versions 6 through 19 */
 #define COMMON_RECORD_FIELDS                                            \
     {  4, '4', offsetof(struct index_record, uid)                  },   \
-    {  4, 'T', offsetof(struct index_record, internaldate)         },   \
-    {  4, 'T', offsetof(struct index_record, sentdate)             },   \
-    {  4, '8', offsetof(struct index_record, size)                 },   \
+    {  4, 't', offsetof(struct index_record, internaldate)         },   \
+    {  4, 't', offsetof(struct index_record, sentdate)             },   \
+    {  4, '<', offsetof(struct index_record, size)                 },   \
     {  4, '4', offsetof(struct index_record, header_size)          },   \
-    {  4, 'T', offsetof(struct index_record, gmtime)               },   \
-    {  4, '4', offsetof(struct index_record, cache_offset)         },   \
-    {  4, 'T', offsetof(struct index_record, last_updated)         },   \
+    {  4, 't', offsetof(struct index_record, gmtime)               },   \
+    {  4, '<', offsetof(struct index_record, cache_offset)         },   \
+    {  4, 't', offsetof(struct index_record, last_updated)         },   \
     {  4, '4', offsetof(struct index_record, system_flags)         },   \
     USER_FLAGS_FIELDS
 
@@ -338,7 +338,7 @@ static const index_field_t v13_rec_fields[] = {
 
 #define V15_RECORD_FIELDS                                               \
     COMMON_RECORD_FIELDS,                                               \
-    {  4, 'T', offsetof(struct index_record, savedate)             },   \
+    {  4, 't', offsetof(struct index_record, savedate)             },   \
     {  4, '4', offsetof(struct index_record, cache_version)        },   \
     { 20, 'B', offsetof(struct index_record, guid.value)           },   \
     {  8, '8', offsetof(struct index_record, modseq)               },   \
@@ -363,22 +363,22 @@ static const index_field_t v16_rec_fields[] = {
    and rearranged fields so that these would fall on 8-byte boundaries */
 static const index_field_t v20_rec_fields[] = {
     {  4, '4', offsetof(struct index_record, uid)                  },
-    {  4, '4', offsetof(struct index_record, cache_offset)         },
+    {  4, '<', offsetof(struct index_record, cache_offset)         },
     {  8, 'T', offsetof(struct index_record, internaldate)         },
     {  8, 'T', offsetof(struct index_record, sentdate)             },
-    {  8, '8', offsetof(struct index_record, size)                 },
+    {  8, 'Q', offsetof(struct index_record, size)                 },
     {  4, '4', offsetof(struct index_record, header_size)          },
     {  4, '4', offsetof(struct index_record, system_flags)         },
     USER_FLAGS_FIELDS,
     {  4, '4', offsetof(struct index_record, cache_version)        },
     { 20, 'B', offsetof(struct index_record, guid.value)           },
-    {  8, '8', offsetof(struct index_record, modseq)               },
-    {  8, '8', offsetof(struct index_record, cid)                  },
-    {  8, '8', offsetof(struct index_record, createdmodseq)        },
+    {  8, 'Q', offsetof(struct index_record, modseq)               },
+    {  8, 'Q', offsetof(struct index_record, cid)                  },
+    {  8, 'Q', offsetof(struct index_record, createdmodseq)        },
     {  8, 'T', offsetof(struct index_record, gmtime)               },
     {  8, 'T', offsetof(struct index_record, last_updated)         },
     {  8, 'T', offsetof(struct index_record, savedate)             },
-    {  8, '8', offsetof(struct index_record, basecid)              },
+    {  8, 'Q', offsetof(struct index_record, basecid)              },
     CACHE_CRC_FIELD,
     END_FIELD
 };
@@ -478,34 +478,34 @@ EXPORTED const char *index_file_read_fields(const char *bufp, void *base,
 
         switch (fields->data_type) {
         case '4':
-            *((bit32 *) datap) = ntohl(*((bit32 *)(bufp)));
+            *((uint32_t *) datap) = ntohl(*((uint32_t *)(bufp)));
+            break;
+
+        case '<':
+            /* this field is stored as a 32b on disk but 64b in memory */
+            *((uint64_t *) datap) = ntohl(*((uint32_t *)(bufp)));
             break;
 
         case '8':
-            if (fields->disk_size == 8)
-                *((bit64 *) datap) = align_ntohll(bufp);
-            else {
-                /* this field is stored as a 32b on disk but 64b in memory */
-                *((bit64 *) datap) = ntohl(*((bit32 *)(bufp)));
-            }
+            *((uint64_t *) datap) = align_ntohll(bufp);
+            break;
+
+        case 'Q':
+            *((uint64_t *) datap) = ntohll(*((uint64_t *)(bufp)));
             break;
 
         case 'B':
             memcpy(datap, bufp, fields->disk_size);
             break;
 
-        case 'T': {
-            struct timespec *ts = (struct timespec *) datap;
-
-            if (fields->disk_size == 8) {
-                TIMESPEC_FROM_NANOSEC(ts, align_ntohll(bufp));
-            }
-            else {
-                ts->tv_sec = ntohl(*((bit32 *)(bufp)));
-                ts->tv_nsec = 0;
-            }
+        case 'T':
+            TIMESPEC_FROM_NANOSEC((struct timespec *) datap, ntohll(*((uint64_t *)(bufp))));
             break;
-        }
+
+        case 't':
+            ((struct timespec *) datap)->tv_sec = ntohl(*((uint32_t *)(bufp)));
+            ((struct timespec *) datap)->tv_nsec = 0;
+            break;
 
         case 'E':
             /* nothing to read */
@@ -530,33 +530,34 @@ EXPORTED unsigned char *index_file_write_fields(void *base, unsigned char *bufp,
 
         switch (fields->data_type) {
         case '4':
-            *((bit32 *) bufp) = htonl(*((bit32 *) datap));
+            *((uint32_t *) bufp) = htonl(*((uint32_t *) datap));
+            break;
+
+        case '<':
+            /* this field is 64b in memory but stored as 32b on disk */
+            assert(*((uint64_t *) datap) <= UINT32_MAX);
+            *((uint32_t *) bufp) = htonl(*((uint64_t *) datap));
             break;
 
         case '8':
-            if (fields->disk_size == 8)
-                align_htonll(bufp, *((bit64 *) datap));
-            else {
-                /* this field is 64b in memory but stored as 32b on disk */
-                bit32 b32 = *((bit64 *) datap);
-                assert((bit64) b32 == *((bit64 *) datap)); // are we losing data?
-                *((bit32 *) bufp) = htonl(b32);
-            }
+            align_htonll(bufp, *((uint64_t *) datap));
+            break;
+
+        case 'Q':
+            *((uint64_t *) bufp) = htonll(*((uint64_t *)datap));
             break;
 
         case 'B':
             memcpy(bufp, datap, fields->disk_size);
             break;
 
-        case 'T': {
-            struct timespec *ts = (struct timespec *) datap;
-
-            if (fields->disk_size == 8)
-                *((bit64 *)(bufp)) = htonll(TIMESPEC_TO_NANOSEC(ts));
-            else
-                *((bit32 *)(bufp)) = htonl(ts->tv_sec);
+        case 'T':
+            *((uint64_t *)(bufp)) = htonll(TIMESPEC_TO_NANOSEC((struct timespec *) datap));
             break;
-        }
+
+        case 't':
+            *((uint32_t *)(bufp)) = htonl(((struct timespec *) datap)->tv_sec);
+            break;
 
         case 'E':
             /* nothing to write */

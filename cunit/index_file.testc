@@ -27,10 +27,16 @@ static void assert_fieldset_invariants(size_t expect_data_size,
                 is_known_overlap = true;
             }
             else {
-                CU_ASSERT_EQUAL(field->disk_size, sizeof(bit32));
+                CU_ASSERT_EQUAL(field->disk_size, sizeof(uint32_t));
             }
-            field_data_size = sizeof(bit32);
+            field_data_size = sizeof(uint32_t);
             break;
+
+        case '<':
+            CU_ASSERT_EQUAL(field->disk_size, sizeof(uint32_t));
+            field_data_size = sizeof(uint64_t);
+            break;
+
         case '8':
             if (field->disk_size == 0) {
                 /* index_header.deletedmodseq may overlap */
@@ -38,33 +44,40 @@ static void assert_fieldset_invariants(size_t expect_data_size,
                                 offsetof(struct index_header, deletedmodseq));
                 is_known_overlap = true;
             }
-            else if (field->disk_size == sizeof(bit32)) {
-                /* some 8-byte fields are only 4 bytes on disk */
-            }
             else {
                 CU_ASSERT_EQUAL(field->disk_size, sizeof(bit64));
             }
             field_data_size = sizeof(bit64);
             break;
+
+        case 'Q':
+            CU_ASSERT_EQUAL(field->disk_size, sizeof(uint64_t));
+            field_data_size = sizeof(uint64_t);
+            break;
+
         case 'B':
             CU_ASSERT_NOT_EQUAL(field->disk_size, 0);
             field_data_size = field->disk_size;
             break;
+
         case 'T':
+            CU_ASSERT_EQUAL(field->disk_size, sizeof(uint64_t));
+            field_data_size = sizeof(uint64_t);
+            break;
+
+        case 't':
             if (field->disk_size == 0) {
                 /* index_header.changes_epoch may overlap */
                 CU_ASSERT_EQUAL(field->data_offset,
                                 offsetof(struct index_header, changes_epoch));
                 is_known_overlap = true;
             }
-            else if (field->disk_size == sizeof(bit32)) {
-                /* some 8-byte fields are only 4 bytes on disk */
-            }
             else {
-                CU_ASSERT_EQUAL(field->disk_size, sizeof(bit64));
+                CU_ASSERT_EQUAL(field->disk_size, sizeof(uint32_t));
             }
-            field_data_size = sizeof(bit64);
+            field_data_size = sizeof(uint32_t);
             break;
+
         case 'E':
             /* empty field: arbitrary disk size, no data size */
             field_data_size = 0;

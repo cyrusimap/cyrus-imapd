@@ -52,10 +52,13 @@ struct opaque_index_field {
     uint8_t disk_size; // size of data on disk
                        // 0 = read w/o advancing, write nothing
     char data_type;    // data storage type:
-                       // '4' = 4 bytes (bit32)
-                       // '8' = 8 bytes (bit64)
+                       // '4' = 4 bytes (uint32_t)
+                       // '<' = 4 bytes on disk, 8 bytes in memory
+                       // '8' = 8 bytes (uint64_t) - unaligned
+                       // 'Q' = 8 bytes (uint64_t) - aligned
                        // 'B' = byte array
-                       // 'T' = struct timespec
+                       // 'T' = struct timespec (8 bytes on disk)
+                       // 't' = 4 bytes unix timestamp (tv_sec)
                        // 'E' = empty field (no storage)
     off_t data_offset; // offset to data type in storage struct
 };
