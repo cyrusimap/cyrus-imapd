@@ -5731,6 +5731,10 @@ EXPORTED int message_get_encoding(message_t *m, int *encp)
 {
     int r = message_need(m, M_CACHEBODY);
     if (r) return r;
+
+    if (!m->body->charset_enc && m->body->encoding)
+        m->body->charset_enc = encoding_lookupname(m->body->encoding);
+
     *encp = m->body->charset_enc;
     return 0;
 }
@@ -5739,6 +5743,18 @@ EXPORTED int message_get_charset_id(message_t *m, const char **strp)
 {
     int r = message_need(m, M_CACHEBODY);
     if (r) return r;
+
+    if (!m->body->charset_id && m->body->params) {
+        charset_t cs = !strcmpsafe(m->body->type, "TEXT") ?
+            charset_lookupname("us-ascii") : CHARSET_UNKNOWN_CHARSET;
+        message_parse_charset_params(m->body->params, &cs);
+        if (cs != CHARSET_UNKNOWN_CHARSET) {
+            /* Use parameter value, instead of canonical name */
+            m->body->charset_id = xstrdup(charset_alias_name(cs));
+        }
+        charset_free(&cs);
+    }
+    
     *strp = m->body->charset_id;
     return 0;
 }
