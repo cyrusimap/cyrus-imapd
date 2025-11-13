@@ -7,6 +7,7 @@
 #include "imap/auditlog.h"
 
 #include "imap/mailbox.h"
+#include "imap/mboxname.h"
 #include "imap/jmap_util.h"
 
 #include "lib/assert.h"
@@ -41,13 +42,14 @@ EXPORTED void auditlog_acl(const char *mboxname,
                            const mbentry_t *mbentry)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
+    mbname_t *mbname = NULL;
 
     if (!config_auditlog) return;
 
+    mbname = mbname_from_intname(mboxname);
     auditlog_begin(&lf, "acl");
 
-    /* XXX convert mboxname to consistent namespace? */
-    logfmt_push(&lf, "mailbox", mboxname);
+    logfmt_push_mbname(&lf, "mbox.name", mbname);
     logfmt_push(&lf, "uniqueid", mbentry->uniqueid);
     logfmt_push(&lf, "jmapid", mbentry->jmapid);
     logfmt_push(&lf, "mbtype", mboxlist_mbtype_to_string(mbentry->mbtype));
@@ -56,6 +58,7 @@ EXPORTED void auditlog_acl(const char *mboxname,
     logfmt_pushf(&lf, "foldermodseq", MODSEQ_FMT, mbentry->foldermodseq);
 
     auditlog_finish(&lf);
+    mbname_free(&mbname);
 }
 
 EXPORTED void auditlog_client(const char *action,
@@ -124,7 +127,9 @@ EXPORTED void auditlog_mailbox(const char *action,
     if (oldmailbox && strcmpsafe(mailbox_name(oldmailbox),
                                  mailbox_name(mailbox)))
     {
-        logfmt_push(&lf, "old.mbox.name", mailbox_name(oldmailbox));
+        mbname_t *mbname = mbname_from_intname(mailbox_name(oldmailbox));
+        logfmt_push_mbname(&lf, "old.mbox.name", mbname);
+        mbname_free(&mbname);
     }
 
     logfmt_push_mailbox(&lf, mailbox);
@@ -161,8 +166,9 @@ EXPORTED void auditlog_mboxname(const char *action,
     }
 
     if (mboxname) {
-        /* XXX convert to consistent namespace? */
-        logfmt_push(&lf, "mailbox", mboxname);
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        logfmt_push_mbname(&lf, "mbox.name", mbname);
+        mbname_free(&mbname);
     }
 
     auditlog_finish(&lf);

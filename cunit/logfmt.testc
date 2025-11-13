@@ -15,6 +15,7 @@
 
 static int set_up(void)
 {
+    config_read_string("configdirectory: "DBDIR"/conf\n");
     session_clear_id();
     trace_set_id(NULL, 0);
     return 0;
@@ -24,6 +25,7 @@ static int tear_down(void)
 {
     session_clear_id();
     trace_set_id(NULL, 0);
+    config_reset();
     return 0;
 }
 
@@ -316,11 +318,6 @@ static void test_logfmt_push_session(void)
     struct logfmt lf = LOGFMT_INITIALIZER;
     unsigned i;
 
-    /* need basic configuration for session_new_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
-
     for (i = 0; i < n_tests; i++) {
         char match[32 + MAX_SESSIONID_SIZE] = {0};
 
@@ -412,6 +409,23 @@ static void test_logfmt_push_mailbox(void)
     #undef MBOXNAME
     #undef UNIQUEID
     #undef JMAPID
+}
+
+static void test_logfmt_push_mbname(void)
+{
+    #define INTNAME "user.sentinel.name"
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    mbname_t *mbname = NULL;
+
+    logfmt_init(&lf, "test_logfmt_push_mbname");
+
+    mbname = mbname_from_intname(INTNAME);
+    logfmt_push_mbname(&lf, NULL, mbname);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.name=" INTNAME));
+
+    mbname_free(&mbname);
+    logfmt_fini(&lf);
 }
 
 /* vim: set ft=c: */

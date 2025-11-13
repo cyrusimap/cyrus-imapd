@@ -8574,9 +8574,13 @@ EXPORTED void logfmt_push_mailbox(struct logfmt *lf,
                                   const struct mailbox *mailbox)
 {
     if (mailbox) {
-        logfmt_push(lf, "mbox.name", mailbox_name(mailbox));
+        mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
+
+        logfmt_push_mbname(lf, "mbox.name", mbname);
         logfmt_push(lf, "mbox.uniqueid", mailbox_uniqueid(mailbox));
         logfmt_push(lf, "mbox.mailboxid", mailbox_jmapid(mailbox));
+
+        mbname_free(&mbname);
     }
     else {
         logfmt_push(lf, "mbox", NULL);
