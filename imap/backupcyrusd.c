@@ -435,7 +435,7 @@ static void send_file(const char *name, const char *mboxname, const char *fname,
  *    => $size bytes
  *    => DONE $file $sha1
  *  )
- *  => DONE FDATA $uniqueid
+ *  => DONE FDATA $uniqueid $jmapid
  */
 static int do_fdata()
 {
@@ -497,6 +497,8 @@ static int do_fdata()
 
     prot_printf(bcd_out, "DONE FDATA ");
     puturistring(bcd_out, mailbox_uniqueid(mailbox));
+    prot_putc(' ', bcd_out);
+    puturistring(bcd_out, mailbox_jmapid(mailbox));
     prot_putc('\n', bcd_out);
 
     mailbox_close(&mailbox);
@@ -510,7 +512,7 @@ static int do_fdata()
  *  => STAT header $size $mtime $inode
  *  => STAT index $size $mtime $inode
  *  => STAT annotations $size $mtime $inode
- *  => DONE FMETA $uniqueid
+ *  => DONE FMETA $uniqueid $jmapid
  *
  * FMETA $slot $user $folder @files
  *  => OK or NO message
@@ -519,7 +521,7 @@ static int do_fdata()
  *    => $size bytes
  *    => DONE $file $sha1
  *  )
- *  => DONE FMETA $uniqueid
+ *  => DONE FMETA $uniqueid $jmapid
  */
 static int do_fmeta()
 {
@@ -578,6 +580,8 @@ static int do_fmeta()
 
     prot_printf(bcd_out, "DONE FMETA ");
     puturistring(bcd_out, mailbox_uniqueid(mailbox));
+    prot_putc(' ', bcd_out);
+    puturistring(bcd_out, mailbox_jmapid(mailbox));
     prot_putc('\n', bcd_out);
 
     mailbox_close(&mailbox);
@@ -594,6 +598,8 @@ static int one_status(const mbentry_t *mbentry, void *rock)
     puturistring(bcd_out, extname);
     prot_putc(' ', bcd_out);
     puturistring(bcd_out, mbentry->uniqueid);
+    prot_putc(' ', bcd_out);
+    puturistring(bcd_out, mbentry->jmapid);
     prot_putc('\n', bcd_out);
     send_file("header", extname, mbentry_metapath(mbentry, META_HEADER, 0), 0);
     send_file("index", extname, mbentry_metapath(mbentry, META_INDEX, 0), 0);
@@ -602,6 +608,18 @@ static int one_status(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
+/*
+ *  FMULTISTATUS $slot $user
+ *    => OK or NO message
+ *    (
+ *      => FOLDER $name $uniqueid $jmapid
+ *      => STAT $name header $size $mtime $inode
+ *      => STAT $name index $size $mtime $inode
+ *      => STAT $name annotations $size $mtime $inode
+ *      => STAT $name mailbox_annotations $size $mtime $inode
+ *    )
+ *    => DONE FMULTISTATUS
+ */
 static int do_fmultistatus()
 {
     static struct buf user;
