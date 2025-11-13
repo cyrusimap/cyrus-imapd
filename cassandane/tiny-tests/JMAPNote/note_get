@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ':v1';
+use utf8;
+
+sub test_note_get
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $id1 = 'bfaf3ef9-6569-4aa1-be58-a53e1c701373';
+    my $note1 = <<"EOF";
+MIME-Version: 1.0 (Cyrus-JMAP/3.11.0-alpha0-2705-g73ba330e6)
+X-Uniform-Type-Identifier: com.apple.mail-note
+X-Universally-Unique-Identifier: $id1
+X-Mail-Created-Date: Tue, 11 Nov 2025 09:24:17 -0500
+Date: Tue, 11 Nov 2025 09:24:17 -0500
+From: <cassandane\@local>
+Subject: snowman
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+=E2=98=83=0D
+EOF
+    $note1 =~ s/\r?\n/\r\n/gs;
+
+    my $id2 = 'c07117fe-1643-420d-a964-c11860f97e19';
+    my $note2 = <<"EOF";
+X-Uniform-Type-Identifier: com.apple.mail-note
+X-Universally-Unique-Identifier: $id2
+X-Mail-Created-Date: Tue, 11 Nov 2025 09:24:17 -0500
+Date: Tue, 11 Nov 2025 09:24:17 -0500
+From: <cassandane\@local>
+Subject: bad charset
+Content-Type: text/plain; charset=foo
+
+foo bar
+EOF
+    $note2 =~ s/\r?\n/\r\n/gs;
+
+    my $id3 = '16ebdca7-ff85-4f37-bf5c-2694d652255e';
+    my $note3 = <<"EOF";
+X-Uniform-Type-Identifier: com.apple.mail-note
+X-Universally-Unique-Identifier: $id3
+X-Mail-Created-Date: Tue, 11 Nov 2025 09:24:17 -0500
+Date: Tue, 11 Nov 2025 09:24:17 -0500
+From: <cassandane\@local>
+Subject: bad encoding
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: foo
+
+foo bar
+EOF
+    $note3 =~ s/\r?\n/\r\n/gs;
+
+    my $imap = $self->{store}->get_client();
+    $imap->create('INBOX.Notes') || die $@;
+    $imap->append('INBOX.Notes', $note1) || die $@;
+    $imap->append('INBOX.Notes', $note2) || die $@;
+    $imap->append('INBOX.Notes', $note3) || die $@;
+
+    my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            id     => $id1,
+            title  => 'snowman',
+            body   => "☃\n\n",
+            isHTML => JSON::false
+        }),
+        $res->[0][1]{list}[0],
+    );
+    $self->assert_cmp_deeply(
+        superhashof({
+            id     => $id2,
+            title  => 'bad charset',
+            body   => "foo bar\n",
+            isHTML => JSON::false
+        }),
+        $res->[0][1]{list}[1],
+    );
+    $self->assert_cmp_deeply(
+        superhashof({
+            id     => $id3,
+            title  => 'bad encoding',
+            body   => "foo bar\n",
+            isHTML => JSON::false
+        }),
+        $res->[0][1]{list}[2],
+    );
+}
