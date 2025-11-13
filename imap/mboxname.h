@@ -45,6 +45,7 @@
 
 #include "auth.h"
 #include "libconfig.h"
+#include "logfmt.h"
 #include "strarray.h"
 #include "util.h"
 
@@ -141,7 +142,7 @@ int mboxname_run_with_lock(int (*cb)(void *), void *rock);
 /* Create namespace based on config options. */
 int mboxname_init_namespace(struct namespace *namespace, unsigned options);
 
-struct namespace *mboxname_get_adminnamespace();
+struct namespace *mboxname_get_adminnamespace(void);
 
 /* Return nonzero if 'userid' owns the (internal) mailbox 'name'. */
 int mboxname_userownsmailbox(const char *userid, const char *name);
@@ -400,5 +401,9 @@ modseq_t mboxname_readraclmodseq(const char *mboxname);
 modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last);
 modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t val);
 void mboxname_zero_counters(const char *mboxname);
+
+/* data-type aware logging */
+void logfmt_push_mbname(struct logfmt *lf,
+                        const char *key, const mbname_t *mbname);
 
 #endif
