@@ -11,17 +11,10 @@ sub test_calendar_defaultalerts_synctoken_shared
 
     xlog "Create other user and share calendar";
     my $admintalk = $self->{adminstore}->get_client();
-    $self->{instance}->create_user("other");
+    my $other_user = $self->{instance}->create_user("other");
     $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
-    my $service = $self->{instance}->get_service("http");
-    my $otherJMAP = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+
+    my $otherJMAP = $other_user->jmap;
 
     xlog "Set default alerts on calendar";
     my $res = $jmap->CallMethods([
