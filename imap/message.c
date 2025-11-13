@@ -5281,6 +5281,20 @@ EXPORTED modseq_t msg_modseq(const message_t *m)
     return m->record.modseq;
 }
 
+EXPORTED int message_get_createdmodseq(message_t *m, modseq_t *modseqp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *modseqp = m->record.createdmodseq;
+    return 0;
+}
+
+EXPORTED modseq_t msg_createdmodseq(const message_t *m)
+{
+    assert(!message_need(m, M_RECORD));
+    return m->record.createdmodseq;
+}
+
 EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
 {
     int r = message_need(m, M_INDEX);

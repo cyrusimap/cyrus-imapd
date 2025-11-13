@@ -217,6 +217,7 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                    mbentry->name, error_message(r));
         }
         else {
+            /* Add special-use flag */
             char *userid = mboxname_to_userid(mbentry->name);
             static const char *annot = "/specialuse";
             struct buf buf = BUF_INITIALIZER;
@@ -230,6 +231,12 @@ static int ensure_notes_collection(const char *accountid, mbentry_t **mbentryp)
                        annot, error_message(r));
                 goto done;
             }
+
+            /* Re-fetch the mbentry so it is fully populated */
+            char *mboxname = xstrdup(mbentry->name);
+            mboxlist_entry_free(&mbentry);
+            r = mboxlist_lookup(mboxname, &mbentry, NULL);
+            free(mboxname);
         }
     }
 
@@ -292,24 +299,34 @@ static int _note_get(message_t *msg, json_t *note, hash_table *props,
 
     /* body */
     if (jmap_wantprop(props, "body")) {
-        int encoding = 0;
-        const char *charset_id = NULL;
-        charset_t charset = CHARSET_UNKNOWN_CHARSET;
-
         buf_reset(buf);
         r = message_get_body(msg, buf);
-        if (!r) r = message_get_encoding(msg, &encoding);
-        if (!r) r = message_get_charset_id(msg, &charset_id);
+        if (!r) {
+            struct body *body;
+
+            message_read_bodystructure(msg_record(msg), &body);
+            if (body) {
+                int encoding = encoding_lookupname(body->encoding);
+                charset_t charset = charset_lookupname(body->charset_id);
+
+                if (encoding ||
+                    strcasecmp(charset_canon_name(charset), "utf-8")) {
+                    char *dec = charset_to_utf8cstr(buf_base(buf), buf_len(buf),
+                                                    charset, encoding);
+                    if (dec) {
+                        buf_setcstr(buf, dec);
+                        free(dec);
+                    }
+                }
+                charset_free(&charset);
+                message_free_body(body);
+                free(body);
+            }
+        }
         if (r) return r;
 
-        charset = charset_lookupname(charset_id);
-        if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
-            char *dec = charset_to_utf8cstr(buf_cstring(buf), buf_len(buf),
-                                            charset, encoding);
-            buf_setcstr(buf, dec);
-            free(dec);
-        }
-        charset_free(&charset);
+        buf_replace_all(buf, "\r\n", "\n");  // replace CRLF with LF
+        buf_replace_all(buf, "\r", "\n");    // replace CR with LF
 
         json_object_set_new(note, "body", json_string(buf_cstring(buf)));
     }
@@ -454,18 +471,25 @@ static int jmap_note_get(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_notes_collection(req->accountid, &mbentry);
+    int r = lookup_notes_collection(req->accountid, &mbentry);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_note_get: ensure_notes_collection(%s): %s",
-               req->accountid, error_message(r));
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            /* Build response */
+            buf_printf(&buf, MODSEQ_FMT, 0UL);
+            get.state = buf_release(&buf);
+            jmap_ok(req, jmap_get_reply(&get));
+        }
+        else {
+            syslog(LOG_ERR,
+                   "jmap_note_get: lookup_notes_collection(%s): %s",
+                   req->accountid, error_message(r));
+        }
         goto done;
     }
 
     rights = jmap_myrights_mbentry(req, mbentry);
 
     r = mailbox_open_irl(mbentry->name, &mbox);
-    mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
     /* Does the client request specific notes? */
@@ -498,6 +522,7 @@ static int jmap_note_get(jmap_req_t *req)
     mailbox_close(&mbox);
 
 done:
+    mboxlist_entry_free(&mbentry);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
 
@@ -533,12 +558,14 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     }
 
     arg = json_object_get(args, "body");
-    if (arg && (!json_is_string(arg) || !json_object_get(args, "isHTML"))) {
+    if (arg && (!json_is_string(arg) ||
+                (is_create && !json_object_get(args, "isHTML")))) {
         jmap_parser_invalid(&parser, "body");
     }
 
     arg = json_object_get(args, "isHTML");
-    if (arg && (!json_is_boolean(arg) || !json_object_get(args, "body"))) {
+    if (arg && (!json_is_boolean(arg) ||
+                (is_create && !json_object_get(args, "body")))) {
         jmap_parser_invalid(&parser, "isHTML");
     }
 
@@ -553,7 +580,8 @@ static int _notes_setargs_check(const char *id, json_t *args, json_t **err)
     return r;
 }
 
-static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note)
+static int _note_create(struct mailbox *mailbox, json_t *note,
+                        modseq_t cmodseq, json_t **new_note)
 {
     struct stagemsg *stage = NULL;
     struct appendstate as;
@@ -678,7 +706,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note, json_t **new_note
 
     /* Append the message to the mailbox */
     if (isFlagged) strarray_append(&flags, "\\Flagged");
-    r = append_fromstage(&as, &bodypart, stage, &now, 0,
+    r = append_fromstage(&as, &bodypart, stage, &now, cmodseq,
                          &flags, 0, /*annots*/NULL);
 
     if (r) {
@@ -749,7 +777,8 @@ static void _notes_update_cb(const char *id, message_t *msg,
           json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
 
             if (new_note) {
-                r = _note_create(msg_mailbox(msg), new_note, &updated_note);
+                r = _note_create(msg_mailbox(msg), new_note,
+                                 msg_createdmodseq(msg), &updated_note);
                 json_decref(new_note);
             }
             else {
@@ -886,7 +915,7 @@ static int jmap_note_set(jmap_req_t *req)
             err = json_pack("{s:s}", "type", "forbidden");
         }
         else if (!_notes_setargs_check(NULL/*id*/, val, &err)) {
-            r = _note_create(mbox, val, &new_note);
+            r = _note_create(mbox, val, 0/*cmodseq*/, &new_note);
             if (r) err = jmap_server_error(r);
         }
         if (err) {
@@ -985,21 +1014,26 @@ static int jmap_note_changes(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_notes_collection(req->accountid, &mbentry);
+    int r = lookup_notes_collection(req->accountid, &mbentry);
     if (r) {
-        syslog(LOG_ERR,
-               "jmap_note_changes: ensure_submission_collection(%s): %s",
-               req->accountid, error_message(r));
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            /* Set new state */
+            changes.new_modseq = 0;
+            jmap_ok(req, jmap_changes_reply(&changes));
+        }
+        else {
+            syslog(LOG_ERR,
+                   "jmap_note_changes: lookup_submission_collection(%s): %s",
+                   req->accountid, error_message(r));
+        }
         goto done;
     }
 
     r = mailbox_open_irl(mbentry->name, &mbox);
-    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
 
     r = mailbox_user_flag(mbox, DFLAG_UNBIND, &userflag, 0);
     if (r) userflag = -1;
-
-    if (r) goto done;
 
     struct mailbox_iter *iter = mailbox_iter_init(mbox, changes.since_modseq, 0);
     modseq_t highest_modseq = mbox->i.highestmodseq;
@@ -1105,6 +1139,7 @@ static int jmap_note_changes(jmap_req_t *req)
     jmap_ok(req, jmap_changes_reply(&changes));
 
 done:
+    mboxlist_entry_free(&mbentry);
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;

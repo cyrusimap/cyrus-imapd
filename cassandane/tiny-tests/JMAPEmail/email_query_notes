@@ -13,16 +13,10 @@ sub test_email_query_notes
     push @using, 'https://cyrusimap.org/ns/jmap/notes';
     $jmap->DefaultUsing(\@using);
 
-    # force creation of notes mailbox prior to creating notes
-    my $res = $jmap->CallMethods([
-        ['Note/set', {
-         }, "R0"]
-    ]);
-
     xlog "create note";
-    $res = $jmap->CallMethods([['Note/set',
-                                { create => { "1" => {title => "foo"}, } },
-                                "R1"]]);
+    my $res = $jmap->CallMethods([['Note/set',
+                                   { create => { "1" => {title => "foo"}, } },
+                                   "R1"]]);
     $self->assert_not_null($res);
     my $note1 = $res->[0][1]{created}{"1"}{id};
 

@@ -1,0 +1,155 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ':v1';
+
+sub test_note_set
+    :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create note with body but without isHTML";
+    my $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => {
+                "1" => {
+                    title => "HTML",
+                    body  => "<html><head></head><body>Hello World</body></html>",
+                },
+            }
+         },
+         "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            type       => 'invalidProperties',
+            properties => [ 'body' ]
+        }),
+        $res->[0][1]{notCreated}{"1"},
+    );
+
+    xlog "create note with isHTML but without body";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => {
+                "1" => {
+                    title => 'HTML',
+                    isHTML => JSON::true,
+                },
+            }
+         },
+         "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            type       => 'invalidProperties',
+            properties => [ 'isHTML' ]
+        }),
+        $res->[0][1]{notCreated}{"1"},
+    );
+
+    xlog "create note with HTML body";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            create => {
+                "1" => {
+                    title  => 'HTML',
+                    body   => '<html><head></head><body>Hello World</body></html>',
+                    isHTML => JSON::true,
+                },
+            }
+         },
+         "R1"],
+        ['Note/get', { }, "R2"]
+    ]);
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+    $self->assert_cmp_deeply(
+        superhashof({
+            id        => $id,
+            title     => 'HTML',
+            body      => '<html><head></head><body>Hello World</body></html>',
+            isHTML    => JSON::true,
+            isFlagged => JSON::false
+        }),
+        $res->[1][1]{list}[0],
+    );
+
+    xlog "update note with HTML body";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            update => {
+                $id => {
+                    body => '<html><head></head><body>Hello World 2</body></html>',
+                },
+            }
+         },
+         "R1"],
+        ['Note/get', { }, "R2"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $self->assert_cmp_deeply(
+        superhashof({
+            id        => $id,
+            title     => 'HTML',
+            body      => '<html><head></head><body>Hello World 2</body></html>',
+            isHTML    => JSON::true,
+            isFlagged => JSON::false
+        }),
+        $res->[1][1]{list}[0],
+    );
+
+    xlog "update note with plain text body";
+    $res = $jmap->CallMethods([
+        ['Note/set', {
+            update => {
+                $id => {
+                    title  => "plain text",
+                    body   => "Hello World 3",
+                    isHTML => JSON::false,
+                },
+            }
+         },
+         "R1"],
+        ['Note/get', { }, "R2"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+    $self->assert_cmp_deeply(
+        superhashof({
+            id        => $id,
+            title     => 'plain text',
+            body      => 'Hello World 3',
+            isHTML    => JSON::false,
+            isFlagged => JSON::false
+        }),
+        $res->[1][1]{list}[0],
+    );
+
+    xlog "set \flagged";
+    my $imap = $self->{store}->get_client();
+    $imap->select('INBOX.Notes') || die $@;
+    $imap->store('1', '+flags', '(\\flagged)') || die $@;
+
+    xlog "verify isFlagged";
+    $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            id        => $id,
+            title     => 'plain text',
+            body      => 'Hello World 3',
+            isHTML    => JSON::false,
+            isFlagged => JSON::true
+        }),
+        $res->[0][1]{list}[0],
+    );
+
+    xlog "destroy note";
+    $res = $jmap->CallMethods([
+        ['Note/set', { destroy => [ $id ] }, "R1"],
+        ['Note/get', { }, "R2"]
+    ]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    $self->assert_deep_equals([], $res->[1][1]{list});
+}
