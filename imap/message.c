@@ -875,16 +875,23 @@ static void message_parse_headers(struct msg *msg, struct body *body,
     buf_putc(&headers, '\n');   /* Leading newline to prime the pump */
 
     /* Slurp up all of the headers into 'headers' */
-    while ((next = message_getline(&headers, msg)) &&
-           (next[-1] != '\n' ||
-            (*next != '\r' || next[1] != '\n')) &&
-            // leniently parse empty line with bare LF as end of headers
-            *next != '\n') {
+    while ((next = message_getline(&headers, msg))) {
+
+        // Continue reading until end of line.
+        if (next[-1] != '\n') continue;
+
+        // Line is empty and ends with CRLF, stop reading headers.
+        if (next[0] == '\r' && next[1] == '\n') break;
+
+        // Line is empty and ends with LF, stop reading headers.
+        // Note: this is invalid MIME but leniently accepted.
+        if (next[0] == '\n') break;
 
         len = strlen(next);
 
-        if (next[-1] == '\n' && *next == '-' &&
+        if (next[0] == '-' &&
             message_pendingboundary(next, len, boundaries)) {
+            // Found multi-part boundary of next body part.
             body->boundary_size = len;
             body->boundary_lines++;
             if (next - 1 > headers.s) {
@@ -893,8 +900,9 @@ static void message_parse_headers(struct msg *msg, struct body *body,
                 next[-2] = '\0';
             }
             else {
-                *next = '\0';
+                next[0] = '\0';
             }
+            // Indicate that we saw boundary and stop reading headers.
             if (sawboundaryp) *sawboundaryp = 1;
             break;
         }
