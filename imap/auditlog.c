@@ -182,7 +182,6 @@ EXPORTED void auditlog_message(const char *action,
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
     struct conversations_state *cstate;
-    char flagstr[FLAGMAPSTR_MAXLEN] = {0};
     char emailid[JMAP_MAX_EMAILID_SIZE] = {0};
     char threadid[JMAP_THREADID_SIZE] = {0};
 
@@ -191,21 +190,11 @@ EXPORTED void auditlog_message(const char *action,
     cstate = mailbox_get_cstate(mailbox);
     jmap_set_emailid(cstate, &record->guid, 0, &record->internaldate, emailid);
     jmap_set_threadid(cstate, record->cid, threadid);
-    flags_to_str(record, flagstr);
 
     auditlog_begin(&lf, action);
 
     logfmt_push_mailbox(&lf, mailbox);
-    logfmt_pushf(&lf, "uid", "%u", record->uid);
-    logfmt_pushf(&lf, "modseq", MODSEQ_FMT, record->modseq);
-    logfmt_push(&lf, "sysflags", flagstr);
-
-    if (oldrecord) {
-        flags_to_str(oldrecord, flagstr);
-        logfmt_push(&lf, "oldflags", flagstr);
-    }
-
-    logfmt_push(&lf, "guid", message_guid_encode(&record->guid));
+    logfmt_push_record(&lf, record);
     logfmt_push(&lf, "emailid", emailid);
     logfmt_push(&lf, "cid", threadid);
 
@@ -213,7 +202,12 @@ EXPORTED void auditlog_message(const char *action,
         logfmt_push(&lf, "message-id", message_id);
     }
 
-    logfmt_pushf(&lf, "size", UINT64_FMT, record->size);
+    if (oldrecord) {
+        char oldsysflags[FLAGMAPSTR_MAXLEN] = {0};
+        flags_to_str(oldrecord, oldsysflags);
+        logfmt_push(&lf, "oldflags", oldsysflags);
+    }
+
     auditlog_finish(&lf);
 }
 

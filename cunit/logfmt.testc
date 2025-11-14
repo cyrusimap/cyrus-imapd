@@ -428,4 +428,37 @@ static void test_logfmt_push_mbname(void)
     logfmt_fini(&lf);
 }
 
+static void test_logfmt_push_record(void)
+{
+    static const char msg[] = "banana";
+    struct index_record test_record = {
+        .uid = UINT32_C(123),
+        .modseq = UINT64_C(234),
+        .system_flags = FLAG_DELETED | FLAG_SEEN,
+        .guid = MESSAGE_GUID_INITIALIZER,
+        .size = strlen(msg),
+    };
+    char expect_guid[32];
+    char expect_size[32];
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    message_guid_generate(&test_record.guid, msg, sizeof(msg));
+    snprintf(expect_guid, sizeof(expect_guid), "msg.guid=%s",
+             message_guid_encode(&test_record.guid));
+    snprintf(expect_size, sizeof(expect_size), "msg.size=" SIZE_T_FMT,
+             strlen(msg));
+
+    logfmt_init(&lf, "test_logfmt_push_record");
+
+    logfmt_push_record(&lf, &test_record);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.imapuid=123"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.modseq=234"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.sysflags=DE|SE"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), expect_guid));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), expect_size));
+
+    logfmt_fini(&lf);
+}
+
 /* vim: set ft=c: */

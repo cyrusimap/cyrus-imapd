@@ -8586,3 +8586,17 @@ EXPORTED void logfmt_push_mailbox(struct logfmt *lf,
         logfmt_push(lf, "mbox", NULL);
     }
 }
+
+EXPORTED void logfmt_push_record(struct logfmt *lf,
+                                 const struct index_record *record)
+{
+    char sysflags[FLAGMAPSTR_MAXLEN] = {0};
+
+    flags_to_str(record, sysflags);
+
+    logfmt_pushf(lf, "msg.imapuid", "%" PRIu32, record->uid);
+    logfmt_pushf(lf, "msg.modseq", MODSEQ_FMT, record->modseq);
+    logfmt_push(lf, "msg.sysflags", sysflags);
+    logfmt_push(lf, "msg.guid", message_guid_encode(&record->guid));
+    logfmt_pushf(lf, "msg.size", UINT64_FMT, record->size);
+}

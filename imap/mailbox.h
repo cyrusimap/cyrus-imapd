@@ -771,5 +771,7 @@ extern int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
 /* data-type aware logging */
 extern void logfmt_push_mailbox(struct logfmt *lf,
                                 const struct mailbox *mailbox);
+extern void logfmt_push_record(struct logfmt *lf,
+                               const struct index_record *record);
 
 #endif /* INCLUDED_MAILBOX_H */
