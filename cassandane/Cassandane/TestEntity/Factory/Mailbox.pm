@@ -1,6 +1,7 @@
 package Cassandane::TestEntity::Factory::Mailbox;
 use Moo;
 
+use lib '.';
 use Cassandane::TestEntity::AutoSetup;
 
 use feature 'state';

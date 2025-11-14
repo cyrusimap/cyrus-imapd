@@ -1,6 +1,7 @@
 package Cassandane::TestEntity::Instance::ContactCard;
 use Moo;
 
+use lib '.';
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
     id addressBookIds kind members name prodId
 ) ];

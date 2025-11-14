@@ -1,6 +1,7 @@
 package Cassandane::TestEntity::Factory::ContactCard;
 use Moo;
 
+use lib '.';
 use Cassandane::TestEntity::AutoSetup;
 
 use Data::GUID ();
