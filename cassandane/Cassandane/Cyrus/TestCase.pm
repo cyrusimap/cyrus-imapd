@@ -1010,6 +1010,42 @@ package Cassandane::Cyrus::TestCase::User {
       return $imap_store->get_client;
   }
 
+  has addressbooks => (
+      is => 'ro',
+      lazy => 1,
+      default => sub {
+          require Cassandane::TestEntity::Factory::AddressBook;
+          return Cassandane::TestEntity::Factory::AddressBook->new({ user => $_[0] });
+      },
+  );
+
+  has contacts => (
+      is => 'ro',
+      lazy => 1,
+      default => sub {
+          require Cassandane::TestEntity::Factory::ContactCard;
+          return Cassandane::TestEntity::Factory::ContactCard->new({ user => $_[0] });
+      },
+  );
+
+  has emails => (
+      is => 'ro',
+      lazy => 1,
+      default => sub {
+          require Cassandane::TestEntity::Factory::Email;
+          return Cassandane::TestEntity::Factory::Email->new({ user => $_[0] });
+      },
+  );
+
+  has mailboxes => (
+      is => 'ro',
+      lazy => 1,
+      default => sub {
+          require Cassandane::TestEntity::Factory::Mailbox;
+          return Cassandane::TestEntity::Factory::Mailbox->new({ user => $_[0] });
+      },
+  );
+
   no Moo;
 }
 
