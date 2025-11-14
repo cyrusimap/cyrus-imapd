@@ -101,15 +101,16 @@ EXPORTED void auditlog_imip(const char *message_id,
                             const char *errstr)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
+    char action[32];
 
     if (!config_auditlog) return;
 
-    auditlog_begin(&lf, "processed iMIP");
+    snprintf(action, sizeof(action), "imip.%s", outcome);
+    auditlog_begin(&lf, action);
 
     logfmt_push(&lf, "msg.id", message_id);
-    logfmt_push(&lf, "outcome", outcome);
     if (errstr)
-        logfmt_push(&lf, "errstr", errstr);
+        logfmt_push(&lf, "imip.error", errstr);
 
     auditlog_finish(&lf);
 }
