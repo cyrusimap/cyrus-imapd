@@ -1,13 +1,9 @@
 package Cassandane::TestEntity::Instance::ContactCard;
 use Moo;
 
-with 'Cassandane::TestEntity::Role::Instance';
-
-sub datatype { 'ContactCard' }
-
-sub datatype_properties {
-    qw( id addressBookIds kind members name prodId )
-}
+use Cassandane::TestEntity::AutoSetup properties => [ qw(
+    id addressBookIds kind members name prodId
+) ];
 
 sub _as_vcard {
     my ($self, $version) = @_;
@@ -30,8 +26,6 @@ sub as_vcard4 {
     my ($self) = @_;
     $self->_as_vcard('4.0');
 }
-
-__PACKAGE__->initialize_accessors;
 
 no Moo;
 1;

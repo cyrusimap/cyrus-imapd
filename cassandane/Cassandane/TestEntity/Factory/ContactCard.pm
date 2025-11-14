@@ -1,15 +1,9 @@
 package Cassandane::TestEntity::Factory::ContactCard;
 use Moo;
 
-with 'Cassandane::TestEntity::Role::Factory';
+use Cassandane::TestEntity::AutoSetup;
 
 use Data::GUID ();
-
-require Cassandane::TestEntity::Instance::ContactCard;
-
-sub datatype { 'ContactCard' }
-
-sub instance_class  { 'Cassandane::TestEntity::Instance::ContactCard' }
 
 sub fill_in_creation_defaults {
     my ($self, $prop) = @_;

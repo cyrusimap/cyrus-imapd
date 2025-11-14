@@ -1,15 +1,9 @@
 package Cassandane::TestEntity::Factory::Mailbox;
 use Moo;
 
-with 'Cassandane::TestEntity::Role::Factory';
+use Cassandane::TestEntity::AutoSetup;
 
 use feature 'state';
-
-require Cassandane::TestEntity::Instance::Mailbox;
-
-sub datatype { 'Mailbox' }
-
-sub instance_class  { 'Cassandane::TestEntity::Instance::Mailbox' }
 
 sub fill_in_creation_defaults {
     my ($self, $prop) = @_;

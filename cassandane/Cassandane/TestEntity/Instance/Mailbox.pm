@@ -1,15 +1,9 @@
 package Cassandane::TestEntity::Instance::Mailbox;
 use Moo;
 
-with 'Cassandane::TestEntity::Role::Instance';
-
-sub datatype { 'Mailbox' }
-
-sub datatype_properties {
-    qw( id name )
-}
-
-__PACKAGE__->initialize_accessors;
+use Cassandane::TestEntity::AutoSetup properties => [ qw(
+    id name
+) ];
 
 # This returns an Email::MIME object. It has some problems, but it makes it
 # easy to futz around with in testing where performance isn't really an issue.

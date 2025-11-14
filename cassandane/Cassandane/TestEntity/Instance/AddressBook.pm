@@ -1,13 +1,7 @@
 package Cassandane::TestEntity::Instance::AddressBook;
 use Moo;
 
-with 'Cassandane::TestEntity::Role::Instance';
-
-sub datatype { 'AddressBook' }
-
-sub datatype_properties {
-    qw( id name )
-}
+use Cassandane::TestEntity::AutoSetup properties => [ qw( id from ) ];
 
 sub create_card {
     my ($self, $props) = @_;
@@ -17,8 +11,6 @@ sub create_card {
         addressBookIds => { $self->id => JSON::true() },
     });
 }
-
-__PACKAGE__->initialize_accessors;
 
 no Moo;
 1;
