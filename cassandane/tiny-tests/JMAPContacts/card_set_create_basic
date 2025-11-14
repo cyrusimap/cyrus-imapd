@@ -9,24 +9,10 @@ sub test_card_set_create_basic
 
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
-    my $carddav = Net::CardDAVTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $carddav = $self->default_user->carddav;
 
     xlog $self, "create addressbook";
-    my $res = $jmap->CallMethods([
-            ['AddressBook/set', { create => { "1" => {
-                            name => "foo"
-             }}}, "R1"]
-    ]);
-
-    my $abookid = $res->[0][1]{created}{"1"}{id};
+    my $abook = $self->default_user->addressbooks->create({ name => 'Foo' });
 
     my $now = DateTime->now();
     my $created = $now->strftime('%Y-%m-%dT%H:%M:%SZ');
@@ -34,42 +20,34 @@ sub test_card_set_create_basic
     my $name = 'Mr. John Q. Public, Esq.';
     my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
 
-    $res = $jmap->CallMethods([
-        ['ContactCard/set', {
-            create => {
-                "1" => {
-                    '@type' => 'Card',
-                    version => '1.0',
-                    addressBookIds => { $abookid => JSON::true },
-                    uid => $uid,
-                    prodId => $prodid,
-                    kind => 'individual',
-                    created => $created,
-                    name => { full => $name }
-                }
-            }
-        }, 'R1']
-    ]);
+    my $card = $abook->create_card({
+        '@type' => 'Card',
+        version => '1.0',
+        uid => $id,
+        prodId => $prodid,
+        kind => 'individual',
+        created => $created,
+        name => { full => $name }
+    });
 
-    $self->assert_not_null($res->[0][1]{created}{1});
-    $self->assert_not_null($res->[0][1]{created}{1}{id});
+    $self->assert_not_null($card->id);
 
-    my $href = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
-    $res = $carddav->Request('GET', $href, '',
+    my $href = $card->properties->{'cyrusimap.org:href'};
+    my $res = $carddav->Request('GET', $href, '',
                              'Accept' => 'text/vcard; version=4.0');
 
-    my $card = $res->{content};
-    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+    my $vcard = $res->{content};
+    $vcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
 
     $name =~ s/,/\\\\,/gs;       # escape commas
 
     $created = $now->strftime('%Y%m%dT%H%M%SZ'); # vCard doesn't use separators
 
-    $self->assert_matches(qr/VERSION:4.0/, $card);
-    $self->assert_matches(qr/KIND:INDIVIDUAL/, $card);
-    $self->assert_matches(qr/UID;VALUE=TEXT:$uid/, $card);
-    $self->assert_matches(qr/PRODID:$prodid/, $card);
-    $self->assert_matches(qr/CREATED:$created/, $card);
-    $self->assert_matches(qr/FN:$name/, $card);
-    $self->assert_does_not_match(qr|JSPROP|, $card);
+    $self->assert_matches(qr/VERSION:4.0/, $vcard);
+    $self->assert_matches(qr/KIND:INDIVIDUAL/, $vcard);
+    $self->assert_matches(qr/UID;VALUE=TEXT:$id/, $vcard);
+    $self->assert_matches(qr/PRODID:$prodid/, $vcard);
+    $self->assert_matches(qr/CREATED:$created/, $vcard);
+    $self->assert_matches(qr/FN:$name/, $vcard);
+    $self->assert_does_not_match(qr|JSPROP|, $vcard);
 }
