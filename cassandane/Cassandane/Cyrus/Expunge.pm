@@ -146,7 +146,7 @@ sub test_auditlog_size
             qr/\bevent=auditlog\.expunge\b/);
 
         my %actual_sizes = map {
-            m/\buid=(\d+)\b.*size=(\d+)\b/
+            m/\bmsg\.imapuid=(\d+)\b.*msg\.size=(\d+)\b/
         } @auditlogs;
 
         $self->assert_deep_equals(\%expected_sizes, \%actual_sizes);

@@ -27,7 +27,7 @@ static void test_basic(void)
 
     /* don't need exhaustive format testing, logfmt.testc already does that */
     snprintf(expect, sizeof(expect),
-             "event=%s bytes_in=%" PRIu64 " bytes_out=%" PRIu64,
+             "event=%s used.bytes.in=%" PRIu64 " used.bytes.out=%" PRIu64,
              "auditlog.traffic", bytes_in, bytes_out);
 
     CU_SYSLOG_MATCH_SUBSTR(expect);
