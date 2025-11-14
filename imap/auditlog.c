@@ -87,12 +87,13 @@ EXPORTED void auditlog_acl(const char *mboxname,
     auditlog_begin(&lf, "acl");
 
     logfmt_push_mbname(&lf, "mbox.name", mbname);
-    logfmt_push(&lf, "uniqueid", mbentry->uniqueid);
-    logfmt_push(&lf, "jmapid", mbentry->jmapid);
-    logfmt_push(&lf, "mbtype", mboxlist_mbtype_to_string(mbentry->mbtype));
-    logfmt_push(&lf, "oldacl", oldmbentry ? oldmbentry->acl : "NONE");
-    logfmt_push(&lf, "acl", mbentry->acl);
-    logfmt_pushf(&lf, "foldermodseq", MODSEQ_FMT, mbentry->foldermodseq);
+    logfmt_push(&lf, "mbox.uniqueid", mbentry->uniqueid);
+    logfmt_push(&lf, "mbox.mailboxid", mbentry->jmapid);
+    logfmt_push(&lf, "mbox.type", mboxlist_mbtype_to_string(mbentry->mbtype));
+    if (oldmbentry)
+        logfmt_push(&lf, "old.mbox.acl", oldmbentry->acl);
+    logfmt_push(&lf, "mbox.acl", mbentry->acl);
+    logfmt_pushf(&lf, "mbox.foldermodseq", MODSEQ_FMT, mbentry->foldermodseq);
 
     auditlog_finish(&lf);
     mbname_free(&mbname);
@@ -108,8 +109,8 @@ EXPORTED void auditlog_client(const char *action,
 
     auditlog_begin(&lf, action);
 
-    logfmt_push(&lf, "userid", userid);
-    logfmt_push(&lf, "client", client);
+    logfmt_push(&lf, "u.username", userid);
+    logfmt_push(&lf, "r.clienthost", client);
 
     auditlog_finish(&lf);
 }
@@ -125,7 +126,7 @@ HIDDEN void auditlog_duplicate(const char *action,
     auditlog_begin(&lf, "duplicate");
 
     logfmt_push(&lf, "action", action);
-    logfmt_push(&lf, "message-id", dkey->id);
+    logfmt_push(&lf, "msg.id", dkey->id);
     logfmt_push(&lf, "uniqueid-or-scope", dkey->to);
     logfmt_push(&lf, "date", dkey->date);
 
@@ -142,7 +143,7 @@ EXPORTED void auditlog_imip(const char *message_id,
 
     auditlog_begin(&lf, "processed iMIP");
 
-    logfmt_push(&lf, "message-id", message_id ? message_id : "nomsgid");
+    logfmt_push(&lf, "msg.id", message_id);
     logfmt_push(&lf, "outcome", outcome);
     if (errstr)
         logfmt_push(&lf, "errstr", errstr);
@@ -170,19 +171,19 @@ EXPORTED void auditlog_mailbox(const char *action,
     }
 
     logfmt_push_mailbox(&lf, mailbox);
-    logfmt_pushf(&lf, "uidvalidity", "%u", mailbox->i.uidvalidity);
+    logfmt_pushf(&lf, "mbox.uidvalidity", "%u", mailbox->i.uidvalidity);
 
     if (oldmailbox && strcmpsafe(mailbox_partition(oldmailbox),
                                  mailbox_partition(mailbox)))
     {
-        logfmt_push(&lf, "oldpart", mailbox_partition(oldmailbox));
-        logfmt_push(&lf, "newpart", mailbox_partition(mailbox));
+        logfmt_push(&lf, "old.mbox.part", mailbox_partition(oldmailbox));
+        logfmt_push(&lf, "mbox.part", mailbox_partition(mailbox));
     }
     else if (newpartition && strcmpsafe(mailbox_partition(mailbox),
                                         newpartition))
     {
-        logfmt_push(&lf, "oldpart", mailbox_partition(mailbox));
-        logfmt_push(&lf, "newpart", newpartition);
+        logfmt_push(&lf, "old.mbox.part", mailbox_partition(mailbox));
+        logfmt_push(&lf, "mbox.part", newpartition);
     }
 
     auditlog_finish(&lf);
@@ -199,7 +200,7 @@ EXPORTED void auditlog_mboxname(const char *action,
     auditlog_begin(&lf, action);
 
     if (userid) {
-        logfmt_push(&lf, "userid", userid);
+        logfmt_push(&lf, "u.username", userid);
     }
 
     if (mboxname) {
@@ -232,17 +233,17 @@ EXPORTED void auditlog_message(const char *action,
 
     logfmt_push_mailbox(&lf, mailbox);
     logfmt_push_record(&lf, record);
-    logfmt_push(&lf, "emailid", emailid);
-    logfmt_push(&lf, "cid", threadid);
+    logfmt_push(&lf, "msg.emailid", emailid);
+    logfmt_push(&lf, "msg.cid", threadid);
 
     if (message_id) {
-        logfmt_push(&lf, "message-id", message_id);
+        logfmt_push(&lf, "msg.id", message_id);
     }
 
     if (oldrecord) {
         char oldsysflags[FLAGMAPSTR_MAXLEN] = {0};
         flags_to_str(oldrecord, oldsysflags);
-        logfmt_push(&lf, "oldflags", oldsysflags);
+        logfmt_push(&lf, "old.msg.sysflags", oldsysflags);
     }
 
     auditlog_finish(&lf);
@@ -260,8 +261,8 @@ EXPORTED void auditlog_message_uid(const char *action,
     auditlog_begin(&lf, action);
 
     logfmt_push_mailbox(&lf, mailbox);
-    logfmt_pushf(&lf, "uid", "%" PRIu32, uid);
-    logfmt_push(&lf, "sysflags", flagstr);
+    logfmt_pushf(&lf, "msg.imapuid", "%" PRIu32, uid);
+    logfmt_push(&lf, "msg.sysflags", flagstr);
 
     auditlog_finish(&lf);
 }
@@ -276,10 +277,10 @@ EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
 
     logfmt_push_mailbox(&lf, mailbox);
 
-    logfmt_pushf(&lf, "highestmodseq", MODSEQ_FMT, mailbox->i.highestmodseq);
-    logfmt_pushf(&lf, "deletedmodseq", MODSEQ_FMT, mailbox->i.deletedmodseq);
-    logfmt_pushf(&lf, "crcs.basic", "%u", mailbox->i.synccrcs.basic);
-    logfmt_pushf(&lf, "crcs.annot", "%u", mailbox->i.synccrcs.annot);
+    logfmt_pushf(&lf, "mbox.highestmodseq", MODSEQ_FMT, mailbox->i.highestmodseq);
+    logfmt_pushf(&lf, "mbox.deletedmodseq", MODSEQ_FMT, mailbox->i.deletedmodseq);
+    logfmt_pushf(&lf, "mbox.crcs.basic", "%u", mailbox->i.synccrcs.basic);
+    logfmt_pushf(&lf, "mbox.crcs.annot", "%u", mailbox->i.synccrcs.annot);
 
     auditlog_finish(&lf);
 }
@@ -296,8 +297,8 @@ EXPORTED void auditlog_proxy(const char *userid, const char *status)
     auditlog_begin(&lf, "proxy");
 
     if (userid)
-        logfmt_push(&lf, "userid", userid);
-    logfmt_push(&lf, "remote", rsessionid);
+        logfmt_push(&lf, "u.username", userid);
+    logfmt_push(&lf, "remote.sessionid", rsessionid);
 
     auditlog_finish(&lf);
 }
@@ -314,16 +315,16 @@ EXPORTED void auditlog_quota(const char *action,
     if (!config_auditlog) return;
 
     auditlog_begin(&lf, action);
-    logfmt_push(&lf, "root", root);
+    logfmt_push(&lf, "quota.root", root);
 
     for (resource = 0; resource < QUOTA_NUMRESOURCES; resource++) {
         if (oldquotas) {
-            snprintf(name, sizeof(name), "old.%s", quota_names[resource]);
+            snprintf(name, sizeof(name), "old.quota.%s", quota_names[resource]);
             logfmt_pushf(&lf, name, "%lld", oldquotas[resource]);
         }
 
         if (newquotas) {
-            snprintf(name, sizeof(name), "new.%s", quota_names[resource]);
+            snprintf(name, sizeof(name), "quota.%s", quota_names[resource]);
             logfmt_pushf(&lf, name, "%lld", newquotas[resource]);
         }
     }
@@ -346,7 +347,7 @@ EXPORTED void auditlog_sieve(const char *action,
     auditlog_begin(&lf, action);
 
     if (userid)
-        logfmt_push(&lf, "userid", userid);
+        logfmt_push(&lf, "u.username", userid);
 
     logfmt_push(&lf, "in.msgid", in_msgid ? in_msgid : "nomsgid");
     if (out_msgid)
@@ -371,7 +372,7 @@ EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
     if (!config_auditlog) return;
 
     auditlog_begin(&lf, "traffic");
-    logfmt_pushf(&lf, "bytes_in", "%" PRIu64, bytes_in);
-    logfmt_pushf(&lf, "bytes_out", "%" PRIu64, bytes_out);
+    logfmt_pushf(&lf, "used.bytes.in", "%" PRIu64, bytes_in);
+    logfmt_pushf(&lf, "used.bytes.out", "%" PRIu64, bytes_out);
     auditlog_finish(&lf);
 }
