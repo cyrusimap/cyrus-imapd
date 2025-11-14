@@ -1156,7 +1156,7 @@ sub create_user
         );
     }
 
-    my $user_obj = Cassandane::Cyrus::TestCase::User->new({
+    my $user_obj = Cassandane::TestUser->new({
         username => $user,
         password => 'pass',
         instance => $self,
