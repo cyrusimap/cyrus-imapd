@@ -12,6 +12,7 @@
 
 #include "byteorder.h"
 #include "conversations.h"
+#include "logfmt.h"
 #include "message_guid.h"
 #include "message.h"
 #include "ptrarray.h"
@@ -766,5 +767,9 @@ extern struct mboxlist_entry *mailbox_mbentry_from_path(const char *header_path)
 
 extern int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
                                            struct index_record *record);
+
+/* data-type aware logging */
+extern void logfmt_push_mailbox(struct logfmt *lf,
+                                const struct mailbox *mailbox);
 
 #endif /* INCLUDED_MAILBOX_H */

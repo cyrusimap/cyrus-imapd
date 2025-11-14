@@ -8569,3 +8569,16 @@ EXPORTED int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
 
     return 0;
 }
+
+EXPORTED void logfmt_push_mailbox(struct logfmt *lf,
+                                  const struct mailbox *mailbox)
+{
+    if (mailbox) {
+        logfmt_push(lf, "mbox.name", mailbox_name(mailbox));
+        logfmt_push(lf, "mbox.uniqueid", mailbox_uniqueid(mailbox));
+        logfmt_push(lf, "mbox.mailboxid", mailbox_jmapid(mailbox));
+    }
+    else {
+        logfmt_push(lf, "mbox", NULL);
+    }
+}

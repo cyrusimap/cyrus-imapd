@@ -6,6 +6,7 @@
 
 #include "imap/auditlog.h"
 
+#include "imap/mailbox.h"
 #include "imap/jmap_util.h"
 
 #include "lib/assert.h"
@@ -123,12 +124,10 @@ EXPORTED void auditlog_mailbox(const char *action,
     if (oldmailbox && strcmpsafe(mailbox_name(oldmailbox),
                                  mailbox_name(mailbox)))
     {
-        logfmt_push(&lf, "oldmailbox", mailbox_name(oldmailbox));
+        logfmt_push(&lf, "old.mbox.name", mailbox_name(oldmailbox));
     }
 
-    logfmt_push(&lf, "mailbox", mailbox_name(mailbox));
-    logfmt_push(&lf, "uniqueid", mailbox_uniqueid(mailbox));
-    logfmt_push(&lf, "mboxid", mailbox_jmapid(mailbox));
+    logfmt_push_mailbox(&lf, mailbox);
     logfmt_pushf(&lf, "uidvalidity", "%u", mailbox->i.uidvalidity);
 
     if (oldmailbox && strcmpsafe(mailbox_partition(oldmailbox),
@@ -190,9 +189,7 @@ EXPORTED void auditlog_message(const char *action,
 
     auditlog_begin(&lf, action);
 
-    logfmt_push(&lf, "mailbox", mailbox_name(mailbox));
-    logfmt_push(&lf, "uniqueid", mailbox_uniqueid(mailbox));
-    logfmt_push(&lf, "mboxid", mailbox_jmapid(mailbox));
+    logfmt_push_mailbox(&lf, mailbox);
     logfmt_pushf(&lf, "uid", "%u", record->uid);
     logfmt_pushf(&lf, "modseq", MODSEQ_FMT, record->modseq);
     logfmt_push(&lf, "sysflags", flagstr);
@@ -225,9 +222,7 @@ EXPORTED void auditlog_message_uid(const char *action,
 
     auditlog_begin(&lf, action);
 
-    logfmt_push(&lf, "mailbox", mailbox_name(mailbox));
-    logfmt_push(&lf, "uniqueid", mailbox_uniqueid(mailbox));
-    logfmt_push(&lf, "mboxid", mailbox_jmapid(mailbox));
+    logfmt_push_mailbox(&lf, mailbox);
     logfmt_pushf(&lf, "uid", "%" PRIu32, uid);
     logfmt_push(&lf, "sysflags", flagstr);
 
@@ -242,9 +237,7 @@ EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
 
     auditlog_begin(&lf, "modseq");
 
-    logfmt_push(&lf, "mailbox", mailbox_name(mailbox));
-    logfmt_push(&lf, "uniqueid", mailbox_uniqueid(mailbox));
-    logfmt_push(&lf, "mboxid", mailbox_jmapid(mailbox));
+    logfmt_push_mailbox(&lf, mailbox);
 
     logfmt_pushf(&lf, "highestmodseq", MODSEQ_FMT, mailbox->i.highestmodseq);
     logfmt_pushf(&lf, "deletedmodseq", MODSEQ_FMT, mailbox->i.deletedmodseq);
