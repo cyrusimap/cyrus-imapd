@@ -1,8 +1,11 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
-#include "libconfig.h"
-#include "sessionid.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+
+#include "lib/libconfig.h"
+#include "lib/sessionid.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -378,6 +381,37 @@ static void test_logfmt_push_caller(void)
     CU_ASSERT_SUBSTR_EQUAL(actual_func, expect_func, strlen(expect_func));
 
     logfmt_fini(&lf);
+}
+
+static void test_logfmt_push_mailbox(void)
+{
+    #define MBOXNAME "sentinel_name"
+    #define UNIQUEID "sentinel_uniqueid"
+    #define JMAPID   "sentinel_mboxid"
+    struct mailbox test_mailbox = {
+        .mbentry = &(struct mboxlist_entry){
+            .name = xstrdup(MBOXNAME),
+            .uniqueid = xstrdup(UNIQUEID),
+            .jmapid = xstrdup(JMAPID),
+        },
+    };
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    logfmt_init(&lf, "test_logfmt_push_mailbox");
+
+    logfmt_push_mailbox(&lf, &test_mailbox);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.name=" MBOXNAME));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.uniqueid=" UNIQUEID));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.mailboxid=" JMAPID));
+
+    free(test_mailbox.mbentry->name);
+    free(test_mailbox.mbentry->uniqueid);
+    free(test_mailbox.mbentry->jmapid);
+    logfmt_fini(&lf);
+    #undef MBOXNAME
+    #undef UNIQUEID
+    #undef JMAPID
 }
 
 /* vim: set ft=c: */
