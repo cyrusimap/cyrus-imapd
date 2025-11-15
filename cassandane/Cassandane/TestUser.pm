@@ -12,7 +12,9 @@ has _common_service_args => (
         my ($self) = @_;
         my $service = $self->{instance}->get_service("https");
         $service ||= $self->{instance}->get_service("http");
-        return if !$service; # XXX die
+
+        $service
+          || Carp::confess("can't create a TestUser without an http service configured");
 
         my $ca_file = Cwd::abs_path("data/certs/cacert.pem");
 
