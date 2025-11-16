@@ -3,7 +3,9 @@ use Moo;
 
 use lib '.';
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
-    id name
+    id name parentId role sortOrder
+    totalEmails unreadEmails totalThreads unreadThreads
+    myRights isSubscribed
 ) ];
 
 # This returns an Email::MIME object. It has some problems, but it makes it

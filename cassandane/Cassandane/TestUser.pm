@@ -119,22 +119,22 @@ sub imap {
 }
 
 for my $pair (
-  [ addressbooks => 'AddressBook' ],
-  [ contacts     => 'ContactCard' ],
-  [ emails       => 'Email' ],
-  [ mailboxes    => 'Mailbox' ],
+    [ addressbooks => 'AddressBook' ],
+    [ contacts     => 'ContactCard' ],
+    [ emails       => 'Email' ],
+    [ mailboxes    => 'Mailbox' ],
 ) {
-  my ($attr, $moniker) = @$pair;
-  my $class = "Cassandane::TestEntity::Factory::$moniker";
+    my ($attr, $moniker) = @$pair;
+    my $class = "Cassandane::TestEntity::Factory::$moniker";
 
-  has $attr => (
-      is => 'ro',
-      lazy => 1,
-      default => sub {
-          eval "require $class; 1" || Carp::croak("can't load $moniker: $@");
-          return $class->new({ user => $_[0] });
-      },
-  );
+    has $attr => (
+        is => 'ro',
+        lazy => 1,
+        default => sub {
+            eval "require $class; 1" || Carp::croak("can't load $moniker: $@");
+            return $class->new({ user => $_[0] });
+        },
+    );
 }
 
 no Moo;

@@ -2,8 +2,19 @@ package Cassandane::TestEntity::Instance::ContactCard;
 use Moo;
 
 use lib '.';
+
+# The properties here are from RFC 9553 (plus id and addressBookIds) in order
+# listed in the RFC.
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
-    id addressBookIds kind members name prodId
+    id addressBookIds
+    version created kind language members prodId relatedTo uid updated
+    name organizations speakToAs titles
+    emails onlineServices phones preferredContactLanguages
+    calendars schedulingAddresses
+    addresses
+    cryptoKeys directories links media
+    localizations
+    anniversaries keywords notes personalInfo
 ) ];
 
 sub _as_vcard {
