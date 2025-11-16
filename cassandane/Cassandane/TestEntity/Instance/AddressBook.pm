@@ -2,7 +2,7 @@ package Cassandane::TestEntity::Instance::AddressBook;
 use Moo;
 
 use lib '.';
-use Cassandane::TestEntity::AutoSetup properties => [ qw( id from ) ];
+use Cassandane::TestEntity::AutoSetup properties => [ qw( id name ) ];
 
 sub create_card {
     my ($self, $props) = @_;
