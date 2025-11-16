@@ -1,6 +1,8 @@
 package Cassandane::TestUser;
 use Moo;
 
+use Cwd ();
+
 has username => (is => 'ro', required => 1);
 has password => (is => 'ro', required => 1);
 has instance => (is => 'ro', required => 1);
