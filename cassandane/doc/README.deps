@@ -8,6 +8,9 @@ Cassandane needs the following software to work:
    Used for standing up local test HTTP servers for testing various bits of
    Cyrus callout capabilities
 
+ * Email::MIME
+    This is a generic MIME email parser and generator.
+
  * Mail::IMAPTalk
     This is a fully featured IMAP client package, available on CPAN.
 
@@ -160,7 +163,8 @@ Debian/Ubuntu copypasta:
        libdatetime-format-ical-perl libuniversal-require-perl \
        libtest-nowarnings-perl libtest-longstring-perl \
        libtest-warn-perl libnet-ldap-server-perl \
-       libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl
+       libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl \
+       libemail-mime-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
