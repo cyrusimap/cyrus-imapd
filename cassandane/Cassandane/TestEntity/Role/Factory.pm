@@ -17,7 +17,7 @@ sub get {
     my $dt = $self->datatype;
 
     my $jmap = $self->user->jmap;
-    delete $jmap->{CreatedIds};
+    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[
         "$dt/get",
@@ -47,7 +47,7 @@ sub create {
     my $dt = $self->datatype;
 
     my $jmap = $self->user->jmap;
-    delete $jmap->{CreatedIds};
+    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     $self->fill_in_creation_defaults($prop);
 
@@ -74,7 +74,7 @@ sub _update {
     my $id = $instance->id;
 
     my $jmap = $self->user->jmap;
-    delete $jmap->{CreatedIds};
+    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[
         "$dt/set",
