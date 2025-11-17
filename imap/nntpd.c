@@ -3280,7 +3280,7 @@ static int deliver(message_data_t *msg)
             if (msg->id &&
                 duplicate_check(&dkey)) {
                 /* duplicate message */
-                duplicate_log(&dkey, "nntp delivery");
+                duplicate_log(&dkey, "nntp-delivery");
                 continue;
             }
 
@@ -3303,7 +3303,7 @@ static int deliver(message_data_t *msg)
 
                     if (!r) {
                         /* duplicate message */
-                        duplicate_log(&dkey, "nntp delivery");
+                        duplicate_log(&dkey, "nntp-delivery");
                         continue;
                     }
                 }
