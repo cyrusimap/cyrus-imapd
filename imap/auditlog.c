@@ -83,15 +83,16 @@ HIDDEN void auditlog_duplicate(const char *action,
                                const duplicate_key_t *dkey)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
+    char myaction[32];
 
     if (!config_auditlog) return;
 
-    auditlog_begin(&lf, "duplicate");
+    snprintf(myaction, sizeof(myaction), "duplicate.%s", action);
+    auditlog_begin(&lf, myaction);
 
-    logfmt_push(&lf, "action", action);
     logfmt_push(&lf, "msg.id", dkey->id);
-    logfmt_push(&lf, "uniqueid-or-scope", dkey->to);
-    logfmt_push(&lf, "date", dkey->date);
+    logfmt_push(&lf, "msg.date", dkey->date);
+    logfmt_push(&lf, "scope", dkey->to);
 
     auditlog_finish(&lf);
 }

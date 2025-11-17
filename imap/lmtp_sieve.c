@@ -833,11 +833,11 @@ static int sieve_redirect(void *ac, void *ic,
     /* if we have a msgid, we can track our redirects */
     if (m->id) {
         snprintf(buf, sizeof(buf), "%s-%s", m->id, rc->addr);
-        sievedb = make_sieve_db(mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns));
+        sievedb = make_sieve_db(mbname_recipient(sd->mbname, mdata->ns));
 
         dkey.id = buf;
         dkey.to = sievedb;
-        dkey.date = ((deliver_data_t *) mc)->m->date;
+        dkey.date = m->date;
         /* ok, let's see if we've redirected this message before */
         if (duplicate_check(&dkey)) {
             duplicate_log(&dkey, "redirect");
