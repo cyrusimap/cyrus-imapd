@@ -301,8 +301,8 @@ EXPORTED void auditlog_sieve(const char *action,
                              const char *in_msgid,
                              const char *out_msgid,
                              const char *target,
-                             const char *from_addr,
-                             const char *to_addr)
+                             const char *vac_from_addr,
+                             const char *vac_to_addr)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
 
@@ -313,18 +313,18 @@ EXPORTED void auditlog_sieve(const char *action,
     if (userid)
         logfmt_push(&lf, "u.username", userid);
 
-    logfmt_push(&lf, "in.msgid", in_msgid ? in_msgid : "nomsgid");
+    logfmt_push(&lf, "msg.id", in_msgid);
     if (out_msgid)
-        logfmt_push(&lf, "out.msgid", out_msgid);
+        logfmt_push(&lf, "out.msg.id", out_msgid);
 
     if (target)
-        logfmt_push(&lf, "target", target);
+        logfmt_push(&lf, "sieve.target", target);
 
-    if (from_addr)
-        logfmt_push(&lf, "from", from_addr);
+    if (vac_from_addr)
+        logfmt_push(&lf, "vacation.from", vac_from_addr);
 
-    if (to_addr)
-        logfmt_push(&lf, "to", to_addr);
+    if (vac_to_addr)
+        logfmt_push(&lf, "vacation.to", vac_to_addr);
 
     auditlog_finish(&lf);
 }

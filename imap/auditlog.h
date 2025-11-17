@@ -52,8 +52,8 @@ extern void auditlog_sieve(const char *action,
                            const char *in_msgid,
                            const char *out_msgid,
                            const char *target,
-                           const char *from_addr,
-                           const char *to_addr);
+                           const char *vac_from_addr,
+                           const char *vac_to_addr);
 extern void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out);
 
 #endif
