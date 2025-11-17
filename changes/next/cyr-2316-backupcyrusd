@@ -1,0 +1,27 @@
+Description:
+
+Added the `backupcyrusd` protocol daemon from Fastmail.
+
+
+Documentation:
+
+The command is documented in an RST manpage, and the protocol itself
+is documented in comments in the backupcyrusd.c file itself.
+
+
+Config changes:
+
+No changes, it's a standard daemon which can be invoked like any other
+daemon in cyrus.conf.
+
+
+Upgrade instructions:
+
+Nothing to change, but only enable this feature if you're sure your host
+and network is secure, since it runs unauthenticated and allows read access
+to the data of all users on the server.
+
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.
