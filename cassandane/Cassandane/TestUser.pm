@@ -7,7 +7,7 @@ has username => (is => 'ro', required => 1);
 has password => (is => 'ro', required => 1);
 has instance => (is => 'ro', required => 1);
 
-has _common_service_args => (
+has _common_http_service_args => (
     is => 'ro',
     lazy => 1,
     default => sub {
@@ -51,7 +51,7 @@ has jmap => (
         require Mail::JMAPTalk;
         $ENV{DEBUGJMAP} = 1;
         my $jmap = Mail::JMAPTalk->new(
-            $self->_common_service_args->%*,
+            $self->_common_http_service_args->%*,
             url => '/jmap/',
         );
 
@@ -76,7 +76,7 @@ has carddav => (
 
         require Net::CardDAVTalk;
         return Net::CardDAVTalk->new(
-            $self->_common_service_args->%*,
+            $self->_common_http_service_args->%*,
             url => '/',
             expandurl => 1,
         );
@@ -97,7 +97,7 @@ has caldav => (
 
         require Net::CalDAVTalk;
         my $caldav = Net::CalDAVTalk->new(
-            $self->_common_service_args->%*,
+            $self->_common_http_service_args->%*,
             url => '/',
             expandurl => 1,
         );
