@@ -1527,4 +1527,81 @@ static void test_barelf_multipart(void)
     buf_free(&buf);
 }
 
+static void test_read_bodystructure_rfc822(void)
+{
+    static const char msg[] =
+"MIME-Version: 1.0\r\n"
+"Date: Thu, 13 Nov 2025 10:59:22 -0500\r\n"
+"From: foo@local\r\n"
+"To: bar@local\r\n"
+"Message-Id: <5eccadef-c6cc-4663-af73-795b6a7a91bf@example.com>\r\n"
+"Subject: Fwd: test\r\n"
+"Content-Type: multipart/mixed;\r\n"
+" boundary=3f9966cc70714c41ab493b92a3d2a3a3\r\n"
+"\r\n"
+"--3f9966cc70714c41ab493b92a3d2a3a3\r\n"
+"Content-Type: text/plain\r\n"
+"Content-Transfer-Encoding: 7bit\r\n"
+"\r\n"
+"part1.1\r\n"
+"--3f9966cc70714c41ab493b92a3d2a3a3\r\n"
+"Content-Disposition: attachment; filename=\"test.eml\"\r\n"
+"Content-Type: message/rfc822; name=\"test.eml\"\r\n"
+"Content-Transfer-Encoding: 7bit\r\n"
+"\r\n"
+"MIME-Version: 1.0\r\n"
+"Date: Thu, 13 Nov 2025 10:58:39 -0500\r\n"
+"From: bam@local\r\n"
+"To: baz@local\r\n"
+"Message-Id: <4d562f28-38ee-47d7-91fb-422c9b16dcc7@app.fastmail.com>\r\n"
+"Subject: test\r\n"
+"Content-Type: text/plain\r\n"
+"Content-Transfer-Encoding: 7bit\r\n"
+"\r\n"
+"part2.1\r\n"
+"\r\n"
+"--3f9966cc70714c41ab493b92a3d2a3a3--\r\n";
+
+    int r;
+    struct body *body = xzmalloc(sizeof(struct body));
+
+    memset(body, 0x45, sizeof(struct body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    struct index_record record;
+    r = message_write_cache(&record, body);
+    CU_ASSERT_EQUAL(r, 0);
+
+    message_free_body(body);
+    free(body);
+
+    message_read_bodystructure(&record, &body);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body);
+
+    // Assert top-level multipart.
+    CU_ASSERT_STRING_EQUAL("MULTIPART", body->type);
+    CU_ASSERT_STRING_EQUAL("MIXED", body->subtype);
+    CU_ASSERT_EQUAL(2, body->numparts);
+
+    // Assert top-level plain text part (part 1).
+    CU_ASSERT_STRING_EQUAL("TEXT", body->subpart[0].type);
+    CU_ASSERT_STRING_EQUAL("PLAIN", body->subpart[0].subtype);
+    CU_ASSERT_EQUAL(0, body->subpart[0].numparts);
+
+    // Assert embedded RFC 822 message part (part 2).
+    CU_ASSERT_STRING_EQUAL("MESSAGE", body->subpart[1].type);
+    CU_ASSERT_STRING_EQUAL("RFC822", body->subpart[1].subtype);
+    CU_ASSERT_EQUAL(1, body->subpart[1].numparts);
+
+    // Assert embedded RFC 822 message content part (part 2.1).
+    CU_ASSERT_STRING_EQUAL("TEXT", body->subpart[1].subpart[0].type);
+    CU_ASSERT_STRING_EQUAL("PLAIN", body->subpart[1].subpart[0].subtype);
+    CU_ASSERT_EQUAL(0, body->subpart[1].subpart[0].numparts);
+
+    message_free_body(body);
+    free(body);
+}
+
+
 /* vim: set ft=c: */

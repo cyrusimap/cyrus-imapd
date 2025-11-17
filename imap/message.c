@@ -3259,6 +3259,7 @@ static int message_read_body(struct protstream *strm, struct body *body, const c
                  (!strcmpsafe(body->type, "MESSAGE") &&
                   !strcmpsafe(body->subtype, "RFC822"))) {
             body->subpart = (struct body *) xzmalloc(sizeof(struct body));
+            body->numparts = 1;
 
             /* envelope structure */
             c = message_read_envelope(strm, body->subpart);
