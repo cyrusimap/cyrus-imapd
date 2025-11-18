@@ -117,6 +117,7 @@ sub new
                  reverseacls => 'yes',
                  rfc3028_strict => 'no',
                  savedate => 'yes',
+                 servername => 'slot1',
                  sieve_extensions => 'fileinto reject vacation imapflags notify envelope body relational regex subaddress copy mailbox mboxmetadata servermetadata date index variables imap4flags editheader duplicate vacation-seconds fcc x-cyrus-jmapquery x-cyrus-snooze x-cyrus-log mailboxid special-use',
                  sieve_utf8fileinto => 'yes',
                  sieve_use_lmtp_reject => 'no',
@@ -157,7 +158,7 @@ sub new
         jmap => 1,
         deliver => 1,
         adminstore => 1,
-        services => [ 'imap', 'http', 'sieve' ]
+        services => [ 'imap', 'http', 'sieve', 'backupcyrusd' ]
     }, @args);
 
     $self->needs('component', 'jmap');
