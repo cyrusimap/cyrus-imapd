@@ -815,7 +815,6 @@ static void alpn_common(const struct tls_alpn_t *client_alpn_map,
 
 static void test_alpn_match_single(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -831,12 +830,10 @@ static void test_alpn_match_single(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
                 "foo");
-#endif
 }
 
 static void test_alpn_match_client_only(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -848,12 +845,10 @@ static void test_alpn_match_client_only(void)
                 0,
                 ALPN_COMMON_EXPECT_SUCCESS,
                 NULL);
-#endif
 }
 
 static void test_alpn_match_server_only(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t server_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -865,12 +860,10 @@ static void test_alpn_match_server_only(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
                 NULL);
-#endif
 }
 
 static void test_alpn_match_client_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -887,12 +880,10 @@ static void test_alpn_match_client_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
                 "foo");
-#endif
 }
 
 static void test_alpn_match_server_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -909,12 +900,10 @@ static void test_alpn_match_server_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
                 "foo");
-#endif
 }
 
 static void test_alpn_match_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -932,12 +921,10 @@ static void test_alpn_match_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_SUCCESS,
                 "bar");
-#endif
 }
 
 static void test_alpn_nomatch_single(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "",    NULL, NULL },
@@ -953,12 +940,10 @@ static void test_alpn_nomatch_single(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_FAIL,
                 NULL);
-#endif
 }
 
 static void test_alpn_nomatch_client_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "foo", NULL, NULL },
         { "bar", NULL, NULL },
@@ -975,12 +960,10 @@ static void test_alpn_nomatch_client_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_FAIL,
                 NULL);
-#endif
 }
 
 static void test_alpn_nomatch_server_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "qux", NULL, NULL },
         { "",    NULL, NULL },
@@ -997,12 +980,10 @@ static void test_alpn_nomatch_server_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_FAIL,
                 NULL);
-#endif
 }
 
 static void test_alpn_nomatch_multi(void)
 {
-#if defined(HAVE_TLS_ALPN)
     struct tls_alpn_t client_map[] = {
         { "baz", NULL, NULL },
         { "qux", NULL, NULL },
@@ -1020,7 +1001,6 @@ static void test_alpn_nomatch_multi(void)
                 sizeof(server_map) / sizeof(server_map[0]),
                 ALPN_COMMON_EXPECT_FAIL,
                 NULL);
-#endif
 }
 
 /* TODO: test UNIX socket comms too */

@@ -173,15 +173,11 @@ static json_t *buildinfo()
 
     /* Build dependencies */
     json_object_set_new(dependency, "openssl", json_true());
+    json_object_set_new(dependency, "openssl_alpn", json_true());
 #ifdef HAVE_LDAP
     json_object_set_new(dependency, "ldap", json_true());
 #else
     json_object_set_new(dependency, "ldap", json_false());
-#endif
-#ifdef HAVE_TLS_ALPN
-    json_object_set_new(dependency, "openssl_alpn", json_true());
-#else
-    json_object_set_new(dependency, "openssl_alpn", json_false());
 #endif
 #ifdef HAVE_ZLIB
     json_object_set_new(dependency, "zlib", json_true());

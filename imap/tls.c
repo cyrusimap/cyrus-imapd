@@ -1092,12 +1092,10 @@ EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 
     saslprops_reset(saslprops);
 
-#ifdef HAVE_TLS_ALPN
     if (alpn_map && alpn_map->id[0])
         SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
     else
         SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
-#endif
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
@@ -1318,14 +1316,12 @@ EXPORTED char *tls_get_alpn_protocol(const SSL *conn)
 {
     char *proto = NULL;
 
-#ifdef HAVE_TLS_ALPN
     const unsigned char *data = NULL;
     unsigned int len = 0;
 
     SSL_get0_alpn_selected(conn, &data, &len);
     if (data && len)
         proto = xstrndup((const char *) data, len);
-#endif
 
     return proto;
 }
@@ -1614,7 +1610,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
 
     if (authid) *authid = NULL;
 
-#ifdef HAVE_TLS_ALPN
     if (alpn_map && alpn_map->id[0]) {
         unsigned char *protos = NULL;
         unsigned int protos_len;
@@ -1630,7 +1625,6 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     else {
         SSL_CTX_set_alpn_protos(c_ctx, NULL, 0);
     }
-#endif
 
     tls_conn = (SSL *) SSL_new(c_ctx);
     if (tls_conn == NULL) {
