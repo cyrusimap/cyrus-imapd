@@ -1289,11 +1289,6 @@ dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([SSL_LIBS])
 AC_SUBST([SSL_CFLAGS])
 
-dnl Check whether OpenSSL supports TLS ALPN extension
-AC_CHECK_LIB(ssl, SSL_CTX_set_alpn_select_cb,
-             [ AC_DEFINE(HAVE_TLS_ALPN, [],
-                         [Do we have support for TLS ALPN extension?])])
-
 dnl
 dnl Allow for setting EGD socket file on systems without /dev/*random.
 dnl
