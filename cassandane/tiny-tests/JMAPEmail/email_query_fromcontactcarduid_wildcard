@@ -1,0 +1,131 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_fromcontactcarduid_wildcard
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.cassandane.#addressbooks.Addrbook1", ['TYPE', 'ADDRESSBOOK']) or die;
+    my $abookId1 = $admintalk->get_response_code('mailboxid')->[0];
+
+    substr($abookId1, 0, 1, 'R');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:contacts',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                contact1 => {
+                    addressBookIds => { $abookId1 => JSON::true },
+                    emails => {
+                        e1 => {
+                            address => '*@wildcard.domain'
+                        }
+                    },
+                },
+            }
+        }, 'R1'],
+    ], $using);
+    my $contactUid = $res->[0][1]{created}{contact1}{uid};
+    $self->assert_not_null($contactUid);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                group1 => {
+                    kind => 'group',
+                    name => { full => 'Group1' },
+                    members => {
+                        $contactUid => JSON::true,
+                    },
+                    addressBookIds => { $abookId1 => JSON::true },
+                },
+            }
+        }, 'R2'],
+    ], $using);
+
+    my $groupUid = $res->[0][1]{created}{group1}{uid};
+    $self->assert_not_null($groupUid);
+
+    $self->make_message("msg1", from => Cassandane::Address->new(
+        localpart => 'somebody', domain => 'not.wildcard'
+    )) or die;
+    $self->make_message("msg2", from => Cassandane::Address->new(
+        localpart => 'rando', domain => 'wildcard.domain'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    my $emailId1 = $res->[0][1]{ids}[0];
+    my $emailId2 = $res->[0][1]{ids}[1];
+
+    # Filter by contact group.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $groupUid
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[0]);
+
+    # Filter by fromAnyContact
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromAnyContact => $JSON::true
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[0]);
+
+    # Negate filter by contact group.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    fromContactCardUid => $groupUid
+                }]
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+
+    # Support individual cards
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactCardUid => $contactUid
+            },
+            sort => [{ property => "subject" }],
+        }, 'R1'],
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[0]);
+}
