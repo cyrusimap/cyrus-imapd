@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_group_with_member
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create an individual card
+    my $res = $jmap->CallMethods([['ContactCard/set', {
+        create => {
+            "Individual" => {
+                name => { full => 'My Org' },
+                emails => {
+                    'e1' => {
+                        contexts => { private => JSON::true },
+                        address => "foo\@example.com"
+                    }
+                },
+            },
+        },
+    }, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    my $iid = $res->[0][1]{created}{"Individual"}{id};
+    my $iuid = $res->[0][1]{created}{"Individual"}{uid};
+    $self->assert_not_null($iid);
+    $self->assert_not_null($iuid);
+
+    # Create a group card
+    $res = $jmap->CallMethods([['ContactCard/set', {
+        create => {
+            "Group" => {
+                kind => 'group',
+                name => {
+                    full => 'My Group'
+                }
+            }
+        }
+    }, "R1"]]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    my $gid = $res->[0][1]{created}{"Group"}{id};
+    my $guid = $res->[0][1]{created}{"Group"}{uid};
+    $self->assert_not_null($gid);
+    $self->assert_not_null($guid);
+
+    # Query for each in turn
+    $res = $jmap->CallMethods([[
+      'ContactCard/query', { filter => { uid => $iuid } }, "R1"
+    ]]);
+    $self->assert_deep_equals($res->[0][1]{ids}, [ $iid ]);
+
+    $res = $jmap->CallMethods([[
+      'ContactCard/query', { filter => { uid => $guid } }, "R1"
+    ]]);
+    $self->assert_deep_equals($res->[0][1]{ids}, [ $gid ]);
+
+    # Now add the contact to the group
+    $res = $jmap->CallMethods([[
+      'ContactCard/set' => {
+        update => {
+          $gid => {
+            "members/$iuid" => JSON::true,
+          },
+        },
+      }, "R1"
+    ]]);
+    $self->assert(exists $res->[0][1]{updated}{$gid});
+
+    # query should still work!
+    $res = $jmap->CallMethods([[
+      'ContactCard/query', { filter => { uid => $iuid } }, "R1"
+    ]]);
+    $self->assert_deep_equals($res->[0][1]{ids}, [ $iid ]);
+
+    $res = $jmap->CallMethods([[
+      'ContactCard/query', { filter => { uid => $guid } }, "R1"
+    ]]);
+    $self->assert_deep_equals($res->[0][1]{ids}, [ $gid ]);
+
+}
