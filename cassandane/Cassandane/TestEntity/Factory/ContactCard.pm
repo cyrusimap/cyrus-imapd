@@ -5,6 +5,11 @@ use Data::GUID ();
 
 sub fill_in_creation_defaults {
     my ($self, $prop) = @_;
+
+    if ($prop->{name} && ! ref $prop->{name}) {
+      $prop->{name} = { full => $prop->{name} };
+    }
+
     $prop->{kind} //= 'individual';
 
     $prop->{created} //= do {
