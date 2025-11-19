@@ -14,7 +14,6 @@ sub test_basic_entity_tests
         name => { full => $name }
     });
 
-    $self->assert_not_null($card);
     $self->assert_not_null($card->id);
     $self->assert_not_null($card->prodId);
 
