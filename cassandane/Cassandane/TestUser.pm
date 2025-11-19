@@ -21,7 +21,7 @@ has _common_http_service_args => (
         my $ca_file = Cwd::abs_path("data/certs/cacert.pem");
 
         my %common_args = (
-            user => 'cassandane',
+            user => $self->username,
             password => 'pass',
             host => $service->host(),
             port => $service->port(),
