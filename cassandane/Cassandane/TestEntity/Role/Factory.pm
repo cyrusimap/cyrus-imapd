@@ -16,7 +16,7 @@ sub get {
     my ($self, $id) = @_;
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[
@@ -46,7 +46,7 @@ sub create {
 
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     $self->fill_in_creation_defaults($prop);
@@ -73,7 +73,7 @@ sub _update {
     my $dt = $self->datatype;
     my $id = $instance->id;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[

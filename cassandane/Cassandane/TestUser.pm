@@ -36,29 +36,64 @@ has _common_http_service_args => (
     },
 );
 
+sub new_jmaptalk {
+    my ($self, $arg) = @_;
+    $arg //= {};
+
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
+        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+
+    unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
+        Carp::croak("User JMAP client requested, but jmap httpmodule not enabled");
+    }
+
+    require Mail::JMAPTalk;
+    $ENV{DEBUGJMAP} = 1;
+    my $jmap = Mail::JMAPTalk->new(
+        $self->_common_http_service_args->%*,
+        url => '/jmap/',
+        %$arg,
+    );
+
+    # preload default UA while the HTTP::Tiny env var is still set
+    $jmap->ua();
+
+    return $jmap;
+}
+
 has jmap => (
     is => 'ro',
     lazy => 1,
     default => sub {
         my ($self) = @_;
-        local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-            Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+        $self->new_jmaptalk;
+    }
+);
 
-        unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
-            Carp::croak("User JMAP client requested, but jmap httpmodule not enabled");
-        }
+has entity_jmap => (
+    # This is just a persistent JMAP client with all the "using" turned on.
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my ($self) = @_;
+        $self->new_jmaptalk({
+            using => [ qw(
+                urn:ietf:params:jmap:core
+                urn:ietf:params:jmap:mail
+                urn:ietf:params:jmap:submission
+                urn:ietf:params:jmap:vacationresponse
+                urn:ietf:params:jmap:calendars
+                urn:ietf:params:jmap:contacts
 
-        require Mail::JMAPTalk;
-        $ENV{DEBUGJMAP} = 1;
-        my $jmap = Mail::JMAPTalk->new(
-            $self->_common_http_service_args->%*,
-            url => '/jmap/',
-        );
+                https://cyrusimap.org/ns/jmap/mail
+                https://cyrusimap.org/ns/jmap/calendars
+                https://cyrusimap.org/ns/jmap/contacts
 
-        # preload default UA while the HTTP::Tiny env var is still set
-        $jmap->ua();
-
-        return $jmap;
+                https://cyrusimap.org/ns/jmap/performance
+                https://cyrusimap.org/ns/jmap/backup
+                https://cyrusimap.org/ns/jmap/blob
+            ) ]
+        });
     }
 );
 
