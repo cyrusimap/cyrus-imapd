@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_basic_entity_tests
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+
+    my $user  = $self->default_user;
+    my $abook = $user->addressbooks->create;
+
+    my $name = 'Mr. John Q. Public, Esq.';
+
+    my $card = $abook->create_card({
+        name => { full => $name }
+    });
+
+    $self->assert_not_null($card);
+    $self->assert_not_null($card->id);
+    $self->assert_not_null($card->prodId);
+
+    $self->assert_cmp_deeply(
+        { $abook->id => JSON::true },
+        $card->addressBookIds,
+    );
+
+    $self->assert_cmp_deeply(
+        { full => $name },
+        $card->name,
+    );
+
+    my $inbox = $user->mailboxes->inbox;
+    $self->assert_str_equals('Inbox', $inbox->name);
+
+    my $email = $inbox->new_email;
+
+    $self->assert_cmp_deeply(
+        [ { name => 'Xavier Ample', email => 'xa@example.com' } ],
+        $email->from,
+    );
+}

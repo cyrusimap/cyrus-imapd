@@ -52,6 +52,7 @@ use Scalar::Util qw(refaddr);
 
 use lib '.';
 use base qw(Cassandane::Unit::TestCase);
+use Cassandane::TestUser;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 use Cassandane::Util::Words;
@@ -905,48 +906,14 @@ sub _setup_http_service_objects
 
     my $ca_file = abs_path("data/certs/cacert.pem");
 
-    my %common_args = (
-        user => 'cassandane',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => ($service->is_ssl() ? 'https' : 'http'),
-        SSL_options => {
-            SSL_ca_file => $ca_file,
-            SSL_verifycn_scheme => 'none',
-        },
-    );
-
-    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} = _need_http_tiny_env();
-
     if ($self->{instance}->{config}->get_bit('httpmodules', 'carddav')) {
-        require Net::CardDAVTalk;
-        $self->{carddav} = Net::CardDAVTalk->new(
-            %common_args,
-            url => '/',
-            expandurl => 1,
-        );
+        $self->{carddav} = $self->default_user->carddav;
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'caldav')) {
-        require Net::CalDAVTalk;
-        $self->{caldav} = Net::CalDAVTalk->new(
-            %common_args,
-            url => '/',
-            expandurl => 1,
-        );
-        $self->{caldav}->UpdateAddressSet("Test User",
-                                          "cassandane\@example.com");
+        $self->{caldav} = $self->default_user->caldav;
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
-        require Mail::JMAPTalk;
-        $ENV{DEBUGJMAP} = 1;
-        $self->{jmap} = Mail::JMAPTalk->new(
-            %common_args,
-            url => '/jmap/',
-        );
-
-        # preload default UA while the HTTP::Tiny env var is still set
-        $self->{jmap}->ua();
+        $self->{jmap} = $self->default_user->jmap;
     }
 
     xlog $self, "http service objects setup complete!";
@@ -981,6 +948,12 @@ sub set_up
     }
 
     xlog $self, "Calling test function";
+}
+
+sub default_user
+{
+    my ($self) = @_;
+    return $self->{default_user};
 }
 
 sub _start_instances
@@ -1079,6 +1052,16 @@ sub _start_instances
                 if ($self->{_want}->{adminstore});
         }
     }
+
+    my $user = Cassandane::TestUser->new({
+        username => 'cassandane',
+        password => 'cassandane',
+        instance => $self->{instance},
+    });
+
+    $self->{default_user} = $user;
+
+    return;
 }
 
 sub tear_down

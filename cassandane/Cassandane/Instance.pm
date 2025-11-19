@@ -1155,6 +1155,14 @@ sub create_user
             'ctl_conversationsdb', '-I', 'on', $user
         );
     }
+
+    my $user_obj = Cassandane::TestUser->new({
+        username => $user,
+        password => 'pass',
+        instance => $self,
+    });
+
+    return $user_obj;
 }
 
 sub set_smtpd {
