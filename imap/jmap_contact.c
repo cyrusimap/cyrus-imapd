@@ -8884,7 +8884,9 @@ static json_t *_card_from_record(jmap_req_t *req,
 static int _cardquery_cb(void *rock, struct carddav_data *cdata)
 {
     struct contactsquery_rock *crock = (struct contactsquery_rock*) rock;
+    struct carddav_data mycdata = { 0 };
     struct index_record record;
+    char *vcard_uid = NULL;
     json_t *entry = NULL;
     int r = 0;
 
@@ -8904,6 +8906,12 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
         return 0;
     }
 
+    /* Copy critical values out of cdata
+       because _card_from_record() will overwrite value with group member data */
+    mycdata.dav.imap_uid = cdata->dav.imap_uid;
+    mycdata.dav.createdmodseq = cdata->dav.createdmodseq;
+    mycdata.vcard_uid = vcard_uid = xstrdupnull(cdata->vcard_uid);
+
     if (cdata->jmapversion == JMAPCACHE_CARDVERSION) {
         json_error_t jerr;
         entry = json_loads(cdata->jmapdata, 0, &jerr);
@@ -8919,7 +8927,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     if (r) return r;
 
     /* Load record. */
-    r = mailbox_find_index_record(crock->mailbox, cdata->dav.imap_uid, &record);
+    r = mailbox_find_index_record(crock->mailbox, mycdata.dav.imap_uid, &record);
     if (r) goto done;
 
     /* Load contact from record. */
@@ -8927,7 +8935,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
                               crock->mailbox, &record);
     if (!entry) {
         syslog(LOG_ERR, "_card_from_record failed for record %u:%s",
-                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+                mycdata.dav.imap_uid, mailbox_name(crock->mailbox));
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -8937,7 +8945,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     if (crock->filter) {
         /* Match the contact against the filter */
         struct contactsquery_filter_rock cfrock = {
-            crock->carddavdb, cdata, entry, PTRARRAY_INITIALIZER
+            crock->carddavdb, &mycdata, entry, PTRARRAY_INITIALIZER
         };
         /* Match filter */
         int matches =
@@ -8957,7 +8965,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     /* Update statistics */
     crock->query->total++;
 
-    jmap_set_contactid(crock->req->cstate, cdata, &crock->cid);
+    jmap_set_contactid(crock->req->cstate, &mycdata, &crock->cid);
 
     if (crock->build_response) {
         struct jmap_query *query = crock->query;
@@ -8976,13 +8984,14 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     else {
         /* Keep matching entries for post-processing */
         json_object_set_new(entry, "id", json_string(buf_cstring(&crock->cid)));
-        json_object_set_new(entry, "uid", json_string(cdata->vcard_uid));
+        json_object_set_new(entry, "uid", json_string(mycdata.vcard_uid));
         ptrarray_append(&crock->entries, entry);
         entry = NULL;
     }
 
 done:
     if (entry) json_decref(entry);
+    free(vcard_uid);
     return r;
 }
 
