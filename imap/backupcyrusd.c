@@ -113,7 +113,7 @@ static int do_meta();
 static void cmdloop(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
-static void bcd_reset(void)
+static void bcd_reset(int in_shutdown)
 {
     uint64_t bytes_in = 0;
     uint64_t bytes_out = 0;
@@ -136,6 +136,8 @@ static void bcd_reset(void)
     auditlog_traffic(bytes_in, bytes_out);
 
     bcd_in = bcd_out = NULL;
+
+    if (in_shutdown) return;
 
     cyrus_reset_stdio();
 
@@ -199,7 +201,7 @@ int service_main(int argc __attribute__((unused)),
     /* QUIT executed */
 
     /* cleanup */
-    bcd_reset();
+    bcd_reset(0);
 
     return 0;
 }
@@ -215,29 +217,11 @@ void service_abort(int error)
  */
 void shut_down(int code)
 {
-    uint64_t bytes_in = 0;
-    uint64_t bytes_out = 0;
-
     in_shutdown = 1;
 
     libcyrus_run_delayed();
 
-    proc_cleanup(&proc_handle);
-
-    if (bcd_in) {
-        prot_NONBLOCK(bcd_in);
-        prot_fill(bcd_in);
-        bytes_in = prot_bytes_in(bcd_in);
-        prot_free(bcd_in);
-    }
-
-    if (bcd_out) {
-        prot_flush(bcd_out);
-        bytes_out = prot_bytes_out(bcd_out);
-        prot_free(bcd_out);
-    }
-
-    auditlog_traffic(bytes_in, bytes_out);
+    bcd_reset(1);
 
     cyrus_done();
 
