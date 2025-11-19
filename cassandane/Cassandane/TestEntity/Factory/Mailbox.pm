@@ -16,7 +16,7 @@ sub inbox {
     my ($self) = @_;
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my $res = $jmap->CallMethods([

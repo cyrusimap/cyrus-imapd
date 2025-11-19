@@ -90,7 +90,7 @@ my sub fake_rfc822 {
 sub _import_message {
   my ($self, $email, $keywords) = @_;
 
-  my $jmap  = $self->user->jmap;
+  my $jmap  = $self->user->entity_jmap;
   my $bytes = Scalar::Util::blessed($email) ? $email->as_string : $email;
   my $upload_res = $jmap->Upload($bytes, "message/rfc822");
   my $blobid = $upload_res->{blobId};
