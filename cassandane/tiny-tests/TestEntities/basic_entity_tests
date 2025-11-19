@@ -37,4 +37,22 @@ sub test_basic_entity_tests
         [ { name => 'Xavier Ample', email => 'xa@example.com' } ],
         $email->from,
     );
+
+    my $other = $self->{instance}->create_user('other');
+    $inbox->share_with($other => [ 'mayRead' ]);
+
+    my $imap = $user->imap;
+
+    $self->assert_cmp_deeply(
+        Test::Deep::superhashof({ other => 'lr' }),
+        { $imap->getacl('INBOX')->@* },
+    );
+
+    $inbox->unshare_entirely;
+
+    $self->assert_null(
+        # Gross: convert list of pairs into ref to anonymous hash, look up
+        # "other" in it, assert we find nothing.
+        { $imap->getacl('INBOX')->@* }->{other}
+    );
 }

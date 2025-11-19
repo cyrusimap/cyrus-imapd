@@ -6,6 +6,8 @@ use Cassandane::TestEntity::AutoSetup properties => [ qw(
     shareWith myRights
 ) ];
 
+with 'Cassandane::TestEntity::Role::ShareableInstance';
+
 sub create_card {
     my ($self, $props) = @_;
 

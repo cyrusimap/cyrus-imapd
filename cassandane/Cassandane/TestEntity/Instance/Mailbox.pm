@@ -7,6 +7,8 @@ use Cassandane::TestEntity::AutoSetup properties => [ qw(
     myRights isSubscribed
 ) ];
 
+with 'Cassandane::TestEntity::Role::ShareableInstance';
+
 # This returns an Email::MIME object. It has some problems, but it makes it
 # easy to futz around with in testing where performance isn't really an issue.
 # (It's also what we use in the tests for all the other products, so you don't
