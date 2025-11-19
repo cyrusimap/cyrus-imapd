@@ -44,6 +44,7 @@
 
 #include "carddav_db.h"
 #include "http_dav.h"
+#include "jmap_mail_query.h"
 #include "spool.h"
 #include "mboxlist.h"
 #include "util.h"
@@ -304,6 +305,61 @@ done:
     return ret;
 }
 
+static int get_uid2emails(struct transaction_t *txn,
+                          const char *userid, const char *uid)
+{
+    struct auth_state *authstate = auth_newstate(userid);
+    int ret = HTTP_NO_CONTENT;
+
+    if (!authstate) goto done;
+
+    struct carddav_db *carddavdb = carddav_open_userid(userid);
+    if (!carddavdb) goto done;
+
+    ptrarray_t *abook_sets = jmap_get_accessible_addressbooks(userid, authstate,
+                                                              &httpd_namespace,
+                                                              carddavdb);
+
+    /* Lookup emails in the given card and any group members */
+    strarray_t card_uids = STRARRAY_INITIALIZER;
+    strarray_t emails = STRARRAY_INITIALIZER;
+    strarray_t *member_uids = NULL;
+            
+    strarray_append(&card_uids, uid);
+    jmap_get_card_emails(&card_uids, CARDDAV_KIND_ANY, abook_sets,
+                         &emails, &member_uids);
+    strarray_fini(&card_uids);
+
+    /* Lookup group member email addresses (ignore subgroup members) */
+    jmap_get_card_emails(member_uids, CARDDAV_KIND_ANY, abook_sets,
+                         &emails, NULL);
+    strarray_free(member_uids);
+    jmap_free_abook_sets(abook_sets);
+
+    if (!strarray_size(&emails)) goto done;
+
+    json_t *json = json_array();
+    for (int i = 0; i < strarray_size(&emails); i++) {
+        json_array_append_new(json, json_string(strarray_nth(&emails, i)));
+    }
+    strarray_fini(&emails);
+
+    char *result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(json);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(result);
+
+    write_body(HTTP_OK, txn, result, txn->resp_body.len);
+    free(result);
+    ret = 0;
+
+done:
+    if (authstate) auth_freestate(authstate);
+
+    return ret;
+}
+
 static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
                       const char *userid, const char *key)
 {
@@ -366,6 +422,9 @@ static int meth_get_db(struct transaction_t *txn,
 
     if (!strcmp(txn->req_uri->path, "/dblookup/uid2groups"))
         return get_uid2groups(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/uid2emails"))
+        return get_uid2emails(txn, userhdrs[0], keyhdrs[0]);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
         return get_mbpath(txn, userhdrs[0], keyhdrs[0]);
