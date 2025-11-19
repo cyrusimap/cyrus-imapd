@@ -27,8 +27,7 @@ sub test_basic_entity_tests
         $card->name,
     );
 
-    my $group = $abook->create_card({
-        kind => 'group',
+    my $group = $abook->create_card_group({
         name => "My Cool Group",
     });
 

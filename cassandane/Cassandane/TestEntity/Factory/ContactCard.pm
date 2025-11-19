@@ -3,6 +3,14 @@ use Moo;
 
 use Data::GUID ();
 
+sub create_group {
+    my ($self, $prop) = @_;
+    $self->create({
+      %$prop,
+      kind => 'group',
+    });
+}
+
 sub fill_in_creation_defaults {
     my ($self, $prop) = @_;
 
