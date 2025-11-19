@@ -18,8 +18,7 @@ sub test_connect_once
             cyrus => 1,
             background => 1,
             handlers => {
-                exited_abnormally => sub {
-                    my ($child, $code) = @_;
+                exited_abnormally => sub ($child, $code) {
                     xlog "child process $child->{binary}\[$child->{pid}\]"
                         . " exited with code $code";
                     return $code;

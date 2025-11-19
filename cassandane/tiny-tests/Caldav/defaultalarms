@@ -70,8 +70,7 @@ EOF
         $propfindXml, 'Content-Type' => 'text/xml');
 
     xlog "Assert alarm values";
-    my $assert_propval = sub {
-        my ($Response, $propname, $wantVal, $wantStatus) = @_;
+    my $assert_propval = sub ($Response, $propname, $wantVal, $wantStatus) {
         my $propStat = $Response->{'{DAV:}response'}[0]->{'{DAV:}propstat'}[0];
         my $prop = $propStat->{'{DAV:}prop'};
         $wantVal =~ s/^\s+|\s+$//g;

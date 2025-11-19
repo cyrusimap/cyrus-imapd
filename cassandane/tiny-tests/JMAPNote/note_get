@@ -5,9 +5,8 @@ use utf8;
 
 sub test_note_get
     :JMAPExtensions :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     my $id1 = 'bfaf3ef9-6569-4aa1-be58-a53e1c701373';

@@ -45,10 +45,8 @@ sub test_unchangedsince ($self)
     my $modified;
     my %handlers =
     (
-        fetch => sub
+        fetch => sub ($response, $rr, $id)
         {
-            my ($response, $rr, $id) = @_;
-
             # older versions of Mail::IMAPTalk don't have
             # the 3rd argument.  We can't test properly in
             # those circumstances.
@@ -56,9 +54,8 @@ sub test_unchangedsince ($self)
 
             $fetched{$id} = $rr;
         },
-        modified => sub
+        modified => sub ($response, $rr)
         {
-            my ($response, $rr) = @_;
             # we should not get more than one of these ever
             $self->assert_null($modified);
             $modified = $rr;

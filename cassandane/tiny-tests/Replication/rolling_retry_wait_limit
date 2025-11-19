@@ -25,8 +25,7 @@ sub test_rolling_retry_wait_limit
             cyrus => 1,
             background => 1,
             handlers => {
-                exited_abnormally => sub {
-                    my ($child, $code) = @_;
+                exited_abnormally => sub ($child, $code) {
                     xlog "child process $child->{binary}\[$child->{pid}\]"
                         . " exited with code $code";
                     return $code;
