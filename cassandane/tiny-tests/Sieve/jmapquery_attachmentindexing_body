@@ -18,8 +18,7 @@ sub test_jmapquery_attachmentindexing_body
         DIR => $instance->{basedir} . "/tmp");
 
     xlog "Start a dummy extractor server";
-    my $handler = sub {
-        my ($conn, $req) = @_;
+    my $handler = sub ($conn, $req) {
         open HANDLE, ">$filename" || die;
         print HANDLE "$req->method";
         close HANDLE;

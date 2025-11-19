@@ -16,8 +16,7 @@ sub test_jmapquery_attachmentindexing_text
     my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
 
     # Start a dummy extractor server.
-    my $handler = sub {
-        my ($conn, $req) = @_;
+    my $handler = sub ($conn, $req) {
         if ($req->method eq 'HEAD') {
             my $res = HTTP::Response->new(204);
             $res->content("");

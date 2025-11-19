@@ -12,8 +12,7 @@ sub test_squatter_skip422
 
     xlog "Start extractor server";
     my $nrequests = 0;
-    my $handler = sub {
-        my ($conn, $req) = @_;
+    my $handler = sub ($conn, $req) {
         if ($req->method eq 'HEAD') {
             my $res = HTTP::Response->new(204);
             $res->content("");

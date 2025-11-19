@@ -12,9 +12,7 @@ sub test_squatter_attachextract_unprocessable_content
     my $nrequests = 0;
 
     xlog "Start extractor server";
-    my $handler = sub {
-        my ($conn, $req) = @_;
-
+    my $handler = sub ($conn, $req) {
         $nrequests++;
 
         # touch trace file in tracedir

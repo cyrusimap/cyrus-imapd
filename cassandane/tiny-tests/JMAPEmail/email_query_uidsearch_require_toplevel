@@ -2,9 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_email_query_uidsearch_require_toplevel
-  : JMAPExtensions
+    :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $imap   = $self->{store}->get_client();
     my $jmap   = $self->{jmap};
 

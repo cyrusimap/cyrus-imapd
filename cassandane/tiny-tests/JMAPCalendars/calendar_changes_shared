@@ -8,10 +8,8 @@ sub test_calendar_changes_shared
     my $jmap = $self->{jmap};
     my $admin = $self->{adminstore}->get_client();
 
-    my $assert_changes = sub
+    my $assert_changes = sub ($sinceState, $changes)
     {
-        my ($sinceState, $changes) = @_;
-
         my $res = $jmap->CallMethods([
             ['Calendar/changes', {
                     accountId => 'sharer',
@@ -27,10 +25,8 @@ sub test_calendar_changes_shared
         return $res->[0][1]{newState};
     };
 
-    my $assert_calendars = sub
+    my $assert_calendars = sub ($calendars)
     {
-        my ($calendars) = @_;
-
         my $res = $jmap->CallMethods([
             ['Calendar/get', {
                 accountId => 'sharer',

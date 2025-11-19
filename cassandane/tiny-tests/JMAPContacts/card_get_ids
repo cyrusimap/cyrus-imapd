@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_card_get_ids
     :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog $self, "create cards";

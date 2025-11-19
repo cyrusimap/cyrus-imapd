@@ -4,9 +4,8 @@ use Test::Deep ':v1';
 
 sub test_note_changes
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);

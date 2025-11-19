@@ -41,9 +41,7 @@ sub test_email_set_move
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
-    local *assert_move = sub {
-        my ($moveto) = (@_);
-
+    local *assert_move = sub ($moveto) {
         xlog $self, "move email to " . Dumper($moveto);
         $res = $jmap->CallMethods(
             [ [ 'Email/set', {
