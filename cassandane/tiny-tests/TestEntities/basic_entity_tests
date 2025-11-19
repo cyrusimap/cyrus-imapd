@@ -28,6 +28,21 @@ sub test_basic_entity_tests
         $card->name,
     );
 
+    my $group = $abook->create_card({
+        kind => 'group',
+        name => "My Cool Group",
+    });
+
+    my $member = $group->create_member({
+        name => "G. Memberson",
+    });
+
+    my $regotten_group = $user->contacts->get($group->id);
+    $self->assert_cmp_deeply(
+        { $member->uid => Test::Deep::bool(1) },
+        $regotten_group->members,
+    );
+
     my $inbox = $user->mailboxes->inbox;
     $self->assert_str_equals('Inbox', $inbox->name);
 
