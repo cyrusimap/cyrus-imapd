@@ -159,6 +159,32 @@ extern int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg);
 extern void jmap_headermatch_serialize(struct jmap_headermatch*, struct buf*);
 
 
+/* Set of addressbooks owned by userid and accessible by accountId */
+struct abook_set {
+    char *userid;
+    struct carddav_db *carddavdb;  // DAV DB for userid
+    ptrarray_t mbentrys;           // NULL = ALL abooks owned by userid
+};
+
+/* Given an 'accountid', along with its 'authstate', 'namespace', 'carddavdb',
+   return an array of 'abook_sets' corresponding to ALL addressbooks
+   to which accountid has access.
+*/
+extern ptrarray_t *jmap_get_accessible_addressbooks(const char *accountid,
+                                                    const struct auth_state *authstate,
+                                                    const struct namespace *namespace,
+                                                    struct carddav_db *carddavdb);
+
+/* Free an array of 'abook_sets' */
+extern void jmap_free_abook_sets(ptrarray_t *abook_sets);
+
+/* Lookup 'card_uids' of 'card_kind' in the array of 'abook_sets'
+   and return an array of 'emails' contained in those cards, and optionally
+   return an array of 'member_uids' contained in any group cards. */
+extern void jmap_get_card_emails(strarray_t *card_uids, unsigned card_kind,
+                                 ptrarray_t *abook_sets,
+                                 strarray_t *emails, strarray_t **member_uids);
+
 #endif /* WITH_DAV */
 
 #endif /* JMAP_MAIL_QUERY_H */

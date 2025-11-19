@@ -129,13 +129,6 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
     free_hash_table(&cfilter->contactgroups, (void(*)(void*))strarray_free);
 }
 
-/* Set of addressbooks owned by userid and accessible by accountId */
-struct abook_set {
-    char *userid;
-    struct carddav_db *carddavdb;  // DAV DB for userid
-    ptrarray_t mbentrys;           // NULL = ALL abooks owned by userid
-};
-
 static int _get_sharedaddressbooks_cb(struct findall_data *data, void *rock)
 {
     ptrarray_t *abook_sets = rock;
@@ -159,11 +152,11 @@ static int _get_sharedaddressbooks_cb(struct findall_data *data, void *rock)
     return 0;
 }
 
-static void _get_sharedaddressbooks(struct email_contactfilter *cfilter,
+static void _get_sharedaddressbooks(const char *accountid,
+                                    const struct auth_state *authstate,
+                                    const struct namespace *namespace,
                                     ptrarray_t *abook_sets)
 {
-    const struct namespace *namespace = cfilter->namespace;
-
     strarray_t patterns = STRARRAY_INITIALIZER;
     struct buf pattern = BUF_INITIALIZER;
 
@@ -178,15 +171,54 @@ static void _get_sharedaddressbooks(struct email_contactfilter *cfilter,
     buf_cstring(&pattern);
     strarray_appendm(&patterns, buf_release(&pattern));
     mboxlist_findallmulti((struct namespace*)namespace, &patterns, 0,
-                          cfilter->accountid, cfilter->authstate,
+                          accountid, authstate,
                           _get_sharedaddressbooks_cb, abook_sets);
     strarray_fini(&patterns);
 }
 
-static void _get_emails(strarray_t *card_uids, unsigned card_kind,
-                        ptrarray_t *abook_sets,
-                        strarray_t *emails, strarray_t **member_uids)
+HIDDEN ptrarray_t *jmap_get_accessible_addressbooks(const char *accountid,
+                                                    const struct auth_state *authstate,
+                                                    const struct namespace *namespace,
+                                                    struct carddav_db *carddavdb)
 
+{
+    ptrarray_t *abook_sets = ptrarray_new();
+    struct abook_set *set = xzmalloc(sizeof(struct abook_set));
+
+    /* Add accountid as the first abook set */
+    set->userid = xstrdup(accountid);
+    set->carddavdb = carddavdb;
+    ptrarray_append(&set->mbentrys, NULL); // ALL accountid addressbooks
+    ptrarray_append(abook_sets, set);
+
+    /* Fetch any shared addressbook sets */
+    _get_sharedaddressbooks(accountid, authstate, namespace, abook_sets);
+
+    return abook_sets;
+}
+
+HIDDEN void jmap_free_abook_sets(ptrarray_t *abook_sets)
+{
+    struct abook_set *set;
+
+    while ((set = ptrarray_pop(abook_sets))) {
+        mbentry_t *mbentry;
+
+        while ((mbentry = ptrarray_pop(&set->mbentrys)))
+            mboxlist_entry_free(&mbentry);
+        ptrarray_fini(&set->mbentrys);
+
+        carddav_close(set->carddavdb);
+        free(set->userid);
+        free(set);
+    }
+    ptrarray_free(abook_sets);
+}
+
+HIDDEN void jmap_get_card_emails(strarray_t *card_uids, unsigned card_kind,
+                                 ptrarray_t *abook_sets,
+                                 strarray_t *emails, strarray_t **member_uids)
+    
 {
     int i, j, k;
 
@@ -268,17 +300,9 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
         goto done;
     }
 
-    ptrarray_t abook_sets = PTRARRAY_INITIALIZER;
-    struct abook_set *set = xzmalloc(sizeof(struct abook_set));
-
-    /* Add accountid as the first abook set */
-    set->userid = xstrdup(cfilter->accountid);
-    set->carddavdb = carddavdb;
-    ptrarray_append(&set->mbentrys, NULL); // ALL accountid addressbooks
-    ptrarray_append(&abook_sets, set);
-
-    /* Fetch any shared addressbook sets */
-    _get_sharedaddressbooks(cfilter, &abook_sets);
+    ptrarray_t *abook_sets =
+        jmap_get_accessible_addressbooks(cfilter->accountid, cfilter->authstate,
+                                         cfilter->namespace, carddavdb);
 
     /* fetch members for each filter referenced */
 
@@ -299,15 +323,18 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
         strarray_append(&card_uids, groupid);
         if (!*groupid) {
             /* Lookup emails in ALL cards */
-            _get_emails(&card_uids, card_kind, &abook_sets, emails, NULL);
+            jmap_get_card_emails(&card_uids, card_kind, abook_sets,
+                                 emails, NULL);
         }
         else {
             /* Lookup emails in the given card and any group members */
             strarray_t *member_uids = NULL;
 
-            _get_emails(&card_uids, card_kind, &abook_sets, emails, &member_uids);
+            jmap_get_card_emails(&card_uids, card_kind, abook_sets,
+                                 emails, &member_uids);
             /* Lookup group member email addresses (ignore subgroup members) */
-            _get_emails(member_uids, CARDDAV_KIND_ANY, &abook_sets, emails, NULL);
+            jmap_get_card_emails(member_uids, CARDDAV_KIND_ANY, abook_sets,
+                                 emails, NULL);
             strarray_free(member_uids);
         }
         strarray_fini(&card_uids);
@@ -316,18 +343,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
     }
 
     /* cleanup */
-    while ((set = ptrarray_pop(&abook_sets))) {
-        mbentry_t *mbentry;
-
-        while ((mbentry = ptrarray_pop(&set->mbentrys)))
-            mboxlist_entry_free(&mbentry);
-        ptrarray_fini(&set->mbentrys);
-
-        carddav_close(set->carddavdb);
-        free(set->userid);
-        free(set);
-    }
-    ptrarray_fini(&abook_sets);
+    jmap_free_abook_sets(abook_sets);
     
  done:
     return r;
