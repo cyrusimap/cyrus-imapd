@@ -375,6 +375,7 @@ static void send_annot(const mbentry_t *mbentry, const char *mboxname, int do_da
         puturistring(bcd_out, name);
         prot_printf(bcd_out, " %lu %lu %lu\n", len, mtime, ino);
     }
+    free(base);
 }
 
 /*
@@ -502,6 +503,7 @@ static int do_fdata()
     prot_putc('\n', bcd_out);
 
     mailbox_close(&mailbox);
+    mbname_free(&mbname);
 
     return c;
 }
@@ -585,6 +587,7 @@ static int do_fmeta()
     prot_putc('\n', bcd_out);
 
     mailbox_close(&mailbox);
+    mbname_free(&mbname);
 
     return c;
 }
@@ -605,6 +608,7 @@ static int one_status(const mbentry_t *mbentry, void *rock)
     send_file("index", extname, mbentry_metapath(mbentry, META_INDEX, 0), 0);
     send_file("annotations", extname, mbentry_metapath(mbentry, META_ANNOTATIONS, 0), 0);
     send_annot(mbentry, extname, 0);
+    mbname_free(&mbname);
     return 0;
 }
 
