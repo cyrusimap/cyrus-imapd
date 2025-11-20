@@ -166,6 +166,11 @@ EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
                          modseq_t since_modseq,
                          annotatemore_find_proc_t proc, void *rock,
                          int flags);
+EXPORTED int annotatemore_findall_mbentry(const mbentry_t *mbentry,
+                         uint32_t uid, const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc, void *rock,
+                         int flags);
 EXPORTED int annotatemore_findall_pattern(const char *pattern,
                          uint32_t uid, const char *entry,
                          modseq_t since_modseq,

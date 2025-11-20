@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+use File::Path;
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+sub test_backupcyrusd
+{
+    my ($self) = @_;
+
+    $self->make_message("Email 1") or die;
+    $self->make_message("Email 2") or die;
+
+    my $servername = $self->{instance}->get_servername;
+    my $service = $self->{instance}->get_service('backupcyrusd');
+
+    my $data = "$self->{instance}->{basedir}/backupdata";
+    my $meta = "$self->{instance}->{basedir}/backupmeta";
+    mkdir($data);
+    mkdir($meta);
+
+    $ENV{DEBUGIO} = 1 if $self->{store}->{verbose};
+    my ($version, $size) = Cyrus::Backup::BackupUser($service->host, $service->port, $meta, $data, $servername, 'cassandane');
+    $self->assert_num_gt(0, $size);
+
+    # we'll get a new email and a subscription
+    my $talk = $self->{store}->get_client();
+    $talk->subscribe("INBOX");
+    $self->make_message("Email 3") or die;
+
+    my ($newversion, $newsize) = Cyrus::Backup::BackupUser($service->host, $service->port, $meta, $data, $servername, 'cassandane');
+
+    $self->assert_num_equals($version, $newversion);
+    $self->assert_num_gt($size, $newsize);
+
+    # XXX - add more tests to check the content of the backups
+
+    $self->assert(-f "$meta/backupstate.sqlite3");
+
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    my $file = $restore->TarFileName();
+
+    $self->assert(-f "$data/$file");
+}

@@ -140,6 +140,11 @@ Cassandane needs the following software to work:
     Calculates various types of CRC sums
     Debian/Ubuntu package libdigest-crc-perl
 
+
+ * Archive::Tar::Stream
+    Used for the backupcyrusd format
+    cpan Archive::Tar::Stream
+
  * AnyEvent
  * Convert::Base64
  * DateTime::Format::ISO8601
@@ -168,7 +173,7 @@ Debian/Ubuntu copypasta:
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
-       IO::File::Lockable
+       IO::File::Lockable Archive::Tar::Stream
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested
