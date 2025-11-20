@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_multiinvite_add_person_only ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'invite3'});

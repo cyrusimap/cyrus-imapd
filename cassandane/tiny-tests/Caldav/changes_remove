@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_changes_remove ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

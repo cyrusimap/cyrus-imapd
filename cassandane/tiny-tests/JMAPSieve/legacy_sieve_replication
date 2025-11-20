@@ -6,7 +6,6 @@ sub test_legacy_sieve_replication
     :needs_component_replication
     ($self)
 {
-
     # can't do anything without captured syslog
     if (!$self->{instance}->{have_syslog_replacement}) {
         xlog $self, "can't examine syslog, test is useless";

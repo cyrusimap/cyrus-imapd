@@ -5,7 +5,6 @@ sub test_msg_replication_mod_bot_msh
     :needs_component_replication :NoReplicaOnly
     ($self)
 {
-
     xlog $self, "testing replication of message scope annotations";
     xlog $self, "case mod_bot_msh: message is modified, on both ends, " .
          "modseq higher on master";

@@ -6,7 +6,6 @@ sub test_snippet_wildcard
     :needs_component_jmap
     ($self)
 {
-
     # Set up Xapian database
     xlog $self, "Generate and index test messages";
     my %params = (

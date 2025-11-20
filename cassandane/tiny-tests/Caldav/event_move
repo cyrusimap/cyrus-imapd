@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_event_move ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

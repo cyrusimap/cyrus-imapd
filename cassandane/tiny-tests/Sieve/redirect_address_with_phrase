@@ -5,7 +5,6 @@ sub test_redirect_address_with_phrase
     :want_smtpdaemon
     ($self)
 {
-
     xlog $self, "Install a script";
     $self->{instance}->install_sieve_script(<<EOF
 redirect "Foo <foo\@example.com>";

@@ -8,7 +8,6 @@ sub test_splitbrain_bothexpunge
     :NoReplicaOnly
     ($self)
 {
-
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 

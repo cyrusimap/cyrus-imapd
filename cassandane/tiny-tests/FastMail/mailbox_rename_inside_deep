@@ -6,7 +6,6 @@ sub test_mailbox_rename_inside_deep
     :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     # we need the mail extensions for isSeenShared

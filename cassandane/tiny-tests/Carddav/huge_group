@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 # but it will definitely cause valgrind errors.
 sub test_huge_group ($self)
 {
-
     my $CardDAV = $self->{carddav};
 
     my $members;

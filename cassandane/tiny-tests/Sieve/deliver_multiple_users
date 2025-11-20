@@ -6,7 +6,6 @@ sub test_deliver_multiple_users
     :want_smtpdaemon
     ($self)
 {
-
     # create 2 other users
     $self->{instance}->create_user('other1');
     $self->{instance}->create_user('other2');

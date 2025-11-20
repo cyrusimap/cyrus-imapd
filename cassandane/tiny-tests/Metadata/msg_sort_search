@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_msg_sort_search ($self)
 {
-
     xlog $self, "testing RFC5257 SORT command ANNOTATION search criterion";
 
     my $entry = '/comment';

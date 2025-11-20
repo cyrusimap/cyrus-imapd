@@ -5,7 +5,6 @@ sub test_calendar_set_issubscribed
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     # Create calendar

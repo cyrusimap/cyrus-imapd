@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_date ($self)
 {
-
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["date", "variables", "imap4flags", "regex", "relational"];
 

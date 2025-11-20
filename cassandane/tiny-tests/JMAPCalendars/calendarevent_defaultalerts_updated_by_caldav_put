@@ -6,7 +6,6 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
     :min_version_3_9
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "Set default alerts on calendar";
@@ -57,7 +56,6 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
 
 sub assert_valarms ($self, $vevent, %args)
 {
-
     my @props = @{$vevent->property('X-JMAP-USEDEFAULTALERTS')};
     if ($args{useDefaultAlerts}) {
         $self->assert_not_null($props[0]);

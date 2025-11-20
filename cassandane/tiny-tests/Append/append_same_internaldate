@@ -5,7 +5,6 @@ use Cassandane::Tiny;
 # but it takes a very long time to run and may not even generate a conflict
 sub bogus_test_append_same_internaldate ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "Append messages with same internaldates";

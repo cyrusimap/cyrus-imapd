@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_cvt_cyrusdb ($self)
 {
-
     xlog $self, "test cvt_cyrusdb between annotation db and flat files (BZ2686)";
 
     my $folder = 'INBOX';

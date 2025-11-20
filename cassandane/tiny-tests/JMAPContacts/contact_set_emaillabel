@@ -5,7 +5,6 @@ sub test_contact_set_emaillabel
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     # See https://github.com/cyrusimap/cyrus-imapd/issues/2273

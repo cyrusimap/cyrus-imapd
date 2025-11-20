@@ -6,7 +6,6 @@ sub test_calendar_set_defaultalerts_shared
     :min_version_3_9
     ($self)
 {
-
     my $t = $self->create_test;
 
     my $ownerJmap = $t->{owner}{jmap};
@@ -142,7 +141,6 @@ sub test_calendar_set_defaultalerts_shared
 
 sub _can_match_b ($event, $want)
 {
-
     # I wrote a really good one of these for Caldav, but this will do for now
     foreach my $key (keys %$want) {
         return 0 if not exists $event->{$key};

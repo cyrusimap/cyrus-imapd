@@ -6,7 +6,6 @@ sub test_alternate_globalannots
     :NoStartInstances
     ($self)
 {
-
     # first, set a different annotation_db_path on the master server
     my $annotation_db_path = $self->{instance}->get_basedir()
                              . "/conf/non-default-annotations.db";

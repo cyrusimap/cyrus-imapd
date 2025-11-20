@@ -10,7 +10,6 @@ sub test_imip_encode_address
     :want_smtpdaemon
     ($self)
 {
-
     $self->{instance}->{config}->set('imipnotifier' => undef);
     $self->_start_instances();
     $self->_setup_http_service_objects();

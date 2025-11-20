@@ -5,7 +5,6 @@ sub test_echo_tls
     :TLS :want_service_https :needs_component_httpd
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     # better be using https!

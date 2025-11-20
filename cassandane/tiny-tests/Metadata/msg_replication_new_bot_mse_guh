@@ -5,7 +5,6 @@ sub test_msg_replication_new_bot_mse_guh
     :needs_component_replication :NoReplicaOnly
     ($self)
 {
-
     xlog $self, "testing replication of message scope annotations";
     xlog $self, "case new_bot_mse_guh: new messages appear, on both master " .
          "and replica, with equal modseqs, higher GUID on master.";

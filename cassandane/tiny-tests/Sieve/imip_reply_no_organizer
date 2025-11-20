@@ -5,7 +5,6 @@ sub test_imip_reply_no_organizer
     :needs_component_httpd :want_service_http
     ($self)
 {
-
     my $IMAP = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $IMAP->uid());

@@ -6,7 +6,6 @@ sub test_sync_empty_file
     :DelayedDelete :min_version_3_3
     ($self)
 {
-
     $self->run_replication();
 
     my $file = $self->{instance}->{basedir} . "/sync.log";

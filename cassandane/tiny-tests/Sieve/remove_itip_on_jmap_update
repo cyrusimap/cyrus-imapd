@@ -6,7 +6,6 @@ sub test_remove_itip_on_jmap_update
     :want_service_http
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "Create calendar user";

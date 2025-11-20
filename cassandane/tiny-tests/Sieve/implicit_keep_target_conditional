@@ -5,7 +5,6 @@ sub test_implicit_keep_target_conditional
     :min_version_3_9 :NoAltNameSpace
     ($self)
 {
-
     my $folder1 = "INBOX.foo";
     my $folder2 = "INBOX.bar";
 

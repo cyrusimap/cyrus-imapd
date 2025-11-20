@@ -6,7 +6,6 @@ sub test_replication_message
     :needs_component_replication
     ($self)
 {
-
     xlog $self, "testing replication of MESSAGE quota";
 
     my $mastertalk = $self->{master_adminstore}->get_client();

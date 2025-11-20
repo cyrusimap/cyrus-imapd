@@ -5,7 +5,6 @@ sub test_dotuser_gh1875_virt_altns
     :VirtDomains :UnixHierarchySep :AltNamespace
     ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user/foo.bar\@example.com");
 

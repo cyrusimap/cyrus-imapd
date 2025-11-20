@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_calendar_query_dtend_tzid ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     xlog $self, "Load a resource";

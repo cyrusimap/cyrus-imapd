@@ -8,7 +8,6 @@ sub test_syncall_failinguser
     :NoStartInstances :min_version_3_6
     ($self)
 {
-
     my $canary = << 'EOF';
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 To: Sarah Jane Smith <sjsmith@tard.is>

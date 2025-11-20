@@ -5,7 +5,6 @@ sub test_list_return_subscribed_trash_nochildren
     :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_7
     ($self)
 {
-
     $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
     $self->_start_instances();
 

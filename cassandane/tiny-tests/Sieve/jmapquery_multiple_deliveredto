@@ -5,7 +5,6 @@ sub test_jmapquery_multiple_deliveredto
     :min_version_3_3 :needs_component_jmap
     ($self)
 {
-
     my $imap = $self->{store}->get_client();
     $imap->create("INBOX.matches") or die;
 

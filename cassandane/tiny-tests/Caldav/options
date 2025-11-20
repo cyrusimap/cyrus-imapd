@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_options ($self)
 {
-
     my $caldav = $self->{caldav};
 
     my $get_options = sub {

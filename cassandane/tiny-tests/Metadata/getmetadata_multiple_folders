@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_getmetadata_multiple_folders ($self)
 {
-
     xlog $self, "test the Cyrus-specific extension to the GETMETADATA";
     xlog $self, "syntax which allows specifying a parenthesised list";
     xlog $self, "of folder names [IRIS-1109]";

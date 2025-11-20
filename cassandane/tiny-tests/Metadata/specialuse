@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 #
 sub test_specialuse ($self)
 {
-
     xlog $self, "testing /private/specialuse";
 
     my $imaptalk = $self->{store}->get_client();

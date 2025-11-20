@@ -5,7 +5,6 @@ sub test_davsharing
     :min_version_3_0 :NoVirtDomains
     ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $admintalk = $self->{adminstore}->get_client();

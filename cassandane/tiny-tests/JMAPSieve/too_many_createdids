@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_too_many_createdids ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog "Test too many createdIds";

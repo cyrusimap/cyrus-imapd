@@ -5,7 +5,6 @@ sub test_calendarevent_get_locations
     :min_version_3_1
     ($self)
 {
-
     my ($id, $ical) = $self->icalfile('locations');
 
     my $event = $self->putandget_vevent($id, $ical);

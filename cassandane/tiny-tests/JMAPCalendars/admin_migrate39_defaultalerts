@@ -60,7 +60,6 @@ sub test_admin_migrate39_defaultalerts
 
 sub assert_calendars ($self, $state)
 {
-
     my $caldav = $self->{caldav};
     my $imap = $self->{store}->get_client();
     my $jmap = $self->{jmap};
@@ -153,7 +152,6 @@ EOF
 
 sub assert_events ($self, $state)
 {
-
     my $caldav = $self->{caldav};
     my $jmap = $self->{jmap};
 

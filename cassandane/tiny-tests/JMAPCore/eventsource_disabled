@@ -5,7 +5,6 @@ sub test_eventsource_disabled
     :JMAPExtensions :NoAltNameSpace :NoStartInstances
     ($self)
 {
-
     $self->{instance}->{config}->set('jmap_pushpoll' => 0);
     $self->_start_instances();
     $self->_setup_http_service_objects();

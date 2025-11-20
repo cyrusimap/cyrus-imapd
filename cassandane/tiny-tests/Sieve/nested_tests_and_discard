@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_nested_tests_and_discard ($self)
 {
-
     xlog $self, "Install a sieve script discarding all mail";
     $self->{instance}->install_sieve_script(<<EOF
 if anyof (false,

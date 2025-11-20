@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_discard_match_on_body_text ($self)
 {
-
     xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body"];

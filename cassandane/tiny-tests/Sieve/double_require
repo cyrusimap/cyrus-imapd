@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_double_require ($self)
 {
-
     my $target = "INBOX.target";
 
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";

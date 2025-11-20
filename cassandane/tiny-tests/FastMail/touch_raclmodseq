@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_touch_raclmodseq ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
     my $imaptalk = $self->{store}->get_client();
 

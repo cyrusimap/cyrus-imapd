@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_exceeding_message ($self)
 {
-
     xlog $self, "test exceeding the MESSAGE quota limit";
 
     my $talk = $self->{store}->get_client();

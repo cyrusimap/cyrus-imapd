@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_variable_modifiers ($self)
 {
-
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["variables", "editheader", "regex", "enotify"];
 

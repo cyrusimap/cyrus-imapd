@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 #
 sub test_quotarename ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
     my $talk = $self->{store}->get_client();
 

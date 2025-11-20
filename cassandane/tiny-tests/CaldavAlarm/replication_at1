@@ -6,7 +6,6 @@ sub test_replication_at1
     :needs_component_replication
     ($self)
 {
-
     $self->assert_not_null($self->{replica});
 
     my $CalDAV = $self->{caldav};

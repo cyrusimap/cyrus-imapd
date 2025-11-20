@@ -8,7 +8,6 @@ sub test_splitbrain_mailbox
     :min_version_3_1 :max_version_3_4 :NoAltNameSpace
     ($self)
 {
-
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 

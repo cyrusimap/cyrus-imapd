@@ -5,7 +5,6 @@ sub test_list_subscribed_return_children
     :UnixHierarchySep :AltNamespace
     ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->setup_mailbox_structure($imaptalk, [

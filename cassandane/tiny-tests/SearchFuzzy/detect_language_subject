@@ -6,7 +6,6 @@ sub test_detect_language_subject
     :needs_component_jmap
     ($self)
 {
-
     my $body = ""
     . "--boundary\r\n"
     . "Content-Type: text/plain;charset=utf-8\r\n"

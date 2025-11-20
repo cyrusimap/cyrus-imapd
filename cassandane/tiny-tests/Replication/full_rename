@@ -8,7 +8,6 @@ sub test_full_rename
     :NoAltNameSpace :AllowMoves :Replication :SyncLog :DelayedDelete
     ($self)
 {
-
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
     xlog $self, "SYNC LOG FNAME $synclogfname";

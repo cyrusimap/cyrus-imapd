@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_calendar_setcolor ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'mycalendar'});

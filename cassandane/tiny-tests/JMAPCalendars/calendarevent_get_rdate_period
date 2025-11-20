@@ -5,7 +5,6 @@ sub test_calendarevent_get_rdate_period
     :min_version_3_1
     ($self)
 {
-
     my ($id, $ical) = $self->icalfile('rdate_period');
 
     my $event = $self->putandget_vevent($id, $ical);

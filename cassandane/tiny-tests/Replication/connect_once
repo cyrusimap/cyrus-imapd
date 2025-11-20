@@ -5,7 +5,6 @@ sub test_connect_once
     :CSyncReplication :min_version_3_9
     ($self)
 {
-
     # stop the replica
     $self->{replica}->stop();
 

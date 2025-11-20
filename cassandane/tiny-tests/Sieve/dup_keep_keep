@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_dup_keep_keep ($self)
 {
-
     xlog $self, "Testing duplicate suppression between 'keep' & 'keep'";
 
     $self->{instance}->install_sieve_script(<<EOF

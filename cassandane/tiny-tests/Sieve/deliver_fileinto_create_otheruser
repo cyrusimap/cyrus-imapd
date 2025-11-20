@@ -5,7 +5,6 @@ sub test_deliver_fileinto_create_otheruser
     :min_version_3_0 :NoAltNameSpace
     ($self)
 {
-
     $self->{instance}->create_user('other');
 
     # sieve script should not be able to create a mailbox in some other

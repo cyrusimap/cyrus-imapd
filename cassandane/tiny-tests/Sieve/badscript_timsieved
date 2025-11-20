@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_badscript_timsieved ($self)
 {
-
     xlog $self, "Testing sieve script compile failures, via timsieved";
     $self->{compile_method} = 'timsieved';
     $self->badscript_common();

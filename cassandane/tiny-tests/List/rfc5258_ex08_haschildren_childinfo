@@ -5,7 +5,6 @@ sub test_rfc5258_ex08_haschildren_childinfo
     :UnixHierarchySep :AltNamespace
     ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->setup_mailbox_structure($imaptalk, [

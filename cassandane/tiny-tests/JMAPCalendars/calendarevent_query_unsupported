@@ -6,7 +6,6 @@ sub test_calendarevent_query_unsupported
     :min_version_3_9
     ($self)
 {
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $uuidgen = Data::UUID->new;

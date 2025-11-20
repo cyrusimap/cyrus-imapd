@@ -6,7 +6,6 @@ sub test_replication_mailbox_too_old
     :max_version_3_4
     ($self)
 {
-
     my $user = 'cassandane';
     my $exit_code;
 

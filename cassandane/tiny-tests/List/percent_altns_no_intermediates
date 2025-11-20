@@ -5,7 +5,6 @@ sub test_percent_altns_no_intermediates
     :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_5
     ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 

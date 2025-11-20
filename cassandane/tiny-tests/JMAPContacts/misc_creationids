@@ -5,7 +5,6 @@ sub test_misc_creationids
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "create and get contact group and contact";

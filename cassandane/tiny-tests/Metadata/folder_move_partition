@@ -5,7 +5,6 @@ sub test_folder_move_partition
     :Partition2
     ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
 
     my $folder = 'user.asd';

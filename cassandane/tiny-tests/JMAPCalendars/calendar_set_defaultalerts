@@ -6,7 +6,6 @@ sub test_calendar_set_defaultalerts
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
     my $CalDAV = $self->{caldav};
 

@@ -6,7 +6,6 @@ sub test_specialuse_exists
     :NoAltNameSpace
     ($self)
 {
-
     xlog $self, "Testing the \"specialuse_exists\" test";
 
     my $talk = $self->{store}->get_client();

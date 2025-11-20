@@ -5,7 +5,6 @@ sub test_contact_query_shared
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
     my $carddav = $self->{carddav};
     my $admintalk = $self->{adminstore}->get_client();

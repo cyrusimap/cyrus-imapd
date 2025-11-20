@@ -6,7 +6,6 @@ sub test_email_set_getquota
     :JMAPExtensions
     ($self)
 {
-
     $self->_set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";
     $self->_set_quotalimits(storage => 1000); # that's 1000 * 1024 bytes

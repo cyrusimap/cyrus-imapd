@@ -9,7 +9,6 @@ sub test_percent_altns
     :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :max_version_3_4
     ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 

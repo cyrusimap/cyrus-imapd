@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_put_date_with_tzid ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

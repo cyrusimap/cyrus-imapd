@@ -6,7 +6,6 @@ sub test_replication_annotstorage
     :needs_component_replication
     ($self)
 {
-
     xlog $self, "testing replication of X-ANNOTATION-STORAGE quota";
 
     my $folder = "user.cassandane";

@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_xattachmentname ($self)
 {
-
     my $talk = $self->{store}->get_client();
 
     my $body = ""

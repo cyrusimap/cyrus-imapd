@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_rename ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     xlog $self, "create calendar";

@@ -5,7 +5,6 @@ sub test_implicit_keep_target_bad
     :min_version_3_9 :NoAltNameSpace
     ($self)
 {
-
     my ($res, $errs) = $self->compile_sievec('norequire', <<EOF
 implicit_keep_target :mailboxid "xxx" :specialuse "\\\\Important" "INBOX";
 EOF

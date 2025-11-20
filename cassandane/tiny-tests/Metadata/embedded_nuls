@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_embedded_nuls ($self)
 {
-
     xlog $self, "testing getting and setting embedded NULs";
 
     my $imaptalk = $self->{store}->get_client();

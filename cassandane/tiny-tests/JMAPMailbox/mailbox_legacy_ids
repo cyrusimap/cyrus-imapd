@@ -5,7 +5,6 @@ sub test_mailbox_legacy_ids
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :NoStartInstances
     ($self)
 {
-
     $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
     $self->_start_instances();
     $self->_setup_http_service_objects();

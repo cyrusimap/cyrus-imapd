@@ -5,7 +5,6 @@ sub test_rfc6154_ex02a_list_return_special_use
     :UnixHierarchySep :AltNamespace
     ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->setup_mailbox_structure($imaptalk, [

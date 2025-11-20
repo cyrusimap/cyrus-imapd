@@ -5,7 +5,6 @@ sub test_msg_replication_mod_mas
     :needs_component_replication
     ($self)
 {
-
     xlog $self, "testing replication of message scope annotations";
     xlog $self, "case mod_mas: message is modified, on master only";
 

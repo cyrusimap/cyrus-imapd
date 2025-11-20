@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_bulk_import_export ($self)
 {
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
 

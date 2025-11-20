@@ -5,7 +5,6 @@ sub test_sieve_replication_stale_unixhs
     :needs_component_sieve :UnixHierarchySep
     ($self)
 {
-
     my $user = 'some.body';
     my $scriptname = 'test1';
     my $scriptoldcontent = <<'EOF';
