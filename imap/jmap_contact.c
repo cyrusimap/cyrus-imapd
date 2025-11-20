@@ -7113,6 +7113,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             goto member;
         }
         else if (!strcmp(prop_name, "X-FM-OTHERACCOUNT-MEMBER")) {
+            if (!strncmp(prop_value, "urn:uuid:", 9))
+                prop_value += 9;
             goto member;
         }
         else if (!strcasecmp(prop_name, "X-SOCIALPROFILE") ||
