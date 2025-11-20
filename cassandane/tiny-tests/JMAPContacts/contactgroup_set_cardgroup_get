@@ -21,7 +21,11 @@ sub test_contactgroup_set_cardgroup_get
         create => {
             "1" => {
                 name => "group1",
-                contactIds => [$contact1, $contact2]
+                contactIds => [$contact1, $contact2],
+                otherAccountContactIds => {
+                    other1 => ['contact3'],
+                    other2 => ['contact4']
+                }
             }
         }
     }, "R2"]]);
@@ -30,6 +34,10 @@ sub test_contactgroup_set_cardgroup_get
     $res = $jmap->CallMethods([['ContactCard/get', { }, "R3"]]);
     $self->assert_str_equals('group', $res->[0][1]{list}[2]{kind});
     $self->assert_str_equals('group1', $res->[0][1]{list}[2]{name}{full});
-    $self->assert(exists $res->[0][1]{list}[2]{members}{$contact1});
-    $self->assert(exists $res->[0][1]{list}[2]{members}{$contact2});
+    $self->assert_deep_equals({
+        $contact1 => JSON::true,
+        $contact2 => JSON::true,
+        contact3 => JSON::true,
+        contact4 => JSON::true
+    }, $res->[0][1]{list}[2]{members});
 }
