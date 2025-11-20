@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_msg_sort_order ($self)
 {
-
     xlog $self, "testing RFC5257 SORT command ANNOTATION order criterion";
 
     my $entry = '/comment';

@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_put_get_v3_v4 ($self)
 {
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
     $self->assert_not_null($Id);

@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_comment ($self)
 {
-
     xlog $self, "testing /shared/comment";
 
     my $imaptalk = $self->{store}->get_client();

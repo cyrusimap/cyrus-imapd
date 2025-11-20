@@ -6,7 +6,6 @@ sub test_detect_language
     :needs_component_jmap
     ($self)
 {
-
     $self->make_message("german",
         mime_type => 'text/plain',
         mime_charset => 'utf-8',

@@ -5,7 +5,6 @@ sub test_calendarevent_get_recurrenceoverrides
     :min_version_3_1
     ($self)
 {
-
     my ($id, $ical) = $self->icalfile('recurrenceoverrides');
     my $aid = $id . "-alarmuid";
 

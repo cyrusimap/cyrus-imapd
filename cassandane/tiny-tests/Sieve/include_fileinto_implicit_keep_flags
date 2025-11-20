@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_include_fileinto_implicit_keep_flags ($self)
 {
-
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Install a script which includes another";

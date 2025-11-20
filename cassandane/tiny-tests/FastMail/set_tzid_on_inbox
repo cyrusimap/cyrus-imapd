@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_set_tzid_on_inbox ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     my $folder = 'INBOX';

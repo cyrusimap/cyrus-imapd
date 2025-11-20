@@ -6,7 +6,6 @@ sub test_snippets_escapehtml
     :needs_component_jmap
     ($self)
 {
-
     xlog $self, "Generate and index test messages.";
     $self->make_message("Test1 subject with an unescaped & in it",
         mime_charset => "utf-8",

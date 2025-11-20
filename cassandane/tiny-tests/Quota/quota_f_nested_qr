@@ -5,7 +5,6 @@ sub test_quota_f_nested_qr
     :NoAltNameSpace
     ($self)
 {
-
     xlog $self, "Test that quota -f correctly calculates the STORAGE quota";
     xlog $self, "with a nested quotaroot and a folder whose name sorts after";
     xlog $self, "the nested quotaroot [Bug 3621]";

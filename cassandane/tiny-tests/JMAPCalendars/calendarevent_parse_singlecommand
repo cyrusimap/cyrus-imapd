@@ -5,7 +5,6 @@ sub test_calendarevent_parse_singlecommand
     :min_version_3_5 :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     my $id1 = '97c46ea4-4182-493c-87ef-aee4edc2d38b';

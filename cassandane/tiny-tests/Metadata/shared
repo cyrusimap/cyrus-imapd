@@ -6,7 +6,6 @@ use Cassandane::Tiny;
 #
 sub test_shared ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "reading read_only Cyrus annotations";

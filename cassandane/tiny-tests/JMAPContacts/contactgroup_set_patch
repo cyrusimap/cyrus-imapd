@@ -5,7 +5,6 @@ sub test_contactgroup_set_patch
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([

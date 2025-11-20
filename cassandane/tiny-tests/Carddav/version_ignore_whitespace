@@ -5,7 +5,6 @@ sub test_version_ignore_whitespace
     :min_version_3_3
     ($self)
 {
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
     $self->assert_not_null($Id);

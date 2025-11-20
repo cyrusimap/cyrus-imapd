@@ -5,7 +5,6 @@ sub test_deliver_fileinto_autocreate_newuser
     :NoStartInstances :NoAltNameSpace
     ($self)
 {
-
     $self->{instance}->{config}->set('anysievefolder' => 'yes');
     $self->_start_instances();
 

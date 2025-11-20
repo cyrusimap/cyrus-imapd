@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_propfind_principal ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
 
     $admintalk->create("user.reallyprivateuser");

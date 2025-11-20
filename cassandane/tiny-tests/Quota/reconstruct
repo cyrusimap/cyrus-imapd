@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_reconstruct ($self)
 {
-
     xlog $self, "test resources usage calculated when reconstructing an index";
 
     $self->set_quotaroot('user.cassandane');

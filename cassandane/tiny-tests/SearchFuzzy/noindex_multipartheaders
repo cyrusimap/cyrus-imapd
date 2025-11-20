@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_noindex_multipartheaders ($self)
 {
-
     my $talk = $self->{store}->get_client();
 
     my $body = ""

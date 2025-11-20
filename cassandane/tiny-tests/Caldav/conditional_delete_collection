@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_conditional_delete_collection ($self)
 {
-
     my $caldav = $self->{caldav};
 
     my $calid = $caldav->NewCalendar({name => 'foo'});

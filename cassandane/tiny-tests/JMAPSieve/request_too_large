@@ -5,7 +5,6 @@ sub test_request_too_large
     :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog "Test too many ids";

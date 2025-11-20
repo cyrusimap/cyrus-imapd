@@ -5,7 +5,6 @@ sub test_calendarevent_get_organizer_bogusuri
     :min_version_3_4
     ($self)
 {
-
     # As seen in the wild: an ORGANIZER/ATTENDEE with a value
     # that hasn't even an URI scheme.
 

@@ -5,7 +5,6 @@ sub test_stopwords
     :min_version_3_0
     ($self)
 {
-
     # This test assumes that "the" is a stopword and is configured with
     # the search_stopword_path in cassandane.ini. If the option is not
     # set it tests legacy behaviour.

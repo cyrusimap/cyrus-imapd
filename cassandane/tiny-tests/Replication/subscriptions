@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_subscriptions ($self)
 {
-
     my $user = 'brandnew';
     $self->{instance}->create_user($user);
 

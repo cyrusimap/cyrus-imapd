@@ -6,7 +6,6 @@ sub test_specialuse
     :NoAltNameSpace
     ($self)
 {
-
     xlog $self, "Testing the \":specialuse\" argument";
 
     my $hitfolder = "INBOX.newfolder";

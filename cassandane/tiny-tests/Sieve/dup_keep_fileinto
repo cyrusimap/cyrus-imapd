@@ -9,7 +9,6 @@ use Cassandane::Tiny;
 
 sub test_dup_keep_fileinto ($self)
 {
-
     xlog $self, "Testing duplicate suppression between 'keep' & 'fileinto'";
 
     $self->{instance}->install_sieve_script(<<EOF

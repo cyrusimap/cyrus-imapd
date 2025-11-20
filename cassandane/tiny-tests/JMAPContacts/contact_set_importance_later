@@ -5,7 +5,6 @@ sub test_contact_set_importance_later
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "create with no importance";

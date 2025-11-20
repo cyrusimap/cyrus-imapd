@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_using_message ($self)
 {
-
     xlog $self, "test increasing usage of the MESSAGE quota resource as messages are added";
 
     $self->set_quotaroot('user.cassandane');

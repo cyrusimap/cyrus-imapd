@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_sync_collection ($self)
 {
-
     my $CardDAV = $self->{carddav};
 
     my $homeset = "/dav/addressbooks/user/cassandane";

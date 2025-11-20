@@ -5,7 +5,6 @@ sub test_restore_mail_simple
     :min_version_3_3
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog "create email in Inbox";

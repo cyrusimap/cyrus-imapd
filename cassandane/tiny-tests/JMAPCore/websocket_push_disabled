@@ -6,7 +6,6 @@ sub test_websocket_push_disabled
     :needs_dependency_wslay
     ($self)
 {
-
     $self->{instance}->{config}->set('jmap_pushpoll' => 0);
     $self->_start_instances();
     $self->_setup_http_service_objects();

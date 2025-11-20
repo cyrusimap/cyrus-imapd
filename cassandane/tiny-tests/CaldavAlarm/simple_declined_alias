@@ -5,7 +5,6 @@ sub test_simple_declined_alias
     :min_version_3_7
     ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $xml = <<EOF;

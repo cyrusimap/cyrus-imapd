@@ -5,7 +5,6 @@ sub test_deliver_fileinto_dot
     :UnixHierarchySep
     ($self)
 {
-
     xlog $self, "Testing a sieve script which does a 'fileinto' a mailbox";
     xlog $self, "when the user has a dot in their name.  Bug 3664";
     # NOTE: The commit https://github.com/cyrusimap/cyrus-imapd/commit/73af8e19546f235f6286cc9147a3ea74bde19ebb

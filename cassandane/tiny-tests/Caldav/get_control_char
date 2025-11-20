@@ -5,7 +5,6 @@ sub test_get_control_char
     :min_version_3_9 :needs_ical_ctrl :MagicPlus
     ($self)
 {
-
     my $caldav = $self->{caldav};
     my $plusstore = $self->{instance}->get_service('imap'
         )->create_store(username => 'cassandane+dav');

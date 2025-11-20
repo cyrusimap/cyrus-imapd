@@ -7,7 +7,6 @@ sub test_rename_deepuser_standardfolders_rightnow
     :needs_component_replication
     ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
 
     my $rhttp = $self->{replica}->get_service('http');

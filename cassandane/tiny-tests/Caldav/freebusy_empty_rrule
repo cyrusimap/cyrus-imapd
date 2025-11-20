@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_freebusy_empty_rrule ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $uid = '39FCA8FE-1D4D-4BB6-8188-3AE90FD66324';

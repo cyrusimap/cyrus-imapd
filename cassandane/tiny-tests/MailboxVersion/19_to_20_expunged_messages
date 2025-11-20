@@ -6,7 +6,6 @@ sub test_19_to_20_expunged_messages
     :min_version_3_3 :MailboxVersion(19)
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "need an inbox/archive folder";

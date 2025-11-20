@@ -5,7 +5,6 @@ sub test_sieve_set_update_destroy
     :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog "Test update + destroy";

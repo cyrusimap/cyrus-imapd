@@ -5,7 +5,6 @@ sub test_using_annotstorage_msg_copy_deimm
     :ImmediateDelete
     ($self)
 {
-
     xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
     xlog $self, "and original folder is deleted, delete_mode=immediate version";
     xlog $self, "(BZ3527)";

@@ -8,7 +8,6 @@ sub test_splitbrain_different_uniqueid_used
     :min_version_3_5 :NoReplicaonly :Conversations
     ($self)
 {
-
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 

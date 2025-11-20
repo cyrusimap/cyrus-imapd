@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_dup_fileinto_implicit_keep_flags ($self)
 {
-
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
     xlog $self, "Testing duplicate suppression between 'fileinto' & 'keep'";

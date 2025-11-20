@@ -5,7 +5,6 @@ sub test_deliver_fileinto_create_globalshared
     :min_version_3_0 :NoAltNameSpace
     ($self)
 {
-
     # sieve script should not be able to create a new global shared mailbox
     my $target = "TopLevel";
 

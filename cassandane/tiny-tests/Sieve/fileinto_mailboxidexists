@@ -5,7 +5,6 @@ sub test_fileinto_mailboxidexists
     :min_version_3_1
     ($self)
 {
-
     xlog $self, "Testing the \"mailboxidexists\" test";
 
     my $talk = $self->{store}->get_client();

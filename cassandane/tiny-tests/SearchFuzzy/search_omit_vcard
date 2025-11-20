@@ -5,7 +5,6 @@ sub test_search_omit_vcard
     :min_version_3_9
     ($self)
 {
-
     xlog $self, "Generate and index test messages.";
 
     $self->make_message("test",

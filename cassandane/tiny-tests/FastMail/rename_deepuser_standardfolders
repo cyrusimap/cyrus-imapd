@@ -6,7 +6,6 @@ sub test_rename_deepuser_standardfolders
     :needs_component_replication :JMAPExtensions
     ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
 
     my $rhttp = $self->{replica}->get_service('http');

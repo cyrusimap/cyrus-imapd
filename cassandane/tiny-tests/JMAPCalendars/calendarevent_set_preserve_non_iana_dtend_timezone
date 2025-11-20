@@ -5,7 +5,6 @@ sub test_calendarevent_set_preserve_non_iana_dtend_timezone
   : needs_component_jmap
     ($self)
 {
-
     my $jmap   = $self->{jmap};
     my $caldav = $self->{caldav};
 

@@ -5,7 +5,6 @@ sub test_calendarevent_changes_issue2558
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "get calendar event updates with bad state";

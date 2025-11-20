@@ -5,7 +5,6 @@ sub test_lookup_only_otheruser_racl
     :UnixHierarchySep :AltNamespace :ReverseACLs
     ($self)
 {
-
     $self->{instance}->create_user("other");
 
     my $admintalk = $self->{adminstore}->get_client();

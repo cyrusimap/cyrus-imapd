@@ -7,7 +7,6 @@ sub test_vacation_with_fcc
     :want_smtpdaemon
     ($self)
 {
-
     my $target = "INBOX.Sent";
 
     xlog $self, "Install a sieve script with vacation action that uses :fcc";

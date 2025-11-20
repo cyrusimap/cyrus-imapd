@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_copy_messages ($self)
 {
-
     $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();

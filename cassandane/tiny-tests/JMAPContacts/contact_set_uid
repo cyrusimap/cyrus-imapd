@@ -5,7 +5,6 @@ sub test_contact_set_uid
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     # An empty UID generates a random uid.

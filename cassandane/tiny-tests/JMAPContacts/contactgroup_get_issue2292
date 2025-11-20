@@ -5,7 +5,6 @@ sub test_contactgroup_get_issue2292
     :min_version_3_1
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "create contact group";

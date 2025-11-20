@@ -6,7 +6,6 @@ sub test_calendarpreferences_defaultcalendar
     :CalDAVNoDefaultCalendar
     ($self)
 {
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $admin = $self->{adminstore}->get_client();

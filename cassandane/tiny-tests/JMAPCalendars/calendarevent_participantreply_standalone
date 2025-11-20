@@ -5,7 +5,6 @@ sub test_calendarevent_participantreply_standalone
     :min_version_3_7 :NoStartInstances
     ($self)
 {
-
     my $instance = $self->{instance};
     $instance->{config}->set(defaultdomain => 'internal');
     $instance->{config}->set(calendar_user_address_set => 'internal');

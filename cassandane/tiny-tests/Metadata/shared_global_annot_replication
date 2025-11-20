@@ -9,7 +9,6 @@ sub test_shared_global_annot_replication
     :needs_component_idled :needs_component_replication
     ($self)
 {
-
     xlog $self, "testing /shared/foobar";
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";

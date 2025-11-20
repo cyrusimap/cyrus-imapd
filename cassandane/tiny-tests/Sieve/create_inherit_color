@@ -6,7 +6,6 @@ sub test_create_inherit_color
     :want_service_http
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog $self, "Create mailbox with color";

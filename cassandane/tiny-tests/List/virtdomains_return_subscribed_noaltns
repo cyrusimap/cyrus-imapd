@@ -5,7 +5,6 @@ sub test_virtdomains_return_subscribed_noaltns
     :VirtDomains :UnixHierarchySep :NoAltNameSpace
     ($self)
 {
-
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user/foo\@example.com");
 

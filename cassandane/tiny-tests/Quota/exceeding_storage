@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_exceeding_storage ($self)
 {
-
     xlog $self, "test exceeding the STORAGE quota limit";
 
     my $talk = $self->{store}->get_client();

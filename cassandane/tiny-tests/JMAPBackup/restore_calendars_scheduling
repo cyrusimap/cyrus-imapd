@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_restore_calendars_scheduling ($self)
 {
-
     my $jmap = $self->{jmap};
 
     xlog "create calendars";

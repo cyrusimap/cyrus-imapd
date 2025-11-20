@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_using_message_late ($self)
 {
-
     xlog $self, "test setting MESSAGE quota resource after messages are added";
 
     $self->set_quotaroot('user.cassandane');

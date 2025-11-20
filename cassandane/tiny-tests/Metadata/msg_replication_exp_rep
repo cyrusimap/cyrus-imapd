@@ -5,7 +5,6 @@ sub test_msg_replication_exp_rep
     :needs_component_replication :NoReplicaOnly
     ($self)
 {
-
     xlog $self, "testing replication of message scope annotations";
     xlog $self, "case exp_rep: message is expunged, on replica only";
 

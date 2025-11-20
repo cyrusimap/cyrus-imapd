@@ -6,7 +6,6 @@ sub test_deliver_specialuse
     :NoAltNameSpace
     ($self)
 {
-
     my $target = "INBOX.target";
 
     xlog $self, "create the target folder";

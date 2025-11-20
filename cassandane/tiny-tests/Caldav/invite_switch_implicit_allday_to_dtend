@@ -5,7 +5,6 @@ sub test_invite_switch_implicit_allday_to_dtend
     :VirtDomains :min_version_3_7
     ($self)
 {
-
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
         user => "cassandane%example.com",

@@ -9,7 +9,6 @@ use Cassandane::Tiny;
 #
 sub test_motd ($self)
 {
-
     xlog $self, "testing /shared/motd";
 
     my $imaptalk = $self->{store}->get_client();

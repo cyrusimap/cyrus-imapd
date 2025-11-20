@@ -6,7 +6,6 @@ sub test_date_iana_tzid
     :needs_dependency_ical
     ($self)
 {
-
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["date", "variables", "imap4flags", "regex", "relational"];
 

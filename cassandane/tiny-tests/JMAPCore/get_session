@@ -6,7 +6,6 @@ sub test_get_session
     :want_smtpdaemon
     ($self)
 {
-
     # need to version-gate jmap features that aren't in 3.2...
     my ($maj, $min) = Cassandane::Instance->get_version();
 

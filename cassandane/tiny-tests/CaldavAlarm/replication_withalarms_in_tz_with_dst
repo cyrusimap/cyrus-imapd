@@ -6,7 +6,6 @@ sub test_replication_withalarms_in_tz_with_dst
     :needs_component_replication
     ($self)
 {
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

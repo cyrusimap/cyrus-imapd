@@ -5,7 +5,6 @@ sub test_sieve_replication_exists
     :needs_component_sieve
     ($self)
 {
-
     my $user = 'cassandane';
     my $scriptname = 'test1';
     my $scriptcontent = <<'EOF';

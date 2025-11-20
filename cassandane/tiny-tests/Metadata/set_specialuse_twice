@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_set_specialuse_twice ($self)
 {
-
     xlog $self, "testing if we could /private/specialuse twice on a folder";
 
     my $imaptalk = $self->{store}->get_client();

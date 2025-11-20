@@ -6,7 +6,6 @@ sub test_issue_LP52545479
     :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
 
     my $res = $jmap->CallMethods([

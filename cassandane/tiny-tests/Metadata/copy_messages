@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_copy_messages ($self)
 {
-
     xlog $self, "testing COPY with message scope annotations (BZ3528)";
 
     my $entry = '/comment';

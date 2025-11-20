@@ -5,7 +5,6 @@ sub test_calendarevent_get_floatingtzid
     :min_version_3_1
     ($self)
 {
-
     my ($id, $ical) = $self->icalfile('floatingtzid');
 
     # As seen in the wild: A floating DTSTART and a DTEND with TZID.

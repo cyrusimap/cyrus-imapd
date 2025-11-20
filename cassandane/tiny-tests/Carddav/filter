@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_filter ($self)
 {
-
     my $CardDAV = $self->{carddav};
 
     my $xml1 = <<EOF;

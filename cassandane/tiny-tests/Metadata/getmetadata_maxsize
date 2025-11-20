@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_getmetadata_maxsize ($self)
 {
-
     xlog $self, "test the GETMETADATA command with the MAXSIZE option";
 
     my $imaptalk = $self->{store}->get_client();

@@ -6,7 +6,6 @@ sub test_email_query_window_guidsearch
     :JMAPExtensions
     ($self)
 {
-
     # guidsearch supports calculating total if version >= 3.5
     my ($maj, $min) = Cassandane::Instance->get_version();
     my $calculateTotal = ($maj > 3 || ($maj == 3 && $min >= 5)) ? JSON::true : JSON::false;

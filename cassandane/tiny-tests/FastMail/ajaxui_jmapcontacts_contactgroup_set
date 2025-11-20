@@ -6,7 +6,6 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     :JMAPExtensions
     ($self)
 {
-
     my $jmap = $self->{jmap};
     my $service = $self->{instance}->get_service("http");
 

@@ -9,7 +9,6 @@ sub test_private_global_annot_replication
     :needs_component_replication
     ($self)
 {
-
     xlog $self, "testing /private/foobar";
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";

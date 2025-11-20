@@ -8,7 +8,6 @@ use Cassandane::Tiny;
 #
 sub test_size ($self)
 {
-
     xlog $self, "testing /shared/vendor/cmu/cyrus-imapd/size";
 
     my $imaptalk = $self->{store}->get_client();

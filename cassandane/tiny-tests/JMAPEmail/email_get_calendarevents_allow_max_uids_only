@@ -105,7 +105,6 @@ sub test_email_get_calendarevents_allow_max_uids_only
     :min_version_3_7 :JMAPExtensions
     ($self)
 {
-
     xlog $self, "Assert that 8 unique UIDs are allowed";
     $self->do(8, 0);
 

@@ -5,7 +5,6 @@ sub test_sieve_test_variables_validation
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-
     my $script = <<'EOF';
 require ["variables", "vnd.cyrus.log"];
 

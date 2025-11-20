@@ -5,7 +5,6 @@ sub test_permessage_unknown_allowed
     :AnnotationAllowUndefined
     ($self)
 {
-
     xlog $self, "testing getting and setting unknown annotations on a message";
     xlog $self, "with config allowing this";
 

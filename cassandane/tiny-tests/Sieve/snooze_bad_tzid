@@ -8,7 +8,6 @@ sub test_snooze_bad_tzid
     :NoAltNamespace
     ($self)
 {
-
     my $snoozed = "INBOX.snoozed";
     my $awakened = "INBOX.awakened";
 

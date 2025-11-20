@@ -6,7 +6,6 @@ sub test_sync_reset_nolegacy
     :needs_component_replication
     ($self)
 {
-
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 

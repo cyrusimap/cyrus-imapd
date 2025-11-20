@@ -156,7 +156,6 @@ sub test_sieve_test_extensive_some_in_thread_have_keyword
     :min_version_3_3 :JMAPExtensions
     ($self)
 {
-
     # Create two messages, where the first is muted and the second is in
     # the same conversation
     my $mid = '<cassandane@example.com>';
@@ -188,7 +187,6 @@ sub test_sieve_test_extensive_some_in_thread_have_keyword
 
 sub add_sieve_tests (@tests)
 {
-
     while (@tests) {
         my ($name, $sieve, $expect) = (
             shift @tests,

@@ -5,7 +5,6 @@ sub test_subscriptions_unixhs
     :UnixHierarchySep
     ($self)
 {
-
     my $user = 'brand.new';
     $self->{instance}->create_user($user);
 

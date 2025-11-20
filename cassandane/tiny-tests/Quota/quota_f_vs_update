@@ -6,7 +6,6 @@ sub test_quota_f_vs_update
     :NoAltNameSpace
     ($self)
 {
-
     my $basefolder = "user.cassandane";
     my @folders = qw(a b c d e);
     my $msg;

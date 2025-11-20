@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_overquota ($self)
 {
-
     xlog $self, "test account which is over STORAGE quota limit";
 
     my $talk = $self->{store}->get_client();

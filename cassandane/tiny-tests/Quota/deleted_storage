@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_deleted_storage ($self)
 {
-
     xlog $self, "test DELETED and DELETED-STORAGE STATUS items";
     $self->set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";

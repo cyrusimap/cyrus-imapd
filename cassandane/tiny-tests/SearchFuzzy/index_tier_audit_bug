@@ -5,7 +5,6 @@ sub test_index_tier_audit_bug
     :min_version_3_3 :needs_search_xapian
     ($self)
 {
-
     my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
 
     my $talk = $self->{store}->get_client();

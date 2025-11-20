@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_using_annotstorage_msg ($self)
 {
-
     xlog $self, "test setting X-ANNOTATION-STORAGE quota resource after";
     xlog $self, "per-message annotations are added";
 

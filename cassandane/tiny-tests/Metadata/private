@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_private ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "testing private metadata operations";

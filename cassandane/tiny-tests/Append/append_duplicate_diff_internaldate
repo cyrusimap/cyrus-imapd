@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_append_duplicate_diff_internaldate ($self)
 {
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "Append duplicate messages with different internaldates";

@@ -6,7 +6,6 @@ sub test_snippets_termcover
     :needs_component_jmap
     ($self)
 {
-
     my $body =
     "The 'charset' portion of an 'encoded-word' specifies the character ".
     "set associated with the unencoded text.  A 'charset' can be any of ".

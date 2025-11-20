@@ -3,7 +3,6 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_plusaddr_itip ($self)
 {
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 

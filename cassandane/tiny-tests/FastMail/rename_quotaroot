@@ -6,7 +6,6 @@ sub test_rename_quotaroot
     :needs_component_replication :JMAPExtensions
     ($self)
 {
-
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
     my $admintalk = $self->{adminstore}->get_client();
