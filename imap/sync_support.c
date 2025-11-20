@@ -2023,16 +2023,18 @@ static int sync_send_file(struct mailbox *mailbox,
                           struct sync_msgid_list *part_list,
                           struct dlist *kupload)
 {
-    struct sync_msgid *msgid;
-    const char *fname;
+    if (message_guid_isnull(&record->guid)) {
+        syslog(LOG_WARNING, "%s: missing guid for record %u (uid %u) -- needs 'reconstruct -G'?",
+               mailbox_name(mailbox), record->recno, record->uid);
+        return IMAP_MAILBOX_BADFORMAT;
+    }
 
     /* we'll trust that it exists - if not, we'll bail later,
      * but right now we're under locks, so be fast */
-    fname = mailbox_record_fname(mailbox, record);
+    const char *fname = mailbox_record_fname(mailbox, record);
     if (!fname) return IMAP_MAILBOX_BADNAME;
 
-    msgid = sync_msgid_insert(part_list, &record->guid);
-
+    struct sync_msgid *msgid = sync_msgid_insert(part_list, &record->guid);
     /* already uploaded, great */
     if (!msgid->need_upload)
         return 0;
@@ -2424,22 +2426,6 @@ int sync_mailbox_version_check(struct mailbox **mailboxp)
         r = IMAP_MAILBOX_NOTSUPPORTED;
         goto done;
     }
-
-    /* scan index records to ensure they have guids.  version 10 index records
-     * have this field, but it might have never been initialised.
-     * XXX this might be overkill for versions > 10, but let's be cautious */
-    struct mailbox_iter *iter = mailbox_iter_init((*mailboxp), 0, 0);
-    const message_t *msg;
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct index_record *record = msg_record(msg);
-        if (message_guid_isnull(&record->guid)) {
-            syslog(LOG_WARNING, "%s: missing guid for record %u -- needs 'reconstruct -G'?",
-                                mailbox_name(*mailboxp), record->recno);
-            r = IMAP_MAILBOX_NOTSUPPORTED;
-            break;
-        }
-    }
-    mailbox_iter_done(&iter);
 
 done:
     if (r) {
@@ -5721,6 +5707,12 @@ static int fetch_file(struct sync_client_state *sync_cs,
     struct message_guid *guid = NULL;
     size_t size = 0;
     const char *fname = NULL;
+
+    if (message_guid_isnull(&rp->guid)) {
+        syslog(LOG_WARNING, "%s: missing guid for record %u (uid %u) -- needs 'reconstruct -G'?",
+               mailbox_name(mailbox), rp->recno, rp->uid);
+        return IMAP_MAILBOX_BADFORMAT;
+    }
 
     msgid = sync_msgid_lookup(part_list, &rp->guid);
 
