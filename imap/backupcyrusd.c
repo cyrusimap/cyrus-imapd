@@ -338,7 +338,7 @@ static void send_annot(const mbentry_t *mbentry, const char *mboxname, int do_da
     // synthetic inode
     char guidbuf[MESSAGE_GUID_SIZE];
     message_guid_export(&guid, guidbuf);
-    long unsigned ino = ntohl(*((uint32_t *)(guidbuf)));
+    long unsigned ino = *((uint16_t *)(guidbuf));
     long unsigned mtime = 0;
 
     if (do_data) {
