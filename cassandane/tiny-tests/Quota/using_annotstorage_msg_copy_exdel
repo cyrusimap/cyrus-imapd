@@ -21,7 +21,7 @@ sub test_using_annotstorage_msg_copy_exdel
 
     $self->_set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
+    $self->_set_quotalimits($self->res_annot_storage => 100000);
     $self->_check_usages($self->res_annot_storage => 0);
     my $talk = $self->{store}->get_client();
 

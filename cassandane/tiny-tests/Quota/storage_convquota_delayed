@@ -9,7 +9,7 @@ sub test_storage_convquota_delayed
     xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";
     $self->_set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits(storage => 100000);
+    $self->_set_quotalimits(storage => 100000);
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 

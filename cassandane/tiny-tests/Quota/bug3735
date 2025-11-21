@@ -8,9 +8,9 @@ sub test_bug3735
     $self->{instance}->create_user("a");
     $self->{instance}->create_user("ab");
     $self->_set_quotaroot('user.a');
-    $self->_set_limits(storage => 12345);
+    $self->_set_quotalimits(storage => 12345);
     $self->_set_quotaroot('user.ab');
-    $self->_set_limits(storage => 12345);
+    $self->_set_quotalimits(storage => 12345);
 
     my $filename = $self->{instance}->{basedir} . "/bug3735.out";
 
