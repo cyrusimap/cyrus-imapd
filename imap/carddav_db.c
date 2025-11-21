@@ -1210,6 +1210,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
         max_size += CARDDAV_UPDATE_OVERAGE;
     }
     if (buf_len(vcard) > max_size) {
+        fclose(f);
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
     }
@@ -1261,6 +1262,14 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     /* Write the vCard data to the file */
     fprintf(f, "%s", buf_cstring(vcard));
+
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
+        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+               mailbox_name(mailbox), strerror(errno));
+        fclose(f);
+        r = IMAP_IOERROR;
+        goto done;
+    }
 
     qdiffs[QUOTA_STORAGE] = ftell(f);
     qdiffs[QUOTA_MESSAGE] = 1;

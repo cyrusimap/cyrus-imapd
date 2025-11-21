@@ -250,8 +250,13 @@ static int append_eventnotif(const char *from,
     fputs("\r\n", fp);
     fputs(notifstr, fp);
 
+    if (fflush(fp) || ferror(fp) || fdatasync(fileno(fp))) {
+        r = IMAP_IOERROR;
+        fclose(fp);
+        goto done;
+    }
+
     fclose(fp);
-    if (r) goto done;
 
     struct appendstate as;
     r = append_setup_mbox(&as, notifmbox, authuserid, authstate,

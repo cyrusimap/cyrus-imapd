@@ -254,9 +254,8 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     if (r) goto done;
 
     if (to) {
-        fflush(to);
-        if (ferror(to) || fsync(fileno(to))) {
-            xsyslog(LOG_ERR, "IOERROR: writing message", NULL);
+        if (fflush(to) || ferror(to) || fdatasync(fileno(to))) {
+            syslog(LOG_ERR, "IOERROR: writing message: %s", strerror(errno));
             r = IMAP_IOERROR;
             goto done;
         }

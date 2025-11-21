@@ -1048,31 +1048,32 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     md.f = append_newstage(intname, time(0),
                            strhash(intname) /* unique msgnum for modified msg */,
                            &dd.stage);
-    if (md.f) {
-        char buf[4096];
-
-        /* write updated message headers */
-        fwrite(buf_base(headers), buf_len(headers), 1, md.f);
-
-        /* get offset of message body */
-        md.body_offset = ftell(md.f);
-
-        /* write message body */
-        fseek(mydata->m->f, mydata->m->body_offset, SEEK_SET);
-        while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
-        fflush(md.f);
-
-        /* XXX  do we look for updated Date and Message-ID? */
-        md.size = ftell(md.f);
-        md.data = prot_new(fileno(md.f), 0);
-
-        mydata = &dd;
-    }
-    else mydata = NULL;
-
     mbname_free(&mbname);
+    if (!md.f) return NULL;
 
-    return mydata;
+    char buf[4096];
+
+    /* write updated message headers */
+    fwrite(buf_base(headers), buf_len(headers), 1, md.f);
+
+    /* get offset of message body */
+    md.body_offset = ftell(md.f);
+
+    /* write message body */
+    fseek(mydata->m->f, mydata->m->body_offset, SEEK_SET);
+    while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
+
+    if (fflush(md.f) || ferror(md.f) || fdatasync(fileno(md.f))) {
+        syslog(LOG_ERR, "setup special delivery failed %s: %s",
+               mbname_intname(origmbname), strerror(errno));
+        fclose(md.f);
+        return NULL;
+    }
+
+    /* XXX  do we look for updated Date and Message-ID? */
+    md.size = ftell(md.f);
+    md.data = prot_new(fileno(md.f), 0);
+    return &dd;
 }
 
 static void cleanup_special_delivery(deliver_data_t *mydata)

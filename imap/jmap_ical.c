@@ -392,16 +392,16 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     buf_appendcstr(&preamble, "MIME-Version: 1.0\r\n");
 
     fwrite(buf_base(&preamble), buf_len(&preamble), 1, fp);
-    if (!ferror(fp))
-        fputs("\r\n", fp);
-    if (!ferror(fp))
-        fwrite(buf_base(&getblobctx.blob), buf_len(&getblobctx.blob), 1, fp);
-    if (ferror(fp)) {
+    fputs("\r\n", fp);
+    fwrite(buf_base(&getblobctx.blob), buf_len(&getblobctx.blob), 1, fp);
+
+    if (fflush(fp) || ferror(fp) || fdatasync(fileno(fp))) {
         xsyslog(LOG_ERR, "ferror", "fname=<%s>", append_stagefname(stage));
-        r = IMAP_IOERROR;
         fclose(fp);
+        r = IMAP_IOERROR;
         goto done;
     }
+
     fclose(fp);
 
     /* Append blob to mailbox */
