@@ -336,7 +336,7 @@ static void test_session_id(void)
     );
 
     session_new_id();
-    snprintf(match, sizeof(match), " sessionid=%s ", session_id());
+    snprintf(match, sizeof(match), " r.sessionid=%s ", session_id());
 
     CU_SYSLOG_MATCH_SUBSTR(match);
     xsyslog_ev(LOG_ERR, "session id test",
