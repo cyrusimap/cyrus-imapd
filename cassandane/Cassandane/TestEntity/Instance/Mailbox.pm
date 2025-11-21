@@ -8,6 +8,8 @@ use Cassandane::TestEntity::AutoSetup properties => [ qw(
     myRights isSubscribed
 ) ];
 
+with 'Cassandane::TestEntity::Role::ShareableInstance';
+
 # This returns an Email::MIME object. It has some problems, but it makes it
 # easy to futz around with in testing where performance isn't really an issue.
 # (It's also what we use in the tests for all the other products, so you don't
@@ -91,7 +93,7 @@ my sub fake_rfc822 {
 sub _import_message {
   my ($self, $email, $keywords) = @_;
 
-  my $jmap  = $self->user->jmap;
+  my $jmap  = $self->user->entity_jmap;
   my $bytes = Scalar::Util::blessed($email) ? $email->as_string : $email;
   my $upload_res = $jmap->Upload($bytes, "message/rfc822");
   my $blobid = $upload_res->{blobId};

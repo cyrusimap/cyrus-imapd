@@ -7,11 +7,23 @@ use Cassandane::TestEntity::AutoSetup properties => [ qw(
     shareWith myRights
 ) ];
 
+with 'Cassandane::TestEntity::Role::ShareableInstance';
+
 sub create_card {
-    my ($self, $props) = @_;
+    my ($self, $prop) = @_;
 
     $self->user->contacts->create({
-        %$props,
+        %$prop,
+        addressBookIds => { $self->id => JSON::true() },
+    });
+}
+
+sub create_card_group {
+    my ($self, $prop) = @_;
+
+    $self->user->contacts->create({
+        %$prop,
+        kind => 'group',
         addressBookIds => { $self->id => JSON::true() },
     });
 }
