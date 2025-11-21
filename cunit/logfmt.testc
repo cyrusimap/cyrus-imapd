@@ -323,7 +323,7 @@ static void test_logfmt_push_session(void)
 
         if (tests[i].with_session_id) {
             session_new_id();
-            snprintf(match, sizeof(match), " sessionid=%s ", session_id());
+            snprintf(match, sizeof(match), " r.sessionid=%s ", session_id());
         }
 
         if (tests[i].with_trace_id) {
@@ -337,7 +337,7 @@ static void test_logfmt_push_session(void)
         if (tests[i].with_session_id)
             CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), match));
         else
-            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " sessionid="));
+            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " r.sessionid="));
 
         if (tests[i].with_trace_id)
             CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf),
