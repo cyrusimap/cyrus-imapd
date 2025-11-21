@@ -6562,7 +6562,15 @@ static void cmd_sort(char *tag, int usinguid)
 
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
+    struct conversations_state *cstate = NULL;
+    char *userid = mboxname_to_userid(imapd_index->mboxname);
+    conversations_open_user(userid, imapd_index->examining, &cstate);
+    free(userid);
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid, &prock);
+    index_release(imapd_index);
+    conversations_abort(&cstate);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SORT MODSEQ");
@@ -6656,7 +6664,15 @@ static void cmd_thread(char *tag, int usinguid)
 
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
+    struct conversations_state *cstate = NULL;
+    char *userid = mboxname_to_userid(imapd_index->mboxname);
+    conversations_open_user(userid, imapd_index->examining, &cstate);
+    free(userid);
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
     n = index_thread(imapd_index, alg, searchargs, usinguid, &prock);
+    index_release(imapd_index);
+    conversations_abort(&cstate);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");
