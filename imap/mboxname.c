@@ -3423,8 +3423,9 @@ EXPORTED void logfmt_push_mbname(struct logfmt *lf,
                                  const char *key,
                                  const mbname_t *mbname)
 {
+    if (!admin_namespace) mboxname_get_adminnamespace();
+
     if (!key) key = "mbox.name";
 
-    /* XXX log mboxname in admin namespace */
-    logfmt_push(lf, key, mbname_intname(mbname));
+    logfmt_push(lf, key, mbname_extname(mbname, admin_namespace, NULL));
 }
