@@ -125,7 +125,7 @@ EXPORTED struct protstream *prot_writebuf(struct buf *buf)
 
 /* Create a protstream which is just an interface to a mapped piece of
  * memory, allowing prot commands to be used to read from it */
-EXPORTED struct protstream *prot_readmap(const char *base, uint32_t len)
+EXPORTED struct protstream *prot_readmap(const char *base, size_t len)
 {
     struct protstream *newstream;
 
@@ -626,7 +626,7 @@ EXPORTED int prot_fill(struct protstream *s)
 {
     int n;
     unsigned char *ptr;
-    int left;
+    size_t left;
     int r;
     struct timeval timeout;
     fd_set rfds;
@@ -861,7 +861,7 @@ static void prot_flush_log(struct protstream *s)
 {
     if(s->logfd != PROT_NO_FD) {
         unsigned char *ptr = s->buf;
-        int left = s->ptr - s->buf;
+        size_t left = s->ptr - s->buf;
         int n;
         time_t newtime;
         char timebuf[20];
@@ -890,10 +890,10 @@ static void prot_flush_log(struct protstream *s)
 /* Do the encoding part of prot_flush */
 static int prot_flush_encode(struct protstream *s,
                              const char **output_buf,
-                             unsigned *output_len)
+                             size_t *output_len)
 {
     unsigned char *ptr = s->buf;
-    int left = s->ptr - s->buf;
+    size_t left = s->ptr - s->buf;
 
 #ifdef HAVE_ZLIB
     if (s->zstrm) {
@@ -908,7 +908,7 @@ static int prot_flush_encode(struct protstream *s,
         do {
             /* should never be needed, but it's better to always check! */
             if (!s->zstrm->avail_out) {
-                syslog(LOG_DEBUG, "growing compress buffer from %u to %u bytes",
+                syslog(LOG_DEBUG, "growing compress buffer from %lu to %lu bytes",
                        s->zbuf_size, s->zbuf_size + PROT_BUFSIZE);
 
                 s->zbuf = (unsigned char *)
@@ -941,9 +941,13 @@ static int prot_flush_encode(struct protstream *s,
 
     if (s->saslssf != 0) {
         /* encode the data */
+        unsigned len = 0;
         int result = sasl_encode(s->conn, (char *) ptr, left,
-                                 output_buf, output_len);
-        if (result != SASL_OK) {
+                                 output_buf, &len);
+        if (result == SASL_OK) {
+            *output_len = len;
+        }
+        else {
             char errbuf[256];
             const char *ed = sasl_errdetail(s->conn);
 
@@ -986,7 +990,7 @@ int prot_flush_internal(struct protstream *s, int force)
     int save_dontblock = s->dontblock;
 
     const char *ptr = (char *) s->buf; /* Memory buffer info */
-    unsigned left = s->ptr - s->buf;
+    size_t left = s->ptr - s->buf;
 
     assert(s->write);
 
@@ -1199,7 +1203,7 @@ int prot_flush_internal(struct protstream *s, int force)
 /*
  * Write to the output stream 's' the 'len' bytes of data at 'buf'
  */
-EXPORTED int prot_write(struct protstream *s, const char *buf, unsigned len)
+EXPORTED int prot_write(struct protstream *s, const char *buf, size_t len)
 {
     assert(s->write);
     if(s->error || s->eof) return EOF;
@@ -1418,7 +1422,7 @@ EXPORTED int prot_printastring(struct protstream *out, const char *s)
  * Read from the protections stream 's' up to 'size' bytes into the buffer
  * 'buf'.  Returns the number of bytes read, or 0 for some error.
  */
-EXPORTED int prot_read(struct protstream *s, char *buf, unsigned size)
+EXPORTED int prot_read(struct protstream *s, char *buf, size_t size)
 {
     int c;
 
@@ -1446,7 +1450,7 @@ EXPORTED int prot_read(struct protstream *s, char *buf, unsigned size)
  * Read from the protections stream 's' up to 'size' bytes, and append them
  * to the buffer 'buf'.  Returns the number of bytes read, or 0 for some error.
  */
-EXPORTED int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size)
+EXPORTED int prot_readbuf(struct protstream *s, struct buf *buf, size_t size)
 {
     buf_ensure(buf, size);
     size = prot_read(s, buf->s + buf->len, size);
@@ -1617,7 +1621,7 @@ EXPORTED int prot_select(struct protgroup *readstreams, int extra_read_fd,
 /*
  * Version of fgets() that works with protection streams.
  */
-EXPORTED char *prot_fgets(char *buf, unsigned size, struct protstream *s)
+EXPORTED char *prot_fgets(char *buf, size_t size, struct protstream *s)
 {
     char *p = buf;
     int c;
