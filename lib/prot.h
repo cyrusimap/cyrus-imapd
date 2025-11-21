@@ -73,9 +73,9 @@ typedef ssize_t prot_fillcallback_t(unsigned char *buf, size_t len, void *rock);
 struct protstream {
     /* The Buffer */
     unsigned char *buf;
-    unsigned buf_size;
+    size_t buf_size;
     unsigned char *ptr; /* The end of data in the buffer */
-    unsigned cnt; /* Space Remaining in buffer */
+    size_t cnt; /* Space Remaining in buffer */
 
     /* File Descriptors */
     int fd;         /* The Socket */
@@ -93,7 +93,7 @@ struct protstream {
     z_stream *zstrm;
     /* (De)compress buffer */
     unsigned char *zbuf;
-    unsigned int zbuf_size;
+    size_t zbuf_size;
     /* Compress parameters */
     int zlevel;
     int zflush;
@@ -213,7 +213,7 @@ extern size_t prot_lookahead(struct protstream *s,
 /* Allocate/free the protstream structure */
 extern struct protstream *prot_new(int fd, int write);
 extern struct protstream *prot_writebuf(struct buf *buf);
-extern struct protstream *prot_readmap(const char *base, uint32_t len);
+extern struct protstream *prot_readmap(const char *base, size_t len);
 extern struct protstream *prot_readcb(prot_fillcallback_t *proc, void *rock);
 extern int prot_free(struct protstream *s);
 
@@ -281,7 +281,7 @@ extern int prot_fill(struct protstream *s);
 extern int prot_flush(struct protstream *s);
 
 /* These are protlayer versions of the specified functions */
-extern int prot_write(struct protstream *s, const char *buf, unsigned len);
+extern int prot_write(struct protstream *s, const char *buf, size_t len);
 extern int prot_putbuf(struct protstream *s, const struct buf *buf);
 extern int prot_puts(struct protstream *s, const char *str);
 extern int prot_vprintf(struct protstream *, const char *, va_list)
@@ -294,9 +294,9 @@ extern int prot_printstring(struct protstream *out, const char *s);
 extern int prot_printmap(struct protstream *out, const char *s, size_t n);
 extern int prot_printamap(struct protstream *out, const char *s, size_t n);
 extern int prot_printastring(struct protstream *out, const char *s);
-extern int prot_read(struct protstream *s, char *buf, unsigned size);
-extern int prot_readbuf(struct protstream *s, struct buf *buf, unsigned size);
-extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
+extern int prot_read(struct protstream *s, char *buf, size_t size);
+extern int prot_readbuf(struct protstream *s, struct buf *buf, size_t size);
+extern char *prot_fgets(char *buf, size_t size, struct protstream *s);
 
 /* select() for protstreams */
 extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
