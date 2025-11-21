@@ -45,6 +45,7 @@
 #include "carddav_db.h"
 #include "http_dav.h"
 #include "jmap_mail_query.h"
+#include "json_support.h"
 #include "spool.h"
 #include "mboxlist.h"
 #include "util.h"
@@ -360,6 +361,107 @@ done:
     return ret;
 }
 
+struct get_cards_rock {
+    hash_table *cards_by_uid;
+    const char *group_uid;
+    strarray_t *member_uids;
+    struct abook_set *abook_set;
+};
+
+static int _get_cards_cb(void *rock, struct carddav_data *cdata)
+{
+    struct get_cards_rock *grock = rock;
+
+    if (cdata->kind == CARDDAV_KIND_GROUP &&
+        !strcmp(cdata->vcard_uid, grock->group_uid)) {
+
+        if (!grock->member_uids) {
+            carddav_getmembers(grock->abook_set->carddavdb, NULL,
+                               grock->group_uid, &grock->member_uids);
+        }
+    }
+    else if (!hash_lookup(cdata->vcard_uid, grock->cards_by_uid)) {
+        hash_insert(cdata->vcard_uid,
+                    xstrdup(grock->abook_set->userid), grock->cards_by_uid);
+    }
+
+    return 0;
+}
+
+static int get_uid2members(struct transaction_t *txn,
+                           const char *userid, const char *uid)
+{
+    struct auth_state *authstate = auth_newstate(userid);
+    hash_table uid_to_userid = HASH_TABLE_INITIALIZER;
+    ptrarray_t *abook_sets = NULL;
+    int ret = HTTP_NO_CONTENT;
+
+    if (!authstate) goto done;
+
+    /* Open DAV DB for the specified user.
+     * It will be assigned to an abook_set in jmap_get_accessible_addressbooks()
+     * and closed in jmap_free_abook_sets().
+     */
+    struct carddav_db *carddavdb = carddav_open_userid(userid);
+    if (!carddavdb) goto done;
+
+    abook_sets = jmap_get_accessible_addressbooks(userid, authstate,
+                                                  &httpd_namespace, carddavdb);
+
+    construct_hash_table(&uid_to_userid, 1024 * ptrarray_size(abook_sets), 0);
+
+    struct get_cards_rock grock = { &uid_to_userid, uid, NULL, NULL };
+
+    /* Fetch all cards from each addressbook in each set.
+       Also, get members in the specified group card */
+    for (int i = 0; i < ptrarray_size(abook_sets); i++) {
+        struct abook_set *set = ptrarray_nth(abook_sets, i);
+
+        if (set->carddavdb) {
+            grock.abook_set = set;
+
+            for (int j = 0; j < ptrarray_size(&set->mbentrys); j++) {
+                mbentry_t *mbentry = ptrarray_nth(&set->mbentrys, j);
+
+                carddav_foreach(set->carddavdb, mbentry, &_get_cards_cb, &grock);
+            }
+        }
+    }
+
+    if (!grock.member_uids) goto done;
+
+    /* Lookup group members and build response */
+    json_t *jres = json_object();
+    for (int i = 0; i < strarray_size(grock.member_uids); i++) {
+        const char *member = strarray_nth(grock.member_uids, i);
+        const char *userid = hash_lookup(member, &uid_to_userid);
+
+        if (userid) {
+            json_t *uids = json_object_get_vanew(jres, userid, "[]");
+            json_array_append_new(uids, json_string(member));
+        }
+    }
+
+    strarray_free(grock.member_uids);
+
+    char *res = json_dumps(jres, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    json_decref(jres);
+
+    txn->resp_body.type = "application/json";
+    txn->resp_body.len = strlen(res);
+
+    write_body(HTTP_OK, txn, res, txn->resp_body.len);
+    free(res);
+    ret = 0;
+
+done:
+    if (authstate) auth_freestate(authstate);
+    if (abook_sets) jmap_free_abook_sets(abook_sets);
+    free_hash_table(&uid_to_userid, &free);
+
+    return ret;
+}
+
 static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
                       const char *userid, const char *key)
 {
@@ -425,6 +527,9 @@ static int meth_get_db(struct transaction_t *txn,
 
     if (!strcmp(txn->req_uri->path, "/dblookup/uid2emails"))
         return get_uid2emails(txn, userhdrs[0], keyhdrs[0]);
+
+    if (!strcmp(txn->req_uri->path, "/dblookup/uid2members"))
+        return get_uid2members(txn, userhdrs[0], keyhdrs[0]);
 
     if (!strcmp(txn->req_uri->path, "/dblookup/mbpath"))
         return get_mbpath(txn, userhdrs[0], keyhdrs[0]);

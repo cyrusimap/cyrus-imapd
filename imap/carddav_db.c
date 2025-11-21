@@ -711,12 +711,8 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
         // first check that the card exists by fetching it's kind
         r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
                        &cardexists_cb, &this_kind);
-        if (r) {
-            /* XXX syslog */
-            return 0;
-        }
 
-        if (this_kind < 0) return 0;
+        if (r || this_kind < 0) return 0;
 
         found = 1;
     }
@@ -728,15 +724,45 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
         (this_kind == CARDDAV_KIND_GROUP || this_kind == -1)) {
         // get group members
         if (!*group_uids) *group_uids = strarray_new();
-        r = sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
-                       &appendarray_cb, *group_uids);
-    }
-
-    if (r) {
-        /* XXX syslog */
+        sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
+                   &appendarray_cb, *group_uids);
     }
 
     return found;
+}
+
+
+EXPORTED int carddav_getmembers(struct carddav_db *carddavdb,
+                                const mbentry_t *mbentry,
+                                const char *vcard_uid, strarray_t **group_uids)
+{
+    const char *mailbox = !mbentry ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+
+    struct sqldb_bindval bval[] = {
+        { ":mailbox",      SQLITE_TEXT,    { .s = mailbox            } },
+        { ":vcard_uid",    SQLITE_TEXT,    { .s = vcard_uid          } },
+        { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
+        { NULL,            SQLITE_NULL,    { .s = NULL               } }
+    };
+
+    int this_kind = -1;
+
+    if (!*vcard_uid) return 0;
+
+    // first check that the card exists by fetching it's kind
+    int r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
+                       &cardexists_cb, &this_kind);
+
+    if (r || this_kind < 0) return 0;
+
+    // get group members
+    *group_uids = strarray_new();
+    sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
+               &appendarray_cb, *group_uids);
+
+    return 1;
 }
 
 
