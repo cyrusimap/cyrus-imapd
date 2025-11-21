@@ -3176,8 +3176,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
     if (r) return r;
 
-    fflush(f);
-    if (ferror(f)) {
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         return IMAP_IOERROR;
     }
 

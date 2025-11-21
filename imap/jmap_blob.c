@@ -214,7 +214,8 @@ static int jmap_copyblob(jmap_req_t *req,
     else {
         fwrite(buf_base(&msg_buf), buf_len(&msg_buf), 1, to_fp);
     }
-    if (ferror(to_fp)) {
+    if (fflush(to_fp) || ferror(to_fp) || fdatasync(fileno(to_fp))) {
+        fclose(to_fp);
         syslog(LOG_ERR, "jmap_copyblob(%s): tofp=%s: %s",
                blobid, append_stagefname(stage), strerror(errno));
         r = IMAP_IOERROR;

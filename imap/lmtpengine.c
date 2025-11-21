@@ -749,8 +749,7 @@ static int savemsg(struct clientdata *cd,
         return r;
     }
 
-    fflush(f);
-    if (ferror(f)) {
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         while (nrcpts--) {
             prot_printf(cd->pout,
                "451 4.3.%c cannot copy message to temporary file: %s\r\n",

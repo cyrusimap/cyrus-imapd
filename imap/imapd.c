@@ -4183,7 +4183,7 @@ static int append_catenate(const char *tag, FILE *f, const char *cur_name,
         return IMAP_PROTOCOL_ERROR;
     }
 
-    if (ferror(f) || fsync(fileno(f))) {
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         syslog(LOG_ERR, "IOERROR: writing message: %m");
         return IMAP_IOERROR;
     }
