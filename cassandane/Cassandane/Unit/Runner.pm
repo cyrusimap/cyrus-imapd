@@ -45,7 +45,6 @@ use Test::Unit::Result;
 use Benchmark;
 use IO::File;
 
-use lib '.';
 use Cassandane::Cassini;
 
 sub new

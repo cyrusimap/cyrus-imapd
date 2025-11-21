@@ -43,7 +43,6 @@ use warnings;
 use URI;
 use Data::Dumper;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;

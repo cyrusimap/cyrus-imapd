@@ -10,7 +10,6 @@ use Plack::Response;
 use Test::TCP;
 use Carp qw(croak);
 
-use lib '.';
 use Cassandane::PortManager;
 
 sub new

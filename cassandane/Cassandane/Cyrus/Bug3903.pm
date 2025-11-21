@@ -41,7 +41,6 @@ package Cassandane::Cyrus::Bug3903;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

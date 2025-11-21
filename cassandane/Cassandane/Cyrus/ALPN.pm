@@ -46,7 +46,6 @@ use HTTP::Tiny;
 use IO::Socket::SSL;
 use XML::Spice;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

@@ -41,7 +41,6 @@ package Cassandane::IMAPService;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Service);
 use Cassandane::Util::Log;
 

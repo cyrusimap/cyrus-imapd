@@ -51,7 +51,6 @@ use MIME::Base64 qw(encode_base64);
 use Encode qw(decode_utf8);
 use Cwd qw(abs_path getcwd);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

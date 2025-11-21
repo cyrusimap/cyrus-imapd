@@ -18,7 +18,7 @@ sub test_quota_f_prefix
 
     $self->{instance}->create_user("base",
                                    subdirs => [ qw(subdir subdir2) ]);
-    $self->_set_limits(quotaroot => 'user.base', storage => 1000000);
+    $self->_set_quotalimits(quotaroot => 'user.base', storage => 1000000);
     my $exp_base = 0;
 
     xlog $self, "Adding messages to user.base";
@@ -41,7 +41,7 @@ sub test_quota_f_prefix
 
     $self->{instance}->create_user("baseplus",
                                    subdirs => [ qw(subdir) ]);
-    $self->_set_limits(quotaroot => 'user.baseplus', storage => 1000000);
+    $self->_set_quotalimits(quotaroot => 'user.baseplus', storage => 1000000);
     my $exp_baseplus = 0;
 
     xlog $self, "Adding messages to user.baseplus";

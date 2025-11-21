@@ -47,7 +47,6 @@ use JSON::XS qw(encode_json);
 use File::Find;
 use Module::Load::Conditional qw(check_install);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;

@@ -41,7 +41,6 @@ package Cassandane::Unit::FormatPretty;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::Formatter);
 
 sub new

@@ -34,14 +34,14 @@ EOF
 
     # Right - let's set ourselves some basic usage quota
     $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(
+    $self->_set_quotalimits(
         storage => 100000,
         message => 50000,
         mailbox => 100,
     );
 
     $self->_set_quotaroot('user.cassandane.#calendars');
-    $self->_set_limits(
+    $self->_set_quotalimits(
         storage => 10000,
         message => 5000,
         mailbox => 10,

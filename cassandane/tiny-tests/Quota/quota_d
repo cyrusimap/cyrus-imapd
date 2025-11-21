@@ -17,7 +17,7 @@ sub test_quota_d
 
     foreach my $user (@users) {
         $admintalk->create("user/$user");
-        $self->_set_limits(
+        $self->_set_quotalimits(
             quotaroot => "user/$user",
             storage => 100000,
             message => 50000,

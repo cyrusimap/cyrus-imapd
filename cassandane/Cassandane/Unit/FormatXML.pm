@@ -47,7 +47,6 @@ use Time::HiRes qw(time);
 use Sys::Hostname;
 use POSIX qw(strftime);
 
-use lib '.';
 use base qw(Cassandane::Unit::Formatter);
 
 $VERSION = '0.1';

@@ -44,7 +44,6 @@ use Data::Dumper;
 use File::Slurp;
 use HTTP::Tiny;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;

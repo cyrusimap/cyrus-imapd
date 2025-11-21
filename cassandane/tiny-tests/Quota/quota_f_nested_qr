@@ -31,14 +31,14 @@ sub test_quota_f_nested_qr
     }
 
     xlog $self, "set a quota on inbox";
-    $self->_set_limits(quotaroot => $inbox, storage => 100000);
+    $self->_set_quotalimits(quotaroot => $inbox, storage => 100000);
 
     xlog $self, "should have correct STORAGE quota";
     my $ex0 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.nnn"} + $exp{"$inbox.zzz"};
     $self->_check_usages(quotaroot => $inbox, storage => int($ex0/1024));
 
     xlog $self, "set a quota on inbox.nnn - a nested quotaroot";
-    $self->_set_limits(quotaroot => "$inbox.nnn", storage => 200000);
+    $self->_set_quotalimits(quotaroot => "$inbox.nnn", storage => 200000);
 
     xlog $self, "should have correct STORAGE quota for both roots";
     my $ex1 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.zzz"};

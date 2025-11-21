@@ -64,7 +64,6 @@ use Time::HiRes qw(usleep);
 use List::Util qw(uniqstr);
 use MIME::Base64 qw(decode_base64 encode_base64);
 
-use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

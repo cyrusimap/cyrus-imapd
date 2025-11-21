@@ -46,7 +46,6 @@ use Net::DAVTalk 0.14;
 use Net::CardDAVTalk 0.05;
 use Net::CardDAVTalk::VCard;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Generator;
 use Cassandane::Util::Log;

@@ -45,7 +45,6 @@ use File::Path qw(mkpath);
 use DateTime;
 use JSON::XS;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

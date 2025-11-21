@@ -7,7 +7,6 @@ use warnings;
 use JSON;
 use LWP::UserAgent;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 
 sub new

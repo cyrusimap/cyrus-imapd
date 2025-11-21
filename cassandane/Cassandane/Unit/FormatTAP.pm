@@ -43,7 +43,6 @@ use warnings;
 use Data::Dumper;
 use IO::File;
 
-use lib '.';
 use base qw(Cassandane::Unit::Formatter);
 
 sub new
