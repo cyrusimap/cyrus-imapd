@@ -54,7 +54,6 @@ use File::Basename;
 use XML::Spice;
 use MIME::Base64 qw(encode_base64url decode_base64url);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

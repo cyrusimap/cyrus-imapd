@@ -47,7 +47,6 @@ use warnings;
 use Cwd qw(realpath);
 use Data::Dumper;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

@@ -41,7 +41,6 @@ package Cassandane::Cyrus::Specialuse;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;

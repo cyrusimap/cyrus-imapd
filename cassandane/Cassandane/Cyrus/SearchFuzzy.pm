@@ -48,7 +48,6 @@ use File::stat;
 use MIME::Base64 qw(encode_base64);
 use Encode qw(decode encode);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

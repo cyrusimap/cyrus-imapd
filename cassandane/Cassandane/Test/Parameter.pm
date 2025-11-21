@@ -41,7 +41,6 @@ package Cassandane::Test::Parameter;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 

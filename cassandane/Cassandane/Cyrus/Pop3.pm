@@ -43,7 +43,6 @@ use warnings;
 use DateTime;
 use Net::POP3;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

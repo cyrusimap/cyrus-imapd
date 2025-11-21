@@ -46,7 +46,6 @@ use File::Basename;
 use File::Copy;
 use File::Path qw(mkpath);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Mboxname;
 use Cassandane::Util::Log;

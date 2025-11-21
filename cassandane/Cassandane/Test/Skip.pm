@@ -41,7 +41,6 @@ package Cassandane::Test::Skip;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 
 sub new

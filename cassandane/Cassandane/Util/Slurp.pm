@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use base qw(Exporter);
 
-use lib '.';
 
 our @EXPORT = qw(&slurp_file);
 

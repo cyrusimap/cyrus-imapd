@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use Clone qw(clone);
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 
 sub new

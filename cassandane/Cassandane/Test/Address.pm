@@ -41,7 +41,6 @@ package Cassandane::Test::Address;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Address;
 

@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use Cwd qw(abs_path);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

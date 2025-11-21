@@ -46,7 +46,6 @@ use Data::Dumper;
 use DateTime;
 use DateTime::Format::ISO8601;
 
-use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
 

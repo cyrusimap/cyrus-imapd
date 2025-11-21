@@ -49,7 +49,6 @@ use Storable 'dclone';
 use File::Basename;
 use IO::File;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

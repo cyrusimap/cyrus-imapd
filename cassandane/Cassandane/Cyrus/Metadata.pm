@@ -44,7 +44,6 @@ use DateTime;
 use File::Temp qw(:POSIX);
 use Config;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

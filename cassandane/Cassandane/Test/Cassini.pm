@@ -43,7 +43,6 @@ use warnings;
 use File::chdir;
 use File::Temp qw(tempdir);
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Cassini;
 use Cassandane::Util::Log;

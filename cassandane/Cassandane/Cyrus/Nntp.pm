@@ -43,7 +43,6 @@ use warnings;
 use DateTime;
 use News::NNTPClient;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;

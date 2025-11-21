@@ -43,7 +43,6 @@ use warnings;
 use feature qw(state);
 use Digest::MD5 qw(md5_hex);
 
-use lib '.';
 use Cassandane::Util::DateTime qw(to_rfc822 from_iso8601);
 use Cassandane::Address;
 use Cassandane::Message;

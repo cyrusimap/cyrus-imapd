@@ -4,7 +4,6 @@ package Cassandane::Test::Base64JMAP;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 
 use Cassandane::Util::Base64JMAP;

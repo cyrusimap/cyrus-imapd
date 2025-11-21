@@ -43,7 +43,6 @@ use warnings;
 use Data::Dumper;
 use JSON;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Generator;

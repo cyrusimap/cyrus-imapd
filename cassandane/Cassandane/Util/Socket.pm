@@ -45,7 +45,6 @@ use IO::Socket::INET;
 use IO::Socket::INET6;
 use IO::Socket::UNIX;
 
-use lib '.';
 use Cassandane::Util::Log;
 
 our @EXPORT = qw(create_client_socket);

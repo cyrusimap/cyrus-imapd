@@ -41,7 +41,6 @@ package Cassandane::PortManager;
 use strict;
 use warnings;
 
-use lib '.';
 use Cassandane::Cassini;
 use IO::Socket::IP;
 use POSIX qw(EADDRINUSE);

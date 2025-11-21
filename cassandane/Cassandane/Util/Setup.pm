@@ -45,7 +45,6 @@ use POSIX;
 use User::pwent;
 use Data::Dumper;
 
-use lib '.';
 use Cassandane::Util::Log;
 
 our @EXPORT = qw(&become_cyrus);

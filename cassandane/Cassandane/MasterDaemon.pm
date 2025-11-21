@@ -41,7 +41,6 @@ package Cassandane::MasterDaemon;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::MasterEntry);
 
 sub new

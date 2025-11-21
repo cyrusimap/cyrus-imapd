@@ -48,7 +48,6 @@ use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 use XML::Spice;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
