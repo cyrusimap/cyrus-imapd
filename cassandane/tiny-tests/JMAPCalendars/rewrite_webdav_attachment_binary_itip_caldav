@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rewrite_webdav_attachment_binary_itip_caldav
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog "Create event via CalDAV";

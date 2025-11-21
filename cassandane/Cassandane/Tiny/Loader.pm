@@ -29,7 +29,9 @@ sub import {
     open(my $test_fh, '<', $test) or die "can't read test file $test: $!";
     my $test_code = do { local $/; <$test_fh> };
 
-    $test_code = qq{use warnings FATAL => 'redefine';\n}
+    $test_code = qq{use v5.28.0;\n}
+               . qq{use warnings FATAL => 'redefine';\n}
+               . qq{use experimental 'signatures';\n}
                . qq{package $into;\n}
                . qq{# line 1 "$test"\n}
                . $test_code

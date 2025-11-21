@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_suppress_duplicates
+sub test_suppress_duplicates ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     my $now = DateTime->now();

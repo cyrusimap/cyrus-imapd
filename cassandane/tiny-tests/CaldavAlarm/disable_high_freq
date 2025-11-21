@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # this test depends on calendar_min_alarm_interval=61 which is configured in new()
 sub test_disable_high_freq
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

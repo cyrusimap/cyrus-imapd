@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_replication_with_modified_seen_flag
+sub test_replication_with_modified_seen_flag ($self)
 {
-    my ($self) = @_;
-
     my $master_store = $self->{master_store};
     $master_store->set_fetch_attributes(qw(uid flags));
 

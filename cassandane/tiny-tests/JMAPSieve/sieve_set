@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_set
     :min_version_3_3 :JMAPExtensions :MagicPlus :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $script1 = <<EOF;
 keep;
 EOF

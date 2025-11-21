@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_connect_once
     :CSyncReplication :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
-
     # stop the replica
     $self->{replica}->stop();
 
@@ -18,8 +17,7 @@ sub test_connect_once
             cyrus => 1,
             background => 1,
             handlers => {
-                exited_abnormally => sub {
-                    my ($child, $code) = @_;
+                exited_abnormally => sub ($child, $code) {
                     xlog "child process $child->{binary}\[$child->{pid}\]"
                         . " exited with code $code";
                     return $code;

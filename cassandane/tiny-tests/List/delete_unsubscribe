@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_delete_unsubscribe
     :UnixHierarchySep :AltNamespace :NoStartInstances :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set('delete_unsubscribe' => 'yes');
     $self->_start_instances();
 

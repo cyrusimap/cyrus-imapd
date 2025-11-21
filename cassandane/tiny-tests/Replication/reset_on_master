@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 # to delete the wrong user's mailbox.
 sub test_reset_on_master
     :DelayedDelete :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
     $self->{instance}->create_user("user2");
 
     my $mastersvc = $self->{instance}->get_service('imap');

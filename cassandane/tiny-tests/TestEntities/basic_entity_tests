@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_basic_entity_tests
     :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
-
     my $user  = $self->default_user;
     my $abook = $user->addressbooks->create;
 

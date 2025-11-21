@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_eventsource_disabled
     :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set('jmap_pushpoll' => 0);
     $self->_start_instances();
     $self->_setup_http_service_objects();

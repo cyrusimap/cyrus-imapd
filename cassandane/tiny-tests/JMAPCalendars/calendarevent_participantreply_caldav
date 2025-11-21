@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_participantreply_caldav
     :min_version_3_7 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $instance = $self->{instance};
     $instance->{config}->set(defaultdomain => 'internal');
     $instance->{config}->set(calendar_user_address_set => 'internal');

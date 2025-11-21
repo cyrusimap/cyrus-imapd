@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # this is testing a bug where sync_client would abort on zero-length file
 sub test_sync_empty_file
     :DelayedDelete :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
-
     $self->run_replication();
 
     my $file = $self->{instance}->{basedir} . "/sync.log";

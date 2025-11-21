@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_num_folders_delete_immediate
+sub test_num_folders_delete_immediate ($self)
 {
-    my ($self) = @_;
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(storage => 12345, $self->res_mailbox => 500);
 

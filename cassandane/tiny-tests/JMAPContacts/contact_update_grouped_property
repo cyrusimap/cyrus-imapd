@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_contact_update_grouped_property
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $service = $self->{instance}->get_service("http");

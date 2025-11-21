@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_changes_cads
+sub test_email_changes_cads ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog $self, "get email state";

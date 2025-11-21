@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # Test races between quota -f and updates to mailboxes
 sub test_quota_f_vs_update
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $basefolder = "user.cassandane";
     my @folders = qw(a b c d e);
     my $msg;

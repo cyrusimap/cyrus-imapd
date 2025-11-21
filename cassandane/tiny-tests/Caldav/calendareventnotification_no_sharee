@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendareventnotification_no_sharee
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     my $admin = $self->{adminstore}->get_client();
 
     $admin->create('user.cassandane.#jmapnotification') or die;

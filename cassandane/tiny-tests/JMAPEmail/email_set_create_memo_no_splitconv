@@ -2,8 +2,9 @@
 use Cassandane::Tiny;
 
 sub test_email_set_create_memo_no_splitconv
-  : ConversationsMaxThread10 {
-  my ($self) = @_;
+  : ConversationsMaxThread10
+    ($self)
+{
   my $jmap   = $self->{jmap};
   my $imap   = $self->{store}->get_client();
 

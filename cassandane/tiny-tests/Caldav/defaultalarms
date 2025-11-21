@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_defaultalarms
     :min_version_3_1 :needs_component_jmap
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     # For JMAP calendars, we refactored CalDAV default alarm property
@@ -70,8 +69,7 @@ EOF
         $propfindXml, 'Content-Type' => 'text/xml');
 
     xlog "Assert alarm values";
-    my $assert_propval = sub {
-        my ($Response, $propname, $wantVal, $wantStatus) = @_;
+    my $assert_propval = sub ($Response, $propname, $wantVal, $wantStatus) {
         my $propStat = $Response->{'{DAV:}response'}[0]->{'{DAV:}propstat'}[0];
         my $prop = $propStat->{'{DAV:}prop'};
         $wantVal =~ s/^\s+|\s+$//g;

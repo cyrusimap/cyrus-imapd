@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rfc5258_ex03_children
     :UnixHierarchySep :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->setup_mailbox_structure($imaptalk, [

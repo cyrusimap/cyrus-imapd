@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_squatter_partials
     :min_version_3_3 :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
 {
-    my ($self) = @_;
     my $instance = $self->{instance};
     my $imap = $self->{store}->get_client();
 
@@ -12,8 +12,7 @@ sub test_squatter_partials
 
     xlog "Start extractor server";
     my $nrequests = 0;
-    my $handler = sub {
-        my ($conn, $req) = @_;
+    my $handler = sub ($conn, $req) {
         if ($req->method eq 'HEAD') {
             my $res = HTTP::Response->new(204);
             $res->content("");

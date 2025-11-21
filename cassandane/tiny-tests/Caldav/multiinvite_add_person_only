@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_multiinvite_add_person_only
+sub test_multiinvite_add_person_only ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'invite3'});

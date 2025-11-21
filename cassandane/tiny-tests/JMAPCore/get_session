@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_get_session
     :min_version_3_1 :JMAPExtensions :NoAltNameSpace
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
-
     # need to version-gate jmap features that aren't in 3.2...
     my ($maj, $min) = Cassandane::Instance->get_version();
 

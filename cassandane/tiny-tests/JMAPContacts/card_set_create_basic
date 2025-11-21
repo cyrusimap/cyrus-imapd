@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_card_set_create_basic
     :min_version_3_9 :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "create addressbook";
     my $abook = $self->default_user->addressbooks->create({ name => 'Foo' });
 

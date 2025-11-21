@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_relocate_legacy_nodomain
     :DelayedDelete :min_version_3_5 :MailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
-
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 

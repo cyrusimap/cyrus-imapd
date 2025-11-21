@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_itip_request_sequence
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 

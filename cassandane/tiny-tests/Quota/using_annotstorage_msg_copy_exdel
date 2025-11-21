@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_using_annotstorage_msg_copy_exdel
     :DelayedExpunge
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
     xlog $self, "and original messages are deleted, expunge_mode=delayed version";
     xlog $self, "(BZ3527)";

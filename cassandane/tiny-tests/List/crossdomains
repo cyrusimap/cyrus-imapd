@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_crossdomains
     :UnixHierarchySep :VirtDomains :CrossDomains :min_version_3_0 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_create_inherit_color
     :min_version_3_9 :AltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "Create mailbox with color";

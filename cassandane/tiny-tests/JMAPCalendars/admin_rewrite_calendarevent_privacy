@@ -5,8 +5,8 @@ use DBI;
 
 sub test_admin_rewrite_calendarevent_privacy
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my @using = qw(

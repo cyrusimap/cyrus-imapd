@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_discard_match_on_body_raw
+sub test_discard_match_on_body_raw ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body"];

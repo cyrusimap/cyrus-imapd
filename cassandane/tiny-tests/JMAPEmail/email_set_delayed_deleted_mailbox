@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_set_delayed_deleted_mailbox
     :min_version_3_7 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog "Create mailbox A";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_require_conversations
     :min_version_3_1 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $instance = $self->{instance};
     $instance->{config}->set(conversations => 'no');
 

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_empty_summary
+sub test_empty_summary ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => ''});

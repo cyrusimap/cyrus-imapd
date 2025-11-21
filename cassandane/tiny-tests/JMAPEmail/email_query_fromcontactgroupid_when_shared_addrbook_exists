@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_email_query_fromcontactgroupid_when_shared_addrbook_exists
     :needs_component_sieve :MagicPlus :NoAltNameSpace
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     my $admintalk = $self->{adminstore}->get_client();

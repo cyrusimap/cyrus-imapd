@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_empty_filter
+sub test_empty_filter ($self)
 {
-    my ($self) = @_;
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
     $self->assert_not_null($Id);

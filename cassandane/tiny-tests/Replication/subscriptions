@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_subscriptions
+sub test_subscriptions ($self)
 {
-    my ($self) = @_;
-
     my $user = 'brandnew';
     $self->{instance}->create_user($user);
 

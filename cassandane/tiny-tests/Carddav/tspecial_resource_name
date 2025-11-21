@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_tspecial_resource_name
+sub test_tspecial_resource_name ($self)
 {
-    my ($self) = @_;
-
     my $carddav = $self->{carddav};
     my $card = <<EOF;
 BEGIN:VCARD

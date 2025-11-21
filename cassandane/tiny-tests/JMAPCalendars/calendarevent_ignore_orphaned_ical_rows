@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_ignore_orphaned_ical_rows
     :min_version_3_7 :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 

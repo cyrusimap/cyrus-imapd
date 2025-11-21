@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_get_barelf_multipart
   : RFC2047_UTF8 : NoMunge8Bit
+    ($self)
 {
-    my ($self) = @_;
     my $imap   = $self->{store}->get_client();
     my $jmap   = $self->{jmap};
 

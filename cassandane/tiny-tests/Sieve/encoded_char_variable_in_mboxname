@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_encoded_char_variable_in_mboxname
     :min_version_3_1 :SieveUTF8Fileinto
+    ($self)
 {
-    my ($self) = @_;
-
     my $target = "INBOX.\N{U+2217}";
 
     xlog $self, "Testing encoded-character in a mailbox name";

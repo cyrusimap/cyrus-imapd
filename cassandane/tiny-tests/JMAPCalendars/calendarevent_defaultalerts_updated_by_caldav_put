@@ -4,9 +4,8 @@ use Data::ICal;
 
 sub test_calendarevent_defaultalerts_updated_by_caldav_put
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog $self, "Set default alerts on calendar";
@@ -55,10 +54,8 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
     $self->assert_not_disabled_if_xheader_set;
 }
 
-sub assert_valarms
+sub assert_valarms ($self, $vevent, %args)
 {
-    my ($self, $vevent, %args) = @_;
-
     my @props = @{$vevent->property('X-JMAP-USEDEFAULTALERTS')};
     if ($args{useDefaultAlerts}) {
         $self->assert_not_null($props[0]);
@@ -74,9 +71,8 @@ sub assert_valarms
     $self->assert_deep_equals(\@wantUids, \@gotUids);
 }
 
-sub caldav_get
+sub caldav_get ($self, $eventHref)
 {
-    my ($self, $eventHref) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "GET event";
@@ -97,9 +93,8 @@ sub caldav_get
     return ($vcalendar, $vevent, $res->{headers}{etag});
 }
 
-sub caldav_put
+sub caldav_put ($self, $href, $args)
 {
-    my ($self, $href, $args) = @_;
     my $caldav = $self->{caldav};
 
     my %headers = (
@@ -118,9 +113,8 @@ sub caldav_put
 }
 
 
-sub create_jevent
+sub create_jevent ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $ug = Data::UUID->new;
@@ -160,9 +154,8 @@ sub create_jevent
     return $eventHref;
 }
 
-sub assert_preserved_when_unchanged
+sub assert_preserved_when_unchanged ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=true for no changes";
@@ -191,9 +184,8 @@ sub assert_preserved_when_unchanged
     );
 }
 
-sub assert_preserved_by_snooze_alarm
+sub assert_preserved_by_snooze_alarm ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=true for snooze alarm";
@@ -234,9 +226,8 @@ sub assert_preserved_by_snooze_alarm
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub assert_disabled_by_user_alarm
+sub assert_disabled_by_user_alarm ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=false for added user alarm";
@@ -274,9 +265,8 @@ sub assert_disabled_by_user_alarm
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub assert_preserved_by_apple_alarm
+sub assert_preserved_by_apple_alarm ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=true for added Apple default alarm";
@@ -315,9 +305,8 @@ sub assert_preserved_by_apple_alarm
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub assert_disabled_by_removed_default_alarm
+sub assert_disabled_by_removed_default_alarm ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=false for removed default alarm";
@@ -347,9 +336,8 @@ sub assert_disabled_by_removed_default_alarm
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub assert_disabled_by_no_alarms
+sub assert_disabled_by_no_alarms ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=false for no alarms";
@@ -380,9 +368,8 @@ sub assert_disabled_by_no_alarms
     $self->assert_str_not_equals($getetag1, $getetag2);
 }
 
-sub assert_not_disabled_if_xheader_set
+sub assert_not_disabled_if_xheader_set ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     xlog $self, "Assert useDefaultAlerts=true for user alarm if x-header is set";

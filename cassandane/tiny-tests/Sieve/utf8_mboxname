@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_utf8_mboxname
     :min_version_3_1 :SieveUTF8Fileinto
+    ($self)
 {
-    my ($self) = @_;
-
     my $target = "INBOX.A & B";
 
     xlog $self, "Testing '&' in a mailbox name";

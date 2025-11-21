@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_msg_sort_order
+sub test_msg_sort_order ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing RFC5257 SORT command ANNOTATION order criterion";
 
     my $entry = '/comment';

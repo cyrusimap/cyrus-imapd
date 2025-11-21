@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_links
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     my ($id, $ical) = $self->icalfile('links');
     my $uri = "http://jmap.io/spec.html#calendar-events";
 

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_simple_multiuser
     :min_version_3_1 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

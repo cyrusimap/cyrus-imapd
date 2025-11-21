@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_query_long
     :min_version_3_1 :needs_component_sieve :Conversations
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
     my $jmap = $self->{jmap};
     my $res;

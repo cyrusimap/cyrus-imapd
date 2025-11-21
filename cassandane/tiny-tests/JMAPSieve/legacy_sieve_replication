@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_legacy_sieve_replication
     :min_version_3_9 :MailboxLegacyDirs :ImmediateDelete
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
-
     # can't do anything without captured syslog
     if (!$self->{instance}->{have_syslog_replacement}) {
         xlog $self, "can't examine syslog, test is useless";

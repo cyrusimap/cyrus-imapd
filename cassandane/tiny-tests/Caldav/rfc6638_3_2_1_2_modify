@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_rfc6638_3_2_1_2_modify
+sub test_rfc6638_3_2_1_2_modify ($self)
 {
-    my ($self) = @_;
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});

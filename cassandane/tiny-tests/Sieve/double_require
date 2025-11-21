@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_double_require
+sub test_double_require ($self)
 {
-    my ($self) = @_;
-
     my $target = "INBOX.target";
 
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_inbox_altnamespace_no_intermediates
     :UnixHierarchySep :VirtDomains :CrossDomains :AltNamespace :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 

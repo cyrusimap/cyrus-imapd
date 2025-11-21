@@ -2,10 +2,8 @@
 use Cassandane::Tiny;
 use utf8;
 
-sub test_import_export_no_declined
+sub test_import_export_no_declined ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

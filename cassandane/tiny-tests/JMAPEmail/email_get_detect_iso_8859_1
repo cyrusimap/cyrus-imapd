@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_email_get_detect_iso_8859_1
     :min_version_3_1 :needs_component_sieve
     :needs_dependency_chardet
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     my $email = <<'EOF';

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_create_ignore_uid_in_special_calendar
     :min_version_3_7 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $admin = $self->{adminstore}->get_client();

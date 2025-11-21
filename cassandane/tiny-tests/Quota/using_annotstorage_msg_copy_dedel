@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_using_annotstorage_msg_copy_dedel
     :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
     xlog $self, "and original folder is deleted, delete_mode=delayed version";
     xlog $self, "(BZ3527)";

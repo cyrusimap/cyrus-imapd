@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_searchsnippet_get_attachment
     :min_version_3_3
     :needs_component_sieve :SearchAttachmentExtractor :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $instance = $self->{instance};
 
@@ -13,8 +13,7 @@ sub test_searchsnippet_get_attachment
 
     # Start a dummy extractor server.
     my %seenPath;
-    my $handler = sub {
-        my ($conn, $req) = @_;
+    my $handler = sub ($conn, $req) {
         if ($req->method eq 'HEAD') {
             my $res = HTTP::Response->new(204);
             $res->content("");

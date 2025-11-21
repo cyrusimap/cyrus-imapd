@@ -8,10 +8,8 @@ use Cassandane::Tiny;
 #  - deleting an annotation bumps the message's modseq etc
 #  - modseq of other messages is never affected
 #
-sub test_modseq
+sub test_modseq ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_query_no_guidsearch_ignore_jmapuploads
     :min_version_3_7 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     my $store = $self->{store};

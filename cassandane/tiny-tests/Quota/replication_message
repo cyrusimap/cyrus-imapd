@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_message
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing replication of MESSAGE quota";
 
     my $mastertalk = $self->{master_adminstore}->get_client();

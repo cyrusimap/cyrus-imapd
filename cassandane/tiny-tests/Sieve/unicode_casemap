@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_unicode_casemap
     :min_version_3_9 :NoAltNameSpace :NoMunge8bit
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing the \"i;unicode-casemap\" collation";
 
     my $miss     = "INBOX";

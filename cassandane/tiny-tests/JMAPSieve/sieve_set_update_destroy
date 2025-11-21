@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_set_update_destroy
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog "Test update + destroy";

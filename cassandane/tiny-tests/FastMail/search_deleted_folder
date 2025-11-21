@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_search_deleted_folder
     :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
 
     my $res = $self->_fmjmap_ok('Mailbox/get');

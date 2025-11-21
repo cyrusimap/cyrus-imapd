@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_get_legacy_defaultalarm_no_uid
     :min_version_3_9 :needs_component_jmap :MagicPlus
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $plusstore = $self->{instance}->get_service('imap'

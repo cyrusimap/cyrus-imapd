@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_parse_repair_broken_ical
+sub test_calendarevent_parse_repair_broken_ical ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my @testCases = ({

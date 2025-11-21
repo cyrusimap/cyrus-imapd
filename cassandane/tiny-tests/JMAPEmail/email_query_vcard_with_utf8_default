@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_query_vcard_with_utf8_default
+sub test_email_query_vcard_with_utf8_default ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 

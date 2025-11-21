@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rfc5490_create
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing the \"fileinto :create\" syntax";
 
     my $talk = $self->{store}->get_client();

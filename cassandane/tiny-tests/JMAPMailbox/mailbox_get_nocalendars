@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailbox_get_nocalendars
     :min_version_3_1 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     # asserts that changes on special mailboxes such as calendars
     # aren't listed as regular mailboxes
 

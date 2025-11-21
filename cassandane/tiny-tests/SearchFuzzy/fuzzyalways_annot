@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_fuzzyalways_annot
     :min_version_3_3 :SearchFuzzyAlways
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
 
     $self->make_message('test', body => 'body') || die;

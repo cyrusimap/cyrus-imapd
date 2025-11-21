@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_deliver
+sub test_deliver ($self)
 {
-    my ($self) = @_;
-
     my $target = "INBOX.target";
 
     xlog $self, "Install a sieve script filing all mail into a nonexistant folder";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_folder_delete_msg_dmdel
     :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test that per-message annotations are";
     xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 

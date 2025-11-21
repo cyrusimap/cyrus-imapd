@@ -6,9 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_splitbrain
     :NoReplicaOnly
+    ($self)
 {
-    my ($self) = @_;
-
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 

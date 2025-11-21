@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendaralert_notification_recurring
     :min_version_3_5 :needs_component_calalarmd
+    ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     my $calendarId = $caldav->NewCalendar({name => 'foo'});

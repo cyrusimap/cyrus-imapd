@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_fileinto_mailboxidexists
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing the \"mailboxidexists\" test";
 
     my $talk = $self->{store}->get_client();

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_url_nodomains
+sub test_url_nodomains ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $admintalk = $self->{adminstore}->get_client();

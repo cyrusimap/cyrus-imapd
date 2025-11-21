@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_utctime_with_tzid
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     # As seen on the wires...
     my ($id, $ical) = $self->icalfile('utctime-with-tzid');
 

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_emailsubmission_scheduled_send_no_move
     :min_version_3_7 :needs_component_calalarmd :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     # we need 'https://cyrusimap.org/ns/jmap/mail' capability for

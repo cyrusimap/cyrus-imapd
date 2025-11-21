@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_imip_invite_calendarid
     :needs_component_httpd :want_service_http
+    ($self)
 {
-    my ($self) = @_;
-
     my $IMAP = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $IMAP->uid());
