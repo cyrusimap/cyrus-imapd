@@ -11,7 +11,7 @@ sub test_overquota
 
     xlog $self, "set a low limit";
     $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 210);
+    $self->_set_quotalimits(storage => 210);
     $self->_check_usages(storage => 0);
 
     xlog $self, "adding messages to get just below the limit";
@@ -40,7 +40,7 @@ sub test_overquota
     $self->_check_smmap('cassandane', 'OK');
 
     xlog $self, "reduce the quota limit";
-    $self->_set_limits(storage => 100);
+    $self->_set_quotalimits(storage => 100);
 
     xlog $self, "check that usage is unchanged";
     $self->_check_usages(storage => int($expected/1024));

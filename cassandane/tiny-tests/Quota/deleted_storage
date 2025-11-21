@@ -8,7 +8,7 @@ sub test_deleted_storage
     xlog $self, "test DELETED and DELETED-STORAGE STATUS items";
     $self->_set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits(storage => 100000);
+    $self->_set_quotalimits(storage => 100000);
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 

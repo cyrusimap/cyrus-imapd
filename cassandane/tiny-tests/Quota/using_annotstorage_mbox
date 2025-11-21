@@ -12,7 +12,7 @@ sub test_using_annotstorage_mbox
     my $talk = $self->{store}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
+    $self->_set_quotalimits($self->res_annot_storage => 100000);
     $self->_check_usages($self->res_annot_storage => 0);
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";

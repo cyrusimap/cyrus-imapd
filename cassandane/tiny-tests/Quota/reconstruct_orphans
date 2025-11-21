@@ -23,7 +23,7 @@ sub test_reconstruct_orphans
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits(
+    $self->_set_quotalimits(
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 100000,

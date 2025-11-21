@@ -46,7 +46,7 @@ use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 
 use lib '.';
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';
@@ -82,31 +82,6 @@ sub set_up
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:sieve',
     ]);
-}
-
-sub _set_quotaroot
-{
-    my ($self, $quotaroot) = @_;
-    $self->{quotaroot} = $quotaroot;
-}
-
-# Utility function to set quota limits and check that it stuck
-sub _set_limits
-{
-    my ($self, %resources) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
-    my @quotalist;
-    foreach my $resource (keys %resources)
-    {
-        my $limit = $resources{$resource}
-            or die "No limit specified for $resource";
-        push(@quotalist, uc($resource), $limit);
-    }
-    $self->{limits}->{$quotaroot} = { @quotalist };
-    $admintalk->setquota($quotaroot, \@quotalist);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
 sub tear_down
