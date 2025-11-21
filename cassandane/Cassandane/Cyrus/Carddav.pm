@@ -49,7 +49,6 @@ use Data::Dumper;
 use XML::Spice;
 use XML::Simple;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

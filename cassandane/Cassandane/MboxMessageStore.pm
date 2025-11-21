@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use POSIX qw(strftime);
 
-use lib '.';
 use base qw(Cassandane::MessageStore);
 use Cassandane::Util::DateTime qw(from_rfc822);
 use Cassandane::Message;

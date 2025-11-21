@@ -45,7 +45,6 @@ use URI;
 use URI::Escape qw(uri_unescape);
 use Exporter ();
 
-use lib '.';
 use Cassandane::MboxMessageStore;
 use Cassandane::MaildirMessageStore;
 use Cassandane::IMAPMessageStore;

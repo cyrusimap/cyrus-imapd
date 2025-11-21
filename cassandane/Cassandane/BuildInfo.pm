@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use JSON;
 
-use lib '.';
 use Cassandane::Cassini;
 use Cassandane::Util::Log;
 

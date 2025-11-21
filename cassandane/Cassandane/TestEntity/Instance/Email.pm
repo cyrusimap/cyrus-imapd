@@ -1,7 +1,6 @@
 package Cassandane::TestEntity::Instance::Email;
 use Moo;
 
-use lib '.';
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
     id blobId threadId mailboxIds keywords size receivedAt
     messageId inReplyTo references sender from to cc bcc replyTo subject sentAt

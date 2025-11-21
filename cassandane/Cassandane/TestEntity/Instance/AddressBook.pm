@@ -1,7 +1,6 @@
 package Cassandane::TestEntity::Instance::AddressBook;
 use Moo;
 
-use lib '.';
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
     id name description sortOrder isDefault isSubscribed
     shareWith myRights

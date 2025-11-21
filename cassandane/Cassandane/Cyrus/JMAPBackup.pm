@@ -50,7 +50,6 @@ use Storable 'dclone';
 use File::Basename;
 use XML::Spice;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

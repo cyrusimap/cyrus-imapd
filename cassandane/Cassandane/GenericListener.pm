@@ -41,7 +41,6 @@ package Cassandane::GenericListener;
 use strict;
 use warnings;
 
-use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::PortManager;
 

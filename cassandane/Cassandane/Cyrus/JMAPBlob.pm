@@ -46,7 +46,6 @@ use Mail::JMAPTalk 0.15;
 use Data::Dumper;
 use MIME::Base64 qw(encode_base64);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

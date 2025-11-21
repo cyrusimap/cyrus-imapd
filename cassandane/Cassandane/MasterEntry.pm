@@ -41,7 +41,6 @@ package Cassandane::MasterEntry;
 use strict;
 use warnings;
 
-use lib '.';
 use Cassandane::Util::Log;
 
 my $next_tag = 1;

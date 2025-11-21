@@ -41,7 +41,6 @@ package Cassandane::Test::Mboxname;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Mboxname;
 use Cassandane::Config;

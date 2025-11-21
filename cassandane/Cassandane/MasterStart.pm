@@ -41,7 +41,6 @@ package Cassandane::MasterStart;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::MasterEntry);
 
 sub new

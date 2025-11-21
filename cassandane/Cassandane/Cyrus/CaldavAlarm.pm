@@ -49,7 +49,6 @@ use Data::Dumper;
 use POSIX;
 use Carp;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

@@ -41,7 +41,6 @@ package Cassandane::Cyrus::Delete;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use File::Basename;

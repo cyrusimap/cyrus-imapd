@@ -44,7 +44,6 @@ use Cwd qw(abs_path);
 use DateTime;
 use Data::Dumper;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;

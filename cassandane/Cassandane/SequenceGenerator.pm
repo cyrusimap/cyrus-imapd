@@ -41,7 +41,6 @@ package Cassandane::SequenceGenerator;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Generator);
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Address;

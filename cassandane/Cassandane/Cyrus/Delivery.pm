@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use IO::File;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

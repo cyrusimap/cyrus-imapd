@@ -43,7 +43,6 @@ use warnings;
 use Data::Dumper;
 use File::Temp qw(tempfile);
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Config;
 use Cassandane::Util::Log;

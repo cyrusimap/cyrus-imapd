@@ -45,7 +45,6 @@ use warnings;
 use Cwd qw(abs_path);
 use Config::IniFiles;
 
-use lib '.';
 use Cassandane::Util::Log;
 
 my $instance;

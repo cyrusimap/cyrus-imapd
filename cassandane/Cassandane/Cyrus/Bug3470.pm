@@ -43,7 +43,6 @@ use warnings;
 use DateTime;
 use Data::Dumper;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 
 sub new
