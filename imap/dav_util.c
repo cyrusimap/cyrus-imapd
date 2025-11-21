@@ -211,7 +211,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     qdiffs[QUOTA_STORAGE] = ftell(f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "append_commit(%s) failed: %s",
+        syslog(LOG_ERR, "IOERROR: append_commit(%s) failed: %s",
                mailbox_name(mailbox), strerror(errno));
         fclose(f);
         append_removestage(stage);

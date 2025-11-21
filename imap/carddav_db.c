@@ -1264,7 +1264,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     fprintf(f, "%s", buf_cstring(vcard));
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
                mailbox_name(mailbox), strerror(errno));
         fclose(f);
         r = IMAP_IOERROR;

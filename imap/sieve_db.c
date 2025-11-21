@@ -624,7 +624,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         r = IMAP_IOERROR;
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
                mailbox_name(mailbox), error_message(r));
         fclose(f);
         goto done;

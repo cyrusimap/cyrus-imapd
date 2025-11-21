@@ -1064,7 +1064,7 @@ static deliver_data_t *setup_special_delivery(deliver_data_t *mydata,
     while (fgets(buf, sizeof(buf), mydata->m->f)) fputs(buf, md.f);
 
     if (fflush(md.f) || ferror(md.f) || fdatasync(fileno(md.f))) {
-        syslog(LOG_ERR, "setup special delivery failed %s: %s",
+        syslog(LOG_ERR, "IOERROR: setup special delivery failed %s: %s",
                mbname_intname(origmbname), strerror(errno));
         fclose(md.f);
         return NULL;

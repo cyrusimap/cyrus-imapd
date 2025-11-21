@@ -434,7 +434,7 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     if (msglen) fwrite(buf_base(msg), msglen, 1, f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
                mailbox_name(mailbox), strerror(errno));
         fclose(f);
         r = IMAP_IOERROR;

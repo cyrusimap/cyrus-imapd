@@ -1201,7 +1201,7 @@ static int jmap_upload(struct transaction_t *txn)
     fwrite(data, datalen, 1, f);
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
-        syslog(LOG_ERR, "append_setup(%s) failed: %s",
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
                mailbox_name(mailbox), strerror(errno));
         fclose(f);
         r = IMAP_IOERROR;

@@ -396,7 +396,8 @@ static int create_managedattach(struct jmapical_ctx *jmapctx,
     fwrite(buf_base(&getblobctx.blob), buf_len(&getblobctx.blob), 1, fp);
 
     if (fflush(fp) || ferror(fp) || fdatasync(fileno(fp))) {
-        xsyslog(LOG_ERR, "ferror", "fname=<%s>", append_stagefname(stage));
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
+               mailbox_name(jmapctx->attachments.mbox), strerror(errno));
         fclose(fp);
         r = IMAP_IOERROR;
         goto done;
