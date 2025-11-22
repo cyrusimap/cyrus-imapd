@@ -2,7 +2,6 @@ package Cassandane::TestEntity::Factory::Mailbox;
 use Moo;
 
 use lib '.';
-use Cassandane::TestEntity::AutoSetup;
 
 use feature 'state';
 
@@ -42,6 +41,8 @@ sub inbox {
         properties => $res->[1][1]{list}[0],
     })
 }
+
+use Cassandane::TestEntity::AutoSetup;
 
 no Moo;
 1;
