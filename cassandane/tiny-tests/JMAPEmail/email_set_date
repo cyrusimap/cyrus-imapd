@@ -5,7 +5,8 @@ sub test_email_set_date
     :min_version_3_1 :needs_component_sieve
 {
     my ($self) = @_;
-    my $jmap = $self->{jmap};
+    my $user = $self->default_user;
+    my $jmap = $user->jmaptester;
 
     my $store = $self->{store};
     my $talk = $store->get_client();

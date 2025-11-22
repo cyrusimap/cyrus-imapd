@@ -77,8 +77,8 @@ has jmaptester => (
         my $host = $arg{host};
         my $port = $arg{port};
 
-        require JMAP::Tester;
-        my $jtest = JMAP::Tester->new({
+        require Cassandane::JMAPTester;
+        my $jtest = Cassandane::JMAPTester->new({
             api_uri => "http://$host:$port/jmap/",
             default_using => [ qw(
                 urn:ietf:params:jmap:core
