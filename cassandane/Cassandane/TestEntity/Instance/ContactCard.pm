@@ -22,7 +22,7 @@ sub _as_vcard {
 
     my $href = $self->properties->{'cyrusimap.org:href'};
     my $res = $self->user->carddav->Request(
-        'GET', $href, '',
+        'GET', "$href", '',
         Accept => "text/vcard; version=$version",
     );
 
