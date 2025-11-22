@@ -62,6 +62,54 @@ has jmap => (
     }
 );
 
+has jmaptester => (
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my ($self) = @_;
+
+        unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
+            Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+        }
+
+        my %arg = $self->_common_http_service_args->%*;
+
+        my $host = $arg{host};
+        my $port = $arg{port};
+
+        require Cassandane::JMAPTester;
+        my $jtest = Cassandane::JMAPTester->new({
+            api_uri => "http://$host:$port/jmap/",
+            default_using => [ qw(
+                urn:ietf:params:jmap:core
+                urn:ietf:params:jmap:mail
+                urn:ietf:params:jmap:submission
+                urn:ietf:params:jmap:vacationresponse
+                urn:ietf:params:jmap:calendars
+                urn:ietf:params:jmap:contacts
+
+                https://cyrusimap.org/ns/jmap/mail
+                https://cyrusimap.org/ns/jmap/calendars
+                https://cyrusimap.org/ns/jmap/contacts
+
+                https://cyrusimap.org/ns/jmap/performance
+                https://cyrusimap.org/ns/jmap/backup
+                https://cyrusimap.org/ns/jmap/blob
+            ) ],
+        });
+
+        $jtest->ua->set_default_header(
+            'Authorization',
+            q{Basic } .  MIME::Base64::encode_base64(
+                join(q{:}, $self->username, $self->password),
+                q{},
+            )
+        );
+
+        return $jtest;
+    }
+);
+
 has carddav => (
     is => 'ro',
     lazy => 1,

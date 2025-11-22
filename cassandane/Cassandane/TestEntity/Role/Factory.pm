@@ -16,22 +16,17 @@ sub get {
     my ($self, $id) = @_;
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
+    my $jmap = $self->user->jmaptester;
 
-    my ($res) = $jmap->CallMethods([[
-        "$dt/get",
-        { ids => [ "$id" ] },
-        'FactoryGet',
-    ]]);
+    my $res = $jmap->request([
+        [ "$dt/get", { ids => [ "$id" ] }, 'FactoryGet' ]
+    ]);
 
-    unless ($res->[0][0] eq "$dt/get") {
-        Carp::confess("failed to get $dt object with id $id")
-    }
+    my $get = $res->single_sentence("$dt/get");
 
     $self->instance_class->new({
         factory    => $self,
-        properties => $res->[0][1]{list}[0],
+        properties => $get->arguments->{list}[0],
     })
 }
 
@@ -46,26 +41,24 @@ sub create {
 
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
+    my $jmap = $self->user->jmaptester;
 
     $self->fill_in_creation_defaults($prop);
 
-    my ($res) = $jmap->CallMethods([[
+    my $res = $jmap->request([[
         "$dt/set",
         { create => { toCreate => $prop } },
         'FactorySetCreate',
     ]]);
 
-    unless ($res->[0][0] eq "$dt/set") {
-        Carp::confess("failed to complete $dt/set call")
-    }
+    my $set = $res->single_sentence("$dt/set")->as_set;
+    my $id  = $set->created_id('toCreate');
 
-    unless ($res->[0][1]{created}{toCreate}) {
+    unless (defined $id) {
         Carp::confess("failed to create $dt object")
     }
 
-    $self->get($res->[0][1]{created}{toCreate}{id});
+    $self->get($id);
 }
 
 sub _update {
@@ -73,26 +66,19 @@ sub _update {
     my $dt = $self->datatype;
     my $id = $instance->id;
 
-    my $jmap = $self->user->jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
+    my $jmap = $self->user->jmaptester;
 
-    my ($res) = $jmap->CallMethods([[
+    my $res = $jmap->request([[
         "$dt/set",
         { update => { $id => $update } },
         'FactorySetUpdate',
     ]]);
 
-    unless ($res->[0][0] eq "$dt/set") {
-        Carp::confess("failed to complete $dt/set call")
-    }
-
-    if ($res->[0][1]{notUpdated}{$id}) {
-        Carp::confess("failed to update $dt object")
-    }
+    my $set = $res->single_sentence("$dt/set")->as_set->assert_no_errors;
 
     my %newprops = {
         %$update,
-        ( $res->[0][1]{updated}{$id} // {} )->%*,
+        ( $set->arguments->{updated}{$id} // {} )->%*,
     };
 
     $instance->properties->@{ keys %newprops } = values %newprops;
