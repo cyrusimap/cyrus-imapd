@@ -51,7 +51,7 @@ use File::Basename;
 use File::Copy;
 use Cwd qw(abs_path getcwd);
 
-use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 

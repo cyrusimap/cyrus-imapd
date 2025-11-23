@@ -52,7 +52,7 @@ use Cwd qw(abs_path getcwd);
 use URI;
 use URI::Escape;
 
-use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 

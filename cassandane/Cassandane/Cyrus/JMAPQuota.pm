@@ -45,7 +45,7 @@ use JSON::XS;
 use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 
-use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';

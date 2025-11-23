@@ -49,7 +49,7 @@ use Mail::JMAPTalk 0.12;
 use Data::Dumper;
 use Storable 'dclone';
 
-use base qw(Cassandane::Cyrus::TestCase Cassandane::Cyrus::Mixin::QuotaHelper);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';

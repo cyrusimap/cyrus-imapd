@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::Mixin::QuotaHelper;
+package Cassandane::Mixin::QuotaHelper;
 use strict;
 use warnings;
 
