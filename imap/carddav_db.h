@@ -142,6 +142,11 @@ int carddav_getemails(struct carddav_db *carddavdb,
                       const char *vcard_uid, unsigned kind,
                       strarray_t *members, strarray_t **group_uids);
 
+/* Looks up a group by uid, optionally filtered by addressbook mailbox.
+   Allocates and returns an array of its member uids. */
+int carddav_getmembers(struct carddav_db *carddavdb, const mbentry_t *mbentry,
+                       const char *vcard_uid, strarray_t **group_uids);
+
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);
 
