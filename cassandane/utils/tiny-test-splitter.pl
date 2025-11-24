@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-use v5.26.0;
+use v5.28.0;
 use warnings;
 
 use File::Basename qw(fileparse);

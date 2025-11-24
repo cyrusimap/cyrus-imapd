@@ -1,5 +1,5 @@
 package Cassandane::Tiny::Loader;
-use v5.26.0;
+use v5.28.0;
 use warnings;
 
 use Carp ();
