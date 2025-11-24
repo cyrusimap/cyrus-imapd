@@ -1,6 +1,8 @@
-#include <stdlib.h>
 #include "cunit/unit.h"
 #include "parseaddr.h"
+
+#include <stdbool.h>
+#include <stdlib.h>
 
 static void test_single(void)
 {
@@ -763,6 +765,117 @@ static void test_quoted_crlf(void)
     CU_ASSERT_PTR_NULL(a->next);
 
     parseaddr_free(head);
+}
+
+static void dump_addr(const char *msg, const struct address *address)
+{
+    fprintf(stderr, "%s: %sname=<%s> route=<%s> mailbox=<%s> domain=<%s>\n",
+                    msg, address->invalid ? "(INVALID) " : "",
+                    address->name, address->route, address->mailbox,
+                    address->domain);
+}
+
+static void test_xs_singles(void)
+{
+    /* single-address inputs, based on Email::Address::XS tests */
+    static const struct {
+        const char *input;
+        bool expect_invalid;
+        const char *expect_name;
+        const char *expect_route;
+        const char *expect_mailbox;
+        const char *expect_domain;
+    } tests[] = {
+//         { "invalid_line", true, NULL, NULL, NULL, NULL },
+        { "Winston Smith <winston.smith@recdep.minitrue>",
+           false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"Winston Smith\" \"suffix\" suffix2 <winston.smith@recdep.minitrue>",
+          false, "Winston Smith suffix suffix2", NULL,
+          "winston.smith", "recdep.minitrue" },
+        { "winston.smith@recdep.minitrue",
+           false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+        { "<winston.smith@recdep.minitrue>",
+           false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+//         { "\"user@oceania\" : winston.smith@recdep.minitrue",
+//            false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+        { "\"user@oceania\" <winston.smith@recdep.minitrue>",
+          false, "user@oceania", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"User <user@oceania>\" <winston.smith@recdep.minitrue>",
+          false, "User <user@oceania>", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"julia@outer\\\"party\"@ficdep.minitrue",
+          false, NULL, NULL, "julia@outer\"party", "ficdep.minitrue" },
+        { "(leading comment)\"Winston (Smith)\" <winston.smith@recdep.minitrue(.oceania)> (comment after)",
+          false, "Winston (Smith)", NULL, "winston.smith", "recdep.minitrue" },
+        { "Julia (Unknown) <julia(outer party)@ficdep.minitrue> (additional comment)",
+          false, "Julia", NULL, "julia", "ficdep.minitrue" },
+        { "Winston Smith( <user@oceania>, Julia) <winston.smith@recdep.minitrue>",
+          false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"Winston Smith\" ( <user@oceania>, (Julia) <julia(outer(.)party)@ficdep.minitrue>, ) <winston.smith@recdep.minitrue>",
+          false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+//         { "Winston Smith <winston   .smith  @  recdep(comment).      minitrue>",
+//           false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+        { "\302\257\302\257`\302\267.\302\245\302\253P\302\256\303\216\303\221\303\247\342\202\254\303\230fTh\342\202\254\303\220\303\205\302\256K\302\273\302\245.\302\267`\302\257\302\257 <email@example.com>",
+          false, "\302\257\302\257`\302\267.\302\245\302\253P\302\256\303\216\303\221\303\247\342\202\254\303\230fTh\342\202\254\303\220\303\205\302\256K\302\273\302\245.\302\267`\302\257\302\257",
+          NULL, "email", "example.com" },
+        { "\"(> \\\" \\\" <)                              ( ='o'= )                              (\\\")___(\\\")  sWeEtAnGeLtHePrInCeSsOfThEsKy\" <email2@example.com>",
+          false, "(> \" \" <)                              ( =\'o\'= )                              (\")___(\")  sWeEtAnGeLtHePrInCeSsOfThEsKy",
+          NULL, "email2", "example.com" },
+        { "\"(i)cRiStIaN(i)\" <email3@example.com>",
+          false, "(i)cRiStIaN(i)", NULL, "email3", "example.com" },
+        { "\"(S)MaNu_vuOLeAmMazZaReNimOe(*)MiAo(@)\" <email4@example.com>\n",
+          false, "(S)MaNu_vuOLeAmMazZaReNimOe(*)MiAo(@)",
+          NULL, "email4", "example.com" },
+        { "aaaa@", false, NULL, NULL, "aaaa", "unspecified-domain" },
+//         { "a(aa", true, NULL, NULL, NULL, NULL },
+        { "O\'Brien <o\'brien@thought.police.oceania>",
+          false, "O'Brien", NULL, "o'brien", "thought.police.oceania" },
+        { "\"Mr. Charrington\" <\"charrington\\\"@\\\"shop\"@thought.police.oceania>",
+          false, "Mr. Charrington", NULL,
+          "charrington\"@\"shop", "thought.police.oceania" },
+        { "\"Escape \\\" also , characters ;\" <user2@oceania>",
+          false, "Escape \" also , characters ;", NULL, "user2", "oceania" },
+        { "\"user5@oceania\\\" <user6@oceania> , \\\"\" <user4@oceania>",
+          false, "user5@oceania\" <user6@oceania> , \"",
+          NULL, "user4", "oceania" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct address *actual = NULL;
+
+        parseaddr_list(tests[i].input, &actual);
+
+        dump_addr(tests[i].input, actual);
+
+        /* better have found exactly one address */
+        CU_ASSERT_PTR_NOT_NULL(actual);
+        CU_ASSERT_PTR_NULL(actual->next);
+
+        CU_ASSERT_EQUAL(actual->invalid, tests[i].expect_invalid);
+
+        if (tests[i].expect_name)
+            CU_ASSERT_STRING_EQUAL(actual->name, tests[i].expect_name);
+        else
+            CU_ASSERT_PTR_NULL(actual->name);
+
+        if (tests[i].expect_route)
+            CU_ASSERT_STRING_EQUAL(actual->route, tests[i].expect_route);
+        else
+            CU_ASSERT_PTR_NULL(actual->route);
+
+        if (tests[i].expect_mailbox)
+            CU_ASSERT_STRING_EQUAL(actual->mailbox, tests[i].expect_mailbox);
+        else
+            CU_ASSERT_PTR_NULL(actual->mailbox);
+
+        if (tests[i].expect_domain)
+            CU_ASSERT_STRING_EQUAL(actual->domain, tests[i].expect_domain);
+        else
+            CU_ASSERT_STRING_EQUAL(actual->domain, "unspecified-domain");
+
+        parseaddr_free(actual);
+    }
 }
 
 /* vim: set ft=c: */
