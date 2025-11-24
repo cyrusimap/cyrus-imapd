@@ -82,6 +82,31 @@ package Cassandane::TestEntity::Instance::ContactCard {
         $self->_as_vcard('4.0');
     }
 
+    sub _as_vcard_struct {
+        my ($self, $version) = @_;
+        my $vcard = $self->_as_vcard($version);
+
+        require Text::VCardFast;
+        my $struct = Text::VCardFast::vcard2hash($vcard);
+
+        $struct || Carp::confess("can't parse $vcard");
+
+        $struct->{objects}->@* == 1
+          || Carp::confess("didn't get exactly one object when parsing vcard");
+
+        return $struct->{objects}[0];
+    }
+
+    sub as_vcard3_struct {
+        my ($self) = @_;
+        $self->_as_vcard_struct('3.0');
+    }
+
+    sub as_vcard4_struct {
+        my ($self) = @_;
+        $self->_as_vcard_struct('4.0');
+    }
+
     sub add_member {
         my ($self, $card_or_uid) = @_;
 

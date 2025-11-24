@@ -26,18 +26,31 @@ sub test_card_set_create_basic
 
     $self->assert_not_null($card->id);
 
-    my $vcard = $card->as_vcard4;
-
-    $vcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
-    $name =~ s/,/\\\\,/gs;        # escape commas
+    my $vcard = $card->as_vcard4_struct;
 
     $created = $now->strftime('%Y%m%dT%H%M%SZ'); # vCard doesn't use separators
 
-    $self->assert_matches(qr/VERSION:4.0/, $vcard);
-    $self->assert_matches(qr/KIND:INDIVIDUAL/, $vcard);
-    $self->assert_matches(qr/UID;VALUE=TEXT:$uid/, $vcard);
-    $self->assert_matches(qr/PRODID:$prodid/, $vcard);
-    $self->assert_matches(qr/CREATED:$created/, $vcard);
-    $self->assert_matches(qr/FN:$name/, $vcard);
-    $self->assert_does_not_match(qr|JSPROP|, $vcard);
+    my sub prop {
+        my ($v, $p) = @_;
+        return [
+            superhashof({
+                value => $v,
+                ($p ? (params => superhashof($p)) : ())
+            }),
+        ];
+    }
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            properties => superhashof({
+                created => prop($created),
+                fn      => prop($name),
+                kind    => prop('INDIVIDUAL'),
+                prodid  => prop($prodid),
+                uid     => prop($uid, { value => [ 'TEXT' ] }),
+                version => prop('4.0'),
+            })
+        }),
+        $vcard,
+    );
 }
