@@ -9720,9 +9720,10 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
 {
     json_t *comps = json_object_get(obj, "components");
 
-    if (!comps) return NULL;
-
-    if (!json_array_size(comps)) {
+    if (!comps) {
+        if (args->num_comps != VCARD_NUM_ADR_FIELDS) return NULL;
+    }
+    else if (!json_array_size(comps)) {
         jmap_parser_invalid(parser, "components");
         return 0;
     }

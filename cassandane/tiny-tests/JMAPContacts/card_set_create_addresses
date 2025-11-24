@@ -109,6 +109,9 @@ sub test_card_set_create_addresses
                             ],
                             countryCode => 'US',
                             timeZone => 'America/New_York'    
+                        },
+                        k25 => {
+                            full => "13579 Birch St\nReston\nVA\n20190\nUSA"
                         }
                     }
                 }
@@ -128,6 +131,7 @@ sub test_card_set_create_addresses
 
     $self->assert_matches(qr/ADR;JSCOMPS="s,\^n;10;s, ;11;3;s,\\, ;4;5;6";PROP-ID=k23;TYPE=WORK;CC=US;LABEL=54321 Oak St\^nReston\^nVA\^n20190\^nUSA:;;54321,Oak St;Reston;VA;20190;USA;;;;54321;Oak St;;;;;;/, $card);
     $self->assert_matches(qr/ADR;PROP-ID=k24;TYPE=HOME;TZ=America\/New_York;CC=US;LABEL=12345 Elm St\^nReston\^nVA\^n20190\^nUSA:;;12345,Elm St;Reston;VA;20190;USA;;;;12345;Elm St;;;;;;/, $card);
+    $self->assert_matches(qr/ADR;PROP-ID=k25;LABEL=13579 Birch St\^nReston\^nVA\^n20190\^nUSA:;;;;;;;;;;;;;;;;/, $card);
     $self->assert_matches(qr/CREATED:/, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
 }
