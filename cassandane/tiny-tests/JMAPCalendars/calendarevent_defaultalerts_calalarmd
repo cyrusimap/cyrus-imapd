@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_defaultalerts_calalarmd
     :min_version_3_9 :needs_component_calalarmd
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
     my $now = DateTime->now();
@@ -227,10 +226,8 @@ EOF
     $self->assert_alarms();
 }
 
-sub _can_match_a {
-    my $event = shift;
-    my $want = shift;
-
+sub _can_match_a ($event, $want)
+{
     # I wrote a really good one of these for Caldav, but this will do for now
     foreach my $key (keys %$want) {
         return 0 if not exists $event->{$key};
@@ -241,9 +238,8 @@ sub _can_match_a {
 }
 
 
-sub assert_alarms {
-    my $self = shift;
-    my @want = @_;
+sub assert_alarms ($self, @want)
+{
     # pick first calendar alarm from notifications
     my $data = $self->{instance}->getnotify();
     if ($self->{replica}) {

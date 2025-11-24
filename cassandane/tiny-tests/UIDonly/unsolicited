@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_unsolicited
     :min_version_3_9 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Deliver some messages";
     my $msg = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg);

@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_get_bodypart_type_invalid
+sub test_email_get_bodypart_type_invalid ($self)
 {
-    my ($self) = @_;
     my $jmap   = $self->{jmap};
     my $imap   = $self->{store}->get_client();
 

@@ -1,5 +1,5 @@
 package Cassandane::TestEntity::AutoSetup;
-use v5.20.0;
+use v5.28.0;
 use warnings;
 
 use Carp ();

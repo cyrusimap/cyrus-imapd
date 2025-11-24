@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_subject_and_body_match
     :min_version_3_0 :needs_dependency_cld2
+    ($self)
 {
-    my ($self) = @_;
-
     $self->make_message('fwd subject', body => 'a schenectady body');
 
     $self->{instance}->run_command({cyrus => 1}, 'squatter');

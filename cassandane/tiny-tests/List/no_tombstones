@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_no_tombstones
     :UnixHierarchySep :AltNamespace :ReverseACLs
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->setup_mailbox_structure($imaptalk, [

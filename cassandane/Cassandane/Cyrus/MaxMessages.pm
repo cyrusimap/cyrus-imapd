@@ -38,9 +38,8 @@
 #
 
 package Cassandane::Cyrus::MaxMessages;
-use strict;
+use v5.28.0;
 use warnings;
-use v5.10;
 use Data::Dumper;
 use Net::DAVTalk 0.14;
 use Net::CardDAVTalk 0.05;

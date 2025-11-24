@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_delete_default_addressbook
     :min_version_3_6
+    ($self)
 {
-    my ($self) = @_;
-
     my $CardDAV = $self->{carddav};
 
     my %Headers = (

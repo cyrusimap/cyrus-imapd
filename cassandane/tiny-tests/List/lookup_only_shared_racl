@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lookup_only_shared_racl
     :UnixHierarchySep :AltNamespace :ReverseACLs
+    ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create('shared');
     $self->assert_str_equals('ok',

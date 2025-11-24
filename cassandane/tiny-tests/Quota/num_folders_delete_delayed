@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_num_folders_delete_delayed
     :DelayedDelete
+    ($self)
 {
-    my ($self) = @_;
     $self->set_quotaroot('user.cassandane');
     $self->set_quotalimits(storage => 12345, $self->res_mailbox => 500);
 

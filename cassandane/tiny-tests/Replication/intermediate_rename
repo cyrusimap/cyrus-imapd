@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_intermediate_rename
     :AllowMoves :Replication :SyncLog :DelayedDelete :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
-
     my $mtalk = $self->{master_store}->get_client();
 
     $mtalk->create('INBOX.a.b');

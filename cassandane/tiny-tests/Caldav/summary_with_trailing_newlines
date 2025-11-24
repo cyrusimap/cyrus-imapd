@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_summary_with_trailing_newlines
     :MagicPlus :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

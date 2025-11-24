@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_restore_calendars_scheduling
+sub test_restore_calendars_scheduling ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog "create calendars";

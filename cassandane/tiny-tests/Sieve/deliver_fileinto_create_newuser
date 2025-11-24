@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_deliver_fileinto_create_newuser
     :min_version_3_0 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     # sieve script should not be able to create a new user
     my $target = "user.other";
 

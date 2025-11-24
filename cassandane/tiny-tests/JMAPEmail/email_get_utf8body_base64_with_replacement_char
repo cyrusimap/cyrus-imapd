@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_get_utf8body_base64_with_replacement_char
     :min_version_3_5 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 

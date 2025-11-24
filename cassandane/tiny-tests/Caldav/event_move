@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_event_move
+sub test_event_move ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

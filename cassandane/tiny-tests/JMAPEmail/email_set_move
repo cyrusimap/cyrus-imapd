@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_set_move
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};
@@ -41,9 +41,7 @@ sub test_email_set_move
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
 
-    local *assert_move = sub {
-        my ($moveto) = (@_);
-
+    local *assert_move = sub ($moveto) {
         xlog $self, "move email to " . Dumper($moveto);
         $res = $jmap->CallMethods(
             [ [ 'Email/set', {

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_imap_plusdav
     :MagicPlus :VirtDomains :min_version_3_0 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'magicplus'});

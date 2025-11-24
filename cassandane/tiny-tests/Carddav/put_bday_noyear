@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_put_bday_noyear
     :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
     $self->assert_not_null($Id);

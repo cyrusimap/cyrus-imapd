@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_github_issue_complex_variables
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Install a sieve script with complex variable work";
     $self->{instance}->install_sieve_script(<<'EOF');
 require ["fileinto", "reject", "vacation", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];

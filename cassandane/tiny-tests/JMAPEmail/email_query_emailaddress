@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_query_emailaddress
     :NoMunge8Bit :RFC2047_UTF8
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 

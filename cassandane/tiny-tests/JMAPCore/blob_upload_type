@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_blob_upload_type
     :min_version_3_7 :JMAPExtensions
+    ($self)
 {
-    my $self = shift;
     my $jmap = $self->{jmap};
 
     xlog "Assert client-supplied type is returned";

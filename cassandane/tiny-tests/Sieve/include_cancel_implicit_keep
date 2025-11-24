@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_include_cancel_implicit_keep
+sub test_include_cancel_implicit_keep ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Install a script which includes another";
     $self->{instance}->install_sieve_script(<<EOF
 require ["include"];

@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # this test is too tricky to get working on uuid mailboxes
 sub test_replication_mailbox_too_old
     :max_version_3_4
+    ($self)
 {
-    my ($self) = @_;
-
     my $user = 'cassandane';
     my $exit_code;
 
@@ -26,7 +25,7 @@ sub test_replication_mailbox_too_old
     $self->run_replication(
         user => $user,
         handlers => {
-            exited_abnormally => sub { (undef, $exit_code) = @_; },
+            exited_abnormally => sub ($, $exit_code) { },
         },
         redirects => { stderr => $log_firstreject },
     );
@@ -43,7 +42,7 @@ sub test_replication_mailbox_too_old
     $self->run_replication(
         user => $user,
         handlers => {
-            exited_abnormally => sub { (undef, $exit_code) = @_; },
+            exited_abnormally => sub ($, $exit_code) { },
         },
         redirects => { stderr => $log_localreject },
     );
@@ -60,7 +59,7 @@ sub test_replication_mailbox_too_old
     $self->run_replication(
         user => $user,
         handlers => {
-            exited_abnormally => sub { (undef, $exit_code) = @_; },
+            exited_abnormally => sub ($, $exit_code) { },
         },
         redirects => { stderr => $log_remotereject },
     );
@@ -75,7 +74,7 @@ sub test_replication_mailbox_too_old
     $self->run_replication(
         user => $user,
         handlers => {
-            exited_abnormally => sub { (undef, $exit_code) = @_; },
+            exited_abnormally => sub ($, $exit_code) { },
         },
     );
     $self->assert_equals(0, $exit_code);

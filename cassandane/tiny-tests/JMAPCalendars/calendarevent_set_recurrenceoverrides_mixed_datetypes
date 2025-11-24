@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my ($id, $ical) = $self->icalfile('recurrenceoverrides-mixed-datetypes');

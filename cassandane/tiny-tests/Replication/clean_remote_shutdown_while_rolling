@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_clean_remote_shutdown_while_rolling
     :CSyncReplication :SyncLog :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
-
     my $mtalk = $self->{master_store}->get_client();
 
     $mtalk->create('INBOX.a.b');
@@ -18,8 +17,7 @@ sub test_clean_remote_shutdown_while_rolling
             cyrus => 1,
             background => 1,
             handlers => {
-                exited_abnormally => sub {
-                    my ($child, $code) = @_;
+                exited_abnormally => sub ($child, $code) {
                     xlog "child process $child->{binary}\[$child->{pid}\]"
                         . " exited with code $code";
                     return $code;

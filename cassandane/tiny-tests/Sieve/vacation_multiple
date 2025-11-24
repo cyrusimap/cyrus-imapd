@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_vacation_multiple
     :min_version_3_1
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
-
     # can't do anything without captured syslog
     if (!$self->{instance}->{have_syslog_replacement}) {
         xlog $self, "can't examine syslog, test is useless";

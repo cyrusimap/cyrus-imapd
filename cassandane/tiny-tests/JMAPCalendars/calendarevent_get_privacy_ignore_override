@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_privacy_ignore_override
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 

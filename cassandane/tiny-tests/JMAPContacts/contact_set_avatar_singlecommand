@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_contact_set_avatar_singlecommand
     :min_version_3_3 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     my $contact = {

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sched_busytime_query
     :min_version_3_4 :NoVirtDomains
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $admintalk = $self->{adminstore}->get_client();

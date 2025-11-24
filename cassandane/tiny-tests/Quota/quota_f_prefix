@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_quota_f_prefix
+sub test_quota_f_prefix ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing prefix matches with quota -f [IRIS-1029]";
 
     my $admintalk = $self->{adminstore}->get_client();

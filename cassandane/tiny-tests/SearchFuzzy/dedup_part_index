@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_dedup_part_index
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
-
     my $xapdirs = ($self->{instance}->run_mbpath(-u => 'cassandane'))->{xapian};
 
     $self->make_message('msgA', body => 'part1') || die;

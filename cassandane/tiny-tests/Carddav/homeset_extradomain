@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_homeset_extradomain
     :ReverseACLs :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     my $service = $self->{instance}->get_service("http");
     my $talk = Net::CardDAVTalk->new(
         user => 'cassandane%extradomain.com',

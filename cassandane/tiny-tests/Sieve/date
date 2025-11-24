@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_date
+sub test_date ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["date", "variables", "imap4flags", "regex", "relational"];
 

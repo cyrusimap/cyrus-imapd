@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_comment
+sub test_comment ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing /shared/comment";
 
     my $imaptalk = $self->{store}->get_client();

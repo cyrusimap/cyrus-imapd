@@ -5,9 +5,8 @@ sub test_vacation_with_long_encoded_origsubject
     :min_version_3_1
     :NoAltNameSpace
     :want_smtpdaemon
+    ($self)
 {
-    my ($self) = @_;
-
     my $target = 'INBOX.Sent';
 
     xlog $self, "Install a sieve script with vacation action that uses :fcc";

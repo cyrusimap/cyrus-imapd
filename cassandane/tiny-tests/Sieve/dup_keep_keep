@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_dup_keep_keep
+sub test_dup_keep_keep ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing duplicate suppression between 'keep' & 'keep'";
 
     $self->{instance}->install_sieve_script(<<EOF

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_folder_delete_mboxm_dmimm
     :ImmediateDelete
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test that per-mailbox GETMETADATA annotations are";
     xlog $self, "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_using_message
+sub test_using_message ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test increasing usage of the MESSAGE quota resource as messages are added";
 
     $self->set_quotaroot('user.cassandane');

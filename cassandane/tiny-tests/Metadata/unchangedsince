@@ -20,10 +20,8 @@ use Cassandane::Tiny;
 #       - returns an OK response
 #       - but reports the UID in the MODIFIED response code
 #
-sub test_unchangedsince
+sub test_unchangedsince ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());
@@ -46,10 +44,8 @@ sub test_unchangedsince
     my $modified;
     my %handlers =
     (
-        fetch => sub
+        fetch => sub ($response, $rr, $id)
         {
-            my ($response, $rr, $id) = @_;
-
             # older versions of Mail::IMAPTalk don't have
             # the 3rd argument.  We can't test properly in
             # those circumstances.
@@ -57,9 +53,8 @@ sub test_unchangedsince
 
             $fetched{$id} = $rr;
         },
-        modified => sub
+        modified => sub ($response, $rr)
         {
-            my ($response, $rr) = @_;
             # we should not get more than one of these ever
             $self->assert_null($modified);
             $modified = $rr;

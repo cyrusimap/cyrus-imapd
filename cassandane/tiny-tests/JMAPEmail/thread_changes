@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_thread_changes
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
     my $jmap = $self->{jmap};
     my $res;

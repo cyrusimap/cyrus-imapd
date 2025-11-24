@@ -4,8 +4,8 @@ use Test::Deep ':v1';
 
 sub test_dblookup_uid2emails
     :JMAPExtensions :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
     my $admin = $self->{adminstore}->get_client();

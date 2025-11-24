@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_uniqueid
     :ImmediateDelete
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing /shared/vendor/cmu/cyrus-imapd/uniqueid";
 
     my $imaptalk = $self->{store}->get_client();

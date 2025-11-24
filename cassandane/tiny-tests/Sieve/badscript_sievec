@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_badscript_sievec
+sub test_badscript_sievec ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing sieve script compile failures, via sievec";
     $self->{compile_method} = 'sievec';
     $self->badscript_common();

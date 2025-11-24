@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_changes_add
+sub test_changes_add ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

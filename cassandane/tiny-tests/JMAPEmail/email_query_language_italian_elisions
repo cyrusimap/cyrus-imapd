@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_query_language_italian_elisions
     :JMAPExtensions :SearchLanguage :needs_dependency_cld2
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
 use utf8;

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_organizermailto
     :min_version_3_4
+    ($self)
 {
-    my ($self) = @_;
-
     my ($id, $ical) = $self->icalfile('organizermailto');
 
     my $event = $self->putandget_vevent($id, $ical);

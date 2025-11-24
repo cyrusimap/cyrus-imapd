@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_permessage_getset
+sub test_permessage_getset ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing getting and setting message scope annotations";
 
     my $talk = $self->{store}->get_client();

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_deleted_storage
+sub test_deleted_storage ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test DELETED and DELETED-STORAGE STATUS items";
     $self->set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";

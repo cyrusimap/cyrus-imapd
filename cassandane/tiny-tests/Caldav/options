@@ -1,13 +1,11 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_options {
-    my ($self) = @_;
-
+sub test_options ($self)
+{
     my $caldav = $self->{caldav};
 
-    my $get_options = sub {
-        my ($url) = shift;
+    my $get_options = sub ($url) {
         my $res = $caldav->ua()->request(
             'OPTIONS',
             $caldav->request_url($url),

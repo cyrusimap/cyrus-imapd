@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_get_relatedto
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     my ($id, $ical) = $self->icalfile('relatedto');
 
     my $event = $self->putandget_vevent($id, $ical);

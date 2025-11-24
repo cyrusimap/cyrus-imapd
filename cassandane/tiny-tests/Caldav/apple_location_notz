@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_apple_location_notz
+sub test_apple_location_notz ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

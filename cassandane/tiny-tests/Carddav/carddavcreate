@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_carddavcreate
+sub test_carddavcreate ($self)
 {
-    my ($self) = @_;
-
     my $CardDAV = $self->{carddav};
 
     my $Id = $CardDAV->NewAddressBook('foo');

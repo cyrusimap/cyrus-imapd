@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_subscriptions_unixhs
     :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
-
     my $user = 'brand.new';
     $self->{instance}->create_user($user);
 

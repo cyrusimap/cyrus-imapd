@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_reschedule_exception
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     # XXX disable this test until calalarmd is fixed
     return;
 

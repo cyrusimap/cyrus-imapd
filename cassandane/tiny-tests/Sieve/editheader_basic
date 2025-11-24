@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_editheader_basic
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     my $target = "INBOX.target";
 
     xlog $self, "Install a sieve script with editheader actions";

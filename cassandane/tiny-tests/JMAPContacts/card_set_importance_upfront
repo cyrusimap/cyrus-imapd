@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_card_set_importance_upfront
     :min_version_3_1 :needs_dependency_icalvcard
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog $self, "create with importance in initial create";

@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test renames
 #
-sub test_quotarename
+sub test_quotarename ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
     my $talk = $self->{store}->get_client();
 

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_too_many_createdids
+sub test_too_many_createdids ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog "Test too many createdIds";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_permessage_unknown_allowed
     :AnnotationAllowUndefined
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "testing getting and setting unknown annotations on a message";
     xlog $self, "with config allowing this";
 

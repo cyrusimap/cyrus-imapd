@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_schedule_reply_custom_tz
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 

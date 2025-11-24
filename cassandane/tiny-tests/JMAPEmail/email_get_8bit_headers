@@ -4,8 +4,8 @@ use Cassandane::Tiny;
 sub test_email_get_8bit_headers
     :min_version_3_1 :needs_dependency_chardet
     :needs_component_sieve :NoMunge8Bit :RFC2047_UTF8
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 

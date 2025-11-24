@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email_query_seen_ignore_jmapupload_folder
     :min_version_3_7 :JMAPExtensions :MagicPlus :AllowDeleted
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog 'Upload some blob to create upload folder';

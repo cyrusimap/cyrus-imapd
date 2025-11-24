@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_request_too_large
+sub test_request_too_large ($self)
 {
-    my $self = shift;
     my $jmap = $self->{jmap};
 
     xlog "Assert Problem Details report";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_subject_isutf8
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Generate and index test messages.";
     # that's: "nuff réunion critères duff"
     my $subject = "=?utf-8?q?nuff_r=C3=A9union_crit=C3=A8res_duff?=";

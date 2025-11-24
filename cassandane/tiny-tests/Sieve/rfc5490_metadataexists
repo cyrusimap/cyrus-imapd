@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rfc5490_metadataexists
     :min_version_3_0 :AnnotationAllowUndefined
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing the \"metadataexists\" test";
 
     my $talk = $self->{store}->get_client();

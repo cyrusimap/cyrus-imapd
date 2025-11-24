@@ -5,8 +5,8 @@ use Data::ICal;
 
 sub test_admin_migrate39_defaultalerts
     :min_version_3_9 :ReverseACLs :MagicPlus
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
@@ -58,10 +58,8 @@ sub test_admin_migrate39_defaultalerts
     $self->assert_shared_calendars($state);
 }
 
-sub assert_calendars
+sub assert_calendars ($self, $state)
 {
-    my ($self, $state) = @_;
-
     my $caldav = $self->{caldav};
     my $imap = $self->{store}->get_client();
     my $jmap = $self->{jmap};
@@ -152,10 +150,8 @@ EOF
     }
 }
 
-sub assert_events
+sub assert_events ($self, $state)
 {
-    my ($self, $state) = @_;
-
     my $caldav = $self->{caldav};
     my $jmap = $self->{jmap};
 
@@ -242,9 +238,8 @@ sub assert_events
     }
 }
 
-sub assert_shared_calendars
+sub assert_shared_calendars ($self, $state)
 {
-    my ($self, $state) = @_;
 
     my $eventUidA1 = '40d6fe3c-6a51-489e-823e-3ea22f427a3e';
     my $eventUidA2 = '00a90af9-8398-4074-94bf-6251a1ab9e70';
@@ -410,9 +405,8 @@ EOF
 
 # All the remaining functions just make the test code less gnarly
 
-sub get_vevent
+sub get_vevent ($self, $caldav, $eventHref)
 {
-    my ($self, $caldav, $eventHref) = @_;
 
     xlog $self, "GET event";
     my %headers = (
@@ -432,9 +426,8 @@ sub get_vevent
     return ($vevent, $res->{headers}{etag});
 }
 
-sub get_jmap_defaultalerts_annotation
+sub get_jmap_defaultalerts_annotation ($self, $calendarId)
 {
-    my ($self, $calendarId) = @_;
     my $imap = $self->{store}->get_client();
 
     my $mboxname = '#calendars';
@@ -446,9 +439,8 @@ sub get_jmap_defaultalerts_annotation
         '/private/vendor/cmu/cyrus-jmap/defaultalerts'};
 }
 
-sub get_caldav_datetime_annotation
+sub get_caldav_datetime_annotation ($self, $calendarId)
 {
-    my ($self, $calendarId) = @_;
     my $imap = $self->{store}->get_client();
 
     my $mboxname = '#calendars';
@@ -461,9 +453,8 @@ sub get_caldav_datetime_annotation
 }
 
 
-sub create_legacy_calendar
+sub create_legacy_calendar ($self, $name)
 {
-    my ($self, $name) = @_;
     my $caldav = $self->{caldav};
     my $plusstore = $self->{instance}->get_service('imap'
         )->create_store(username => 'cassandane+dav');
@@ -481,9 +472,8 @@ sub create_legacy_calendar
     return $calendarId;
 }
 
-sub set_caldav_datetime_alarms
+sub set_caldav_datetime_alarms ($self, $calendarId, $valarms)
 {
-    my ($self, $calendarId, $valarms) = @_;
     my $plusstore = $self->{instance}->get_service('imap'
         )->create_store(username => 'cassandane+dav');
     my $imap = $plusstore->get_client();

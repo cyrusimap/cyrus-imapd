@@ -4,9 +4,8 @@ use Test::Deep ':v1';
 
 sub test_note_set
     :JMAPExtensions :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $jmap = $self->{jmap};
 
     xlog "create note with body but without isHTML";

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sieve_test
     :min_version_3_3 :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     my $script = <<EOF;
 require ["fileinto", "imap4flags", "copy", "variables", "mailbox", "mailboxid", "special-use"];
 if header "subject" "Memo" {

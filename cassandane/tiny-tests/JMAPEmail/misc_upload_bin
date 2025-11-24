@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_misc_upload_bin
     :min_version_3_1 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog $self, "create drafts mailbox";

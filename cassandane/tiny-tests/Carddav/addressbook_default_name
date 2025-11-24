@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_addressbook_default_name
+sub test_addressbook_default_name ($self)
 {
-    my ($self) = @_;
-
     my $carddav = $self->{carddav};
 
     xlog $self, 'PROPFIND default displayname';

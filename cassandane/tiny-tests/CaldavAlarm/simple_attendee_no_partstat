@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_simple_attendee_no_partstat
     :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     my $CalDAV = $self->{caldav};
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_cardgroup_set_add_remove_add
     :needs_dependency_icalvcard :MailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $service = $self->{instance}->get_service("http");

@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_put_control_char
     :min_version_3_9 :needs_ical_ctrl :MagicPlus
+    ($self)
 {
-    my ($self) = @_;
     my $caldav = $self->{caldav};
 
     # Assert that CONTROL chars are omitted when reading

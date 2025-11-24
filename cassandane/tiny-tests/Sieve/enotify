@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_enotify
     :min_version_3_2
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["enotify"];
 
