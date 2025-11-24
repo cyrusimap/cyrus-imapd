@@ -10,7 +10,7 @@ sub test_email_query_number
     my $mime = <<'EOF';
 From: from@example.com
 To: to@example.com
-Subject: test
+Subject: test 9876
 Date: Mon, 13 Apr 2020 15:34:03 +0200
 MIME-Version: 1.0
 Content-Type: text/plain
@@ -24,43 +24,48 @@ EOF
     $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-Z');
 
     my %testCases = (
-        '1,234.56' => 1,
-        '1.234,56' => 1,
-        '1234.56'  => 1,
-        '1234,56'  => 1,
-        '1234.*'  => 1,
-        '1234,*'  => 1,
-        '1,234.*'  => 1,
-        '1.234,*'  => 1,
-        '1234.5*'  => 1,
-        '1234,5*'  => 1,
-        '1,234.5*'  => 1,
-        '1.234,5*'  => 1,
-        '1,234*'   => 1,
-        '1.234*'   => 1,
-        ' 1234.56'  => 1,
-        ' 1234,56 '  => 1,
-        '1234,56 '  => 1,
-        '1,234'    => 0,
-        '1.234'    => 0,
-        '1,234,*'  => 0,
-        '1,23,4.*' => 0,
-        '1,234,567.89' => 0,
-        '1.234.567,89' => 0,
-        '1,234,56' => 0,
-        '1.234.56' => 0,
+        '1,234.56' => { wantMatch => 1, criteria => 'body' },
+        '1.234,56' => { wantMatch => 1, criteria => 'body' },
+        '1234.56'  => { wantMatch => 1, criteria => 'body' },
+        '1234,56'  => { wantMatch => 1, criteria => 'body' },
+        '1234.*'  => { wantMatch => 1, criteria => 'body' },
+        '1234,*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234.*'  => { wantMatch => 1, criteria => 'body' },
+        '1.234,*'  => { wantMatch => 1, criteria => 'body' },
+        '1234.5*'  => { wantMatch => 1, criteria => 'body' },
+        '1234,5*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234.5*'  => { wantMatch => 1, criteria => 'body' },
+        '1.234,5*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234*'   => { wantMatch => 1, criteria => 'body' },
+        '1.234*'   => { wantMatch => 1, criteria => 'body' },
+        ' 1234.56'  => { wantMatch => 1, criteria => 'body' },
+        ' 1234,56 '  => { wantMatch => 1, criteria => 'body' },
+        '1234,56 '  => { wantMatch => 1, criteria => 'body' },
+        '1,234'    => { wantMatch => 0, criteria => 'body' },
+        '1.234'    => { wantMatch => 0, criteria => 'body' },
+        '1,234,*'  => { wantMatch => 0, criteria => 'body' },
+        '1,23,4.*' => { wantMatch => 0, criteria => 'body' },
+        '1,234,567.89' => { wantMatch => 0, criteria => 'body' },
+        '1.234.567,89' => { wantMatch => 0, criteria => 'body' },
+        '1,234,56' => { wantMatch => 0, criteria => 'body' },
+        '1.234.56' => { wantMatch => 0, criteria => 'body' },
+        '9876' => { wantMatch => 1, criteria => 'text' },
     );
 
     foreach my $term (sort keys %testCases) {
+        my $tc = $testCases{$term};
+
         my $res = $jmap->CallMethods([
             [ 'Email/query', {
                 filter => {
-                    body => $term,
+                    $tc->{criteria} => $term,
                 },
             }, 'R1'],
             [ 'SearchSnippet/get', {
-                filter => {
-                    body => $term,
+                '#filter' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/filter',
                 },
                 '#emailIds' => {
                     resultOf => 'R1',
@@ -69,10 +74,9 @@ EOF
                 },
             }, 'R2'],
         ]);
-        my $wantMatch = $testCases{$term};
-        $self->assert_num_equals($wantMatch, scalar @{$res->[0][1]{ids}});
+        $self->assert_num_equals($tc->{wantMatch}, scalar @{$res->[0][1]{ids}});
 
-        if ($wantMatch) {
+        if ($tc->{wantMatch} && $tc->{criteria} eq 'body') {
             $self->assert_str_equals(
                 'The total amount is $<mark>1,234.56</mark> USD.',
                 $res->[1][1]{list}[0]{preview});
