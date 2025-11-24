@@ -8,13 +8,13 @@ sub test_quota_f
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic usage quota";
-    $self->_set_quotalimits(
+    $self->set_quotalimits(
         quotaroot => 'user.cassandane',
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 10000,
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.cassandane',
         storage => 0,
         message => 0,
@@ -23,7 +23,7 @@ sub test_quota_f
 
     xlog $self, "create some messages to use various quota resources";
     $self->{instance}->create_user("quotafuser");
-    $self->_set_quotalimits(
+    $self->set_quotalimits(
         quotaroot => 'user.quotafuser',
         storage => 100000,
         message => 50000,
@@ -55,13 +55,13 @@ sub test_quota_f
     $admintalk->setmetadata('user.cassandane', '/private/comment', { Quote => $annotation });
 
     xlog $self, "check usages";
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
         message => $quotafuser_expected_message,
         $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.cassandane',
         storage => int($cassandane_expected_storage/1024),
         message => $cassandane_expected_message,
@@ -69,16 +69,16 @@ sub test_quota_f
     );
 
     xlog $self, "create a bogus quota file";
-    $self->_zap_quota(quotaroot => 'user.quotafuser');
+    $self->zap_quota(quotaroot => 'user.quotafuser');
 
     xlog $self, "check usages";
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.quotafuser',
         storage => 0,
         message => 0,
         $self->res_annot_storage => 0,
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.cassandane',
         storage => int($cassandane_expected_storage/1024),
         message => $cassandane_expected_message,
@@ -89,13 +89,13 @@ sub test_quota_f
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "check usages";
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
         message => $quotafuser_expected_message,
         $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.cassandane',
         storage => int($cassandane_expected_storage/1024),
         message => $cassandane_expected_message,
@@ -106,13 +106,13 @@ sub test_quota_f
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "check usages";
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
         message => $quotafuser_expected_message,
         $self->res_annot_storage => int($quotafuser_expected_annotation_storage/1024),
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user.cassandane',
         storage => int($cassandane_expected_storage/1024),
         message => $cassandane_expected_message,

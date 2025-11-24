@@ -6,10 +6,10 @@ sub test_deleted_storage
     my ($self) = @_;
 
     xlog $self, "test DELETED and DELETED-STORAGE STATUS items";
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     xlog $self, "set ourselves a basic limit";
-    $self->_set_quotalimits(storage => 100000);
-    $self->_check_usages(storage => 0);
+    $self->set_quotalimits(storage => 100000);
+    $self->check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 
     # append some messages
@@ -21,7 +21,7 @@ sub test_deleted_storage
         my $len = length($msg->as_string());
         $expected += $len;
         xlog $self, "added $len bytes of message";
-        $self->_check_usages(storage => int($expected/1024));
+        $self->check_usages(storage => int($expected/1024));
     }
 
     # delete messages
@@ -46,5 +46,5 @@ sub test_deleted_storage
     $self->assert_num_equals(0, $res->{'size'});
     $self->assert_num_equals(0, $res->{'deleted-storage'});
 
-    $self->_check_usages(storage => 0);
+    $self->check_usages(storage => 0);
 }

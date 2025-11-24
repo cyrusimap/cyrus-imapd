@@ -13,9 +13,9 @@ sub test_quota_f_vs_update
     my $expected;
 
     xlog $self, "Set up a large but limited quota";
-    $self->_set_quotaroot($basefolder);
-    $self->_set_quotalimits(storage => 1000000);
-    $self->_check_usages(storage => 0);
+    $self->set_quotaroot($basefolder);
+    $self->set_quotalimits(storage => 1000000);
+    $self->check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 
     xlog $self, "Create some sub folders";
@@ -31,7 +31,7 @@ sub test_quota_f_vs_update
     $talk->unselect();
 
     xlog $self, "Check that we have some quota usage";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
 
     xlog $self, "Start a quota -f scan";
     $self->{instance}->quota_Z_go($basefolder);
@@ -67,5 +67,5 @@ sub test_quota_f_vs_update
     $self->{instance}->reap_command(@bits);
 
     xlog $self, "Check that we have the correct quota usage";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
 }

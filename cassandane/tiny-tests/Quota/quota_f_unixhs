@@ -9,13 +9,13 @@ sub test_quota_f_unixhs
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic usage quota";
-    $self->_set_quotalimits(
+    $self->set_quotalimits(
         quotaroot => 'user/cassandane',
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 10000,
     );
-    $self->_check_usages(
+    $self->check_usages(
         quotaroot => 'user/cassandane',
         storage => 0,
         message => 0,

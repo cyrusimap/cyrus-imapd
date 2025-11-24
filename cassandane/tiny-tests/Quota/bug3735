@@ -7,10 +7,10 @@ sub test_bug3735
     my ($self) = @_;
     $self->{instance}->create_user("a");
     $self->{instance}->create_user("ab");
-    $self->_set_quotaroot('user.a');
-    $self->_set_quotalimits(storage => 12345);
-    $self->_set_quotaroot('user.ab');
-    $self->_set_quotalimits(storage => 12345);
+    $self->set_quotaroot('user.a');
+    $self->set_quotalimits(storage => 12345);
+    $self->set_quotaroot('user.ab');
+    $self->set_quotalimits(storage => 12345);
 
     my $filename = $self->{instance}->{basedir} . "/bug3735.out";
 

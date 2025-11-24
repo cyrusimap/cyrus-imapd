@@ -26,8 +26,8 @@ sub test_contact_copy_overquota
     $admintalk->setacl('user.other.#addressbooks.Default',
                        'cassandane' => 'lrswipkxtecdn') or die;
 
-    $self->_set_quotaroot('user.other.#addressbooks');
-    $self->_set_quotalimits(storage => 1);
+    $self->set_quotaroot('user.other.#addressbooks');
+    $self->set_quotalimits(storage => 1);
 
     my $res = $jmap->CallMethods([
         ['Contact/set', {

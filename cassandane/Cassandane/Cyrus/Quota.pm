@@ -94,20 +94,20 @@ sub bogus_test_upgrade_v2_4
 
     xlog $self, "test resources usage computing upon upgrading a cyrus v2.4 mailbox";
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
-    $self->_check_usages($self->res_annot_storage => 0);
+    $self->set_limits($self->res_annot_storage => 100000);
+    $self->check_usages($self->res_annot_storage => 0);
 
     xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     my $expected_annotation_storage = length($data);
     $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->_check_usages($self->res_annot_storage => int($expected_annotation_storage/1024));
+    $self->check_usages($self->res_annot_storage => int($expected_annotation_storage/1024));
 
     xlog $self, "restore cyrus v2.4 mailbox content and quota file";
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
@@ -136,12 +136,12 @@ sub bogus_test_upgrade_v2_4
     # set quota limits on resources which did not exist in previous cyrus versions;
     # when the mailbox was upgraded, new resources quota usage shall have been
     # computed automatically
-    $self->_set_limits(
+    $self->set_limits(
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 10000,
     );
-    $self->_check_usages(
+    $self->check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
         $self->res_annot_storage => int($expected_annotation_storage/1024),

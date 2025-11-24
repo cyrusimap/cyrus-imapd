@@ -45,7 +45,7 @@ use File::Path ();
 
 # Utility function to check that quota's usages
 # and limits are where we expect it to be
-sub _check_usages
+sub check_usages
 {
     my ($self, %expecteds) = @_;
     my $admintalk = $self->{adminstore}->get_client();
@@ -92,7 +92,7 @@ sub _check_usages
 # Reset the recorded usage in the database.  Used for testing
 # quota -f.  Rather hacky.  Both _set_quotaroot() and _set_quotalimits()
 # can be used to set default values.
-sub _zap_quota
+sub zap_quota
 {
     my ($self, %params) = @_;
 
@@ -148,7 +148,7 @@ sub _zap_quota
 }
 
 # Utility function to check that there is no quota
-sub _check_no_quota
+sub check_no_quota
 {
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();
@@ -158,14 +158,14 @@ sub _check_no_quota
 }
 
 
-sub _set_quotaroot
+sub set_quotaroot
 {
     my ($self, $quotaroot) = @_;
     $self->{quotaroot} = $quotaroot;
 }
 
 # Utility function to set quota limits and check that it stuck
-sub _set_quotalimits
+sub set_quotalimits
 {
     my ($self, %resources) = @_;
     my $admintalk = $self->{adminstore}->get_client();

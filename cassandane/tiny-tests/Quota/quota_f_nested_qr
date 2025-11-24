@@ -31,38 +31,38 @@ sub test_quota_f_nested_qr
     }
 
     xlog $self, "set a quota on inbox";
-    $self->_set_quotalimits(quotaroot => $inbox, storage => 100000);
+    $self->set_quotalimits(quotaroot => $inbox, storage => 100000);
 
     xlog $self, "should have correct STORAGE quota";
     my $ex0 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.nnn"} + $exp{"$inbox.zzz"};
-    $self->_check_usages(quotaroot => $inbox, storage => int($ex0/1024));
+    $self->check_usages(quotaroot => $inbox, storage => int($ex0/1024));
 
     xlog $self, "set a quota on inbox.nnn - a nested quotaroot";
-    $self->_set_quotalimits(quotaroot => "$inbox.nnn", storage => 200000);
+    $self->set_quotalimits(quotaroot => "$inbox.nnn", storage => 200000);
 
     xlog $self, "should have correct STORAGE quota for both roots";
     my $ex1 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.zzz"};
     my $ex2 = $exp{"$inbox.nnn"};
-    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
-    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
+    $self->check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
     xlog $self, "create a bogus quota file";
-    $self->_zap_quota(quotaroot => $inbox);
-    $self->_zap_quota(quotaroot => "$inbox.nnn");
-    $self->_check_usages(quotaroot => $inbox, storage => 0);
-    $self->_check_usages(quotaroot => "$inbox.nnn", storage => 0);
+    $self->zap_quota(quotaroot => $inbox);
+    $self->zap_quota(quotaroot => "$inbox.nnn");
+    $self->check_usages(quotaroot => $inbox, storage => 0);
+    $self->check_usages(quotaroot => "$inbox.nnn", storage => 0);
 
     xlog $self, "run quota -f to find and add the quota";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "check that STORAGE quota is restored for both roots";
-    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
-    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
+    $self->check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
     xlog $self, "run quota -f again";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "check that STORAGE quota is still correct for both roots";
-    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
-    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
+    $self->check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 }

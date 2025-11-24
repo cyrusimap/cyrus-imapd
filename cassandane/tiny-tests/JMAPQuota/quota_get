@@ -33,15 +33,15 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 
     # Right - let's set ourselves some basic usage quota
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_quotalimits(
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(
         storage => 100000,
         message => 50000,
         mailbox => 100,
     );
 
-    $self->_set_quotaroot('user.cassandane.#calendars');
-    $self->_set_quotalimits(
+    $self->set_quotaroot('user.cassandane.#calendars');
+    $self->set_quotalimits(
         storage => 10000,
         message => 5000,
         mailbox => 10,
