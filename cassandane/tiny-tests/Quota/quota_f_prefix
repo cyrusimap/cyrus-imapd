@@ -18,7 +18,7 @@ sub test_quota_f_prefix
 
     $self->{instance}->create_user("base",
                                    subdirs => [ qw(subdir subdir2) ]);
-    $self->_set_limits(quotaroot => 'user.base', storage => 1000000);
+    $self->set_quotalimits(quotaroot => 'user.base', storage => 1000000);
     my $exp_base = 0;
 
     xlog $self, "Adding messages to user.base";
@@ -41,7 +41,7 @@ sub test_quota_f_prefix
 
     $self->{instance}->create_user("baseplus",
                                    subdirs => [ qw(subdir) ]);
-    $self->_set_limits(quotaroot => 'user.baseplus', storage => 1000000);
+    $self->set_quotalimits(quotaroot => 'user.baseplus', storage => 1000000);
     my $exp_baseplus = 0;
 
     xlog $self, "Adding messages to user.baseplus";
@@ -63,110 +63,110 @@ sub test_quota_f_prefix
     }
 
     xlog $self, "Check that the quotas were updated as expected";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
     xlog $self, "Run quota -f";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "Check that the quotas were unchanged by quota -f";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
     my $bogus_base = $exp_base + 20000 + rand(30000);
     my $bogus_baseplus = $exp_baseplus + 50000 + rand(80000);
     xlog $self, "Write incorrect values to the quota db";
-    $self->_zap_quota(quotaroot => 'user.base',
+    $self->zap_quota(quotaroot => 'user.base',
                       useds => { storage => $bogus_base });
-    $self->_zap_quota(quotaroot => 'user.baseplus',
+    $self->zap_quota(quotaroot => 'user.baseplus',
                       useds => { storage => $bogus_baseplus });
 
     xlog $self, "Check that the quotas are now bogus";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
     xlog $self, "Run quota -f with no prefix";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog $self, "Check that the quotas were all fixed";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
     xlog $self, "Write incorrect values to the quota db";
-    $self->_zap_quota(quotaroot => "user.base",
+    $self->zap_quota(quotaroot => "user.base",
                       useds => { storage => $bogus_base });
-    $self->_zap_quota(quotaroot => "user.baseplus",
+    $self->zap_quota(quotaroot => "user.baseplus",
                       useds => { storage => $bogus_baseplus });
 
     xlog $self, "Check that the quotas are now bogus";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
     xlog $self, "Run quota -f on user.base only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.base');
 
     xlog $self, "Check that only the user.base and user.baseplus quotas were fixed";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
     xlog $self, "Write incorrect values to the quota db";
-    $self->_zap_quota(quotaroot => "user.base",
+    $self->zap_quota(quotaroot => "user.base",
                       useds => { storage => $bogus_base });
-    $self->_zap_quota(quotaroot => "user.baseplus",
+    $self->zap_quota(quotaroot => "user.baseplus",
                       useds => { storage => $bogus_baseplus });
 
     xlog $self, "Check that the quotas are now bogus";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
     xlog $self, "Run quota -f on user.baseplus only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.baseplus');
 
     xlog $self, "Check that only the user.baseplus quotas were fixed";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
     xlog $self, "Write incorrect values to the quota db";
-    $self->_zap_quota(quotaroot => "user.base",
+    $self->zap_quota(quotaroot => "user.base",
                       useds => { storage => $bogus_base });
-    $self->_zap_quota(quotaroot => "user.baseplus",
+    $self->zap_quota(quotaroot => "user.baseplus",
                       useds => { storage => $bogus_baseplus });
 
     xlog $self, "Check that the quotas are now bogus";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
     xlog $self, "Run quota -f -u on user base ";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', '-u', 'base');
 
     xlog $self, "Check that only the user base quotas were fixed";
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
     xlog $self, "Run a final quota -f to fix up everything";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
-    $self->_check_usages(quotaroot => 'user.base',
+    $self->check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
-    $self->_check_usages(quotaroot => 'user.baseplus',
+    $self->check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 }

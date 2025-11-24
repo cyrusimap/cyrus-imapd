@@ -52,8 +52,7 @@ use Cwd qw(abs_path getcwd);
 use URI;
 use URI::Escape;
 
-use lib '.';
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 
@@ -368,30 +367,6 @@ sub email_query_window_internal
     if ($params{calculateTotal}) {
         $self->assert_num_equals(4, $res->[0][1]->{total});
     }
-}
-
-sub _set_quotaroot
-{
-    my ($self, $quotaroot) = @_;
-    $self->{quotaroot} = $quotaroot;
-}
-
-sub _set_quotalimits
-{
-    my ($self, %resources) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
-    my @quotalist;
-    foreach my $resource (keys %resources)
-    {
-        my $limit = $resources{$resource}
-            or die "No limit specified for $resource";
-        push(@quotalist, uc($resource), $limit);
-    }
-    $self->{limits}->{$quotaroot} = { @quotalist };
-    $admintalk->setquota($quotaroot, \@quotalist);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPEmail';

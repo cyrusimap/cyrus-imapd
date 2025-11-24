@@ -43,7 +43,6 @@ use warnings;
 use base qw(Exporter);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 
-use lib '.';
 use Cassandane::Util::Log;
 
 our @EXPORT = qw(&timed_wait);

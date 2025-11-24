@@ -8,10 +8,10 @@ sub test_using_annotstorage_msg_late
     xlog $self, "test increasing usage of the X-ANNOTATION-STORAGE quota";
     xlog $self, "resource as per-message annotations are added";
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
-    $self->_check_no_quota();
+    $self->check_no_quota();
 
     $talk->create("INBOX.sub1") || die "Failed to create subfolder";
     $talk->create("INBOX.sub2") || die "Failed to create subfolder";
@@ -37,13 +37,13 @@ sub test_using_annotstorage_msg_late
         }
     }
 
-    $self->_set_limits($self->res_annot_storage => 100000);
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->set_quotalimits($self->res_annot_storage => 100000);
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 
     xlog $self, "delete subfolder sub1";
     $talk->delete("INBOX.sub1") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub1"});
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 
     xlog $self, "delete messages in sub2";
     $talk->select("INBOX.sub2");
@@ -53,13 +53,13 @@ sub test_using_annotstorage_msg_late
 
     xlog $self, "X-ANNOTATION-STORAGE quota goes down immediately";
     $expected -= delete($expecteds{"INBOX.sub2"});
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 
     $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
     xlog $self, "X-ANNOTATION-STORAGE quota should have been unchanged by expunge";
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 
     xlog $self, "delete annotations on INBOX";
     $talk->select("INBOX");
@@ -67,5 +67,5 @@ sub test_using_annotstorage_msg_late
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $expected -= delete($expecteds{"INBOX"});
     $self->assert_num_equals(0, $expected);
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 }

@@ -8,7 +8,7 @@ sub test_reconstruct_orphans
     xlog $self, "test resources usage calculated when reconstructing an index";
     xlog $self, "with messages disappearing, resulting in orphan annotations";
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $folder = 'INBOX';
     my $fentry = '/private/comment';
     my $mentry1 = '/comment';
@@ -23,12 +23,12 @@ sub test_reconstruct_orphans
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits(
+    $self->set_quotalimits(
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 100000,
     );
-    $self->_check_usages(
+    $self->check_usages(
         storage => 0,
         message => 0,
         $self->res_annot_storage => 0,
@@ -77,7 +77,7 @@ sub test_reconstruct_orphans
     }, $res);
 
     xlog $self, "Check the quota usage is as expected";
-    $self->_check_usages(
+    $self->check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
         $self->res_annot_storage => int($expected_annotation_storage/1024),
@@ -130,7 +130,7 @@ sub test_reconstruct_orphans
     }, $res);
 
     xlog $self, "Check the quota usage is still as expected";
-    $self->_check_usages(
+    $self->check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
         $self->res_annot_storage => int($expected_annotation_storage/1024),

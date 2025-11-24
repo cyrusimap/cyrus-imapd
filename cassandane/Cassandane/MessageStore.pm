@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use overload qw("") => \&as_string;
 
-use lib '.';
 use Cassandane::Util::Log;
 
 sub new

@@ -45,7 +45,6 @@ use Data::Dumper;
 use Date::Format qw(time2str);
 use Time::HiRes qw(usleep);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;

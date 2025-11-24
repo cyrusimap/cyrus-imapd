@@ -44,7 +44,6 @@ use IO::Handle;
 use POSIX;
 use Time::HiRes qw(time);
 
-use lib '.';
 use Cassandane::Unit::TestCase;
 
 sub new

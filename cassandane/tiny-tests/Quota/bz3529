@@ -14,12 +14,12 @@ sub test_bz3529
     $self->assert_str_equals('quotalegacy', $backend)
         if defined $backend;        # the default value is also ok
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
-    $self->_check_usages($self->res_annot_storage => 0);
+    $self->set_quotalimits($self->res_annot_storage => 100000);
+    $self->check_usages($self->res_annot_storage => 0);
 
     xlog $self, "make some messages to hang annotations on";
 #       $self->{store}->set_folder($folder);
@@ -37,10 +37,10 @@ sub test_bz3529
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     my $expected = ($uid-1) * length($data);
-    $self->_check_usages($self->res_annot_storage => int($expected/1024));
+    $self->check_usages($self->res_annot_storage => int($expected/1024));
 
     # delete annotations
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->_check_usages($self->res_annot_storage => 0);
+    $self->check_usages($self->res_annot_storage => 0);
 }

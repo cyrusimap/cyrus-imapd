@@ -7,7 +7,6 @@ use File::Spec::Functions qw(catfile);
 use File::Temp qw(mkstemps);
 use Net::Server::PreFork;
 
-use lib ".";
 use Net::XmtpServer;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

@@ -7,8 +7,8 @@ sub test_using_storage_late
 
     xlog $self, "test setting STORAGE quota resource after messages are added";
 
-    $self->_set_quotaroot('user.cassandane');
-    $self->_check_no_quota();
+    $self->set_quotaroot('user.cassandane');
+    $self->check_no_quota();
     my $talk = $self->{store}->get_client();
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
@@ -32,14 +32,14 @@ sub test_using_storage_late
         }
     }
 
-    $self->_set_limits(storage => 100000);
-    $self->_check_usages(storage => int($expected/1024));
+    $self->set_quotalimits(storage => 100000);
+    $self->check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
     # delete subfolder
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub"});
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
 
     # delete messages
     $talk->select("INBOX");
@@ -47,5 +47,5 @@ sub test_using_storage_late
     $talk->close();
     $expected -= delete($expecteds{"INBOX"});
     $self->assert_num_equals(0, $expected);
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
 }

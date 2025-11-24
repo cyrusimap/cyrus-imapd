@@ -7,9 +7,9 @@ sub test_using_message_late
 
     xlog $self, "test setting MESSAGE quota resource after messages are added";
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
-    $self->_check_no_quota();
+    $self->check_no_quota();
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
@@ -29,13 +29,13 @@ sub test_using_message_late
         }
     }
 
-    $self->_set_limits(message => 50000);
-    $self->_check_usages(message => $expected);
+    $self->set_quotalimits(message => 50000);
+    $self->check_usages(message => $expected);
 
     # delete subfolder
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
     $expected -= $expecteds{"INBOX.sub"};
-    $self->_check_usages(message => $expected);
+    $self->check_usages(message => $expected);
 
     # delete messages
     $talk->select("INBOX");
@@ -43,5 +43,5 @@ sub test_using_message_late
     $talk->close();
     $expected -= delete($expecteds{"INBOX"});
     $self->assert_num_equals(0, $expected);
-    $self->_check_usages(message => $expected);
+    $self->check_usages(message => $expected);
 }

@@ -46,7 +46,6 @@ use DateTime;
 use JSON::XS qw(encode_json);
 use File::Find;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;

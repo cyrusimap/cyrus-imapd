@@ -4,20 +4,20 @@ use Cassandane::Tiny;
 sub test_num_folders_rename
 {
     my ($self) = @_;
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 12345, $self->res_mailbox => 500);
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(storage => 12345, $self->res_mailbox => 500);
 
     my $talk = $self->{store}->get_client();
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 2);
+    $self->check_usages(storage => 0, $self->res_mailbox => 2);
 
     $talk->create("INBOX.another");
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 3);
+    $self->check_usages(storage => 0, $self->res_mailbox => 3);
 
     $talk->rename("INBOX.another", "INBOX.out");
 
-    $self->_check_usages(storage => 0, $self->res_mailbox => 3);
+    $self->check_usages(storage => 0, $self->res_mailbox => 3);
 }

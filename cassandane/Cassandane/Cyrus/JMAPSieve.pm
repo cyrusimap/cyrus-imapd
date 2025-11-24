@@ -50,7 +50,6 @@ use File::Basename;
 use IO::File;
 use Cwd qw(abs_path getcwd);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

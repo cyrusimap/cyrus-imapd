@@ -10,9 +10,9 @@ sub test_overquota
     my $talk = $self->{store}->get_client();
 
     xlog $self, "set a low limit";
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 210);
-    $self->_check_usages(storage => 0);
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(storage => 210);
+    $self->check_usages(storage => 0);
 
     xlog $self, "adding messages to get just below the limit";
     my %msgs;
@@ -36,14 +36,14 @@ sub test_overquota
     xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
     xlog $self, "check that the usage is just below the limit";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
     xlog $self, "reduce the quota limit";
-    $self->_set_limits(storage => 100);
+    $self->set_quotalimits(storage => 100);
 
     xlog $self, "check that usage is unchanged";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
     xlog $self, "check that smmap reports over quota";
     $self->_check_smmap('cassandane', 'TEMP');
 
@@ -62,7 +62,7 @@ sub test_overquota
     $self->check_messages(\%msgs);
 
     xlog $self, "check that the quota usage is still unchanged";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'TEMP');
 
     my $delmsg = delete $msgs{1};
@@ -77,7 +77,7 @@ sub test_overquota
 
     xlog $self, "check that the usage has gone down";
     $expected -= $dellen;
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
 
     xlog $self, "check that we are still over quota";
     $self->_check_smmap('cassandane', 'TEMP');

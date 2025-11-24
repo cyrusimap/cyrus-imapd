@@ -46,7 +46,6 @@ use IO::File;
 use JSON;
 use Cwd qw(abs_path);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Instance;

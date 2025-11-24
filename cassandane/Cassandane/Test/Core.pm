@@ -43,7 +43,6 @@ use warnings;
 use Data::Dumper;
 use POSIX qw(getcwd);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

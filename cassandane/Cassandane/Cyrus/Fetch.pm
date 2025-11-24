@@ -44,7 +44,6 @@ use Data::Dumper;
 use DateTime;
 use IO::Scalar;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Address;
 use Cassandane::Util::DateTime qw(to_rfc822);

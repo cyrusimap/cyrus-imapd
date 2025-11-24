@@ -50,7 +50,6 @@ use File::Temp qw(tempfile);
 use List::Util qw(uniq);
 use Scalar::Util qw(refaddr);
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::TestUser;
 use Cassandane::Util::Log;

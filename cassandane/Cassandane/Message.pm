@@ -44,7 +44,6 @@ use base qw(Clone Exporter);
 use overload qw("") => \&as_string;
 use Math::Int64;
 
-use lib '.';
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
 use Cassandane::Util::SHA;

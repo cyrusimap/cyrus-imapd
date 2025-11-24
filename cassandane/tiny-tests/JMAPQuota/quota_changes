@@ -10,8 +10,8 @@ sub test_quota_changes
 
     # Right - let's set ourselves some basic usage quota
     xlog "Set a quota limit";
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(
         storage => 100000,
         message => 50000,
         mailbox => 100,
@@ -43,8 +43,8 @@ sub test_quota_changes
     $state = $res->[0][1]{'newState'};
 
     xlog "Update limit";
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(
         storage => 200000,
         message => 50000,
         mailbox => 100,
@@ -73,8 +73,8 @@ sub test_quota_changes
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 
-    $self->_set_quotaroot('user.cassandane.#calendars');
-    $self->_set_limits(
+    $self->set_quotaroot('user.cassandane.#calendars');
+    $self->set_quotalimits(
         storage => 10000,
         message => 5000,
         mailbox => 10,
@@ -94,8 +94,8 @@ sub test_quota_changes
 
     $state = $res->[0][1]{'newState'};
 
-    $self->_set_quotaroot('user.cassandane.#calendars');
-    $self->_set_limits(
+    $self->set_quotaroot('user.cassandane.#calendars');
+    $self->set_quotalimits(
         storage => 20000,
         message => 5000,
         mailbox => 10,

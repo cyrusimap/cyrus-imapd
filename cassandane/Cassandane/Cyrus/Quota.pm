@@ -41,12 +41,10 @@ package Cassandane::Cyrus::Quota;
 use strict;
 use warnings;
 use Cwd qw(abs_path);
-use File::Path qw(mkpath);
 use DateTime;
 use Data::Dumper;
 
-use lib '.';
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 use Cassandane::Util::NetString;
 use Cassandane::Util::Slurp;
@@ -78,145 +76,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub _set_quotaroot
-{
-    my ($self, $quotaroot) = @_;
-    $self->{quotaroot} = $quotaroot;
-}
-
-# Utility function to set quota limits and check that it stuck
-sub _set_limits
-{
-    my ($self, %resources) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
-    my @quotalist;
-    foreach my $resource (keys %resources)
-    {
-        my $limit = $resources{$resource}
-            or die "No limit specified for $resource";
-        push(@quotalist, uc($resource), $limit);
-    }
-    $self->{limits}->{$quotaroot} = { @quotalist };
-    $admintalk->setquota($quotaroot, \@quotalist);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-}
-
-# Utility function to check that quota's usages
-# and limits are where we expect it to be
-sub _check_usages
-{
-    my ($self, %expecteds) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my $quotaroot = delete $expecteds{quotaroot} || $self->{quotaroot};
-    my $limits = $self->{limits}->{$quotaroot};
-
-    my @result = $admintalk->getquota($quotaroot);
-    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
-
-    # check actual and expected number of resources do match
-    $self->assert_num_equals(scalar(keys %$limits) * 3, scalar(@result));
-
-    # Convert the IMAP result to a conveniently checkable hash.
-    # By checkable, we mean that a failure in assert_deep_equals()
-    # will give a human some idea of what went wrong.
-    my %act;
-    while (scalar(@result)) {
-        my ($res, $used, $limit) = splice(@result, 0, 3);
-        $res = uc($res);
-        die "Resource $res appears twice in result"
-            if defined $act{$res};
-        $act{$res} = {
-            used => $used,
-            limit => $limit,
-        };
-    }
-
-    # Build a conveniently checkable hash from %expecteds
-    # and limits previously by _set_limits().
-    my %exp;
-    foreach my $res (keys %expecteds)
-    {
-        $exp{uc($res)} = {
-            used => $expecteds{$res},
-            limit => $limits->{uc($res)},
-        };
-    }
-
-    # Now actually compare
-    $self->assert_deep_equals(\%exp, \%act);
-}
-
-# Reset the recorded usage in the database.  Used for testing
-# quota -f.  Rather hacky.  Both _set_quotaroot() and _set_limits()
-# can be used to set default values.
-sub _zap_quota
-{
-    my ($self, %params) = @_;
-
-    my $quotaroot = $params{quotaroot} || $self->{quotaroot};
-    my $limits = $params{limits} || $self->{limits}->{$quotaroot};
-    my $useds = $params{useds} || {};
-    $useds = { map { uc($_) => $useds->{$_} } keys %$useds };
-
-    # double check that some other part of Cassandane didn't
-    # accidentally futz with the expected quota db backend
-    my $backend = $self->{instance}->{config}->get('quota_db');
-    $self->assert_str_equals('quotalegacy', $backend)
-        if defined $backend;        # the default value is also ok
-
-    my ($uc) = ($quotaroot =~ m/^user[\.\/](.)/);
-    my ($domain, $dirname);
-    ($quotaroot, $domain) = split '@', $quotaroot;
-    if ($domain) {
-        my ($dc) = ($domain =~ m/^(.)/);
-        $dirname = $self->{instance}->{basedir} . "/conf/domain/$dc/$domain";
-    }
-    else {
-        $dirname = $self->{instance}->{basedir} . "/conf";
-    }
-    $dirname .= "/quota/$uc";
-    my $qfn = $quotaroot;
-    $qfn =~ s/\//\./g;
-    my $filename = "$dirname/$qfn";
-    mkpath $dirname;
-
-    open QUOTA,'>',$filename
-        or die "Failed to open $filename for writing: $!";
-
-    # STORAGE is special and always present, but -1 if unlimited
-    my $limit = $limits->{STORAGE} || -1;
-    my $used = $useds->{STORAGE} || 0;
-    print QUOTA "$used\n$limit";
-
-    # other resources have a leading keyword if present
-    my %keywords = ( MESSAGE => 'M', $self->res_annot_storage => 'AS' );
-    foreach my $resource (keys %$limits)
-    {
-        my $kw = $keywords{$resource} or next;
-        $limit = $limits->{$resource};
-        $used = $useds->{$resource} || 0;
-        print QUOTA " $kw $used $limit";
-    }
-
-    print QUOTA "\n";
-    close QUOTA;
-
-    $self->{instance}->_fix_ownership($self->{instance}{basedir} . "/conf/quota");
-}
-
-# Utility function to check that there is no quota
-sub _check_no_quota
-{
-    my ($self) = @_;
-    my $admintalk = $self->{adminstore}->get_client();
-
-    my @res = $admintalk->getquota($self->{quotaroot});
-    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
-}
-
 sub _check_smmap
 {
     my ($self, $name, $expected) = @_;
@@ -235,20 +94,20 @@ sub bogus_test_upgrade_v2_4
 
     xlog $self, "test resources usage computing upon upgrading a cyrus v2.4 mailbox";
 
-    $self->_set_quotaroot('user.cassandane');
+    $self->set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog $self, "set ourselves a basic limit";
-    $self->_set_limits($self->res_annot_storage => 100000);
-    $self->_check_usages($self->res_annot_storage => 0);
+    $self->set_limits($self->res_annot_storage => 100000);
+    $self->check_usages($self->res_annot_storage => 0);
 
     xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     my $expected_annotation_storage = length($data);
     $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $self->_check_usages($self->res_annot_storage => int($expected_annotation_storage/1024));
+    $self->check_usages($self->res_annot_storage => int($expected_annotation_storage/1024));
 
     xlog $self, "restore cyrus v2.4 mailbox content and quota file";
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
@@ -277,12 +136,12 @@ sub bogus_test_upgrade_v2_4
     # set quota limits on resources which did not exist in previous cyrus versions;
     # when the mailbox was upgraded, new resources quota usage shall have been
     # computed automatically
-    $self->_set_limits(
+    $self->set_limits(
         storage => 100000,
         message => 50000,
         $self->res_annot_storage => 10000,
     );
-    $self->_check_usages(
+    $self->check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
         $self->res_annot_storage => int($expected_annotation_storage/1024),

@@ -41,7 +41,6 @@ package Cassandane::Test::Metronome;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Metronome;
 use Cassandane::Util::Sample;

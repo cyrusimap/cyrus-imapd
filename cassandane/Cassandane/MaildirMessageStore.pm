@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use File::Path qw(mkpath rmtree);
 
-use lib '.';
 use base qw(Cassandane::MessageStore);
 
 sub new

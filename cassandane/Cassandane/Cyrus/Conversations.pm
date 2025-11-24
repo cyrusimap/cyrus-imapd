@@ -43,7 +43,6 @@ use warnings;
 use DateTime;
 use URI::Escape;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;

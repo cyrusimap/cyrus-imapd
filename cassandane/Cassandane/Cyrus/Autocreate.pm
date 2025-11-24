@@ -44,7 +44,6 @@ use Cwd qw(getcwd);
 use Data::Dumper;
 use File::Temp qw(tempdir);
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 

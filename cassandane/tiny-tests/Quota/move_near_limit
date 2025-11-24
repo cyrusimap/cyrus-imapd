@@ -10,9 +10,9 @@ sub test_move_near_limit
     my $talk = $self->{store}->get_client();
 
     xlog $self, "set a low limit";
-    $self->_set_quotaroot('user.cassandane');
-    $self->_set_limits(storage => 210);
-    $self->_check_usages(storage => 0);
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(storage => 210);
+    $self->check_usages(storage => 0);
 
     xlog $self, "adding messages to get just below the limit";
     my %msgs;
@@ -36,7 +36,7 @@ sub test_move_near_limit
     xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
     xlog $self, "check that the usage is just below the limit";
-    $self->_check_usages(storage => int($expected/1024));
+    $self->check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
     xlog $self, "add a message that exceeds the limit";

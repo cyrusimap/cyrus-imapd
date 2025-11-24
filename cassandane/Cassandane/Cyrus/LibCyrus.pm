@@ -47,7 +47,6 @@ use DateTime;
 use File::Copy;
 use File::Find;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;

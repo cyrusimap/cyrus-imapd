@@ -48,7 +48,6 @@ use File::Temp qw/tempfile/;
 use DateTime;
 use Date::Parse;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Encode qw(decode);

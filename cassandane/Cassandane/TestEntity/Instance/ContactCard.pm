@@ -1,7 +1,6 @@
 package Cassandane::TestEntity::Instance::ContactCard;
 use Moo;
 
-use lib '.';
 
 # The properties here are from RFC 9553 (plus id and addressBookIds) in order
 # listed in the RFC.

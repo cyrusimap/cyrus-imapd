@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use Net::POP3;
 
-use lib '.';
 use base qw(Cassandane::MessageStore);
 use Cassandane::Util::Log;
 

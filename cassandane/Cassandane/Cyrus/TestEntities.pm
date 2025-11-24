@@ -41,7 +41,6 @@ package Cassandane::Cyrus::TestEntities;
 use strict;
 use warnings;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
@@ -50,45 +49,16 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_historical_age => -1,
-                 caldav_realm => 'Cassandane',
-                 conversations => 'yes',
-                 conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment \$muted",
-                 defaultdomain => 'example.com',
-                 httpallowcompress => 'no',
+    $config->set(conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
-                 imipnotifier => 'imip',
-                 icalendar_max_size => 100000,
-                 jmap_nonstandard_extensions => 'yes',
-                 jmapsubmission_deleteonsend => 'no',
-                 notesmailbox => 'Notes',
-                 sync_log => 'yes');
-
-    # setup sieve
-    my ($maj, $min) = Cassandane::Instance->get_version();
-    if ($maj == 3 && $min == 0) {
-        # need to explicitly add 'body' to sieve_extensions for 3.0
-        $config->set(sieve_extensions =>
-            "fileinto reject vacation vacation-seconds imap4flags notify " .
-            "envelope relational regex subaddress copy date index " .
-            "imap4flags mailbox mboxmetadata servermetadata variables " .
-            "body");
-    }
-    elsif ($maj < 3) {
-        # also for 2.5 (the earliest Cyrus that Cassandane can test)
-        $config->set(sieve_extensions =>
-            "fileinto reject vacation vacation-seconds imap4flags notify " .
-            "envelope relational regex subaddress copy date index " .
-            "imap4flags body");
-    }
-    $config->set(sievenotifier => 'mailto');
+                 jmap_nonstandard_extensions => 'yes');
 
     my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         deliver => 1,
         adminstore => 1,
-        services => [ 'imap', 'http', 'sieve' ]
+        services => [ 'imap', 'http' ]
     }, @args);
 
     $self->needs('component', 'jmap');

@@ -44,7 +44,6 @@ use Cwd qw(realpath);
 use JSON;
 use Data::Dumper;
 
-use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;

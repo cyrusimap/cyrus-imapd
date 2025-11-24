@@ -43,7 +43,6 @@ use warnings;
 use base qw(Exporter);
 use MIME::Base64 qw(encode_base64url decode_base64url);
 
-use lib '.';
 use Cassandane::Util::Log;
 
 our @EXPORT = qw(&encode_base64jmap &decode_base64jmap);
