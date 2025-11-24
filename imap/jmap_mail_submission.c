@@ -425,15 +425,22 @@ static int store_submission(jmap_req_t *req, struct mailbox *mailbox,
     buf_free(&buf);
     if (!r) {
         r = IMAP_IOERROR;
+        fclose(f);
         goto done;
     }
     fputs("\r\n\r\n", f);
 
     /* Add submitted message */
-    if ((msglen && !fwrite(buf_base(msg), msglen, 1, f)) || fflush(f)) {
+    if (msglen) fwrite(buf_base(msg), msglen, 1, f);
+
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
+               mailbox_name(mailbox), strerror(errno));
+        fclose(f);
         r = IMAP_IOERROR;
         goto done;
     }
+
     fclose(f);
 
     /* Prepare to append the message to the mailbox */

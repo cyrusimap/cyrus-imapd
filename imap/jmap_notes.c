@@ -689,7 +689,7 @@ static int _note_create(struct mailbox *mailbox, json_t *note,
     free(title);
     free(from);
     free(body);
-    if (ferror(f) || fflush(f)) {
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         r = IMAP_IOERROR;
     }
     fclose(f);

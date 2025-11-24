@@ -210,6 +210,14 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     fwrite(data, datalen, 1, f);
     qdiffs[QUOTA_STORAGE] = ftell(f);
 
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
+        syslog(LOG_ERR, "IOERROR: append_commit(%s) failed: %s",
+               mailbox_name(mailbox), strerror(errno));
+        fclose(f);
+        append_removestage(stage);
+        txn->error.desc = "append_commit() failed";
+        return HTTP_SERVER_ERROR;
+    }
     fclose(f);
 
     qdiffs[QUOTA_MESSAGE] = 1;

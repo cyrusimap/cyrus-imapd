@@ -622,6 +622,13 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     /* Write the script data to the file */
     fwrite(data, datalen, 1, f);
 
+    if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
+        r = IMAP_IOERROR;
+        syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
+               mailbox_name(mailbox), error_message(r));
+        fclose(f);
+        goto done;
+    }
     fclose(f);
 
     /* Treat this as the user taking action, since that's what it is. */
@@ -665,6 +672,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
         }
     }
 
+done:
     append_removestage(stage);
     auth_freestate(authstate);
     strarray_fini(&flags);

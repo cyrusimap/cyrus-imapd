@@ -9268,8 +9268,9 @@ static void _email_append(jmap_req_t *req,
         }
         r = writecb(req, f, rock, err);
         if (r) goto done;
-        if (fflush(f)) {
+        if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
             r = IMAP_IOERROR;
+            fclose(f);
             goto done;
         }
     }
@@ -9286,6 +9287,7 @@ static void _email_append(jmap_req_t *req,
         munmap(addr, len);
     } else {
         r = IMAP_IOERROR;
+        fclose(f);
         goto done;
     }
     fclose(f);
