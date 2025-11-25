@@ -54,6 +54,17 @@ sub test_basic_entity_tests
     my $other = $self->{instance}->create_user('other');
     $inbox->share_with($other => [ 'mayRead' ]);
 
+    $self->assert_cmp_deeply(
+        {
+            $other->username => {
+                mayAdmin  => JSON::false(),
+                mayRead   => JSON::true(),
+                mayWrite  => JSON::false(),
+            }
+        },
+        $inbox->properties->{shareWith},
+    );
+
     my $imap = $user->imap;
 
     $self->assert_cmp_deeply(
