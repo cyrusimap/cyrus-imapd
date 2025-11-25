@@ -241,6 +241,7 @@ sub BackupUser {
   # remove stale data files :)
   if (opendir(DH, $DataDir)) {
     while (my $item = readdir(DH)) {
+      next if ($item eq 'backupstate.sqlite3' and $DataDir eq $Metadir);
       next if $item eq $NewName;
       next if $item eq '..';
       next if $item eq '.';
