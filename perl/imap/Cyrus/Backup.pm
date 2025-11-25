@@ -55,6 +55,17 @@ sub GetIO {
   die "Failed to connect to $Server:$Port 3 times\n";
 }
 
+sub GetUsers {
+  my $Host = shift;
+  my $Port = shift;
+  my $ServerName = shift;
+
+  my $IO = GetIO($Host, $Port);
+
+  my @list = iolist($IO, 'USERS', $ServerName);
+  return map { $_->[1] } grep { $_->[0] eq 'USER' } @list;
+}
+
 # BACKUP PHASE:
 # * connects to the user's IMAP server
 # * for each file in:
