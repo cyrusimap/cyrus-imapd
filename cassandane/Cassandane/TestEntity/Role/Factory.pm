@@ -12,11 +12,11 @@ has user => (
     weak_ref => 1,
 );
 
-sub get {
+sub _get_properties {
     my ($self, $id) = @_;
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[
@@ -26,12 +26,24 @@ sub get {
     ]]);
 
     unless ($res->[0][0] eq "$dt/get") {
-        Carp::confess("failed to get $dt object with id $id")
+        Carp::confess("failed to get properties of $dt object with id $id")
     }
 
+    my $props = $res->[0][1]{list}[0];
+    delete $props->{id};
+
+    return $props;
+}
+
+sub get {
+    my ($self, $id) = @_;
+
+    my $props = $self->_get_properties($id);
+
     $self->instance_class->new({
+        id  => $id,
         factory    => $self,
-        properties => $res->[0][1]{list}[0],
+        properties => $props,
     })
 }
 
@@ -46,7 +58,7 @@ sub create {
 
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     $self->fill_in_creation_defaults($prop);
@@ -73,7 +85,7 @@ sub _update {
     my $dt = $self->datatype;
     my $id = $instance->id;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my ($res) = $jmap->CallMethods([[
@@ -90,12 +102,7 @@ sub _update {
         Carp::confess("failed to update $dt object")
     }
 
-    my %newprops = {
-        %$update,
-        ( $res->[0][1]{updated}{$id} // {} )->%*,
-    };
-
-    $instance->properties->@{ keys %newprops } = values %newprops;
+    $instance->clear_properties;
 
     return;
 }

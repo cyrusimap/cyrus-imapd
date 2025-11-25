@@ -16,7 +16,7 @@ sub inbox {
     my ($self) = @_;
     my $dt = $self->datatype;
 
-    my $jmap = $self->user->jmap;
+    my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     my $res = $jmap->CallMethods([
@@ -34,9 +34,12 @@ sub inbox {
         Carp::confess("failed to get $dt object for inbox role");
     }
 
+    my $props = $res->[1][1]{list}[0];
+    my $id    = delete $props->{id};
     $self->instance_class->new({
+        id  => $id,
         factory    => $self,
-        properties => $res->[1][1]{list}[0],
+        properties => $props,
     })
 }
 

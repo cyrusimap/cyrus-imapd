@@ -3,8 +3,21 @@ use Moo;
 
 use Data::GUID ();
 
+sub create_group {
+    my ($self, $prop) = @_;
+    $self->create({
+      %$prop,
+      kind => 'group',
+    });
+}
+
 sub fill_in_creation_defaults {
     my ($self, $prop) = @_;
+
+    if ($prop->{name} && ! ref $prop->{name}) {
+      $prop->{name} = { full => $prop->{name} };
+    }
+
     $prop->{kind} //= 'individual';
 
     $prop->{created} //= do {
