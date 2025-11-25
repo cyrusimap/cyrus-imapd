@@ -1,0 +1,23 @@
+Description:
+
+Audit logs have been changed to logfmt
+
+
+Documentation:
+
+https://metacpan.org/pod/Log::Fmt#The-logfmt-text-format
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Deployments that monitor or parse auditlogs will need to update their tooling
+
+
+GitHub issue:
+
+None
