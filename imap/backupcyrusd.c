@@ -683,6 +683,28 @@ static int do_meta()
     return c;
 }
 
+static int users_cb(const char *userid, void *rock __attribute__((unused)))
+{
+    prot_puts(bcd_out, "USER ");
+    puturistring(bcd_out, userid);
+    prot_putc('\n', bcd_out);
+    return 0;
+}
+
+/*
+ *  USERS $slot
+ *    => OK or NO message
+ *    => USER $username
+ *    => USER $username
+ *    => DONE USERS
+ */
+static void do_users()
+{
+    prot_puts(bcd_out, "OK\n");
+    mboxlist_alluser(users_cb, NULL);
+    prot_printf(bcd_out, "DONE USERS\n");
+}
+
 /*
  * Top-level command loop parsing
  */
@@ -713,7 +735,6 @@ static void cmdloop(void)
 
         if (!strcasecmp(cstr, "QUIT")) {
             prot_printf(bcd_out, "OK\n");
-            eatline(bcd_in, c);
             prot_flush(bcd_out);
             break;
         }
@@ -721,21 +742,23 @@ static void cmdloop(void)
         if (!strcasecmp(cstr, "PING")) {
             prot_printf(bcd_out, "OK\n");
             prot_printf(bcd_out, "DONE PING\n");
-            eatline(bcd_in, c);
-            prot_flush(bcd_out);
-            continue;
+            goto done;
         }
 
         c = getword(bcd_in, &slot);
-        if (c != ' ') {
-            prot_printf(bcd_out, "NO bad command\n");
-            eatline(bcd_in, c);
-            prot_flush(bcd_out);
-            continue;
-        }
 
         if (strcmp(buf_cstring(&slot), config_servername)) {
             prot_printf(bcd_out, "NO iam %s\n", config_servername);
+            goto done;
+        }
+
+        if (!strcasecmp(cstr, "USERS")) {
+            do_users();
+            goto done;
+        }
+
+        if (c != ' ') {
+            prot_printf(bcd_out, "NO bad command\n");
             eatline(bcd_in, c);
             prot_flush(bcd_out);
             continue;
@@ -757,6 +780,7 @@ static void cmdloop(void)
             prot_printf(bcd_out, "NO unknown command %s\n", cstr);
         }
 
+done:
         eatline(bcd_in, c);
         prot_flush(bcd_out);
     }
