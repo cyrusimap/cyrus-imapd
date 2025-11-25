@@ -2132,7 +2132,7 @@ static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
 
     // Format number without thousands separator.
     if (frac.size()) {
-        std::string term = barenum;
+        std::string term = prefix + barenum;
         size_t n = term.size();
         term.append(frac);
         term[n] = '.';
@@ -2141,13 +2141,13 @@ static Xapian::Query *xapian_query_new_numbermatch(enum search_part partnum,
         terms.push_back(term);
     }
     else {
-        terms.push_back(barenum);
+        terms.push_back(prefix + barenum);
     }
 
     // Format number with thousands separator.
     if (barenum.size() > 3) {
         for (char sep : { '.', ',' }) {
-            std::string term;
+            std::string term = prefix;
             size_t count = 0;
             for (size_t i = barenum.size(); i > 0; --i) {
                 if (count == 3) {
