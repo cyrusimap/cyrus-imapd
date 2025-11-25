@@ -2,7 +2,7 @@ package Cassandane::TestEntity::Instance::Mailbox;
 use Moo;
 
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
-    id name parentId role sortOrder
+    name parentId role sortOrder
     totalEmails unreadEmails totalThreads unreadThreads
     myRights isSubscribed
 ) ];

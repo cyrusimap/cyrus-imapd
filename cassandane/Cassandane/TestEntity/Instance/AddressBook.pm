@@ -2,7 +2,7 @@ package Cassandane::TestEntity::Instance::AddressBook;
 use Moo;
 
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
-    id name description sortOrder isDefault isSubscribed
+    name description sortOrder isDefault isSubscribed
     shareWith myRights
 ) ];
 

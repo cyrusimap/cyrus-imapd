@@ -1,6 +1,8 @@
 package Cassandane::TestEntity::Role::Instance;
 use Moo::Role;
 
+use experimental 'signatures';
+
 use Sub::Install ();
 
 requires 'datatype'; # Email, Mailbox, etc.
@@ -31,9 +33,18 @@ has factory => (
     handles  => [ qw( user ) ],
 );
 
-has properties => (
-    is => 'ro',
+has id => (
+    is       => 'ro',
     required => 1,
+);
+
+has properties => (
+    is    => 'ro',
+    lazy  => 1,
+    clearer  => 'clear_properties',
+    default  => sub ($self) {
+        $self->factory->_get_properties($self->id);
+    },
 );
 
 no Moo::Role;

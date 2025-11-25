@@ -5,7 +5,7 @@ use Moo;
 # The properties here are from RFC 9553 (plus id and addressBookIds) in order
 # listed in the RFC.
 use Cassandane::TestEntity::AutoSetup properties => [ qw(
-    id addressBookIds
+    addressBookIds
     version created kind language members prodId relatedTo uid updated
     name organizations speakToAs titles
     emails onlineServices phones preferredContactLanguages

@@ -12,7 +12,7 @@ has user => (
     weak_ref => 1,
 );
 
-sub get {
+sub _get_properties {
     my ($self, $id) = @_;
     my $dt = $self->datatype;
 
@@ -26,12 +26,24 @@ sub get {
     ]]);
 
     unless ($res->[0][0] eq "$dt/get") {
-        Carp::confess("failed to get $dt object with id $id")
+        Carp::confess("failed to get properties of $dt object with id $id")
     }
 
+    my $props = $res->[0][1]{list}[0];
+    delete $props->{id};
+
+    return $props;
+}
+
+sub get {
+    my ($self, $id) = @_;
+
+    my $props = $self->_get_properties($id);
+
     $self->instance_class->new({
+        id  => $id,
         factory    => $self,
-        properties => $res->[0][1]{list}[0],
+        properties => $props,
     })
 }
 
@@ -90,15 +102,7 @@ sub _update {
         Carp::confess("failed to update $dt object")
     }
 
-    my %newprops = {
-        %$update,
-        ( $res->[0][1]{updated}{$id} // {} )->%*,
-    };
-
-    # This is, perhaps, too naive.  It will bungle things if we're doing a deep
-    # patch.  %newprops will contain a key like "foo/bar", which will now end
-    # up in properties.  Possibly we should re-get instead. -- rjbs, 2025-11-19
-    $instance->properties->@{ keys %newprops } = values %newprops;
+    $instance->clear_properties;
 
     return;
 }
