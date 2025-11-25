@@ -1,0 +1,100 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_changes_recreate_uid
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {}, 'R1'],
+    ]);
+    my $calId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($calId);
+
+    xlog $self, "create event";
+    my $uid = '6e7132b8-ca0f-11f0-a7ac-90b11c993ad4';
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => {
+                uid => $uid,
+                calendarIds => {
+                    $calId => JSON::true,
+                },
+                "title" => "1",
+                "description" => "",
+                "freeBusyStatus" => "busy",
+                "showWithoutTime" => JSON::true,
+                "start" => "2015-10-06T00:00:00",
+            }
+        }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get event and current state";
+    $res = $jmap->CallMethods([['CalendarEvent/get', { }, "R1"]]);
+    my $state = $res->[0][1]{'state'};
+
+    xlog $self, "delete event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        destroy => [ $id ]
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    my $newState = $res->[0][1]{newState};
+
+    xlog $self, "recreate event with same UID";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => {
+            "1" => {
+                uid => $uid,
+                calendarIds => {
+                    $calId => JSON::true,
+                },
+                "title" => "1",
+                "description" => "",
+                "freeBusyStatus" => "busy",
+                "showWithoutTime" => JSON::true,
+                "start" => "2015-10-06T00:00:00",
+            }
+        }}, "R1"]]);
+    $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "get most recent calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $newState
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{created}[0]);
+    $newState = $res->[0][1]{newState};
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+
+    xlog $self, "delete event again";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+        destroy => [ $id ]
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get most recent calendar event updates";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $newState
+     }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "get calendar event updates since start";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $state
+     }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}

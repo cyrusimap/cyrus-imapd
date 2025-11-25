@@ -4391,6 +4391,7 @@ struct createevent {
     const char *sched_userid;
     strarray_t schedule_addresses;
     icalcomponent *ical_standalone;
+    modseq_t deletedmodseq;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -4519,6 +4520,7 @@ struct createevent_load_ical_rock {
     uint32_t imap_uid;
     char *uniqueid;
     char *resourcename;
+    modseq_t deletedmodseq;
 };
 
 int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
@@ -4537,6 +4539,10 @@ int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
         else {
             rock->uniqueid = xstrdup(jscal->cdata.dav.mailbox);
             rock->imap_uid = jscal->cdata.dav.imap_uid;
+        }
+
+        if (!jscal->cdata.dav.alive) {
+            rock->deletedmodseq = jscal->cdata.dav.modseq;
         }
     }
 
@@ -4559,19 +4565,27 @@ static int createevent_load_ical(jmap_req_t *req,
     struct createevent_load_ical_rock rock = {
         .ical_recurid = create->ical_recurid ? create->ical_recurid : ""
     };
+    struct caldav_jscal_window window = { .tombstones = 1 };
     int r = caldav_foreach_jscal(create->db, NULL, &jscal_filter,
-            NULL, NULL, 0, createevent_load_ical_cb, &rock);
+            &window, NULL, 0, createevent_load_ical_cb, &rock);
     if (r) goto done;
 
     if (rock.imap_uid) {
         // Event with this UID already exists
         if (rock.seen_recurid) {
-            // This recurrence id (empty for main event) already exists.
-            jmap_parser_invalid(parser, "uid");
-            if (create->ical_recurid)
-                jmap_parser_invalid(parser, "recurrenceId");
-            goto done;
+            if (rock.deletedmodseq) {
+                create->deletedmodseq = rock.deletedmodseq;
+            }
+            else {
+                // This recurrence id (empty for main event) already exists.
+                jmap_parser_invalid(parser, "uid");
+                if (create->ical_recurid)
+                    jmap_parser_invalid(parser, "recurrenceId");
+                goto done;
+            }
         }
+
+        if (rock.deletedmodseq) goto done;
 
         if (create->ical_recurid) {
             // Merge new recurrence instance with existing iCalendar data.
@@ -4721,6 +4735,13 @@ static int createevent_store(jmap_req_t *req,
         goto done;
     }
     r = 0;
+
+    /* If we create an event with same UID as a destroyed one,
+       we can't calculate changes before the original was destroyed */
+    if (create->deletedmodseq > req->counters.caldavdeletedmodseq) {
+        mboxname_setmodseq(mailbox_name(mbox), create->deletedmodseq,
+                           MBTYPE_CALENDAR, MBOXMODSEQ_ISDELETE);
+    }
 
     if (calendar_has_sharees(mbox->mbentry)) {
         // Create notification
