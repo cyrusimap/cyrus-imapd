@@ -21,6 +21,10 @@ sub test_backupcyrusd
     mkdir($meta);
 
     $ENV{DEBUGIO} = 1 if $self->{store}->{verbose};
+
+    my @users = Cyrus::Backup::GetUsers($service->host, $service->port, $servername);
+    $self->assert_str_equals('cassandane', join(',', @users));
+
     my ($version, $size) = Cyrus::Backup::BackupUser($service->host, $service->port, $meta, $data, $servername, 'cassandane');
     $self->assert_num_gt(0, $size);
 
