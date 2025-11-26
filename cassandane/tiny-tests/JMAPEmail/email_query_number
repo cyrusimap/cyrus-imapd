@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_number
+    :SearchAttachmentExtractor :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    my $uri = URI->new($self->{instance}->{config}->get('search_attachment_extractor_url'));
+
+    # Start a dummy attachment extractor server.
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->header("Keep-Alive" => "timeout=1");  # Force client timeout
+            $res->content("You got 76543 things.");
+            $conn->send_response($res);
+        }
+    };
+    $self->{instance}->start_httpd($handler, $uri->port());
+
+    my $mime = <<'EOF';
+From: from@example.com
+To: to@example.com
+Subject: test 9876
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="7435bd413d994b60"
+
+--7435bd413d994b60
+Content-Type: text/plain;charset=utf-8
+
+The total amount is $1,234.56 USD.
+
+--7435bd413d994b60
+Content-Disposition: attachment; filename="attachment.rtf"
+Content-Type: application/rtf; name="attachment.rtf"
+Content-Transfer-Encoding: base64
+
+e1xydGYxXGFuc2lcYW5zaWNwZzEyNTJcY29jb2FydGYyODIwClxjb2NvYXRleHRzY2FsaW5nMFxjb2
+NvYXBsYXRmb3JtMHtcZm9udHRibFxmMFxmc3dpc3NcZmNoYXJzZXQwIEhlbHZldGljYTtcZjFcZnN3
+aXNzXGZjaGFyc2V0MCBIZWx2ZXRpY2EtQm9sZDt9CntcY29sb3J0Ymw7XHJlZDI1NVxncmVlbjI1NV
+xibHVlMjU1O30Ke1wqXGV4cGFuZGVkY29sb3J0Ymw7O30KXG1hcmdsMTQ0MFxtYXJncjE0NDBcdmll
+d3cxMTUyMFx2aWV3aDg0MDBcdmlld2tpbmQwClxwYXJkXHR4NzIwXHR4MTQ0MFx0eDIxNjBcdHgyOD
+gwXHR4MzYwMFx0eDQzMjBcdHg1MDQwXHR4NTc2MFx0eDY0ODBcdHg3MjAwXHR4NzkyMFx0eDg2NDBc
+cGFyZGlybmF0dXJhbFxwYXJ0aWdodGVuZmFjdG9yMAoKXGYwXGZzMjQgXGNmMCBZb3UgZ290IApcZj
+FcYiBcdWwgNzY1NDMKXGYwXGIwIFx1bG5vbmUgIHRoaW5ncy59
+--7435bd413d994b60--
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter', '-Z');
+
+    my %testCases = (
+        '1,234.56' => { wantMatch => 1, criteria => 'body' },
+        '1.234,56' => { wantMatch => 1, criteria => 'body' },
+        '1234.56'  => { wantMatch => 1, criteria => 'body' },
+        '1234,56'  => { wantMatch => 1, criteria => 'body' },
+        '1234.*'  => { wantMatch => 1, criteria => 'body' },
+        '1234,*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234.*'  => { wantMatch => 1, criteria => 'body' },
+        '1.234,*'  => { wantMatch => 1, criteria => 'body' },
+        '1234.5*'  => { wantMatch => 1, criteria => 'body' },
+        '1234,5*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234.5*'  => { wantMatch => 1, criteria => 'body' },
+        '1.234,5*'  => { wantMatch => 1, criteria => 'body' },
+        '1,234*'   => { wantMatch => 1, criteria => 'body' },
+        '1.234*'   => { wantMatch => 1, criteria => 'body' },
+        ' 1234.56'  => { wantMatch => 1, criteria => 'body' },
+        ' 1234,56 '  => { wantMatch => 1, criteria => 'body' },
+        '1234,56 '  => { wantMatch => 1, criteria => 'body' },
+        '1,234'    => { wantMatch => 0, criteria => 'body' },
+        '1.234'    => { wantMatch => 0, criteria => 'body' },
+        '1,234,*'  => { wantMatch => 0, criteria => 'body' },
+        '1,23,4.*' => { wantMatch => 0, criteria => 'body' },
+        '1,234,567.89' => { wantMatch => 0, criteria => 'body' },
+        '1.234.567,89' => { wantMatch => 0, criteria => 'body' },
+        '1,234,56' => { wantMatch => 0, criteria => 'body' },
+        '1.234.56' => { wantMatch => 0, criteria => 'body' },
+        '9876' => { wantMatch => 1, criteria => 'text' },
+        ' 987*' => { wantMatch => 1, criteria => 'text' },
+        '987*' => { wantMatch => 1, criteria => 'text' },
+        '76543' => { wantMatch => 1, criteria => 'text' },
+    );
+
+    foreach my $term (sort keys %testCases) {
+        my $tc = $testCases{$term};
+
+        my $res = $jmap->CallMethods([
+            [ 'Email/query', {
+                filter => {
+                    $tc->{criteria} => $term,
+                },
+                findMatchingParts => JSON::true,
+            }, 'R1'],
+            [ 'SearchSnippet/get', {
+                '#filter' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/filter',
+                },
+                '#emailIds' => {
+                    resultOf => 'R1',
+                    name => 'Email/query',
+                    path => '/ids',
+                },
+            }, 'R2'],
+        ], [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:mail',
+            'urn:ietf:params:jmap:submission',
+            'https://cyrusimap.org/ns/jmap/mail',
+            'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/performance',
+        ]);
+
+        $self->assert_num_equals($tc->{wantMatch}, scalar @{$res->[0][1]{ids}});
+
+        if ($tc->{wantMatch} && $tc->{criteria} eq 'body') {
+            $self->assert_str_equals(
+                'The total amount is $<mark>1,234.56</mark> USD.',
+                $res->[1][1]{list}[0]{preview});
+        } else {
+            $self->assert_null($res->[1][1]{list}[0]{preview});
+        }
+    }
+}

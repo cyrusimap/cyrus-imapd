@@ -230,7 +230,7 @@ EXPORTED void buf_truncate(struct buf *buf, ssize_t len)
     }
     if ((size_t)len > buf->alloc) {
         /* grow the buffer and zero-fill the new bytes */
-        size_t more = len - buf->len;
+        size_t more = (size_t) len >= buf->len ? len - buf->len : 0;
         buf_ensure(buf, more);
         memset(buf->s + buf->len, 0, more);
     }
