@@ -261,17 +261,6 @@ static void get_statsock(int filedes[2])
         fatalf(1, "unable to set close-on-exec: %m");
 }
 
-static int cyrus_cap_bind(int socket, struct sockaddr *addr, socklen_t length)
-{
-    int r;
-
-    set_caps(BEFORE_BIND, /*is_master*/1);
-    r = bind(socket, addr, length);
-    set_caps(AFTER_BIND, /*is_master*/1);
-
-    return r;
-}
-
 /* Return a new 'centry', by malloc'ing it. */
 static struct centry *centry_alloc(void)
 {
@@ -655,7 +644,7 @@ static void service_create(struct service *s, int is_startup)
 #endif
 
         oldumask = umask((mode_t) 0); /* for linux */
-        r = cyrus_cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
+        r = bind(s->socket, res->ai_addr, res->ai_addrlen);
         umask(oldumask);
         if (r < 0) {
             int e = errno;
@@ -766,8 +755,6 @@ static void run_startup(const char *name, const strarray_t *cmd)
     case 0:
         /* Child - Release our pidfile lock. */
         xclose(pidfd);
-
-        set_caps(AFTER_FORK, /*is_master*/1);
 
         child_sighandler_setup();
 
@@ -894,8 +881,6 @@ static void spawn_waitdaemon(struct service *s, int wdi)
 
         /* Child - Release our pidfile lock. */
         xclose(pidfd);
-
-        set_caps(AFTER_FORK, /*is_master*/1);
 
         child_sighandler_setup();
 
@@ -1086,8 +1071,6 @@ static void spawn_service(struct service *s, int si, int wdi)
         /* Child - Release our pidfile lock. */
         xclose(pidfd);
 
-        set_caps(AFTER_FORK, /*is_master*/1);
-
         child_sighandler_setup();
 
         if (s->listen) {
@@ -1218,8 +1201,6 @@ static void spawn_exec(const char *name,
     case 0:
         /* Child - Release our pidfile lock. */
         xclose(pidfd);
-
-        set_caps(AFTER_FORK, /*is_master*/1);
 
         /* close all listeners */
         for (i = 0; i < nservices; i++) {
@@ -3136,14 +3117,6 @@ int main(int argc, char **argv)
 
     syslog(LOG_DEBUG, "process started");
 
-#if defined(__linux__) && defined(HAVE_LIBCAP)
-    if (become_cyrus(/*is_master*/1) != 0) {
-        syslog(LOG_ERR, "can't change to the cyrus user: %m");
-        exit(1);
-    }
-    if (daemon_mode) chdir_cores();
-#endif
-
     masterconf_getsection("START", &add_start, NULL);
     masterconf_getsection("SERVICES", &add_service, NULL);
     masterconf_getsection("EVENTS", &add_event, NULL);
@@ -3162,13 +3135,11 @@ int main(int argc, char **argv)
                    Services[i].stat[0], Services[i].stat[1]);
     }
 
-#if !defined(__linux__) || !defined(HAVE_LIBCAP)
-    if (become_cyrus(/*is_master*/1) != 0) {
+    if (become_cyrus() != 0) {
         syslog(LOG_ERR, "can't change to the cyrus user: %m");
         exit(1);
     }
     if (daemon_mode) chdir_cores();
-#endif
 
     /* init ctable janitor */
     gettimeofday(&now, 0);

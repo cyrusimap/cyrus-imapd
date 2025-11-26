@@ -55,10 +55,6 @@
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#if defined(__linux__) && defined(HAVE_LIBCAP)
-#include <sys/capability.h>
-#include <sys/prctl.h>
-#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -707,71 +703,7 @@ done:
     return r;
 }
 
-#if defined(__linux__) && defined(HAVE_LIBCAP)
-EXPORTED int set_caps(int stage, int is_master)
-{
-    cap_t cap = NULL;
-    int r = 0;
-    int e = errno;
-    static const char * const capsets[2][5] = {
-        { /* !master */
-            "cap_setuid=ep",    /* BEFORE_SETUID */
-            "=",                /* AFTER_SETUID */
-            "=",                /* doesn't happen */
-            "=",                /* doesn't happen */
-            "="                 /* doesn't happen */
-        }, { /* master */
-            "cap_net_bind_service=p cap_setuid=ep",     /* BEFORE_SETUID */
-            "cap_net_bind_service=p",                   /* AFTER_SETUID */
-            "cap_net_bind_service=ep",                  /* BEFORE_BIND */
-            "cap_net_bind_service=p",                   /* AFTER_BIND */
-            "="                                         /* AFTER_FORK */
-        }
-    };
-
-    cap = cap_from_text(capsets[!!is_master][stage]);
-    assert(cap != NULL);
-
-    r = cap_set_proc(cap);
-    if (r < 0) {
-        syslog(LOG_ERR, "cannot set caps: %m");
-        goto out;
-    }
-
-    if ((stage == BEFORE_SETUID) || (stage == AFTER_SETUID)) {
-        r = prctl(PR_SET_KEEPCAPS, (stage == BEFORE_SETUID));
-        if (r < 0) {
-            syslog(LOG_ERR, "cannot set keepcaps flag: %m");
-            goto out;
-        }
-    }
-
-  out:
-    if (cap) cap_free(cap);
-    errno = e;   /* preserve errno so the caller's error reporting is easy */
-
-    return r;
-}
-#else
-EXPORTED int set_caps(int stage __attribute__((unused)),
-                      int is_master __attribute__((unused)))
-{
-    return 0;
-}
-#endif
-
-static int cyrus_cap_setuid(int uid, int is_master)
-{
-    int r;
-
-    set_caps(BEFORE_SETUID, is_master);
-    r = setuid(uid);
-    set_caps(AFTER_SETUID, is_master);
-
-    return r;
-}
-
-EXPORTED int become_cyrus(int is_master)
+EXPORTED int become_cyrus(void)
 {
     struct passwd *p;
     struct group *g;
@@ -780,7 +712,7 @@ EXPORTED int become_cyrus(int is_master)
     int result;
     static uid_t uid = 0;
 
-    if (uid) return cyrus_cap_setuid(uid, is_master);
+    if (uid) return setuid(uid);
 
     const char *cyrus = cyrus_user();
     const char *mail = cyrus_group();
@@ -810,7 +742,6 @@ EXPORTED int become_cyrus(int is_master)
         newgid == getgid()) {
         /* already the Cyrus user, stop trying */
         uid = newuid;
-        set_caps(AFTER_SETUID, is_master);
         return 0;
     }
 
@@ -826,7 +757,7 @@ EXPORTED int become_cyrus(int is_master)
         return -1;
     }
 
-    result = cyrus_cap_setuid(newuid, is_master);
+    result = setuid(newuid);
 
     /* Only set static uid if successful, else future calls won't reset gid */
     if (result == 0)

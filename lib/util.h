@@ -290,8 +290,7 @@ enum {
     AFTER_FORK
 };
 
-extern int set_caps(int stage, int is_master);
-extern int become_cyrus(int is_master);
+extern int become_cyrus(void);
 extern const char *cyrus_user(void);
 extern const char *cyrus_group(void);
 
