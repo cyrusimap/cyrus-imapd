@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_memo_inreplyto ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create message1";
+    my $message1Subject = 'message1';
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    1 => {
+                        subject    => $message1Subject,
+                        messageId  => ['message1@local'],
+                        mailboxIds => { '$inbox' => JSON::true },
+
+                        from       => [ { email => 'a@example.com' } ],
+                        to         => [ { email => 'b@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "test" } },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+    my $emailId1 =  $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($emailId1);
+    my $threadId1 = $res->[0][1]{created}{1}{threadId};
+    $self->assert_not_null($threadId1);
+
+    xlog $self, "Create message2 replying to message1 with different subject";
+    my $message2Subject = 'message2';
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    2 => {
+                        subject    => $message2Subject,
+                        messageId  => ['message2@local'],
+                        references => ['message1@local'],
+                        inReplyTo  => ['message1@local'],
+                        mailboxIds => { '$inbox' => JSON::true },
+
+                        from       => [ { email => 'b@example.com' } ],
+                        to         => [ { email => 'a@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "test" } },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+    my $emailId2 =  $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($emailId2);
+
+    xlog $self, "Assert message2 has different threadId than message1";
+    $self->assert_str_not_equals($threadId1, $res->[0][1]{created}{2}{threadId});
+
+    xlog $self, "Create memos, replying to message1 with subjects of message1, message2, and an arbitrary subject";
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    memo1 => {
+                        subject    => $message1Subject,
+                        messageId  => ['memo1@local'],
+                        references => ['message1@local'],
+                        inReplyTo  => ['message1@local'],
+                        mailboxIds => { '$inbox' => JSON::true },
+                        from       => [ { email => 'b@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "memo1" } },
+                        keywords => { '$memo' => JSON::true  },
+                    },
+                    memo2 => {
+                        subject    => $message2Subject,
+                        messageId  => ['memo2@local'],
+                        references => ['message1@local'],
+                        inReplyTo  => ['message1@local'],
+                        mailboxIds => { '$inbox' => JSON::true },
+                        from       => [ { email => 'b@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "memo2" } },
+                        keywords => { '$memo' => JSON::true  },
+                    },
+                    memo3 => {
+                        subject    => 'memo3',
+                        messageId  => ['memo3@local'],
+                        references => ['message1@local'],
+                        inReplyTo  => ['message1@local'],
+                        mailboxIds => { '$inbox' => JSON::true },
+                        from       => [ { email => 'b@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "memo3" } },
+                        keywords => { '$memo' => JSON::true  },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+
+    xlog $self, "Assert all memos belong to thread of message1";
+    $self->assert_str_equals($threadId1, $res->[0][1]{created}{memo1}{threadId});
+    $self->assert_str_equals($threadId1, $res->[0][1]{created}{memo2}{threadId});
+    $self->assert_str_equals($threadId1, $res->[0][1]{created}{memo3}{threadId});
+}

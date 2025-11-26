@@ -3892,6 +3892,47 @@ static int extract_convdata(struct conversations_state *state,
     if (!is_valid_rfc2822_inreplyto(hdrs[1]))
         hdrs[1] = NULL;
 
+    // Special-handle memos.
+    if (hdrs[1] && is_memo) {
+        // Parse In-Reply-To header.
+        char *repid = message_iter_msgid(
+            hdrs[1], MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET, NULL);
+        if (repid) {
+            lcase(repid);
+            if (conversations_check_msgid(repid, strlen(repid))) {
+                xzfree(repid);
+            }
+        }
+
+        // Parse Message-ID header.
+        char *msgid = message_iter_msgid(hdrs[2], 0, NULL);
+        if (msgid) {
+            lcase(msgid);
+            if (conversations_check_msgid(msgid, strlen(msgid))) {
+                xzfree(msgid);
+            }
+        }
+
+        bool did_match = false;
+
+        // Lookup conversation for In-Reply-To header value.
+        if (repid && !conversations_get_msgid(state, repid, &cids)
+            && arrayu64_size(&cids))
+        {
+            // Only report the message-ids of the memo and its parent.
+            if (msgid) strarray_append(msgidlist, msgid);
+            strarray_append(msgidlist, repid);
+            // Only use first thread id of parent.
+            arrayu64_add(matchlist, arrayu64_nth(&cids, 0));
+            did_match = true;
+        }
+
+        free(repid);
+        free(msgid);
+
+        if (did_match) goto out;
+    }
+
     for (i = 0 ; i < 4 ; i++) {
         // Require message-ids in In-Reply-To header be enclosed in
         // brackets, allow bare dot-atom identifiers otherwise.
