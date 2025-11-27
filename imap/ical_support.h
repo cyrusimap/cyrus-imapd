@@ -338,4 +338,23 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 #endif /* HAVE_ICAL */
 
+#ifdef HAVE_LIBICALVCARD
+
+#include <libical/vcard.h>
+
+/**
+ * Looks up a property parameter by name.
+ *
+ * @param prop   The vCard property.
+ * @param name   The name of the parameter to look up.
+ *
+ * This function looks up and returns the first property parameter
+ * having the same name as @p name. The name is compared case-insensitively.
+ *
+ * @return The parameter, or NULL otherwise.
+ */
+extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
+                                                           const char *name);
+#endif /* HAVE_LIBICALVCARD */
+
 #endif /* ICAL_SUPPORT_H */
