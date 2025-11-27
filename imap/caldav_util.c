@@ -170,10 +170,12 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
     if ((namespace_calendar.allow & ALLOW_USERDATA) &&
         cdata->dav.imap_uid && cdata->comp_flags.shared &&
         caldav_is_personalized(mailbox, cdata, userid, &userdata)) {
-        struct dlist *dl;
+        struct dlist *dl = NULL;
 
         /* Parse the userdata and fetch the validators */
-        dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
+        r = dlist_parsemap(&dl, 1, buf_base(&userdata), buf_len(&userdata));
+        buf_free(&userdata);
+        if (r) return r;
 
         if (etag) {
             struct message_guid *userdata_guid;
@@ -201,7 +203,6 @@ EXPORTED int caldav_get_validators(struct mailbox *mailbox, void *data,
         }
 
         dlist_free(&dl);
-        buf_free(&userdata);
     }
     else if (cdata->comp_flags.defaultalerts) {
         if (etag) {

@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ':v1';
+
+sub test_calendar_query_shared
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create second user";
+    $admintalk->create("user.test");
+
+    xlog $self, "Provision calendar user";
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "Share default calendar to cassandane";
+    $admintalk->setacl("user.test.#calendars.Default", "cassandane" => 'lrswin');
+
+    xlog $self, "Subscribe to shared calendar";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->subscribe("user.test.#calendars.Default");
+
+    xlog $self, "Get calendars as cassandane";
+    my $CalDAV = $self->{caldav};
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedId = $CasCal->[1]{href};
+
+    xlog $self, "Add events";
+    my $href1 = $CalDAV->NewEvent($sharedId, {
+        timeZone => 'Etc/UTC',
+        start => '2015-01-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall',
+    });
+    $href1 =~ s|//|/|;  # remove double slash
+
+    my $href2 = $CalDAV->NewEvent($sharedId, {
+        timeZone => 'America/New_York',
+        start => '2015-02-01T12:00:00',
+        duration => 'PT1H',
+        summary => 'waterfall2',
+    });
+    $href2 =~ s|//|/|;  # remove double slash
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<calendar-query xmlns="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <filter>
+    <comp-filter name="VCALENDAR">
+      <comp-filter name="VEVENT"/>
+    </comp-filter>
+  </filter>
+</calendar-query>
+EOF
+
+    xlog $self, "Run calendar-query report on shared calendar";
+    my $res = $CalDAV->Request('REPORT', $sharedId, $xml,
+                               'Content-Type' => 'application/xml',
+                               'Depth' => 1
+    );
+    $self->assert_cmp_deeply(
+        bag($href1, $href2),
+        [
+            $res->{'{DAV:}response'}[0]{'{DAV:}href'}{content},
+            $res->{'{DAV:}response'}[1]{'{DAV:}href'}{content},
+        ],
+    );
+}
