@@ -185,11 +185,6 @@ EOF
                 'uri' => 'https://example.com/@simon',
                 'service' => 'Mastodon'
             },
-            'OS3' => {
-                'user' => 'foo',
-                'uri' => 'https://example.com/foo',
-                'service' => 'Twitter'
-            }
         },
         media => {
             L1 => {
