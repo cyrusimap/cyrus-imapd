@@ -351,6 +351,13 @@ static int delete(struct dbengine *db,
     return mywrite(db, key, keylen, NULL, 0, tidptr, tmflags);
 }
 
+static int yield(struct dbengine *db)
+{
+    struct twom_db *tmdb = (struct twom_db *)db;
+    int tmr = twom_db_yield(tmdb);
+    return _errormap(tmr);
+}
+
 HIDDEN struct cyrusdb_backend cyrusdb_twom =
 {
     "twom",                  /* name */
@@ -360,7 +367,7 @@ HIDDEN struct cyrusdb_backend cyrusdb_twom =
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
-    NULL, /*yield*/
+    &yield,
 
     &myopen,
     &myclose,
