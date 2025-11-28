@@ -172,6 +172,11 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
         if (p) location = p + 1;
@@ -234,6 +239,11 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the location part, everything is local */
         if (p) location = p + 1;
@@ -294,6 +304,11 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
         return MUPDATE_BADPARAM;
     }
 
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
+
     if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_REPLICATED) {
         /* we don't care about the server part, everything is local */
         if (p) location = p + 1;
@@ -335,6 +350,11 @@ EXPORTED int mupdate_delete(mupdate_handle *handle,
     }
 
     if (!handle->saslcompleted) return MUPDATE_NOAUTH;
+
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
 
     prot_printf(handle->conn->out,
                 "X%u DELETE {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
@@ -405,6 +425,11 @@ EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
         return MUPDATE_BADPARAM;
     }
 
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
+
     prot_printf(handle->conn->out,
                 "X%u FIND {" SIZE_T_FMT "+}\r\n%s\r\n", handle->tagn++,
                 strlen(mailbox), mailbox);
@@ -443,6 +468,11 @@ EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
     if (!callback) {
         syslog(LOG_ERR, "%s: no callback", __func__);
         return MUPDATE_BADPARAM;
+    }
+
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
     }
 
     if (prefix) {
