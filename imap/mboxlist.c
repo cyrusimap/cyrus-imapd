@@ -5080,6 +5080,12 @@ static void init_internal()
     }
 }
 
+EXPORTED int mboxlist_yield(void)
+{
+    if (!mboxlist_dbopen) return 0;
+    return cyrusdb_yield(mbdb);
+}
+
 /* must be called after cyrus_init */
 EXPORTED void mboxlist_init(void)
 {
