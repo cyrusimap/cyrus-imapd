@@ -21,11 +21,11 @@ Description
 ===========
 
 **backupcyrusd** is server which speaks the backup protocol used at Fastmail.
-It implements NO AUTHENTIATION so MUST only listen on safe internal networks
+It implements NO AUTHENTICATION so MUST only listen on safe internal networks
 and be firewalled from any untrusted users.
 
 It accepts commands on its standard input and responds on its standard output.
-t MUST invoked by :cyrusman:`master(8)` with those descriptors attached to a
+It MUST invoked by :cyrusman:`master(8)` with those descriptors attached to a
 remote client connection.
 
 Options
