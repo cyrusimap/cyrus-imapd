@@ -269,11 +269,6 @@ static int myforeach(struct dbengine *db,
     int tmflags = 0;
 
     if (!tidptr) {
-        // we call out to the mupdate server within mailbox findall,
-        // which tries to lock the mailboxes.db!  This breaks unless
-        // we release the lock every time sadly, so add ALWAYSYIELD
-        // to match twoskip/skiplist et al behaviour
-        tmflags |= TWOM_ALWAYSYIELD;
         struct twom_db *tmdb = (struct twom_db *)db;
         return _errormap(twom_db_foreach(tmdb, prefix, prefixlen,
                                          goodp, cb, rock, tmflags));
