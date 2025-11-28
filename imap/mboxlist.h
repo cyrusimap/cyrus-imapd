@@ -390,6 +390,8 @@ void mboxlist_close(void);
 /* initialize database structures */
 void mboxlist_init(void);
 
+int mboxlist_yield(void);
+
 /* done with database stuff */
 void mboxlist_done(void);
 
