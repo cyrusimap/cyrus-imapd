@@ -398,6 +398,8 @@ HIDDEN struct cyrusdb_backend cyrusdb_twom =
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
 
+    NULL, /*yield*/
+
     &myopen,
     &myclose,
 

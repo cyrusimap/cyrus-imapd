@@ -109,6 +109,9 @@ struct cyrusdb_backend {
     /* unlinks this specific database, including cleaning up any environment */
     int (*unlink)(const char *fname, int flags);
 
+    /* yield any transactions on the current database */
+    int (*yield)(struct dbengine *db);
+
     /* open the specified database in the global environment */
     int (*open)(const char *fname, int flags, struct dbengine **ret, struct txn **tid);
 
@@ -291,6 +294,7 @@ extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);
 extern int cyrusdb_consistent(struct db *db);
 extern int cyrusdb_repack(struct db *db);
+extern int cyrusdb_yield(struct db *db);
 extern int cyrusdb_compar(struct db *db,
                           const char *a, size_t alen,
                           const char *b, size_t blen);

@@ -918,6 +918,9 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     &cyrusdb_generic_noarchive,
     NULL,
 
+    NULL, /*yield*/
+    NULL, /*yieldall*/
+
     &myopen,
     &myclose,
 
