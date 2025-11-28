@@ -46,6 +46,7 @@ enum twom_flagspec {
     TWOM_NOCSUM          = 1<<2,    /* Don't check checksums on read */
     TWOM_NOSYNC          = 1<<3,    /* Don't msync/fsync on write */
     TWOM_NONBLOCKING     = 1<<4,    /* When taking a lock, return immediately if the file is already locked */
+    TWOM_ONELOCK         = 1<<5,    /* When locking, skip the double-lock process */
 
     TWOM_ALWAYSYIELD     = 1<<9,    /* Yield foreach before every callback */
     TWOM_NOYIELD         = 1<<10,   /* Never yield a read transaction lock */
