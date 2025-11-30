@@ -262,7 +262,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     config_toggle_debug_cb = &debug_toggled;
 
     /* changed user if needed */
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
+    if ((geteuid()) == 0 && (become_cyrus() != 0)) {
         fatal("must run as the Cyrus user", EX_USAGE);
     }
 

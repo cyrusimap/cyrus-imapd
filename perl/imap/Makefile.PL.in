@@ -91,7 +91,7 @@ WriteMakefile(
     'LD'       => $Config{ld} . ' @GCOV_LDFLAGS@',
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '@top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
-    'LIBS'	=> [ "$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @GCOV_LIBS@ @LIBCAP_LIBS@"],
+    'LIBS'	=> [ "$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @GCOV_LIBS@"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
     'INC'	=> "-I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CFLAGS@ @GCOV_CFLAGS@ -I@top_srcdir@/perl/imap",
     'EXE_FILES' => [cyradm],

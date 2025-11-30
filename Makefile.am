@@ -1600,7 +1600,7 @@ lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(SSL_LIBS) \
-                             $(GCOV_LIBS) $(LIBCAP_LIBS)
+                             $(GCOV_LIBS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 # n.b. the order of the -m arguments to mkchartable.pl is important,

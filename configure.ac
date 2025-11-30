@@ -1370,35 +1370,6 @@ if test "$with_zephyr" != "no"; then
 fi
 AM_CONDITIONAL([ZEPHYR], [test "$with_zephyr" != "no"])
 
-
-dnl
-dnl Test for libcap (POSIX.1e - security API) on Linux systems
-dnl
-AC_ARG_WITH([libcap],
-        AS_HELP_STRING([--with-libcap], [Enable libcap system capabilities handling (Linux systems only)]),
-        with_libcap="${withval}")
-
-have_libcap=no
-LIBCAP_LIBS=""
-case $host_os in
-linux*)
-        if test "x$with_libcap" = "xyes"; then
-                AC_CHECK_LIB([cap], [cap_get_proc], have_libcap=yes, have_libcap=no)
-                AC_CHECK_HEADERS([sys/capability.h sys/prctl.h], , have_libcap=no)
-                if test "$have_libcap" = "yes"; then
-                        AC_DEFINE(HAVE_LIBCAP, [], [Do we have libcap system capabilities handling (Linux systems only)?])
-                        LIBCAP_LIBS="-lcap"
-                fi
-        fi
-        ;;
-*)
-        ;;
-esac
-AC_SUBST(LIBCAP_LIBS)
-
-AC_MSG_CHECKING(for libcap)
-AC_MSG_RESULT($have_libcap)
-
 dnl
 dnl Check for jansson library, needed for JSON support
 dnl
