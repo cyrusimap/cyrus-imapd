@@ -3954,7 +3954,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     struct body *body = NULL;
     struct sieve_data *sdata = NULL;
     char *id = NULL;
-    const char *name = NULL;
+    char *name = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
     int isactive = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
@@ -3989,7 +3989,8 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
     assert(id);
 
     /* Get script name from Subject */
-    name = body->subject;
+    name = charset_decode_mimeheader(body->subject,
+                                     CHARSET_KEEPCASE | CHARSET_MIME_UTF8);
 
     sievedb = mailbox_open_sieve(mailbox);
 
@@ -4092,6 +4093,7 @@ done:
         free(body);
     }
     buf_free(&msg_buf);
+    free(name);
     free(id);
 
     return r;
