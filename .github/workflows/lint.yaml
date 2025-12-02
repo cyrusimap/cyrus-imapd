@@ -24,3 +24,6 @@ jobs:
     - name: Assert no FIXME
       shell: bash
       run: ./tools/find-fixme-markers
+    - name: Assert no WIP commits
+      shell: bash
+      run: ./tools/find-wip-commits
