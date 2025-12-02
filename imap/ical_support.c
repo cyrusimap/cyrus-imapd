@@ -3278,7 +3278,37 @@ EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
     icalproperty_set_x_name(prop, JMAPICAL_XPROP_ID);
     icalcomponent_add_property(comp, prop);
 }
+
 #endif
+
+#ifdef HAVE_LIBICALVCARD
+
+EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
+                                                             const char *name)
+{
+    for (vcardparameter *param =
+            vcardproperty_get_first_parameter(prop, VCARD_ANY_PARAMETER);
+            param;
+            param = vcardproperty_get_next_parameter(prop, VCARD_ANY_PARAMETER)) {
+
+        const char *kind_string = NULL;
+
+        if (vcardparameter_isa(param) == VCARD_X_PARAMETER) {
+            kind_string = vcardparameter_get_xname(param);
+        } else if (vcardparameter_isa(param) == VCARD_IANA_PARAMETER) {
+            kind_string = vcardparameter_get_iana_name(param);
+        } else {
+            kind_string = vcardparameter_kind_to_string(vcardparameter_isa(param));
+        }
+
+        if (!strcasecmpsafe(name, kind_string))
+            return param;
+    }
+
+    return NULL;
+}
+
+#endif /* HAVE_LIBICALVCARD */
 
 #ifdef HAVE_RECUR_BY_REF
 EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
