@@ -346,11 +346,21 @@ int deletescript(struct protstream *conn, const struct buf *name)
     return TIMSIEVE_OK;
 }
 
+#define QUOTED_SPECIALS "\"\\"  // DQUOTE and "\"
+
 static int list_cb(void *rock, struct sieve_data *sdata)
 {
     struct protstream *conn = (struct protstream *) rock;
+    size_t len = strlen(sdata->name);
 
-    prot_printf(conn, "\"%s\"", sdata->name);
+    if (strcspn(sdata->name, QUOTED_SPECIALS) != len) {
+        /* name contains QUOTED-SPECIALS, use a literal */
+        prot_printf(conn, "{%zu}\r\n%s", len, sdata->name);
+    }
+    else {
+        /* use a quoted string */
+        prot_printf(conn, "\"%s\"", sdata->name);
+    }
     if (sdata->isactive) prot_puts(conn, " ACTIVE");
     prot_puts(conn, "\r\n");
 
