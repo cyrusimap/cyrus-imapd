@@ -6,11 +6,22 @@ use utf8;
 binmode *STDOUT, ':encoding(utf-8)';
 binmode *STDERR, ':encoding(utf-8)';
 
-my ($base_commit, $head_commit) = @ARGV;
+my ($base_ref, $head_ref) = @ARGV;
+
+$base_ref //= $ENV{GITHUB_BASE_REF};
+$head_ref //= $ENV{GITHUB_HEAD_REF};
+
+if (!$base_ref or !$head_ref) {
+    die "usage: find-wip-commits BASE_REF HEAD_REF";
+}
 
 my @log_opts = qw(--no-decorate --oneline --no-color);
-my @commits = qx(git log @log_opts $base_commit..$head_commit --);
-my $reject = qr{ ^( wip | junk | nomerge )\b }ix;
+my @commits = qx(git log @log_opts $base_ref..$head_ref --);
+my $reject = qr{ ^( wip
+                    | junk
+                    | no\s?merge
+                    | te?mp
+                  )\b }ix;
 
 my $rejected = 0;
 
