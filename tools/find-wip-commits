@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+use v5.28.0;
+use warnings;
+use utf8;
+
+binmode *STDOUT, ':encoding(utf-8)';
+binmode *STDERR, ':encoding(utf-8)';
+
+my ($base_commit, $head_commit) = @ARGV;
+
+my @log_opts = qw(--no-decorate --oneline --no-color);
+my @commits = qx(git log @log_opts $base_commit..$head_commit --);
+my $reject = qr{ ^( wip | junk | nomerge )\b }ix;
+
+my $rejected = 0;
+
+for (@commits) {
+    chomp;
+
+    say "XXX $_";
+
+    my ($sha1, $msg) = split " ", $_, 2;
+
+    if ($msg =~ m/$reject/) {
+        say "❌ Commit message for $sha1 starts with $1";
+        $rejected++;
+    }
+}
+
+exit $rejected;
