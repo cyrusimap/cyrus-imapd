@@ -13830,6 +13830,10 @@ static void list_data(struct listargs *listargs)
 {
     canonical_list_patterns(listargs->ref, &listargs->pat);
 
+    /* The reference argument is now part of the canonical patterns,
+       so send an empty reference to backends */
+    listargs->ref = "";
+
     /* Check to see if we should only list the personal namespace */
     if (!(listargs->cmd == LIST_CMD_EXTENDED)
             && !strcmp(listargs->pat.data[0], "*")
