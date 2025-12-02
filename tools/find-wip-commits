@@ -15,16 +15,18 @@ if (!$base_ref or !$head_ref) {
     die "usage: find-wip-commits BASE_REF HEAD_REF";
 }
 
-my @log_opts = qw(--no-decorate --oneline --no-color);
-my @commits = qx(git log @log_opts $base_ref..$head_ref --);
+# words we wish to reject in initial position
 my $reject = qr{ ^( wip
                     | junk
                     | no\s?merge
                     | te?mp
                   )\b }ix;
 
-my $rejected = 0;
+my @log_opts = qw(--no-decorate --oneline --no-color);
+my @commits = qx(git log @log_opts $base_ref..$head_ref --);
+die "git log failed" if $?;
 
+my $rejected = 0;
 for (@commits) {
     chomp;
 
