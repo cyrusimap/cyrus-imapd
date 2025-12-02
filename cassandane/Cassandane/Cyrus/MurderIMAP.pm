@@ -219,6 +219,73 @@ sub test_list_specialuse
     $self->assert_deep_equals($bresult, $fresult);
 }
 
+sub test_list_subscribed
+{
+    my ($self) = @_;
+
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
+
+    my %subscribed = map { $_ => 1 } qw( A1 A2 A3 );
+    my %other = map { $_ => 1 } qw( lists personal timesheets );
+
+    # create some subscribed folders
+    foreach my $f (keys %subscribed) {
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+        $frontend->subscribe("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # create some other non special-use folders (control group)
+    foreach my $f (keys %other) {
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+        $frontend->subscribe("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    }
+
+    # ask the backend about them
+    my $bresult = $backend->list([qw(SUBSCRIBED)], "", "INBOX.A*");
+    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+    xlog $self, Dumper $bresult;
+
+    # check the responses
+    my %found;
+    foreach my $r (@{$bresult}) {
+        my ($flags, $sep, $name) = @{$r};
+        # carve out the interesting part of the name
+        $self->assert_matches(qr/^INBOX$sep/, $name);
+        $name = substr($name, 6);
+        $found{$name} = 1;
+        # only want subscribed folders
+        $self->assert(exists $subscribed{$name});
+        # must be flagged with \subscribed
+        $self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
+    }
+
+    # make sure no expected responses were missing
+    $self->assert_deep_equals(\%subscribed, \%found);
+
+    # ask the frontend about them
+    my $fresult = $frontend->list([qw(SUBSCRIBED)], "", "INBOX.A*");
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    xlog $self, Dumper $fresult;
+
+    # expect the same results as on backend
+    $self->assert_deep_equals($bresult, $fresult);
+
+    # ask the frontend about them with a non-empty reference argument
+    $fresult = $frontend->list([qw(SUBSCRIBED)], "INBOX.A", "*");
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    xlog $self, Dumper $fresult;
+
+    # expect the same results as on backend
+    $self->assert_deep_equals($bresult, $fresult);
+}
+
 sub test_xlist
 {
     my ($self) = @_;
