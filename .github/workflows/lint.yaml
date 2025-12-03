@@ -25,5 +25,9 @@ jobs:
       shell: bash
       run: ./tools/find-fixme-markers
     - name: Assert no WIP commits
+      env:
+        COMMITS: ${{ toJSON(github.event.commits) }}
       shell: bash
-      run: ./tools/find-wip-commits ${{github.base_ref}} ${{github.head_ref}}
+      run: |
+        echo "commits: $COMMITS"
+        ./tools/find-wip-commits ${{github.base_ref}} ${{github.head_ref}}
