@@ -922,7 +922,6 @@ HIDDEN struct cyrusdb_backend cyrusdb_sql =
     NULL,
 
     NULL, /*yield*/
-    NULL, /*yieldall*/
 
     &myopen,
     &myclose,
