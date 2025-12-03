@@ -29,10 +29,10 @@ sub test_cyr_expire_delete_findpaths_nolegacy
     $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format,
                                      ['SET', '$VERSION', '1']);
 
-    my $res = $admintalk->status($inbox, ['mailboxid']);
-    my $inboxid = $res->{mailboxid}[0];
-    $res = $admintalk->status($subfolder, ['mailboxid']);
-    my $subid = $res->{mailboxid}[0];
+    my $res = $admintalk->status($inbox, ['uniqueid']);
+    my $inboxid = $res->{uniqueid}[0];
+    $res = $admintalk->status($subfolder, ['uniqueid']);
+    my $subid = $res->{uniqueid}[0];
 
     xlog $self, "Delete $subfolder";
     $admintalk->unselect();
