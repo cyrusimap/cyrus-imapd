@@ -8,8 +8,8 @@ binmode *STDERR, ':encoding(utf-8)';
 
 my ($base_ref, $head_ref) = @ARGV;
 
-$base_ref //= $ENV{GITHUB_BASE_REF};
-$head_ref //= $ENV{GITHUB_HEAD_REF};
+$base_ref //= $ENV{GITHUB_BASE_REF} // 'master';
+$head_ref //= $ENV{GITHUB_HEAD_REF} // 'HEAD';
 
 if (!$base_ref or !$head_ref) {
     die "usage: find-wip-commits BASE_REF HEAD_REF";
@@ -23,7 +23,9 @@ my $reject = qr{ ^( wip
                   )\b }ix;
 
 my @log_opts = qw(--no-decorate --oneline --no-color);
-my @commits = qx(git log @log_opts $base_ref..$head_ref --);
+my $ref = "$base_ref..$head_ref";
+say "XXX $ref";
+my @commits = qx(git log @log_opts $ref --);
 die "git log failed" if $?;
 
 my $rejected = 0;
