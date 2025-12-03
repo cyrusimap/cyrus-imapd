@@ -26,4 +26,4 @@ jobs:
       run: ./tools/find-fixme-markers
     - name: Assert no WIP commits
       shell: bash
-      run: ./tools/find-wip-commits
+      run: ./tools/find-wip-commits ${{github.base_ref}} ${{github.head_ref}}
