@@ -1734,6 +1734,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     json_t *phones = json_array();
     json_t *online = json_array();
     int emailIndex = 0, defaultEmailIndex = -1;
+    int minPrefValue = 101; // allowed range is 1 to 100
 
     // Generate lookup table for Apple's X-ABADR property values.
     hash_table abadr_by_group = HASH_TABLE_INITIALIZER;
@@ -1865,6 +1866,16 @@ static json_t *jmap_contact_from_vcard(const char *userid,
                 else if (!strcasecmp(param->name, "label")) {
                     label = param->value;
                     if (label) label_len = strlen(label);
+                }
+                else if (!strcasecmp(param->name, "pref")) {
+                    size_t len = strlen(param->value);
+                    int pref = 0;
+                    if (len <= 3 && len == strspn(param->value, "0123456789"))
+                        pref = atoi(param->value);
+                    if (pref && pref < minPrefValue) {
+                        minPrefValue = pref;
+                        defaultEmailIndex = emailIndex;
+                    }
                 }
             }
             json_object_set_new(item, "type", json_string(type));

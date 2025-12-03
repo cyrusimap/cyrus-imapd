@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ':v1';
+
+sub test_contact_get_emails_v4
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    xlog $self, "create a v4 contact with multiple emails";
+    my $uid = '816ad14a-f9ef-43a8-9039-b57bf321de1f';
+    my $href = "Default/$uid.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID;VALUE=TEXT:$uid
+PRODID:-//CyrusIMAP.org//Cyrus 3.13.0-alpha0-1560-g0834bc3ab-dirty//EN
+EMAIL;PROP-ID=e1;TYPE=WORK:jqpublic\@xyz.example.com
+EMAIL;PROP-ID=e3;PREF=2:jdoe\@example.com
+EMAIL;PROP-ID=e2;PREF=1:jane_doe\@example.com
+FN:Jane Doe
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['emails'],
+        }, 'R1']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{list}[0]{id});
+    $self->assert_cmp_deeply(bag(
+                                 {
+                                     type      => "work",
+                                     isDefault => JSON::false,
+                                     value     => "jqpublic\@xyz.example.com"
+                                 },
+                                 {
+                                     type      => "other",
+                                     isDefault => JSON::false,
+                                     value     => "jdoe\@example.com"
+                                 },
+                                 {
+                                     type      => "other",
+                                     isDefault => JSON::true,
+                                     value     => "jane_doe\@example.com"
+                                 }
+                             ),
+                             $res->[0][1]{list}[0]{emails}
+        );
+}
