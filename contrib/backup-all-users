@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Cyrus::Backup;
+use Getopt::Long::Descriptive;
+
+my ($opt, $usage) = describe_options(
+  "$0 %o --server s --port p",
+  [ 'servername|server|s=s', "the server name", { required => 1  } ],
+  [ 'host|h=s', "the host to connect to (defaults to servername)" ],
+  [ 'port|p=i', "the port to connect to",   { default  => 2901 } ],
+  [ 'datadir|data|d=s', "directory to back up into", { required => 1} ],
+  [ 'metadir|meta|m=s', "meta directory for state file (defaults to datadir)" ],
+  [ 'compress|c', "compress data file (.tar.gz)", { default => 0 } ],
+  [],
+  [ 'verbose|v',  "print usernames"              ],
+  [ 'debug', "print lots of extra stuff"         ],
+  [ 'help',       "print usage message and exit", { shortcircuit => 1 } ],
+);
+
+print($usage->text), exit if $opt->help;
+
+my $server = $opt->servername;
+my $host = $opt->host // $server;
+my $port = $opt->port;
+my $datadir = $opt->datadir;
+my $metadir = $opt->metadir // $datadir;
+my $compress = $opt->compress;
+
+my @users = Cyrus::Backup::GetUsers($host, $port, $server);
+
+for my $user (@users) {
+  print "$user\n" if $opt->verbose;
+  local $ENV{DEBUGIO} = 1 if $opt->debug;
+  my $userdata = "$datadir/$user";
+  my $usermeta = "$metadir/$user";
+  mkdir($userdata);
+  mkdir($usermeta) if $datadir ne $metadir;
+  Cyrus::Backup::BackupUser($host, $port, $usermeta, $userdata, $server, $user, $compress);
+}

@@ -116,6 +116,12 @@ sub create
                                 port => '@basedir@/conf/ptsock',
                                 %params);
     }
+    elsif ($name =~ m/backupcyrusd/)
+    {
+        return Cassandane::Service->new(
+                                argv => ['backupcyrusd'],
+                                %params);
+    }
     else
     {
         die "$name: No command specified and cannot guess a default";

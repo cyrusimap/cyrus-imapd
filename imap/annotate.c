@@ -1230,6 +1230,18 @@ EXPORTED int annotatemore_findall_mailbox(const struct mailbox *mailbox,
                                      uid, entry, since_modseq, proc, rock, flags);
 }
 
+EXPORTED int annotatemore_findall_mbentry(const mbentry_t *mbentry,
+                         unsigned int uid,
+                         const char *entry,
+                         modseq_t since_modseq,
+                         annotatemore_find_proc_t proc,
+                         void *rock,
+                         int flags)
+{
+    return annotatemore_findall_full(NULL, NULL, mbentry,
+                                     uid, entry, since_modseq, proc, rock, flags);
+}
+
 EXPORTED int annotatemore_findall_pattern(const char *pattern,
                          unsigned int uid,
                          const char *entry,
