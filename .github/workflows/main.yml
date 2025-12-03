@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
-        options: --init
+        options: --init --privileged
     steps:
     - uses: actions/checkout@v4
       with:
@@ -59,6 +59,9 @@ jobs:
     - name: setup git safe directory
       shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
+    - name: override kernel core pattern
+      shell: bash
+      run: sudo sysctl -w kernel.core_pattern=core.%p
     - name: fetch upstream release tags
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
       shell: bash
@@ -86,8 +89,7 @@ jobs:
       if: ${{ ! matrix.skip-cass }}
       id: cass1
       continue-on-error: true
-      # We haven't figured out how to make Test::Core work in actions yet.
-      run: cyd test --no-ok --slow "!Test::Core" --format prettier "${{ matrix.skip }}"
+      run: cyd test --no-ok --slow --format prettier "${{ matrix.skip }}"
     - name: rerun cassandane failures noisily
       if: ${{ steps.cass1.outcome == 'failure' }}
       run: cyd test --no-slow --format pretty --rerun
