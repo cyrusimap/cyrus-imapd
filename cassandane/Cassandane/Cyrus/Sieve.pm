@@ -42,6 +42,7 @@ use Net::CalDAVTalk 0.12;
 use strict;
 use warnings;
 use IO::File;
+use IO::Socket::IP;
 use version;
 use utf8;
 use File::Temp qw/tempfile/;
@@ -50,7 +51,7 @@ use Date::Parse;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
-use Encode qw(decode);
+use Encode qw(decode encode);
 use MIME::Base64 qw(encode_base64);
 use Data::Dumper;
 
@@ -396,6 +397,86 @@ EOF
     $self->{store}->set_folder($target);
     $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged' ]);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
+# Returns an IO::Socket::IP object connected to timsieved that's
+# authenticated as cassandane
+#
+# Use timsieved_read() and timsieved_write() to interact with it
+
+sub timsieved_client {
+    my $self = shift;
+
+    my $srv = $self->{instance}->get_service('sieve');
+    my $client = IO::Socket::IP->new(
+        PeerHost => $srv->host(),
+        PeerPort => $srv->port(),
+        Type     => SOCK_STREAM,
+    ) or die "Can't connect to timsieved: $@";
+
+    # Banner
+    timsieved_read($client);
+
+    # Login
+    timsieved_write($client, "AUTHENTICATE \"PLAIN\"\n");
+    $self->assert_str_equals("{0}\r\n\r\n", timsieved_read($client));
+
+    my $plain = encode_base64("\0cassandane\0test", "");
+    my $len = length($plain);
+    timsieved_write($client, "{$len+}\r\n");
+    timsieved_write($client, "$plain\n");
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    return $client;
+}
+
+# Reads 4096 octets from timsieved and returns characters. Waits
+# up to 5 seconds for data, returns an empty string if none received.
+
+sub timsieved_read {
+    my $sock = shift;
+
+    my $buf = "";
+
+    my $old_alarm = 0;
+
+    eval {
+        local $SIG{ALRM} = sub { die "alarm\n" };
+        $old_alarm = alarm 5;
+        $sock->recv($buf, 4096);
+    };
+
+    my $err = $@;
+
+    alarm($old_alarm);
+
+    if ($err && $err ne "alarm\n") {
+      die "timsieved_read failed?! $err\n";
+    }
+
+    xlog "timsieved S: $buf";
+
+    $buf = decode("UTF-8", $buf);
+
+    return $buf;
+}
+
+# Writes $str directly without handling encoding. Callers are responsible for
+# encoding any characters into octets that might need it. This is because
+# callers often need to write:
+#
+#     COMMAND {5+}\r\n
+#     10 octets!
+#
+# and if '10 octets!' contained UTF-8 characters, 5+ would be wrong once
+# encoded into octets, so we can't just encode all input on the fly.
+
+sub timsieved_write {
+    my ($sock, $str) = @_;
+
+    $sock->write($str);
+
+    xlog "timsieved: C: $str";
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/Sieve';
