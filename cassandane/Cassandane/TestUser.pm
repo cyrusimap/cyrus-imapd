@@ -1,6 +1,9 @@
 package Cassandane::TestUser;
 use Moo;
 
+use experimental 'signatures';
+
+use Carp ();
 use Cwd ();
 
 has username => (is => 'ro', required => 1);
@@ -96,6 +99,63 @@ has entity_jmap => (
         });
     }
 );
+
+my @DEFAULT_USING = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:mail
+    urn:ietf:params:jmap:submission
+    urn:ietf:params:jmap:vacationresponse
+    urn:ietf:params:jmap:calendars
+    urn:ietf:params:jmap:contacts
+
+    https://cyrusimap.org/ns/jmap/mail
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/contacts
+
+    https://cyrusimap.org/ns/jmap/performance
+    https://cyrusimap.org/ns/jmap/backup
+    https://cyrusimap.org/ns/jmap/blob
+);
+
+# Either 0-arg to get a default-config one, or provide just [using...] for
+# custom using, or {k=>v,...} to override constructor args.
+sub new_jmaptester ($self, $new_arg = undef) {
+    my %overrides;
+    if ($new_arg) {
+        %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
+                    : ref $new_arg eq 'ARRAY' ? (using => $new_arg)
+                    : Carp::confess("expected hash or array reference to ->new_jmaptester, got neither");
+    }
+
+    unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
+        Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+    }
+
+    my %arg = $self->_common_http_service_args->%*;
+
+    my $host = $arg{host};
+    my $port = $arg{port};
+
+    require Cassandane::JMAPTester;
+    my $jtest = Cassandane::JMAPTester->new({
+        fallback_account_id => $self->username,
+
+        api_uri => "http://$host:$port/jmap/",
+        upload_uri => "http://$host:$port/jmap/upload/{accountId}/",
+        default_using => [ @DEFAULT_USING ],
+        %overrides,
+    });
+
+    $jtest->ua->set_default_header(
+        'Authorization',
+        q{Basic } .  MIME::Base64::encode_base64(
+            join(q{:}, $self->username, $self->password),
+            q{},
+        )
+    );
+
+    return $jtest;
+}
 
 has carddav => (
     is => 'ro',
