@@ -650,7 +650,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
     " JOIN vcard_objs CO" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
     " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
-    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox);"
+    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
 
 #define GETCARD_EXISTS \
     "SELECT kind " \
@@ -681,10 +681,11 @@ static int appendarray_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
-                               const mbentry_t *mbentry,
-                               const char *vcard_uid, unsigned kind,
-                               strarray_t *emails)
+static int _getemails(struct carddav_db *carddavdb,
+                      const mbentry_t *mbentry,
+                      const char *vcard_uid, unsigned kind,
+                      const char *sort,
+                      strarray_t *emails)
 {
     int found = 0;
 
@@ -718,9 +719,34 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
     }
 
     // get emails in the card(s) itself
-    sqldb_exec(carddavdb->db, GETEMAILS, bval, &appendarray_cb, emails);
+    struct buf stmt = BUF_INITIALIZER;
+    buf_setcstr(&stmt, GETEMAILS);
+    if (sort) buf_appendcstr(&stmt, sort);
+    buf_putc(&stmt, ';');
+
+    sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval, &appendarray_cb, emails);
+
+    buf_free(&stmt);
 
     return found;
+}
+
+EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
+                               const mbentry_t *mbentry,
+                               const char *vcard_uid, unsigned kind,
+                               strarray_t *emails)
+{
+    return _getemails(carddavdb, mbentry, vcard_uid, kind, NULL, emails);
+}
+
+#define PREF_EMAIL " ORDER BY CO.vcard_uid, E.ispref DESC, E.pos"
+
+EXPORTED int carddav_getemails_pref(struct carddav_db *carddavdb,
+                                    const mbentry_t *mbentry,
+                                    const char *vcard_uid, unsigned kind,
+                                    strarray_t *emails)
+{
+    return _getemails(carddavdb, mbentry, vcard_uid, kind, PREF_EMAIL, emails);
 }
 
 

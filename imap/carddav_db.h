@@ -141,6 +141,11 @@ int carddav_getemails(struct carddav_db *carddavdb,
                       const mbentry_t *mbentry,
                       const char *vcard_uid, unsigned kind,
                       strarray_t *members);
+/* Same as above, but emails are sorted in preferred order */
+int carddav_getemails_pref(struct carddav_db *carddavdb,
+                           const mbentry_t *mbentry,
+                           const char *vcard_uid, unsigned kind,
+                           strarray_t *members);
 
 /* Looks up a group by uid, optionally filtered by addressbook mailbox.
    Allocates and returns an array of its member uids. */
