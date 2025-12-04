@@ -94,22 +94,29 @@ sub _import_message {
 
   my $jmap  = $self->user->entity_jmap;
   my $bytes = Scalar::Util::blessed($email) ? $email->as_string : $email;
-  my $upload_res = $jmap->Upload($bytes, "message/rfc822");
-  my $blobid = $upload_res->{blobId};
+  my $upload  = $jmap->upload({
+      blob => \$bytes,
+      type => "message/rfc822",
+      accountId => $jmap->fallback_account_id,
+  });
 
-  my $import_res = $jmap->CallMethods([['Email/import', {
+  my $blob_id = $upload->blob_id;
+
+  my $import_res = $jmap->request([['Email/import', {
       emails => {
           "toCreate" => {
-              blobId => $blobid,
+              blobId => $blob_id,
               mailboxIds => { $self->id =>  JSON::true() },
               ($keywords ? (keywords => { map {; $_ => JSON::true() } @$keywords }) : ()),
           },
       }
   }, "MailboxEntityImport"]]);
 
-  Carp::confess("Email/import call failed") unless $import_res->[0][0] eq 'Email/import';
+  Carp::confess("Email/import call failed") unless $import_res->sentence(0)->name eq 'Email/import';
 
-  my $email_id = $import_res->[0][1]{created}{toCreate}{id};
+  my $email_id = $import_res->sentence_named('Email/import')
+                            ->arguments
+                            ->{created}{toCreate}{id};
 
   unless ($email_id) {
       Carp::confess("Email/import did not import our blob");
