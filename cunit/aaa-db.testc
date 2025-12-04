@@ -233,7 +233,7 @@ static void test_openclose(void)
     /* open() with _CREATE succeeds and creates the db */
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* closing succeeds and leaves the file in place */
@@ -292,7 +292,7 @@ static void test_multiopen(void)
     /* open() with _CREATE succeeds and creates the db */
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* 1st txn starts */
@@ -321,15 +321,17 @@ static void test_multiopen(void)
         CU_ASSERT_EQUAL(r, CYRUSDB_OK);
         CU_ASSERT_PTR_NOT_NULL(db);
 
-        /* 2nd txn starts */
-        CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
-        CANCOMMIT();
-        /* 2nd txn ends */
+        if (db) {
+            /* 2nd txn starts */
+            CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+            CANCOMMIT();
+            /* 2nd txn ends */
 
-        /* closing succeeds and leaves the file in place */
-        r = cyrusdb_close(db);
-        CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-        CU_ASSERT_EQUAL(fexists(filename), 0);
+            /* closing succeeds and leaves the file in place */
+            r = cyrusdb_close(db);
+            CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+            CU_ASSERT_EQUAL(fexists(filename), 0);
+        }
     }
     db = db1;
     txn = txn1;
@@ -348,7 +350,7 @@ static void test_multiopen(void)
     /* re-opening works */
     r = cyrusdb_open(backend, filename, 0, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* all the records are present in the file */
@@ -390,7 +392,7 @@ static void test_read_and_delete(void)
     /* open() with _CREATE succeeds and creates the db */
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* 1st txn starts */
@@ -444,7 +446,7 @@ static void test_replace_before_delete(void)
     /* open() with _CREATE succeeds and creates the db */
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* 1st txn */
@@ -492,7 +494,7 @@ static void test_opentwo(void)
     /* open() with _CREATE succeeds and creates the db */
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db1);
     CU_ASSERT_EQUAL(fexists(filename), 0);
     CU_ASSERT_EQUAL(fexists(filename2), -ENOENT);
 
@@ -500,7 +502,7 @@ static void test_opentwo(void)
      * succeeds and creates another separate db */
     r = cyrusdb_open(backend, filename2, CYRUSDB_CREATE, &db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db2);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db2);
     CU_ASSERT_EQUAL(fexists(filename), 0);
     CU_ASSERT_EQUAL(fexists(filename2), 0);
     CU_ASSERT_PTR_NOT_EQUAL(db1, db2);
@@ -527,7 +529,7 @@ static void test_readwrite(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
@@ -572,7 +574,7 @@ static void test_multirw(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
@@ -626,7 +628,7 @@ static void test_readwrite_zerolen(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
@@ -673,7 +675,7 @@ static void test_readwrite_null(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
@@ -718,7 +720,7 @@ static void test_abort(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
@@ -770,7 +772,7 @@ static void test_delete(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
@@ -891,7 +893,7 @@ static void test_mboxlist(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
@@ -958,7 +960,7 @@ static void test_foreach_nullkey(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     for (i = 0; i < 4; i++)
@@ -1068,7 +1070,7 @@ static void test_foreach(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     for (i = 0; i < 8; i++)
@@ -1382,7 +1384,7 @@ static void test_foreach_changes(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
@@ -1416,7 +1418,7 @@ static void test_foreach_changes(void)
     db = NULL;
     r = cyrusdb_open(backend, filename2, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
@@ -1476,7 +1478,7 @@ static void test_binary_keys(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY1, sizeof(KEY1)-1, CYRUSDB_NOTFOUND);
@@ -1591,7 +1593,7 @@ static void test_binary_data(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY1, sizeof(KEY1)-1, CYRUSDB_NOTFOUND);
@@ -1825,7 +1827,7 @@ static void test_many(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     for (n = 0 ; n <= MAXN ; n++) {
@@ -1964,7 +1966,7 @@ static void test_foreach_replace(void)
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
     /* store() some records */
     CANSTORE("01", 2, "one", 3);
