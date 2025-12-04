@@ -17,19 +17,12 @@ sub _get_properties {
     my $dt = $self->datatype;
 
     my $jmap = $self->user->entity_jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
-    my ($res) = $jmap->CallMethods([[
-        "$dt/get",
-        { ids => [ "$id" ] },
-        'FactoryGet',
-    ]]);
+    my $res = $jmap->request([
+        [ "$dt/get", { ids => [ "$id" ] }, 'FactoryGet' ]
+    ]);
 
-    unless ($res->[0][0] eq "$dt/get") {
-        Carp::confess("failed to get properties of $dt object with id $id")
-    }
-
-    my $props = $res->[0][1]{list}[0];
+    my $props = $res->single_sentence("$dt/get")->arguments->{list}[0];
     delete $props->{id};
 
     return $props;
@@ -59,25 +52,23 @@ sub create {
     my $dt = $self->datatype;
 
     my $jmap = $self->user->entity_jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
     $self->fill_in_creation_defaults($prop);
 
-    my ($res) = $jmap->CallMethods([[
+    my $res = $jmap->request([[
         "$dt/set",
         { create => { toCreate => $prop } },
         'FactorySetCreate',
     ]]);
 
-    unless ($res->[0][0] eq "$dt/set") {
-        Carp::confess("failed to complete $dt/set call")
-    }
+    my $set = $res->single_sentence("$dt/set")->as_set;
+    my $id  = $set->created_id('toCreate');
 
-    unless ($res->[0][1]{created}{toCreate}) {
+    unless (defined $id) {
         Carp::confess("failed to create $dt object")
     }
 
-    $self->get($res->[0][1]{created}{toCreate}{id});
+    $self->get($id);
 }
 
 sub _update {
@@ -86,21 +77,14 @@ sub _update {
     my $id = $instance->id;
 
     my $jmap = $self->user->entity_jmap;
-    local $jmap->{CreatedIds}; # do not pollute the client for later use
 
-    my ($res) = $jmap->CallMethods([[
+    my $res = $jmap->request([[
         "$dt/set",
         { update => { $id => $update } },
         'FactorySetUpdate',
     ]]);
 
-    unless ($res->[0][0] eq "$dt/set") {
-        Carp::confess("failed to complete $dt/set call")
-    }
-
-    if ($res->[0][1]{notUpdated}{$id}) {
-        Carp::confess("failed to update $dt object")
-    }
+    my $set = $res->single_sentence("$dt/set")->as_set->assert_no_errors;
 
     $instance->clear_properties;
 
