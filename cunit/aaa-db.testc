@@ -19,7 +19,13 @@ struct binary_result
     size_t datalen;
 };
 
-static const char *backend = CUNIT_PARAM("skiplist,flat,twom,twoskip");
+#ifdef USE_CYRUSDB_SQL
+#define BACKENDS "skiplist,flat,twom,twoskip,sql"
+#else
+#define BACKENDS "skiplist,flat,twom,twoskip"
+#endif
+
+static const char *backend = CUNIT_PARAM(BACKENDS);
 static char *filename;
 static char *filename2;
 static char *basedir;
