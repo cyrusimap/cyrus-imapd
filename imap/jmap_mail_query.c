@@ -237,8 +237,13 @@ HIDDEN void jmap_get_card_emails(strarray_t *card_uids, unsigned card_kind,
                     mbentry_t *mbentry = ptrarray_nth(&set->mbentrys, k);
 
                     found = carddav_getemails(set->carddavdb, mbentry,
-                                              uid, card_kind,
-                                              emails, member_uids);
+                                              uid, card_kind, emails);
+
+                    if (member_uids &&
+                        found && (card_kind != CARDDAV_KIND_CONTACT)) {
+                        carddav_getmembers(set->carddavdb, mbentry,
+                                           uid, member_uids);
+                    }
                 }
             }
         }

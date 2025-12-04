@@ -684,9 +684,9 @@ static int appendarray_cb(sqlite3_stmt *stmt, void *rock)
 EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
                                const mbentry_t *mbentry,
                                const char *vcard_uid, unsigned kind,
-                               strarray_t *emails, strarray_t **group_uids)
+                               strarray_t *emails)
 {
-    int r, found = 0;
+    int found = 0;
 
     if (!strncmpsafe(vcard_uid, "shared/", 7)) {
         /* strip legacy "shared/" prefix -- no longer needed*/
@@ -709,7 +709,7 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
 
     if (*vcard_uid) {
         // first check that the card exists by fetching it's kind
-        r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
+        int r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
                        &cardexists_cb, &this_kind);
 
         if (r || this_kind < 0) return 0;
@@ -718,15 +718,7 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
     }
 
     // get emails in the card(s) itself
-    r = sqldb_exec(carddavdb->db, GETEMAILS, bval, &appendarray_cb, emails);
-
-    if (!r && group_uids &&
-        (this_kind == CARDDAV_KIND_GROUP || this_kind == -1)) {
-        // get group members
-        if (!*group_uids) *group_uids = strarray_new();
-        sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
-                   &appendarray_cb, *group_uids);
-    }
+    sqldb_exec(carddavdb->db, GETEMAILS, bval, &appendarray_cb, emails);
 
     return found;
 }
@@ -758,7 +750,7 @@ EXPORTED int carddav_getmembers(struct carddav_db *carddavdb,
     if (r || this_kind < 0) return 0;
 
     // get group members
-    *group_uids = strarray_new();
+    if (!*group_uids) *group_uids = strarray_new();
     sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
                &appendarray_cb, *group_uids);
 
