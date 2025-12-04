@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(encode);
+
+sub test_timsieved_utf8_scripts
+    ($self)
+{
+    my $client = $self->timsieved_client;
+
+    timsieved_write($client, "LISTSCRIPTS\n");
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    my $snowman = encode("UTF-8", "\N{SNOWMAN}");
+    my $slen = length($snowman);
+
+    # Create a utf8 sieve script name
+    timsieved_write($client, <<~"EOF");
+      PUTSCRIPT {$slen+}\r
+      $snowman {5+}\r
+      #test
+      EOF
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    timsieved_write($client, "LISTSCRIPTS\n");
+    $self->assert_str_equals("\"\N{SNOWMAN}\"\r\nOK\r\n", timsieved_read($client));
+}
