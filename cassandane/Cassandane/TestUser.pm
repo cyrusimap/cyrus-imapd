@@ -77,26 +77,8 @@ has entity_jmap => (
     # This is just a persistent JMAP client with all the "using" turned on.
     is => 'ro',
     lazy => 1,
-    default => sub {
-        my ($self) = @_;
-        $self->new_jmaptalk({
-            using => [ qw(
-                urn:ietf:params:jmap:core
-                urn:ietf:params:jmap:mail
-                urn:ietf:params:jmap:submission
-                urn:ietf:params:jmap:vacationresponse
-                urn:ietf:params:jmap:calendars
-                urn:ietf:params:jmap:contacts
-
-                https://cyrusimap.org/ns/jmap/mail
-                https://cyrusimap.org/ns/jmap/calendars
-                https://cyrusimap.org/ns/jmap/contacts
-
-                https://cyrusimap.org/ns/jmap/performance
-                https://cyrusimap.org/ns/jmap/backup
-                https://cyrusimap.org/ns/jmap/blob
-            ) ]
-        });
+    default => sub ($self) {
+        $self->new_jmaptester;
     }
 );
 
