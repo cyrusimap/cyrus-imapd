@@ -19,7 +19,14 @@ struct binary_result
     size_t datalen;
 };
 
-static const char *backend = CUNIT_PARAM("skiplist,flat,twom,twoskip");
+#if defined(USE_CYRUSDB_SQL) && defined(HAVE_SQLITE)
+/* if we've built cyrusdb_sql with the sqlite engine, then we can test it */
+#define BACKENDS "skiplist,flat,twom,twoskip,sql"
+#else
+#define BACKENDS "skiplist,flat,twom,twoskip"
+#endif
+
+static const char *backend = CUNIT_PARAM(BACKENDS);
 static char *filename;
 static char *filename2;
 static char *basedir;
