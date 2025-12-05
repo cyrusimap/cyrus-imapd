@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 use Test::Deep ':v1';
 
-sub test_dblookup_uid2members
+sub test_dblookup_expandcard
     :NoAltNameSpace
 {
     my ($self) = @_;
@@ -110,6 +110,10 @@ sub test_dblookup_uid2members
                 sharedContact1 => {
                     emails => {
                         e1 => {
+                            address => 'sharedcontact2Pref@local',
+                            pref => 1
+                        },
+                        e2 => {
                             address => 'sharedcontact2@local'
                         }
                     },
@@ -117,9 +121,6 @@ sub test_dblookup_uid2members
                 },
                 sharedContact2 => {
                     emails => {
-                        e1 => {
-                            address => 'sharedcontact3@local'
-                        }
                     },
                     addressBookIds => { $other2SharedAbookId2 => JSON::true }
                 },
@@ -149,6 +150,10 @@ sub test_dblookup_uid2members
                     emails => {
                         e1 => {
                             address => 'ownContact@local'
+                        },
+                        e1 => {
+                            address => 'ownContactPref@local',
+                            pref => 1
                         }
                     },
                 },
@@ -202,7 +207,23 @@ sub test_dblookup_uid2members
 
     my $dbLookupUrl = "http://"
         . $http->host . ":" . $http->port
-        . "/dblookup/uid2members";
+        . "/dblookup/expandcard";
+
+    xlog "Lookup ownContactUid as cassandane";
+    $res = $adminJmap->ua->get($dbLookupUrl, {
+        headers => {
+            User => 'cassandane',
+            Key => $ownContactUid
+        },
+    });
+    $self->assert_cmp_deeply(
+        superhashof({
+            cassandane => {
+                $ownContactUid => 'ownContactPref@local'
+            }
+        }),
+        decode_json($res->{content})
+    );
 
     xlog "Lookup ownGroupUid as cassandane";
     $res = $adminJmap->ua->get($dbLookupUrl, {
@@ -213,8 +234,16 @@ sub test_dblookup_uid2members
     });
     $self->assert_cmp_deeply(
         superhashof({
-            other => [ $otherSharedContactUid ],
-            other2 => bag( $other2SharedContactUid1, $other2SharedContactUid2 )
+            cassandane => {
+                $ownGroupUid => 'ownGroup@local'
+            },
+            other => {
+                $otherSharedContactUid => 'sharedcontact@local'
+            },
+            other2 => {
+                $other2SharedContactUid1 => 'sharedcontact2Pref@local',
+                $other2SharedContactUid2 => JSON::null
+            }
         }),
         decode_json($res->{content})
     );
@@ -228,17 +257,24 @@ sub test_dblookup_uid2members
     });
     $self->assert_cmp_deeply(
         superhashof({
-            cassandane => [ $ownContactUid ],
-            other => [ $otherSharedContactUid ]
+            cassandane => {
+                $ownContactUid => 'ownContactPref@local'
+            },
+            other => {
+                $otherSharedContactUid => 'sharedcontact@local'
+            },
+            other2 => {
+                $other2SharedGroupUid => JSON::null
+            }
         }),
         decode_json($res->{content})
     );
 
-    xlog "Lookup ownContactUid as cassandane -- NOT a group so no content";
+    xlog "Lookup bogus Uid as cassandane -- no content";
     $res = $adminJmap->ua->get($dbLookupUrl, {
         headers => {
             User => 'cassandane',
-            Key => $ownContactUid
+            Key => 'foo'
         },
     });
     $self->assert_str_equals('204', $res->{status});

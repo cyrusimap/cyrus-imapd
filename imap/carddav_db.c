@@ -650,7 +650,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
     " JOIN vcard_objs CO" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
     " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
-    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox);"
+    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
 
 #define GETCARD_EXISTS \
     "SELECT kind " \
@@ -681,12 +681,13 @@ static int appendarray_cb(sqlite3_stmt *stmt, void *rock)
     return 0;
 }
 
-EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
-                               const mbentry_t *mbentry,
-                               const char *vcard_uid, unsigned kind,
-                               strarray_t *emails, strarray_t **group_uids)
+static int _getemails(struct carddav_db *carddavdb,
+                      const mbentry_t *mbentry,
+                      const char *vcard_uid, unsigned kind,
+                      const char *sort,
+                      strarray_t *emails)
 {
-    int r, found = 0;
+    int found = 0;
 
     if (!strncmpsafe(vcard_uid, "shared/", 7)) {
         /* strip legacy "shared/" prefix -- no longer needed*/
@@ -709,7 +710,7 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
 
     if (*vcard_uid) {
         // first check that the card exists by fetching it's kind
-        r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
+        int r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
                        &cardexists_cb, &this_kind);
 
         if (r || this_kind < 0) return 0;
@@ -718,17 +719,34 @@ EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
     }
 
     // get emails in the card(s) itself
-    r = sqldb_exec(carddavdb->db, GETEMAILS, bval, &appendarray_cb, emails);
+    struct buf stmt = BUF_INITIALIZER;
+    buf_setcstr(&stmt, GETEMAILS);
+    if (sort) buf_appendcstr(&stmt, sort);
+    buf_putc(&stmt, ';');
 
-    if (!r && group_uids &&
-        (this_kind == CARDDAV_KIND_GROUP || this_kind == -1)) {
-        // get group members
-        if (!*group_uids) *group_uids = strarray_new();
-        sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
-                   &appendarray_cb, *group_uids);
-    }
+    sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval, &appendarray_cb, emails);
+
+    buf_free(&stmt);
 
     return found;
+}
+
+EXPORTED int carddav_getemails(struct carddav_db *carddavdb,
+                               const mbentry_t *mbentry,
+                               const char *vcard_uid, unsigned kind,
+                               strarray_t *emails)
+{
+    return _getemails(carddavdb, mbentry, vcard_uid, kind, NULL, emails);
+}
+
+#define PREF_EMAIL " ORDER BY CO.vcard_uid, E.ispref DESC, E.pos"
+
+EXPORTED int carddav_getemails_pref(struct carddav_db *carddavdb,
+                                    const mbentry_t *mbentry,
+                                    const char *vcard_uid, unsigned kind,
+                                    strarray_t *emails)
+{
+    return _getemails(carddavdb, mbentry, vcard_uid, kind, PREF_EMAIL, emails);
 }
 
 
@@ -758,7 +776,7 @@ EXPORTED int carddav_getmembers(struct carddav_db *carddavdb,
     if (r || this_kind < 0) return 0;
 
     // get group members
-    *group_uids = strarray_new();
+    if (!*group_uids) *group_uids = strarray_new();
     sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
                &appendarray_cb, *group_uids);
 
