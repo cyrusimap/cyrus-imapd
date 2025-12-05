@@ -124,6 +124,14 @@ sub new_jmaptester ($self, $new_arg = undef) {
 
         api_uri => "http://$host:$port/jmap/",
         upload_uri => "http://$host:$port/jmap/upload/{accountId}/",
+
+        # The session actually provides a query string of "?accept={type}" but
+        # our tests don't reliably provide type, and we can't just use the
+        # Accept header they send, because sometimes they send an Accept that's
+        # preferential or wildcardy.  So, we'll just not include that parameter
+        # here.  This is crap, but it's a transition toward less crap.
+        download_uri => "http://$host:$port/jmap/download/{accountId}/{blobId}/{name}",
+
         default_using => [ @DEFAULT_USING ],
         %overrides,
     });
