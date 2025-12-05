@@ -119,6 +119,9 @@ sub new_jmaptester ($self, $new_arg = undef) {
     my $port = $arg{port};
 
     require Cassandane::JMAPTester;
+    local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
+        unless exists $ENV{JMAP_TESTER_LOGGER};
+
     my $jtest = Cassandane::JMAPTester->new({
         fallback_account_id => $self->username,
 
