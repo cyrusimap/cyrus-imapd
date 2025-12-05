@@ -123,6 +123,7 @@ sub new_jmaptester ($self, $new_arg = undef) {
         fallback_account_id => $self->username,
 
         api_uri => "http://$host:$port/jmap/",
+        authentication_uri => "http://$host:$port/jmap",
         upload_uri => "http://$host:$port/jmap/upload/{accountId}/",
 
         # The session actually provides a query string of "?accept={type}" but
