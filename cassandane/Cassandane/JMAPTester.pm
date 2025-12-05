@@ -7,6 +7,24 @@ has fallback_account_id => (
     required => 1,
 );
 
+# This emulates JMAPTalk's DefaultUsing
+sub DefaultUsing {
+    my ($self, $using) = @_;
+    $using || return $self->default_using;
+    $self->default_using($using);
+}
+
+sub AddUsing {
+    my ($self, @to_add) = @_;
+    my %already_using = map {; $_ => 1 } $self->default_using->@*;
+
+    for my $capa (@to_add) {
+        next if $already_using{$capa}++;
+
+        push $self->default_using->@*, $capa;
+    }
+}
+
 # This emulates JMAPTalk's CallMethods, which returns the plain ol'
 # array-of-arrays that is the methodResponses
 sub CallMethods {
