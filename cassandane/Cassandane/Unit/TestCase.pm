@@ -530,7 +530,9 @@ sub assert_cmp_deeply
     require Test::Deep;
     require Test::Deep::JType;
 
+    no warnings 'once';
     local $Test::Deep::LeafWrapper = sub { Test::Deep::JType::_String->new(@_) };
+    use warnings 'once';
 
     my ($ok, $stack) = Test::Deep::cmp_details($actual, $expected);
 
