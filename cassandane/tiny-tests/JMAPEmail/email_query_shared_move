@@ -24,10 +24,9 @@ sub test_email_query_shared_move
     $self->{adminstore}->set_folder('user.other.A');
     $self->make_message("Email", store => $self->{adminstore}) or die;
 
-    my $res = $jmap->Call('Email/get', {
-        accountId => 'other',
-        ids => [],
-    });
+    my $res = $jmap->CallMethods([
+        [ 'Email/get', { accountId => 'other', ids => [] }, 'a' ]
+    ])->[0][1];
     $self->assert_not_null($res);
     my $oldState = $res->{state};
 
@@ -38,10 +37,9 @@ sub test_email_query_shared_move
     $admintalk->move(1, "user.other.B");
 
     # Fetch Changes
-    $res = $jmap->Call('Email/changes', {
-        accountId => 'other',
-        sinceState => $oldState,
-    });
+    $res = $jmap->CallMethods([
+        [ 'Email/changes', { accountId => 'other', sinceState => $oldState }, 'a' ]
+    ])->[0][1];
     $self->assert_not_null($res);
     $self->assert_num_equals(0, scalar @{$res->{created}});
     $self->assert_num_equals(1, scalar @{$res->{destroyed}});

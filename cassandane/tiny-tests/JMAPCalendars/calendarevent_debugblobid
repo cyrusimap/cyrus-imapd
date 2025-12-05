@@ -110,15 +110,8 @@ sub test_calendarevent_debugblobid
 
     xlog $self, "attempt to download debugBlob as non-admin (should fail)";
 
-    my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
-    my %Headers = (
-        'Authorization' => $jmap->auth_header(),
-    );
-    my $RawResponse = $jmap->ua->get($downloadUri, { headers => \%Headers });
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawResponse);
-    }
-    $self->assert_str_equals('404', $RawResponse->{status});
+    my $download = $self->{jmap}->Download('other', $debugBlobId);
+    $self->assert_str_equals('404', $download->{status});
 
     xlog $self, "get debugBlobId as admin user";
 

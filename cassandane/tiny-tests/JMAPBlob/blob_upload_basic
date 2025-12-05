@@ -8,14 +8,24 @@ sub test_blob_upload_basic
     my $instance = $self->{instance};
 
     xlog "Test without capability";
+
     my $jmap = $self->{jmap};
-    my $res = $jmap->CallMethods([['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']]);
+
+    my @using = ('urn:ietf:params:jmap:core');
+
+    my $res = $jmap->CallMethods(
+        [['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']],
+        \@using,
+    );
     $self->assert_str_equals($res->[0][0], 'error');
 
-    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+    push @using, 'urn:ietf:params:jmap:blob';
 
     xlog "Regular Blob/upload works and returns a blobId";
-    $res = $jmap->CallMethods([['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']]);
+    $res = $jmap->CallMethods(
+        [['Blob/upload', { create => { b1 => { data => [{'data:asText' => 'hello world'}] } } }, 'R1']],
+        \@using,
+    );
     $self->assert_str_equals('Blob/upload', $res->[0][0]);
     $self->assert_not_null($res->[0][1]{created}{b1}{id});
 }

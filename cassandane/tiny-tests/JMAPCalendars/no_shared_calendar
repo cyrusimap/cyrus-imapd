@@ -37,14 +37,8 @@ sub test_no_shared_calendar
     $self->assert_not_null($otherCalendarId);
     $admintalk->setacl('user.other.#calendars', cassandane => 'lr') or die;
 
-    $res = $jmap->ua->get($jmap->uri(), {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    });
-    $self->assert_str_equals('200', $res->{status});
-    my $session = eval { decode_json($res->{content}) };
+    my $session = $jmap->get_client_session->client_session;
+
     my $capabilities = $session->{accounts}{other}{accountCapabilities};
     $self->assert_not_null($capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
