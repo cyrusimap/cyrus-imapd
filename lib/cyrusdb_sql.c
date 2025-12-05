@@ -667,8 +667,15 @@ static int fetch_cb(void *rock,
     struct fetch_rock *frock = (struct fetch_rock *) rock;
 
     if (frock->data) {
-        *(frock->data) = xrealloc(*(frock->data), datalen);
-        memcpy(*(frock->data), data, datalen);
+        if (datalen) {
+            *(frock->data) = xrealloc(*(frock->data), datalen);
+            memcpy(*(frock->data), data, datalen);
+        }
+        else {
+            /* non-null data but datalen is 0: allocate one byte for "" */
+            *(frock->data) = xrealloc(*(frock->data), 1);
+            *(frock->data)[0] = '\0';
+        }
     }
     if (frock->datalen) *(frock->datalen) = datalen;
 
