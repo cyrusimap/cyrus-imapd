@@ -41,10 +41,11 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
 
 #include "assert.h"
@@ -323,13 +324,21 @@ static void *_sqlite_open(char *host __attribute__((unused)),
                           int flags)
 {
     int rc;
-    sqlite3 *db;
+    sqlite3 *db = NULL;
+    bool want_create = (flags & CYRUSDB_CREATE);
     int sqlite_open_flags = SQLITE_OPEN_READWRITE;
 
-    if ((flags & CYRUSDB_CREATE))
+    if (want_create)
         sqlite_open_flags |= SQLITE_OPEN_CREATE;
 
     rc = sqlite3_open_v2(database, &db, sqlite_open_flags, NULL);
+
+    if (want_create && rc == SQLITE_CANTOPEN) {
+        sqlite3_close(db);
+        cyrus_mkdir(database, 0755);
+        rc = sqlite3_open_v2(database, &db, sqlite_open_flags, NULL);
+    }
+
     if (rc != SQLITE_OK) {
         xsyslog(LOG_ERR, "DBERROR: SQL backend",
                          "sqlite3_error=<%s>",
