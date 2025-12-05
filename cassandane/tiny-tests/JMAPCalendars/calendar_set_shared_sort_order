@@ -38,15 +38,8 @@ sub test_calendar_set_shared_sort_order
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrw') or die;
 
     xlog $self, "Verify shared account is NOT isReadOnly";
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    $self->assert_str_equals('200', $RawResponse->{status});
-    my $session = eval { decode_json($RawResponse->{content}) };
+
+    my $session = $jmap->get_client_session->client_session;
     $self->assert_equals(JSON::false, $session->{accounts}{manifold}{isReadOnly});
 
     xlog $self, "Set sortOrder on a calendar";

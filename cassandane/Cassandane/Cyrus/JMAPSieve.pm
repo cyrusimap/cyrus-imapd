@@ -123,15 +123,7 @@ sub tear_down
 sub download
 {
     my ($self, $accountid, $blobid) = @_;
-    my $jmap = $self->{jmap};
-
-    my $uri = $jmap->downloaduri($accountid, $blobid);
-    my %Headers;
-    $Headers{'Authorization'} = $jmap->auth_header();
-    my %getopts = (headers => \%Headers);
-    my $res = $jmap->ua->get($uri, \%getopts);
-    xlog $self, "JMAP DOWNLOAD @_ " . Dumper($res);
-    return $res;
+    $self->{jmap}->Download($accountid, $blobid);
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPSieve';

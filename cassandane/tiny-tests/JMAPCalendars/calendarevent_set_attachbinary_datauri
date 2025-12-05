@@ -39,7 +39,7 @@ sub test_calendarevent_set_attachbinary_datauri
     xlog "Fetch event without Cyrus extension";
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            ids => ['#event1'],
+            ids => [$eventId],
             properties => ['links'],
         }, 'R1'],
     ], [
@@ -57,7 +57,7 @@ sub test_calendarevent_set_attachbinary_datauri
     xlog "Fetch event with Cyrus extension";
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            ids => ['#event1'],
+            ids => [$eventId],
             properties => ['links', 'x-href'],
         }, 'R1'],
     ], [

@@ -1,6 +1,8 @@
 package Cassandane::TestUser;
 use Moo;
 
+use experimental 'signatures';
+
 use Cwd ();
 
 has username => (is => 'ro', required => 1);
@@ -74,28 +76,78 @@ has entity_jmap => (
     # This is just a persistent JMAP client with all the "using" turned on.
     is => 'ro',
     lazy => 1,
-    default => sub {
-        my ($self) = @_;
-        $self->new_jmaptalk({
-            using => [ qw(
-                urn:ietf:params:jmap:core
-                urn:ietf:params:jmap:mail
-                urn:ietf:params:jmap:submission
-                urn:ietf:params:jmap:vacationresponse
-                urn:ietf:params:jmap:calendars
-                urn:ietf:params:jmap:contacts
-
-                https://cyrusimap.org/ns/jmap/mail
-                https://cyrusimap.org/ns/jmap/calendars
-                https://cyrusimap.org/ns/jmap/contacts
-
-                https://cyrusimap.org/ns/jmap/performance
-                https://cyrusimap.org/ns/jmap/backup
-                https://cyrusimap.org/ns/jmap/blob
-            ) ]
-        });
+    default => sub ($self) {
+        $self->new_jmaptester;
     }
 );
+
+my @DEFAULT_USING = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:mail
+    urn:ietf:params:jmap:submission
+    urn:ietf:params:jmap:vacationresponse
+    urn:ietf:params:jmap:calendars
+    urn:ietf:params:jmap:contacts
+
+    https://cyrusimap.org/ns/jmap/mail
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/contacts
+
+    https://cyrusimap.org/ns/jmap/performance
+    https://cyrusimap.org/ns/jmap/backup
+    https://cyrusimap.org/ns/jmap/blob
+);
+
+# Either 0-arg to get a default-config one, or provide just [using...] for
+# custom using, or {k=>v,...} to override constructor args.
+sub new_jmaptester ($self, $new_arg=undef) {
+    my %overrides;
+    if ($new_arg) {
+        %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
+                    : ref $new_arg eq 'ARRAY' ? (using => $new_arg)
+                    : Carp::confess("expected hash or array reference to ->jmap_tester, got neither");
+    }
+
+    unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
+        Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+    }
+
+    my %arg = $self->_common_http_service_args->%*;
+
+    my $host = $arg{host};
+    my $port = $arg{port};
+
+    require Cassandane::JMAPTester;
+    local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2';
+
+    my $jtest = Cassandane::JMAPTester->new({
+        fallback_account_id => $self->username,
+
+        api_uri => "http://$host:$port/jmap/",
+        authentication_uri => "http://$host:$port/jmap",
+        upload_uri => "http://$host:$port/jmap/upload/{accountId}/",
+
+        # The session actually providers a query string of "?accept={type}" but
+        # our tests don't reliably provide type, and we can't just use the
+        # Accept header they send, because sometimes they send an Accept that's
+        # preferential or wildcardy.  So, we'll just not include that parameter
+        # here.  This is crap, but it's a transition toward less crap.
+        download_uri => "http://$host:$port/jmap/download/{accountId}/{blobId}/{name}",
+
+        default_using => [ @DEFAULT_USING ],
+        %overrides,
+    });
+
+    $jtest->ua->set_default_header(
+        'Authorization',
+        q{Basic } .  MIME::Base64::encode_base64(
+            join(q{:}, $self->username, $self->password),
+            q{},
+        )
+    );
+
+    return $jtest;
+}
 
 has carddav => (
     is => 'ro',

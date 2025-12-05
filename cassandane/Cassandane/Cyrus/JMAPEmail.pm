@@ -157,21 +157,7 @@ sub get_account_capabilities
     my $Request;
     my $Response;
 
-    xlog $self, "get session";
-    $Request = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    $Response = $jmap->ua->get($jmap->uri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('200', $Response->{status});
-
-    my $session;
-    $session = eval { decode_json($Response->{content}) } if $Response->{success};
+    my $session = $jmap->get_client_session->client_session;
 
     return $session->{accounts}{cassandane}{accountCapabilities};
 }
@@ -184,15 +170,8 @@ sub defaultprops_for_email_get
 sub download
 {
     my ($self, $accountid, $blobid) = @_;
-    my $jmap = $self->{jmap};
 
-    my $uri = $jmap->downloaduri($accountid, $blobid);
-    my %Headers;
-    $Headers{'Authorization'} = $jmap->auth_header();
-    my %getopts = (headers => \%Headers);
-    my $res = $jmap->ua->get($uri, \%getopts);
-    xlog $self, "JMAP DOWNLOAD @_ " . Dumper($res);
-    return $res;
+    $self->{jmap}->Download($accountid, $blobid);
 }
 
 sub email_query_window_internal
