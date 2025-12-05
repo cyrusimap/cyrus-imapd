@@ -165,14 +165,12 @@ EOF
                                    'ctl_conversationsdb', '-I', 'on', 'other');
 
     # GET session
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    my $session = eval { decode_json($RawResponse->{content}) };
+    # JMAPTalk doesn't have a method to get the session.  JMAPTester does, but
+    # (for now) only if you also reconfigure from it.  To avoid doing that,
+    # we'll make a new JMAPTester and get its session.  Silly, but it'll work.
+    my $auth = $jmap->get_client_session;
+
+    my $session = $auth->client_session;
     my $capabilities = $session->{accounts}->{cassandane}->{accountCapabilities};
     $self->assert_deep_equals(
         {
