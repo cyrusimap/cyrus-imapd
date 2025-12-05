@@ -354,16 +354,31 @@ static char *_sqlite_escape(void *conn __attribute__((unused)),
                             char **to, const char *from, size_t fromlen)
 {
     size_t tolen;
-#if 0
-    *to = xrealloc(*to, 2 + (257 * fromlen) / 254);
 
-    tolen = sqlite3_encode_binary(from, fromlen, *to);
-#else
+    /* XXX This is doing nothing!  Which means we can't store binary
+     * XXX keys or data, it all gets truncated at the first \0, or
+     * XXX thrown out for syntax violations.
+     *
+     * SQLite doesn't provide a means for escaping a string value in
+     * the same way that MySQL and Postgres do, so there's nothing
+     * sensible we could do here anyway, short of changing this API.
+     *
+     * For SQLite, we're using BLOB fields.  The correct way to store
+     * arbitrary data into them is to use the blob literal syntax:
+     * https://sqlite.org/lang_expr.html#literal_values_constants_
+     * > BLOB literals are string literals containing hexadecimal data
+     * > and preceded by a single "x" or "X" character.
+     * > Example: X'53514C697465'
+     *
+     * But we'd need to change the API such that the sql_escape()
+     * implementations also provide the quoting, which will mean changing
+     * _mysql_escape() and _pgsql_escape() to match, and then we have no
+     * way to verify that we haven't broken them.
+     */
     *to = xrealloc(*to, fromlen + 1);
     memcpy(*to, from, fromlen);
     tolen = fromlen;
     (*to)[tolen] = '\0';
-#endif
 
     return *to;
 }
