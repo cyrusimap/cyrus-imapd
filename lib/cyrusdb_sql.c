@@ -558,6 +558,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     if (dbengine->sql_exec(conn, cmd, NULL, NULL)) {
         if (flags & CYRUSDB_CREATE) {
             /* create the table */
+            /* XXX sql_escape and quote the table name throughout? */
             snprintf(cmd, sizeof(cmd),
                      "CREATE TABLE %s (dbkey %s NOT NULL, data %s);",
                      table, dbengine->binary_type, dbengine->binary_type);

@@ -248,7 +248,11 @@ static void test_openclose_mkdir(void)
     struct db *db = NULL;
     int r;
 
-    char *myfilename = strconcat(basedir, "/inexistent/cyrus.", backend, "-test", (char *)NULL);
+    char *myfilename = strconcat(basedir,
+                                 "/inexistent/cyrus.",
+                                 backend,
+                                 "_test",
+                                 NULL);
 
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
@@ -1905,8 +1909,8 @@ static int set_up(void)
 
     cyrusdb_init();
 
-    filename = strconcat(basedir, "/stuff/cyrus.", backend, "-test", (char *)NULL);
-    filename2 = strconcat(basedir, "/stuff/cyrus.", backend, "-testB", (char *)NULL);
+    filename = strconcat(basedir, "/stuff/cyrus.", backend, "_test", NULL);
+    filename2 = strconcat(basedir, "/stuff/cyrus.", backend, "_testB", NULL);
 
     return 0;
 }
