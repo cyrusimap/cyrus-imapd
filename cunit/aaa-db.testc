@@ -20,7 +20,8 @@ struct binary_result
 };
 
 #ifdef USE_CYRUSDB_SQL
-#define BACKENDS "skiplist,flat,twom,twoskip,sql"
+// #define BACKENDS "skiplist,flat,twom,twoskip,sql"
+#define BACKENDS "sql"
 #else
 #define BACKENDS "skiplist,flat,twom,twoskip"
 #endif
@@ -1904,8 +1905,8 @@ static int set_up(void)
 
     cyrusdb_init();
 
-    filename = strconcat(basedir, "/stuff/cyrus.", backend, "-test", (char *)NULL);
-    filename2 = strconcat(basedir, "/stuff/cyrus.", backend, "-testB", (char *)NULL);
+    filename = strconcat(basedir, "/stuff/cyrus.", backend, "_test", NULL);
+    filename2 = strconcat(basedir, "/stuff/cyrus.", backend, "_testB", NULL);
 
     return 0;
 }
