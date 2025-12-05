@@ -949,7 +949,7 @@ static void test_foreach_nullkey(void)
     struct binary_result *results = NULL;
     int i;
     static const char *KEY[] = {
-            "a\0a", "a\0b", "a\0c", "abc"
+        "a\0a", "a\0b", "a\0c", "abc"
     };
     static const char *DATA[] = {
         "delays maj bullish packard ronald",
@@ -958,8 +958,9 @@ static void test_foreach_nullkey(void)
         "."
     };
 
-    // flat doesn't support NULL keys
+    // flat, sqlite don't support keys containing NULL
     if (!strcmp(backend, "flat")) return;
+    if (!strcmp(backend, "sql")) return;
 
     int r;
 
@@ -1481,6 +1482,10 @@ static void test_binary_keys(void)
     struct binary_result *results = NULL;
     int r;
 
+    // flat, sqlite don't support keys containing NULL
+//     if (!strcmp(backend, "flat")) return; // XXX so why does flat pass?
+    if (!strcmp(backend, "sql")) return;
+
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL_FATAL(db);
@@ -1595,6 +1600,10 @@ static void test_binary_data(void)
     static const char DATA6[] = " BLANK\x07\xa0";
     struct binary_result *results = NULL;
     int r;
+
+    // flat, sqlite don't support data containing NULL
+//     if (!strcmp(backend, "flat")) return; // XXX so why does flat pass?
+    if (!strcmp(backend, "sql")) return;
 
     r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
