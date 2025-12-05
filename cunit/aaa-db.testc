@@ -945,7 +945,7 @@ static void test_foreach_nullkey(void)
     struct binary_result *results = NULL;
     int i;
     static const char *KEY[] = {
-            "a\0a", "a\0b", "a\0c", "abc"
+        "a\0a", "a\0b", "a\0c", "abc"
     };
     static const char *DATA[] = {
         "delays maj bullish packard ronald",
@@ -954,8 +954,9 @@ static void test_foreach_nullkey(void)
         "."
     };
 
-    // flat doesn't support NULL keys
+    // flat, sql don't support keys containing NULL
     if (!strcmp(backend, "flat")) return;
+    if (!strcmp(backend, "sql")) return;
 
     int r;
 
