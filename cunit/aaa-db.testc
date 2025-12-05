@@ -248,7 +248,7 @@ static void test_openclose_mkdir(void)
     struct db *db = NULL;
     int r;
 
-    char *myfilename = strconcat(basedir, "/inexistent/cyrus.", backend, "-test", (char *)NULL);
+    char *myfilename = strconcat(basedir, "/inexistent/cyrus.", backend, "_test", (char *)NULL);
 
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
