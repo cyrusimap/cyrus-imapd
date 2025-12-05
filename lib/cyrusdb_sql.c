@@ -65,7 +65,7 @@ typedef struct sql_engine {
     const char *binary_type;
     void *(*sql_open)(char *host, char *port, int usessl,
                       const char *user, const char *password,
-                      const char *database);
+                      const char *database, int flags);
     char *(*sql_escape)(void *conn, char **to,
                         const char *from, size_t fromlen);
     int (*sql_begin_txn)(void *conn);
@@ -97,7 +97,8 @@ static const sql_engine_t *dbengine = NULL;
 
 static void *_mysql_open(char *host, char *port, int usessl,
                          const char *user, const char *password,
-                         const char *database)
+                         const char *database,
+                         int flags __attribute__((unused)))
 {
     MYSQL *mysql;
 
@@ -204,7 +205,8 @@ static void _mysql_close(void *conn)
 
 static void *_pgsql_open(char *host, char *port, int usessl,
                          const char *user, const char *password,
-                         const char *database)
+                         const char *database,
+                         int flags __attribute__((unused)))
 {
     PGconn *conn = NULL;
     struct buf conninfo = BUF_INITIALIZER;
@@ -317,12 +319,17 @@ static void *_sqlite_open(char *host __attribute__((unused)),
                           int usessl __attribute__((unused)),
                           const char *user __attribute__((unused)),
                           const char *password __attribute__((unused)),
-                          const char *database)
+                          const char *database,
+                          int flags)
 {
     int rc;
     sqlite3 *db;
+    int sqlite_open_flags = SQLITE_OPEN_READWRITE;
 
-    rc = sqlite3_open(database, &db);
+    if ((flags & CYRUSDB_CREATE))
+        sqlite_open_flags |= SQLITE_OPEN_CREATE;
+
+    rc = sqlite3_open_v2(database, &db, sqlite_open_flags, NULL);
     if (rc != SQLITE_OK) {
         xsyslog(LOG_ERR, "DBERROR: SQL backend",
                          "sqlite3_error=<%s>",
@@ -525,7 +532,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
         if ((cur_port = strchr(cur_host, ':'))) *cur_port++ = '\0';
 
         conn = dbengine->sql_open(cur_host, cur_port, usessl,
-                                  user, passwd, database);
+                                  user, passwd, database, flags);
         if (conn) break;
 
         syslog(LOG_WARNING,
