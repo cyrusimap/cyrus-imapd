@@ -1456,6 +1456,8 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
     strarray_t member_uids = STRARRAY_INITIALIZER;
     vcardproperty *prop;
     char *propval = NULL;
+    int emailIndex = 0, defaultEmailIndex = -1;
+    int minPrefValue = 101; // allowed range is 1 to 100
 
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
@@ -1501,12 +1503,11 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             break;
 
         case VCARD_EMAIL_PROPERTY: {
-            /* XXX - insert if primary */
-            int ispref = 0;
+            int prefVal = 0;
             vcardparameter *param =
                 vcardproperty_get_first_parameter(prop, VCARD_PREF_PARAMETER);
             if (param) {
-                ispref = (vcardparameter_get_pref(param) == 1);
+                prefVal = vcardparameter_get_pref(param);
             }
             else if ((param =
                       vcardproperty_get_first_parameter(prop,
@@ -1514,11 +1515,18 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                 vcardenumarray *types = vcardparameter_get_type(param);
                 vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
                 if (vcardenumarray_find(types, &pref) < vcardenumarray_size(types))
-                    ispref = 1;
+                    prefVal = 1;
             }
+            /* Track preferred address */
+            if (prefVal && prefVal < minPrefValue) {
+                minPrefValue = prefVal;
+                defaultEmailIndex = emailIndex;
+            }
+
             strarray_appendm(&emails, propval);
-            strarray_append(&emails, ispref ? "1" : "");
+            strarray_append(&emails, "");
             propval = NULL;
+            emailIndex++;
             break;
         }
 
@@ -1572,6 +1580,13 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
         }
 
         if (buf) icalmemory_free_buffer(buf);
+    }
+
+    if (strarray_size(&emails)) {
+        /* Set preferred address */
+        if (defaultEmailIndex < 0)
+            defaultEmailIndex = 0;
+        strarray_set(&emails, 2 * defaultEmailIndex + 1, "1");
     }
 
     int r;

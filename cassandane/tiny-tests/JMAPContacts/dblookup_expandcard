@@ -151,9 +151,17 @@ sub test_dblookup_expandcard
                         e1 => {
                             address => 'ownContact@local'
                         },
-                        e1 => {
+                        e2 => {
                             address => 'ownContactPref@local',
-                            pref => 1
+                            pref => 5
+                        },
+                        e3 => {
+                            address => 'ownContactPref2@local',
+                            pref => 5
+                        },
+                        e4 => {
+                            address => 'ownContactOther@local',
+                            pref => 10
                         }
                     },
                 },
@@ -219,7 +227,8 @@ sub test_dblookup_expandcard
     $self->assert_cmp_deeply(
         superhashof({
             cassandane => {
-                $ownContactUid => 'ownContactPref@local'
+                $ownContactUid => any('ownContactPref@local',
+                                      'ownContactPref2@local')
             }
         }),
         decode_json($res->{content})
@@ -258,7 +267,8 @@ sub test_dblookup_expandcard
     $self->assert_cmp_deeply(
         superhashof({
             cassandane => {
-                $ownContactUid => 'ownContactPref@local'
+                $ownContactUid => any('ownContactPref@local',
+                                      'ownContactPref2@local')
             },
             other => {
                 $otherSharedContactUid => 'sharedcontact@local'
