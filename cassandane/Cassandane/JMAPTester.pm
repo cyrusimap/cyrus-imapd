@@ -4,6 +4,8 @@ extends 'JMAP::Tester';
 
 use experimental 'signatures';
 
+use Encode ();
+
 has fallback_account_id => (
     is       => 'ro',
     required => 1,
@@ -93,6 +95,10 @@ sub Download {
   my $account_id = shift;
   my $blob_id    = shift;
   my $name       = shift;
+
+  if (length $name) {
+    $name = Encode::encode('utf-8', $name, Encode::FB_CROAK);
+  }
 
   $code && Carp::confess("Cassandane::JMAPTester can't emulate JMAPTalk->Download callback");
 
