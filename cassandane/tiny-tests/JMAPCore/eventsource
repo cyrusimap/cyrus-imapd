@@ -9,28 +9,30 @@ sub test_eventsource
 
     my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);
-    my $url = $session->{eventSourceUrl};
-    $self->assert_not_null($url);
+    my $event_relative = $session->{eventSourceUrl};
+    $self->assert_not_null($event_relative);
 
-    $self->assert_num_equals(1, $url =~ s/\{types\}/Mailbox,Email,Calendar,CalendarEvent,AddressBook,ContactCard/g);
-    $self->assert_num_equals(1, $url =~ s/\{closeafter\}/state/g);
-    $self->assert_num_equals(1, $url =~ s/\{ping\}/0/g);
+    $self->assert_num_equals(1, $event_relative =~ s/\{types\}/Mailbox,Email,Calendar,CalendarEvent,AddressBook,ContactCard/g);
+    $self->assert_num_equals(1, $event_relative =~ s/\{closeafter\}/state/g);
+    $self->assert_num_equals(1, $event_relative =~ s/\{ping\}/0/g);
 
-    if (not $url =~ /^http/) {
-        $url = "http://".$http->host().":".$http->port().$url;
-    }
+    my $event_uri = URI->new_abs($event_relative, $jmap->api_uri);
 
-    $RawRequest->{headers}->{'Last-Event-Id'} = '0';
-    $RawResponse = $jmap->ua->get($url, $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('200', $RawResponse->{status});
+    my $es_request = HTTP::Request->new(
+        GET => "$event_uri",
+        [
+            $jmap->_maybe_auth_header,
+            'Last-Event-Id' => '0',
+        ],
+    );
+
+    my $http_res = $jmap->http_request($es_request);
+    $self->assert_str_equals('200', $http_res->code);
     $self->assert_str_equals('text/event-stream',
-                             $RawResponse->{headers}{'content-type'});
-    $self->assert_null($RawResponse->{headers}{'content-length'});
+                             $http_res->header('content-type'));
+    $self->assert_null($http_res->header('content-length'));
 
-    my %event = $RawResponse->{content} =~ /^(\w+): ?(.*)$/mg;
+    my %event = $http_res->decoded_content(charset => undef) =~ /^(\w+): ?(.*)$/mg;
     $self->assert_not_null($event{id});
     $self->assert_str_equals('state', $event{event});
 
