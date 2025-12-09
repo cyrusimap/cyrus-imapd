@@ -16,16 +16,14 @@ sub test_blob_upload_type
     $self->assert_str_equals("text/plain", $res->{type});
 
     xlog "Assert default server type";
-    my $httpReq = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => 'blob2',
-    };
-    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane'), $httpReq);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($httpReq, $httpRes);
-    }
-    $res = eval { decode_json($httpRes->{content}) };
+    my $upload_res = $jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"blob2",
+        type      => '', # XXX Bogus?
+    });
+
+    my $http_res = $upload_res->http_response;
+
+    $res = eval { decode_json($http_res->decoded_content(charset => undef)) };
     $self->assert_str_equals("application/octet-stream", $res->{type});
 }

@@ -8,18 +8,24 @@ sub test_blob_upload_bad_url
     my $jmap = $self->{jmap};
 
     xlog "Assert Problem Details report";
-    my $httpReq = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => 'Hello World',
+
+    my $uri = $jmap->upload_uri;
+    $uri .= "garbage";
+    $jmap->upload_uri($uri);
+
+    my $upload_res = $jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"Hello, world!",
+        type      => 'text/plain',
+    });
+
+    $self->assert(!$upload_res->is_success);
+
+    my $http_res = $upload_res->http_response;
+    $self->assert_str_equals("404", $http_res->code);
+    my $res = eval {
+        decode_json($http_res->decoded_content(charset => undef))
     };
-    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane') . 'X', $httpReq);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($httpReq, $httpRes);
-    }
-    $self->assert_str_equals("404", $httpRes->{status});
-    my $res = eval { decode_json($httpRes->{content}) };
     $self->assert_str_equals("404", $res->{status});
     $self->assert_str_equals("Not Found", $res->{title});
     $self->assert_str_equals("about:blank", $res->{type});
