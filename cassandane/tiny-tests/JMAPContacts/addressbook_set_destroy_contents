@@ -45,7 +45,7 @@ EOF
         }, 'R3'],
         ['ContactCard/get', {
             properties => ['id'],
-        }, 'R2'],
+        }, 'R4'],
     ]);
     $self->assert_str_equals('addressBookHasContents',
         $res->[0][1]{notDestroyed}{$abookId}{type});
