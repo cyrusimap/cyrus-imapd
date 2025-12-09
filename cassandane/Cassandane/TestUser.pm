@@ -117,6 +117,7 @@ sub new_jmaptester ($self, $new_arg = undef) {
 
     my $host = $arg{host};
     my $port = $arg{port};
+    my $scheme = $arg{scheme};
 
     require Cassandane::JMAPTester;
     local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
@@ -125,22 +126,29 @@ sub new_jmaptester ($self, $new_arg = undef) {
     my $jtest = Cassandane::JMAPTester->new({
         fallback_account_id => $self->username,
 
-        api_uri => "http://$host:$port/jmap/",
-        authentication_uri => "http://$host:$port/jmap",
-        upload_uri => "http://$host:$port/jmap/upload/{accountId}/",
+        api_uri => "$scheme://$host:$port/jmap/",
+        authentication_uri => "$scheme://$host:$port/jmap",
+        upload_uri => "$scheme://$host:$port/jmap/upload/{accountId}/",
 
         # The session actually provides a query string of "?accept={type}" but
         # our tests don't reliably provide type, and we can't just use the
         # Accept header they send, because sometimes they send an Accept that's
         # preferential or wildcardy.  So, we'll just not include that parameter
         # here.  This is crap, but it's a transition toward less crap.
-        download_uri => "http://$host:$port/jmap/download/{accountId}/{blobId}/{name}",
+        download_uri => "$scheme://$host:$port/jmap/download/{accountId}/{blobId}/{name}",
 
         default_using => [ @DEFAULT_USING ],
         %overrides,
     });
 
     $jtest->set_username_and_password($self->username, $self->password);
+
+    $jtest->ua->lwp->ssl_opts(
+        # Setting SSL_verify_mode without setting verify_hostname to 0 will
+        # fail, annoyingly.  That's why both are set.
+        SSL_verify_mode => 0,
+        verify_hostname => 0,
+    );
 
     return $jtest;
 }
