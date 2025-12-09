@@ -143,5 +143,15 @@ sub Download {
   return $fake_jmaptalk_download;
 }
 
+sub set_username_and_password ($self, $username, $password) {
+    $self->ua->set_default_header(
+        'Authorization',
+        q{Basic } .  MIME::Base64::encode_base64(
+            join(q{:}, $username, $password),
+            q{},
+        )
+    );
+}
+
 no Moo;
 1;

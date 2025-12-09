@@ -140,13 +140,7 @@ sub new_jmaptester ($self, $new_arg = undef) {
         %overrides,
     });
 
-    $jtest->ua->set_default_header(
-        'Authorization',
-        q{Basic } .  MIME::Base64::encode_base64(
-            join(q{:}, $self->username, $self->password),
-            q{},
-        )
-    );
+    $jtest->set_username_and_password($self->username, $self->password);
 
     return $jtest;
 }

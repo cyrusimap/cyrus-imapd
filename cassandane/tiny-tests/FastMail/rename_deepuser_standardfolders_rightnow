@@ -66,6 +66,7 @@ sub test_rename_deepuser_standardfolders_rightnow
     $self->{instance}->getsyslog();
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
+    $self->{jmap}->set_username_and_password('newuser', 'pass');
 
     xlog $self, "Make sure we didn't create intermediates in the process!";
     my $syslog = join "\n", $self->{instance}->getsyslog();
@@ -77,7 +78,6 @@ sub test_rename_deepuser_standardfolders_rightnow
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
 
-    $self->{jmap}->{user} = 'newuser';
     $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
     my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
 
