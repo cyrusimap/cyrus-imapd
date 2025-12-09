@@ -210,12 +210,13 @@ sub _fmjmap_req
     my $jmap = delete $args{jmap} || $self->{jmap};
 
     my $rnum = "R" . $RNUM++;
-    my $res = $jmap->Request({methodCalls => [[$cmd, \%args, $rnum]],
-                              using => [ $self->default_using ] });
-    my $res1 = $res->{methodResponses}[0];
-    $self->assert_not_null($res1);
-    $self->assert_str_equals($rnum, $res1->[2]);
-    return $res1;
+    my $res = $jmap->CallMethods(
+        [[$cmd, \%args, $rnum]],
+        [ $self->default_using ],
+    );
+    $self->assert_not_null($res->[0]);
+    $self->assert_str_equals($rnum, $res->[0][2]);
+    return $res->[0];
 }
 
 sub _fmjmap_ok
