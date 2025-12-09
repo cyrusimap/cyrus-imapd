@@ -8,7 +8,7 @@ sub test_echo_tls
     my $jmap = $self->{jmap};
 
     # better be using https!
-    $self->assert_str_equals('https', $jmap->{scheme});
+    $self->assert_matches(qr/^https:/, $jmap->api_uri);
 
     my $req = {
         hello => JSON::true,
