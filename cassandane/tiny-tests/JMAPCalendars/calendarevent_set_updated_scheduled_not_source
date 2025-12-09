@@ -62,7 +62,7 @@ sub test_calendarevent_set_updated_scheduled_not_source
             },
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => [ '#event' ],
+            ids => [ $eventId ],
             properties => ['updated'],
         }, 'R2'],
     ]);
@@ -79,7 +79,7 @@ sub test_calendarevent_set_updated_scheduled_not_source
             },
         }, 'R1'],
         ['CalendarEvent/get', {
-            ids => [ '#event' ],
+            ids => [ $eventId ],
             properties => ['updated'],
         }, 'R2'],
     ]);
