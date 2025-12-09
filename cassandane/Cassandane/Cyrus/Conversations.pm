@@ -260,32 +260,40 @@ sub test_move_200
 
     my $jmap = $self->{jmap};
     xlog $self, "create bar mailbox";
-    $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods(
+        [
             ['Mailbox/set', { create => { "1" => {
                             name => "bar",
              }}}, "R1"]
-    ]);
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
     $self->assert_str_equals('Mailbox/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $bar = $res->[0][1]{created}{"1"}{id};
 
-    $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods(
+        [
             ['Email/set', { update => {
                  $emailid1 => { mailboxIds => { $bar => $JSON::true } },
                  $emailid2 => { mailboxIds => { $bar => $JSON::true } },
              }}, "R1"]
-    ]);
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
 
     $self->assert_str_equals('Email/set', $res->[0][0]);
     $self->assert(exists $res->[0][1]{updated}{$emailid1});
     $self->assert(exists $res->[0][1]{updated}{$emailid2});
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    $res = $jmap->CallMethods([
-            ['Email/get', { ids => [$emailid1,$emailid2], properties => ['threadId']
-             }, "R1"]
-    ]);
+    $res = $jmap->CallMethods(
+        [
+            ['Email/get', { ids => [$emailid1,$emailid2], properties => ['threadId'] }, "R1"],
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
 
     $self->assert_str_equals('Email/get', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
