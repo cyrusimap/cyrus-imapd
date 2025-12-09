@@ -43,6 +43,19 @@ sub CallMethods {
     return $res->as_stripped_triples;
 }
 
+# This emulates JMAPTalk's Call method, which returns the arguments of the
+# successful response to a single method invocation.
+sub Call {
+    my ($self, $method, $arguments, @rest) = @_;
+    $arguments ||= {};
+    my $res = $self->CallMethods([[ $method, $arguments, "c1"]], @rest);
+    return undef unless ref $res;
+    return undef unless ref $res->[0];
+    return undef unless $res->[0][0] eq $method;
+    return undef unless $res->[0][2] eq 'c1';
+    return $res->[0][1];
+}
+
 # This emulates JMAPTalk's Upload, called like this:
 #   $jmaptalk->Upload(\%optional_headers?, $bytes, $content_type, $accountId)
 #
