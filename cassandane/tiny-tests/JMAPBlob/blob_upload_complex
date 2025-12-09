@@ -11,7 +11,10 @@ sub test_blob_upload_complex
     my $session = $jmap->get_client_session->client_session;
     my %algs = map { $_ => 1 } @{$session->{capabilities}->{'https://cyrusimap.org/ns/jmap/blob'}->{supportedDigestAlgorithms}};
 
-    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+    $jmap->default_using([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:blob',
+    ]);
 
     my $data = "The quick brown fox jumped over the lazy dog.";
     my $bdata = encode_base64($data, '');

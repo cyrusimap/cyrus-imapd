@@ -41,11 +41,15 @@ sub test_blob_lookup
     $self->assert_not_null($mailboxId);
 
     xlog "Test without capability";
-    $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
-    $self->assert_str_equals($res->[0][0], 'error');
 
-    # XXX: this will be replaced with the upstream one
-    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+    my @using = grep {; $_ ne 'https://cyrusimap.org/ns/jmap/blob' }
+                $jmap->default_using->@*;
+
+    $res = $jmap->CallMethods(
+        [['Blob/lookup', { ids => [$blobId, 'unknown'], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']],
+        \@using,
+    );
+    $self->assert_str_equals($res->[0][0], 'error');
 
     xlog "Regular Blob/lookup works";
     $res = $jmap->CallMethods([['Blob/lookup', { ids => [$blobId, 'unknown'], typeNames => ['Mailbox', 'Thread', 'Email'] }, 'R1']]);
