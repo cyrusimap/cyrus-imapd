@@ -42,7 +42,7 @@ sub CallMethods {
         ($using ? (using => $using) : ()),
     });
 
-    return $res->as_stripped_triples;
+    return $res->assert_successful->as_stripped_triples;
 }
 
 # This emulates JMAPTalk's Call method, which returns the arguments of the
