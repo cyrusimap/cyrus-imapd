@@ -8,14 +8,7 @@ sub test_blob_upload_complex
     my $jmap = $self->{jmap};
 
     # GET supported digest algorithms from session object
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    my $session = eval { decode_json($RawResponse->{content}) };
+    my $session = $jmap->get_client_session->client_session;
     my %algs = map { $_ => 1 } @{$session->{capabilities}->{'https://cyrusimap.org/ns/jmap/blob'}->{supportedDigestAlgorithms}};
 
     $jmap->AddUsing('urn:ietf:params:jmap:blob');

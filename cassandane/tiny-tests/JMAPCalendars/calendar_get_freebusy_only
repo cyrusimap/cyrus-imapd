@@ -34,14 +34,8 @@ sub test_calendar_get_freebusy_only
     ]);
     $admintalk->setacl('user.other.#calendars.Default', cassandane => 'l9') or die;
 
-    $res = $jmap->ua->get($jmap->uri(), {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    });
-    $self->assert_str_equals('200', $res->{status});
-    my $session = eval { decode_json($res->{content}) };
+    my $session = $jmap->get_client_session->client_session;
+
     my $capabilities = $session->{accounts}{other}{accountCapabilities};
     $self->assert_not_null($capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
@@ -52,5 +46,4 @@ sub test_calendar_get_freebusy_only
         }, 'R1'],
     ]);
     $self->assert_deep_equals([], $res->[0][1]{list});
-
 }

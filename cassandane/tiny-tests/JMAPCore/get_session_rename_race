@@ -13,28 +13,15 @@ sub test_get_session_rename_race
     my $admintalk = $self->{adminstore}->get_client();
 
     # GET session
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('200', $RawResponse->{status});
-    my $session = eval { decode_json($RawResponse->{content}) };
+    my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);
 
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
 
     # Try to GET session
-    $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('503', $RawResponse->{status});
-    $self->assert_not_null($RawResponse->{headers}{'retry-after'});
+    my $auth = $jmap->get_client_session;
+    $self->assert(!$auth->is_success);
+    $self->assert_str_equals('503', $auth->http_response->code);
+    $self->assert_not_null($auth->http_response->header('retry-after'));
 }
