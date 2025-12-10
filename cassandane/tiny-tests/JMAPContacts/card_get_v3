@@ -106,7 +106,7 @@ EOF
         },
         onlineServices => {
             OS1 => {
-                uri => 'foo',
+                user => 'foo',
                 service => 'Facebook'
             },
             OS2 => {

@@ -6817,7 +6817,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
         username:
         case VCARD_USERNAME_PARAMETER:
-            if (param_flags & ALLOW_USERNAME_PARAM) {
+            if (param_flags & ALLOW_SERVICETYPE_PARAM) {
                 json_object_set_new(obj, "user", jmap_utf8string(param_value));
                 continue;
             }
@@ -7070,221 +7070,6 @@ static void vcardvalues_to_json(const char *values, vcardvalue_kind vkind,
     tok_fini(&vals);
 }
 
-static json_t *_jsonline_from_vcard(vcardproperty *prop,
-                                    const char *prop_id,
-                                    json_t *obj,
-                                    unsigned convert_flags,
-                                    unsigned *param_flags)
-{
-    json_t *jprop = NULL;
-
-    const char *prop_name = vcardproperty_get_property_name(prop);
-
-    if (!strcasecmpsafe("X-CYRUS-ONLINESERVICE", prop_name)) {
-        // This property has a structured value in form "<user>;<uri>".
-        const char *val = vcardproperty_get_value_as_string(prop);
-        if (!val) goto done;
-
-        vcardstructuredtype *stt = vcardstructured_from_string(val);
-        if (!stt) goto done;
-
-        // At least one of user and uri must be set.
-        const char *user = NULL, *uri = NULL;
-        if (stt->num_fields == 2) {
-            if (vcardstrarray_size(stt->field[0]) == 1) {
-                user = vcardstrarray_element_at(stt->field[0], 0);
-                if (!strlen(user)) user = NULL;
-            }
-            if (vcardstrarray_size(stt->field[1]) == 1) {
-                uri = vcardstrarray_element_at(stt->field[1], 0);
-                if (!strlen(uri)) uri = NULL;
-            }
-        }
-
-        if (!user && !uri) {
-            vcardstructured_free(stt);
-            goto done;
-        }
-
-        // Convert OnlineService object.
-        jprop = json_pack("{s:s* s:s*}", "user", user, "uri", uri);
-        vcardstructured_free(stt);
-
-        *param_flags =
-            ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM |
-            ALLOW_SERVICETYPE_PARAM;
-    }
-    else if (!strcasecmpsafe("X-FM-ONLINE-OTHER", prop_name)) {
-        // This property was set prior to JMAP for Contacts.
-        // We'll convert it to an OnlineService but convert
-        // it back to vCard using a different property kind.
-        const char *val = vcardproperty_get_value_as_string(prop);
-        if (!val || !strlen(val)) goto done;
-
-        // Determine if the value begins with an URI scheme and
-        // contains some data in addition to that scheme.
-        // For URI scheme definition, see RFC 3986 Section 3.1.
-        bool has_scheme = false;
-        const char *p = strchr(val, ':');
-        if (p && p[1] && isalnum(val[0])) {
-            has_scheme = true;
-            for (const char *s = val + 1; s < p; s++) {
-                if (!isalpha(*s) && !strchr("+-.", *s)) {
-                    has_scheme = false;
-                    break;
-                }
-            }
-        }
-
-        // Convert OnlineService object.
-        jprop = json_pack("{s:s}", has_scheme ? "uri" : "user", val);
-
-        vcardparameter *param =
-            vcardproperty_get_first_parameter(prop, VCARD_LABEL_PARAMETER);
-        if (param) {
-            const char *label = vcardparameter_get_label(param);
-            json_object_set_new(jprop, "service", json_string(label));
-            // Remove parameter, we neither want it later to get
-            // converted to the "label" property nor preserved as
-            // an unknown vCard parameter.
-            vcardproperty_remove_parameter_by_ref(prop, param);
-        }
-    }
-    else if (!strcasecmpsafe("X-SOCIAL-PROFILE", prop_name)) {
-        // This property was set prior to JMAP for Contacts.
-        // Not to be confused with Apple's X-SOCIALPROFILE.
-        // We'll convert it to an OnlineService but convert
-        // it back to vCard using a different property kind.
-        const char *uri = vcardproperty_get_value_as_string(prop);
-        if (uri && !strlen(uri)) uri = NULL;
-
-        const char *user = NULL;
-        vcardparameter *param =
-            vcardproperty_get_parameter_by_name(prop, "X-USER");
-        if (param) {
-            user = vcardparameter_get_x(param);
-            if (!strlen(user)) user = NULL;
-        }
-
-        // At least one of user and uri must be set.
-        if (!uri && !user) goto done;
-
-        const char *service = NULL;
-        param = vcardproperty_get_first_parameter(prop, VCARD_TYPE_PARAMETER);
-        if (param) {
-            const vcardenumarray_element *elem =
-                vcardenumarray_element_at(vcardparameter_get_type(param), 0);
-            if (elem && elem->xvalue) {
-                service = elem->xvalue;
-            }
-        }
-
-        // Convert OnlineService object.
-        jprop = json_pack("{s:s* s:s* s:s*}",
-                "uri", uri, "user", user, "service", service);
-
-        // Remove processed parameters, we don't want them to be
-        // handled later as unknown parameters.
-        vcardproperty_remove_parameter_by_name(prop, "TYPE");
-        vcardproperty_remove_parameter_by_name(prop, "X-USER");
-    }
-    else if (!strcasecmpsafe("IMPP", prop_name)) {
-        const char *uri = vcardproperty_get_impp(prop);
-        if (!uri || !strlen(uri)) goto done;
-
-        json_t *jvparams = NULL;
-
-        // Support USERNAME parameter (defined in RFC 9554). Also
-        // support X-USER, which some clients set. We'll keep track
-        // of which parameter we used to set the 'user' property in
-        // vCardParams, so that we know to convert that OnlineService
-        // back to an IMPP property and that parameter if the 'user'
-        // property is set.
-        const char *user = NULL;
-        vcardparameter *param =
-            vcardproperty_get_first_parameter(prop, VCARD_USERNAME_PARAMETER);
-        if (param) {
-            user = vcardparameter_get_username(param);
-            jvparams = json_pack("{s:s}", "username", user);
-        }
-        else {
-            param = vcardproperty_get_parameter_by_name(prop, "X-USER");
-            if (param) {
-                user = vcardparameter_get_x(param);
-                jvparams = json_pack("{s:s}", "x-user", user);
-            }
-        }
-
-        jprop = json_pack("{s:s* s:s* s:o*}", "uri", uri, "user", user,
-                          "vCardParams", jvparams);
-
-        // Remove processed parameters, we don't want them to be
-        // handled later as unknown parameters.
-        vcardproperty_remove_parameter_by_name(prop, "USERNAME");
-        vcardproperty_remove_parameter_by_name(prop, "X-USER");
-
-        *param_flags =
-            ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM |
-            ALLOW_SERVICETYPE_PARAM;
-    }
-    else if (!strcasecmpsafe("SOCIALPROFILE", prop_name)) {
-        vcardvalue *val = vcardproperty_get_value(prop);
-        const char *uri = NULL;
-        const char *user = NULL;
-
-        // Read property value.
-        vcardparameter *param =
-            vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
-        if (param) {
-            switch (vcardparameter_get_value(param)) {
-                case VCARD_VALUE_TEXT:
-                    user = vcardvalue_get_text(val);
-                    break;
-                case VCARD_VALUE_URI:
-                    uri = vcardvalue_get_uri(val);
-                    break;
-                default:
-                    break;
-            }
-        }
-        else {
-            uri = vcardproperty_get_value_as_string(prop);
-        }
-
-        if (!uri && !user) goto done;
-
-        if (!user) {
-            // If we haven't read the user name from the property value,
-            // try reading it from the USERNAME parameter.
-            param =
-                vcardproperty_get_first_parameter(prop, VCARD_USERNAME_PARAMETER);
-            if (param)
-                user = vcardparameter_get_username(param);
-        }
-
-        jprop = json_pack("{s:s* s:s*}", "uri", uri, "user", user);
-
-        *param_flags =
-            ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM | ALLOW_LABEL_PARAM |
-            ALLOW_SERVICETYPE_PARAM;
-    }
-
-    if (jprop) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, prop_name);
-        if (convert_flags & SET_VCARD_CONVPROPS) {
-            json_object_set_new(jprop, "vCardName", json_string(buf_lcase(&buf)));
-        }
-        buf_free(&buf);
-
-        json_t *services = json_object_get_vanew(obj, "onlineServices", "{}");
-        json_object_set_new(services, prop_id, jprop);
-    }
-
-done:
-    return jprop;
-}
-
 static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                               const char *prop_id, struct card_rock *crock)
 {
@@ -7343,13 +7128,12 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 prop_value += 9;
             goto member;
         }
-        else if (!strcasecmp(prop_name, "X-CYRUS-ONLINESERVICE")) {
+        else if (!strcasecmp(prop_name, "X-SOCIALPROFILE") ||
+                 !strcasecmp(prop_name, "X-SOCIAL-PROFILE")) {
+            kind = "x-socialprofile";
             goto online;
         }
         else if (!strcasecmp(prop_name, "X-FM-ONLINE-OTHER")) {
-            goto online;
-        }
-        else if (!strcasecmp(prop_name, "X-SOCIAL-PROFILE")) {
             goto online;
         }
         else if (prop_group) {
@@ -7594,12 +7378,42 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         break;
     }
 
-    online:
     case VCARD_IMPP_PROPERTY:
+        kind = "impp";
+
+        goto online;
+
     case VCARD_SOCIALPROFILE_PROPERTY:
-      jprop =
-          _jsonline_from_vcard(prop, prop_id, obj, crock->flags, &param_flags);
-      break;
+        kind = "socialprofile";
+
+    online:
+        {
+            json_t *user = NULL, *uri = NULL;
+            json_t *services = json_object_get_vanew(obj, "onlineServices", "{}");
+
+            param_flags = ALLOW_TYPE_PARAM | ALLOW_PREF_PARAM |
+                ALLOW_LABEL_PARAM | ALLOW_SERVICETYPE_PARAM;
+
+            param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
+            if ((param && vcardparameter_get_value(param) == VCARD_VALUE_TEXT) ||
+                (prop_value && *prop_value && !strchr(prop_value, ':'))) {
+                user = jmap_utf8string(prop_value);
+            }
+            else {
+                if (prop_value && *prop_value)
+                    uri = jmap_utf8string(prop_value);
+
+                param_flags |= ALLOW_USERNAME_PARAM;
+            }
+
+            jprop = json_pack("{s:o* s:o*}", "user", user, "uri", uri);
+
+            if (kind && (crock->flags & SET_VCARD_CONVPROPS))
+                json_object_set_new(jprop, "vCardName", json_string(kind));
+
+            json_object_set_new(services, prop_id, jprop);
+        }
+        break;
 
     case VCARD_LANG_PROPERTY: {
         json_t *langs = json_object_get_vanew(obj, "preferredLanguages", "{}");
@@ -8087,7 +7901,6 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             json_object_set_new(jprop, "label", jmap_utf8string(label));
         }
     }
-
 }
 
 static void free_props_by_altid(void *val)
@@ -10641,13 +10454,14 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
                                          vcardcomponent *card __attribute__((unused)),
                                          void *rock __attribute__((unused)))
 {
-    const char *service = NULL, *user = NULL, *uri = NULL;
+    const char *service = NULL, *user = NULL, *val = NULL, *val_kind = "TEXT";
+    vcardproperty_kind kind = VCARD_SOCIALPROFILE_PROPERTY;
     vcardproperty *prop = NULL;
+    const char *propname = NULL;
     struct buf buf = BUF_INITIALIZER;
+    json_t *jprop;
 
-    // Validate OnlineService object.
-
-    json_t *jprop = json_object_get(obj, "service");
+    jprop = json_object_get(obj, "service");
     if (json_is_string(jprop)) {
         service = json_string_value(jprop);
     }
@@ -10665,102 +10479,76 @@ static vcardproperty *_jsonline_to_vcard(struct jmap_parser *parser, json_t *obj
 
     jprop = json_object_get(obj, "uri");
     if (json_is_string(jprop)) {
-        uri = json_string_value(jprop);
+        val_kind = "URI";
+        val = json_string_value(jprop);
+
+        if (!strncasecmp("xmpp:", val, 5)) {
+            kind = VCARD_IMPP_PROPERTY;
+        }
+    }
+    else if (jprop || !user) {
+        jmap_parser_invalid(parser, "uri");
+    }
+    else {
+        val = user;
+        user = NULL;
+    }
+
+    jprop = json_object_get(obj, "vCardName");
+    if (json_is_string(jprop)) {
+        propname = json_string_value(jprop);
+        kind = vcardproperty_string_to_kind(propname);
+
+        if (kind == VCARD_NO_PROPERTY) {
+            jmap_parser_invalid(parser, "vCardName");
+        }
+        else if (kind == VCARD_X_PROPERTY) {
+            buf_setcstr(&buf, propname);
+            propname = buf_ucase(&buf);
+            if (!strcmp(propname, "X-SOCIALPROFILE")) {
+                kind = VCARD_SOCIALPROFILE_PROPERTY;
+            }
+        }
     }
     else if (jprop) {
-        jmap_parser_invalid(parser, "uri");
+        jmap_parser_invalid(parser, "vCardName");
     }
 
-    if (!uri && !user) {
-        // One of uri or user must be set.
-        jmap_parser_invalid(parser, "uri");
-        jmap_parser_invalid(parser, "user");
-        goto done;
-    }
+    if (val) {
+        if (kind == VCARD_SOCIALPROFILE_PROPERTY) {
+            /* Use X-SOCIALPROFILE instead of SOCIALPROFILE (RFC 9554)
+               to be compatible with Apple */
+            prop = vcardproperty_new(VCARD_X_PROPERTY);
+            vcardproperty_set_x_name(prop, "X-SOCIALPROFILE");
 
-    const char *vcardname =
-        json_string_value(json_object_get(obj, "vCardName"));
-    json_t *jvcardparams = json_object_get(obj, "vCardParams");
-
-    // Convert OnlineService to vCard property.
-
-    if (!strcasecmpsafe(vcardname, "SOCIALPROFILE")) {
-        // Use SOCIALPROFILE property if object was converted from it.
-        prop = vcardproperty_new(VCARD_SOCIALPROFILE_PROPERTY);
-
-        if (uri) {
-            vcardproperty_set_value(prop, vcardvalue_new_uri(uri));
+            if (service) {
+                vcardenumarray_element type = { .xvalue = service };
+                vcardproperty_add_type_parameter(prop, &type);
+            }
             if (user) {
-              vcardproperty_add_parameter(prop,
-                                          vcardparameter_new_username(user));
+                vcardparameter *param = vcardparameter_new_x(user);
+                vcardparameter_set_xname(param, "X-USER");
+                vcardproperty_add_parameter(prop, param);
             }
         }
         else {
-            vcardproperty_set_value(prop, vcardvalue_new_text(user));
-            vcardproperty_add_parameter(
-                prop, vcardparameter_new_value(VCARD_VALUE_TEXT));
+            prop = vcardproperty_new(kind);
+            if (kind == VCARD_X_PROPERTY && propname)
+                vcardproperty_set_x_name(prop, propname);
+            
+            if (service) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_servicetype(service));
+            }
+            if (user) {
+                vcardproperty_add_parameter(prop,
+                                            vcardparameter_new_username(user));
+            }
         }
 
-        if (service) {
-            vcardproperty_add_parameter(prop,
-                    vcardparameter_new_servicetype(service));
-        }
-    } else if ((!user && !vcardname) ||
-               (!strcasecmpsafe(vcardname, "IMPP") &&
-                (!user ||
-                 (user && (json_object_get(jvcardparams, "username") ||
-                           json_object_get(jvcardparams, "x-user")))))) {
-      // Use IMPP if 'user' isn't set and this is a new OnlineService object,
-      // or if the property got converted from IMPP and either 'user' isn't
-      // set or the USERNAME or X-USER parameters already were set.
-      prop = vcardproperty_new(VCARD_IMPP_PROPERTY);
-      vcardproperty_set_value(prop, vcardvalue_new_uri(uri));
-
-      if (service) {
-          vcardparameter *param = vcardparameter_new_x(service);
-          vcardparameter_set_xname(param, "X-SERVICE-TYPE");
-          vcardproperty_add_parameter(prop, param);
-      }
-
-      if (user) {
-          vcardparameter *param;
-          if (json_object_get(jvcardparams, "x-user")) {
-              param = vcardparameter_new_x(user);
-              vcardparameter_set_xname(param, "X-USER");
-          }
-          else {
-              param = vcardparameter_new_username(user);
-          }
-          vcardproperty_add_parameter(prop, param);
-      }
-
-      json_object_del(jvcardparams, "username");
-      json_object_del(jvcardparams, "x-user");
-
-    } else {
-      // Use X-CYRUS-ONLINESERVICE in all other cases.
-        prop = vcardproperty_new(VCARD_X_PROPERTY);
-        vcardproperty_set_x_name(prop, "X-CYRUS-ONLINESERVICE");
-        vcardproperty_set_value(prop, vcardvalue_new(VCARD_STRUCTURED_VALUE));
-
-        vcardstructuredtype *st =
-            vcardvalue_get_structured(vcardproperty_get_value(prop));
-        st->field[0] = vcardstrarray_new(1);
-        if (user)
-            vcardstrarray_add(st->field[0], user);
-        st->field[1] = vcardstrarray_new(1);
-        if (uri)
-            vcardstrarray_add(st->field[1], uri);
-        st->num_fields = 2;
-
-        if (service) {
-            vcardparameter *param = vcardparameter_new_x(service);
-            vcardparameter_set_xname(param, "X-SERVICE-TYPE");
-            vcardproperty_add_parameter(prop, param);
-        }
+        vcardproperty_set_value_from_string(prop, val, val_kind);
     }
 
-done:
     json_object_del(obj, "service");
     json_object_del(obj, "user");
     json_object_del(obj, "uri");
