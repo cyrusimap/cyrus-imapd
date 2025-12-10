@@ -43,6 +43,7 @@ sub test_blob_get
         \@using,
     );
     $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'unknownMethod');
 
     xlog "Regular Blob/get works and returns a blobId";
     $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'data:asBase64', 'size' ] }, 'R1']]);
