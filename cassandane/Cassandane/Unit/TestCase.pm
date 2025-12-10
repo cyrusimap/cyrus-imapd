@@ -41,6 +41,9 @@ package Cassandane::Unit::TestCase;
 use strict;
 use warnings;
 
+# We need 0.29 because of a fix for exception handling
+use Test::Unit 0.29 ();
+
 use base qw(Test::Unit::TestCase);
 use Data::Dumper;
 use DateTime;
