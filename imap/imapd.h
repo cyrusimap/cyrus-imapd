@@ -61,6 +61,9 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
+/* Client quirks */
+#define QUIRK_SEARCHFUZZY (1<<0)
+
 struct octetinfo
 {
     int start_octet;
