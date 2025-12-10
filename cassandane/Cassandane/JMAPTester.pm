@@ -89,58 +89,58 @@ sub Upload {
 #
 # It returns an HTTP::Simple-style HTTP response.
 sub Download {
-  my $self = shift;
-  my $code = ref $_[0] eq 'CODE' ? shift : undef;
-  my $hdrs = ref $_[0] eq 'HASH' ? shift : undef;
-  my $account_id = shift;
-  my $blob_id    = shift;
-  my $name       = shift;
+    my $self = shift;
+    my $code = ref $_[0] eq 'CODE' ? shift : undef;
+    my $hdrs = ref $_[0] eq 'HASH' ? shift : undef;
+    my $account_id = shift;
+    my $blob_id    = shift;
+    my $name       = shift;
 
-  if (length $name) {
-    $name = Encode::encode('utf-8', $name, Encode::FB_CROAK);
-  }
-
-  $code && Carp::confess("Cassandane::JMAPTester can't emulate JMAPTalk->Download callback");
-
-  my %download_arg;
-  if ($hdrs && %$hdrs) {
-    my $accept = delete $hdrs->{accept};
-
-    %$hdrs && Carp::confess("Cassandane::JMAPTester's JMAPTalk->Download only supports accept header");
-
-    $download_arg{accept} = $accept;
-  }
-
-  my $download = $self->download(
-    {
-      (defined $account_id ? (accountId => $account_id) : ()),
-      (defined $blob_id    ? (blobId    => $blob_id   ) : ()),
-      (defined $name       ? (name      => $name      ) : ()),
-    },
-    \%download_arg,
-  );
-
-  my $have_headers = $download->http_response->headers;
-  my %tiny_headers;
-
-  $have_headers->scan(sub ($k, $v) {
-    $k = lc $k;
-    if (exists $tiny_headers{$k}) {
-      $tiny_headers{$k} = ref $tiny_headers{$k}
-                        ? [ $tiny_headers{$k}->@*, $v ]
-                        : [ $tiny_headers{$k}, $v ];
-    } else {
-      $tiny_headers{$k} = $v;
+    if (length $name) {
+        $name = Encode::encode('utf-8', $name, Encode::FB_CROAK);
     }
-  });
 
-  my $fake_jmaptalk_download = {
-    content => $download->http_response->decoded_content(charset => undef),
-    headers => \%tiny_headers,
-    status  => $download->http_response->code,
-  };
+    $code && Carp::confess("Cassandane::JMAPTester can't emulate JMAPTalk->Download callback");
 
-  return $fake_jmaptalk_download;
+    my %download_arg;
+    if ($hdrs && %$hdrs) {
+        my $accept = delete $hdrs->{accept};
+
+        %$hdrs && Carp::confess("Cassandane::JMAPTester's JMAPTalk->Download only supports accept header");
+
+        $download_arg{accept} = $accept;
+    }
+
+    my $download = $self->download(
+        {
+            (defined $account_id ? (accountId => $account_id) : ()),
+            (defined $blob_id    ? (blobId    => $blob_id   ) : ()),
+            (defined $name       ? (name      => $name      ) : ()),
+        },
+        \%download_arg,
+    );
+
+    my $have_headers = $download->http_response->headers;
+    my %tiny_headers;
+
+    $have_headers->scan(sub ($k, $v) {
+        $k = lc $k;
+        if (exists $tiny_headers{$k}) {
+            $tiny_headers{$k} = ref $tiny_headers{$k}
+                              ? [ $tiny_headers{$k}->@*, $v ]
+                              : [ $tiny_headers{$k}, $v ];
+        } else {
+            $tiny_headers{$k} = $v;
+        }
+    });
+
+    my $fake_jmaptalk_download = {
+        content => $download->http_response->decoded_content(charset => undef),
+        headers => \%tiny_headers,
+        status  => $download->http_response->code,
+    };
+
+    return $fake_jmaptalk_download;
 }
 
 sub set_username_and_password ($self, $username, $password) {
