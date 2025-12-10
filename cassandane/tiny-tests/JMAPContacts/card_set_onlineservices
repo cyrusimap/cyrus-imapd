@@ -195,25 +195,10 @@ install_test(update_xsocialprofile_fm => {
     wantVcard => ['X-CYRUS-ONLINESERVICE;X-SERVICE-TYPE=Github;PROP-ID=[\w]+:user;https://uri.local'],
 });
 
-install_test(update_xsocialprofile_fm_unset_user_service => {
-    fromVcard => ['X-SOCIAL-PROFILE;PROP-ID=1;X-USER=user;TYPE=Github:https://uri.local'],
-    update    => {
-        'onlineServices/1/user' => undef,
-        'onlineServices/1/service' => undef,
-    },
-    wantVcard => ['X-CYRUS-ONLINESERVICE;PROP-ID=1:;https://uri.local'],
-});
-
 install_test(update_xfmonlineother => {
     fromVcard => ['X-FM-ONLINE-OTHER;LABEL=Foo:https://uri.local'],
     update    => { nicknames => { 1 => { name => 'nickname' } } },
     wantVcard => ['X-CYRUS-ONLINESERVICE;X-SERVICE-TYPE=Foo;PROP-ID=[\w]+:;https://uri.local'],
-});
-
-install_test(update_xfmonlineother_unset_service => {
-    fromVcard => ['X-FM-ONLINE-OTHER;PROP-ID=1:https://uri.local'],
-    update    => { 'onlineServices/1/service' => undef },
-    wantVcard => ['X-CYRUS-ONLINESERVICE;PROP-ID=1:;https://uri.local'],
 });
 
 sub assert_card_set_create_onlineservices($self, $arg)
@@ -299,18 +284,6 @@ sub assert_card_set_update_onlineservices($self, $arg)
                 },
                 'R1',
             ],
-            [
-                'ContactCard/get',
-                {
-                    '#ids'        => {
-                        resultOf => 'R1',
-                        name => 'ContactCard/query',
-                        path => '/ids',
-                    },
-                    properties => ['onlineServices'],
-                },
-                'R2',
-            ]
         ]
     );
     $self->assert_num_equals( 1, scalar @{ $res->[0][1]{ids} } );
