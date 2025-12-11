@@ -120,6 +120,8 @@ sub new_jmaptester ($self, $new_arg = undef) {
     my $scheme = $arg{scheme};
 
     require Cassandane::JMAPTester;
+
+    # This causes all requests and responses to be printed to STDERR.
     local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
         unless exists $ENV{JMAP_TESTER_LOGGER};
 
