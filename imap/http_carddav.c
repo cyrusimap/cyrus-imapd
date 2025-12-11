@@ -1465,6 +1465,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
     const char *want_ver = NULL;
+    char *card_ver = NULL;
     int error_count = 0;
 
     /* Sanity check Content-Type */
@@ -1559,13 +1560,14 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
         switch (vcardproperty_isa(prop)) {
         case VCARD_VERSION_PROPERTY:
-            if (strcmp(propval, "3.0") &&
-                strcmp(propval, "4.0")) {
+            card_ver = xstrdup(propval);
+            if (strcmp(card_ver, "3.0") &&
+                strcmp(card_ver, "4.0")) {
                 txn->error.precond = CARDDAV_SUPP_DATA;
                 txn->error.desc = "Unsupported vCard version";
                 goto done;
             }
-            if (want_ver && (want_ver[0] != propval[0])) {
+            if (want_ver && (want_ver[0] != card_ver[0])) {
                 txn->error.precond = CARDDAV_VALID_DATA;
                 txn->error.desc =
                     "Content-Type version= and vCard VERSION mismatch";
@@ -1605,7 +1607,21 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     
     const char *olduid = cdata->vcard_uid;
     const char *newuid = uid;
-    if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
+    if (cdata->dav.imap_uid && olduid && newuid
+        && cdata->version == 3 && !strcmpsafe(card_ver, "4.0")
+        && !strncasecmp(newuid, "urn:uuid:", 9)
+        && !strcmp(olduid, newuid + 9))
+    {
+        // This is a PUT that rewrites a version 3 vCard to version 4
+        // and prefixes the UID value of the former card with the
+        // verbatim string "urn:uuid". Strictly speaking, this is not
+        // allowed and would require us to reject this with a
+        // no-uid-conflict precondition error. But previous versions
+        // of Cyrus did allow to do so and there is at least one client
+        // (eMClient) that does these bogus rewrites, so let's allow
+        // this case until they got a chance to fix their code.
+    }
+    else if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
         /* CARDDAV:no-uid-conflict */
         char *owner;
         const char *mboxname;
@@ -1637,6 +1653,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     free(fullname);
     free(subtype);
     free(type);
+    free(card_ver);
 
     if (txn->error.precond) return HTTP_FORBIDDEN;
 
