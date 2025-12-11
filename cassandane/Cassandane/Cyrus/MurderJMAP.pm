@@ -116,24 +116,23 @@ sub test_frontend_commands
         \b
     }x;
 
-    my $frontend_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $frontend_host,
-        port => $frontend_port,
-        scheme => 'http',
-        url => '/jmap/',
+    my $frontend_jmap = $self->{frontend}->new_jmaptester_for_user(
+        $self->default_user,
     );
 
     # upload a blob
-    my ($resp, $data) = $frontend_jmap->Upload("some test", "text/plain");
+    my $upload_res = $frontend_jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"some test",
+        type      => 'text/plain',
+    });
 
     # request should have been proxied
-    $self->assert_matches($proxy_re, $resp->{headers}{via});
+    $self->assert_matches($proxy_re, $upload_res->http_response->header('Via'));
 
     # download the same blob
-    $resp = $frontend_jmap->Download({ accept => 'text/plain' },
-                                     'cassandane', $data->{blobId});
+    my $resp = $frontend_jmap->Download({ accept => 'text/plain' },
+                                     'cassandane', $upload_res->blob_id);
 
     # request should have been proxied
     $self->assert_matches($proxy_re, $resp->{headers}{via});
@@ -155,24 +154,23 @@ sub test_backend1_commands
     my $backend1_host = $backend1_svc->host();
     my $backend1_port = $backend1_svc->port();
 
-    my $backend1_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $backend1_host,
-        port => $backend1_port,
-        scheme => 'http',
-        url => '/jmap/',
+    my $backend1_jmap = $self->{instance}->new_jmaptester_for_user(
+        $self->default_user,
     );
 
     # upload a blob
-    my ($resp, $data) = $backend1_jmap->Upload("some test", "text/plain");
+    my $upload_res = $backend1_jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"some test",
+        type      => 'text/plain',
+    });
 
     # request should not have been proxied
-    $self->assert_null($resp->{headers}{via});
+    $self->assert_null($upload_res->http_response->header('Via'));
 
     # download the same blob
-    $resp = $backend1_jmap->Download({ accept => 'text/plain' },
-                                     'cassandane', $data->{blobId});
+    my $resp = $backend1_jmap->Download({ accept => 'text/plain' },
+                                     'cassandane', $upload_res->blob_id);
 
     # request should not have been proxied
     $self->assert_null($resp->{headers}{via});
@@ -194,23 +192,22 @@ sub test_backend2_commands
     my $backend2_host = $backend2_svc->host();
     my $backend2_port = $backend2_svc->port();
 
-    my $backend2_jmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $backend2_host,
-        port => $backend2_port,
-        scheme => 'http',
-        url => '/jmap/',
+    my $backend2_jmap = $self->{backend2}->new_jmaptester_for_user(
+        $self->default_user,
     );
 
     # try to upload a blob
-    my ($resp, $data) = $backend2_jmap->Upload("some test", "text/plain");
+    my $upload_res = $backend2_jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"some test",
+        type      => 'text/plain',
+    });
 
     # user doesn't exist on this backend, so upload url should not exist
-    $self->assert_num_equals(404, $resp->{status});
-    $self->assert_str_equals('Not Found', $resp->{reason});
+    $self->assert_num_equals(404, $upload_res->http_response->code);
+    $self->assert_str_equals('Not Found', $upload_res->http_response->message);
 
-    $self->assert_null($data);
+    $self->assert(!$upload_res->is_success);
 
 #    # XXX test other commands
 }
