@@ -124,6 +124,10 @@ sub Download {
     my $have_headers = $download->http_response->headers;
     my %tiny_headers;
 
+    # Tests using the emulation layer want to see the headers as they'd have
+    # been provided by HTTP::Tiny, which means "either array or one value, name
+    # always in lower case".  This just maps HTTP::Header values into
+    # HTTP::Tiny-like headers. -- rjbs, 2025-12-11
     $have_headers->scan(sub ($k, $v) {
         $k = lc $k;
         if (exists $tiny_headers{$k}) {
