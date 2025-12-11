@@ -39,37 +39,12 @@ has _common_http_service_args => (
     },
 );
 
-sub new_jmaptalk {
-    my ($self, $arg) = @_;
-    $arg //= {};
-
-    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
-        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
-
-    unless ($self->instance->{config}->get_bit('httpmodules', 'jmap')) {
-        Carp::croak("User JMAP client requested, but jmap httpmodule not enabled");
-    }
-
-    require Mail::JMAPTalk;
-    $ENV{DEBUGJMAP} = 1;
-    my $jmap = Mail::JMAPTalk->new(
-        $self->_common_http_service_args->%*,
-        url => '/jmap/',
-        %$arg,
-    );
-
-    # preload default UA while the HTTP::Tiny env var is still set
-    $jmap->ua();
-
-    return $jmap;
-}
-
 has jmap => (
     is => 'ro',
     lazy => 1,
     default => sub {
         my ($self) = @_;
-        $self->new_jmaptalk;
+        $self->new_jmaptester;
     }
 );
 
