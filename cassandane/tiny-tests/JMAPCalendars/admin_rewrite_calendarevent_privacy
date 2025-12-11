@@ -10,13 +10,13 @@ sub test_admin_rewrite_calendarevent_privacy
     my $jmap = $self->{jmap};
 
     my @using = qw(
-    urn:ietf:params:jmap:core
-    urn:ietf:params:jmap:calendars
-    https://cyrusimap.org/ns/jmap/admin
-    https://cyrusimap.org/ns/jmap/calendars
-    https://cyrusimap.org/ns/jmap/debug
-    https://cyrusimap.org/ns/jmap/performance
-);
+        urn:ietf:params:jmap:core
+        urn:ietf:params:jmap:calendars
+        https://cyrusimap.org/ns/jmap/admin
+        https://cyrusimap.org/ns/jmap/calendars
+        https://cyrusimap.org/ns/jmap/debug
+        https://cyrusimap.org/ns/jmap/performance
+    );
 
     xlog $self, "Make sure regular user can't call Admin method";
     my $res = $jmap->CallMethods([
