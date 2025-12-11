@@ -158,5 +158,20 @@ sub set_username_and_password ($self, $username, $password) {
     );
 }
 
+sub set_scheme_and_host_and_port ($self, $scheme, $host, $port) {
+    $self->api_uri("$scheme://$host:$port/jmap/");
+    $self->authentication_uri("$scheme://$host:$port/jmap");
+    $self->upload_uri("$scheme://$host:$port/jmap/upload/{accountId}/");
+
+    # The session actually provides a query string of "?accept={type}" but our
+    # tests don't reliably provide type, and we can't just use the Accept
+    # header they send, because sometimes they send an Accept that's
+    # preferential or wildcardy.  So, we'll just not include that parameter
+    # here.  This is crap, but it's a transition toward less crap.
+    $self->download_uri("$scheme://$host:$port/jmap/download/{accountId}/{blobId}/{name}");
+
+    return;
+}
+
 no Moo;
 1;
