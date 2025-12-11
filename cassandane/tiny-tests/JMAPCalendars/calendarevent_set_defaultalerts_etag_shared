@@ -32,26 +32,10 @@ sub test_calendarevent_set_defaultalerts_etag_shared
 
     xlog "Create other user and share owner calendar";
     my $admintalk = $self->{adminstore}->get_client();
-    $self->{instance}->create_user("other");
+    my $other_user = $self->{instance}->create_user("other");
     $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
-    my $service = $self->{instance}->get_service("http");
-    my $otherJMAP = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
-    my $otherCalDAV = Net::CalDAVTalk->new(
-        user => "other",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $otherJMAP = $other_user->jmap;
+    my $otherCalDAV = $other_user->caldav;
 
     xlog "Create event";
     $res = $jmap->CallMethods([

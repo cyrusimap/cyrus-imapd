@@ -11,25 +11,10 @@ sub test_email_query_fromanycontact_shared
     my $admin = $self->{adminstore}->get_client();
 
     xlog "Create shared addressbook";
+    my $other_user = $self->{instance}->create_trivial_user('other');
     $admin->create("user.other");
-    my $http = $self->{instance}->get_service("http");
-    my $otherCarddav = Net::CardDAVTalk->new(
-        user => "other",
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $otherCarddav = $other_user->carddav;
+    my $otherJmap = $other_user->jmap;
     $admin->create("user.other.#addressbooks.Shared", ['TYPE', 'ADDRESSBOOK']);
     $admin->setacl("user.other.#addressbooks.Shared", "cassandane", "lr") or die;
     $imap->subscribe("user.other.#addressbooks.Shared");

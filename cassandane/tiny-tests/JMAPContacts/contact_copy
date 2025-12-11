@@ -15,35 +15,13 @@ sub test_contact_copy
     $admintalk->create("user.other2");
     $admintalk->create("user.other3");
 
-    my $othercarddav = Net::CardDAVTalk->new(
-        user => "other",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $other3_user = $self->{instance}->create_trivial_user('other3');
 
-    my $other2carddav = Net::CardDAVTalk->new(
-        user => "other2",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-
-    my $other3carddav = Net::CardDAVTalk->new(
-        user => "other3",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $othercarddav = $other_user->carddav;
+    my $other2carddav = $other2_user->carddav;
+    my $other3carddav = $other3_user->carddav;
 
     xlog $self, "share addressbooks";
     $admintalk->setacl("user.other.#addressbooks.Default",
@@ -151,14 +129,7 @@ sub test_contact_copy
     $self->assert_null($res->[0][1]{list}[0]{avatar});
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
 
-    my $other3Jmap = Mail::JMAPTalk->new(
-        user => 'other3',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other3Jmap = $other3_user->jmap;
     $other3Jmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/contacts',

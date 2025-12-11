@@ -35,14 +35,8 @@ sub test_email_query_fromcontactgroupid_when_shared_addrbook_exists
 
     xlog "Create a shared contact, necessary to trigger bug";
     my $http = $self->{instance}->get_service("http");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $otherJmap = $other_user->new_jmaptester;
 
     xlog "Create contact in shared addressbook";
     my $res = $otherJmap->CallMethods([

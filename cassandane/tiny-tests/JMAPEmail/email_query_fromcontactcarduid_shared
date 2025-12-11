@@ -13,24 +13,12 @@ sub test_email_query_fromcontactcarduid_shared
     xlog "Create shared addressbooks";
     $admin->create("user.other");
     my $http = $self->{instance}->get_service("http");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $otherJmap = $other_user->new_jmaptester;
 
     $admin->create("user.other2");
-    my $otherJmap2 = Mail::JMAPTalk->new(
-        user => 'other2',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $otherJmap2 = $other2_user->new_jmaptester;
 
     xlog $self, "Enable compactids";
     $self->{instance}->run_command({ cyrus => 1 },

@@ -14,14 +14,9 @@ sub test_email_query_seen_shared
     $admin->setacl("user.other", cassandane => 'lrswipkxtecdn') or die;
 
     my $service = $self->{instance}->get_service("http");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $otherJmap = $other_user->new_jmaptester;
+
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
