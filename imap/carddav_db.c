@@ -544,8 +544,9 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     "SELECT DISTINCT GO.vcard_uid, GO.fullname" \
     " FROM vcard_objs GO JOIN vcard_groups G" \
     " WHERE G.objid = GO.rowid AND GO.alive = 1" \
-    " AND G.member_uid = :member_uid AND G.otheruser = :otheruser" \
+    " AND G.member_uid = :member_uid" \
     " AND GO.mailbox = :mailbox;"
+// we don't filter by otheruser here because the ContactCard API doesn't set it
 
 static int emailexists_cb(sqlite3_stmt *stmt, void *rock)
 {

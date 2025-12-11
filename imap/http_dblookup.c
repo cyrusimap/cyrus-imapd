@@ -259,6 +259,10 @@ static int get_uid2groups(struct transaction_t *txn,
     const char **mailboxhdrs;
     const char *mailbox = "Default";
     mbentry_t *mbentry = NULL;
+    ptrarray_t *abook_sets = NULL;
+    struct auth_state *authstate = auth_newstate(userid);
+
+    if (!authstate) goto done;
 
     otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
     if (otheruserhdrs) {
@@ -276,12 +280,54 @@ static int get_uid2groups(struct transaction_t *txn,
     mboxlist_lookup(mboxname, &mbentry, NULL);
     if (!mbentry) goto done;
 
-    /* XXX init just incase carddav not enabled? */
+    /* Open DAV DB for the specified user.
+     * It will be assigned to an abook_set in jmap_get_accessible_addressbooks()
+     * and closed in jmap_free_abook_sets().
+     */
     db = carddav_open_userid(userid);
     if (!db) goto done;
 
-    array = carddav_getuid2groups(db, key, mbentry, otheruser);
-    if (!array) goto done;
+    abook_sets = jmap_get_accessible_addressbooks(userid, authstate,
+                                                  &httpd_namespace, db);
+    struct abook_set *user_set = NULL;
+    struct carddav_data *cdata = NULL;
+    int is_accessible = 0;
+
+    if (!*otheruser) {
+        /* Addressbook set for User */
+        user_set = ptrarray_nth(abook_sets, 0);
+    }
+    else {
+        /* Find addressbook set for OtherUser */
+        for (int i = 1; i < ptrarray_size(abook_sets); i++) {
+            struct abook_set *set = ptrarray_nth(abook_sets, i);
+
+            if (!strcmp(otheruser, set->userid)) {
+                user_set = set;
+                break;
+            }
+        }
+    }
+
+    /* Verify that the member UID exists in an accessible addressbook */
+    if (user_set && user_set->carddavdb &&
+        !carddav_lookup_uid(user_set->carddavdb, key, &cdata) &&
+        cdata && cdata->dav.imap_uid) {
+        for (int i = 0; i < ptrarray_size(&user_set->mbentrys); i++) {
+            mbentry_t *mbentry = ptrarray_nth(&user_set->mbentrys, i);
+
+            if (!mbentry ||  // ANY addressbook of User
+                !strcmp(cdata->dav.mailbox, mbentry->uniqueid)) {
+                is_accessible = 1;
+                break;
+            }
+        }
+    }
+
+    if (is_accessible) {
+        array = carddav_getuid2groups(db, key, mbentry, otheruser);
+        if (!array) goto done;
+    }
 
     json = json_object();
     for (i = 0; i < strarray_size(array); i += 2) {
@@ -302,7 +348,8 @@ done:
     free(result);
     mboxlist_entry_free(&mbentry);
     if (array) strarray_free(array);
-    if (db) carddav_close(db);
+    if (authstate) auth_freestate(authstate);
+    if (abook_sets) jmap_free_abook_sets(abook_sets);
     return ret;
 }
 
