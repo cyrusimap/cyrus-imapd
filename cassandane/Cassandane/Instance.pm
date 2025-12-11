@@ -1167,6 +1167,18 @@ sub create_user
     return $user_obj;
 }
 
+sub create_trivial_user {
+    my ($self, $username) = @_;
+
+    my $user_obj = Cassandane::TestUser->new({
+        username => $username,
+        password => 'pass',
+        instance => $self,
+    });
+
+    return $user_obj;
+}
+
 sub set_smtpd {
     my ($self, $data) = @_;
     my $basedir = $self->{basedir};
