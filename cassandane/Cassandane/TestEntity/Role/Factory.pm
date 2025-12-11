@@ -84,7 +84,7 @@ sub _update {
         'FactorySetUpdate',
     ]]);
 
-    my $set = $res->single_sentence("$dt/set")->as_set->assert_no_errors;
+    $res->single_sentence("$dt/set")->as_set->assert_no_errors;
 
     $instance->clear_properties;
 
