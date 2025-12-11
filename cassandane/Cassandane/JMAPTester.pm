@@ -5,6 +5,7 @@ extends 'JMAP::Tester';
 use experimental 'signatures';
 
 use Encode ();
+use MIME::Base64 ();
 
 has fallback_account_id => (
     is       => 'ro',
