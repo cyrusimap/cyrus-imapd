@@ -19,22 +19,26 @@ sub inbox {
     my $jmap = $self->user->entity_jmap;
     local $jmap->{CreatedIds}; # do not pollute the client for later use
 
-    my $res = $jmap->CallMethods([
-        [ "$dt/query", { filter => { role => 'inbox' } }, 'a' ],
+    my $res = $jmap->request([
+        [ "$dt/query", { filter => { role => 'inbox' } }, "a" ],
         [ "$dt/get", {
             '#ids' => {
                 resultOf => 'a',
                 name     => "$dt/query",
                 path     => '/ids'
             },
-        }, 'b' ],
+        } ],
     ]);
 
-    unless ($res->[1][0] eq "$dt/get" && $res->[1][1]{list}->@*) {
+    my $get = $res->sentence(1);
+
+    unless ($get->name eq "$dt/get"
+        &&  $get->arguments->{list}->@* == 1
+    ) {
         Carp::confess("failed to get $dt object for inbox role");
     }
 
-    my $props = $res->[1][1]{list}[0];
+    my $props = $get->arguments->{list}[0];
     my $id    = delete $props->{id};
     $self->instance_class->new({
         id  => $id,

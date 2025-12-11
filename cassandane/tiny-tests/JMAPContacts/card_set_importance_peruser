@@ -71,7 +71,7 @@ sub test_card_set_importance_peruser
 
     $res = $jmap->CallMethods([
         ['ContactCard/get', {
-            ids => ['#c1'],
+            ids => [ $contactId ],
             properties => ['cyrusimap.org:importance'],
         }, 'R1'],
     ]);

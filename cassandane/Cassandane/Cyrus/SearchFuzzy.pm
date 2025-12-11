@@ -155,12 +155,15 @@ sub get_snippets
     my $res = $imap->fetch($uids, ['emailid']);
     my %emailIdToImapUid = map { $res->{$_}{emailid}[0] => $_ } keys %$res;
 
-    $res = $jmap->CallMethods([
-        ['SearchSnippet/get', {
-            filter => $filter,
-            emailIds => [ keys %emailIdToImapUid ],
-        }, 'R1'],
-    ]);
+    $res = $jmap->CallMethods(
+        [
+            ['SearchSnippet/get', {
+                filter => $filter,
+                emailIds => [ keys %emailIdToImapUid ],
+            }, 'R1'],
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
 
     my @snippets;
     foreach (@{$res->[0][1]{list}}) {

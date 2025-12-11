@@ -8,27 +8,16 @@ sub test_created_ids
     my $jmap = $self->{jmap};
 
     xlog $self, "send bogus creation ids map";
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-        },
-        content => encode_json({
-            using => ['urn:ietf:params:jmap:mail'],
-            methodCalls => [['Identity/get', {}, 'R1']],
-            createdIds => 'bogus',
-        }),
-    };
-    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('400', $RawResponse->{status});
+    my $err = $jmap->request({
+        using => ['urn:ietf:params:jmap:mail'],
+        methodCalls => [['Identity/get', {}, 'R1']],
+        createdIds => 'bogus',
+    });
+
+    $self->assert_str_equals('400', $err->http_response->code);
 
     xlog $self, "create a mailbox without any client-supplied creation ids";
-    my $JMAPRequest = {
-        using => ['urn:ietf:params:jmap:mail'],
+    my $res = $jmap->request({
         methodCalls => [['Mailbox/set', {
             create => {
                 "1" => {
@@ -38,25 +27,24 @@ sub test_created_ids
                 }
             }
         }, "R1"]],
-    };
-    my $JMAPResponse = $jmap->Request($JMAPRequest);
-    my $mboxid1 = $JMAPResponse->{methodResponses}->[0][1]{created}{1}{id};
+        using => ['urn:ietf:params:jmap:mail'],
+    });
+    my $mboxid1 = $res->sentence_named("Mailbox/set")->arguments->{created}{1}{id};
     $self->assert_not_null($mboxid1);
-    $self->assert_null($JMAPResponse->{createdIds});
+    $self->assert_null($res->wrapper_properties->{createdIds});
 
     xlog $self, "get mailbox using client-supplied creation id";
-    $JMAPRequest = {
+    $res = $jmap->request({
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => ['#1'] }, 'R1']],
         createdIds => { 1 => $mboxid1 },
-    };
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    $self->assert_str_equals($mboxid1, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
-    $self->assert_not_null($JMAPResponse->{createdIds});
-    $self->assert_str_equals($mboxid1, $JMAPResponse->{createdIds}{1});
+    });
+    $self->assert_str_equals($mboxid1, $res->sentence_named('Mailbox/get')->arguments->{list}[0]{id});
+    $self->assert_not_null($res->wrapper_properties->{createdIds});
+    $self->assert_str_equals($mboxid1, $res->wrapper_properties->{createdIds}{1});
 
     xlog $self, "create a mailbox with empty client-supplied creation ids";
-    $JMAPRequest = {
+    $res = $jmap->request({
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
             create => {
@@ -68,13 +56,12 @@ sub test_created_ids
             }
         }, "R1"]],
         createdIds => {},
-    };
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    my $mboxid2 = $JMAPResponse->{methodResponses}->[0][1]{created}{2}{id};
-    $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
+    });
+    my $mboxid2 = $res->sentence_named('Mailbox/set')->arguments->{created}{2}{id};
+    $self->assert_str_equals($mboxid2, $res->wrapper_properties->{createdIds}{2});
 
     xlog $self, "create a mailbox with client-supplied creation ids";
-    $JMAPRequest = {
+    $res = $jmap->request({
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
             create => {
@@ -89,20 +76,19 @@ sub test_created_ids
             1 => $mboxid1,
             2 => $mboxid2,
         },
-    };
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    my $mboxid3 = $JMAPResponse->{methodResponses}->[0][1]{created}{3}{id};
-    $self->assert_str_equals($mboxid1, $JMAPResponse->{createdIds}{1});
-    $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
-    $self->assert_str_equals($mboxid3, $JMAPResponse->{createdIds}{3});
+    });
+    my $mboxid3 = $res->sentence_named('Mailbox/set')->arguments->{created}{3}{id};
+    $self->assert_str_equals($mboxid1, $res->wrapper_properties->{createdIds}{1});
+    $self->assert_str_equals($mboxid2, $res->wrapper_properties->{createdIds}{2});
+    $self->assert_str_equals($mboxid3, $res->wrapper_properties->{createdIds}{3});
 
     xlog $self, "get mailbox and check parentid";
-    $JMAPRequest = {
+    $res = $jmap->request({
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => [$mboxid3], properties => ['parentId'] }, 'R1']],
-    };
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    $self->assert_str_equals($mboxid3, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
-    $self->assert_str_equals($mboxid2, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{parentId});
-    $self->assert_null($JMAPResponse->{createdIds});
+    });
+
+    $self->assert_str_equals($mboxid3, $res->sentence_named('Mailbox/get')->arguments->{list}[0]{id});
+    $self->assert_str_equals($mboxid2, $res->sentence_named('Mailbox/get')->arguments->{list}[0]{parentId});
+    $self->assert_null($res->wrapper_properties->{createdIds});
 }

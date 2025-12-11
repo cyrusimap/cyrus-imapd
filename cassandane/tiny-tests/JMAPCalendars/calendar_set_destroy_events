@@ -53,7 +53,7 @@ sub test_calendar_set_destroy_events
         ['CalendarEvent/get', {
             ids => [$eventId],
             properties => ['id'],
-        }, 'R2'],
+        }, 'R4'],
     ]);
     $self->assert_str_equals('calendarHasEvents',
         $res->[0][1]{notDestroyed}{$calendarId}{type});

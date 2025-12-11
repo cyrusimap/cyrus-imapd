@@ -8,18 +8,18 @@ sub test_blob_upload_too_large
     my $jmap = $self->{jmap};
 
     xlog "Assert Problem Details report";
-    my $httpReq = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => 'X' x 1025,
-    };
-    my $httpRes = $jmap->ua->post($jmap->uploaduri('cassandane'), $httpReq);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($httpReq, $httpRes);
-    }
-    $self->assert_str_equals("413", $httpRes->{status});
-    my $res = eval { decode_json($httpRes->{content}) };
+    my $big_blob = 'X' x 1025;
+
+    my $upload_res = $jmap->upload({
+        accountId => 'cassandane',
+        blob      => \$big_blob,
+        type      => "text/plain",
+    });
+
+    my $http_res = $upload_res->http_response;
+
+    $self->assert_str_equals("413", $http_res->code);
+    my $res = eval { decode_json($http_res->decoded_content(charset => undef)) };
     $self->assert_str_equals("413", $res->{status});
     $self->assert_str_equals("Content Too Large", $res->{title});
     $self->assert_str_equals("urn:ietf:params:jmap:error:limit", $res->{type});

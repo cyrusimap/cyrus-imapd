@@ -34,11 +34,16 @@ sub test_blob_get
     $self->assert_not_null($blobId);
 
     xlog "Test without capability";
-    $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'size' ] }, 'R1']]);
-    $self->assert_str_equals($res->[0][0], 'error');
 
-    # XXX: this will be replaced with the upstream one
-    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/blob');
+    my @using = grep {; $_ ne 'https://cyrusimap.org/ns/jmap/blob' }
+                $jmap->default_using->@*;
+
+    $res = $jmap->CallMethods(
+        [['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'size' ] }, 'R1']],
+        \@using,
+    );
+    $self->assert_str_equals($res->[0][0], 'error');
+    $self->assert_str_equals($res->[0][1]{type}, 'unknownMethod');
 
     xlog "Regular Blob/get works and returns a blobId";
     $res = $jmap->CallMethods([['Blob/get', { ids => [$blobId], properties => [ 'data:asText', 'data:asBase64', 'size' ] }, 'R1']]);

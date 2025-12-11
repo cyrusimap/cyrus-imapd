@@ -14,7 +14,7 @@ sub test_blob_upload_repair_acl
 
     xlog "Assert that uploading duplicates does not fail";
     $admin->setacl("user.cassandane.#jmap", "cassandane", "lrswkcni") or die;
-    my $res = $jmap->Upload($binary);
+    my $res = $jmap->Upload($binary, 'application/octet-stream');
     my $blobId = $res->{blobId};
     $res = $jmap->Upload($binary, "message/rfc822");
     $self->assert_str_equals($blobId, $res->{blobId});

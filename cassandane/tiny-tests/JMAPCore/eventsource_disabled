@@ -11,29 +11,20 @@ sub test_eventsource_disabled
 
     my $jmap = $self->{jmap};
     my $http = $self->{instance}->get_service("http");
-
-    my $RawRequest = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('200', $RawResponse->{status});
-    my $session = eval { decode_json($RawResponse->{content}) };
+    my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);
-    my $url = $session->{eventSourceUrl};
-    $self->assert_null($url);
+    $self->assert_null($session->{eventSourceUrl});
 
-    $url = $jmap->uri() . "eventsource/";
+    my $uri = $jmap->api_uri . "eventsource/";
 
-    $RawRequest->{headers}->{'Last-Event-Id'} = '0';
-    $RawResponse = $jmap->ua->get($url, $RawRequest);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($RawRequest, $RawResponse);
-    }
-    $self->assert_str_equals('404', $RawResponse->{status});
+    my $es_request = HTTP::Request->new(
+        GET => $uri,
+        [
+            $jmap->_maybe_auth_header,
+            'Last-Event-Id' => '0',
+        ],
+    );
+
+    my $http_res = $jmap->http_request($es_request);
+    $self->assert_str_equals('404', $http_res->code);
 }

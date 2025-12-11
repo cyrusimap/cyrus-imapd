@@ -155,7 +155,7 @@ Cassandane needs the following software to work:
 
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha-perl \
-       libdatetime-perl libbsd-resource-perl libtest-unit-perl \
+       libdatetime-perl libbsd-resource-perl \
        libxml-generator-perl libxml-xpath-perl libclone-perl \
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libio-socket-inet6-perl libio-socket-ssl-perl libnet-server-perl \
@@ -173,7 +173,7 @@ Debian/Ubuntu copypasta:
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
-       IO::File::Lockable Archive::Tar::Stream
+       IO::File::Lockable Archive::Tar::Stream Test::Unit
 
 Fedora copypasta:
    # there's heaps more to add here... needs to be tested

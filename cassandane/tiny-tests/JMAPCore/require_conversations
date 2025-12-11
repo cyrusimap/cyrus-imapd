@@ -18,8 +18,8 @@ sub test_require_conversations
     };
 
     # request should fail
-    my ($response, undef) = $jmap->Request($JMAPRequest);
-    $self->assert(not $response->{success});
+    my ($response, undef) = $jmap->request($JMAPRequest);
+    $self->assert(not $response->is_success);
 
     # httpd should syslog an error
     $self->assert_syslog_matches(

@@ -912,7 +912,7 @@ sub _setup_http_service_objects
         $self->{caldav} = $self->default_user->caldav;
     }
     if ($self->{instance}->{config}->get_bit('httpmodules', 'jmap')) {
-        $self->{jmap} = $self->default_user->jmap;
+        $self->{jmap} = $self->default_user->new_jmaptester;
     }
 
     xlog $self, "http service objects setup complete!";

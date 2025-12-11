@@ -16,23 +16,22 @@ sub test_sessionstate
         using => ['urn:ietf:params:jmap:core'],
         methodCalls => [['Core/echo', { }, 'R1']],
     };
-    my $JMAPResponse = $jmap->Request($JMAPRequest);
-    $self->assert_not_null($JMAPResponse->{sessionState});
-    my $sessionState = $JMAPResponse->{sessionState};
+    my $JMAPResponse = $jmap->request($JMAPRequest);
+    $self->assert_not_null($JMAPResponse->wrapper_properties->{sessionState});
+    my $sessionState = $JMAPResponse->wrapper_properties->{sessionState};
 
     # Update ACL
     $admintalk->setacl("user.other", "cassandane", "lr") or die;
 
     # Fetch sessionState
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
-    $sessionState = $JMAPResponse->{sessionState};
+    $JMAPResponse = $jmap->request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->wrapper_properties->{sessionState});
+    $sessionState = $JMAPResponse->wrapper_properties->{sessionState};
 
     # Update ACL
     $admintalk->setacl("user.other", "cassandane", "") or die;
 
     # Fetch sessionState
-    $JMAPResponse = $jmap->Request($JMAPRequest);
-    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
-    $sessionState = $JMAPResponse->{sessionState};
+    $JMAPResponse = $jmap->request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->wrapper_properties->{sessionState});
 }

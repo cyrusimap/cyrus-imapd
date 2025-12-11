@@ -6,19 +6,19 @@ sub test_request_too_large ($self)
     my $jmap = $self->{jmap};
 
     xlog "Assert Problem Details report";
-    my $httpReq = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
+    my $http_req = HTTP::Request->new(
+        POST => $jmap->api_uri,
+        [
             'Content-Type' => 'application/json',
-        },
-        content => 'X' x 1025,
-    };
-    my $httpRes = $jmap->ua->post($jmap->uri('cassandane'), $httpReq);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($httpReq, $httpRes);
-    }
-    $self->assert_str_equals("413", $httpRes->{status});
-    my $res = eval { decode_json($httpRes->{content}) };
+            $jmap->_maybe_auth_header,
+        ],
+        'X' x 1025,
+    );
+
+    my $http_res = $jmap->http_request($http_req);
+
+    $self->assert_str_equals("413", $http_res->code);
+    my $res = eval { decode_json($http_res->decoded_content(charset => undef)) };
     $self->assert_str_equals("413", $res->{status});
     $self->assert_str_equals("JMAP request exceeds a server limit",
                              $res->{title});

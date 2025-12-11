@@ -90,7 +90,7 @@ sub test_email_query_guidsearch_sort
                 isAscending => JSON::true,
             }],
             disableGuidSearch => JSON::true,
-        }, 'R1'],
+        }, 'R3'],
         ['Email/query', {
             filter => {
                 to => '@example.com',
@@ -100,7 +100,7 @@ sub test_email_query_guidsearch_sort
                 isAscending => JSON::false,
             }],
             disableGuidSearch => JSON::true,
-        }, 'R2'],
+        }, 'R4'],
     ], $using);
 
     my $guidSearchIds;

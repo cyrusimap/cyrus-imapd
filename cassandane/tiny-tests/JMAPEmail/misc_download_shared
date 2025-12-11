@@ -41,14 +41,11 @@ sub test_misc_download_shared
 
     xlog $self, "download email as blob";
     $res = $jmap->Download('foo', $blobId);
+    $self->assert_str_equals('200', $res->{status});
 
     xlog $self, "Unshare mailbox";
     $admintalk->setacl("user.foo.B", "cassandane", "") or die;
 
-    my %Headers = (
-        'Authorization' => $jmap->auth_header(),
-    );
-    my $httpRes = $jmap->ua->get($jmap->downloaduri('foo', $blobId),
-                                 { headers => \%Headers });
-    $self->assert_str_equals('404', $httpRes->{status});
+    my $redownload = $jmap->Download('foo', $blobId);
+    $self->assert_str_equals('404', $redownload->{status});
 }

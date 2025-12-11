@@ -41,6 +41,9 @@ package Cassandane::Unit::TestCase;
 use strict;
 use warnings;
 
+# We need 0.29 because of a fix for exception handling
+use Test::Unit 0.29 ();
+
 use base qw(Test::Unit::TestCase);
 use Data::Dumper;
 use DateTime;
@@ -528,6 +531,12 @@ sub assert_cmp_deeply
     $desc ||= "deep comparison matched";
 
     require Test::Deep;
+    require Test::Deep::JType;
+
+    no warnings 'once';
+    local $Test::Deep::LeafWrapper = sub { Test::Deep::JType::_String->new(@_) };
+    use warnings 'once';
+
     my ($ok, $stack) = Test::Deep::cmp_details($actual, $expected);
 
     if ($ok) {
