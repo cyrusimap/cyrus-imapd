@@ -855,9 +855,9 @@ sub _create_instances
 
 sub _need_http_tiny_env
 {
-    # Net::DAVTalk < 0.23 and Mail::JMAPTalk < 0.17 don't pass through
-    # SSL_options, but HTTP::Tiny >= 0.083 enables SSL certificate
-    # verification, which will fail without our SSL_options.
+    # Net::DAVTalk < 0.23 doesn't pass through SSL_options, but HTTP::Tiny >=
+    # 0.083 enables SSL certificate verification, which will fail without our
+    # SSL_options.
     #
     # For HTTP::Tiny >= 0.086, we can set an environment variable
     # to turn off SSL certificate verifications.
@@ -870,25 +870,22 @@ sub _need_http_tiny_env
     return undef if $@;
 
     my $ndv = version->parse($Net::DAVTalk::VERSION);
-    my $mjv = version->parse($Mail::JMAPTalk::VERSION);
     my $htv = version->parse($HTTP::Tiny::VERSION);
 
     # not needed: old HTTP::Tiny doesn't check certificates
     return undef if $htv < version->parse('0.083');
 
-    # not needed: new Net::DAVTalk and Mail::JMAPTalk pass through SSL_options
-    return undef if $ndv >= version->parse('0.23')
-                    && $mjv >= version->parse('0.17');
+    # not needed: new Net::DAVTalk passes through SSL_options
+    return undef if $ndv >= version->parse('0.23');
 
     # awkward: HTTP::Tiny 0.083-0.085 are new enough to check certificates
     # by default, but not new enough for us to override that by the
     # environment variable.  if you get errors here, you need to either
     # upgrade HTTP::Tiny to 0.086 (or later), or upgrade Net::DAVTalk to 0.23
-    # and Mail::JMAPTalk to 0.17 (or later).
+    # (or later).
     HTTP::Tiny->VERSION('0.086');
 
     xlog "Have Net::DAVTalk version " . Net::DAVTalk->VERSION();
-    xlog "Have Mail::JMAPTalk version " . Mail::JMAPTalk->VERSION();
     xlog "Have HTTP::Tiny version " . HTTP::Tiny->VERSION();
     xlog "Will set PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT=1";
     return 1;
