@@ -1549,13 +1549,14 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
     struct flock fl;
     int r = 0;
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
+    int take_headlock = (flags & TWOM_ONELOCK) ? 0 : 1;
     struct tm_file *file = forcefile ? forcefile : db->openfile;
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
     for (;;) {
         // lock the head section
-        for (;!file->has_headlock;) {
+        for (;take_headlock && !file->has_headlock;) {
             fl.l_type = F_WRLCK;
             fl.l_whence = SEEK_SET;
             fl.l_start = 0;
@@ -1624,6 +1625,9 @@ static int write_lock(struct twom_db *db, struct twom_txn **txnp,
         }
 
         if (sbuf.st_ino == sbuffile.st_ino) break;
+
+        // go straight to the data lock when retrying
+        take_headlock = 0;
 
         r = unlock(db, file);
         if (r) goto done;
@@ -1698,12 +1702,13 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
     struct flock fl;
     struct tm_file *file = forcefile ? forcefile : db->openfile;
     int cmd = (flags & TWOM_NONBLOCKING) ? F_SETLK : F_SETLKW;
+    int take_headlock = (flags & TWOM_ONELOCK) ? 0 : 1;
 
     if (file->has_headlock || file->has_datalock) return TWOM_INTERNAL;
 
     for (;;) {
         // take the headlock
-        for (;!file->has_headlock;) {
+        for (;take_headlock && !file->has_headlock;) {
             fl.l_type = F_RDLCK;
             fl.l_whence = SEEK_SET;
             fl.l_start = 0;
@@ -1774,6 +1779,9 @@ static int read_lock(struct twom_db *db, struct twom_txn **txnp,
 
         // file is unchanged, we have successfully locked
         if (sbuf.st_ino == sbuffile.st_ino) break;
+
+        // go straight to the data lock when retrying
+        take_headlock = 0;
 
         // unlock the old file
         r = unlock(db, file);
@@ -2168,7 +2176,7 @@ static int myreplay(struct twom_txn *txn,
         if (txn->counter > db->foreach_lock_release) {
             r = unlock(db, file);
             if (r) return r;
-            r = read_lock(db, &txn, file, /*flags*/0);
+            r = read_lock(db, &txn, file, /*flags*/TWOM_ONELOCK);
             if (r) return r;
             txn->counter = 0;
         }
@@ -2698,7 +2706,7 @@ int twom_cursor_next(struct twom_cursor *cur,
         }
 
         if (!txn->file->has_datalock) {
-            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, /*flags*/0);
+            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, TWOM_ONELOCK);
             if (r) return r;
             txn->counter = 0;
         }
@@ -3243,7 +3251,7 @@ int twom_db_repack(struct twom_db *db)
     /* open fname.NEW */
     snprintf(newfname, sizeof(newfname), "%s.NEW", db->fname);
 
-    int flags = TWOM_NONBLOCKING; // if another file has already locked it, something is broken
+    int flags = TWOM_NONBLOCKING | TWOM_ONELOCK; // if another file has already locked it, something is broken
     if (db->external_csum)
         flags |= TWOM_CSUM_EXTERNAL;
     else if (db->nocsum)
