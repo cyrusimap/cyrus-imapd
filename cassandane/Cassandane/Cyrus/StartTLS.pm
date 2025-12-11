@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use JSON::XS;
 use Convert::Base64;
-use Mail::JMAPTalk 0.13;
 use Cwd qw(abs_path);
 use Data::Dumper;
 

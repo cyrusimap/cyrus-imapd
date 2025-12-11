@@ -43,7 +43,6 @@ use warnings;
 use DateTime;
 use JSON;
 use JSON::XS;
-use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;

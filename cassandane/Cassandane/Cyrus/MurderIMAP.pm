@@ -41,7 +41,6 @@ package Cassandane::Cyrus::MurderIMAP;
 use strict;
 use warnings;
 use Data::Dumper;
-use Mail::JMAPTalk;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;

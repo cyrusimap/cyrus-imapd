@@ -44,7 +44,6 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.13;
 use Data::ICal;
 use Data::Dumper;
 use Data::GUID qw(guid_string);

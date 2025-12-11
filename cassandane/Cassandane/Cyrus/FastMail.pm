@@ -45,7 +45,6 @@ use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.05;
 use Net::CardDAVTalk::VCard;
-use Mail::JMAPTalk 0.12;
 use Data::Dumper;
 use Storable 'dclone';
 

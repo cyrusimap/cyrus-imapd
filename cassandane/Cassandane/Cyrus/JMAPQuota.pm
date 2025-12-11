@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use JSON;
 use JSON::XS;
-use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 
 use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);

@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);

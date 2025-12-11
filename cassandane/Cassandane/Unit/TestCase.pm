@@ -52,6 +52,8 @@ use DateTime::Format::ISO8601;
 use Cassandane::Util::Log;
 use Cassandane::Util::TestUrl;
 
+use Mail::JMAPTalk;
+
 my $enabled;
 my $buildinfo;
 
