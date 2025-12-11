@@ -240,11 +240,10 @@ static struct event_groups {
 
 } *notify_event_groups = NULL;
 
-#define QUIRK_SEARCHFUZZY (1<<0)
 static struct id_data {
     hash_table params;
+    unsigned quirks;
     int did_id;
-    int quirks;
 } imapd_id = { HASH_TABLE_INITIALIZER, 0, 0 };
 
 /* our tls connection, if any */
@@ -6278,29 +6277,7 @@ static void cmd_search(const char *tag, const char *cmd)
 
     searchargs->maxargssize_mark = maxargssize_mark;
 
-    /* Set FUZZY search according to config and quirks */
-    static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
-    char *inbox = mboxname_user_mbox(imapd_userid, NULL);
-    struct buf val = BUF_INITIALIZER;
-    if (imapd_id.quirks & QUIRK_SEARCHFUZZY) {
-        /* Quirks overrule anything */
-        searchargs->fuzzy_depth++;
-    }
-    else if (!annotatemore_lookupmask(inbox, annot, imapd_userid, &val) && val.len) {
-        /* User may override global config */
-        int b = config_parse_switch(buf_cstring(&val));
-        if (b > 0 || (b < 0 && config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS))) {
-            searchargs->fuzzy_depth++;
-        }
-    }
-    else if (config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS)) {
-        /* Use global config */
-        searchargs->fuzzy_depth++;
-    }
-    buf_free(&val);
-    free(inbox);
-
-    c = get_search_program(imapd_in, imapd_out, searchargs);
+    c = get_search_program(imapd_in, imapd_out, imapd_id.quirks, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
         goto done;
@@ -6536,9 +6513,6 @@ static void cmd_sort(char *tag, int usinguid)
 
     searchargs->maxargssize_mark = maxargssize_mark;
 
-    if (imapd_id.quirks & QUIRK_SEARCHFUZZY)
-        searchargs->fuzzy_depth++;
-
     /* See if its ESORT */
     c = getword(imapd_in, &arg);
     if (c == EOF) goto error;
@@ -6551,7 +6525,7 @@ static void cmd_sort(char *tag, int usinguid)
     c = getsortcriteria(tag, &sortcrit);
     if (c == EOF) goto error;
 
-    c = get_search_program(imapd_in, imapd_out, searchargs);
+    c = get_search_program(imapd_in, imapd_out, imapd_id.quirks, searchargs);
     if (c == EOF) goto error;
 
     if (!IS_EOL(c, imapd_in)) {
@@ -6562,7 +6536,15 @@ static void cmd_sort(char *tag, int usinguid)
 
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
+    struct conversations_state *cstate = NULL;
+    char *userid = mboxname_to_userid(imapd_index->mboxname);
+    conversations_open_user(userid, imapd_index->examining, &cstate);
+    free(userid);
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid, &prock);
+    index_release(imapd_index);
+    conversations_abort(&cstate);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("SORT MODSEQ");
@@ -6636,7 +6618,7 @@ static void cmd_thread(char *tag, int usinguid)
 
     searchargs->maxargssize_mark = maxargssize_mark;
 
-    c = get_search_program(imapd_in, imapd_out, searchargs);
+    c = get_search_program(imapd_in, imapd_out, imapd_id.quirks, searchargs);
     if (c == EOF) {
         eatline(imapd_in, ' ');
         goto done;
@@ -6656,7 +6638,15 @@ static void cmd_thread(char *tag, int usinguid)
 
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
+    struct conversations_state *cstate = NULL;
+    char *userid = mboxname_to_userid(imapd_index->mboxname);
+    conversations_open_user(userid, imapd_index->examining, &cstate);
+    free(userid);
+    // this refreshes the index, we may be looking at it in our search
+    imapd_check(NULL, 0);
     n = index_thread(imapd_index, alg, searchargs, usinguid, &prock);
+    index_release(imapd_index);
+    conversations_abort(&cstate);
 
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");

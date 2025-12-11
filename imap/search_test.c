@@ -143,7 +143,7 @@ static int do_search(const char *mboxname,
 
     gettimeofday(&start_time, NULL);
 
-    r = get_search_program(pin, pout, searchargs);
+    r = get_search_program(pin, pout, 0/*quirks*/, searchargs);
     if (r != '\r') {
         fprintf(stderr, "Couldn't parse IMAP search program\n");
         goto out;
@@ -212,7 +212,7 @@ static int do_serialise(char **words, int nwords)
 
     searchargs = new_searchargs(".", GETSEARCH_CHARSET_KEYWORD, &ns, userid, auth_newstate(userid), /*isadmin*/0);
 
-    r = get_search_program(pin, pout, searchargs);
+    r = get_search_program(pin, pout, 0/*quirks*/, searchargs);
     if (r != '\r') {
         fprintf(stderr, "Couldn't parse IMAP search program\n");
         goto out;
