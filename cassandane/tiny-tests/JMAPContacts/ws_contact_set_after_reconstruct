@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_ws_contact_set_after_reconstruct
+{
+    my ($self) = @_;
+
+    my $jmap_ws = $self->default_user->jmap_ws;
+
+    my $res = $jmap_ws->request([[
+      "Contact/set" => {
+          create => {
+              new => {
+                  firstName => "first",
+                  lastName  => "last",
+              },
+          },
+      },
+    ]]);
+
+    $res->assert_successful_set("Contact/set");
+
+    # Now reconstruct the user, rebuilding the dav db out from under the
+    # cached websocket connection
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        'dav_reconstruct', 'cassandane'
+    );
+
+    # Should be able to create another contact
+    $res = $jmap_ws->request([[
+      "Contact/set" => {
+          create => {
+              new => {
+                  firstName => "first",
+                  lastName  => "last",
+              },
+          },
+      },
+    ]]);
+
+    $res->assert_successful_set("Contact/set");
+}
