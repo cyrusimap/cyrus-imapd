@@ -19,6 +19,15 @@ has jmap => (
     }
 );
 
+has jmap_ws => (
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my ($self) = @_;
+        $self->new_jmaptester_ws;
+    }
+);
+
 has entity_jmap => (
     # This is just a persistent JMAP client with all the "using" turned on.
     is => 'ro',
@@ -34,6 +43,10 @@ has entity_jmap => (
 # custom using, or {k=>v,...} to override constructor args.
 sub new_jmaptester ($self, $new_arg = undef) {
     $self->instance->new_jmaptester_for_user($self, $new_arg);
+}
+
+sub new_jmaptester_ws ($self, $new_arg = undef) {
+    $self->instance->new_jmaptester_ws_for_user($self, $new_arg);
 }
 
 has carddav => (
