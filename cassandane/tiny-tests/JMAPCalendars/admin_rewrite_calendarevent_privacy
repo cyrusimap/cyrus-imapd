@@ -10,13 +10,13 @@ sub test_admin_rewrite_calendarevent_privacy
     my $jmap = $self->{jmap};
 
     my @using = qw(
-    urn:ietf:params:jmap:core
-    urn:ietf:params:jmap:calendars
-    https://cyrusimap.org/ns/jmap/admin
-    https://cyrusimap.org/ns/jmap/calendars
-    https://cyrusimap.org/ns/jmap/debug
-    https://cyrusimap.org/ns/jmap/performance
-);
+        urn:ietf:params:jmap:core
+        urn:ietf:params:jmap:calendars
+        https://cyrusimap.org/ns/jmap/admin
+        https://cyrusimap.org/ns/jmap/calendars
+        https://cyrusimap.org/ns/jmap/debug
+        https://cyrusimap.org/ns/jmap/performance
+    );
 
     xlog $self, "Make sure regular user can't call Admin method";
     my $res = $jmap->CallMethods([
@@ -104,17 +104,9 @@ sub test_admin_rewrite_calendarevent_privacy
     my $state = $res->[0][1]{newState};
     $self->assert_not_null($state);
 
-    my $http = $self->{instance}->get_service("http");
-    my $adminJmap = Mail::JMAPTalk->new(
-        user => 'admin',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $admin_user = $self->{instance}->create_trivial_user('admin');
+    my $adminJmap = $admin_user->jmap;
     $adminJmap->DefaultUsing(\@using);
-
 
     my $dirs = ($self->{instance}->run_mbpath(-u => 'cassandane'));
     my $db = DBI->connect("dbi:SQLite:dbname=$dirs->{user}{dav}","","");

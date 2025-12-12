@@ -13,15 +13,8 @@ sub test_calendar_get_freebusy_only
     $admintalk->setacl('user.other', admin => 'lrswipkxtecdan') or die;
     $admintalk->setacl('user.other', other => 'lrswipkxtecdn') or die;
 
-    my $service = $self->{instance}->get_service("http");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $otherJmap = $other_user->jmap;
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',

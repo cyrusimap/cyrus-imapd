@@ -9,15 +9,9 @@ sub test_contact_set_importance_peruser
     my $admin = $self->{adminstore}->get_client();
 
     $admin->create("user.manifold");
-    my $http = $self->{instance}->get_service("http");
-    my $manjmap = Mail::JMAPTalk->new(
-        user => 'manifold',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $manifold_user = $self->{instance}->create_trivial_user('manifold');
+    my $manjmap = $manifold_user->jmap;
+
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/contacts',

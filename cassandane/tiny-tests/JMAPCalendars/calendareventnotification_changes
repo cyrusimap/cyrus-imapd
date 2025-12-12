@@ -12,24 +12,9 @@ sub test_calendareventnotification_changes
 
     my $admin = $self->{adminstore}->get_client();
     $admin->create("user.manifold");
-    my $http = $self->{instance}->get_service("http");
-    my $mantalk = Net::CalDAVTalk->new(
-        user => "manifold",
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
-    my $manjmap = Mail::JMAPTalk->new(
-        user => 'manifold',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $manifold_user = $self->{instance}->create_trivial_user('manifold');
+    my $mantalk = $manifold_user->caldav;
+    my $manjmap = $manifold_user->jmap;
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',

@@ -40,6 +40,9 @@
 package Cassandane::Instance;
 use strict;
 use warnings;
+
+use experimental 'signatures';
+
 use Config;
 use Data::Dumper;
 use Errno qw(ENOENT);
@@ -1164,6 +1167,18 @@ sub create_user
     return $user_obj;
 }
 
+sub create_trivial_user {
+    my ($self, $username) = @_;
+
+    my $user_obj = Cassandane::TestUser->new({
+        username => $username,
+        password => 'pass',
+        instance => $self,
+    });
+
+    return $user_obj;
+}
+
 sub set_smtpd {
     my ($self, $data) = @_;
     my $basedir = $self->{basedir};
@@ -1497,7 +1512,7 @@ sub _check_valgrind_logs
     return;
 }
 
-sub _sanitizer_log_dir()
+sub _sanitizer_log_dir
 {
     my ($self, $sanitizer) = @_;
 
@@ -3166,6 +3181,132 @@ sub make_folder_intermediate
     # bring service back up
     $self->getsyslog();
     $self->start();
+}
+
+sub _common_http_service_args ($self) {
+  $self->{_common_http_service_args} //= do {
+      my $service = $self->get_service("https")
+                 || $self->get_service("http");
+
+      $service
+          || Carp::confess("can't build _common_http_service_args without an http service configured");
+
+      my $ca_file = Cwd::abs_path("data/certs/cacert.pem");
+
+      {
+          host => $service->host(),
+          port => $service->port(),
+          scheme => ($service->is_ssl() ? 'https' : 'http'),
+          SSL_options => {
+              SSL_ca_file => $ca_file,
+              SSL_verifycn_scheme => 'none',
+          },
+      };
+  };
+
+  return $self->{_common_http_service_args}->%*;
+}
+
+my @DEFAULT_USING = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:mail
+    urn:ietf:params:jmap:submission
+    urn:ietf:params:jmap:vacationresponse
+    urn:ietf:params:jmap:calendars
+    urn:ietf:params:jmap:contacts
+
+    https://cyrusimap.org/ns/jmap/mail
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/contacts
+
+    https://cyrusimap.org/ns/jmap/performance
+    https://cyrusimap.org/ns/jmap/backup
+    https://cyrusimap.org/ns/jmap/blob
+);
+
+sub new_jmaptester_for_user ($self, $user, $new_arg = undef) {
+    my %overrides;
+    if ($new_arg) {
+        %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
+                    : ref $new_arg eq 'ARRAY' ? (using => $new_arg)
+                    : Carp::confess("expected hash or array reference to ->new_jmaptester, got neither");
+    }
+
+    unless ($self->{config}->get_bit('httpmodules', 'jmap')) {
+        Carp::croak("User JMAP::Tester requested, but jmap httpmodule not enabled");
+    }
+
+    my %arg = $self->_common_http_service_args;
+
+    my $host = $arg{host};
+    my $port = $arg{port};
+    my $scheme = $arg{scheme};
+
+    require Cassandane::JMAPTester;
+
+    # This causes all requests and responses to be printed to STDERR.
+    local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
+        unless exists $ENV{JMAP_TESTER_LOGGER};
+
+    my $jtest = Cassandane::JMAPTester->new({
+        fallback_account_id => $user->username,
+        default_using => [ @DEFAULT_USING ],
+        %overrides,
+    });
+
+    $jtest->set_scheme_and_host_and_port($scheme, $host, $port);
+
+    $jtest->set_username_and_password($user->username, $user->password);
+
+    $jtest->ua->lwp->ssl_opts(
+        # Setting SSL_verify_mode without setting verify_hostname to 0 will
+        # fail, annoyingly.  That's why both are set.
+        SSL_verify_mode => 0,
+        verify_hostname => 0,
+    );
+
+    return $jtest;
+}
+
+sub new_carddavtalk_for_user ($self, $user) {
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
+        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+
+    unless ($self->{config}->get_bit('httpmodules', 'carddav')) {
+        Carp::croak("User CardDAV client requested, but carddav httpmodule not enabled");
+    }
+
+    require Net::CardDAVTalk;
+    return Net::CardDAVTalk->new(
+        $self->_common_http_service_args,
+        user => $user->username,
+        password => $user->password,
+        url => '/',
+        expandurl => 1,
+    );
+}
+
+sub new_caldavtalk_for_user ($self, $user) {
+    local $ENV{PERL_HTTP_TINY_SSL_INSECURE_BY_DEFAULT} =
+        Cassandane::Cyrus::TestCase::_need_http_tiny_env();
+
+    unless ($self->{config}->get_bit('httpmodules', 'caldav')) {
+        Carp::croak("User CalDAV client requested, but caldav httpmodule not enabled");
+    }
+
+    require Net::CalDAVTalk;
+    my $caldav = Net::CalDAVTalk->new(
+        $self->_common_http_service_args,
+        user => $user->username,
+        password => $user->password,
+        url => '/',
+        expandurl => 1,
+    );
+
+    # XXX get users all with domain, etc.
+    $caldav->UpdateAddressSet("Test User", $user->username . '@example.com');
+
+    return $caldav;
 }
 
 1;

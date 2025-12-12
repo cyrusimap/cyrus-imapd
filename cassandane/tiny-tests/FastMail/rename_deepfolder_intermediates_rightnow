@@ -12,14 +12,7 @@ sub test_rename_deepfolder_intermediates_rightnow
     $admintalk->setquota('user.cassandane', ['STORAGE', 500000]);
 
     my $rhttp = $self->{replica}->get_service('http');
-    my $rjmap = Mail::JMAPTalk->new(
-        user => 'cassandane',
-        password => 'pass',
-        host => $rhttp->host(),
-        port => $rhttp->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $rjmap = $self->{replica}->new_jmaptester_for_user($self->default_user);
 
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 

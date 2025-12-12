@@ -57,18 +57,10 @@ sub test_calendarevent_set_peruser
 
     xlog "Create other user and share owner calendar";
     my $admintalk = $self->{adminstore}->get_client();
-    $self->{instance}->create_user("other");
+    my $other_user = $self->{instance}->create_user("other");
     $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
-    my $service = $self->{instance}->get_service("http");
-    my $otherJMAPTalk = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
-    $otherJMAPTalk->DefaultUsing([
+    my $otherJMAP = $other_user->jmap;
+    $otherJMAP->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',
         'urn:ietf:params:jmap:calendars',
@@ -112,7 +104,7 @@ sub test_calendarevent_set_peruser
     $self->assert_deep_equals($ownerPerUserProps, $event);
 
     xlog "Assert other user per-user properties for shared event";
-    $res = $otherJMAPTalk->CallMethods([
+    $res = $otherJMAP->CallMethods([
         ['CalendarEvent/get', {
             accountId => 'cassandane',
             ids => [$eventId],
@@ -154,7 +146,7 @@ sub test_calendarevent_set_peruser
         },
     };
 
-    $res = $otherJMAPTalk->CallMethods([
+    $res = $otherJMAP->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',
             update => {
@@ -201,7 +193,7 @@ sub test_calendarevent_set_peruser
         },
     };
 
-    $res = $otherJMAPTalk->CallMethods([
+    $res = $otherJMAP->CallMethods([
         ['CalendarEvent/set', {
             accountId => 'cassandane',
             update => {

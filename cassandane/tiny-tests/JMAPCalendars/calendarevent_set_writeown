@@ -9,16 +9,8 @@ sub test_calendarevent_set_writeown
 
     xlog "Create sharee user";
     my $admin = $self->{adminstore}->get_client();
-    $self->{instance}->create_user("sharee");
-    my $service = $self->{instance}->get_service("http");
-    my $shareeJmap = Mail::JMAPTalk->new(
-        user => 'sharee',
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $sharee_user = $self->{instance}->create_user("sharee");
+    my $shareeJmap = $sharee_user->jmap;
     $shareeJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',

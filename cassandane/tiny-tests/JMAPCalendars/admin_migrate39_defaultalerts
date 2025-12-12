@@ -20,14 +20,9 @@ sub test_admin_migrate39_defaultalerts
     );
 
     my $http = $self->{instance}->get_service("http");
-    my $adminJmap = Mail::JMAPTalk->new(
-        user => 'admin',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+
+    my $admin = $self->{instance}->create_trivial_user('admin');
+    my $adminJmap = $admin->new_jmaptester;
     $adminJmap->DefaultUsing(\@using);
 
     xlog $self, "Make sure regular user can't call Admin method";

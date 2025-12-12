@@ -16,7 +16,6 @@ Cassandane needs the following software to work:
 
     There is an Ubuntu package for this, libmail-imaptalk-perl.
 
- * Mail::JMAPTalk
  * Net::DAVTalk
  * Net::CalDAVTalk
  * Net::CardDAVTalk
@@ -171,7 +170,7 @@ Debian/Ubuntu copypasta:
        libdbd-sqlite3-perl libdigest-crc-perl libxml-simple-perl \
        libemail-mime-perl
 
-  sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
+  sudo cpan Math::Int64 Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
        IO::File::Lockable Archive::Tar::Stream Test::Unit
 
@@ -186,6 +185,6 @@ Fedora copypasta:
         perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
         perl-Unix-Syslog perl-Net-Server perl-Net-CalDAVTalk \
-        perl-Net-CardDAVTalk perl-Mail-JMAPTalk perl-AnyEvent \
+        perl-Net-CardDAVTalk perl-AnyEvent \
         perl-File-Slurp perl-Pod-POM perl-experimental
 

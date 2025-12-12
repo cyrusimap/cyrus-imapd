@@ -10,36 +10,16 @@ sub test_dblookup_expandcard
     my $imap = $self->{store}->get_client();
     my $admin = $self->{adminstore}->get_client();
 
+    my $http = $self->{instance}->get_service("http");
+
     xlog "Create shared addressbooks";
     $admin->create("user.other");
-    my $http = $self->{instance}->get_service("http");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $otherJmap = $other_user->jmap;
 
     $admin->create("user.other2");
-    my $otherJmap2 = Mail::JMAPTalk->new(
-        user => 'other2',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
-
-    my $adminJmap = Mail::JMAPTalk->new(
-        user => 'admin',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $otherJmap2 = $other2_user->jmap;
 
     xlog $self, "Enable compactids";
     $self->{instance}->run_command({ cyrus => 1 },
@@ -213,17 +193,12 @@ sub test_dblookup_expandcard
     my $other2SharedGroupUid = $res->[0][1]{created}{sharedGroup}{uid};
     $self->assert_not_null($other2SharedGroupUid);
 
-    my $dbLookupUrl = "http://"
-        . $http->host . ":" . $http->port
-        . "/dblookup/expandcard";
-
     xlog "Lookup ownContactUid as cassandane";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownContactUid
-        },
+    $res = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => $ownContactUid
     });
+
     $self->assert_cmp_deeply(
         superhashof({
             cassandane => {
@@ -231,16 +206,15 @@ sub test_dblookup_expandcard
                                       'ownContactPref2@local')
             }
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup ownGroupUid as cassandane";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownGroupUid
-        },
+    $res = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => $ownGroupUid
     });
+
     $self->assert_cmp_deeply(
         superhashof({
             cassandane => {
@@ -254,16 +228,15 @@ sub test_dblookup_expandcard
                 $other2SharedContactUid2 => JSON::null
             }
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup other2SharedGroupUid as cassandane";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $other2SharedGroupUid
-        },
+    $res = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => $other2SharedGroupUid,
     });
+
     $self->assert_cmp_deeply(
         superhashof({
             cassandane => {
@@ -277,24 +250,22 @@ sub test_dblookup_expandcard
                 $other2SharedGroupUid => JSON::null
             }
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup bogus Uid as cassandane -- no content";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => 'foo'
-        },
+    $res = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => 'foo',
     });
-    $self->assert_str_equals('204', $res->{status});
+
+    $self->assert_str_equals('204', $res->{http_response}->code);
 
     xlog "Lookup ownGroupUid as other2 -- abook is NOT shared so no content";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other2',
-            Key => $ownGroupUid
-        },
+    $res = $self->dblookup('/dblookup/expandcard' => {
+        User => 'other2',
+        Key => $ownGroupUid,
     });
-    $self->assert_str_equals('204', $res->{status});
+
+    $self->assert_str_equals('204', $res->{http_response}->code);
 }
