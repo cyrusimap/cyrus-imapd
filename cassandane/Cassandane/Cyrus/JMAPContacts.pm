@@ -40,6 +40,9 @@
 package Cassandane::Cyrus::JMAPContacts;
 use strict;
 use warnings;
+
+use experimental 'signatures';
+
 use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
@@ -111,6 +114,31 @@ sub normalize_jscard
     if (not exists $jscard->{'cyrusimap.org:importance'}) {
         $jscard->{'cyrusimap.org:importance'} = '0';
     }
+}
+
+sub dblookup ($self, $path, $headers) {
+    # Using the admin JMAP UA for this is sort of nonsense, but it's going to
+    # get the job done.  Isolating this in a subroutine should make it easy to
+    # improve later. -- rjbs, 2025-12-12
+    $self->{_admin_user} //= $self->{instance}->create_trivial_user('admin');
+    my $admin_jmap = $self->{_admin_user}->jmap;
+
+    if (ref $headers eq 'HASH') {
+        # This is just how HTTP::Request works.
+        $headers = [ %$headers ];
+    }
+
+    my $req = HTTP::Request->new(
+        GET => URI->new_abs($path, $admin_jmap->api_uri),
+        $headers,
+    );
+
+    my $res = $admin_jmap->http_request($req);
+
+    return {
+        http_response => $res,
+        payload => scalar eval { decode_json($res->decoded_content(charset => undef)) },
+    };
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/JMAPContacts';
