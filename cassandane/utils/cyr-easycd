@@ -1,0 +1,167 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use lib 'perl/imap';
+
+use feature 'signatures';
+
+use Carp;
+use Cwd;
+use Path::Tiny;
+use Capture::Tiny ':all';
+use Process::Status;
+use Cyrus::Mbname;
+
+# Create a tmp directory then symlink all of a user's
+# mail/contacts/calendars etc into it, dropping you in a dir like:
+#
+# mbox/
+# mbox/INBOX/
+# mbox/INBOX/meta/
+# mbox/INBOX/spool/
+
+my $testdir = shift || die "Usage: $0 <testdir> [username - defaults to 'cassandane']\n";
+my $username = shift || 'cassandane';
+
+@ARGV && die "Unexpected extra arguments: @ARGV\n";
+
+# Allow quick copy/paste of output from test run and do the right thing
+$testdir =~ s{conf/.*\.conf$}{};
+
+# Ensure trailing / for linking
+$testdir =~ s{/$}{/};
+
+my $cfg = "$testdir/conf/imapd.conf";
+-e $cfg || die "$testdir doesn't contain conf/imapd.conf, not a cass test dir?\n";
+
+my ($cur, $tmpdir);
+
+END {
+    if ($cur && $tmpdir) {
+        chdir($cur);
+        $tmpdir->remove_tree;
+    }
+}
+
+# Try to cleanup on sensible exits
+$SIG{HUP} = $SIG{INT} = $SIG{KILL} = $SIG{TERM} = sub { exit; };
+
+$cur = getcwd;
+$tmpdir = create_tmpdir();
+
+chdir($tmpdir);
+mkdir("$tmpdir/mbox");
+
+# What kind of mailbox name format do we need?
+my $cnf = run_command("$cur/imap/cyr_info", "-C", $cfg, "conf-all");
+my $unixhiersep = 1;
+
+if ($cnf =~ /^unixhierarchysep: (.*?)$/m) {
+  $unixhiersep = $1 eq 'yes' ? 1 : 0;
+}
+
+my $user_inbox = $unixhiersep ? "user/$username" : "user.$username";
+my $mblist = run_command("$cur/imap/cyr_ls", "-C", $cfg, "-R", $user_inbox);
+my @mailboxes = map { /^([^\s]+):/ ? $1 : () } split("\n", $mblist);
+
+my %done;
+
+while (@mailboxes) {
+    my $mbname = shift @mailboxes;
+
+    if ($done{$mbname}++) {
+        warn "We've already processed $mbname?! Skipping...\n";
+
+        next;
+    }
+
+    if ($mbname !~ /^$user_inbox/) {
+        print "Skipping shared data $mbname\n";
+        next;
+    }
+
+    my $spool_path = mailbox_to_path($mbname);
+    my $meta_path = mailbox_to_path($mbname, 'meta');
+
+    $mbname =~ s/^\Q$user_inbox\E(\.|\/)?//;
+
+    if ($mbname =~ /^-/) {
+        # Don't let folder names be parsed as arguments in bash, etc...
+        $mbname = '"' . $mbname . '"';
+    }
+
+    # With unixhiersep on, paths contain '/' which we do not want!
+    my $safe_mbname = $mbname =~ s{/}{.}gr;
+
+    mkdir("$tmpdir/mbox/$safe_mbname");
+
+    linkit($spool_path, "$tmpdir/mbox/$safe_mbname/spool");
+
+    # If both spool and meta are in the same dir just use one so you don't
+    # find data twice...
+    linkit($meta_path, "$tmpdir/mbox/$safe_mbname/meta")
+        unless $meta_path eq $spool_path;
+}
+
+my $slot;
+# Add in top level db / telemetry
+my $conv_path = conversations_path($user_inbox);
+if ($conv_path) {
+    linkit($conv_path, "$tmpdir/db");
+} else {
+    print "No conversations DB found? Won't link db path...";
+}
+
+my $telemetry_path = $testdir . "conf/log/" . $username;
+linkit($telemetry_path, "$tmpdir/telemetry");
+
+print "Starting your shell. Be sure to exit it when finished!\n";
+system($ENV{SHELL} // "/bin/bash");
+exit;
+
+sub create_tmpdir {
+    my $t = Path::Tiny->tempdir(CLEANUP => 0);
+
+    return $t;
+}
+
+sub mailbox_to_path ($mb, $meta = 0) {
+    my @cmd = (
+        "$cur/imap/mbpath", "-C", $cfg, ($meta ? ("-m") : ()), $mb
+    );
+
+    return run_command(@cmd);
+}
+
+sub conversations_path ($user_inbox) {
+    my @cmd = (
+        "$cur/imap/mbpath", "-C", $cfg, "-U", $user_inbox
+    );
+
+    return run_command(@cmd);
+}
+
+sub linkit ($existing, $new) {
+    print "Linking $new to $existing\n";
+
+    unless (symlink($existing, $new)) {
+        die "Failed to create link '$new' for existing path '$existing': $!\n";
+    }
+}
+
+sub run_command ($cmd, @args) {
+    my ($stdout, $stderr, $exit) = capture {
+        system($cmd, @args);
+
+        $?;
+    };
+
+    warn $stderr if $stderr;
+
+    croak "Bad exit: $exit\n  cmd: $cmd @args\n  stdout: $stdout\n  stderr: $stderr" if $exit;
+
+    chomp($stdout);
+    return $stdout;
+}
