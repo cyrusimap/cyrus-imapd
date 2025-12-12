@@ -13,33 +13,15 @@ sub test_dblookup_uid2groups
 
     xlog "Create shared addressbooks";
     $admin->create("user.other");
-    my $otherJmap = Mail::JMAPTalk->new(
-        user => 'other',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
-
     $admin->create("user.other2");
-    my $other2Jmap = Mail::JMAPTalk->new(
-        user => 'other2',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
 
-    my $adminJmap = Mail::JMAPTalk->new(
-        user => 'admin',
-        password => 'pass',
-        host => $http->host(),
-        port => $http->port(),
-        scheme => 'http',
-        url => '/jmap/',
-    );
+    my $admin_user = $self->{instance}->create_trivial_user('admin');
+    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other2_user = $self->{instance}->create_trivial_user('other2');
+
+    my $adminJmap = $admin_user->jmap;
+    my $otherJmap = $other_user->jmap;
+    my $other2Jmap = $other2_user->jmap;
 
     xlog $self, "Enable compactids";
     $self->{instance}->run_command({ cyrus => 1 },
@@ -160,96 +142,78 @@ sub test_dblookup_uid2groups
     my $otherGroupUid = $res->[0][1]{created}{otherGroup}{uid};
     $self->assert_not_null($otherGroupUid);
 
-    my $dbLookupUrl = "http://"
-        . $http->host . ":" . $http->port
-        . "/dblookup/uid2groups";
-
     xlog "Lookup own groups containing ownContactUid";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownContactUid
-        }
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $ownContactUid
     });
     $self->assert_cmp_deeply(
         superhashof({
             $ownGroupUid => 'owngroup'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup own groups containing ownContactUid in other user";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownContactUid,
-            OtherUser => 'other'
-        }
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $ownContactUid,
+        OtherUser => 'other'
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup own groups containing otherSharedContactUid";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $otherSharedContactUid,
-            OtherUser => 'other'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $otherSharedContactUid,
+        OtherUser => 'other'
     });
     $self->assert_cmp_deeply(
         superhashof({
             $ownGroupUid => 'owngroup'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup own groups containing otherSharedContactUid in own user";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $otherSharedContactUid
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $otherSharedContactUid
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Default abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $otherSharedContactUid,
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $otherSharedContactUid,
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Shared abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $otherSharedContactUid,
-            Mailbox => 'Shared'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $otherSharedContactUid,
+        Mailbox => 'Shared'
     });
     $self->assert_cmp_deeply(
         superhashof({
             $otherGroupUid => 'othergroup'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup other groups containing other2SharedContactUid in Shared abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $other2SharedContactUid,
-            OtherUser => 'other2',
-            Mailbox => 'Shared'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $other2SharedContactUid,
+        OtherUser => 'other2',
+        Mailbox => 'Shared'
     });
     $self->assert_cmp_deeply(
         superhashof({
             $otherGroupUid => 'othergroup'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Create group in own addressbook";
@@ -290,95 +254,82 @@ sub test_dblookup_uid2groups
     $self->assert_not_null($otherGroupUid2);
 
     xlog "Lookup own groups containing ownContactUid";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownContactUid
-        }
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $ownContactUid
     });
     $self->assert_cmp_deeply(
         superhashof({
             $ownGroupUid => 'owngroup',
             $ownGroupUid2 => 'owngroup2'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup own groups containing ownContactUid in other user";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $ownContactUid,
-            OtherUser => 'other'
-        }
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $ownContactUid,
+        OtherUser => 'other'
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup own groups containing otherSharedContactUid";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $otherSharedContactUid,
-            OtherUser => 'other'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $otherSharedContactUid,
+        OtherUser => 'other'
     });
+
     $self->assert_cmp_deeply(
         superhashof({
             $ownGroupUid => 'owngroup',
             $ownGroupUid2 => 'owngroup2'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup own groups containing otherSharedContactUid in own user";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'cassandane',
-            Key => $otherSharedContactUid
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'cassandane',
+        Key => $otherSharedContactUid
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Default abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $otherSharedContactUid,
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $otherSharedContactUid,
     });
-    $self->assert_deep_equals({}, decode_json($res->{content}));
+    $self->assert_deep_equals({}, $res->{payload});
 
     xlog "Lookup other groups containing otherSharedContactUid in Shared abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $otherSharedContactUid,
-            Mailbox => 'Shared'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $otherSharedContactUid,
+        Mailbox => 'Shared'
     });
     $self->assert_cmp_deeply(
         superhashof({
             $otherGroupUid => 'othergroup',
             $otherGroupUid2 => 'othergroup2'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 
     xlog "Lookup other groups containing other2SharedContactUid in Shared abook";
-    $res = $adminJmap->ua->get($dbLookupUrl, {
-        headers => {
-            User => 'other',
-            Key => $other2SharedContactUid,
-            OtherUser => 'other2',
-            Mailbox => 'Shared'
-        },
+    $res = $self->dblookup('/dblookup/uid2groups' => {
+        User => 'other',
+        Key => $other2SharedContactUid,
+        OtherUser => 'other2',
+        Mailbox => 'Shared'
     });
     $self->assert_cmp_deeply(
         superhashof({
             $otherGroupUid => 'othergroup',
             $otherGroupUid2 => 'othergroup2'
         }),
-        decode_json($res->{content})
+        $res->{payload},
     );
 }
 
