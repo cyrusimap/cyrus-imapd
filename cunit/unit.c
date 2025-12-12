@@ -79,6 +79,11 @@ int timeouts_flag = 1;
     else fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2));                    \
 } while (0)
 #else
+/* no valgrind header? assume we're NOT running on valgrind. might
+ * lead to test failures if we are running on valgrind after all,
+ * but without the header there's no way to tell
+ */
+#define RUNNING_ON_VALGRIND (0)
 #define log1(fmt, a1) do {                                                  \
     fprintf(stderr, "\nunit: "fmt"\n", (a1));                               \
 } while (0)
@@ -478,6 +483,16 @@ int main(int argc, char **argv)
     CU_initialize_registry();
     register_cunit_suites();
     parse_args(argc, argv);
+
+    if (RUNNING_ON_VALGRIND) {
+        /* Tests that time out are killed without cleaning up properly, and
+         * this produces unhelpful valgrind noise.  This isn't helped by things
+         * generally running slower under valgrind to begin with.  So just
+         * don't enable timeouts when valgrind is detected.
+         */
+        timeouts_flag = 0;
+    }
+
     switch (mode) {
     case RUN:
         run_tests();
