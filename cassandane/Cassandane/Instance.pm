@@ -3224,7 +3224,15 @@ my @DEFAULT_USING = qw(
     https://cyrusimap.org/ns/jmap/blob
 );
 
+sub new_jmaptester_ws_for_user ($self, $user, $new_arg = undef) {
+  return $self->_new_jmaptester_for_user('Cassandane::JMAPTesterWS', $user, $new_arg);
+}
+
 sub new_jmaptester_for_user ($self, $user, $new_arg = undef) {
+  return $self->_new_jmaptester_for_user('Cassandane::JMAPTester', $user, $new_arg);
+}
+
+sub _new_jmaptester_for_user($self, $tester_class, $user, $new_arg = undef) {
     my %overrides;
     if ($new_arg) {
         %overrides  = ref $new_arg eq 'HASH'  ? %$new_arg
@@ -3242,16 +3250,19 @@ sub new_jmaptester_for_user ($self, $user, $new_arg = undef) {
     my $port = $arg{port};
     my $scheme = $arg{scheme};
 
-    require Cassandane::JMAPTester;
+    eval "require $tester_class; 1" || Carp::croak("can't load $tester_class: $@");
 
     # This causes all requests and responses to be printed to STDERR.
     local $ENV{JMAP_TESTER_LOGGER} = 'HTTP:-2'
         unless exists $ENV{JMAP_TESTER_LOGGER};
 
-    my $jtest = Cassandane::JMAPTester->new({
+    my $jtest = $tester_class->new({
         fallback_account_id => $user->username,
         default_using => [ @DEFAULT_USING ],
         %overrides,
+        ( $tester_class eq 'Cassandane::JMAPTesterWS'
+            ? (cache_connection => 1, ws_api_uri => '') : ()
+        ),
     });
 
     $jtest->set_scheme_and_host_and_port($scheme, $host, $port);

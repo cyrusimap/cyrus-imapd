@@ -1,6 +1,14 @@
-package Cassandane::JMAPTester;
+package Cassandane::JMAPTesterWS;
 use Moo;
-extends 'JMAP::Tester';
+
+# Ugh. We must load AnyEvent::Loop before JMAP::Tester::WebSocket,
+# otherwise AnyEvent in Cassandane::Instance::notifyd will use
+# AnyEvent::Impl::IOAsync which is ... not actually running (except
+# when ::WebSocket makes a request) ... which will make the perl
+# notifyd process hang and lock up the tests
+require AnyEvent::Loop;
+
+extends 'JMAP::Tester::WebSocket';
 
 use experimental 'signatures';
 use MIME::Base64 ();
@@ -8,7 +16,9 @@ use MIME::Base64 ();
 with 'Cassandane::JMAPTesterRole';
 
 sub set_scheme_and_host_and_port ($self, $scheme, $host, $port) {
-    $self->api_uri("$scheme://$host:$port/jmap/");
+    my $ws_scheme = $scheme eq 'https' ? 'wss' : 'ws';
+
+    $self->ws_api_uri("$ws_scheme://$host:$port/jmap/ws/");
     $self->authentication_uri("$scheme://$host:$port/jmap");
     $self->upload_uri("$scheme://$host:$port/jmap/upload/{accountId}/");
 
@@ -23,13 +33,16 @@ sub set_scheme_and_host_and_port ($self, $scheme, $host, $port) {
 }
 
 sub set_username_and_password ($self, $username, $password) {
+    my $auth = q{Basic } .  MIME::Base64::encode_base64(
+                   join(q{:}, $username, $password),
+                   q{},
+               );
+
     $self->ua->set_default_header(
-        'Authorization',
-        q{Basic } .  MIME::Base64::encode_base64(
-            join(q{:}, $username, $password),
-            q{},
-        )
+        'Authorization' => $auth
     );
+
+    $self->authorization($auth);
 }
 
 no Moo;
