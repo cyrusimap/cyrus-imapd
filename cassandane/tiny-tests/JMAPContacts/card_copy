@@ -19,9 +19,9 @@ sub test_card_copy
     $admintalk->create("user.other2");
     $admintalk->create("user.other3");
 
-    my $other_user = $self->{instance}->create_trivial_user('other');
-    my $other2_user = $self->{instance}->create_trivial_user('other2');
-    my $other3_user = $self->{instance}->create_trivial_user('other3');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
+    my $other2_user = $self->{instance}->create_user_without_setup('other2');
+    my $other3_user = $self->{instance}->create_user_without_setup('other3');
 
     my $other2jmap = $other2_user->jmap;
 

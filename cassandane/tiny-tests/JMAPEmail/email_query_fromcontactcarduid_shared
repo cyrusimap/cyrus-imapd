@@ -13,11 +13,11 @@ sub test_email_query_fromcontactcarduid_shared
     xlog "Create shared addressbooks";
     $admin->create("user.other");
     my $http = $self->{instance}->get_service("http");
-    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
     my $otherJmap = $other_user->new_jmaptester;
 
     $admin->create("user.other2");
-    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $other2_user = $self->{instance}->create_user_without_setup('other2');
     my $otherJmap2 = $other2_user->new_jmaptester;
 
     xlog $self, "Enable compactids";

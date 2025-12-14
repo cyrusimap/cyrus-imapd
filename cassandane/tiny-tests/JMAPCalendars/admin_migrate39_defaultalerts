@@ -21,7 +21,7 @@ sub test_admin_migrate39_defaultalerts
 
     my $http = $self->{instance}->get_service("http");
 
-    my $admin = $self->{instance}->create_trivial_user('admin');
+    my $admin = $self->{instance}->create_user_without_setup('admin');
     my $adminJmap = $admin->new_jmaptester;
     $adminJmap->DefaultUsing(\@using);
 

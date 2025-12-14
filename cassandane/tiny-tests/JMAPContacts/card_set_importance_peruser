@@ -9,7 +9,7 @@ sub test_card_set_importance_peruser
     my $admin = $self->{adminstore}->get_client();
 
     $admin->create("user.manifold");
-    my $manifold_user = $self->{instance}->create_trivial_user('manifold');
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
     my $manjmap = $manifold_user->jmap;
     $manjmap->DefaultUsing([
         'urn:ietf:params:jmap:core',

@@ -14,7 +14,7 @@ sub test_calendarevent_debugblobid
     $admintalk->setacl("user.other", admin => 'lrswipkxtecdan') or die;
     $admintalk->setacl("user.other", other => 'lrswipkxtecdn') or die;
 
-    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
     my $otherJmap = $other_user->jmap;
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
@@ -108,7 +108,7 @@ sub test_calendarevent_debugblobid
 
     xlog $self, "get debugBlobId as admin user";
 
-    my $admin_user = $self->{instance}->create_trivial_user('admin');
+    my $admin_user = $self->{instance}->create_user_without_setup('admin');
     my $adminJmap = $admin_user->jmap;
     $res = $adminJmap->CallMethods([
         ['CalendarEvent/get', {

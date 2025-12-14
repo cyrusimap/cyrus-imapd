@@ -9,7 +9,7 @@ sub test_calendareventnotification_aclcheck
     my $admin = $self->{adminstore}->get_client();
 
     $admin->create("user.manifold");
-    my $manifold_user = $self->{instance}->create_trivial_user('manifold');
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
     my $mantalk = $manifold_user->caldav;
     my $manjmap = $manifold_user->jmap;
     $manjmap->DefaultUsing([

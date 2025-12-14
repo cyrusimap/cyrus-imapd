@@ -1167,7 +1167,7 @@ sub create_user
     return $user_obj;
 }
 
-sub create_trivial_user {
+sub create_user_without_setup {
     my ($self, $username) = @_;
 
     my $user_obj = Cassandane::TestUser->new({
