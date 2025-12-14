@@ -640,10 +640,10 @@ sub _create_instances
             unless ($self->{no_replicaonly}) {
                 $replica_params{config}->set(replicaonly => 'yes');
             }
-            my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
-            if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
-                xlog $self, "replica instance: using [cyrus replica] configuration";
-                $replica_params{installation} = 'replica';
+            my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
+            if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {
+                xlog $self, "replica instance: using [cyrus other] configuration";
+                $replica_params{installation} = 'other';
             }
 
             $replica_params{description} = "replica instance for test $self->{_name}";
@@ -686,10 +686,11 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
-            if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
-                xlog $self, "murder instance: using [cyrus murder] configuration";
-                $instance_params{installation} = 'murder';
+            my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
+            if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {
+                xlog $self, "frontend instance: using [cyrus other] configuration";
+                xlog $self, "backend2 instance: using [cyrus other] configuration";
+                $instance_params{installation} = 'other';
             }
 
             $instance_params{description} = "murder frontend for test $self->{_name}";
