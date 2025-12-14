@@ -41,10 +41,11 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sysexits.h>
 #include <syslog.h>
-#include <string.h>
-#include <stdlib.h>
 #include <unistd.h>
 
 #include "assert.h"
@@ -65,7 +66,7 @@ typedef struct sql_engine {
     const char *binary_type;
     void *(*sql_open)(char *host, char *port, int usessl,
                       const char *user, const char *password,
-                      const char *database);
+                      const char *database, int flags);
     char *(*sql_escape)(void *conn, char **to,
                         const char *from, size_t fromlen);
     int (*sql_begin_txn)(void *conn);
@@ -97,7 +98,8 @@ static const sql_engine_t *dbengine = NULL;
 
 static void *_mysql_open(char *host, char *port, int usessl,
                          const char *user, const char *password,
-                         const char *database)
+                         const char *database,
+                         int flags __attribute__((unused)))
 {
     MYSQL *mysql;
 
@@ -204,7 +206,8 @@ static void _mysql_close(void *conn)
 
 static void *_pgsql_open(char *host, char *port, int usessl,
                          const char *user, const char *password,
-                         const char *database)
+                         const char *database,
+                         int flags __attribute__((unused)))
 {
     PGconn *conn = NULL;
     struct buf conninfo = BUF_INITIALIZER;
@@ -317,17 +320,31 @@ static void *_sqlite_open(char *host __attribute__((unused)),
                           int usessl __attribute__((unused)),
                           const char *user __attribute__((unused)),
                           const char *password __attribute__((unused)),
-                          const char *database)
+                          const char *database,
+                          int flags)
 {
     int rc;
-    sqlite3 *db;
+    sqlite3 *db = NULL;
+    bool want_create = (flags & CYRUSDB_CREATE);
+    int sqlite_open_flags = SQLITE_OPEN_READWRITE;
 
-    rc = sqlite3_open(database, &db);
+    if (want_create)
+        sqlite_open_flags |= SQLITE_OPEN_CREATE;
+
+    rc = sqlite3_open_v2(database, &db, sqlite_open_flags, NULL);
+
+    if (want_create && rc == SQLITE_CANTOPEN) {
+        sqlite3_close(db);
+        cyrus_mkdir(database, 0755);
+        rc = sqlite3_open_v2(database, &db, sqlite_open_flags, NULL);
+    }
+
     if (rc != SQLITE_OK) {
         xsyslog(LOG_ERR, "DBERROR: SQL backend",
                          "sqlite3_error=<%s>",
                          sqlite3_errmsg(db));
         sqlite3_close(db);
+        db = NULL;
     }
 
     return db;
@@ -337,16 +354,31 @@ static char *_sqlite_escape(void *conn __attribute__((unused)),
                             char **to, const char *from, size_t fromlen)
 {
     size_t tolen;
-#if 0
-    *to = xrealloc(*to, 2 + (257 * fromlen) / 254);
 
-    tolen = sqlite3_encode_binary(from, fromlen, *to);
-#else
+    /* XXX This is doing nothing!  Which means we can't store binary
+     * XXX keys or data, it all gets truncated at the first \0, or
+     * XXX thrown out for syntax violations.
+     *
+     * SQLite doesn't provide a means for escaping a string value in
+     * the same way that MySQL and Postgres do, so there's nothing
+     * sensible we could do here anyway, short of changing this API.
+     *
+     * For SQLite, we're using BLOB fields.  The correct way to store
+     * arbitrary data into them is to use the blob literal syntax:
+     * https://sqlite.org/lang_expr.html#literal_values_constants_
+     * > BLOB literals are string literals containing hexadecimal data
+     * > and preceded by a single "x" or "X" character.
+     * > Example: X'53514C697465'
+     *
+     * But we'd need to change the API such that the sql_escape()
+     * implementations also provide the quoting, which will mean changing
+     * _mysql_escape() and _pgsql_escape() to match, and then we have no
+     * way to verify that we haven't broken them.
+     */
     *to = xrealloc(*to, fromlen + 1);
     memcpy(*to, from, fromlen);
     tolen = fromlen;
     (*to)[tolen] = '\0';
-#endif
 
     return *to;
 }
@@ -525,7 +557,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
         if ((cur_port = strchr(cur_host, ':'))) *cur_port++ = '\0';
 
         conn = dbengine->sql_open(cur_host, cur_port, usessl,
-                                  user, passwd, database);
+                                  user, passwd, database, flags);
         if (conn) break;
 
         syslog(LOG_WARNING,
@@ -558,6 +590,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     if (dbengine->sql_exec(conn, cmd, NULL, NULL)) {
         if (flags & CYRUSDB_CREATE) {
             /* create the table */
+            /* XXX sql_escape and quote the table name throughout? */
             snprintf(cmd, sizeof(cmd),
                      "CREATE TABLE %s (dbkey %s NOT NULL, data %s);",
                      table, dbengine->binary_type, dbengine->binary_type);
@@ -649,8 +682,15 @@ static int fetch_cb(void *rock,
     struct fetch_rock *frock = (struct fetch_rock *) rock;
 
     if (frock->data) {
-        *(frock->data) = xrealloc(*(frock->data), datalen);
-        memcpy(*(frock->data), data, datalen);
+        if (datalen) {
+            *(frock->data) = xrealloc(*(frock->data), datalen);
+            memcpy(*(frock->data), data, datalen);
+        }
+        else {
+            /* non-null data but datalen is 0: allocate one byte for "" */
+            *(frock->data) = xrealloc(*(frock->data), 1);
+            *(frock->data)[0] = '\0';
+        }
     }
     if (frock->datalen) *(frock->datalen) = datalen;
 
