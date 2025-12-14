@@ -134,20 +134,11 @@
 ##coresizelimit = 100
 
 # This optional section describes the Cyrus installation used for the
-# replica side of replication tests.  You can use this to test
-# replication to a different Cyrus version from your main instance.
-# If this section does not exist, or the prefix it names does not
-# exist, then the replica instance will use the "cyrus default".
-##[cyrus replica]
-##prefix = /usr/cyrus
-##destdir =
-
-# This optional section describes the Cyrus installation used for the
-# murder frontend in murder tests.  You can use this to test a murder
-# with a different Cyrus version from your main instance.
-# If this section does not exist, or the prefix it names does not
-# exist, then the murder tests will use the "cyrus default".
-##[cyrus murder]
+# 'replica' instance in replication tests, and the 'frontend' and 'backend2'
+# instances in murder tests.  You can use this to test cross-version
+# interoperability.  If this section does not exist, or the prefix it names
+# does not exist, then "cyrus default" will be used as usual.
+##[cyrus other]
 ##prefix = /usr/cyrus
 ##destdir =
 
