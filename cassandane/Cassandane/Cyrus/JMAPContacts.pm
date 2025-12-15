@@ -120,7 +120,7 @@ sub dblookup ($self, $path, $headers) {
     # Using the admin JMAP UA for this is sort of nonsense, but it's going to
     # get the job done.  Isolating this in a subroutine should make it easy to
     # improve later. -- rjbs, 2025-12-12
-    $self->{_admin_user} //= $self->{instance}->create_trivial_user('admin');
+    $self->{_admin_user} //= $self->{instance}->create_user_without_setup('admin');
     my $admin_jmap = $self->{_admin_user}->jmap;
 
     if (ref $headers eq 'HASH') {

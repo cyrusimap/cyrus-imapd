@@ -24,7 +24,9 @@ has entity_jmap => (
     is => 'ro',
     lazy => 1,
     default => sub ($self) {
-        $self->new_jmaptester;
+        $self->new_jmaptester({
+          ident => "entity_jmap/" . $self->username,
+        });
     }
 );
 

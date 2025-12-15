@@ -11,7 +11,7 @@ sub test_email_query_fromanycontact_shared
     my $admin = $self->{adminstore}->get_client();
 
     xlog "Create shared addressbook";
-    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
     $admin->create("user.other");
     my $otherCarddav = $other_user->carddav;
     my $otherJmap = $other_user->jmap;

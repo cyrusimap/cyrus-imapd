@@ -15,9 +15,9 @@ sub test_dblookup_uid2groups
     $admin->create("user.other");
     $admin->create("user.other2");
 
-    my $admin_user = $self->{instance}->create_trivial_user('admin');
-    my $other_user = $self->{instance}->create_trivial_user('other');
-    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $admin_user = $self->{instance}->create_user_without_setup('admin');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
+    my $other2_user = $self->{instance}->create_user_without_setup('other2');
 
     my $adminJmap = $admin_user->jmap;
     my $otherJmap = $other_user->jmap;

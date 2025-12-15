@@ -14,11 +14,11 @@ sub test_dblookup_expandcard
 
     xlog "Create shared addressbooks";
     $admin->create("user.other");
-    my $other_user = $self->{instance}->create_trivial_user('other');
+    my $other_user = $self->{instance}->create_user_without_setup('other');
     my $otherJmap = $other_user->jmap;
 
     $admin->create("user.other2");
-    my $other2_user = $self->{instance}->create_trivial_user('other2');
+    my $other2_user = $self->{instance}->create_user_without_setup('other2');
     my $otherJmap2 = $other2_user->jmap;
 
     xlog $self, "Enable compactids";

@@ -104,7 +104,7 @@ sub test_admin_rewrite_calendarevent_privacy
     my $state = $res->[0][1]{newState};
     $self->assert_not_null($state);
 
-    my $admin_user = $self->{instance}->create_trivial_user('admin');
+    my $admin_user = $self->{instance}->create_user_without_setup('admin');
     my $adminJmap = $admin_user->jmap;
     $adminJmap->DefaultUsing(\@using);
 
