@@ -75,6 +75,13 @@ jobs:
       if: ${{ matrix.pretest }}
       shell: bash
       run: ${{ matrix.pretest }}
+    - name: build custom libical branch
+      shell: bash
+      run: |
+        git clone --depth 1 --shallow-submodules -b rsto-next \
+          https://github.com/cyrusimap/cyruslibs.git
+        cd cyruslibs
+        ./build.sh cyruslibs libical
     - name: configure and build
       shell: bash
       run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}" --cflags "${{ matrix.cflags }}" --cxxflags "${{ matrix.cxxflags }}"
@@ -117,6 +124,13 @@ jobs:
         # following".  we're explicitly fetching the tags we want, we do not
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
+    - name: build custom libical branch
+      shell: bash
+      run: |
+        git clone --depth 1 --shallow-submodules -b rsto-next \
+          https://github.com/cyrusimap/cyruslibs.git
+        cd cyruslibs
+        ./build.sh cyruslibs libical
     - name: configure and build
       shell: bash
       run: |
