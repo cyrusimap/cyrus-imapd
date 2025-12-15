@@ -9169,6 +9169,7 @@ static void _email_append(jmap_req_t *req,
     int r = 0;
     time_t savedate = 0;
     struct timespec now;
+    char exist_id[JMAP_MAX_EMAILID_SIZE];
 
     if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
         *err = json_pack("{s:s}", "type", "tooManyMailboxes");
@@ -9278,9 +9279,9 @@ static void _email_append(jmap_req_t *req,
     len = ftell(f);
 
     /* Generate a GUID from the raw file content */
+    struct message_guid guid;
     fd = fileno(f);
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
-        struct message_guid guid;
         message_guid_generate(&guid, addr, len);
         jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
@@ -9299,11 +9300,38 @@ static void _email_append(jmap_req_t *req,
     uint32_t exist_uid;
     r = jmap_email_find_by_guid(req, req->accountid, detail->blob_id+1,
                                 &exist_mboxname, &exist_uid, NULL);
-    free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
-        if (!r) r = IMAP_MAILBOX_EXISTS;
+        if (!r) {
+            struct mailbox *exist_mbox = NULL;
+            int r2 = 0;
+
+            /* Open mailbox containing existing message */
+            if (!strcmp(exist_mboxname, mboxname)) {
+                exist_mbox = mbox;
+            }
+            else {
+                r2 = mailbox_open_irl(exist_mboxname, &exist_mbox);
+            }
+
+            /* Load message record */
+            if (!r2) r2 = msgrecord_find(exist_mbox, exist_uid, &mr);
+
+            struct timespec jinternaldate;
+            if (!r2) r2 = msgrecord_get_internaldate(mr, &jinternaldate);
+
+            if (!r2) {
+                jmap_set_emailid(req->cstate, &guid,
+                                 0, &jinternaldate, exist_id);
+            }
+
+            if (exist_mbox != mbox) mailbox_close(&exist_mbox);
+
+            r = IMAP_MAILBOX_EXISTS;
+        }
+        free(exist_mboxname);
         goto done;
     }
+    free(exist_mboxname);
 
     /* Great, that's a new message! */
     struct body *body = NULL;
@@ -9382,7 +9410,6 @@ static void _email_append(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
     jmap_set_threadid(req->cstate, cid, detail->thread_id);
-    struct message_guid guid;
     struct timespec jinternaldate;
     r = msgrecord_get_guid(mr, &guid);
     if (r) goto done;
@@ -9429,7 +9456,8 @@ done:
                 *err = json_pack("{s:s}", "type", "forbidden");
                 break;
             case IMAP_MAILBOX_EXISTS:
-                *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", detail->email_id);
+                *err = json_pack("{s:s s:s}", "type", "alreadyExists",
+                                 "existingId", exist_id);
                 break;
             case IMAP_QUOTA_EXCEEDED:
                 *err = json_pack("{s:s}", "type", "overQuota");
