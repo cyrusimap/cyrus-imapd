@@ -102,6 +102,7 @@ extern unsigned config_maxquoted;
 extern unsigned config_maxword;
 extern int config_qosmarking;
 extern int config_debug;
+extern const char *config_zoneinfo_dir;
 
 /* config requirement flags */
 #define CONFIG_NEED_PARTITION_DATA (1<<0)
