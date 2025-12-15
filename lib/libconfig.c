@@ -889,6 +889,10 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     config_debug = config_getswitch(IMAPOPT_DEBUG);
 
     config_zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
+#ifdef DEFAULT_ZONEINFO_DIR
+    if (!config_zoneinfo_dir)
+        config_zoneinfo_dir = DEFAULT_ZONEINFO_DIR;
+#endif
 }
 
 #define GROWSIZE 4096
