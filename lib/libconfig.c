@@ -89,6 +89,7 @@ EXPORTED unsigned config_maxquoted;
 EXPORTED unsigned config_maxliteral;
 EXPORTED int config_qosmarking;
 EXPORTED int config_debug;
+EXPORTED const char *config_zoneinfo_dir = NULL;
 
 static int config_loaded;
 
@@ -605,6 +606,7 @@ EXPORTED void config_reset(void)
     config_maxword = 0;
     config_qosmarking = 0;
     config_debug = 0;
+    config_zoneinfo_dir = NULL;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -831,6 +833,8 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
     /* allow debug logging */
     config_debug = config_getswitch(IMAPOPT_DEBUG);
+
+    config_zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
 }
 
 #define GROWSIZE 4096
