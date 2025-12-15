@@ -1078,9 +1078,8 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
 
     if (!jstzones->no_guess) {
         /* Open database to guess IANA timezones */
-        if (config_getstring(IMAPOPT_ZONEINFO_DIR)) {
-            char *fname = strconcat(config_getstring(IMAPOPT_ZONEINFO_DIR),
-                    "/guesstz.db", NULL);
+        if (config_zoneinfo_dir) {
+            char *fname = strconcat(config_zoneinfo_dir, "/guesstz.db", NULL);
             gtz = guesstz_open(fname);
             free(fname);
             if (guesstz_error(gtz)) {

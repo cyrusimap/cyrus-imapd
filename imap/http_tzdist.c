@@ -85,7 +85,6 @@ static time_t compile_time;
 static unsigned synctoken_prefix;
 static ptrarray_t *leap_seconds = NULL;
 static int geo_enabled = 0;
-static const char *zoneinfo_dir = NULL;
 static void tzdist_init(struct buf *serverinfo);
 static void tzdist_shutdown(void);
 static int meth_get(struct transaction_t *txn, void *params);
@@ -189,7 +188,7 @@ static void open_shape_file(struct buf *serverinfo)
     buf_printf(serverinfo, " ShapeLib/%s", SHAPELIB_VERSION);
 
     /* Open the tz_world shape files */
-    snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_WORLD_SHAPEFILE);
+    snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_WORLD_SHAPEFILE);
     if (!(tz_world.shp = SHPOpen(buf, "rb"))) {
         syslog(LOG_ERR, "Failed to open file %s", buf);
         return;
@@ -219,7 +218,7 @@ static void open_shape_file(struct buf *serverinfo)
     geo_enabled = tz_world.valid = 1;
 
     /* Open the tz_antarctica shape files (optional) */
-    snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_AQ_SHAPEFILE);
+    snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_AQ_SHAPEFILE);
     if (!(tz_aq.shp = SHPOpen(buf, "rb"))) {
         syslog(LOG_NOTICE, "Failed to open file %s", buf);
         return;
@@ -595,7 +594,7 @@ static void read_leap_seconds()
     char buf[1024];
     struct leapsec *leap;
 
-    snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_LEAPSECFILE);
+    snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_LEAPSECFILE);
     if (!(fp = fopen(buf, "r"))) {
         syslog(LOG_ERR, "Failed to open file %s", buf);
         return;
@@ -645,8 +644,7 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
     }
 
     /* Find configured zoneinfo_zir */
-    zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
-    if (!zoneinfo_dir) {
+    if (!config_zoneinfo_dir) {
         syslog(LOG_ERR, "zoneinfo_dir must be set for tzdist service");
         namespace_tzdist.enabled = 0;
         return;
@@ -1318,7 +1316,7 @@ static int action_get(struct transaction_t *txn)
 
         /* Open, mmap, and parse the file */
         buf_reset(&pathbuf);
-        buf_printf(&pathbuf, "%s/%s.ics", zoneinfo_dir, tzid);
+        buf_printf(&pathbuf, "%s/%s.ics", config_zoneinfo_dir, tzid);
         path = buf_cstring(&pathbuf);
         if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 
@@ -1526,7 +1524,7 @@ static int action_expand(struct transaction_t *txn)
 
         /* Open, mmap, and parse the file */
         buf_reset(&pathbuf);
-        buf_printf(&pathbuf, "%s/%s.ics", zoneinfo_dir, tzid);
+        buf_printf(&pathbuf, "%s/%s.ics", config_zoneinfo_dir, tzid);
         path = buf_cstring(&pathbuf);
         if ((fd = open(path, O_RDONLY)) == -1) return HTTP_SERVER_ERROR;
 
