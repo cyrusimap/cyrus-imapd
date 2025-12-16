@@ -95,8 +95,6 @@ sub new
 
 sub default
 {
-    my $default_backend = $ENV{CASSANDANE_DEFAULT_DB} // 'twom';
-
     if (!defined($default)) {
         $default = Cassandane::Config->new(
             admins => 'admin mailproxy mupduser repluser',
@@ -122,22 +120,23 @@ sub default
             httpprettytelemetry => 'yes',
 
             # from cyr_info conf-default | grep _db:
-            annotation_db => $default_backend,
-            conversations_db => $default_backend,
-            duplicate_db => $default_backend,
-            mboxkey_db => $default_backend,
-            mboxlist_db => $default_backend,
-            ptscache_db => $default_backend,
+            annotation_db => 'twoskip',
+            backup_db => 'twoskip',
+            conversations_db => 'twoskip',
+            duplicate_db => 'twoskip',
+            mboxkey_db => 'twoskip',
+            mboxlist_db => 'twoskip',
+            ptscache_db => 'twoskip',
             quota_db => 'quotalegacy',
-            search_indexed_db => $default_backend,
-            seenstate_db => $default_backend,
+            search_indexed_db => 'twoskip',
+            seenstate_db => 'twoskip',
             subscription_db => 'flat',
-            statuscache_db => $default_backend,
-            sync_cache_db => $default_backend,
-            tlscache_db => 'twoskip', # deprecated, does not allow twom
-            tls_sessions_db => $default_backend,
+            statuscache_db => 'twoskip',
+            sync_cache_db => 'twoskip',
+            tlscache_db => 'twoskip',
+            tls_sessions_db => 'twoskip',
             userdeny_db => 'flat',
-            zoneinfo_db => $default_backend,
+            zoneinfo_db => 'twoskip',
 
             # smtpclient_open should fail by default!
             #
