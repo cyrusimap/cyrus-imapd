@@ -90,6 +90,8 @@ sub get
 {
     my ($self, $category, $key) = @_;
 
+    return if not exists $self->{data}->{$category};
+    return $self->{data}->{$category} if not defined $key;
     return if not exists $self->{data}->{$category}->{$key};
     return $self->{data}->{$category}->{$key};
 }
