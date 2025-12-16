@@ -6206,13 +6206,18 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
     }
     }
 
-    char *userid = mboxname_to_userid(mbentry->name);
+    if (mrock->args->fuzzy_depth ||
+        (mrock->args->client_behavior_mask & CB_SEARCHFUZZY)) {
+        char *userid = mboxname_to_userid(mbentry->name);
 
-    if (!mrock->cstate || strcmpsafe(userid, mrock->cstate->userid)) {
-        conversations_abort(&mrock->cstate);
-        if (userid) conversations_open_user(userid, /*shared*/1, &mrock->cstate);
+        if (!mrock->cstate || strcmpsafe(userid, mrock->cstate->userid)) {
+            conversations_abort(&mrock->cstate);
+            if (userid)
+                conversations_open_user(userid, /*shared*/1, &mrock->cstate);
+        }
+
+        free(userid);
     }
-    free(userid);
 
     if ((r = index_open(mbentry->name, &mrock->init, &state))) {
         return r;
@@ -6374,9 +6379,12 @@ static void cmd_search(const char *tag, const char *cmd)
 
             switch (mrock.filter) {
             case SEARCH_SOURCE_SELECTED: {
-                char *userid = mboxname_to_userid(imapd_index->mboxname);
-                conversations_open_user(userid, shared, &mrock.cstate);
-                free(userid);
+                if (searchargs->fuzzy_depth ||
+                    (client_behavior_mask & CB_SEARCHFUZZY)) {
+                    char *userid = mboxname_to_userid(imapd_index->mboxname);
+                    conversations_open_user(userid, shared, &mrock.cstate);
+                    free(userid);
+                }
                 imapd_check(NULL, 0);
                 n += index_search(imapd_index, searchargs, /* usinguid */1,
                                   &mrock.prock);
@@ -6538,9 +6546,12 @@ static void cmd_sort(char *tag, int usinguid)
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
     struct conversations_state *cstate = NULL;
-    char *userid = mboxname_to_userid(imapd_index->mboxname);
-    conversations_open_user(userid, imapd_index->examining, &cstate);
-    free(userid);
+    if (searchargs->fuzzy_depth ||
+        (searchargs->client_behavior_mask & CB_SEARCHFUZZY)) {
+        char *userid = mboxname_to_userid(imapd_index->mboxname);
+        conversations_open_user(userid, imapd_index->examining, &cstate);
+        free(userid);
+    }
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid, &prock);
@@ -6640,9 +6651,12 @@ static void cmd_thread(char *tag, int usinguid)
     struct progress_rock prock = { &progress_cb, tag, time(0), 0 };
 
     struct conversations_state *cstate = NULL;
-    char *userid = mboxname_to_userid(imapd_index->mboxname);
-    conversations_open_user(userid, imapd_index->examining, &cstate);
-    free(userid);
+    if (searchargs->fuzzy_depth ||
+        (searchargs->client_behavior_mask & CB_SEARCHFUZZY)) {
+        char *userid = mboxname_to_userid(imapd_index->mboxname);
+        conversations_open_user(userid, imapd_index->examining, &cstate);
+        free(userid);
+    }
     // this refreshes the index, we may be looking at it in our search
     imapd_check(NULL, 0);
     n = index_thread(imapd_index, alg, searchargs, usinguid, &prock);
