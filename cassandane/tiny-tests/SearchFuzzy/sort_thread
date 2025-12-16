@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sort_thread
+{
+    my ($self) = @_;
+
+    $self->make_message('fwd subject', body => 'a schenectady body');
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    # This will cause an assert() if there is a lock inversion
+    my $uids = $talk->sort('(SUBJECT)', 'UTF-8', 'FUZZY', 'SUBJECT', 'fwd');
+    $self->assert_deep_equals([1], $uids);
+
+    # This will cause an assert() if there is a lock inversion
+    $uids = $talk->thread('REFERENCES', 'UTF-8', 'FUZZY', 'SUBJECT', 'fwd');
+    $self->assert_deep_equals([[1]], $uids);
+}

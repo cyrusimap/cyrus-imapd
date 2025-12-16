@@ -1165,6 +1165,8 @@ static int get_search_criterion(struct protstream *pin,
             c = get_search_criterion(pin, pout, parent, base);
             base->fuzzy_depth--;
             if (c <= EOF) return c;
+
+            base->client_behavior_mask |= CB_SEARCHFUZZY;
         }
         else goto badcri;
         break;
@@ -1607,9 +1609,41 @@ static int get_search_criterion(struct protstream *pin,
  */
 EXPORTED int get_search_program(struct protstream *pin,
                                 struct protstream *pout,
+                                unsigned client_quirks,
                                 struct searchargs *searchargs)
 {
     int c;
+
+    /* Set FUZZY search according to config and quirks */
+    if (client_quirks & QUIRK_SEARCHFUZZY) {
+        /* Quirks overrule anything */
+        searchargs->fuzzy_depth++;
+    }
+    else {
+        int config_fuzzy = -1;
+
+        if (searchargs->userid) {
+            static const char *annot = IMAP_ANNOT_NS "search-fuzzy-always";
+            char *inbox = mboxname_user_mbox(searchargs->userid, NULL);
+            struct buf val = BUF_INITIALIZER;
+
+            if (!annotatemore_lookupmask(inbox, annot, searchargs->userid, &val)
+                && buf_len(&val)) {
+                /* User may override global config */
+                config_fuzzy = config_parse_switch(buf_cstring(&val));
+                if (config_fuzzy > 0)
+                    searchargs->fuzzy_depth++;
+            }
+
+            buf_free(&val);
+            free(inbox);
+        }
+
+        if (config_fuzzy < 0 && config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS)) {
+            /* Use global config */
+            searchargs->fuzzy_depth++;
+        }
+    }
 
     searchargs->root = search_expr_new(NULL, SEOP_AND);
 

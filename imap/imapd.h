@@ -61,6 +61,9 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
+/* Client quirks */
+#define QUIRK_SEARCHFUZZY (1<<0)
+
 struct octetinfo
 {
     int start_octet;
@@ -423,6 +426,7 @@ enum {
     CB_QRESYNC     =  (1<<13),  /* ENABLE QRESYNC or QRESYNC on SELECT   */
     CB_REPLACE     =  (1<<14),  /* REPLACE                               */
     CB_SAVEDATE    =  (1<<15),  /* FETCH SAVEDATE                        */
+    CB_SEARCHFUZZY =  (1<<22),  /* SEARCH FUZZY                          */
     CB_SEARCHRES   =  (1<<16),  /* SAVE on SEARCH                        */
     CB_UIDBATCHES  =  (1<<20),  /* UIDBATCHES                            */
     CB_UIDONLY     =  (1<<17),  /* ENABLE UIDONLY                        */
