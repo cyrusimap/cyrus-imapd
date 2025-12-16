@@ -892,6 +892,7 @@ static const struct client_behavior {
     { CB_QRESYNC,     "qresync"     },
     { CB_REPLACE,     "replace"     },
     { CB_SAVEDATE,    "savedate"    },
+    { CB_SEARCHFUZZY, "searchfuzzy" },
     { CB_SEARCHRES,   "searchres"   },
     { CB_UIDBATCHES,  "uidbatches"  },
     { CB_UIDONLY,     "uidonly"     },

@@ -1165,6 +1165,8 @@ static int get_search_criterion(struct protstream *pin,
             c = get_search_criterion(pin, pout, parent, base);
             base->fuzzy_depth--;
             if (c <= EOF) return c;
+
+            base->client_behavior_mask |= CB_SEARCHFUZZY;
         }
         else goto badcri;
         break;
