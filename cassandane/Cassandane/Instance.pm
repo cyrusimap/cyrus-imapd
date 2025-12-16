@@ -165,6 +165,46 @@ sub new
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
 
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
+
+    if ($self->{buildinfo}->get('cyrusdb', undef)) {
+        # find best default backend based on what installed cyrus supports
+        my @backends = grep { defined }
+                            ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
+        my $default_backend;
+
+        foreach my $b (@backends) {
+            if ($self->{buildinfo}->get('cyrusdb', $b)) {
+                $default_backend = $b;
+                last;
+            }
+        }
+
+        # every Cyrus version supports twoskip so this won't happen..
+        die "couldn't find a supported cyrusdb backend"
+            if not $default_backend;
+
+        # set default backends, but only where the test didn't specify already
+        $self->{config}->set_if_undef(
+            annotation_db => $default_backend,
+            conversations_db => $default_backend,
+            duplicate_db => $default_backend,
+            mboxkey_db => $default_backend,
+            mboxlist_db => $default_backend,
+            ptscache_db => $default_backend,
+            quota_db => 'quotalegacy',
+            search_indexed_db => $default_backend,
+            seenstate_db => $default_backend,
+            subscription_db => 'flat',
+            statuscache_db => $default_backend,
+            sync_cache_db => $default_backend,
+            tlscache_db => 'twoskip', # deprecated, does not allow twom
+            tls_sessions_db => $default_backend,
+            userdeny_db => 'flat',
+            zoneinfo_db => $default_backend,
+        );
+    }
+
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
     return bless $self, $class;
@@ -1352,8 +1392,6 @@ sub start
             );
         }
     }
-
-    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
