@@ -1394,7 +1394,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
             }
         }
         else {
-            r = carddav_lookup_uid(db, id, &cdata);
+            r = carddav_lookup_uid(db, NULL, id, &cdata);
         }
 
         /* is it a valid contact? */
@@ -3225,7 +3225,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     if (wantuid) {
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
-        r = carddav_lookup_uid(db, wantuid, &cdata);
+        r = carddav_lookup_uid(db, NULL, wantuid, &cdata);
         if (!r) _query_cb(&rock, cdata);
         if (r == CYRUSDB_NOTFOUND) r = 0;
     }
@@ -4318,7 +4318,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
         if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
             /* Use custom vCard UID from request object */
             uid = xstrdup(uid);
-            r = carddav_lookup_uid(db, uid, &mycdata);
+            r = carddav_lookup_uid(db, NULL, uid, &mycdata);
             if (r == CYRUSDB_NOTFOUND) {
                 r = 0;
             }
@@ -4332,7 +4332,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
             for (i = 0; i < maxattempts; i++) {
                 free(uid);
                 uid = xstrdup(makeuuid());
-                r = carddav_lookup_uid(db, uid, &mycdata);
+                r = carddav_lookup_uid(db, NULL, uid, &mycdata);
                 if (r == CYRUSDB_NOTFOUND) {
                     json_object_set_new(item, "uid", json_string(uid));
                     r = 0;
@@ -4524,7 +4524,7 @@ static int _contact_set_update(jmap_req_t *req,
     int r;
 
     /* is it a valid contact? */
-    r = carddav_lookup_uid(db, uid, &cdata);
+    r = carddav_lookup_uid(db, NULL, uid, &cdata);
     if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
         r = HTTP_NOT_FOUND;
         goto done;
@@ -4800,7 +4800,7 @@ static void _contact_copy(jmap_req_t *req,
         }
     }
     else {
-        r = carddav_lookup_uid(src_db, src_id, &cdata);
+        r = carddav_lookup_uid(src_db, NULL, src_id, &cdata);
     }
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "carddav_lookup_uid(%s) failed: %s",
@@ -7526,11 +7526,11 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     case VCARD_MEMBER_PROPERTY: {
         json_t *members = json_object_get_vanew(obj, "members", "{}");
         struct carddav_data *cdata = NULL;
-        int r = carddav_lookup_uid(crock->db, prop_value, &cdata);
+        int r = carddav_lookup_uid(crock->db, NULL, prop_value, &cdata);
 
         if (r == CYRUSDB_NOTFOUND &&
             !strncmp(prop_value, "urn:uuid:", 9) &&
-            !carddav_lookup_uid(crock->db, prop_value+9, &cdata)) {
+            !carddav_lookup_uid(crock->db, NULL, prop_value+9, &cdata)) {
             prop_value += 9;
         }
 
@@ -11973,7 +11973,7 @@ static int _card_set_create(jmap_req_t *req,
         if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
             /* Use custom vCard UID from request object */
             uid = xstrdup(uid);
-            r = carddav_lookup_uid(db, uid, &mycdata);
+            r = carddav_lookup_uid(db, NULL, uid, &mycdata);
             if (r == CYRUSDB_NOTFOUND) {
                 r = 0;
             }
@@ -11987,7 +11987,7 @@ static int _card_set_create(jmap_req_t *req,
             for (i = 0; i < maxattempts; i++) {
                 free(uid);
                 uid = xstrdup(makeuuid());
-                r = carddav_lookup_uid(db, uid, &mycdata);
+                r = carddav_lookup_uid(db, NULL, uid, &mycdata);
                 if (r == CYRUSDB_NOTFOUND) {
                     json_object_set_new(item, "uid", json_string(uid));
                     r = 0;
@@ -12263,7 +12263,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         }
     }
     else {
-        r = carddav_lookup_uid(db, id, &cdata);
+        r = carddav_lookup_uid(db, NULL, id, &cdata);
     }
     if (r || !cdata || !cdata->dav.imap_uid) {
         r = HTTP_NOT_FOUND;

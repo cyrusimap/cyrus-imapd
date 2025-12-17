@@ -118,7 +118,9 @@ int carddav_lookup_imapuid(struct carddav_db *carddavdb,
 
 /* lookup an entry from 'carddavdb' by iCal UID
    (optionally inside a transaction for updates) */
-int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
+int carddav_lookup_uid(struct carddav_db *carddavdb,
+                       const mbentry_t *mbentry,
+                       const char *vcard_uid,
                        struct carddav_data **result);
 
 /* lookup an entry from 'carddavdb' by JMAP ID

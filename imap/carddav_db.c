@@ -357,12 +357,20 @@ EXPORTED int carddav_lookup_imapuid(struct carddav_db *carddavdb,
 
 
 #define CMD_SELUID CMD_GETFIELDS \
-    " WHERE vcard_uid = :vcard_uid AND alive = 1;"
+    " WHERE vcard_uid = :vcard_uid AND alive = 1" \
+    " AND (:mailbox IS NULL OR mailbox = :mailbox);"
 
-EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb, const char *vcard_uid,
+EXPORTED int carddav_lookup_uid(struct carddav_db *carddavdb,
+                                const mbentry_t *mbentry,
+                                const char *vcard_uid,
                                 struct carddav_data **result)
 {
+    const char *mailbox = !mbentry ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
+
     struct sqldb_bindval bval[] = {
+        { ":mailbox",   SQLITE_TEXT, { .s = mailbox              } },
         { ":vcard_uid", SQLITE_TEXT, { .s = vcard_uid            } },
         { NULL,         SQLITE_NULL, { .s = NULL                 } } };
     static struct carddav_data cdata;
