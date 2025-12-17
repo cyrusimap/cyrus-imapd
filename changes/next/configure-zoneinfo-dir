@@ -1,0 +1,24 @@
+Description:
+
+Adds configure ``--with-zoneinfo-dir`` option to set zoneinfo_dir at compile
+time
+
+
+Documentation:
+
+:cyrusman:`imapd.conf(5)`
+
+
+Config changes:
+
+zoneinfo_dir
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
