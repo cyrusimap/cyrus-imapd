@@ -47,19 +47,15 @@ use Cassandane::Cassini;
 use Cassandane::Util::Log;
 
 sub new {
-    my $class = shift;
-    my %params = @_;
+    my ($class, $installation) = @_;
     my $self = {};
+
+    $installation ||= 'default';
 
     my $cassini = Cassandane::Cassini->instance();
 
-    my $prefix = $cassini->val("cyrus default", 'prefix', '/usr/cyrus');
-    $prefix = $params{cyrus_prefix}
-        if defined $params{cyrus_prefix};
-
-    my $destdir = $cassini->val("cyrus default", 'destdir', '');
-    $destdir = $params{cyrus_destdir}
-        if defined $params{cyrus_destdir};
+    my $destdir = $cassini->val("cyrus $installation", 'destdir', '');
+    my $prefix = $cassini->val("cyrus $installation", 'prefix', '/usr/cyrus');
 
     $self->{data} = _read_buildinfo($destdir, $prefix);
 

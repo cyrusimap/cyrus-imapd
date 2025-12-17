@@ -1261,8 +1261,7 @@ sub start
         }
     }
 
-    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-                                                    $self->{cyrus_prefix});
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
