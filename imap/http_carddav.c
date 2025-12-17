@@ -384,7 +384,7 @@ static struct meth_params carddav_params = {
       (db_write_proc_t) &carddav_write,
       (db_delete_proc_t) &carddav_delete },
     NULL,                                       /* No ACL extensions */
-    { CARDDAV_UID_CONFLICT, &carddav_copy },
+    { 0, &carddav_copy },
     NULL,                                       /* No special DELETE handling */
     &carddav_get,
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK, NULL },
@@ -755,12 +755,64 @@ static int carddav_store_resource(struct transaction_t *txn,
     return r;
 }
 
+static unsigned check_uid_conflict(struct transaction_t *txn,
+                                   struct mailbox *mailbox,
+                                   const char *resource, const char *uid,
+                                   struct carddav_db *db)
+{
+    unsigned precond = 0;
+    struct carddav_data *cdata;
+
+    /* Check for changed UID */
+    carddav_lookup_resource(db, mailbox_mbentry(mailbox), resource, &cdata, 0);
+    
+    if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
+        precond = CARDDAV_UID_CONFLICT;
+    }
+    else {
+        /* Check for duplicate vCard UID in addressbook */
+        carddav_lookup_uid(db, mailbox_mbentry(mailbox), uid, &cdata);
+
+        if (cdata->dav.imap_uid && strcmp(cdata->dav.resource, resource)) {
+            precond = CARDDAV_UID_CONFLICT;
+        }
+    }
+
+    if (precond) {
+        char *owner;
+        const char *mboxname;
+        mbentry_t *mbentry = NULL;
+
+        if (cdata->dav.mailbox_byname)
+            mboxname = cdata->dav.mailbox;
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            mboxname = mbentry->name;
+        }
+        owner = mboxname_to_userid(mboxname);
+
+        assert(!buf_len(&txn->buf));
+        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
+                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
+                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
+        txn->error.resource = buf_cstring(&txn->buf);
+        mboxlist_entry_free(&mbentry);
+        free(owner);
+    }
+
+    return precond;
+}
+
 static int carddav_copy(struct transaction_t *txn, void *obj,
                         struct mailbox *mailbox, const char *resource,
                         void *destdb, unsigned flags __attribute__((unused)))
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     vcardcomponent *vcard = (vcardcomponent *)obj;
+    const char *uid = vcardcomponent_get_uid(vcard);
+
+    txn->error.precond = check_uid_conflict(txn, mailbox, resource, uid, db);
+    if (txn->error.precond) return HTTP_FORBIDDEN;
 
     return carddav_store_resource(txn, vcard, mailbox, resource, db);
 }
@@ -1599,37 +1651,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Check for changed UID */
-    struct carddav_data *cdata;
-    carddav_lookup_resource(db, txn->req_tgt.mbentry, resource, &cdata, 0);
-    
-    const char *olduid = cdata->vcard_uid;
-    const char *newuid = uid;
-    if (cdata->dav.imap_uid && strcmpsafe(olduid, newuid)) {
-        /* CARDDAV:no-uid-conflict */
-        char *owner;
-        const char *mboxname;
-        mbentry_t *mbentry = NULL;
-
-        if (cdata->dav.mailbox_byname)
-            mboxname = cdata->dav.mailbox;
-        else {
-            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
-            mboxname = mbentry->name;
-        }
-        owner = mboxname_to_userid(mboxname);
-
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
-                   namespace_addressbook.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(mboxname, '.') + 1, cdata->dav.resource);
-        txn->error.resource = buf_cstring(&txn->buf);
-        mboxlist_entry_free(&mbentry);
-        free(owner);
-
-        txn->error.precond = CARDDAV_UID_CONFLICT;
-        goto done;
-    }
+    txn->error.precond = check_uid_conflict(txn, mailbox, resource, uid, db);
 
   done:
     param_free(&params);
