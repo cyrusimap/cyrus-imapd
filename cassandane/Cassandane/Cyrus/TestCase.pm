@@ -620,6 +620,9 @@ sub _create_instances
             $frontend_service_port = Cassandane::PortManager::alloc();
             $backend2_service_port = Cassandane::PortManager::alloc();
 
+            my %frontend_params = %instance_params;
+            my %backend2_params = %instance_params;
+
             # set up a front end on which we also run the mupdate master
             my $frontend_conf = $self->{_config}->clone();
             $frontend_conf->set(
@@ -642,12 +645,13 @@ sub _create_instances
             if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {
                 xlog $self, "frontend instance: using [cyrus other] configuration";
                 xlog $self, "backend2 instance: using [cyrus other] configuration";
-                $instance_params{installation} = 'other';
+                $frontend_params{installation} = 'other';
+                $backend2_params{installation} = 'other';
             }
 
-            $instance_params{description} = "murder frontend for test $self->{_name}";
-            $instance_params{config} = $frontend_conf;
-            $self->{frontend} = Cassandane::Instance->new(%instance_params,
+            $frontend_params{description} = "murder frontend for test $self->{_name}";
+            $frontend_params{config} = $frontend_conf;
+            $self->{frontend} = Cassandane::Instance->new(%frontend_params,
                                                           setup_mailbox => 0);
             $self->{frontend}->add_service(name => 'mupdate',
                                            port => $mupdate_port,
@@ -710,9 +714,9 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            $instance_params{description} = "murder backend2 for test $self->{_name}";
-            $instance_params{config} = $backend2_conf;
-            $self->{backend2} = Cassandane::Instance->new(%instance_params,
+            $backend2_params{description} = "murder backend2 for test $self->{_name}";
+            $backend2_params{config} = $backend2_conf;
+            $self->{backend2} = Cassandane::Instance->new(%backend2_params,
                                                           setup_mailbox => 0); # XXX ?
             $self->{backend2}->add_services(@{$want->{services}});
 
