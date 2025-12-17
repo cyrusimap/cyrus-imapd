@@ -1212,6 +1212,8 @@ sub start
         );
     }
 
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
+
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
         $created = 1;
@@ -1219,8 +1221,6 @@ sub start
         $self->_build_skeleton();
         # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
         # TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
-        $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-                                                        $self->{cyrus_prefix});
         $self->_generate_imapd_conf();
         $self->_generate_master_conf();
         $self->install_certificates() if $self->{install_certificates};
