@@ -368,13 +368,14 @@ static size_t do_write(int txnmode, int insmode)
     return bytes;
 }
 
-static int parse_options(int argc, char **argv, const struct option *options __attribute__((unused)))
+static int parse_options(int argc, char **argv, const struct option *options)
 {
     int option;
     int option_index;
 
     while ((option = getopt_long(argc, argv, "d:b:n:t:h?",
-                                 long_options, &option_index)) != -1) {
+                                 options, &option_index)) != -1)
+    {
         switch (option) {
             case 'b':
                 BENCHMARKS = optarg;
