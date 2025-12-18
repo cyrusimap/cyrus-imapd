@@ -1,0 +1,174 @@
+#!perl
+use Cassandane::Tiny;
+
+my sub put_vcard ($carddav, $args)
+{
+    my ( undef, undef, $line ) = caller;
+    my $dt = DateTime->now();
+    $dt->set_time_zone('Etc/UTC');
+    my $rev = $dt->strftime('%Y%m%dT%H%M%SZ');
+
+    my $vcard = <<EOF;
+BEGIN:VCARD
+PRODID:-//foo//bar//EN
+VERSION:3.0
+UID:$args->{uid}
+N:;;;;
+FN:test created in line $line
+REV:$rev
+END:VCARD
+EOF
+    $vcard =~ s/\r?\n/\r\n/gs;
+
+    my $method = 'PUT';
+    my $url = $carddav->request_url($args->{resource});
+    my $res = $carddav->ua->request($method, $url,
+        {
+            content => $vcard,
+            headers => {
+                'Content-Type' => "text/vcard; version=3.0",
+                Authorization => $carddav->auth_header(),
+            }
+        }
+    );
+
+    if ($ENV{DEBUGDAV}) {
+        warn "<<<<<<<< $method $url HTTP/1.1\n$vcard\n" .
+            ">>>>>>>> $res->{protocol} $res->{status} $res->{reason}\n" .
+            "$res->{content}\n" .
+            "========\n\n";
+    }
+
+    return $res;
+}
+
+my sub move_resource($carddav, $method, $args)
+{
+    Carp::croak("method must be 'MOVE' or 'COPY'")
+        unless $method eq 'MOVE' || $method eq 'COPY';
+
+    my $url = $carddav->request_url($args->{from});
+    my $dest = $carddav->request_url($args->{to});
+    my $res = $carddav->ua->request($method, $url,
+        {
+            content => undef,
+            headers => {
+                Authorization => $carddav->auth_header(),
+                Destination => $dest
+            }
+        }
+    );
+
+    if ($ENV{DEBUGDAV}) {
+        warn "<<<<<<<< $method $url HTTP/1.1\nDestination: $dest\n" .
+            ">>>>>>>> $res->{protocol} $res->{status} $res->{reason}\n" .
+            "$res->{content}\n" .
+            "========\n\n";
+    }
+
+    return $res;
+}
+
+sub test_uid_conflict
+    :needs_dependency_icalvcard
+    ($self)
+{
+    my $carddav = $self->{carddav};
+
+    # Initial setup:
+    # Create two addressbooks, abook1 and abook2.
+    # In abook1, create one resource having uid1.
+    # In abook2, create two resources one having uid1, the other uid2.
+
+    my $abook1 = $carddav->NewAddressBook('abook1');
+    my $abook2 = $carddav->NewAddressBook('abook2');
+
+    my $uid1 = '039269ce-428a-47a5-b41d-c05e6b315598';
+    my $uid2 = 'dc6d1842-0b36-425b-8874-a46fc30de519';
+
+    my $abook1Uid1 = "$abook1/$uid1.vcf";
+
+    my $abook2Uid1 = "$abook2/$uid1.vcf";
+    my $abook2Uid2 = "$abook2/$uid2.vcf";
+
+    my $res = put_vcard($carddav, {
+        uid => $uid1,
+        resource => $abook1Uid1
+    });
+    $self->assert_equals('201', $res->{status});
+
+    $res = put_vcard($carddav, {
+        uid => $uid1,
+        resource => $abook2Uid1,
+    });
+    $self->assert_equals('201', $res->{status});
+
+    $res = put_vcard($carddav, {
+        uid => $uid2,
+        resource => $abook2Uid2,
+    });
+    $self->assert_equals('201', $res->{status});
+
+    # Tests start here
+
+    xlog $self, "Can't change UID of resource";
+    $res = put_vcard($carddav, {
+        uid => $uid2,
+        resource => $abook1Uid1,
+    });
+    $self->assert_equals('403', $res->{status});
+    my $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+
+    xlog $self, "Can't use UID in different resource";
+    $res = put_vcard($carddav, {
+        uid => $uid1,
+        resource => "$abook1/foo.vcf"
+    });
+    $self->assert_equals('403', $res->{status});
+    $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+
+    xlog $self, "Can't change UID with COPY";
+    $res = move_resource($carddav, 'COPY', {
+        from => $abook2Uid2,
+        to => $abook1Uid1,
+    });
+    $self->assert_equals('403', $res->{status});
+    $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+
+    xlog $self, "Can't change UID with MOVE";
+    $res = move_resource($carddav, 'MOVE', {
+        from => $abook2Uid2,
+        to => $abook1Uid1,
+    });
+    $self->assert_equals('403', $res->{status});
+    $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+
+    xlog $self, "Can't use UID in different resource with COPY";
+    $res = move_resource($carddav, 'COPY', {
+        from => $abook2Uid1,
+        to => "$abook1/foo.vcf"
+    });
+    $self->assert_equals('403', $res->{status});
+    $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+
+    xlog $self, "Can't use UID in different resource with MOVE";
+    $res = move_resource($carddav, 'MOVE', {
+        from => $abook2Uid1,
+        to => "$abook1/foo.vcf"
+    });
+    $self->assert_equals('403', $res->{status});
+    $xml = XMLin($res->{content});
+    $self->assert_equals($carddav->fullpath($abook1Uid1),
+                         $xml->{'C:no-uid-conflict'}{'D:href'});
+}
+

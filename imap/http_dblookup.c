@@ -311,7 +311,7 @@ static int get_uid2groups(struct transaction_t *txn,
 
     /* Verify that the member UID exists in an accessible addressbook */
     if (user_set && user_set->carddavdb &&
-        !carddav_lookup_uid(user_set->carddavdb, key, &cdata) &&
+        !carddav_lookup_uid(user_set->carddavdb, NULL, key, &cdata) &&
         cdata && cdata->dav.imap_uid) {
         for (int i = 0; i < ptrarray_size(&user_set->mbentrys); i++) {
             mbentry_t *mbentry = ptrarray_nth(&user_set->mbentrys, i);
