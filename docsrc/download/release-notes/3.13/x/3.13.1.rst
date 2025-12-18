@@ -22,7 +22,6 @@ Major changes since the 3.12 series
 ===================================
 
 * The annotator is now called only on items added to email-type mailboxes.
-* There is now a ``--with-zoneinfo-dir`` option to configure.
 * ``ctl_conversationsdb`` now has ``-U`` for version upgrades.
 * ``lmtpd`` now provides a capability called ``TRACE`` and a new ``TRACE``
   command for setting an interal trace-id, which will be logged.

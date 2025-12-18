@@ -1,0 +1,46 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.12.2 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.2/cyrus-imapd-3.12.2.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.2/cyrus-imapd-3.12.2.tar.gz.sig
+
+.. _relnotes-3.12.2-changes:
+
+Changes since 3.12.1
+====================
+
+Security fixes
+--------------
+
+* Fixed :issue:`5495`: ``MBTYPE_INTERMEDIATE`` mailboxes could be renamed
+  by users without the expected ``ACL_DELETEMBOX`` permission.
+
+Build changes
+-------------
+
+* Fixed :issue:`5500`: cassandane failures on Ubuntu 24 LTS
+* Fixed :issue:`5512`: distcheck now runs the unit tests
+* Added: configure ``--with-zoneinfo-dir`` option to set
+  zoneinfo_dir at compile time
+* Fixed :issue:`5733`: compiler warning when optimizations enabled
+* Fixed :issue:`5727`: cross-version cassandane support was broken
+* Fixed :issue:`5750`: cross-version cassandane can now conditionalise tests
+  on both versions
+
+Bug fixes
+---------
+
+* Fixed: :cyrusman:`lmtpd(8)` now uses the session id that it logged
+* Fixed :issue:`4787`: VANISHED not working with cyrus proxy
+* Fixed :issue:`5602`: LIST (SUBSCRIBED) not working with cyrus proxy
+* Fixed :issue:`3562`: :cyrusman:`imapd(8)` crash when searching for flags
+  (thanks Sven Wegener)
+* Fixed :issue:`5816`: Xapian indexing broken on platforms without
+  ``posix_fadvise()`` (thanks Angelo Gruendler)
+* Fixed :issue:`5789`: :cyrusman:`mupdate(8)` crash on DEACTIVATE (thanks
+  Zisis Vakras)
