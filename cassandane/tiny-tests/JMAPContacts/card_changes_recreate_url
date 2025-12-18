@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_changes_recreate_url
+    :needs_dependency_icalvcard
+    ($self)
+{
+    $ENV{DEBUGDAV} = 1;
+    my $carddav = $self->{carddav};
+    my $jmap = $self->{jmap};
+
+    my $href = "Default/test.vcf";
+
+    my $uid1 = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $card1 = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$uid1
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+END:VCARD
+EOF
+
+    xlog $self, "create card";
+    $card1 =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card1, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "get card and current state";
+    my $res = $jmap->CallMethods([['ContactCard/get', { }, 'R1']]);
+    my $id = $res->[0][1]{list}[0]{id};
+    my $startState = $res->[0][1]{'state'};
+
+    xlog $self, "delete card";
+    $carddav->Request('DELETE', $href);
+
+    xlog $self, "get card updates since start";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $startState
+    }, "R1"]]);
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
+    my $newState = $res->[0][1]{newState};
+
+    my $uid2 = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $card2 = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID;VALUE=TEXT:$uid2
+KIND:individual
+FN:Simon Perreault
+N:Perreault;Simon;;;ing. jr
+END:VCARD
+EOF
+
+    xlog $self, "create new card using same href";
+    $card2 =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card2, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "get most recent card updates";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $newState
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{created}[0]);
+
+    xlog $self, "get card updates since start";
+    $res = $jmap->CallMethods([['ContactCard/changes', {
+        sinceState => $startState
+    }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}

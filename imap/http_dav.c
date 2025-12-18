@@ -7299,8 +7299,9 @@ int meth_put(struct transaction_t *txn, void *params)
 
     /* Find message UID for the resource, if exists */
     pparams->davdb.lookup_resource(davdb, txn->req_tgt.mbentry,
-                                   txn->req_tgt.resource, (void *) &ddata, 0);
-    /* XXX  Check errors */
+                                   txn->req_tgt.resource, (void *) &ddata, 1);
+    modseq_t tombstone_modseq =
+        (ddata->imap_uid && !ddata->alive) ? ddata->modseq : 0;
 
     /* Fetch resource validators */
     r = pparams->get_validators(mailbox, (void *) ddata, httpd_userid,
@@ -7335,6 +7336,33 @@ int meth_put(struct transaction_t *txn, void *params)
         obj = mime->to_object(&txn->req_body.payload);
         ret = pparams->put.proc(txn, obj, mailbox,
                                 txn->req_tgt.resource, davdb, flags);
+
+        if (tombstone_modseq && (ret == HTTP_CREATED)) {
+            /* If we create a resource at the same URL as a destroyed one,
+               we can't calculate changes before the original was destroyed */
+            uint32_t mbtype = mailbox_mbtype(mailbox);
+            struct mboxname_counters counters = { 0 };
+            modseq_t *deletedmodseq = NULL;
+
+            switch (mbtype) {
+            case MBTYPE_CALENDAR:
+                deletedmodseq = &counters.caldavdeletedmodseq;
+                break;
+            case MBTYPE_ADDRESSBOOK:
+                deletedmodseq = &counters.carddavdeletedmodseq;
+                break;
+            }
+
+            if (deletedmodseq) {
+                const char *mboxname = mailbox_name(mailbox);
+
+                assert(!mboxname_read_counters(mboxname, &counters));
+                if (tombstone_modseq > *deletedmodseq) {
+                    mboxname_setmodseq(mboxname, tombstone_modseq,
+                                       mbtype, MBOXMODSEQ_ISDELETE);
+                }
+            }
+        }
         break;
 
     case HTTP_PRECOND_FAILED:
