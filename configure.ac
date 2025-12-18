@@ -1722,6 +1722,21 @@ if test "x$enable_http" = "xyes"; then
 fi
 
 dnl
+dnl allow setting a compile-time default for zoneinfo_dir
+dnl
+AC_ARG_WITH([zoneinfo-dir],
+            [AS_HELP_STRING([--with-zoneinfo-dir=path],
+                            [set default zoneinfo_dir to path (otherwise NULL)])])
+AS_CASE([$with_zoneinfo_dir],
+        [yes],  [AC_MSG_ERROR([--with-zoneinfo-dir requires a path])],
+        [no],   [with_zoneinfo_dir=''],
+        [*],    []);
+AS_IF([test "x$with_zoneinfo_dir" != "x"],
+      AC_DEFINE_UNQUOTED(DEFAULT_ZONEINFO_DIR,
+                         ["$with_zoneinfo_dir"],
+                         [Default zoneinfo_dir]))
+
+dnl
 dnl see if we're compiling with calendar alarm support
 dnl
 AC_ARG_ENABLE(calalarmd,
@@ -2557,4 +2572,5 @@ Build info:
    unit tests (cunit): $enable_unit_tests
    xxd:                $XXD
    release checks:     $enable_release_checks
+   zoneinfo_dir:       $with_zoneinfo_dir
 "

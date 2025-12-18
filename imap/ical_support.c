@@ -76,12 +76,12 @@ EXPORTED void ical_support_init(void)
     if (initialized) return;
 
     /* Initialize timezones path */
-    const char *tzpath = config_getstring(IMAPOPT_ZONEINFO_DIR);
     icalarray *timezones;
 
-    if (tzpath) {
-        syslog(LOG_DEBUG, "using timezone data from zoneinfo_dir=%s", tzpath);
-        icaltimezone_set_zone_directory((char *) tzpath);
+    if (config_zoneinfo_dir) {
+        syslog(LOG_DEBUG, "using timezone data from zoneinfo_dir=%s",
+                          config_zoneinfo_dir);
+        icaltimezone_set_zone_directory(config_zoneinfo_dir);
         icaltimezone_set_tzid_prefix("");
         icaltimezone_set_builtin_tzdata(1);
     }

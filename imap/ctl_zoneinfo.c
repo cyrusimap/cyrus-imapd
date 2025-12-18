@@ -87,7 +87,6 @@ int main(int argc, char **argv)
 {
     int opt, r = 0;
     char *alt_config = NULL, *pub = NULL, *ver = NULL, *winfile = NULL;
-    const char *zoneinfo_dir = NULL;
     enum { REBUILD, WINZONES, NONE } op = NONE;
 
     /* keep this in alphabetical order */
@@ -142,8 +141,7 @@ int main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    zoneinfo_dir = config_getstring(IMAPOPT_ZONEINFO_DIR);
-    if (!zoneinfo_dir) {
+    if (!config_zoneinfo_dir) {
         fprintf(stderr, "zoneinfo_dir must be set for tzdist service\n");
         cyrus_done();
         return EX_CONFIG;
@@ -167,7 +165,7 @@ int main(int argc, char **argv)
         hash_insert(INFO_TZID, info, &tzentries);
 
         /* Add LEAP record (last updated and hash) */
-        snprintf(buf, sizeof(buf), "%s%s", zoneinfo_dir, FNAME_LEAPSECFILE);
+        snprintf(buf, sizeof(buf), "%s%s", config_zoneinfo_dir, FNAME_LEAPSECFILE);
         if (verbose) printf("Processing leap seconds file %s\n", buf);
         if (!(fp = fopen(buf, "r"))) {
             fprintf(stderr, "Could not open leap seconds file %s\n", buf);
@@ -204,7 +202,7 @@ int main(int argc, char **argv)
         }
 
         /* Add ZONE/LINK records */
-        do_zonedir(zoneinfo_dir, &tzentries, info);
+        do_zonedir(config_zoneinfo_dir, &tzentries, info);
 
         zoneinfo_open(NULL);
 
@@ -260,8 +258,8 @@ int main(int argc, char **argv)
             goto done;
         }
 
-        if (chdir(zoneinfo_dir)) {
-            fprintf(stderr, "chdir(%s) failed\n", zoneinfo_dir);
+        if (chdir(config_zoneinfo_dir)) {
+            fprintf(stderr, "chdir(%s) failed\n", config_zoneinfo_dir);
             goto done;
         }
 
