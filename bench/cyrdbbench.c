@@ -374,7 +374,8 @@ static int parse_options(int argc, char **argv, const struct option *options)
     int option_index;
 
     while ((option = getopt_long(argc, argv, "d:b:t:h?",
-                                 long_options, &option_index)) != -1) {
+                                 options, &option_index)) != -1)
+    {
         switch (option) {
             case 'b':
                 BENCHMARKS = optarg;
