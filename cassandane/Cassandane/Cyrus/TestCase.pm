@@ -1079,6 +1079,11 @@ sub tear_down
     $self->{backend1_store} = undef;
     $self->{backend1_adminstore} = undef;
 
+    $self->{default_user} = undef;
+    $self->{jmap} = undef;
+    $self->{caldav} = undef;
+    $self->{carddav} = undef;
+
     my @stop_errors;
     my @basedirs;
 
