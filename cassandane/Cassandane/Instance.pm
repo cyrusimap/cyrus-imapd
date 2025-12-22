@@ -97,7 +97,7 @@ sub new
 
     my $cassini = Cassandane::Cassini->instance();
 
-    my $self = {
+    my $self = bless({
         name => undef,
         buildinfo => undef,
         basedir => undef,
@@ -124,7 +124,7 @@ sub new
         _pid => $$,
         smtpdaemon => 0,
         lsan_suppressions => "",
-    };
+    }, $class);
 
     $self->{name} = $params{name}
         if defined $params{name};
@@ -207,7 +207,7 @@ sub new
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
-    return bless $self, $class;
+    return $self;
 }
 
 # return an id for use by xlog
