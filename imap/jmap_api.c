@@ -1746,6 +1746,17 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
         }
         if (tmp) free(tmp);
     }
+    if (!id) {
+        /* create */
+        const jmap_property_t *prop;
+
+        for (prop = valid_props; prop && prop->name; prop++) {
+            if ((prop->flags & JMAP_PROP_MANDATORY) &&
+                !json_object_get(jobj, prop->name)) {
+                json_array_append_new(invalid, json_string(prop->name));
+            }
+        }
+    }
     if (json_array_size(invalid)) {
         *err = json_pack("{s:s s:o}",
                 "type", "invalidProperties",
