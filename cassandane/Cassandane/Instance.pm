@@ -160,12 +160,15 @@ sub new
         if defined $params{smtpdaemon};
     $self->{lsan_suppressions} = $params{lsan_suppressions}
         if defined $params{lsan_suppressions};
-    $self->{mailbox_version} = $params{mailbox_version}
-        if defined $params{mailbox_version};
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
 
     $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
+
+    if (defined $params{mailbox_version}) {
+        $self->assert_supports_mailbox_version($params{mailbox_version});
+        $self->{mailbox_version} = $params{mailbox_version};
+    }
 
     if ($self->{buildinfo}->get('cyrusdb', undef)) {
         # find best default backend based on what installed cyrus supports
@@ -215,6 +218,38 @@ sub id
 {
     my ($self) = @_;
     return $self->{name}; # XXX something cleverer?
+}
+
+sub default_mailbox_version
+{
+    my ($self) = @_;
+
+    return $self->{buildinfo}->get('version', 'MAILBOX_MINOR_VERSION');
+}
+
+sub supports_mailbox_version
+{
+    my ($self, $version) = @_;
+
+    unless ($version =~ /\A[0-9]+\z/) {
+        require Carp;
+        Carp::confess("Invalid mailbox_version '$version'");
+    }
+
+    my $max_version = $self->default_mailbox_version();
+
+    return $version <= $max_version;
+}
+
+sub assert_supports_mailbox_version
+{
+    my ($self, $version) = @_;
+
+    unless ($self->supports_mailbox_version($version)) {
+        my $id = $self->id();
+        require Carp;
+        Card::confess("$id does not support mailbox version '$version'");
+    }
 }
 
 # Class method! Need to be able to interrogate the Cyrus version
@@ -1154,19 +1189,14 @@ sub create_user
     }
 
     my @mb_version;
-    my $old_jmap_ids;
+    my $default_mailbox_version = $self->default_mailbox_version();
+    my $mailbox_version = $params{mailbox_version}
+                          // $self->{mailbox_version}
+                          // $default_mailbox_version;
 
-    if (my $version = $params{mailbox_version} // $self->{mailbox_version}) {
-        unless ($version =~ /\A[0-9]+\z/) {
-            require Carp;
-            Carp::confess("Invalid mailbox_version '$version'");
-        }
-
-        if ($version <= 19) {
-            $old_jmap_ids = 1;
-        }
-
-        push @mb_version, [ 'VERSION', $version ];
+    if ($mailbox_version != $default_mailbox_version) {
+        $self->assert_supports_mailbox_version($mailbox_version);
+        push @mb_version, [ 'VERSION', $mailbox_version ];
     }
 
     foreach my $mb (@mboxes)
@@ -1181,20 +1211,35 @@ sub create_user
             or die "Cannot setacl for $mb: $@";
     }
 
-    if ($old_jmap_ids || $params{old_jmap_ids} || $self->{old_jmap_ids}) {
-        xlog $self, "Disable compactids";
+    # do we need to enable or disable compactids?
+    my $want_compact_ids;
+    if ($mailbox_version <= 19) {
+        if ($default_mailbox_version >= 20) {
+            # cyrus supports compactids, but not for this mailbox version
+            $want_compact_ids = 'off';
+        }
+        else {
+            # cyrus does not support compact ids
+            $want_compact_ids = undef;
+        }
+    }
+    elsif ($params{old_jmap_ids} || $self->{old_jmap_ids}) {
+        # requested by test
+        $want_compact_ids = 'off';
+    }
+    else {
+        # XXX: conditionalise further when "on" is the default...
+        $want_compact_ids = 'on';
+    }
+
+    if (defined $want_compact_ids) {
+        die "uh oh" if $want_compact_ids !~ m/^(on|off)$/;
+
+        xlog $self, "Turn compactids $want_compact_ids";
 
         $self->run_command(
             { cyrus => 1 },
-            'ctl_conversationsdb', '-I', 'off', $user
-        );
-    } else {
-        # XXX: This should be removed when "on" is the default...
-        xlog $self, "Enable compactids";
-
-        $self->run_command(
-            { cyrus => 1 },
-            'ctl_conversationsdb', '-I', 'on', $user
+            'ctl_conversationsdb', '-I', $want_compact_ids, $user
         );
     }
 
