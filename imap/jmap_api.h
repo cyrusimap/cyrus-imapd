@@ -317,6 +317,7 @@ enum {
     JMAP_PROP_REJECT_GET = (1<<4), // reject as unknown in Foo/get
     JMAP_PROP_REJECT_SET = (1<<5), // reject as unknown in Foo/set
     JMAP_PROP_EXTERNAL   = (1<<6), // property is stored externally
+    JMAP_PROP_MANDATORY  = (1<<7), // MUST be present in Foo/set{create}
 };
 
 extern const jmap_property_t *jmap_property_find(const char *name,
