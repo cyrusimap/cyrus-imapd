@@ -1,0 +1,244 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_addressbookids
+    :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "get default addressbook";
+    my $res = $jmap->CallMethods([
+            ['AddressBook/get', { }, "R1"]
+    ]);
+    my $abookid1 = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($abookid1);
+
+    xlog $self, "create second addressbook";
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', {
+            create => {
+                "1" => {
+                    name => "foo"
+                }
+            }
+         }, "R1"]
+    ]);
+    my $abookid2 = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($abookid2);
+
+    xlog $self, "attempt to create a card in NULL addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => JSON::null
+                }
+            }
+        }, 'R1']
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notCreated => {
+                1 => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to create a card in zero addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => { }
+                }
+            }
+        }, 'R1']
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notCreated => {
+                1 => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to create a card in multiple addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => {
+                        $abookid1 => JSON::true,
+                        $abookid2 => JSON::true
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notCreated => {
+                1 => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "create a card in a single (default) addressbook";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0'
+                }
+            }
+        }, 'R1']
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "attempt to update a card to be in NULL addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    addressBookIds => JSON::null
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                $id => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to update a card to be in zero addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    addressBookIds => { }
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                $id => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to update a card to be in multiple addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    addressBookIds => {
+                        $abookid1 => JSON::true,
+                        $abookid2 => JSON::true
+                    }
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                $id => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to patch a card to be in zero addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    "addressBookIds/$abookid1" => JSON::null
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                $id => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "attempt to patch a card to be in multiple addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    "addressBookIds/$abookid2" => JSON::true
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                $id => {
+                    type => 'invalidProperties',
+                    properties => [ 'addressBookIds' ]
+                }
+            }
+        }),
+        $res->[0][1]
+    );
+
+    xlog $self, "patch a card, moving it between addressbooks";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    "addressBookIds/$abookid1" => JSON::null,
+                    "addressBookIds/$abookid2" => JSON::true
+                }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+}
