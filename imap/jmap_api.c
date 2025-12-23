@@ -1712,11 +1712,16 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
         /* Determine property name */
         const char *pname = path;
         char *tmp = NULL;
-        const char *slash = strchr(pname, '/');
-        if (slash) {
-            tmp = jmap_pointer_decode(pname, slash - path);
-            if (tmp) pname = tmp;
+
+        if (id) {
+            /* update */
+            const char *slash = strchr(pname, '/');
+            if (slash) {
+                tmp = jmap_pointer_decode(pname, slash - path);
+                if (tmp) pname = tmp;
+            }
         }
+
         /* Validate against property spec */
         const jmap_property_t *prop = jmap_property_find(pname, valid_props);
         if (!prop) {
