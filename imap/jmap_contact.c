@@ -5212,7 +5212,7 @@ static const jmap_property_t addressbook_props[] = {
     {
         "name",
         NULL,
-        0
+        JMAP_PROP_MANDATORY
     },
     {
         "description",
