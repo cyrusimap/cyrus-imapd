@@ -2283,7 +2283,7 @@ AM_CONDITIONAL([HAVE_SPHINX_BUILD],
 
 AH_TOP([
 /*
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
