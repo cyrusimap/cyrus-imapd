@@ -55,11 +55,11 @@
  * The request consists of the database map name and the lookup key
  * separated by a space character:
  *
- * <mapname> ’ ’ <key>
+ * <mapname> ' ' <key>
  *
  * The server responds with a status indicator and the result (if any):
  *
- * <status> ’ ’ <result>
+ * <status> ' ' <result>
  *
  * The status indicator is one of the following upper case words:
  *
