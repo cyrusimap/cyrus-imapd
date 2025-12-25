@@ -9753,29 +9753,8 @@ static int jmap_principal_getavailability(struct jmap_req *req)
 
     json_t *jprops = json_object_get(myargs, "eventProperties");
     if (json_is_array(jprops)) {
-        props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(props, json_array_size(jprops) + 1, 0);
-        json_t *jval;
-        size_t i;
-        json_array_foreach(jprops, i, jval) {
-            const char *name = json_string_value(jval);
-            const jmap_property_t *propdef = NULL;
-            if (name) {
-                propdef = jmap_property_find(name, event_props);
-                if (propdef && propdef->capability &&
-                        !jmap_is_using(req, propdef->capability)) {
-                    propdef = NULL;
-                }
-            }
-            if (propdef) {
-                hash_insert(name, (void*)1, props);
-            }
-            else {
-                jmap_parser_push_index(&parser, "eventProperties", i, name);
-                jmap_parser_invalid(&parser, NULL);
-                jmap_parser_pop(&parser);
-            }
-        }
+        props = jmap_get_validate_props(req, &parser,
+                                        event_props, "eventProperties", jprops);
         json_object_del(myargs, "eventProperties");
     }
     else if (jprops == NULL || json_is_null(jprops)) {

@@ -1524,6 +1524,39 @@ HIDDEN const jmap_property_t *jmap_property_find(const char *name,
 
 /* Foo/get */
 
+HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
+                                           struct jmap_parser *parser,
+                                           const jmap_property_t *valid_props,
+                                           const char *key,
+                                           json_t *jprops)
+{
+    hash_table *props = xzmalloc(sizeof(hash_table));
+    construct_hash_table(props, json_array_size(jprops) + 1, 0);
+
+    json_t *val;
+    size_t i;
+    json_array_foreach(jprops, i, val) {
+        const char *name = json_string_value(val);
+        const jmap_property_t *propdef = NULL;
+        if (name) {
+            propdef = jmap_property_find(name, valid_props);
+            if (propdef && propdef->capability &&
+                !jmap_is_using(req, propdef->capability)) {
+                propdef = NULL;
+            }
+        }
+        if (!propdef || (propdef->flags & JMAP_PROP_REJECT_GET)) {
+            jmap_parser_push_index(parser, key, i, name);
+            jmap_parser_invalid(parser, NULL);
+            jmap_parser_pop(parser);
+            continue;
+        }
+        hash_insert(name, (void*)1, props);
+    }
+
+    return props;
+}
+                           
 HIDDEN void jmap_get_parse(jmap_req_t *req,
                            struct jmap_parser *parser,
                            const jmap_property_t valid_props[],
@@ -1603,26 +1636,8 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
 
         else if (!strcmp(key, "properties")) {
             if (json_is_array(arg)) {
-                get->props = xzmalloc(sizeof(hash_table));
-                construct_hash_table(get->props, json_array_size(arg) + 1, 0);
-                json_array_foreach(arg, i, val) {
-                    const char *name = json_string_value(val);
-                    const jmap_property_t *propdef = NULL;
-                    if (name) {
-                        propdef = jmap_property_find(name, valid_props);
-                        if (propdef && propdef->capability &&
-                            !jmap_is_using(req, propdef->capability)) {
-                            propdef = NULL;
-                        }
-                    }
-                    if (!propdef || (propdef->flags & JMAP_PROP_REJECT_GET)) {
-                        jmap_parser_push_index(parser, "properties", i, name);
-                        jmap_parser_invalid(parser, NULL);
-                        jmap_parser_pop(parser);
-                        continue;
-                    }
-                    hash_insert(name, (void*)1, get->props);
-                }
+                get->props = jmap_get_validate_props(req, parser,
+                                                     valid_props, key, arg);
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "properties");

@@ -343,6 +343,12 @@ struct jmap_get {
 typedef int jmap_args_parse_cb(jmap_req_t *, struct jmap_parser *,
                                const char *arg, json_t *val, void *);
 
+extern hash_table *jmap_get_validate_props(jmap_req_t *req,
+                                           struct jmap_parser *parser,
+                                           const jmap_property_t *valid_props,
+                                           const char *key,
+                                           json_t *arg);
+
 extern void jmap_get_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_t valid_props[],
                            int allow_null_ids,
