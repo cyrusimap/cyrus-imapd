@@ -80,6 +80,19 @@ sub write_inifile
     close INIFILE;
 }
 
+sub new_cassini
+{
+    my ($self) = @_;
+
+    # This may get set during distcheck (for example) to pick the environment
+    # for the test we're now running.  Since that cassini has already been
+    # loaded and is governing this run, the work of this env variable is done!
+    # We can ignore it for creating a next-order object, just for testing the
+    # test framework.
+    delete local $ENV{CASSINI_FILENAME};
+    return Cassandane::Cassini->new;
+}
+
 sub test_basic
 {
     my ($self) = @_;
@@ -92,7 +105,7 @@ sub test_basic
         'helvetica.blog' => 'ethical',
     );
 
-    my $cassini = new Cassandane::Cassini;
+    my $cassini = $self->new_cassini;
 
     # Don't find non-existant param in non-existant section
     $self->assert_null($cassini->val('swag', 'quinoa'));
@@ -149,7 +162,7 @@ sub test_boolval
         'narwhal.vegan' => 'invalid',
     );
 
-    my $cassini = new Cassandane::Cassini;
+    my $cassini = $self->new_cassini;
 
     $self->assert_equals(0, $cassini->bool_val('narwhal', 'cardigan'));
     $self->assert_equals(1, $cassini->bool_val('narwhal', 'banksy'));
@@ -221,7 +234,7 @@ sub test_environment_override
         'jmaptestsuite.suppress' => '',
     );
 
-    my $cassini = new Cassandane::Cassini;
+    my $cassini = $self->new_cassini;
 
     # let's test the things we provide examples of
     $self->assert_str_equals(
@@ -313,7 +326,7 @@ sub test_environment_only
     # n.b. did not create an ini file!
 
     # allow_noinifile has not been set, so it should barf
-    eval { $cassini = new Cassandane::Cassini; };
+    eval { $cassini = $self->new_cassini; };
     my $e = $@;
     $self->assert_matches(qr/couldn't find a cassandane\.ini file/, $e);
 
@@ -322,7 +335,7 @@ sub test_environment_only
     $ENV{CASSINI_CASSANDANE_ROOTDIR} = 'overridden!';
 
     # should work this time
-    $cassini = new Cassandane::Cassini;
+    $cassini = $self->new_cassini;
 
     $self->assert_equals(1,
         $cassini->bool_val('cassandane', 'allow_noinifile'));
@@ -349,7 +362,7 @@ sub test_override
         'semiotics.skateboard' => 'flexitarian',
     );
 
-    my $cassini = new Cassandane::Cassini;
+    my $cassini = $self->new_cassini;
 
     $self->assert_null($cassini->val('semiotics', 'typewriter'));
     $self->assert_str_equals('whatever',
