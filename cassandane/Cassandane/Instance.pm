@@ -171,7 +171,7 @@ sub new
     }
 
     if ($self->{buildinfo}->get('cyrusdb', undef)) {
-        # set best default backend based on what installed cyrus supports
+        # find best default backend based on what installed cyrus supports
         my @backends = grep { defined }
                             ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
         my $default_backend;
@@ -187,7 +187,8 @@ sub new
         die "couldn't find a supported cyrusdb backend"
             if not $default_backend;
 
-        $self->{config}->set(
+        # set default backends, but only where the test didn't specify already
+        $self->{config}->set_if_undef(
             annotation_db => $default_backend,
             conversations_db => $default_backend,
             duplicate_db => $default_backend,
