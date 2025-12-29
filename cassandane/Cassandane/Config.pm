@@ -197,6 +197,24 @@ sub set
     }
 }
 
+sub set_if_undef
+{
+    my ($self, %nv) = @_;
+
+    while (my ($n, $v) = each %nv) {
+        if (exists $bitfields{$n}) {
+            # XXX bitfield behaviour?
+            die "can't set_if_undef with bitfield '$n'";
+        }
+        elsif (not defined $self->get($n)) {
+            $self->{params}->{$n} = $v;
+        }
+        else {
+            # nothing to do
+        }
+    }
+}
+
 sub set_bits
 {
     my ($self, $name, @bits) = @_;
