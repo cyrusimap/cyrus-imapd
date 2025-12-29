@@ -11,6 +11,8 @@ sub test_card_set_importance_float
         ['ContactCard/set', {
             create => {
                 c1 => {
+                    '@type' => 'Card',
+                    version => '1.0', 
                     name => { full => 'John Doe' },
                     'cyrusimap.org:importance' => -122.129545321514,
                 },

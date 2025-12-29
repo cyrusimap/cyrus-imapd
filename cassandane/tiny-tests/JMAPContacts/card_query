@@ -11,6 +11,8 @@ sub test_card_query
     my $res = $jmap->CallMethods([['ContactCard/set', {
         create => {
             "1" => {
+                '@type' => 'Card',
+                version => '1.0',
                 name => {
                     isOrdered => JSON::false,
                     components => [
@@ -48,6 +50,8 @@ sub test_card_query
                 }
             },
             "2" => {
+                '@type' => 'Card',
+                version => '1.0',
                 name => {
                     isOrdered => JSON::false,
                     components => [
@@ -107,6 +111,8 @@ sub test_card_query
                 }
             },
             "3" => {
+                '@type' => 'Card',
+                version => '1.0',
                 name => {
                     isOrdered => JSON::false,
                     components => [
@@ -162,6 +168,8 @@ sub test_card_query
                 }
             },
             "4" => {
+                '@type' => 'Card',
+                version => '1.0',
                 name => {
                     isOrdered => JSON::false,
                     components => [
@@ -187,6 +195,8 @@ sub test_card_query
                 }
             },
             "5" => {
+                '@type' => 'Card',
+                version => '1.0',
                 kind => 'org',
                 name => {
                     full => 'My Org'
@@ -210,14 +220,20 @@ sub test_card_query
     xlog $self, "create card groups";
     $res = $jmap->CallMethods([['ContactCard/set', {create => {
         "1" => { kind => 'group',
+                 '@type' => 'Card',
+                 version => '1.0',
                  name => { full => "group1" },
                  members => { $uid1 => JSON::true, $uid2 => JSON::true }
                },
         "2" => { kind => 'group',
+                 '@type' => 'Card',
+                 version => '1.0',
                  name => { full => "group2" },
                  members => { $uid3 => JSON::true }
                },
         "3" => { kind => 'group',
+                 '@type' => 'Card',
+                 version => '1.0',
                  name => { full => "group3" },
                  members => { $uid4 => JSON::true }
                }

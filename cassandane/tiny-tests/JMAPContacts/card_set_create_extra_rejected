@@ -13,6 +13,7 @@ sub test_card_set_create_extra_rejected
             create => {
                 card1 => {
                     '@type' => 'Card',
+                    version => '1.0', 
                     name => {
                         full => 'John',
                         extra => 'reserved',

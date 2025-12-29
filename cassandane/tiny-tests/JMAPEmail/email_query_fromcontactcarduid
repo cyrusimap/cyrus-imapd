@@ -27,6 +27,8 @@ sub test_email_query_fromcontactcarduid
         ['ContactCard/set', {
             create => {
                 contact1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'contact1@local'
@@ -34,6 +36,8 @@ sub test_email_query_fromcontactcarduid
                     },
                 },
                 contact2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'contact2@local'
@@ -52,6 +56,8 @@ sub test_email_query_fromcontactcarduid
         ['ContactCard/set', {
             create => {
                 group1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => 'Group1' },
                     members => {
@@ -61,6 +67,8 @@ sub test_email_query_fromcontactcarduid
                     addressBookIds => { $abookId1 => JSON::true },
                 },
                 group2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => 'Group2' },
                     members => { $contactUid1 => JSON::true },
@@ -164,6 +172,8 @@ sub test_email_query_fromcontactcarduid
         ['ContactCard/set', {
             create => {
                 contact3 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'contact3@local',
@@ -236,6 +246,8 @@ sub test_email_query_fromcontactcarduid
         ['ContactCard/set', {
             create => {
                 contact4 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'contact4@local',

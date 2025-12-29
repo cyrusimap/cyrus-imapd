@@ -42,9 +42,17 @@ sub test_card_changes_shared
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
     xlog $self, "create contact 1";
-    $res = $jmap->CallMethods([['ContactCard/set', {
-                    accountId => 'manifold',
-                    create => {"1" => {firstName => "first", lastName => "last"}}
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'manifold',
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0', 
+                    firstName => "first",
+                    lastName => "last"
+                }
+            }
     }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
@@ -68,9 +76,17 @@ sub test_card_changes_shared
     $state = $res->[0][1]{newState};
 
     xlog $self, "create contact 2";
-    $res = $jmap->CallMethods([['ContactCard/set', {
-                    accountId => 'manifold',
-                    create => {"2" => {firstName => "second", lastName => "prev"}}
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'manifold',
+            create => {
+                "2" => {
+                    '@type' => 'Card',
+                    version => '1.0', 
+                    firstName => "second",
+                    lastName => "prev"
+                }
+            }
     }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);

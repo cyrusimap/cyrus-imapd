@@ -12,6 +12,8 @@ sub test_card_query_text
         ['ContactCard/set', {
             create => {
                 card1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     notes => {
                         'n1' => {
                             note => 'cats and dogs'
@@ -19,6 +21,8 @@ sub test_card_query_text
                     }
                 },
                 card2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     notes => {
                         'n1' => {
                             note => 'hats and bats'

@@ -10,6 +10,8 @@ sub test_card_query_group_with_member
     my $res = $jmap->CallMethods([['ContactCard/set', {
         create => {
             "Individual" => {
+                '@type' => 'Card',
+                version => '1.0',
                 name => { full => 'My Org' },
                 emails => {
                     'e1' => {
@@ -34,6 +36,8 @@ sub test_card_query_group_with_member
     $res = $jmap->CallMethods([['ContactCard/set', {
         create => {
             "Group" => {
+                '@type' => 'Card',
+                version => '1.0',
                 kind => 'group',
                 name => {
                     full => 'My Group'

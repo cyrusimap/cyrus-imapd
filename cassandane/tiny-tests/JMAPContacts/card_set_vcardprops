@@ -14,6 +14,7 @@ sub test_card_set_vcardprops
             create => {
                 1 => {
                     '@type' => 'Card',
+                    version => '1.0', 
                     name    => { full => 'Test1' },
                     emails  => {
                         email1 => {
@@ -41,6 +42,7 @@ sub test_card_set_vcardprops
             create => {
                 2 => {
                     '@type' => 'Card',
+                    version => '1.0', 
                     name    => { full => 'Test2' },
                     emails  => {
                         email1 => {
