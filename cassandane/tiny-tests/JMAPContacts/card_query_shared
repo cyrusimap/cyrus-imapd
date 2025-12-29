@@ -35,6 +35,8 @@ sub test_card_query_shared
             accountId => 'manifold',
             create    => {
                 card1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     name => {
                         isOrdered  => JSON::false,
                         components => [
@@ -64,6 +66,8 @@ sub test_card_query_shared
                     }
                 },
                 card2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     name => {
                         isOrdered  => JSON::false,
                         components => [
@@ -117,6 +121,8 @@ sub test_card_query_shared
                     }
                 },
                 card3 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     name => {
                         isOrdered  => JSON::false,
                         components => [
@@ -170,6 +176,8 @@ sub test_card_query_shared
                     }
                 },
                 card4 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     name => {
                         isOrdered  => JSON::false,
                         components => [
@@ -206,16 +214,22 @@ sub test_card_query_shared
             accountId => 'manifold',
             create    => {
                 group1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind    => 'group',
                     name    => { full => "group1" },
                     members => { $id1 => JSON::true, $id2 => JSON::true }
                 },
                 group2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind    => 'group',
                     name    => { full => "group2" },
                     members => { $id3 => JSON::true }
                 },
                 group3 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind    => 'group',
                     name    => { full => "group3" },
                     members => { $id4 => JSON::true }

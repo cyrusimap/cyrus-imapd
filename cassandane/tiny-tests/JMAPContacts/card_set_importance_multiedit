@@ -8,9 +8,17 @@ sub test_card_set_importance_multiedit
     my $jmap = $self->{jmap};
 
     xlog $self, "create with no importance";
-    my $res = $jmap->CallMethods([['ContactCard/set',
-                                   {create => {"1" => {name => { full => "John Doe" },
-                                   "cyrusimap.org:importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0', 
+                    name => { full => "John Doe" },
+                    "cyrusimap.org:importance" => -5.2
+                }
+            }
+         }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
