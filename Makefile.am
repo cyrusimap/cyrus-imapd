@@ -1306,6 +1306,8 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_props/participant_identity.h \
     imap/jmap_props/principal.c \
     imap/jmap_props/principal.h \
+    imap/jmap_props/push_subscription.c \
+    imap/jmap_props/push_subscription.h \
     imap/jmap_props/quota.c \
     imap/jmap_props/quota.h \
     imap/jmap_props/quota_legacy.c \
@@ -1347,6 +1349,7 @@ imap_httpd_SOURCES += \
     imap/jmap_notif.h \
     imap/jmap_push.c \
     imap/jmap_push.h \
+    imap/jmap_push_subscription.c \
     imap/jmap_quota.c \
     imap/jmap_util.c \
     imap/jmap_util.h \
@@ -1376,6 +1379,7 @@ imap_jmap_props_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_props/notes.gperf \
     imap/jmap_props/participant_identity.gperf \
     imap/jmap_props/principal.gperf \
+    imap/jmap_props/push_subscription.gperf \
     imap/jmap_props/quota.gperf \
     imap/jmap_props/quota_legacy.gperf \
     imap/jmap_props/share_notification.gperf \
