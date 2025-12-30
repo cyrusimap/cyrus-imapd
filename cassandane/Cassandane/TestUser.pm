@@ -83,13 +83,14 @@ for my $pair (
     [ mailboxes    => 'Mailbox' ],
 ) {
     my ($attr, $moniker) = @$pair;
-    my $class = "Cassandane::TestEntity::Factory::$moniker";
+    my $module = "Cassandane::TestEntity::DataType::$moniker";
+    my $class  = "Cassandane::TestEntity::Factory::$moniker";
 
     has $attr => (
         is => 'ro',
         lazy => 1,
         default => sub {
-            eval "require $class; 1" || Carp::croak("can't load $moniker: $@");
+            eval "require $module; 1" || Carp::croak("can't load $moniker: $@");
             return $class->new({ user => $_[0] });
         },
     );
