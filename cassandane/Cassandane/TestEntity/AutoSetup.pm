@@ -56,9 +56,6 @@ sub _setup_factory_class {
         });
     }
 
-    eval "require $instance_class; 1"
-        || die "Failed to load $instance_class: $@";
-
     # Avert your eyes, this is nasty.
     $class->can('with')->('Cassandane::TestEntity::Role::Factory');
 }
