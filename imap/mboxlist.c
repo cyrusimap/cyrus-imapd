@@ -3189,14 +3189,22 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
             mailbox_rename_cleanup(&oldmailbox);
 
-            if (mbtype_isa(mailbox_mbtype(newmailbox)) == MBTYPE_SIEVE) {
+            switch (mbtype_isa(mailbox_mbtype(newmailbox))) {
+            case MBTYPE_SIEVE:
 #ifdef USE_SIEVE
                 mailbox_add_sieve(newmailbox, NULL);
 #endif
+                break;
+            case MBTYPE_JMAPPUSHSUB:
+#ifdef WITH_JMAP
+                mailbox_add_pushsub(newmailbox, NULL);
+#endif
+                break;
+            default:
 #ifdef WITH_DAV
-            } else {
                 mailbox_add_dav(newmailbox, NULL);
 #endif
+                break;
             }
 
             mailbox_close(&newmailbox);
