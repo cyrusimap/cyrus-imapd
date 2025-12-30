@@ -1,6 +1,14 @@
 use v5.28.0;
 package Cassandane::TestEntity::DataType::Mailbox;
 
+=head1 NAME
+
+Cassandane::TestEntity::DataType::Mailbox - the Mailbox entity datatype
+
+=head1 FACTORY METHODS
+
+=cut
+
 package Cassandane::TestEntity::Factory::Mailbox {
     use Moo;
 
@@ -14,6 +22,15 @@ package Cassandane::TestEntity::Factory::Mailbox {
 
         return;
     }
+
+=head2 inbox
+
+    my $mailbox = $user->mailboxes->inbox;
+
+This acts like C<< ->get >>, returning a mailbox instance, but finds and
+returns the mailbox with the inbox role.
+
+=cut
 
     sub inbox {
         my ($self) = @_;
@@ -54,6 +71,10 @@ package Cassandane::TestEntity::Factory::Mailbox {
 
     no Moo;
 }
+
+=head1 INSTANCE METHODS
+
+=cut
 
 package Cassandane::TestEntity::Instance::Mailbox {
     use Moo;
@@ -181,6 +202,28 @@ package Cassandane::TestEntity::Instance::Mailbox {
 
       return $email_id;
     }
+
+=head2 new_email
+
+    my $email = $mailbox->new_email({ ... });
+
+This creates a new email (currently by calling C<Email/import>, although this
+may change) and returns an Email instance object.
+
+Valid arguments to include in the passed hashref are:
+
+    to      - the string to use as the To header
+    from    - the string to use as the From header
+    subject - the string to use as the Subject header
+    message_id - the string to use in the Message-Id header; include <...>!
+
+    headers - a reference to an array in the form [ name, value, n2, v2, ... ]
+
+    body_str  - the body, as a text string (not a byte string)
+    body_type - the media type of the body (default: text/plain)
+    body_encoding - the C-T-E of the body (default: quoted-printable)
+
+=cut
 
     sub new_email {
         my ($self, $arg) = @_;
