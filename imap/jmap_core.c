@@ -19,6 +19,8 @@
 
 /* JMAP Core API Methods */
 static int jmap_core_echo(jmap_req_t *req);
+extern int jmap_pushsub_get(jmap_req_t *req);
+extern int jmap_pushsub_set(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_usercounters_get(jmap_req_t *req);
@@ -30,6 +32,18 @@ static jmap_method_t jmap_core_methods_standard[] = {
         JMAP_URN_CORE,
         &jmap_core_echo,
         0/*flags*/
+    },
+    {
+        "PushSubscription/get",
+        JMAP_URN_CORE,
+        &jmap_pushsub_get,
+        /*flags*/0
+    },
+    {
+        "PushSubscription/set",
+        JMAP_URN_CORE,
+        &jmap_pushsub_set,
+        JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
