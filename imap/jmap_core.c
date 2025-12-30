@@ -37,13 +37,13 @@ static jmap_method_t jmap_core_methods_standard[] = {
         "PushSubscription/get",
         JMAP_URN_CORE,
         &jmap_pushsub_get,
-        /*flags*/0
+        JMAP_NO_ACCOUNTID
     },
     {
         "PushSubscription/set",
         JMAP_URN_CORE,
         &jmap_pushsub_set,
-        JMAP_READ_WRITE
+        JMAP_NO_ACCOUNTID | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
