@@ -315,7 +315,9 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
     int is_main_account = !strcmpsafe(authuserid, accountid);
 
     json_object_set_new(account_capabilities, JMAP_URN_CONTACTS,
-                        json_pack("{s:b}", "mayCreateAddressBook",
+                        json_pack("{s:i s:b}",
+                                  "maxAddressBooksPerCard", 1,
+                                  "mayCreateAddressBook",
                                   is_main_account || (rights & JACL_CREATECHILD)));
 #endif
 
@@ -8238,7 +8240,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
     char id[JMAP_MAX_ADDRBOOKID_SIZE];
     jmap_set_addrbookid(req->cstate, mbentry, id);
-    json_object_set_new(obj, "addressBookIds", json_pack("{s:b}", id, 1));
+    json_object_set_new(obj, "addressBookIds", json_pack("{s:b}", id, true));
 
     json_array_append_new(crock->get->list, obj);
     crock->rows++;
@@ -12060,7 +12062,7 @@ static int _card_set_create(jmap_req_t *req,
             char id[JMAP_MAX_ADDRBOOKID_SIZE];
             jmap_set_addrbookid(req->cstate, mbentry, id);
             json_object_set_new(item, "addressBookIds",
-                                json_pack("{s:b}", id, 1));
+                                json_pack("{s:b}", id, true));
         }
         free(mboxname);
     }
@@ -12246,7 +12248,6 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     mbentry_t *mbentry = NULL;
     uint32_t olduid;
     char *resource = NULL, *uid = NULL;
-    int do_move = 0;
     json_t *jupdated = NULL;
     vcardcomponent *vcard = NULL;
     struct entryattlist *annots = NULL;
@@ -12255,6 +12256,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     json_t *media = NULL, *keys = NULL;
     int r = 0;
     size_t num_props = json_object_size(jcard);
+    json_t *new_obj = NULL;
 
     /* is it a valid contact? */
     if (USER_COMPACT_EMAILIDS(req->cstate)) {
@@ -12291,57 +12293,10 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
-    const char *addressbookId = NULL;
-    json_t *jval = json_object_get(jcard, "addressBookIds");
-    if (jval) {
-        if (json_object_size(jval) != 1) {
-            // multiple address book ids are not supported
-            json_array_append_new(invalid, json_string("addressBookIds"));
-            goto done;
-        }
+    int needrights = required_set_rights(jcard);
 
-        void *iter = json_object_iter(jval);
-        if (json_object_iter_value(iter) == json_true()) {
-            addressbookId = json_object_iter_key(iter);
-        }
-        if (addressbookId && *addressbookId == '#') {
-            addressbookId = jmap_lookup_id(req, addressbookId + 1);
-        }
-
-        if (!addressbookId) {
-            json_array_append_new(invalid, json_string("addressBookIds"));
-            goto done;
-        }
-    }
-
-    if (addressbookId) {
-        mbentry_t *newmbentry = NULL;
-        abookid_to_mbentry(req, addressbookId, &newmbentry);
-
-        if (mbentry && (!newmbentry || strcmp(newmbentry->name, mbentry->name))) {
-            /* move */
-            if (!newmbentry ||
-                !jmap_hasrights_mbentry(req, newmbentry, JACL_ADDITEMS)) {
-                json_array_append_new(invalid, json_string("addressBookIds"));
-                r = HTTP_FORBIDDEN;
-            }
-            else if ((r = mailbox_open_iwl(newmbentry->name, &newmailbox))) {
-                syslog(LOG_ERR, "IOERROR: failed to open %s", newmbentry->name);
-            }
-            else {
-                do_move = 1;
-            }
-        }
-        json_object_del(jcard, "addressBookIds");
-        mboxlist_entry_free(&newmbentry);
-
-        if (r) goto done;
-    }
-
-    int needrights = do_move ? JACL_UPDATEITEMS : required_set_rights(jcard);
-
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
-        int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+    int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+    if ((rights & needrights) != needrights) {
         r = (rights & JACL_READITEMS) ? HTTP_NOT_ALLOWED : HTTP_NOT_FOUND;
         goto done;
     }
@@ -12365,38 +12320,36 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
     annots = mailbox_extract_annots(*mailbox, &record);
 
-    if (!newmailbox) {
-        const char *key = "cyrusimap.org:importance";
-        json_t *jval;
+    const char *key = "cyrusimap.org:importance";
+    json_t *jval;
 
-        if (num_props &&
-            (jval = json_object_get(jcard, key))) {
-            _jscard_set_importance(req, mailbox_name(*mailbox),
-                                   key, jval, &annots, errors);
-            num_props--;
-        }
+    if (num_props == 1 &&
+        (jval = json_object_get(jcard, key))) {
+        _jscard_set_importance(req, mailbox_name(*mailbox),
+                               key, jval, &annots, errors);
+        num_props--;
+    }
 
-        if (!num_props && !apply_empty_updates) {
-            /* just bump the modseq
-               if in the same mailbox and no data change */
-            annotate_state_t *state = NULL;
+    if (!num_props && !apply_empty_updates) {
+        /* just bump the modseq
+           if in the same mailbox and no data change */
+        annotate_state_t *state = NULL;
 
-            syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
-                   req->accountid, resource);
-            r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
-            annotate_state_set_auth(state, 0,
+        syslog(LOG_NOTICE, "jmap: touch contact %s/%s",
+               req->accountid, resource);
+        r = mailbox_get_annotate_state(*mailbox, record.uid, &state);
+        annotate_state_set_auth(state, 0,
                                     req->userid, req->authstate);
-            if (!r) r = annotate_state_store(state, annots);
-            if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
-            if (!r) {
-                *item = json_null();
+        if (!r) r = annotate_state_store(state, annots);
+        if (!r) r = mailbox_rewrite_index_record(*mailbox, &record);
+        if (!r) {
+            *item = json_null();
 
-                /* flush cached JSContactCard for this user */
-                carddav_write_jscardcache(db, cdata->dav.rowid,
-                                          req->userid, 0, NULL);
-            }
-            goto done;
+            /* flush cached JSContactCard for this user */
+            carddav_write_jscardcache(db, cdata->dav.rowid,
+                                      req->userid, 0, NULL);
         }
+        goto done;
     }
 
     /* Load message containing the resource and parse vcard data */
@@ -12412,21 +12365,77 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         /* Convert the vCard to a JSContact Card. */
         json_t *old_obj = jmap_card_from_vcard(req->userid, vcard,
                                                db, *mailbox, &record,
-                                               IGNORE_VCARD_VERSION | IGNORE_DERIVED_PROPS | SET_VCARD_CONVPROPS);
+                                               IGNORE_VCARD_VERSION |
+                                               IGNORE_DERIVED_PROPS |
+                                               SET_VCARD_CONVPROPS);
         vcardcomponent_free(vcard);
         vcard = NULL;
+
+        /* Add current addressBookId */
+        char cur_abookid[JMAP_MAX_ADDRBOOKID_SIZE];
+        jmap_set_addrbookid(req->cstate, mbentry, cur_abookid);
+        json_object_set_new(old_obj, "addressBookIds",
+                            json_pack("{s:b}", cur_abookid, true));
 
         /* Remove old "updated" */
         json_object_del(old_obj, "updated");
 
         /* Apply the patch as provided */
-        json_t *new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
+        new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
 
         json_decref(old_obj);
         if (!new_obj) {
             r = HTTP_BAD_REQUEST;
             goto done;
         }
+
+        /* Validate addressBookIds */
+        const char *addressbookId = NULL;
+        json_t *jval = json_object_get(new_obj, "addressBookIds");
+        if (jval) {
+            if (json_object_size(jval) != 1) {
+                // multiple address book ids are not supported
+                json_array_append_new(invalid, json_string("addressBookIds"));
+                goto done;
+            }
+
+            void *iter = json_object_iter(jval);
+            if (json_object_iter_value(iter) == json_true()) {
+                addressbookId = json_object_iter_key(iter);
+            }
+            if (addressbookId && *addressbookId == '#') {
+                addressbookId = jmap_lookup_id(req, addressbookId + 1);
+            }
+        }
+
+        if (!addressbookId) {
+            json_array_append_new(invalid, json_string("addressBookIds"));
+            goto done;
+        }
+
+        mbentry_t *newmbentry = NULL;
+        abookid_to_mbentry(req, addressbookId, &newmbentry);
+
+        if (!newmbentry || strcmp(newmbentry->name, mbentry->name)) {
+            /* move */
+            needrights |= JACL_ADDITEMS;
+            if (!newmbentry ||
+                !jmap_hasrights_mbentry(req, newmbentry, JACL_ADDITEMS)) {
+                json_array_append_new(invalid, json_string("addressBookIds"));
+                r = HTTP_FORBIDDEN;
+            }
+            else if (!(rights & JACL_REMOVEITEMS)) {
+                r = HTTP_FORBIDDEN;
+            }
+            else if ((r = mailbox_open_iwl(newmbentry->name, &newmailbox))) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s", newmbentry->name);
+            }
+        }
+        mboxlist_entry_free(&newmbentry);
+
+        if (r) goto done;
+
+        json_object_del(new_obj, "addressBookIds");
 
         /* Make copies of patched media/cryptoKeys properties
            in case we need to report updated blobIds */
@@ -12453,7 +12462,6 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
         r = _jscard_to_vcard(req, cdata, mailbox_name(*mailbox), vcard,
                              new_obj, &annots, &blobs, errors);
-        json_decref(new_obj);
     }
     else {
         *item = json_null();
@@ -12538,6 +12546,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     ptrarray_fini(&blobs);
     json_decref(media);
     json_decref(keys);
+    json_decref(new_obj);
 
     return r;
 }
