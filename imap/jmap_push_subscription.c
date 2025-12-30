@@ -320,6 +320,8 @@ static int store_pushsub(const char *id, time_t *expires, strarray_t *types,
     return r;
 }
 
+static strarray_t *allowed_push_types = NULL;
+
 static const char *set_create(const char *creation_id, json_t *jpushsub,
                               struct mailbox *mailbox, struct jmap_set *set)
 {
@@ -398,8 +400,18 @@ static const char *set_create(const char *creation_id, json_t *jpushsub,
             size_t i;
             json_t *val;
             json_array_foreach(arg, i, val) {
-                strarray_append(&types, json_string_value(val));
+                const char *type = json_string_value(val);
+
+                if (!type ||
+                    strarray_find_case(allowed_push_types, type, 0) < 0) {
+                    json_array_append_new(invalid,
+                                          json_sprintf("types[%lu]", i));
+                    break;
+                }
+
+                strarray_append(&types, type);
             }
+
             jtypes = json_incref(arg);
         }
     }
@@ -569,8 +581,16 @@ static void set_update(const char *id, json_t *jpushsub,
 
                 memset(record.user_flags, 0, sizeof(record.user_flags));
                 json_array_foreach(arg, i, val) {
-                    r = mailbox_user_flag(mailbox,
-                                          json_string_value(val), &flagnum, 1);
+                    const char *type = json_string_value(val);
+
+                    if (!type ||
+                        strarray_find_case(allowed_push_types, type, 0) < 0) {
+                        json_array_append_new(invalid,
+                                              json_sprintf("types[%lu]", i));
+                        break;
+                    }
+
+                    r = mailbox_user_flag(mailbox, type, &flagnum, 1);
                     if (r) goto done;
 
                     record.user_flags[flagnum/32] |= 1<<(flagnum&31);
@@ -667,6 +687,12 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
     struct pushsub_db *db = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
+
+    if (!allowed_push_types) {
+        allowed_push_types =
+            strarray_split(config_getstring(IMAPOPT_JMAP_PUSH_TYPES),
+                           " ", STRARRAY_TRIM);
+    }
 
     /* Parse arguments */
     jmap_set_parse(req, &parser, pushsub_props, NULL, NULL, &set, &jerr);
