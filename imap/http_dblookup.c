@@ -558,6 +558,7 @@ static const struct lookup_type_t lookup_types[] = {
     { "/email2details", &get_email2details, 1 },
     { "/uid2groups",    &get_uid2groups,    1 },
     { "/expandcard",    &get_expandcard,    1 },
+    { "/mbpath",        &get_mbpath,        1 },
     { "/pushsubs",      &get_pushsubs,      0 },
     { NULL,             NULL,               0 }
 };

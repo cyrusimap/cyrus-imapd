@@ -4025,7 +4025,7 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
         psdata->imap_uid = new->uid;
         psdata->id = id;
         psdata->subscription = subscription;
-        psdata->expires = new->internaldate;
+        psdata->expires = new->internaldate.tv_sec;
         psdata->isverified = isverified;
         psdata->alive = !isexpunged;
 

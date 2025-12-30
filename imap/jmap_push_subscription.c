@@ -144,7 +144,7 @@ static int getpushsub(void *rock, struct pushsub_data *psdata)
 HIDDEN int jmap_pushsub_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
     json_t *err = NULL;
     struct pushsub_db *db = NULL;
     struct mailbox *mailbox = NULL;
@@ -172,10 +172,14 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
         goto done;
     }
 
-    r = pushsub_ensure_folder(req->accountid, &mailbox);
+    char *mboxname = pushsub_mboxname(req->accountid);
+    r = mailbox_open_irl(mboxname, &mailbox);
+    free(mboxname);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;
+        goto resp;
+    }
     if (r) goto done;
-
-    mailbox_unlock_index(mailbox, NULL);
 
     db = pushsubdb_open_userid(req->accountid);
     if (!db) {
@@ -206,6 +210,7 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
         pushsubdb_foreach(db, &getpushsub, &get);
     }
 
+resp:
     /* Build response */
     json_t *res = jmap_get_reply(&get);
     json_object_del(res, "state");
@@ -314,9 +319,10 @@ static int store_pushsub(const char *id, json_t *jexpires, json_t **new_jexpires
     }
     else {
         struct body *body = NULL;
+        struct timespec ts_expires = { expires, 0 };
 
         /* Use internaldate to store expires time */
-        r = append_fromstage(&as, &body, stage, expires, 0, &flags, 0, NULL);
+        r = append_fromstage(&as, &body, stage, &ts_expires, 0, &flags, 0, NULL);
         if (body) {
             message_free_body(body);
             free(body);
@@ -675,7 +681,7 @@ static void set_destroy(const char *id,
 HIDDEN int jmap_pushsub_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_set set;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *jerr = NULL, *accountid;
     struct pushsub_db *db = NULL;
     struct mailbox *mailbox = NULL;

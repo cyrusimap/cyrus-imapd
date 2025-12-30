@@ -381,32 +381,18 @@ EXPORTED int pushsubdb_delete(struct pushsub_db *pushsubdb, unsigned rowid)
 
 EXPORTED int pushsub_ensure_folder(const char *userid, struct mailbox **mailboxptr)
 {
-    struct mboxlock *namespacelock = NULL;
     char *mboxname = pushsub_mboxname(userid);
     int r = mboxlist_lookup(mboxname, NULL, NULL);
 
+    user_nslock_t *user_nslock = NULL;
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        namespacelock = user_namespacelock(userid);
-
-        if (!namespacelock) {
-            r = IMAP_MAILBOX_LOCKED;
-            goto done;
-        }
+        user_nslock = user_nslock_lock_w(userid);
 
         /* maybe we lost the race on this one */
         r = mboxlist_lookup(mboxname, NULL, NULL);
     }
 
-    if (!r && mailboxptr) {
-        r = mailbox_open_iwl(mboxname, mailboxptr);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
-            goto done;
-        }
-    }
-
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* Create locally */
         struct mailbox *mailbox = NULL;
         mbentry_t mbentry = MBENTRY_INITIALIZER;
@@ -422,12 +408,24 @@ EXPORTED int pushsub_ensure_folder(const char *userid, struct mailbox **mailboxp
             goto done;
         }
 
-        if (mailboxptr) *mailboxptr = mailbox;
-        else mailbox_close(&mailbox);
+        // close the mailbox here, we'll re-open once we've released the namespace lock
+        mailbox_close(&mailbox);
+    }
+
+    // release before opening mailbox so mailbox takes and holds a lock
+    user_nslock_release(&user_nslock);
+
+    if (!r && mailboxptr) {
+        r = mailbox_open_iwl(mboxname, mailboxptr);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
+                   mboxname, error_message(r));
+            goto done;
+        }
     }
 
   done:
-    mboxname_release(&namespacelock);
+    user_nslock_release(&user_nslock);
     free(mboxname);
     return r;
 }
