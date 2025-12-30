@@ -1075,6 +1075,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/prometheus.c \
     imap/prometheus.h \
     imap/protocol.h \
+    imap/pushsub_db.c \
+    imap/pushsub_db.h \
     imap/quota_db.c \
     imap/rfc822_header.h \
     imap/saslclient.c \
