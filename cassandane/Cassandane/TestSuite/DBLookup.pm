@@ -21,10 +21,12 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'carddav caldav');
+    $config->set(httpmodules => 'carddav caldav jmap');
+    $config->set(conversations => 'yes');
     $config->set(httpallowcompress => 'no');
     return $class->SUPER::new({
         adminstore => 1,
+        jmap => 1,
         config => $config,
         services => ['imap', 'http'],
     }, @_);
@@ -34,6 +36,9 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+    ]);
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
     $self->{carddav} = Net::CardDAVTalk->new(
