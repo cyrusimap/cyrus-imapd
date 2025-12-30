@@ -148,16 +148,25 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
     json_t *err = NULL;
     struct pushsub_db *db = NULL;
     struct mailbox *mailbox = NULL;
+    json_t *res;
     int r = 0;
 
     /* Parse request */
     jmap_get_parse(req, &parser, pushsub_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
-    if (!err &&
-        (jmap_wantprop(get.props, "url") ||
-         jmap_wantprop(get.props, "keys"))) {
-        err = json_pack("{s:s, s:s}", "type", "forbidden",
-                        "description", "MUST NOT return private data");
+    if (json_object_get(req->args, "accountId")) {
+        jmap_parser_invalid(&parser, "accountId");
+
+        if (err) json_decref(err);
+        err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                        "arguments", parser.invalid);
+    }
+    else if (!err &&
+             (jmap_wantprop(get.props, "url") ||
+              jmap_wantprop(get.props, "keys"))) {
+                 err = json_pack("{s:s, s:s}", "type", "forbidden",
+                                 "description", "MUST NOT return private data");
+             
     }
     if (err) {
         jmap_error(req, err);
@@ -204,7 +213,10 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
 
 resp:
     /* Build response */
-    jmap_ok(req, jmap_get_reply(&get));
+    res = jmap_get_reply(&get);
+    json_object_del(res, "state");
+    req->accountid = NULL;  // suppress inclusion of 'accountId'
+    jmap_ok(req, res);
 
 done:
     if (r) {
@@ -683,7 +695,7 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
-    json_t *jerr = NULL;
+    json_t *jerr = NULL, *accountid;
     struct pushsub_db *db = NULL;
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -696,6 +708,13 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
 
     /* Parse arguments */
     jmap_set_parse(req, &parser, pushsub_props, NULL, NULL, &set, &jerr);
+    if ((accountid = json_object_get(req->args, "accountId")) || set.if_in_state) {
+        if (accountid) jmap_parser_invalid(&parser, "accountId");
+        else if (set.if_in_state) jmap_parser_invalid(&parser, "ifInState");
+        if (jerr) json_decref(jerr);
+        jerr = json_pack("{s:s s:O}", "type", "invalidArguments",
+                         "arguments", parser.invalid);
+    }
     if (jerr) goto done;
 
     r = pushsub_ensure_folder(req->accountid, &mailbox);
@@ -732,7 +751,11 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
     }
 
     /* Build response */
-    jmap_ok(req, jmap_set_reply(&set));
+    json_t *res = jmap_set_reply(&set);
+    json_object_del(res, "oldState");
+    json_object_del(res, "newState");
+    req->accountid = NULL;  // suppress inclusion of 'accountId'
+    jmap_ok(req, res);
 
 done:
     if (r) {
