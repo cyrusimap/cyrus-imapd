@@ -352,7 +352,31 @@ EXTRA_DIST = \
     imap/http_cal_abook_admin.js \
     imap/http_err.et \
     imap/imap_err.et \
+    imap/jmap_blob_props.gperf \
+    imap/jmap_blob_upload_props.gperf \
+    imap/jmap_calendar_event_notification_props.gperf \
+    imap/jmap_calendar_event_props.gperf \
+    imap/jmap_calendar_participant_identity.gperf \
+    imap/jmap_calendar_preferences_props.gperf \
+    imap/jmap_calendar_principal.gperf \
+    imap/jmap_calendar_props.gperf \
+    imap/jmap_calendar_share_notification_props.gperf \
+    imap/jmap_contact_addressbook_props.gperf \
+    imap/jmap_contact_card_props.gperf \
+    imap/jmap_contact_group_props.gperf \
+    imap/jmap_contact_props.gperf \
+    imap/jmap_core_usercounters_props.gperf \
     imap/jmap_err.et \
+    imap/jmap_mailbox_props.gperf \
+    imap/jmap_mail_props.gperf \
+    imap/jmap_mail_submission_identity_props.gperf \
+    imap/jmap_mail_submission_props.gperf \
+    imap/jmap_mail_thread_props.gperf \
+    imap/jmap_notes_props.gperf \
+    imap/jmap_quota_legacy_props.gperf \
+    imap/jmap_quota_props.gperf \
+    imap/jmap_sieve_props.gperf \
+    imap/jmap_vacation_props.gperf \
     imap/lmtp_err.et \
     imap/mailbox_header_cache.gperf \
     imap/mupdate_err.et \
@@ -1310,8 +1334,32 @@ imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 if JMAP
 BUILT_SOURCES += \
+    imap/jmap_blob_props.h \
+    imap/jmap_blob_upload_props.h \
+    imap/jmap_calendar_event_notification_props.h \
+    imap/jmap_calendar_event_props.h \
+    imap/jmap_calendar_participant_identity_props.h \
+    imap/jmap_calendar_preferences_props.h \
+    imap/jmap_calendar_principal_props.h \
+    imap/jmap_calendar_props.h \
+    imap/jmap_calendar_share_notification_props.h \
+    imap/jmap_contact_addressbook_props.h \
+    imap/jmap_contact_card_props.h \
+    imap/jmap_contact_group_props.h \
+    imap/jmap_contact_props.h \
+    imap/jmap_core_usercounters_props.h \
     imap/jmap_err.c \
-    imap/jmap_err.h
+    imap/jmap_err.h \
+    imap/jmap_mailbox_props.h \
+    imap/jmap_mail_props.h \
+    imap/jmap_mail_submission_identity_props.h \
+    imap/jmap_mail_submission_props.h \
+    imap/jmap_mail_thread_props.h \
+    imap/jmap_notes_props.h \
+    imap/jmap_quota_legacy_props.h \
+    imap/jmap_quota_props.h \
+    imap/jmap_sieve_props.h \
+    imap/jmap_vacation_props.h
 
 imap_httpd_SOURCES += \
     imap/defaultalarms.c \
@@ -1322,35 +1370,59 @@ imap_httpd_SOURCES += \
     imap/jmap_api.c \
     imap/jmap_api.h \
     imap/jmap_backup.c \
+    imap/jmap_blob.c \
+    imap/jmap_blob_props.h \
+    imap/jmap_blob_upload_props.h \
     imap/jmap_calendar.c \
     imap/jmap_calendar.h \
+    imap/jmap_calendar_event_notification_props.h \
+    imap/jmap_calendar_event_props.h \
+    imap/jmap_calendar_participant_identity_props.h \
+    imap/jmap_calendar_preferences_props.h \
+    imap/jmap_calendar_principal_props.h \
+    imap/jmap_calendar_props.h \
+    imap/jmap_calendar_share_notification_props.h \
     imap/jmap_contact.c \
-    imap/jmap_blob.c \
+    imap/jmap_contact_addressbook_props.h \
+    imap/jmap_contact_card_props.h \
+    imap/jmap_contact_group_props.h \
+    imap/jmap_contact_props.h \
     imap/jmap_core.c \
+    imap/jmap_core_usercounters_props.h \
     imap/jmap_ical.c \
     imap/jmap_ical.h \
+    imap/jmap_mailbox.c \
+    imap/jmap_mailbox_props.h \
     imap/jmap_mail.c \
     imap/jmap_mail.h \
+    imap/jmap_mail_props.h \
     imap/jmap_mail_query.c \
     imap/jmap_mail_query.h \
     imap/jmap_mail_query_parse.c \
     imap/jmap_mail_query_parse.h \
     imap/jmap_mail_submission.c \
-    imap/jmap_mailbox.c \
+    imap/jmap_mail_submission_identity_props.h \
+    imap/jmap_mail_submission_props.h \
+    imap/jmap_mail_thread_props.h \
     imap/jmap_mdn.c \
     imap/jmap_notes.c \
+    imap/jmap_notes_props.h \
     imap/jmap_notif.c \
     imap/jmap_notif.h \
     imap/jmap_push.c \
     imap/jmap_push.h \
     imap/jmap_quota.c \
+    imap/jmap_quota_legacy_props.h \
+    imap/jmap_quota_props.h \
     imap/jmap_util.c \
     imap/jmap_util.h
 
 if SIEVE
 imap_httpd_SOURCES += \
     imap/jmap_sieve.c \
-    imap/jmap_vacation.c
+    imap/jmap_sieve_props.h \
+    imap/jmap_vacation.c \
+    imap/jmap_vacation_props.h
 endif
 
 nodist_imap_httpd_SOURCES += \
@@ -1472,6 +1544,9 @@ lib/htmlchar.h: lib/htmlchar.st
 
 imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
 	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
+
+%_props.h: %_props.gperf
+	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c

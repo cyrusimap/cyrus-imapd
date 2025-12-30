@@ -1,0 +1,96 @@
+%{
+/* jmap_calendar_event_props.h --
+   Lookup functions for JMAP CalendarEvent properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      CALENDAREVENT_PROP_
+%define word-array-name       calendarevent_prop_array
+%define length-table-name     calendarevent_prop_lengths
+%define hash-function-name    calendarevent_prop_hash
+%define lookup-function-name  calendarevent_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",                      NULL, JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"calendarIds",             NULL, 0
+#
+# JSCalendar common properties
+"@type",                   NULL, 0
+"uid",                     NULL, 0
+"relatedTo",               NULL, 0
+"prodId",                  NULL, 0
+"created",                 NULL, 0
+"updated",                 NULL, 0
+"sequence",                NULL, 0
+"method",                  NULL, 0
+"title",                   NULL, 0
+"description",             NULL, 0
+"descriptionContentType",  NULL, 0
+"locations",               NULL, 0
+"virtualLocations",        NULL, 0
+"links",                   NULL, 0
+"locale",                  NULL, 0
+"keywords",                NULL, 0
+"categories",              NULL, 0
+"color",                   NULL, 0
+"recurrenceId",            NULL, 0
+"recurrenceIdTimeZone",    NULL, 0
+"recurrenceRules",         NULL, 0
+"recurrenceOverrides",     NULL, 0
+"excluded",                NULL, 0
+"excludedRecurrenceRules", NULL, 0
+"priority",                NULL, 0
+"freeBusyStatus",          NULL, 0
+"privacy",                 NULL, 0
+"replyTo",                 NULL, 0
+"participants",            NULL, 0
+"useDefaultAlerts",        NULL, 0
+"alerts",                  NULL, 0
+"localizations",           NULL, 0
+"sentBy",                  NULL, 0
+#
+# Event properties
+"start",                   NULL, 0
+"timeZone",                NULL, 0
+"duration",                NULL, 0
+"showWithoutTime",         NULL, 0
+"status",                  NULL, 0
+#
+# JMAP Calendars spec
+"isDraft",                 JMAP_URN_CALENDARS,       0
+"utcStart",                JMAP_URN_CALENDARS,       JMAP_PROP_SKIP_GET
+"utcEnd",                  JMAP_URN_CALENDARS,       JMAP_PROP_SKIP_GET
+"mayInviteSelf",           JMAP_URN_CALENDARS,       0
+"mayInviteOthers",         JMAP_URN_CALENDARS,       0
+"hideAttendees",           JMAP_URN_CALENDARS,       0
+"isOrigin",                JMAP_URN_CALENDARS,       0
+"baseEventId",             JMAP_URN_CALENDARS,       JMAP_PROP_SERVER_SET
+#
+# FM specific
+"x-href",                  JMAP_CALENDARS_EXTENSION, 0
+"blobId",                  JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET
+"cyrusimap.org:iCalProps", JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+"debugBlobId",             JMAP_DEBUG_EXTENSION,     JMAP_PROP_SERVER_SET
+%%
+
+static const jmap_prop_hash_table_t jmap_calendarevent_props_map = {
+    calendarevent_prop_array,
+    CALENDAREVENT_PROP_TOTAL_KEYWORDS,
+    CALENDAREVENT_PROP_MIN_HASH_VALUE,
+    CALENDAREVENT_PROP_MAX_HASH_VALUE,
+    &calendarevent_prop_lookup
+};

@@ -1,0 +1,39 @@
+%{
+/* jmap_calendar_participant_identity_props.h --
+   Lookup functions for JMAP ParticipantIdentity properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      PARTICIPANTIDENTITY_PROP_
+%define word-array-name       participantidentity_prop_array
+%define length-table-name     participantidentity_prop_lengths
+%define hash-function-name    participantidentity_prop_hash
+%define lookup-function-name  participantidentity_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",     NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"name",   NULL, 0
+"sendTo", NULL, 0
+%%
+
+static const jmap_prop_hash_table_t jmap_participantidentity_props_map = {
+    participantidentity_prop_array,
+    PARTICIPANTIDENTITY_PROP_TOTAL_KEYWORDS,
+    PARTICIPANTIDENTITY_PROP_MIN_HASH_VALUE,
+    PARTICIPANTIDENTITY_PROP_MAX_HASH_VALUE,
+    &participantidentity_prop_lookup
+};

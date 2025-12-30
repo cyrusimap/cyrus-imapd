@@ -1,0 +1,64 @@
+%{
+/* jmap_mailbox_props.h -- Lookup functions for JMAP Mailbox properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      MAILBOX_PROP_
+%define word-array-name       mailbox_prop_array
+%define length-table-name     mailbox_prop_lengths
+%define hash-function-name    mailbox_prop_hash
+%define lookup-function-name  mailbox_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",            NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"name",          NULL, 0
+"parentId",      NULL, 0
+"role",          NULL, 0
+"sortOrder",     NULL, 0
+"totalEmails",   NULL, JMAP_PROP_SERVER_SET
+"unreadEmails",  NULL, JMAP_PROP_SERVER_SET
+"totalThreads",  NULL, JMAP_PROP_SERVER_SET
+"unreadThreads", NULL, JMAP_PROP_SERVER_SET
+"myRights",      NULL, JMAP_PROP_SERVER_SET
+"isSubscribed",  NULL, 0
+#
+# FM extensions (do ALL of these get through to Cyrus?)
+"isCollapsed",        JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"hidden",             JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"sort",               JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"identityRef",        JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"autoLearn",          JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"learnAsSpam",        JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"autoPurge",          JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"purgeOlderThanDays", JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"onlyPurgeDeleted",   JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"suppressDuplicates", JMAP_MAIL_EXTENSION, JMAP_PROP_EXTERNAL
+"shareWith",          JMAP_MAIL_EXTENSION, 0
+"isSeenShared",       JMAP_MAIL_EXTENSION, 0
+"storageUsed",        JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET
+"color",              JMAP_MAIL_EXTENSION, 0
+"showAsLabel",        JMAP_MAIL_EXTENSION, 0
+"uniqueId",           JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+%%
+
+static const jmap_prop_hash_table_t jmap_mailbox_props_map = {
+    mailbox_prop_array,
+    MAILBOX_PROP_TOTAL_KEYWORDS,
+    MAILBOX_PROP_MIN_HASH_VALUE,
+    MAILBOX_PROP_MAX_HASH_VALUE,
+    &mailbox_prop_lookup
+};
