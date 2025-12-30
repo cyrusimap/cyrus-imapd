@@ -1133,6 +1133,8 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/caldav_alarm.h \
     imap/caldav_db.c \
     imap/caldav_db.h \
+    imap/calsched_support.c \
+    imap/calsched_support.h \
     imap/carddav_db.c \
     imap/carddav_db.h \
     imap/dav_util.c \
@@ -1143,8 +1145,8 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/ical_support.h \
     imap/icu_wrap.h \
     imap/icu_wrap.cpp \
-    imap/calsched_support.c \
-    imap/calsched_support.h \
+    imap/pushsub_db.c \
+    imap/pushsub_db.h \
     imap/vcard_support.c \
     imap/vcard_support.h \
     imap/webdav_db.c \
