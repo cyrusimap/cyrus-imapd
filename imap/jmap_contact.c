@@ -78,8 +78,13 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_contact_group_props.h"
+#include "imap/jmap_contact_props.h"
 
 #ifdef HAVE_LIBICALVCARD
+#include "imap/jmap_contact_addressbook_props.h"
+#include "imap/jmap_contact_card_props.h"
+
 static int jmap_addressbook_get(struct jmap_req *req);
 static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
@@ -256,6 +261,11 @@ static jmap_method_t jmap_contact_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t addressbook_props = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t card_props        = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t contact_props     = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t group_props       = JMAP_PROPERTY_SET_INITIALIZER;
+
 static char *_prodid = NULL;
 
 HIDDEN void jmap_contact_init(jmap_settings_t *settings)
@@ -265,6 +275,9 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 #ifdef HAVE_LIBICALVCARD
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CONTACTS, json_object());
+
+    jmap_build_prop_set(&jmap_addressbook_props_map, &addressbook_props, settings);
+    jmap_build_prop_set(&jmap_card_props_map, &card_props, settings);
 #endif
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
@@ -272,6 +285,9 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
                 JMAP_CONTACTS_EXTENSION, json_object());
 
         jmap_add_methods(jmap_contact_methods_nonstandard, settings);
+
+        jmap_build_prop_set(&jmap_contact_props_map, &contact_props, settings);
+        jmap_build_prop_set(&jmap_group_props_map, &group_props, settings);
     }
 
     ptrarray_append(&settings->getblob_handlers, jmap_contact_getblob);
@@ -539,201 +555,6 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     return r;
 }
 
-// clang-format off
-static const jmap_property_t contact_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "uid",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "isFlagged",
-        NULL,
-        0
-    },
-    {
-        "avatar",
-        NULL,
-        0
-    },
-    {
-        "prefix",
-        NULL,
-        0
-    },
-    {
-        "firstName",
-        NULL,
-        0
-    },
-    {
-        "lastName",
-        NULL,
-        0
-    },
-    {
-        "suffix",
-        NULL,
-        0
-    },
-    {
-        "nickname",
-        NULL,
-        0
-    },
-    {
-        "birthday",
-        NULL,
-        0
-    },
-    {
-        "anniversary",
-        NULL,
-        0
-    },
-    {
-        "company",
-        NULL,
-        0
-    },
-    {
-        "department",
-        NULL,
-        0
-    },
-    {
-        "jobTitle",
-        NULL,
-        0
-    },
-    {
-        "emails",
-        NULL,
-        0
-    },
-    {
-        "phones",
-        NULL,
-        0
-    },
-    {
-        "online",
-        NULL,
-        0
-    },
-    {
-        "addresses",
-        NULL,
-        0
-    },
-    {
-        "notes",
-        NULL,
-        0
-    },
-
-    /* RFC 9555 conversion properties - for internal use only */
-    {
-        "vCardProps",
-        NULL,
-        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
-    },
-    {
-        "vCardName",
-        NULL,
-        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
-    },
-    {
-        "vCardParams",
-        NULL,
-        JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
-    },
-
-    /* FM extensions */
-    {
-        "addressbookId",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    },
-    {
-        "x-href",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    }, // AJAXUI only
-    {
-        "x-hasPhoto",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    }, // AJAXUI only
-    {
-        "importance",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    },  // JMAPUI only
-    {
-        "blobId",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "size",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
-// clang-format off
-static const jmap_property_t group_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "uid",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "contactIds",
-        NULL,
-        0
-    },
-
-    // FM extensions */
-    {
-        "addressbookId",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    },
-    {
-        "x-href",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    }, // AJAXUI only
-    {
-        "otherAccountContactIds",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    }, // Both AJAXUI and JMAPUI
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
 {
     const char *jscard = payload;
@@ -766,7 +587,7 @@ static int has_addressbooks(jmap_req_t *req)
 }
 
 static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
-                         const jmap_property_t *props)
+                         jmap_property_set_t *props)
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -883,7 +704,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
 
 static int jmap_contactgroup_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP, group_props);
+    return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP, &group_props);
 }
 
 static const char *_json_array_get_string(const json_t *obj, size_t index)
@@ -1196,7 +1017,7 @@ static void reject_convprops(json_t *jpatch, json_t *invalid) {
 }
 
 static void _contacts_set(struct jmap_req *req, unsigned kind,
-                          const jmap_property_t *props,
+                          jmap_property_set_t *props,
                           int (*_set_create)(jmap_req_t *req,
                                              unsigned kind,
                                              json_t *jcard,
@@ -1464,7 +1285,7 @@ done:
 
 static int jmap_contactgroup_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_GROUP, group_props,
+    _contacts_set(req, CARDDAV_KIND_GROUP, &group_props,
                   &_contact_set_create, &_contact_set_update);
     return 0;
 }
@@ -2175,7 +1996,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
 static int jmap_contact_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT, contact_props);
+    return _contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT, &contact_props);
 }
 
 static int jmap_contact_changes(struct jmap_req *req)
@@ -4752,7 +4573,7 @@ static int _contact_set_update(jmap_req_t *req,
 
 static int jmap_contact_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_CONTACT, contact_props,
+    _contacts_set(req, CARDDAV_KIND_CONTACT, &contact_props,
                   &_contact_set_create, &_contact_set_update);
 
     return 0;
@@ -5251,60 +5072,6 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
     return r;
 }
 
-// clang-format off
-static const jmap_property_t addressbook_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "description",
-        NULL,
-        0
-    },
-    {
-        "sortOrder",
-        NULL,
-        0
-    },
-    {
-        "isDefault",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "isSubscribed",
-        NULL,
-        0
-    },
-    {
-        "shareWith",
-        NULL,
-        0
-    },
-    {
-        "myRights",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "cyrusimap.org:href",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_addressbook_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -5313,7 +5080,7 @@ static int jmap_addressbook_get(struct jmap_req *req)
     int r = 0;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, addressbook_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &addressbook_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -6021,7 +5788,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &argparser, addressbook_props, setaddressbooks_parse_args,
+    jmap_set_parse(req, &argparser, &addressbook_props, setaddressbooks_parse_args,
                    &on_destroy_remove_contents, &set, &err);
     if (err) {
         jmap_error(req, err);
@@ -6131,223 +5898,6 @@ done:
 /*****************************************************************************
  * JMAP ContactCard API
  ****************************************************************************/
-
-// clang-format off
-static const jmap_property_t card_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "addressBookId",
-        NULL,
-        0
-    },
-    {
-        "@type",
-        NULL,
-        0
-    },
-    {
-        "version",
-        NULL,
-        0
-    },
-    {
-        "created",
-        NULL,
-        0
-    },
-    {
-        "kind",
-        NULL,
-        0
-    },
-    {
-        "language",
-        NULL,
-        0
-    },
-    {
-        "members",
-        NULL,
-        0
-    },
-    {
-        "prodId",
-        NULL,
-        0
-    },
-    {
-        "relatedTo",
-        NULL,
-        0
-    },
-    {
-        "uid",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "updated",
-        NULL,
-        0
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "nicknames",
-        NULL,
-        0
-    },
-    {
-        "organizations",
-        NULL,
-        0
-    },
-    {
-        "speakToAs",
-        NULL,
-        0
-    },
-    {
-        "titles",
-        NULL,
-        0
-    },
-    {
-        "department",
-        NULL,
-        0
-    },
-    {
-        "emails",
-        NULL,
-        0
-    },
-    {
-        "onlineServices",
-        NULL,
-        0
-    },
-    {
-        "phones",
-        NULL,
-        0
-    },
-    {
-        "contactBy",
-        NULL,
-        0
-    },
-    {
-        "preferredLanguages",
-        NULL,
-        0
-    },
-    {
-        "calendars",
-        NULL,
-        0
-    },
-    {
-        "schedulingAddresses",
-        NULL,
-        0
-    },
-    {
-        "addresses",
-        NULL,
-        0
-    },
-    {
-        "cryptoKeys",
-        NULL,
-        0
-    },
-    {
-        "directories",
-        NULL,
-        0
-    },
-    {
-        "links",
-        NULL,
-        0
-    },
-    {
-        "media",
-        NULL,
-        0
-    },
-    {
-        "localizations",
-        NULL,
-        0
-    },
-    {
-        "anniversaries",
-        NULL,
-        0
-    },
-    {
-        "keywords",
-        NULL,
-        0
-    },
-    {
-        "notes",
-        NULL,
-        0
-    },
-    {
-        "personalInfo",
-        NULL,
-        0
-    },
-    {
-        "vCardProps",
-        NULL,
-        0
-    },
-
-    /* FM extensions */
-    {
-        "cyrusimap.org:importance",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    },
-    {
-        "cyrusimap.org:blobId",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "cyrusimap.org:size",
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "cyrusimap.org:href", 
-        JMAP_CONTACTS_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-
-    /* Allow unknown properties */
-    {
-        "*",
-        NULL,
-        0
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 
 /*
  * ContactCard/get
@@ -11891,16 +11441,20 @@ static int _jscard_to_vcard(struct jmap_req *req,
         }
 
         else {
-            int i;
+            unsigned i;
 
             /* Known property with wrong case is invalid */
-            for (i = 0; card_props[i].name; i++) {
-                if (!strcasecmp(mykey, card_props[i].name)) {
+            for (i = jmap_card_props_map.min_hash;
+                 i <= jmap_card_props_map.max_hash; i++) {
+                const jmap_property_t *prop =
+                    &jmap_card_props_map.array[i];
+
+                if (!strcasecmpsafe(mykey, prop->name)) {
                     jmap_parser_invalid(&parser, mykey);
                 }
             }
 
-            if (!card_props[i].name) {
+            if (i > jmap_card_props_map.max_hash) {
                 _jsunknown_to_vcard(&parser, mykey, jval, NULL, card);
             }
         }
@@ -12582,7 +12136,7 @@ static json_t *_card_from_record(jmap_req_t *req,
 
 static int jmap_card_get(struct jmap_req *req)
 {
-    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_ANY, card_props);
+    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_ANY, &card_props);
 }
 
 static int jmap_card_changes(struct jmap_req *req)
@@ -12623,7 +12177,7 @@ done:
 
 static int jmap_card_set(struct jmap_req *req)
 {
-    _contacts_set(req, CARDDAV_KIND_ANY, card_props,
+    _contacts_set(req, CARDDAV_KIND_ANY, &card_props,
                   &_card_set_create, &_card_set_update);
 
     return 0;

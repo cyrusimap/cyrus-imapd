@@ -1,0 +1,37 @@
+%{
+/* jmap_mail_thread_props.h -- Lookup functions for JMAP Thread properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      THREAD_PROP_
+%define word-array-name       thread_prop_array
+%define length-table-name     thread_prop_lengths
+%define hash-function-name    thread_prop_hash
+%define lookup-function-name  thread_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",       NULL, JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"emailIds", NULL, 0
+%%
+
+static const jmap_prop_hash_table_t jmap_thread_props_map = {
+    thread_prop_array,
+    THREAD_PROP_TOTAL_KEYWORDS,
+    THREAD_PROP_MIN_HASH_VALUE,
+    THREAD_PROP_MAX_HASH_VALUE,
+    &thread_prop_lookup
+};

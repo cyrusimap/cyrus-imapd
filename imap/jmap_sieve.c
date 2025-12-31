@@ -78,6 +78,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_sieve_props.h"
 
 static int jmap_sieve_get(jmap_req_t *req);
 static int jmap_sieve_set(jmap_req_t *req);
@@ -154,6 +155,8 @@ static jmap_method_t jmap_sieve_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t sieve_props = JMAP_PROPERTY_SET_INITIALIZER;
+
 HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
 {
     if (config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) {
@@ -170,6 +173,8 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
     }
 
     jmap_add_methods(jmap_sieve_methods_standard, settings);
+
+    jmap_build_prop_set(&jmap_sieve_props_map, &sieve_props, settings);
 
     json_object_set_new(settings->server_capabilities,
                         JMAP_URN_SIEVE,
@@ -237,32 +242,6 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
-// clang-format off
-static const jmap_property_t sieve_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "isActive",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "blobId",
-        NULL,
-        0
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int getscript(void *rock, struct sieve_data *sdata)
 {
     struct jmap_get *get = (struct jmap_get *) rock;
@@ -300,7 +279,7 @@ static int jmap_sieve_get(jmap_req_t *req)
     int r = 0;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, sieve_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &sieve_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -811,7 +790,7 @@ static int jmap_sieve_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, sieve_props,
+    jmap_set_parse(req, &parser, &sieve_props,
                    &_sieve_setargs_parse, &sub_args, &set, &jerr);
     if (jerr) goto done;
 

@@ -1,0 +1,47 @@
+%{
+/* jmap_contact_group_props.h --
+   Lookup functions for JMAP ContactGroup properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      GROUP_PROP_
+%define word-array-name       group_prop_array
+%define length-table-name     group_prop_lengths
+%define hash-function-name    group_prop_hash
+%define lookup-function-name  group_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",          NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"uid",        NULL, JMAP_PROP_IMMUTABLE
+"name",       NULL, 0
+"contactIds", NULL, 0
+#
+# FM extensions
+"addressbookId",          JMAP_CONTACTS_EXTENSION, 0
+# AJAXUI only
+"x-href",                 JMAP_CONTACTS_EXTENSION,JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+# Both AJAXUI and JMAPUI
+"otherAccountContactIds", JMAP_CONTACTS_EXTENSION, 0
+%%
+
+static const jmap_prop_hash_table_t jmap_group_props_map = {
+    group_prop_array,
+    GROUP_PROP_TOTAL_KEYWORDS,
+    GROUP_PROP_MIN_HASH_VALUE,
+    GROUP_PROP_MAX_HASH_VALUE,
+    &group_prop_lookup
+};

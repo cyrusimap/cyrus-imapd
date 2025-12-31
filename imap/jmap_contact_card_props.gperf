@@ -1,0 +1,81 @@
+%{
+/* jmap_contact_card_props.h --
+   Lookup functions for JMAP ContactCard properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      CARD_PROP_
+%define word-array-name       card_prop_array
+%define length-table-name     card_prop_lengths
+%define hash-function-name    card_prop_hash
+%define lookup-function-name  card_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",                  NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"addressBookIds",      NULL, 0
+"@type",               NULL, JMAP_PROP_MANDATORY
+"version",             NULL, JMAP_PROP_MANDATORY
+"created",             NULL, 0
+"kind",                NULL, 0
+"language",            NULL, 0
+"members",             NULL, 0
+"prodId",              NULL, 0
+"relatedTo",           NULL, 0
+"uid",                 NULL, JMAP_PROP_IMMUTABLE
+"updated",             NULL, 0
+"name",                NULL, 0
+"nicknames",           NULL, 0
+"organizations",       NULL, 0
+"speakToAs",           NULL, 0
+"titles",              NULL, 0
+"department",          NULL, 0
+"emails",              NULL, 0
+"onlineServices",      NULL, 0
+"phones",              NULL, 0
+"contactBy",           NULL, 0
+"preferredLanguages",  NULL, 0
+"calendars",           NULL, 0
+"schedulingAddresses", NULL, 0
+"addresses",           NULL, 0
+"cryptoKeys",          NULL, 0
+"directories",         NULL, 0
+"links",               NULL, 0
+"media",               NULL, 0
+"localizations",       NULL, 0
+"anniversaries",       NULL, 0
+"keywords",            NULL, 0
+"notes",               NULL, 0
+"personalInfo",        NULL, 0
+"vCardProps",          NULL, 0
+#
+# FM extensions
+"cyrusimap.org:importance", JMAP_CONTACTS_EXTENSION, 0
+"cyrusimap.org:blobId",     JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
+"cyrusimap.org:size",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
+"cyrusimap.org:href",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+#
+# Allow unknown properties
+"*", NULL, 0
+%%
+
+static const jmap_prop_hash_table_t jmap_card_props_map = {
+    card_prop_array,
+    CARD_PROP_TOTAL_KEYWORDS,
+    CARD_PROP_MIN_HASH_VALUE,
+    CARD_PROP_MAX_HASH_VALUE,
+    &card_prop_lookup
+};
