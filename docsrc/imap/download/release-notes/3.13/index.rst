@@ -16,3 +16,4 @@ Cyrus IMAP 3.13 Snapshots
     :glob:
 
     x/*-alpha*
+    x/*

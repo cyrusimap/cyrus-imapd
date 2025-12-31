@@ -934,7 +934,15 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
 :rfc:`9698`
 
-   The JMAPACCESS Extension for IMAP
+    The JMAPACCESS Extension for IMAP
+
+:rfc:`9610`
+
+    JMAP for Contacts
+
+:rfc:`9670`
+
+    JMAP Sharing
 
 IETF RFC Drafts
 ===============
@@ -954,14 +962,6 @@ draft-ietf-calext-vpoll
 draft-ietf-jmap-calendars
 
     JMAP for Calendars
-
-draft-ietf-jmap-contacts
-
-    JMAP for Contacts
-
-draft-ietf-jmap-sharing
-
-    JMAP Sharing
 
 draft-ietf-mailmaint-imap-uidbatches
 
