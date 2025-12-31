@@ -696,10 +696,10 @@ sub _create_instances
             unless ($self->{no_replicaonly}) {
                 $replica_params{config}->set(replicaonly => 'yes');
             }
-            my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
-            if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
-                xlog $self, "replica instance: using [cyrus replica] configuration";
-                $replica_params{installation} = 'replica';
+            my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
+            if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {
+                xlog $self, "replica instance: using [cyrus other] configuration";
+                $replica_params{installation} = 'other';
             }
 
             my $class = ref $self;
@@ -726,6 +726,9 @@ sub _create_instances
             $frontend_service_port = Cassandane::PortManager::alloc("localhost");
             $backend2_service_port = Cassandane::PortManager::alloc("localhost");
 
+            my %frontend_params = %instance_params;
+            my %backend2_params = %instance_params;
+
             # set up a front end on which we also run the mupdate master
             my $frontend_conf = $self->{_config}->clone();
             $frontend_conf->set(
@@ -744,17 +747,19 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
-            if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
-                xlog $self, "murder instance: using [cyrus murder] configuration";
-                $instance_params{installation} = 'murder';
+            my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
+            if (defined $cyrus_other_prefix and -d $cyrus_other_prefix) {
+                xlog $self, "frontend instance: using [cyrus other] configuration";
+                xlog $self, "backend2 instance: using [cyrus other] configuration";
+                $frontend_params{installation} = 'other';
+                $backend2_params{installation} = 'other';
             }
 
             my $class = ref $self;
             my $name  = $self->{_name} =~ s/^test_//r;
-            $instance_params{description} = "murder frontend for test $class.$name";
-            $instance_params{config} = $frontend_conf;
-            $self->{frontend} = Cassandane::Instance->new(%instance_params,
+            $frontend_params{description} = "murder frontend for test $class.$name";
+            $frontend_params{config} = $frontend_conf;
+            $self->{frontend} = Cassandane::Instance->new(%frontend_params,
                                                           setup_mailbox => 0);
             $self->{frontend}->add_service(name => 'mupdate',
                                            port => $mupdate_port,
@@ -817,9 +822,9 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            $instance_params{description} = "murder backend2 for test $class.$name";
-            $instance_params{config} = $backend2_conf;
-            $self->{backend2} = Cassandane::Instance->new(%instance_params,
+            $backend2_params{description} = "murder backend2 for test $class.$name";
+            $backend2_params{config} = $backend2_conf;
+            $self->{backend2} = Cassandane::Instance->new(%backend2_params,
                                                           setup_mailbox => 0); # XXX ?
             $self->{backend2}->add_services(@{$want->{services}});
 
