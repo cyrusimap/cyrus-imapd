@@ -58,6 +58,6 @@ sub test_emailsubmission_set
 
     xlog $self, "make sure #jmapsubmission folder isn't visible via IMAP";
     my $talk = $self->{store}->get_client();
-    my @list = $talk->list('', '*');
-    $self->assert_num_equals(0, scalar grep { $_->[2] eq 'INBOX.#jmapsubmission' } @list);
+    my @list = map { $_->[2] } $talk->list('', '*');
+    $self->assert_contains('INBOX.#jmapsubmission', \@list, 0);
 }
