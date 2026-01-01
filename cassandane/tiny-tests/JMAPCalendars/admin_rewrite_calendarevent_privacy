@@ -140,7 +140,7 @@ sub test_admin_rewrite_calendarevent_privacy
 
     xlog $self, "Assert no iMIP notifications are sent";
     my $data = $self->{instance}->getnotify();
-    $self->assert_num_equals(0, scalar grep { $_->{METHOD} eq 'imip' } @$data);
+    $self->assert_contains('imip', [ map { $_->{METHOD} } @{$data} ], 0);
 
     xlog $self, "Assert new event message is sent to pusher";
     my @newevent = grep {

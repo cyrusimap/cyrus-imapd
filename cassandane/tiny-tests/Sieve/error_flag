@@ -41,8 +41,8 @@ EOF
 
     my $res = $imaptalk->fetch('1:*', 'flags');
 
-    $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{1}{flags}});
-    $self->assert_not_null(grep { $_ eq '$SieveFailed' } @{$res->{2}{flags}});
-    $self->assert_null(grep { $_ eq '$SieveFailed' } @{$res->{3}{flags}});
-    $self->assert_not_null(grep { $_ eq '$SieveFailed' } @{$res->{4}{flags}});
+    $self->assert_contains('$SieveFailed', $res->{1}{flags}, 0);
+    $self->assert_contains('$SieveFailed', $res->{2}{flags});
+    $self->assert_contains('$SieveFailed', $res->{3}{flags}, 0);
+    $self->assert_contains('$SieveFailed', $res->{4}{flags});
 }

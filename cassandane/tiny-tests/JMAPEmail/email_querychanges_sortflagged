@@ -132,8 +132,8 @@ sub test_email_querychanges_sortflagged
     $self->assert_num_equals(2, $res->[0][1]{total});
     # will have removed 'D' (old exemplar) and 'A' (touched)
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $idd } map { $_ } @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $idc } map { $_ } @{$res->[0][1]->{removed}});
+    $self->assert_contains($idd, $res->[0][1]->{removed});
+    $self->assert_contains($ida, $res->[0][1]->{removed});
+    $self->assert_contains($idc, $res->[0][1]->{removed});
     $self->assert_deep_equals([{id => $idd, index => 0}], $res->[0][1]{added});
 }

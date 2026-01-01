@@ -117,7 +117,7 @@ sub test_mailbox_set_parent
         destroy => [$id3, $id1, $id2]
     }, "R1"]]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
-    $self->assert(grep {$_ eq $id1} @{$res->[0][1]{destroyed}});
-    $self->assert(grep {$_ eq $id2} @{$res->[0][1]{destroyed}});
-    $self->assert(grep {$_ eq $id3} @{$res->[0][1]{destroyed}});
+    $self->assert_contains($id1, $res->[0][1]{destroyed});
+    $self->assert_contains($id2, $res->[0][1]{destroyed});
+    $self->assert_contains($id3, $res->[0][1]{destroyed});
 }

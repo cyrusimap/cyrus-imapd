@@ -24,5 +24,5 @@ sub test_bug3735
     my @res = <RESULTS>;
     close RESULTS;
 
-    $self->assert(grep { m/user\.ab/ } @res);
+    $self->assert_contains(qr{user\.ab}, \@res);
 }

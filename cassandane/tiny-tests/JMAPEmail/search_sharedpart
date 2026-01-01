@@ -89,7 +89,7 @@ sub test_search_sharedpart
     $self->assert_num_equals(2, scalar keys %$partIds);
     $self->assert_num_equals(1, scalar @{$partIds->{$fooId}});
     $self->assert_num_equals(2, scalar @{$partIds->{$ladyId}});
-    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$fooId}});
-    $self->assert_not_null(grep { $_ eq "1" } @{$partIds->{$ladyId}});
-    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$ladyId}});
+    $self->assert_contains("2", $partIds->{$fooId});
+    $self->assert_contains("1", $partIds->{$ladyId});
+    $self->assert_contains("2", $partIds->{$ladyId});
 }

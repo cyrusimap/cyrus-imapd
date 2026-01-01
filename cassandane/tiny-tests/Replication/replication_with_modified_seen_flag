@@ -45,7 +45,7 @@ sub test_replication_with_modified_seen_flag ($self)
     $replica_store->_select();
     my $res = $rtalk->fetch("2", "(flags)");
     my $flags = $res->{2}->{flags};
-    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+    $self->assert_contains("\\Seen", $flags, 0);
 
     xlog $self, "Run Replication!";
     $self->run_replication();
@@ -56,7 +56,7 @@ sub test_replication_with_modified_seen_flag ($self)
     $replica_store->_select();
     $res = $rtalk->fetch("2", "(flags)");
     $flags = $res->{2}->{flags};
-    $self->assert(grep { $_ eq "\\Seen"} @$flags);
+    $self->assert_contains("\\Seen", $flags);
 
     xlog $self, "Clear \\Seen flag on Message B on master.";
     $mtalk = $master_store->get_client();
@@ -72,11 +72,11 @@ sub test_replication_with_modified_seen_flag ($self)
     $master_store->_select();
     $res = $mtalk->fetch("2", "(flags)");
     $flags = $res->{2}->{flags};
-    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+    $self->assert_contains("\\Seen", $flags, 0);
 
     $rtalk = $replica_store->get_client();
     $replica_store->_select();
     $res = $rtalk->fetch("3", "(flags)");
     $flags = $res->{3}->{flags};
-    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+    $self->assert_contains("\\Seen", $flags, 0);
 }
