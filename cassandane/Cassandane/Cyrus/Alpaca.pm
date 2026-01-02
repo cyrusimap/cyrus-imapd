@@ -245,7 +245,7 @@ FIN
     $self->assert_num_lt(scalar @request, scalar @response);
 
     # cyrus should have dropped the connection at the POST in first line
-    $self->assert_contains(qr{^\* BAD}, \@response, 0);
+    $self->assert_not_contains(qr{^\* BAD}, \@response);
 
     # snarky last response back from the server
     $self->assert_matches(qr{This is an IMAP server}, $response[-1]);

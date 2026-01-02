@@ -600,6 +600,13 @@ sub assert_contains
     }
 }
 
+sub assert_not_contains
+{
+    my ($self, $needle, $haystack) = @_;
+
+    $self->assert_contains($needle, $haystack, 0);
+}
+
 sub new_test_url
 {
     my ($self, $content_or_app) = @_;

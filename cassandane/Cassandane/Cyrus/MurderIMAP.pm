@@ -337,7 +337,7 @@ sub test_xlist
             }
             else {
                 # must not be flagged with name-based flag
-                $self->assert_contains("\\$name", $flags, 0);
+                $self->assert_not_contains("\\$name", $flags);
             }
         }
     }
