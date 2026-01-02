@@ -118,7 +118,7 @@ sub test_reconstruct_zerouid
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert_contains('6', \@records, 0);
+    $self->assert_not_contains('6', \@records);
     $self->assert_contains('11', \@records);
 }
 
@@ -171,7 +171,7 @@ sub test_reconstruct_truncated
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
     $self->assert_contains('6', \@records);
-    $self->assert_contains('11', \@records, 0);
+    $self->assert_not_contains('11', \@records);
 
     # We should have generated a SYNCERROR or two
     $self->assert_syslog_matches($self->{instance},
@@ -213,7 +213,7 @@ sub test_reconstruct_removedfile
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(9, scalar @records);
-    $self->assert_contains('6', \@records, 0);
+    $self->assert_not_contains('6', \@records);
 }
 
 #

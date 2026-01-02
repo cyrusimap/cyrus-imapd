@@ -51,6 +51,6 @@ sub test_sync_reset_nolegacy
     close(FH);
 
     xlog $self, "ensure there's no files left matching either uuid!";
-    $self->assert_contains(qr{$inboxid}, \@files, 0);
-    $self->assert_contains(qr{$subid}, \@files, 0);
+    $self->assert_not_contains(qr{$inboxid}, \@files);
+    $self->assert_not_contains(qr{$subid}, \@files);
 }

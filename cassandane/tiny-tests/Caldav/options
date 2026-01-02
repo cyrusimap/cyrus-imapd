@@ -16,7 +16,8 @@ sub test_options ($self)
 
     # Non-calendar collections - no scheduling
     $self->assert_null(@{ $get_options->('/') });
-    $self->assert_contains(qr{calendar-auto-schedule}, $get_options->('/dav/'), 0);
+    $self->assert_not_contains(qr{calendar-auto-schedule},
+                               $get_options->('/dav/'));
 
     # Calendar collections - scheduling enabled by default
     $self->assert_contains(qr{calendar-auto-schedule},
@@ -45,7 +46,6 @@ EOF
                                $xml, 'Content-Type' => 'text/xml');
 
     # Scheduling should NOT be advertised
-    $self->assert_contains(qr{calendar-auto-schedule},
-                           $get_options->('/dav/calendars/user/cassandane/Default'),
-                           0);
+    $self->assert_not_contains(qr{calendar-auto-schedule},
+        $get_options->('/dav/calendars/user/cassandane/Default'));
 }

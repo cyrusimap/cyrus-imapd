@@ -124,5 +124,6 @@ sub test_calendareventnotification_prune
     $self->assert_num_equals($jmap_max_calendareventnotifs, scalar @{$res->[0][1]{list}});
 
     xlog $self, "Assert first event notification does not exist";
-    $self->assert_contains($notif1Id, [ map { $_->{id} } @{$res->[0][1]{list}} ], 0);
+    $self->assert_not_contains($notif1Id,
+                               [ map { $_->{id} } @{$res->[0][1]{list}} ]);
 }

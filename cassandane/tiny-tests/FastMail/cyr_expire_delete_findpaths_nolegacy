@@ -65,7 +65,7 @@ sub test_cyr_expire_delete_findpaths_nolegacy
     xlog $self, "files for the inbox still exist";
     $self->assert_contains(qr{$inboxid}, \@files);
     xlog $self, "no files left for subfolder";
-    $self->assert_contains(qr{$subid}, \@files, 0);
+    $self->assert_not_contains(qr{$subid}, \@files);
 
     xlog $self, "Run cyr_expire -D now.";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
@@ -76,5 +76,5 @@ sub test_cyr_expire_delete_findpaths_nolegacy
 
     use Data::Dumper;
     xlog $self, "no files for the inbox still exist" . Dumper(\@files, $inboxid);;
-    $self->assert_contains(qr{$inboxid}, \@files, 0);
+    $self->assert_not_contains(qr{$inboxid}, \@files);
 }
