@@ -16,18 +16,18 @@ sub test_options ($self)
 
     # Non-calendar collections - no scheduling
     $self->assert_null(@{ $get_options->('/') });
-    $self->assert(not grep(/calendar-auto-schedule/,
-                           @{ $get_options->('/dav/') }));
+    $self->assert_not_contains(qr{calendar-auto-schedule},
+                               $get_options->('/dav/'));
 
     # Calendar collections - scheduling enabled by default
-    $self->assert(grep(/calendar-auto-schedule/,
-            @{ $get_options->('/dav/calendars/') }));
-    $self->assert(grep(/calendar-auto-schedule/,
-            @{ $get_options->('/dav/calendars/user/') }));
-    $self->assert(grep(/calendar-auto-schedule/,
-            @{ $get_options->('/dav/calendars/user/cassandane/') }));
-    $self->assert(grep(/calendar-auto-schedule/,
-            @{ $get_options->('/dav/calendars/user/cassandane/Default') }));
+    $self->assert_contains(qr{calendar-auto-schedule},
+                           $get_options->('/dav/calendars/'));
+    $self->assert_contains(qr{calendar-auto-schedule},
+                           $get_options->('/dav/calendars/user/'));
+    $self->assert_contains(qr{calendar-auto-schedule},
+                           $get_options->('/dav/calendars/user/cassandane/'));
+    $self->assert_contains(qr{calendar-auto-schedule},
+                           $get_options->('/dav/calendars/user/cassandane/Default'));
 
     # Disable scheduling on Default calendar
     my $xml = <<EOF;
@@ -46,6 +46,6 @@ EOF
                                $xml, 'Content-Type' => 'text/xml');
 
     # Scheduling should NOT be advertised
-    $self->assert(not grep(/calendar-auto-schedule/,
-            @{ $get_options->('/dav/calendars/user/cassandane/Default') }));
+    $self->assert_not_contains(qr{calendar-auto-schedule},
+        $get_options->('/dav/calendars/user/cassandane/Default'));
 }

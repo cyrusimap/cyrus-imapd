@@ -107,19 +107,17 @@ sub test_calendarevent_set_baseeventid
     ]);
 
     # Can't create an event with a baseEventId
-    $self->assert(grep $_ eq 'baseEventId',
-        @{$res->[0][1]{notCreated}{rdate}{properties}});
+    $self->assert_contains('baseEventId',
+        $res->[0][1]{notCreated}{rdate}{properties});
 
     # Can't set the baseEventId on a non-instance
-    $self->assert(grep $_ eq 'baseEventId',
-        @{$res->[0][1]{notUpdated}{$event1Id}{properties}});
+    $self->assert_contains('baseEventId',
+        $res->[0][1]{notUpdated}{$event1Id}{properties});
 
     # Can't change the baseEventId of an instance
-    $self->assert(grep $_ eq 'baseEventId',
-        @{$res->[0][1]{notUpdated}{$eventInstance1Id}{properties}});
+    $self->assert_contains('baseEventId',
+        $res->[0][1]{notUpdated}{$eventInstance1Id}{properties});
 
     # Can keep the baseEventId of an instance
     $self->assert(exists $res->[0][1]{updated}{$eventInstance2Id});
-
-
 }

@@ -1072,8 +1072,8 @@ sub test_rename_jmapid
 
     my $post = { $self->{instance}->run_dbcommand($mailboxes_db, $format, ['SHOW', 'J']) };
 
-    $self->assert_num_equals(4, scalar grep { m/newuser/ } keys %$post);
-    $self->assert_num_equals(0, scalar grep { m/cassandane/ } keys %$post);
+    $self->assert_contains(qr{newuser}, [ keys %{$post} ], 4);
+    $self->assert_not_contains(qr{cassandane}, [ keys %{$post} ]);
 }
 
 1;

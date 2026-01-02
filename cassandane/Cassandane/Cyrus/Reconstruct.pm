@@ -91,13 +91,13 @@ sub test_reconstruct_zerouid
 
     my @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
@@ -118,8 +118,8 @@ sub test_reconstruct_zerouid
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(not grep { $_ == 6 } @records);
-    $self->assert(grep { $_ == 11 } @records);
+    $self->assert_not_contains('6', \@records);
+    $self->assert_contains('11', \@records);
 }
 
 #
@@ -140,13 +140,13 @@ sub test_reconstruct_truncated
 
     my @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
@@ -170,8 +170,8 @@ sub test_reconstruct_truncated
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
-    $self->assert(not grep { $_ == 11 } @records);
+    $self->assert_contains('6', \@records);
+    $self->assert_not_contains('11', \@records);
 
     # We should have generated a SYNCERROR or two
     $self->assert_syslog_matches($self->{instance},
@@ -195,13 +195,13 @@ sub test_reconstruct_removedfile
 
     my @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     # this needs a bit of magic to know where to write... so
     # we do some hard-coded cyrus.index handling
@@ -213,7 +213,7 @@ sub test_reconstruct_removedfile
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(9, scalar @records);
-    $self->assert(not grep { $_ == 6 } @records);
+    $self->assert_not_contains('6', \@records);
 }
 
 #
@@ -236,13 +236,13 @@ sub test_reconstruct_snoozed
 
     my @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
 
     @records = $imaptalk->search("all");
     $self->assert_num_equals(10, scalar @records);
-    $self->assert(grep { $_ == 6 } @records);
+    $self->assert_contains('6', \@records);
 
     $imaptalk->store('5', 'annotation', ["/vendor/cmu/cyrus-imapd/snoozed",
         ['value.shared', { Quote => encode_json({until => '2020-01-01T00:00:00'}) }],

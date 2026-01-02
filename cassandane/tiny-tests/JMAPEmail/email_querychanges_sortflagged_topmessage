@@ -133,8 +133,8 @@ sub test_email_querychanges_sortflagged_topmessage
     # will have removed 'D' (touched) as well as
     # XXX: C and A because it can't know what the old order was, oh well
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $idd } map { $_ } @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
-    $self->assert_not_null(grep { $_ eq $idc } map { $_ } @{$res->[0][1]->{removed}});
+    $self->assert_contains($idd, $res->[0][1]->{removed});
+    $self->assert_contains($ida, $res->[0][1]->{removed});
+    $self->assert_contains($idc, $res->[0][1]->{removed});
     $self->assert_deep_equals([{id => $idd, index => 0}], $res->[0][1]{added});
 }

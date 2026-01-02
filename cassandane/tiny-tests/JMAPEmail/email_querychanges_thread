@@ -48,9 +48,9 @@ sub test_email_querychanges_thread
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     # assert that IDA got destroyed
-    $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
+    $self->assert_contains($ida, $res->[0][1]->{removed});
     # and not recreated
-    $self->assert_null(grep { $_ eq $ida } map { $_->{id} } @{$res->[0][1]->{added}});
+    $self->assert_not_contains($ida, $res->[0][1]->{added});
 
     $talk->select("INBOX");
     $talk->store('3', "+flags", '\\Deleted');

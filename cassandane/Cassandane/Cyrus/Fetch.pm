@@ -148,11 +148,12 @@ sub test_duplicate_headers
 
     # Verify that it created duplicate headers, and didn't collate the values.
     # If it collated the values, this test proves nothing.
-    $self->assert_equals(scalar(grep { $_->{name} eq 'subject' } @{$msg->{headers}}), 2);
-    $self->assert_equals(scalar(grep { $_->{name} eq 'from' } @{$msg->{headers}}), 2);
-    $self->assert_equals(scalar(grep { $_->{name} eq 'to' } @{$msg->{headers}}), 2);
-    $self->assert_equals(scalar(grep { $_->{name} eq 'cc' } @{$msg->{headers}}), 2);
-    $self->assert_equals(scalar(grep { $_->{name} eq 'bcc' } @{$msg->{headers}}), 2);
+    my @got_header_names = map { $_->{name} } @{$msg->{headers}};
+    $self->assert_contains('subject', \@got_header_names, 2);
+    $self->assert_contains('from', \@got_header_names, 2);
+    $self->assert_contains('to', \@got_header_names, 2);
+    $self->assert_contains('cc', \@got_header_names, 2);
+    $self->assert_contains('bcc', \@got_header_names, 2);
 
     # XXX Cassandane::Message's add_header() appends rather than prepends.
     # So we currently expect all the "second" values, when we would prefer

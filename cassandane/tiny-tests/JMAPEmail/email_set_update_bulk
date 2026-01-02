@@ -38,8 +38,8 @@ sub test_email_set_update_bulk
     $talk->select("INBOX.B");
     $res = $talk->fetch("1", "(flags)");
     my @flags = @{$res->{1}{flags}};
-    $self->assert_null(grep { $_ eq 'hello' } @flags);
-    $self->assert_null(grep { $_ eq '\\Seen' } @flags);
+    $self->assert_not_contains('hello', \@flags);
+    $self->assert_not_contains('\\Seen', \@flags);
 
     # Create email in mailboox A
     $talk->select("INBOX.A");
@@ -72,9 +72,9 @@ sub test_email_set_update_bulk
     $talk->select("INBOX.C");
     $res = $talk->fetch("1", "(flags)");
     @flags = @{$res->{1}{flags}};
-    $self->assert_not_null(grep { $_ eq 'hello' } @flags);
+    $self->assert_contains('hello', \@flags);
     # but \Seen shouldn't
-    $self->assert_null(grep { $_ eq '\\Seen' } @flags);
+    $self->assert_not_contains('\\Seen', \@flags);
 
     $res = $jmap->CallMethods([['Email/query', {
         sort => [{ property => 'subject' }],

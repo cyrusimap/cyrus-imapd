@@ -107,13 +107,13 @@ EOF
     $self->assert_matches(qr/foo\.X-ABLabel/, $blob->{content});
     $self->assert_matches(qr/foo\.ADR/, $blob->{content});
 
-    $self->assert_null(grep { m/foo\.EMAIL/ } $blob->{content});
-    $self->assert_null(grep { m/email0\./ } $blob->{content});
+    $self->assert_does_not_match(qr/foo\.EMAIL/, $blob->{content});
+    $self->assert_does_not_match(qr/email0\./, $blob->{content});
     $self->assert_matches(qr/email1\.X-ABLabel/, $blob->{content});
     $self->assert_matches(qr/email1\.EMAIL/, $blob->{content});
     $self->assert_matches(qr/email2\.X-ABLabel/, $blob->{content});
     $self->assert_matches(qr/email2\.EMAIL/, $blob->{content});
 
-    $self->assert_null(grep { m/bar\.X-ABLabel/ } $blob->{content});
-    $self->assert_null(grep { m/bar\.TEL/ } $blob->{content});
+    $self->assert_does_not_match(qr/bar\.X-ABLabel/, $blob->{content});
+    $self->assert_does_not_match(qr/bar\.TEL/, $blob->{content});
 }
