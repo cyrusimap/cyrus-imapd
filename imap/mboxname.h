@@ -381,6 +381,10 @@ struct mboxname_counters {
     modseq_t sievedeletedmodseq;
     modseq_t sievefoldersmodseq;
     modseq_t sievefoldersdeletedmodseq;
+    modseq_t jmappushsubmodseq;
+    modseq_t jmappushsubdeletedmodseq;
+    modseq_t jmappushsubfoldersmodseq;
+    modseq_t jmappushsubfoldersdeletedmodseq;
     uint32_t uidvalidity;
 };
 

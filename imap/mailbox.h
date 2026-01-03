@@ -304,6 +304,9 @@ struct mailbox {
     struct carddav_db *local_carddav;
     struct webdav_db *local_webdav;
 #endif
+#ifdef WITH_JMAP
+    struct pushsub_db *local_pushsub;
+#endif
 #ifdef USE_SIEVE
     struct sieve_db *local_sieve;
     char *sievedir;
@@ -775,6 +778,7 @@ extern int mailbox_add_dav(struct mailbox *mailbox);
 extern int mailbox_delete_dav(struct mailbox *mailbox);
 extern int mailbox_add_sieve(struct mailbox *mailbox);
 extern int mailbox_add_email_alarms(struct mailbox *mailbox);
+extern int mailbox_add_pushsub(struct mailbox *mailbox);
 
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 __attribute__((nonnull))
