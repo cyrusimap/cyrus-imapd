@@ -2880,7 +2880,7 @@ sub make_folder_intermediate
 
     my $basedir = $self->get_basedir();
     my $mailboxes_db = "$basedir/conf/mailboxes.db";
-    my $format = $self->{config}->get('mboxlist_db');
+    my $format = $self->{config}->get('mboxlist_db') // 'twoskip';
 
     my $I_key = "I$uniqueid";
     (undef, $value) = $self->run_dbcommand($mailboxes_db, $format,
