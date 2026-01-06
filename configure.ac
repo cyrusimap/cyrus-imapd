@@ -1,45 +1,7 @@
 dnl Process this file with autoconf to produce a configure script.
+dnl SPDX-License-Identifier: BSD-3-Clause-CMU
+dnl See COPYING file at the root of the distribution for more details.
 
-dnl
-dnl Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
-dnl
-dnl Redistribution and use in source and binary forms, with or without
-dnl modification, are permitted provided that the following conditions
-dnl are met:
-dnl
-dnl 1. Redistributions of source code must retain the above copyright
-dnl    notice, this list of conditions and the following disclaimer.
-dnl
-dnl 2. Redistributions in binary form must reproduce the above copyright
-dnl    notice, this list of conditions and the following disclaimer in
-dnl    the documentation and/or other materials provided with the
-dnl    distribution.
-dnl
-dnl 3. The name "Carnegie Mellon University" must not be used to
-dnl    endorse or promote products derived from this software without
-dnl    prior written permission. For permission or any legal
-dnl    details, please contact
-dnl      Carnegie Mellon University
-dnl      Center for Technology Transfer and Enterprise Creation
-dnl      4615 Forbes Avenue
-dnl      Suite 302
-dnl      Pittsburgh, PA  15213
-dnl      (412) 268-7393, fax: (412) 268-7395
-dnl      innovation@andrew.cmu.edu
-dnl
-dnl 4. Redistributions of any form whatsoever must retain the following
-dnl    acknowledgment:
-dnl    "This product includes software developed by Computing Services
-dnl     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
-dnl
-dnl CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
-dnl THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-dnl AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
-dnl FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
-dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
-dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-dnl
 dnl configure.ac for the Cyrus imapd
 dnl
 
@@ -2283,7 +2245,7 @@ AM_CONDITIONAL([HAVE_SPHINX_BUILD],
 
 AH_TOP([
 /*
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
