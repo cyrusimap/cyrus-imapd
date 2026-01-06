@@ -97,7 +97,7 @@ sub new
 
     my $cassini = Cassandane::Cassini->instance();
 
-    my $self = {
+    my $self = bless({
         name => undef,
         buildinfo => undef,
         basedir => undef,
@@ -124,7 +124,7 @@ sub new
         _pid => $$,
         smtpdaemon => 0,
         lsan_suppressions => "",
-    };
+    }, $class);
 
     $self->{name} = $params{name}
         if defined $params{name};
@@ -160,14 +160,57 @@ sub new
         if defined $params{smtpdaemon};
     $self->{lsan_suppressions} = $params{lsan_suppressions}
         if defined $params{lsan_suppressions};
-    $self->{mailbox_version} = $params{mailbox_version}
-        if defined $params{mailbox_version};
     $self->{old_jmap_ids} = $params{old_jmap_ids}
         if defined $params{old_jmap_ids};
 
+    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{installation});
+
+    if (defined $params{mailbox_version}) {
+        $self->assert_supports_mailbox_version($params{mailbox_version});
+        $self->{mailbox_version} = $params{mailbox_version};
+    }
+
+    if ($self->{buildinfo}->get('cyrusdb', undef)) {
+        # find best default backend based on what installed cyrus supports
+        my @backends = grep { defined }
+                            ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
+        my $default_backend;
+
+        foreach my $b (@backends) {
+            if ($self->{buildinfo}->get('cyrusdb', $b)) {
+                $default_backend = $b;
+                last;
+            }
+        }
+
+        # every Cyrus version supports twoskip so this won't happen..
+        die "couldn't find a supported cyrusdb backend"
+            if not $default_backend;
+
+        # set default backends, but only where the test didn't specify already
+        $self->{config}->set_if_undef(
+            annotation_db => $default_backend,
+            conversations_db => $default_backend,
+            duplicate_db => $default_backend,
+            mboxkey_db => $default_backend,
+            mboxlist_db => $default_backend,
+            ptscache_db => $default_backend,
+            quota_db => 'quotalegacy',
+            search_indexed_db => $default_backend,
+            seenstate_db => $default_backend,
+            subscription_db => 'flat',
+            statuscache_db => $default_backend,
+            sync_cache_db => $default_backend,
+            tlscache_db => 'twoskip', # deprecated, does not allow twom
+            tls_sessions_db => $default_backend,
+            userdeny_db => 'flat',
+            zoneinfo_db => $default_backend,
+        );
+    }
+
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
-    return bless $self, $class;
+    return $self;
 }
 
 # return an id for use by xlog
@@ -175,6 +218,38 @@ sub id
 {
     my ($self) = @_;
     return $self->{name}; # XXX something cleverer?
+}
+
+sub default_mailbox_version
+{
+    my ($self) = @_;
+
+    return $self->{buildinfo}->get('version', 'MAILBOX_MINOR_VERSION');
+}
+
+sub supports_mailbox_version
+{
+    my ($self, $version) = @_;
+
+    unless ($version =~ /\A[0-9]+\z/) {
+        require Carp;
+        Carp::confess("Invalid mailbox_version '$version'");
+    }
+
+    my $max_version = $self->default_mailbox_version();
+
+    return $version <= $max_version;
+}
+
+sub assert_supports_mailbox_version
+{
+    my ($self, $version) = @_;
+
+    unless ($self->supports_mailbox_version($version)) {
+        my $id = $self->id();
+        require Carp;
+        Card::confess("$id does not support mailbox version '$version'");
+    }
 }
 
 # Class method! Need to be able to interrogate the Cyrus version
@@ -1114,19 +1189,14 @@ sub create_user
     }
 
     my @mb_version;
-    my $old_jmap_ids;
+    my $default_mailbox_version = $self->default_mailbox_version();
+    my $mailbox_version = $params{mailbox_version}
+                          // $self->{mailbox_version}
+                          // $default_mailbox_version;
 
-    if (my $version = $params{mailbox_version} // $self->{mailbox_version}) {
-        unless ($version =~ /\A[0-9]+\z/) {
-            require Carp;
-            Carp::confess("Invalid mailbox_version '$version'");
-        }
-
-        if ($version <= 19) {
-            $old_jmap_ids = 1;
-        }
-
-        push @mb_version, [ 'VERSION', $version ];
+    if ($mailbox_version != $default_mailbox_version) {
+        $self->assert_supports_mailbox_version($mailbox_version);
+        push @mb_version, [ 'VERSION', $mailbox_version ];
     }
 
     foreach my $mb (@mboxes)
@@ -1141,20 +1211,35 @@ sub create_user
             or die "Cannot setacl for $mb: $@";
     }
 
-    if ($old_jmap_ids || $params{old_jmap_ids} || $self->{old_jmap_ids}) {
-        xlog $self, "Disable compactids";
+    # do we need to enable or disable compactids?
+    my $want_compact_ids;
+    if ($mailbox_version <= 19) {
+        if ($default_mailbox_version >= 20) {
+            # cyrus supports compactids, but not for this mailbox version
+            $want_compact_ids = 'off';
+        }
+        else {
+            # cyrus does not support compact ids
+            $want_compact_ids = undef;
+        }
+    }
+    elsif ($params{old_jmap_ids} || $self->{old_jmap_ids}) {
+        # requested by test
+        $want_compact_ids = 'off';
+    }
+    else {
+        # XXX: conditionalise further when "on" is the default...
+        $want_compact_ids = 'on';
+    }
+
+    if (defined $want_compact_ids) {
+        die "uh oh" if $want_compact_ids !~ m/^(on|off)$/;
+
+        xlog $self, "Turn compactids $want_compact_ids";
 
         $self->run_command(
             { cyrus => 1 },
-            'ctl_conversationsdb', '-I', 'off', $user
-        );
-    } else {
-        # XXX: This should be removed when "on" is the default...
-        xlog $self, "Enable compactids";
-
-        $self->run_command(
-            { cyrus => 1 },
-            'ctl_conversationsdb', '-I', 'on', $user
+            'ctl_conversationsdb', '-I', $want_compact_ids, $user
         );
     }
 
@@ -1352,9 +1437,6 @@ sub start
             );
         }
     }
-
-    $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-                                                    $self->{cyrus_prefix});
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {

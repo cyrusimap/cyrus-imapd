@@ -53,7 +53,7 @@ static json_t *buildinfo()
 {
     json_t *component = json_object();
     json_t *dependency = json_object();
-    json_t *database = json_object();
+    json_t *cyrusdb = json_object();
     json_t *search = json_object();
     json_t *hardware = json_object();
     json_t *buildconf = json_object();
@@ -62,7 +62,7 @@ static json_t *buildinfo()
 
     json_object_set_new(buildconf, "component", component);
     json_object_set_new(buildconf, "dependency", dependency);
-    json_object_set_new(buildconf, "database", database);
+    json_object_set_new(buildconf, "cyrusdb", cyrusdb);
     json_object_set_new(buildconf, "search", search);
     json_object_set_new(buildconf, "ical", ical);
     json_object_set_new(buildconf, "hardware", hardware);
@@ -227,21 +227,28 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "guesstz", json_false());
 #endif
 
-    /* Enabled databases */
-#ifdef HAVE_MYSQL
-    json_object_set_new(database, "mysql", json_true());
+    /* cyrusdb backends */
+    json_object_set_new(cyrusdb, "flat", json_true());
+    json_object_set_new(cyrusdb, "quotalegacy", json_true());
+    json_object_set_new(cyrusdb, "skiplist", json_true());
+    json_object_set_new(cyrusdb, "twom", json_true());
+    json_object_set_new(cyrusdb, "twoskip", json_true());
+#ifdef USE_CYRUSDB_SQL
+    {
+        json_t *sql_engines = json_array();
+        json_object_set_new(cyrusdb, "sql", sql_engines);
+# ifdef HAVE_MYSQL
+        json_array_append_new(sql_engines, json_string("mysql"));
+# endif
+# ifdef HAVE_PGSQL
+        json_array_append_new(sql_engines, json_string("pgsql"));
+# endif
+# ifdef HAVE_SQLITE
+        json_array_append_new(sql_engines, json_string("sqlite"));
+# endif
+    }
 #else
-    json_object_set_new(database, "mysql", json_false());
-#endif
-#ifdef HAVE_PGSQL
-    json_object_set_new(database, "pgsql", json_true());
-#else
-    json_object_set_new(database, "pgsql", json_false());
-#endif
-#ifdef HAVE_SQLITE
-    json_object_set_new(database, "sqlite", json_true());
-#else
-    json_object_set_new(database, "sqlite", json_false());
+    json_object_set_new(cyrusdb, "sql", json_false());
 #endif
 
     /* Enabled search engines */
