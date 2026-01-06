@@ -1156,15 +1156,8 @@ static void setcalendar_parseprops(jmap_req_t *req,
         props->comp_types = -1;
 
         /* Any externally-stored properties? */
-        for (int i = 0; i < ptrarray_size(&calendar_props.external); i++) {
-            const jmap_property_t *prop =
-                ptrarray_nth(&calendar_props.external, i);
-
-            if (json_object_get(arg, prop->name)) {
-                props->has_ext_props = true;
-                break;
-            }
-        }
+        props->has_ext_props =
+            json_is_true(json_object_get(arg, JMAP_HAS_EXT_PROPS));
     }
 
     /* name */

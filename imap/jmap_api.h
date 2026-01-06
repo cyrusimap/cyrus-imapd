@@ -333,12 +333,11 @@ typedef struct jmap_property_set {
     ptrarray_t wildcards;   // list of wildcard props, e.g. "foo*"
     ptrarray_t always_get;  // list of JMAP_PROP_ALWAYS_GET props
     ptrarray_t mandatory;   // list of JMAP_PROP_MANDATORY props
-    ptrarray_t external;    // list of JMAP_PROP_EXTERNAL props
 } jmap_property_set_t;
 
 #define JMAP_PROPERTY_SET_INITIALIZER                                   \
-    { NULL, PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER,                 \
-      PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER }
+    { NULL,                                                             \
+      PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER, PTRARRAY_INITIALIZER }
 
 extern void jmap_build_prop_set(const jmap_prop_hash_table_t *map,
                                 jmap_property_set_t *prop_set,
@@ -406,6 +405,7 @@ struct jmap_set {
 };
 
 #define JMAP_SET_INITIALIZER {0}
+#define JMAP_HAS_EXT_PROPS   "cyrusimap.org:hasExtProps"
 
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            jmap_property_set_t *valid_props,

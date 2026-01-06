@@ -1534,7 +1534,6 @@ static void free_prop_set(enum jmap_handler_event eventmask,
         ptrarray_fini(&prop_set->wildcards);
         ptrarray_fini(&prop_set->always_get);
         ptrarray_fini(&prop_set->mandatory);
-        ptrarray_fini(&prop_set->external);
     }
 }
 
@@ -1558,9 +1557,6 @@ HIDDEN void jmap_build_prop_set(const jmap_prop_hash_table_t *map,
 
         if (prop->flags & JMAP_PROP_MANDATORY)
             ptrarray_append(&prop_set->mandatory, (void *) prop);
-
-        if (prop->flags & JMAP_PROP_EXTERNAL)
-            ptrarray_append(&prop_set->external, (void *) prop);
     }
 
     /* Add an event handler to free property set elements */
@@ -1766,13 +1762,14 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
+static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
                                     jmap_property_set_t *valid_props,
                                     json_t **err)
 {
     json_t *invalid = json_array();
     const char *path;
     json_t *jval;
+    bool has_external = false;
 
     json_object_foreach(jobj, path, jval) {
         /* Determine property name */
@@ -1806,6 +1803,9 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
                 /* can NEVER change id */
                 json_array_append_new(invalid, json_string(path));
             }
+            else if (prop->flags & JMAP_PROP_EXTERNAL) {
+                has_external = true;
+            }
             /* XXX could check IMMUTABLE and SERVER_SET here, but we can't
              * reject such properties if they match the current value */
         }
@@ -1837,6 +1837,8 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
     else {
         json_decref(invalid);
     }
+
+    return has_external;
 }
 
 HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
@@ -1960,6 +1962,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     if (update) {
         json_object_foreach(update, id, val) {
             json_t *err = NULL;
+            bool has_external = false;
             if (!json_is_object(val)) {
                 jmap_parser_push(parser, "update");
                 jmap_parser_invalid(parser, id);
@@ -1972,7 +1975,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
             else if (valid_props) {
                 /* Make sure no property is set without its capability */
-                jmap_set_validate_props(req, id, val, valid_props, &err);
+                has_external =
+                    jmap_set_validate_props(req, id, val, valid_props, &err);
             }
 
             // TODO We could report the following set errors here:
@@ -1980,8 +1984,12 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
             if (err)
                 json_object_set_new(set->not_updated, id, err);
-            else
+            else {
+                if (has_external) {
+                    json_object_set_new(val, JMAP_HAS_EXT_PROPS, json_true());
+                }
                 json_object_set(set->update, id, val);
+            }
         }
     }
 

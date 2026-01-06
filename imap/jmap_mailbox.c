@@ -1729,15 +1729,8 @@ static void _mboxset_args_parse(json_t *jargs,
 
     if (!is_create) {
         /* Any externally-stored properties? */
-        for (int i = 0; i < ptrarray_size(&mailbox_props.external); i++) {
-            const jmap_property_t *prop =
-                ptrarray_nth(&mailbox_props.external, i);
-
-            if (json_object_get(jargs, prop->name)) {
-                args->has_ext_props = true;
-                break;
-            }
-        }
+        args->has_ext_props =
+            json_is_true(json_object_get(jargs, JMAP_HAS_EXT_PROPS));
     }
 
     /* id */
