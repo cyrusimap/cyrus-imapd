@@ -566,7 +566,7 @@ sub _run_magic
 
             my $m = lc($a);
             # ignore min/max version attribution here
-            next if $a =~ m/^(?:min|max)_version_/;
+            next if $a =~ m/^(?:min|max)_(?:other_)?version_/;
             # ignore feature test attribution here
             next if $a =~ m/^needs_/;
             # ignore want attribution here
