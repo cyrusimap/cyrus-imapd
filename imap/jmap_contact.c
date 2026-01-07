@@ -8013,10 +8013,13 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         json_array_append_new(props, jprop);
 
         switch (prop_vkind) {
+        case VCARD_X_VALUE:
+            /* There is no way to detect a structured TEXT value in a X- prop */
+            json_array_append_new(jprop, json_string(prop_value));
+            break;
         case VCARD_BOOLEAN_VALUE:
         case VCARD_INTEGER_VALUE:
         case VCARD_FLOAT_VALUE:
-            /* There is no way to detect a structured TEXT value in a X- prop */
             if (strchr(prop_value, ';')) {
                 tok_t comps = TOK_INITIALIZER(prop_value, "\\;", 0);
                 json_t *jcomps = json_array();
@@ -8206,7 +8209,19 @@ static json_t *jmap_card_from_vcard(const char *userid,
 
         case VCARD_X_PROPERTY:
             if (group && !strcasecmp(prop_name, VCARD_APPLE_LABEL_PROPERTY)) {
-                const char *label = vcardproperty_get_value_as_string(prop);
+                vcardvalue *val = vcardproperty_get_value(prop);
+                const char *label = NULL;
+                switch (vcardvalue_isa(val)) {
+                    case VCARD_TEXT_VALUE:
+                        label = vcardvalue_get_text(val);
+                        break;
+                    case VCARD_X_VALUE:
+                        label = vcardvalue_get_x(val);
+                        break;
+                    default:
+                        label = vcardvalue_as_vcard_string(val);
+                }
+
                 size_t label_len = strlen(label);
 
                 /* Check and adjust for weird (localized?) labels */
@@ -9498,7 +9513,9 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
     case VCARD_X_PARAMETER:
         /* label translates to a grouped X-ABLabel property */
         if (json_is_string(jprop)) {
-            vcardproperty *label = vcardproperty_new_x(json_string_value(jprop));
+            vcardproperty *label = vcardproperty_new(VCARD_X_PROPERTY);
+            vcardproperty_set_value(label,
+                    vcardvalue_new_text(json_string_value(jprop)));
             const char *group;
 
             vcardproperty_set_x_name(label, VCARD_APPLE_LABEL_PROPERTY);
@@ -11497,7 +11514,8 @@ static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jprops,
         else if ((unsigned) val_type == VCARD_TYPE_DATE)
             val_type = VCARD_VALUE_DATE;;
 
-        vcardproperty_add_parameter(prop, vcardparameter_new_value(val_type));
+        if (val_type)
+          vcardproperty_add_parameter(prop, vcardparameter_new_value(val_type));
 
         _vcardparams_to_prop(params, prop);
 
@@ -11534,12 +11552,23 @@ static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jprops,
             st->num_fields = 0;
             vcardstructured_free(st);
         }
-        else {
+        else if (val_type) {
             vals = jprop_values_to_strarray(jprop, 3, val_type, &buf);
 
             if (!vals) goto error;
 
             vcardproperty_set_value(prop, vcardvalue_new_textlist(vals));
+        }
+        else {
+            if (json_is_string(jval)) {
+                buf_setcstr(&buf, json_string_value(jval));
+            }
+            else {
+                char *tmp = json_dumps(jval, JSON_ENCODE_ANY);
+                buf_setcstr(&buf, tmp);
+                free(tmp);
+            }
+            vcardproperty_set_value(prop, vcardvalue_new_x(buf_cstring(&buf)));
         }
     }
 
