@@ -5,6 +5,6 @@
 
     Custom docutils components.
 
-    :copyright: Copywrite 2015 by Nic Bernstein <nic@onlight.com>
-    :license: BSD, see LICENSE for details.
+    :copyright: Copyright Carnegie Mellon University.
+    :license: BSD-3-Clause-CMU, see COPYING for details.
 """
