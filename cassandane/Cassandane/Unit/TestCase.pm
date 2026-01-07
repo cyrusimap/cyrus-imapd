@@ -572,7 +572,11 @@ sub assert_contains
                           . join(q{, }, map { "'$_'" } @{$haystack})
                           . q{)};
 
-    if (ref $needle eq '') {
+    if (not defined $needle) {
+        $needle_string = 'undef';
+        $actual_count = scalar grep { not defined $_ } @{$haystack};
+    }
+    elsif (ref $needle eq '') {
         $needle_string = "'$needle'";
         $actual_count = scalar grep { $needle eq $_ } @{$haystack};
     }
