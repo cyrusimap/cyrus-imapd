@@ -72,13 +72,15 @@ sub _skip_version
 {
     my ($str) = @_;
 
-    return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
+    return if not $str =~ m/^(min|max)_(other_)?version_([\d_]+)$/;
     my $minmax = $1;
+    my $installation = ($2 ? 'other' : 'default');
     my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
-        = map { 0 + $_ } split /_/, $2;
+        = map { 0 + $_ } split /_/, $3;
     return if not defined $lim_major;
 
-    my ($major, $minor, $revision, $commits) = Cassandane::Instance->get_version();
+    my ($major, $minor, $revision, $commits)
+        = Cassandane::Instance->get_version($installation);
 
     if ($minmax eq 'min') {
         return 1 if $major < $lim_major; # too old, skip!
@@ -151,7 +153,7 @@ sub filter
             my $sub = $self->can($self->{_name});
             return if not defined $sub;
             foreach my $attr (attributes::get($sub)) {
-                next if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
+                next if $attr !~ m/^(?:min|max)_(?:other_)?version_[\d_]+$/;
                 return 1 if _skip_version($attr);
             }
             return;
