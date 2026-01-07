@@ -3,8 +3,17 @@
 .. _upgrade:
 
 =================
-Upgrading to 3.12
+Upgrading to 3.13
 =================
+
+.. warning::
+   Cyrus IMAP v3.13, like any odd-middle-numbered version, is a **developer
+   snapshot** and is not meant to be trusted as a stable release for production
+   deployment.
+
+   The rest of this document is old news: it describes the *general* upgrade
+   procedure, and largely in terms of upgrading from 3.10 to 3.12.  Future
+   versions of this document may describe the upgrade from 3.12 to 3.13.
 
 .. note::
 
