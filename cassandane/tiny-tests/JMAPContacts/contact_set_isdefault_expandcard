@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_contact_set_isdefault_expandcard ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $contact = {
+        firstName => "first",
+        lastName => "last",
+        emails => [{
+            type => 'work',
+            value => 'first@example.com',
+        },{
+            type => 'work',
+            value => 'second@example.com',
+            isDefault => JSON::true,
+        }],
+    };
+
+    my $res = $jmap->CallMethods([['Contact/set', {
+        create => { "1" => $contact }
+    }, "R1"]]);
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    my $expanded = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => "$id"
+    });
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            cassandane => {
+                $id => 'second@example.com',
+            },
+        }),
+        $expanded->{payload},
+    );
+
+    # Now swap first to isDefault
+    $res = $jmap->CallMethods([['Contact/set', {
+        update => {
+            $id => {
+                emails => [{
+                    type => 'work',
+                    value => 'first@example.com',
+                    isDefault => JSON::true,
+                },{
+                    type => 'work',
+                    value => 'second@example.com',
+                }],
+            },
+        },
+    }, "R1"]]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => {
+                $id => ignore(),
+            },
+        }),
+        $res->[0][1],
+    );
+
+    $expanded = $self->dblookup('/dblookup/expandcard' => {
+        User => 'cassandane',
+        Key => "$id"
+    });
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            cassandane => {
+                $id => 'first@example.com',
+            },
+        }),
+        $expanded->{payload},
+    );
+}

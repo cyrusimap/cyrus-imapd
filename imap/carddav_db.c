@@ -1482,10 +1482,21 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
             else if ((param =
                       vcardproperty_get_first_parameter(prop,
                                                         VCARD_TYPE_PARAMETER))) {
-                vcardenumarray *types = vcardparameter_get_type(param);
                 vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
-                if (vcardenumarray_find(types, &pref) < vcardenumarray_size(types))
-                    prefVal = 1;
+
+                do {
+                    vcardenumarray *types = vcardparameter_get_type(param);
+                    ssize_t i = vcardenumarray_find(types, &pref);
+
+                    if (i >= 0 && (size_t) i < vcardenumarray_size(types)) {
+                        prefVal = 1;
+                        break;
+                    }
+
+                    param =
+                        vcardproperty_get_next_parameter(prop,
+                                                         VCARD_TYPE_PARAMETER);
+                } while (param);
             }
             /* Track preferred address */
             if (prefVal && prefVal < minPrefValue) {
