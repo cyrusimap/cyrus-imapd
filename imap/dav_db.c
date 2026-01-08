@@ -101,7 +101,8 @@
     " ispref INTEGER NOT NULL DEFAULT 0,"                               \
     " ispinned INTEGER NOT NULL DEFAULT 0,"                             \
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );"
+    "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_objs ON vcard_emails ( objid );"
 
 #define CMD_CREATE_GR                                                   \
     "CREATE TABLE IF NOT EXISTS vcard_groups ("                         \
@@ -250,6 +251,9 @@
     "DROP TABLE vcard_jmapcache;" \
     CMD_CREATE_JSCARDCACHE
 
+#define CMD_DBUPGRADEv17                                                \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_objs ON vcard_emails ( objid );"
+
 static int sievedb_upgrade(sqldb_t *db);
 
 static const struct sqldb_upgrade davdb_upgrade[] = {
@@ -268,10 +272,11 @@ static const struct sqldb_upgrade davdb_upgrade[] = {
   { 14, CMD_DBUPGRADEv14, &sievedb_upgrade },
   { 15, CMD_DBUPGRADEv15, NULL },
   { 16, CMD_DBUPGRADEv16, NULL },
+  { 17, CMD_DBUPGRADEv17, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 16
+#define DB_VERSION 17
 
 static sqldb_t *reconstruct_db;
 
