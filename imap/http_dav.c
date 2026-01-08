@@ -2334,14 +2334,7 @@ int propfind_owner(const xmlChar *name, xmlNsPtr ns,
 
     mbname = mbname_from_intname(fctx->mbentry->name);
     owner = mbname_userid(mbname);
-    if (!owner) {
-        static strarray_t *admins = NULL;
-
-        if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
-                                             NULL, STRARRAY_TRIM);
-
-        owner = strarray_nth(admins, 0);
-    }
+    if (!owner) owner = strarray_nth(config_admins, 0);
 
     r = propfind_principalurl(name, ns, fctx,
                               prop, resp, propstat, (void *) owner);

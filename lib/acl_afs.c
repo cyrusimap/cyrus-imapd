@@ -205,15 +205,11 @@ EXPORTED int cyrus_acl_remove(char **acl, const char *identifier,
 
 EXPORTED int is_system_user(const char *userid)
 {
-    static strarray_t *admins = NULL;
-
-    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, STRARRAY_TRIM);
-
     if (*userid == '-') userid++;
 
     if (!strcmp(userid, "anyone")) return 1;
     if (!strcmp(userid, "anonymous")) return 1;
-    if (strarray_contains(admins, userid)) return 1;
+    if (strarray_contains(config_admins, userid)) return 1;
 
     return 0;
 }

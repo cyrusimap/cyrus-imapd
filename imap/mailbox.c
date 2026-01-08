@@ -1179,8 +1179,6 @@ EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
     const char *aclstr = mailbox_acl(mailbox);
     const char *p, *q;
     strarray_t users = STRARRAY_INITIALIZER;
-    static strarray_t *admins = NULL;
-    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
 
     p = aclstr;
 
@@ -1206,7 +1204,7 @@ EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
         // not admin or special name
         if (strcmp(name, "anyone")) goto done;
         if (strcmp(name, "anonymous")) goto done;
-        if (strarray_contains(admins, name)) goto done;
+        if (strarray_contains(config_admins, name)) goto done;
         // OK, this belongs
         if (strncmp(name, "group:", 6)) {
             strarray_appendm(&users, name);
