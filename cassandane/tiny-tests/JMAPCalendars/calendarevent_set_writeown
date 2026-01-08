@@ -162,6 +162,6 @@ sub test_calendarevent_set_writeown
     ]);
     $self->assert_str_equals('forbidden',
         $res->[0][1]{notDestroyed}{$eventCassOwner}{type});
-    $self->assert(grep /$eventShareeOwner/, @{$res->[0][1]{destroyed}});
-    $self->assert(grep /$eventNoOwner/, @{$res->[0][1]{destroyed}});
+    $self->assert_contains(qr/$eventShareeOwner/, $res->[0][1]{destroyed});
+    $self->assert_contains(qr/$eventNoOwner/, $res->[0][1]{destroyed});
 }

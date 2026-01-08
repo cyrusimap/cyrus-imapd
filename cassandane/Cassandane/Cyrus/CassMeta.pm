@@ -98,9 +98,7 @@ sub test_cyrusdb_default_backends
 
                 # expect it to be set, and to a known backend
                 $self->assert_not_null($backend);
-                # XXX use assert_contains()
-                $self->assert_num_equals(1, scalar grep { $backend eq $_ }
-                                                        @regular_backends);
+                $self->assert_contains($backend, \@regular_backends);
             }
 
             while (my ($database, $expect_backend) = each %irregular_databases) {

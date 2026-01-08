@@ -52,8 +52,9 @@ sub test_cyr_expire_delete_findpaths_legacy
     close(FH);
 
     xlog $self, "DELETED files exists";
-    $self->assert(scalar grep { m{/DELETED/} } @files);
+    $self->assert_contains(qr{/DELETED/}, \@files);
     xlog $self, "no non-deleted paths";
+    # n.b. tricky double-negative!
     $self->assert(not scalar grep { not m{/DELETED/} } @files);
 
     xlog $self, "Run cyr_expire -D now.";
@@ -64,7 +65,7 @@ sub test_cyr_expire_delete_findpaths_legacy
     close(FH);
 
     xlog $self, "no DELETED files exists";
-    $self->assert(not scalar grep { m{/DELETED/} } @files);
+    $self->assert_not_contains(qr{/DELETED/}, \@files);
     xlog $self, "no non-deleted paths";
-    $self->assert(not scalar grep { not m{/DELETED/} } @files);
+    $self->assert_not_contains(qr{/DELETED/}, \@files);
 }

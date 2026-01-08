@@ -200,9 +200,9 @@ sub test_list_specialuse
         # only want specialuse folders
         $self->assert(exists $specialuse{$name});
         # must be flagged with appropriate flag
-        $self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+        $self->assert_contains("\\$name", $flags, 1);
         # must be flagged with \subscribed
-        $self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
+        $self->assert_contains('\\Subscribed', $flags, 1);
     }
 
     # make sure no expected responses were missing
@@ -262,7 +262,7 @@ sub test_list_subscribed
         # only want subscribed folders
         $self->assert(exists $subscribed{$name});
         # must be flagged with \subscribed
-        $self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
+        $self->assert_contains('\\Subscribed', $flags, 1);
     }
 
     # make sure no expected responses were missing
@@ -323,7 +323,7 @@ sub test_xlist
         if ($name eq 'INBOX') {
             $found{$name} = 1;
             # must be flagged with \Inbox
-            $self->assert_equals(1, scalar grep { $_ eq '\\Inbox' } @{$flags});
+            $self->assert_contains('\\Inbox', $flags, 1);
         }
         else {
             # carve out the interesting part of the name
@@ -333,11 +333,11 @@ sub test_xlist
             $self->assert(exists $specialuse{$name} or exists $other{$name});
             if (exists $specialuse{$name}) {
                 # must be flagged with appropriate flag
-                $self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+                $self->assert_contains("\\$name", $flags, 1);
             }
             else {
                 # must not be flagged with name-based flag
-                $self->assert_equals(0, scalar grep { $_ eq "\\$name" } @{$flags});
+                $self->assert_not_contains("\\$name", $flags);
             }
         }
     }

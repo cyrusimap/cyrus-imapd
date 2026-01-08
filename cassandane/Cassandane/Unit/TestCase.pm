@@ -552,6 +552,65 @@ sub assert_cmp_deeply
     return $self->assert(0, $diag);
 }
 
+sub assert_contains
+{
+    my ($self, $needle, $haystack, $expect_count) = @_;
+
+    my $actual_count = 0;
+
+    if (not defined $haystack) {
+        $self->assert($expect_count == 0,
+                      "needle '$needle' not found in undef haystack");
+        return;
+    }
+
+    die 'haystack is not an ARRAY reference: '
+        if ref $haystack ne 'ARRAY';
+
+    my $needle_string;
+    my $haystack_string = q{(}
+                          . join(q{, }, map { "'$_'" } @{$haystack})
+                          . q{)};
+
+    if (not defined $needle) {
+        $needle_string = 'undef';
+        $actual_count = scalar grep { not defined $_ } @{$haystack};
+    }
+    elsif (ref $needle eq '') {
+        $needle_string = "'$needle'";
+        $actual_count = scalar grep { $needle eq $_ } @{$haystack};
+    }
+    elsif (ref $needle eq 'CODE') {
+        $needle_string = 'needle()';
+        # count is how many elements the function returns true for
+        $actual_count = scalar grep { $needle->($_) } @{$haystack};
+    }
+    elsif (lc ref $needle eq 'regexp') { # may be REGEXP or Regexp
+        $needle_string = $needle;
+        $actual_count = scalar grep { m/$needle/ } @{$haystack};
+    }
+    else {
+        die 'needle is not a scalar, CODE reference, or REGEXP reference';
+    }
+
+    if (defined $expect_count) {
+        my $message = "expected $expect_count $needle_string"
+                      . " but got $actual_count in $haystack_string";
+        $self->assert($actual_count == $expect_count, $message);
+    }
+    else {
+        my $message = "$needle_string not found in $haystack_string";
+        $self->assert($actual_count > 0, $message);
+    }
+}
+
+sub assert_not_contains
+{
+    my ($self, $needle, $haystack) = @_;
+
+    $self->assert_contains($needle, $haystack, 0);
+}
+
 sub new_test_url
 {
     my ($self, $content_or_app) = @_;
