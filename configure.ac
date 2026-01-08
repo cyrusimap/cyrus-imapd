@@ -1577,6 +1577,11 @@ dnl
                 ],
                 with_icalvcard=no)
 
+        dnl vcardparser_set_xprop_value_kind will be new in libical 4.0
+        AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
+                AC_DEFINE(HAVE_LIBICALVCARD_XPROP_VALUE,[],
+                        [Do we have support for custom x-property value types?]))
+
 dnl  Don't bother checking for DKIM until iSchedule gains traction
 dnl        PKG_CHECK_MODULES([DKIM], [opendkim >= 2.7.0],
 dnl                AC_EGREP_HEADER(DKIM_CANON_ISCHEDULE, dkim.h,

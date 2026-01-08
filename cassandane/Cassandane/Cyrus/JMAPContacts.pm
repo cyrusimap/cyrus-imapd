@@ -96,6 +96,8 @@ sub set_up
     if ($buildinfo->get('dependency', 'icalvcard')) {
         $self->{jmap}->AddUsing('urn:ietf:params:jmap:contacts');
     }
+
+    $ENV{DEBUGDAV} = 1;
 }
 
 sub normalize_jscard

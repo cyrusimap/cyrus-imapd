@@ -1,0 +1,234 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_preserve_escaping
+    :needs_component_jmap :needs_dependency_icalvcard
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    # This test asserts that values containing special
+    # characters such as COMMA and SEMICOLON are handled
+    # differently by property type:
+    #
+    # For properties known to have TEXT values, unescaped
+    # special characters are escaped when the vCard is encoded.
+    #
+    # For extended properties (X-properties), unescaped
+    # special characters are kept as-is, as their type is unknown
+    # and escaping them might break structured value types.
+    #
+    # As an exception to this rule, the X-ABLabel property
+    # is known to contain TEXT values, so this property does
+    # get rewritten as TEXT during encoding.
+
+    # A verbatim vCard value containing special characters.
+    my $verbatim = 'a,b;c\\,d;e\\;f;g:h\'\\\\j';
+
+    # The verbatim value decoded as TEXT.
+    my $decoded = "a,b;c,d;e;f;g:h'\\j";
+
+    # The decoded value encoded as TEXT.
+    my $encoded = 'a\\,b\\;c\\,d\\;e\\;f\\;g:h\'\\\\j';
+
+    xlog $self, "PUT vCard with special characters";
+    my $card = ""
+    . "BEGIN:VCARD\r\n"
+    . "VERSION:3.0\r\n"
+    . "UID:ae2640cc-234a-4dd9-95cc-3106258445b9\r\n"
+    . "FN:$verbatim\r\n"
+    . "N:$verbatim\r\n"
+    . "X-SOCIALPROFILE:xsp-$verbatim\r\n"
+    . "group1.URL;PROP-ID=url:url-$verbatim\r\n"
+    . "group1.X-ABLabel:$verbatim\r\n"
+    . "END:VCARD\r\n";
+
+    $carddav->Request('PUT', 'Default/test.vcf',
+        $card, 'Content-Type' => 'text/vcard');
+
+    # Define a helper routine to map property names to values.
+    # We use this routine one rather than VCardFast, as we want the
+    # values exactly as they show up in the HTTP body, not how
+    # they are parsed into a Perl structure.
+    my $vcardValueByProp = sub ($vcard) {
+        my @ctlines = split(/\r\n/, $vcard);
+        my %propvals = map {
+            my ($k, $v) = split(/:/, $_, 2); $k = (split /;/, $k, 2)[0]; ($k, $v)
+        } @ctlines;
+        return \%propvals;
+    };
+
+    xlog $self, "GET and assert property values";
+    my $res = $carddav->Request('GET', 'Default/test.vcf');
+    $self->assert_cmp_deeply(
+        superhashof({
+            # N gets preserved as-is (really, as TEXT list).
+            N => $verbatim,
+            # X-property gets preserved as-is.
+            'X-SOCIALPROFILE' => "xsp-$verbatim",
+            # URI type gets preserved as-is.
+            'group1.URL' => "url-$verbatim",
+            # Known TEXT properties get encoded as TEXT value.
+            FN => $encoded,
+            'group1.X-ABLabel' => $encoded,
+        }),
+        $vcardValueByProp->($res->{content})
+    );
+
+    xlog $self, "Assert JSContact Card property values";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { }, 'R1']
+    ]);
+    my $cardId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($cardId);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => {
+              full => $decoded,
+              components => [
+                {
+                  kind => "surname",
+                  value => "a"
+                },
+                {
+                  kind => "surname",
+                  value => "b"
+                },
+                {
+                  kind => "given",
+                  value => "c,d"
+                },
+                {
+                  kind => "given2",
+                  value => "e;f"
+                },
+                {
+                  kind => "title",
+                  value => "g:h'\\j"
+                }
+              ]
+            },
+            links => {
+              url => {
+                uri => "url-$verbatim",
+                label => $decoded,
+              }
+            },
+        }),
+        $res->[0][1]{list}[0]
+    );
+
+    # This asserts that old JMAP Contact values are displayed
+    # the same as before the libicalvcard change. This does not
+    # mean that they were displayed correctly, it just demonstrates
+    # that the libicalvcard change does not impact the old JMAP API.
+    xlog $self, "Assert old JMAP API property values";
+    $res = $jmap->CallMethods([
+        ['Contact/get', { }, 'R1']
+    ]);
+    my $contactId = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($contactId);
+    $self->assert_cmp_deeply(
+        superhashof({
+            lastName => "a,b",
+            firstName => "c,d e;f",
+            prefix => "g:h'\\j",
+            online => [
+              {
+                type => "uri",
+                label => $decoded,
+                value => "url-$decoded",
+              }
+            ],
+        }),
+        $res->[0][1]{list}[0]
+    );
+
+    xlog $self, "Update JSContact Card to rewrite vCard";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $cardId => {
+                    nicknames => { nick1 => { name => 'test' } }
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$cardId});
+
+    xlog $self, "GET and assert property values";
+    $res = $carddav->Request('GET', 'Default/test.vcf');
+    $self->assert_cmp_deeply(
+        superhashof({
+            N => $verbatim . ";;;", # N gets extended with RFC 9554 definitions
+            FN => $encoded,
+            'X-SOCIALPROFILE' => "xsp-$verbatim",
+            'url0.URL' => "url-$verbatim",
+            'url0.X-ABLabel' => $encoded,
+        }),
+        $vcardValueByProp->($res->{content})
+    );
+
+    xlog $self, "Assert JSContact Card property values";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { }, 'R1']
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => {
+              full => $decoded,
+              components => [
+                {
+                  kind => "surname",
+                  value => "a"
+                },
+                {
+                  kind => "surname",
+                  value => "b"
+                },
+                {
+                  kind => "given",
+                  value => "c,d"
+                },
+                {
+                  kind => "given2",
+                  value => "e;f"
+                },
+                {
+                  kind => "title",
+                  value => "g:h'\\j"
+                }
+              ]
+            },
+            links => {
+              url => {
+                uri => "url-$verbatim",
+                label => $decoded,
+              }
+            },
+        }),
+        $res->[0][1]{list}[0]
+    );
+
+    xlog $self, "Assert old JMAP API property values";
+    $res = $jmap->CallMethods([
+        ['Contact/get', { }, 'R1']
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            lastName => "a,b",
+            firstName => "c,d e;f",
+            prefix => "g:h'\\j",
+            online => [
+              {
+                type => "uri",
+                label => $decoded,
+                value => "url-$decoded",
+              }
+            ],
+        }),
+        $res->[0][1]{list}[0]
+    );
+}

@@ -32,6 +32,13 @@
 
 static int initialized = 0;
 
+#ifdef HAVE_LIBICALVCARD_XPROP_VALUE
+static vcardvalue_kind vcard_xprop_value_func(const char *name, void *data __attribute__((unused)))
+{
+    return !strcasecmp(name, "X-ABLabel") ? VCARD_TEXT_VALUE : VCARD_X_VALUE;
+}
+#endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
+
 EXPORTED void ical_support_init(void)
 {
     if (initialized) return;
@@ -70,6 +77,11 @@ EXPORTED void ical_support_init(void)
 
     syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
                        __func__, timezones->num_elements);
+
+#ifdef HAVE_LIBICALVCARD_XPROP_VALUE
+    /* Initialize libicalvcard extended property values */
+    vcardparser_set_xprop_value_kind(vcard_xprop_value_func, NULL);
+#endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
 
     initialized = 1;
 }
