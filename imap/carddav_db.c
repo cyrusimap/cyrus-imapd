@@ -618,23 +618,21 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb,
 #define GETEMAILS \
     "SELECT DISTINCT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO" \
-    " WHERE E.objid = CO.rowid AND CO.alive = 1" \
-    " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
-    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
+    " WHERE E.objid = CO.rowid AND CO.alive = 1"
 
 #define GETCARD_EXISTS \
     "SELECT kind " \
-    " FROM vcard_objs" \
+    " FROM vcard_objs CO" \
     " WHERE (:kind = 255 OR kind = :kind)"              \
-    " AND vcard_uid = :vcard_uid AND alive = 1"         \
-    " AND (:mailbox IS NULL OR mailbox = :mailbox);"
+    " AND vcard_uid = :vcard_uid AND alive = 1"
 
 #define GETGROUP_MEMBERS                                  \
     "SELECT DISTINCT G.member_uid FROM vcard_groups G"    \
     " JOIN vcard_objs CO"                                 \
-    " WHERE G.objid = CO.rowid AND CO.alive = 1"          \
-    " AND (:vcard_uid = '' OR CO.vcard_uid = :vcard_uid)" \
-    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox);"
+    " WHERE G.objid = CO.rowid AND CO.alive = 1"
+
+#define FILTER_VCARD_UID  " AND CO.vcard_uid = :vcard_uid"
+#define FILTER_MAILBOX    " AND CO.mailbox = :mailbox"
 
 static int cardexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -675,22 +673,31 @@ static int _getemails(struct carddav_db *carddavdb,
         { ":kind",         SQLITE_INTEGER, { .i = kind } },
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
+    struct buf stmt = BUF_INITIALIZER;
 
     int this_kind = -1;
 
     if (*vcard_uid) {
         // first check that the card exists by fetching it's kind
-        int r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
-                       &cardexists_cb, &this_kind);
+        buf_setcstr(&stmt, GETCARD_EXISTS);
+        if (mailbox) buf_appendcstr(&stmt, FILTER_MAILBOX);
+        buf_putc(&stmt, ';');
 
-        if (r || this_kind < 0) return 0;
+        int r = sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval,
+                           &cardexists_cb, &this_kind);
+
+        if (r || this_kind < 0) {
+            buf_free(&stmt);
+            return 0;
+        }
 
         found = 1;
     }
 
     // get emails in the card(s) itself
-    struct buf stmt = BUF_INITIALIZER;
     buf_setcstr(&stmt, GETEMAILS);
+    if (*vcard_uid) buf_appendcstr(&stmt, FILTER_VCARD_UID);
+    if (mailbox) buf_appendcstr(&stmt, FILTER_MAILBOX);
     if (sort) buf_appendcstr(&stmt, sort);
     buf_putc(&stmt, ';');
 
@@ -734,21 +741,37 @@ EXPORTED int carddav_getmembers(struct carddav_db *carddavdb,
         { ":kind",         SQLITE_INTEGER, { .i = CARDDAV_KIND_GROUP } },
         { NULL,            SQLITE_NULL,    { .s = NULL               } }
     };
+    struct buf stmt = BUF_INITIALIZER;
 
     int this_kind = -1;
 
     if (!*vcard_uid) return 0;
 
     // first check that the card exists by fetching it's kind
-    int r = sqldb_exec(carddavdb->db, GETCARD_EXISTS, bval,
+    buf_setcstr(&stmt, GETCARD_EXISTS);
+    if (mailbox) buf_appendcstr(&stmt, FILTER_MAILBOX);
+    buf_putc(&stmt, ';');
+
+    int r = sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval,
                        &cardexists_cb, &this_kind);
 
-    if (r || this_kind < 0) return 0;
+    if (r || this_kind < 0) {
+        buf_free(&stmt);
+        return 0;
+    }
 
     // get group members
     if (!*group_uids) *group_uids = strarray_new();
-    sqldb_exec(carddavdb->db, GETGROUP_MEMBERS, bval,
+
+    buf_setcstr(&stmt, GETGROUP_MEMBERS);
+    buf_appendcstr(&stmt, FILTER_VCARD_UID);
+    if (mailbox) buf_appendcstr(&stmt, FILTER_MAILBOX);
+    buf_putc(&stmt, ';');
+
+    sqldb_exec(carddavdb->db, buf_cstring(&stmt), bval,
                &appendarray_cb, *group_uids);
+
+    buf_free(&stmt);
 
     return 1;
 }
