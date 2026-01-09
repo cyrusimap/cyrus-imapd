@@ -696,6 +696,7 @@ sub test_downgrade_upgrade
 sub test_upgrade_v19_to_v20
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :Replication
     :NoStartInstances
+    :min_version_3_13 :min_other_version_3_13
 {
     my ($self) = @_;
 
