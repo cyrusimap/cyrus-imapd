@@ -10,8 +10,8 @@ served.
 :version: 0.1
 :author: Nicola Nye <nicola@fastmailteam.com>
 
-:copyright: Copyright 2007-2016 by the Cyrus team.
-:license: BSD, see LICENSE for details.
+:copyright: Copyright Carnegie Mellon University.
+:license: BSD-3-Clause-CMU, see COPYING for details.
 """
 
 import os

@@ -1,7 +1,3 @@
-/* com_err.h */
-/* SPDX-License-Identifier: BSD-3-Clause-CMU */
-/* See COPYING file at the root of the distribution for more details. */
-
 /*
  * Header file for common error description library.
  *
