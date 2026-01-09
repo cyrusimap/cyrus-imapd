@@ -1075,7 +1075,8 @@ havefile:
     r = mailbox_copyfile_fdptr(linkfile ? linkfile : stagefile, fname, nolink, fdptr);
     if (r) goto out;
 
-    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
+    if (!as->no_annotator &&
+        config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
         (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
         if (flags)
             newflags = strarray_dup(flags);
