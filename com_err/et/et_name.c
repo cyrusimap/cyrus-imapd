@@ -1,7 +1,3 @@
-/* et_name.c */
-/* SPDX-License-Identifier: BSD-3-Clause-CMU */
-/* See COPYING file at the root of the distribution for more details. */
-
 #include "error_table.h"
 #include "mit-sipb-copyright.h"
 #include "internal.h"

@@ -1,6 +1,9 @@
-/* error_table.h */
-/* SPDX-License-Identifier: BSD-3-Clause-CMU */
-/* See COPYING file at the root of the distribution for more details. */
+/*
+ * Copyright 1988 by the Student Information Processing Board of the
+ * Massachusetts Institute of Technology.
+ *
+ * For copyright info, see mit-sipb-copyright.h.
+ */
 
 #ifndef _ET_H
 
