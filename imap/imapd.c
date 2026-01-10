@@ -7565,10 +7565,74 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     mbname_free(&mbname);
 }
 
+static void add_renamed_mbox_sharees(hash_table *sharedmboxes_by_username,
+                                     const mbentry_t *mbentry,
+                                     const char *newmailboxname,
+                                     const char *olduser)
+{
+    strarray_t *aclusers = strarray_split(mbentry->acl, "\t", 0);
+    int need_rights = ACL_LOOKUP | ACL_READ;
+
+    for (int i = 0; i + 1 < strarray_size(aclusers); i += 2) {
+        const char *acluser = strarray_nth(aclusers, i);
+        int have_rights = 0;
+
+        /* Is this mailbox shared to a regular user? */
+        cyrus_acl_strtomask(strarray_nth(aclusers, i+1), &have_rights);
+        if ((have_rights & need_rights) != need_rights) continue;
+        if (!strcmpsafe(olduser, acluser)) continue;
+        if (is_system_user(acluser)) continue;
+
+        /* Add oldname, newname tuple to array for this sharee */
+        strarray_t *mboxes = hash_lookup(acluser, sharedmboxes_by_username);
+        if (!mboxes) {
+            mboxes = strarray_new();
+            hash_insert(acluser, mboxes, sharedmboxes_by_username);
+        }
+        strarray_append(mboxes, mbentry->name);
+        strarray_append(mboxes, newmailboxname);
+    }
+
+    strarray_free(aclusers);
+}
+
+static void rename_subs(const char *userid, void *data,
+                        void *rock __attribute__((unused)))
+{
+    strarray_t *subs = mboxlist_sublist(userid);
+    strarray_t *renames = data;
+    int i, start = 0;
+
+    for (i = 0; i + 1 < strarray_size(renames); i += 2) {
+        const char *oldname = strarray_nth(renames, i);
+        const char *newname = strarray_nth(renames, i+1);
+
+        /* Are we currently subsscribed to a renamed mailbox? */
+        int n = strarray_find(subs, oldname, start);
+
+        if (n >= 0) {
+            /* Subscribe the newname and unsubscribe the oldname */
+            int r = mboxlist_changesub(newname, userid, NULL, 1/*add*/,
+                                       1/*force*/, 1/*notify*/, 0/*silent*/);
+            if (!r) {
+                mboxlist_changesub(oldname, userid, NULL, 0/*add*/,
+                                   1/*force*/, 1/*notify*/, 0/*silent*/);
+            }
+
+            /* Skip over this oldname when searching for next */
+            start = n+1;
+        }
+    }
+
+    strarray_free(renames);
+    strarray_free(subs);
+}
+
 struct renrock
 {
     const char *tag;
     const struct namespace *namespace;
+    hash_table *sharedmboxes_by_username;
     int ol;
     int nl;
     int rename_user;
@@ -7657,6 +7721,10 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
                            text->olduser, text->newuser);
         }
 
+        /* Add sharees of this renamed mailbox to our hash */
+        add_renamed_mbox_sharees(text->sharedmboxes_by_username,
+                                 mbentry, text->newmailboxname, text->olduser);
+
         // non-standard output item, but it helps give progress
         if (text->noisy) {
             prot_printf(imapd_out,
@@ -7718,6 +7786,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
         "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
     };
+    hash_table sharedmboxes_by_username = HASH_TABLE_INITIALIZER;
 
     if (location && !imapd_userisadmin) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
@@ -8053,6 +8122,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         struct mboxevent *mboxevent = NULL;
         uint32_t uidvalidity = mbentry ? mbentry->uidvalidity : 0;
 
+        construct_hash_table(&sharedmboxes_by_username, 64, 0);
+
         /* don't send rename notification if we only change the partition */
         if (strcmp(oldmailboxname, newmailboxname))
             mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
@@ -8079,6 +8150,12 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
                                    0, 0, rename_user, /*keep_intermediaries*/1,
                                    0, /*silent*/rename_user);
 
+        if (!r) {
+            /* Add sharees of this renamed mailbox to our hash */
+            add_renamed_mbox_sharees(&sharedmboxes_by_username,
+                                     mbentry, newmailboxname, olduser);
+        }
+        
         /* it's OK to not exist if there are subfolders */
         if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
            mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
@@ -8128,6 +8205,7 @@ submboxes:
         /* setup the rock */
         rock.tag = tag;
         rock.namespace = &imapd_namespace;
+        rock.sharedmboxes_by_username = &sharedmboxes_by_username;
         rock.newmailboxname = newmailboxname;
         rock.ol = omlen + 1;
         rock.nl = nmlen + 1;
@@ -8151,6 +8229,10 @@ submboxes:
     /* take care of intermediaries */
     mboxlist_update_intermediaries(oldmailboxname, mbtype);
     mboxlist_update_intermediaries(newmailboxname, mbtype);
+
+    /* take care of renaming subscriptions to shared mailboxes */
+    hash_enumerate(&sharedmboxes_by_username, &rename_subs, NULL);
+    free_hash_table(&sharedmboxes_by_username, NULL);
 
 respond:
 

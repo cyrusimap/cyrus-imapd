@@ -1174,7 +1174,6 @@ static int mboxlist_update_raclmodseq_wrapper(const char *acluser,
 static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
                                 const mbentry_t *newmbentry, struct txn **txn, int silent)
 {
-    static strarray_t *admins = NULL;
     struct buf buf = BUF_INITIALIZER;
     strarray_t *oldusers = NULL;
     strarray_t *newusers = NULL;
@@ -1185,8 +1184,6 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     mbname_t *mbname = mbname_from_dbname(dbname);
     char *userid = xstrdupnull(mbname_userid(mbname));
     mbname_free(&mbname);
-
-    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
 
     if (oldmbentry && !(oldmbentry->mbtype & MBTYPE_DELETED))
         oldusers = strarray_split(oldmbentry->acl, "\t", 0);
@@ -1199,7 +1196,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             const char *acluser = strarray_nth(oldusers, i);
             if (!strpbrk(strarray_nth(oldusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
-            if (strarray_contains(admins, acluser)) continue;
+            if (strarray_contains(config_admins, acluser)) continue;
             if (user_can_read(newusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
@@ -1213,7 +1210,7 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
             const char *acluser = strarray_nth(newusers, i);
             if (!strpbrk(strarray_nth(newusers, i+1), "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
-            if (strarray_contains(admins, acluser)) continue;
+            if (strarray_contains(config_admins, acluser)) continue;
             if (user_can_read(oldusers, acluser)) continue;
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);

@@ -55,6 +55,7 @@ EXPORTED toggle_debug_cb config_toggle_debug_cb = NULL;
 EXPORTED int config_debug_slowio = 0;
 EXPORTED int config_fatals_abort = 0;
 EXPORTED const char *config_zoneinfo_dir = NULL;
+EXPORTED strarray_t *config_admins = NULL;
 
 static int config_loaded;
 
@@ -614,6 +615,8 @@ EXPORTED void config_reset(void)
     config_debug_slowio = 0;
     config_fatals_abort = 0;
     config_zoneinfo_dir = NULL;
+    strarray_free(config_admins);
+    config_admins = NULL;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -856,6 +859,9 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     if (!config_zoneinfo_dir)
         config_zoneinfo_dir = DEFAULT_ZONEINFO_DIR;
 #endif
+
+    config_admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
+                                   NULL, STRARRAY_TRIM);
 }
 
 #define GROWSIZE 4096
