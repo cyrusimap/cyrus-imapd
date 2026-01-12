@@ -4,11 +4,13 @@
 use ExtUtils::MakeMaker;
 use Config;
 
-my $LIB_SASL = "@LIB_SASL@" || "-lsasl2";
-
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 $libs = "-lcyrus";
+
+my $build = do './build.cfg' || die "build.cfg $!";
+
+my $LIB_SASL = $build->{LIB_SASL} || '-lsasl2';
 
 # override default xs.c rule with a VPATH-aware version
 sub MY::xs_c
@@ -29,12 +31,12 @@ sub MY::xs_o
 
 sub MY::postamble
 {
-    return <<'EOT';
+    return <<"EOT";
 
-VPATH=@top_srcdir@/perl/imap
+VPATH=$build->{top_srcdir}/perl/imap
 
 cyradm: cyradm.sh
-	@PERL_PREINSTALL@ < $< > $@
+	$build->{PERL_PREINSTALL} < \$< > \$\@
 
 check:
 
@@ -48,17 +50,17 @@ EOT
 WriteMakefile(
     'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
-    'VERSION_FROM' => "@top_srcdir@/perl/imap/IMAP.pm", # finds $VERSION
+    'VERSION_FROM' => "$build->{top_srcdir}/perl/imap/IMAP.pm", # finds $VERSION
     'macro'	=> {
 		    'IMCLIENT_LIBS' => '',	# hack
 		},
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
-    'LD'       => $Config{ld} . ' @GCOV_LDFLAGS@',
+    'LD'       => $Config{ld} . " $build->{GCOV_LDFLAGS}",
     'OBJECT'    => 'IMAP.o',
-    'MYEXTLIB'  => '@top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
-    'LIBS'	=> [ "$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @GCOV_LIBS@"],
+    'MYEXTLIB'  => "$build->{top_builddir}/perl/.libs/libcyrus.a $build->{top_builddir}/perl/.libs/libcyrus_min.a",
+    'LIBS'	=> [ "$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{GCOV_LIBS}"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
-    'INC'	=> "-I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CFLAGS@ @GCOV_CFLAGS@ -I@top_srcdir@/perl/imap",
+    'INC'	=> "-I$build->{top_srcdir} -I$build->{top_srcdir}/com_err/et $build->{SASLFLAGS} $build->{SSL_CFLAGS} $build->{GCOV_CFLAGS} -I$build->{top_srcdir}/perl/imap",
     'EXE_FILES' => [cyradm],
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
