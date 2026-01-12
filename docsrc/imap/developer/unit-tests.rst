@@ -41,7 +41,7 @@ This section takes you through the process of running Cyrus' unit tests.
 Cyrus' unit tests are all located in a new directory,
 ``cyrus-imapd/cunit/``. They're written in C, like the remainder of
 Cyrus, and use the `CUnit library from
-SourceForge <http://cunit.sourceforge.net/>`__, with some home grown
+SourceForge <https://cunit.sourceforge.net/>`__, with some home grown
 wrappers and other improvements to make our lives easier.
 
 Your first step is step is to ensure that the CUnit library (including
