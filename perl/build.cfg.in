@@ -1,0 +1,24 @@
+# build.cfg: glue layer for passing autotools details to MakeMaker
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+{
+    top_builddir => '@top_builddir@',
+    top_srcdir => '@top_srcdir@',
+
+    GCOV_CFLAGS => '@GCOV_CFLAGS@',
+    GCOV_LDFLAGS => '@GCOV_LDFLAGS@',
+    GCOV_LIBS => '@GCOV_LIBS@',
+    ICU_LIBS => '@ICU_LIBS@',
+    LIB_REGEX => '@LIB_REGEX@',
+    LIB_SASL => '@LIB_SASL@',
+    LIB_UUID => '@LIB_UUID@',
+    MYSQL_LIBADD => '@MYSQL_LIBADD@',
+    PERL_PREINSTALL => '@PERL_PREINSTALL@',
+    PGSQL_LIBADD => '@PGSQL_LIBADD@',
+    SASLFLAGS => '@SASLFLAGS@',
+    SQLITE_LIBADD => '@SQLITE_LIBADD@',
+    SSL_CFLAGS => '@SSL_CFLAGS@',
+    SSL_LIBS => '@SSL_LIBS@',
+    ZLIB => '@ZLIB@',
+};
+# vim: set ft=perl :
