@@ -4,10 +4,12 @@
 use ExtUtils::MakeMaker;
 use Config;
 
+my $build = do './build.cfg' || die "build.cfg: $!";
+
 WriteMakefile(
     'NAME'	=> 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
-    'VERSION_FROM' => "@top_srcdir@/perl/annotator/Daemon.pm", # finds $VERSION
+    'VERSION_FROM' => "$build->{top_srcdir}/perl/annotator/Daemon.pm", # finds $VERSION
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.
@@ -15,9 +17,9 @@ WriteMakefile(
 );
 
 sub MY::postamble {
-    return <<'EOT';
+    return <<"EOT";
 
-VPATH=@top_srcdir@/perl/annotator
+VPATH=$build->{top_srcdir}/perl/annotator
 
 check:
 
