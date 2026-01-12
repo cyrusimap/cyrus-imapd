@@ -1,9 +1,5 @@
 .. _imap-developer-unit-tests:
 
-..  Note: This document was converted from the original by Nic Bernstein
-    (Onlight).  Any formatting mistakes are my fault and not the
-    original author's.
-
 Unit Tests
 ==========
 
@@ -11,65 +7,35 @@ Table of Contents
 -----------------
 
 -  `1. Introduction <#introduction>`__
--  `2. What Is A Unit Test? <#what-is-a-unit-test>`__
--  `3. Running The Tests <#running-the-tests>`__
+-  `2. Running The Tests <#running-the-tests>`__
 
-   -  `3.1. Setting Up The Machine <#setting-up-the-machine>`__
-   -  `3.2 Configure Script <#configure-scripts>`__
-   -  `3.3 Make <#make>`__
-   -  `3.4 Using Valgrind <#using-valgrind>`__
-   -  `3.5 The Tests Are Failing <#the-tests-are-failing>`__
-   -  `3.6 Debugging A Test <#debugging-a-test>`__
+   -  `2.1. Setting Up The Machine <#setting-up-the-machine>`__
+   -  `2.2 Configure Script <#configure-scripts>`__
+   -  `2.3 Make <#make>`__
+   -  `2.4 Using Valgrind <#using-valgrind>`__
+   -  `2.5 The Tests Are Failing <#the-tests-are-failing>`__
+   -  `2.6 Debugging A Test <#debugging-a-test>`__
 
--  `4. Adding Your Own Tests <#adding-your-own-tests>`__
+-  `3. Adding Your Own Tests <#adding-your-own-tests>`__
 
-   -  `4.1 Where To Put Your Tests <#where-to-put-your-tests>`__
-   -  `4.2 Adding A New Suite <#adding-a-new-suite>`__
-   -  `4.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
-   -  `4.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
+   -  `3.1 Where To Put Your Tests <#where-to-put-your-tests>`__
+   -  `3.2 Adding A New Suite <#adding-a-new-suite>`__
+   -  `3.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
+   -  `3.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
 
 1. Introduction
 ---------------
 
-Recently, a set of regression unit tests has been added to Cyrus. This
-document explains the purpose implementation of those unit tests, and
-gives an example of how to add more unit tests (because there are never
-enough unit tests!).
+Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
+primarily *unit testing*.  The other is written in Perl, using Test::Unit, and
+is primarily *integration testing*.  This page covers the CUnit test suite.
 
-2. What Is A Unit Test?
------------------------
-
-The `definition on Wikipedia <http://en.wikipedia.org/wiki/Unit_test>`__
-sheds some light:
-
-    ...\ **unit testing** is a method by which individual units of
-    source code are tested to determine if they are fit for use. A unit
-    is the smallest testable part of an application.
-
-In other words, unit testing is about verifying that small pieces of
-code, like individual functions, modules, or classes, work in isolation.
-It is **not** about testing the system as a whole.
-
-The tests implemented here are also **regression tests**, which in
-`Wikipedia's words <http://en.wikipedia.org/wiki/Regression_testing>`__
-means:
-
-    **Regression testing** is any type of software testing that seeks to
-    uncover software errors after changes to the program (e.g. bugfixes
-    or new functionality) have been made, by retesting the program. The
-    intent of regression testing is to assure that a change, such as a
-    bugfix, did not introduce new bugs.
-
-In other words, the tests are designed to be easy to run and to work out
-fully automatically whether they have passed or failed, so that they can
-be run usefully by people who didn't write them.
-
-3. Running The Tests
+2. Running The Tests
 --------------------
 
 This section takes you through the process of running Cyrus' unit tests.
 
-3.1. Setting Up The Machine
+2.1. Setting Up The Machine
 ---------------------------
 
 Cyrus' unit tests are all located in a new directory,
@@ -90,7 +56,7 @@ Alternately, you can download the CUnit source, build it and install it.
 It's not a complicated or difficult library, this shouldn't take long.
 When you've done, install it in ``/usr/include`` and ``/usr/lib``.
 
-3.2 Configure Script
+2.2 Configure Script
 --------------------
 
 Because of the dependency on the CUnit library, the tests are disabled
@@ -107,7 +73,7 @@ by default; this means you need enable them with an option to the
     checking for CUnit/CUnit.h... yes
     ...
 
-3.3 Make
+2.3 Make
 --------
 
 First you need to build Cyrus itself, using the traditional ``all:``
@@ -183,7 +149,7 @@ Let's take a closer look at what's happening here.
     it ran and how many passed and failed. The key thing to look at here
     is the rightmost column, it should be all zero.
 
-3.4 Using Valgrind
+2.4 Using Valgrind
 ------------------
 
 Some failure modes are subtle, and cannot be detected in the C code
@@ -244,7 +210,7 @@ useful. I would have made running the tests under Valgrind the only
 option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
-3.5 The Tests Are Failing
+2.5 The Tests Are Failing
 -------------------------
 
 So you've noticed that some of the tests are failing. Let me make the
@@ -271,7 +237,7 @@ most benefit out of unit testing
    report <http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/>`__
    and consider writing tests for the existing code.
 
-3.6 Debugging A Test
+2.6 Debugging A Test
 ~~~~~~~~~~~~~~~~~~~~
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
@@ -308,12 +274,12 @@ debugging a failing test somewhat challenging. The solution is:
 Note the **-t** option. This turns off test timeouts, which is very
 useful for manual debugging.
 
-4. Adding Your Own Tests
+3. Adding Your Own Tests
 ------------------------
 
 Adding your own tests is quite simple. Here's how.
 
-4.1 Where To Put Your Tests
+3.1 Where To Put Your Tests
 ---------------------------
 
 The unit test code in Cyrus is contained in a set of C source files in
@@ -332,7 +298,7 @@ existing tests, the sensible thing to do is to `add a new test to the
 existing suite <#adding-a-test-to-a-suite>`__. Otherwise, you'll need to
 `add a new Suite <#adding-a-new-suite>`__.
 
-4.2 Adding A New Suite
+3.2 Adding A New Suite
 ----------------------
 
 Each Suite is a single C source file in the ``cunit/`` directory. Your
@@ -480,7 +446,7 @@ and this time passing.
     Suite: crc32
       Test: map ... passed
 
-4.3 Adding A Test To A Suite
+3.3 Adding A Test To A Suite
 ----------------------------
 
 Adding a new test to an existing test is easy: all you have to do is add
@@ -563,7 +529,7 @@ Now run ``make check`` and you'll see your test being built and run.
       Test: map ... passed
       Test: iovec ... passed
 
-4.4 Suite Setup And Teardown
+3.4 Suite Setup And Teardown
 ----------------------------
 
 Sometimes the behaviour of the functions under test depend on external

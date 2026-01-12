@@ -17,7 +17,7 @@ we hope to make it easier for you to contribute.
 
     Contributing to the documentation <imap/developer/documentation>
     Contributing code and tests <imap/developer>
-    Using the Cassandane test suite <imap/developer/unit-tests>
+    Using the CUnit test suite <imap/developer/unit-tests>
 
 Cyrus Internals
 ===============
