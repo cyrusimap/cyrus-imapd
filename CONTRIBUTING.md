@@ -37,7 +37,7 @@ There are two kinds of tests:
   suite](https://www.cyrusimap.org/imap/developer/developer-testing.html) is an
   integration test suite.  It can and should be run against your build of
   Cyrus, and it's right there in the repo under `./cassandane`.
-* The [cunit tests](https://www.cyrusimap.org/imap/developer/unit-tests.html)
+* The [cunit tests](https://www.cyrusimap.org/dev/imap/developer/cunit.html)
   are located in the Cyrus IMAP repository, in `./cunit` and run by `make
   check`.  You should run these, too.
 

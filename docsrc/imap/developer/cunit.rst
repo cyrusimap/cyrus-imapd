@@ -1,4 +1,4 @@
-.. _imap-developer-unit-tests:
+.. _imap-developer-cunit:
 
 Unit Tests
 ==========
