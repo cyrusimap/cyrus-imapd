@@ -126,9 +126,10 @@ package Cassandane::TestEntity::Instance::ContactCard {
             $uid
         );
 
-        # We're sending _all_ the members instead of patching because the "update
-        # instance in situ" code in $factory->_update is not sophisticated enough
-        # to cope with patches.  We need to address that. -- rjbs, 2025-11-19
+        # We're sending _all_ the members instead of patching because the
+        # "update instance in situ" code in $factory->_update is not
+        # sophisticated enough to cope with patches.  We need to address that.
+        # -- rjbs, 2025-11-19
         $self->factory->_update($self => { members => \%new_members });
         return;
     }
