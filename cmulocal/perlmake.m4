@@ -5,7 +5,6 @@
 # CMU_PERL_MAKEMAKER
 # ------------------
 AC_DEFUN([CMU_PERL_MAKEMAKER],[
-AC_CONFIG_FILES([$1/Makefile.PL])
 AC_CONFIG_FILES([$1/build.cfg:perl/build.cfg.in])
 AC_CONFIG_COMMANDS($1/Makefile,[
     ( cd $1;

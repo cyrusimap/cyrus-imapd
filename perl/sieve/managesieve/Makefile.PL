@@ -3,9 +3,11 @@
 use ExtUtils::MakeMaker;
 use Config;
 
-my $LIB_SASL = "@LIB_SASL@" || "-lsasl2";
-
 $libs = "-lcyrus";
+
+my $build = do './build.cfg' || die "build.cfg $!";
+
+my $LIB_SASL = $build->{LIB_SASL} || '-lsasl2';
 
 # override default xs.c rule with a VPATH-aware version
 sub MY::xs_c
@@ -29,14 +31,14 @@ sub MY::xs_o
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'ABSTRACT'  => 'Cyrus Sieve management interface',
-    'VERSION_FROM' => "@top_srcdir@/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
-    'MYEXTLIB'  => '../lib/.libs/libisieve.a @top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
-    'LIBS'	=> ["$LIB_SASL @SSL_LIBS@ @LIB_UUID@ @LIB_REGEX@ @ZLIB@ @SQLITE_LIBADD@ @MYSQL_LIBADD@ @PGSQL_LIBADD@ @ICU_LIBS@"],
-    'CCFLAGS'	=> '@GCOV_CFLAGS@',
+    'VERSION_FROM' => "$build->{top_srcdir}/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
+    'MYEXTLIB'  => "../lib/.libs/libisieve.a $build->{top_builddir}/perl/.libs/libcyrus.a $build->{top_builddir}/perl/.libs/libcyrus_min.a",
+    'LIBS'	=> ["$LIB_SASL $build->{SSL_LIBS} $build->{LIB_UUID} $build->{LIB_REGEX} $build->{ZLIB} $build->{SQLITE_LIBADD} $build->{MYSQL_LIBADD} $build->{PGSQL_LIBADD} $build->{ICU_LIBS}"],
+    'CCFLAGS'	=> "$build->{GCOV_CFLAGS}",
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@top_srcdir@/lib -I@top_srcdir@/perl/sieve -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CFLAGS@",
+    'INC'	=> "-I$build->{top_srcdir}/lib -I$build->{top_srcdir}/perl/sieve -I$build->{top_srcdir}/perl/sieve/lib $build->{SASLFLAGS} $build->{SSL_CFLAGS}",
     'OBJECT'    => 'managesieve.o',
-    'LD'	=> $Config{ld} . ' @GCOV_LDFLAGS@',
+    'LD'	=> $Config{ld} . " $build->{GCOV_LDFLAGS}",
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.
@@ -44,9 +46,9 @@ WriteMakefile(
 );
 
 sub MY::postamble {
-    return <<'EOT';
+    return <<"EOT";
 
-VPATH=@top_srcdir@/perl/sieve/managesieve
+VPATH=$build->{top_srcdir}/perl/sieve/managesieve
 
 check:
 
