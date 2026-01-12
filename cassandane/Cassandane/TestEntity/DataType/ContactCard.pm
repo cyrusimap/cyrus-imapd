@@ -8,6 +8,8 @@ package Cassandane::TestEntity::Factory::ContactCard {
 
     sub create_group {
         my ($self, $prop) = @_;
+        $prop //= {};
+
         $self->create({
             %$prop,
             kind => 'group',
@@ -133,6 +135,7 @@ package Cassandane::TestEntity::Instance::ContactCard {
 
     sub create_member {
         my ($self, $props) = @_;
+        $props //= {};
 
         my $kind = $self->kind;
         $kind eq 'group'

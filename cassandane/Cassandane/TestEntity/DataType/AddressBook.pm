@@ -30,6 +30,7 @@ package Cassandane::TestEntity::Instance::AddressBook {
 
     sub create_card {
         my ($self, $prop) = @_;
+        $prop //= {};
 
         $self->user->contacts->create({
             %$prop,
@@ -39,6 +40,7 @@ package Cassandane::TestEntity::Instance::AddressBook {
 
     sub create_card_group {
         my ($self, $prop) = @_;
+        $prop //= {};
 
         $self->user->contacts->create({
             %$prop,
