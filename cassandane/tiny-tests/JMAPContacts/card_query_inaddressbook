@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_inaddressbook
+    :needs_dependency_icalvcard
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $user = $self->default_user;
+
+    xlog $self, "create cards in default address book";
+    my $c1 = $user->contacts->create;
+    my $c2 = $user->contacts->create;
+
+    xlog $self, "create cards in second addressbook";
+    my $abook2 = $user->addressbooks->create;
+    my $c3 = $abook2->create_card({});
+    my $c4 = $abook2->create_card({});
+
+    xlog $self, "query by addressBookId";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/query', {
+            filter => {
+                inAddressBook => $abook2->id
+            }
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply(
+        bag($c3->id . "", $c4->id .""),
+        $res->[0][1]{ids}
+    );
+
+    xlog $self, "query by bogus addressBookId";
+    $res = $jmap->CallMethods([
+        ['ContactCard/query', {
+            filter => {
+                inAddressBook => 'foo'
+            }
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([
+        'error',
+        {
+            type => 'invalidArguments',
+            arguments => [ 'filter/inAddressBook' ]
+        },
+        'R2'
+        ], $res->[0]
+    );
+}

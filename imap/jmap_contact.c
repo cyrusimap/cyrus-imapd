@@ -8425,6 +8425,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
 struct card_filter {
     const char *uid;
+    mbentry_t *inAddressBook;
     hash_table *inCardGroup;
     struct contact_textfilter *fullName;
     struct contact_textfilter *prefix;
@@ -8454,6 +8455,7 @@ static void card_filter_free(void *vf)
 {
     struct card_filter *f = (struct card_filter *) vf;
 
+    mboxlist_entry_free(&f->inAddressBook);
     if (f->inCardGroup) {
         free_hash_table(f->inCardGroup, NULL);
         free(f->inCardGroup);
@@ -8490,6 +8492,14 @@ static void *card_filter_parse(json_t *arg, void *rock)
     struct filter_parse_rock *frock = (struct filter_parse_rock *) rock;
     struct card_filter *f =
         (struct card_filter *) xzmalloc(sizeof(struct card_filter));
+
+    /* inAddressBook */
+    if (JNOTNULL(json_object_get(arg, "inAddressBook"))) {
+        const char *id = NULL;
+        if (jmap_readprop(arg, "inAddressBook", 0, NULL, "s", &id) > 0) {
+            abookid_to_mbentry(frock->req, id, &f->inAddressBook);
+        }
+    }
 
     /* inCardGroup */
     json_t *inCardGroup = json_object_get(arg, "inCardGroup");
@@ -8708,6 +8718,7 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
             !strcmp(field, "text") ||
             !strcmp(field, "kind") ||
             !strcmp(field, "hasMember") ||
+            !strcmp(field, "inAddressBook") ||
             !strcmp(field, "uid")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
@@ -8728,6 +8739,15 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                 else {
                     *kind = CARDDAV_KIND_CONTACT;
                 }
+            }
+            else if (field[2] == 'A') {
+                mbentry_t *mbentry = NULL;
+
+                abookid_to_mbentry(req, json_string_value(arg), &mbentry);
+                if (!mbentry) {
+                    jmap_parser_invalid(parser, field);
+                }
+                mboxlist_entry_free(&mbentry);
             }
         }
         else if (!strcmp(field, "inCardGroup")) {
@@ -8964,6 +8984,18 @@ static int card_filter_match(void *vf, void *rock)
     struct carddav_data *cdata = cfrock->cdata;
     struct carddav_db *db = cfrock->carddavdb;
 
+    /* inAddressBook */
+    if (f->inAddressBook) {
+        if (cdata->dav.mailbox_byname) {
+            if (strcmpsafe(cdata->dav.mailbox, f->inAddressBook->name)) {
+                return 0;
+            }
+        }
+        else if (strcmpsafe(cdata->dav.mailbox, f->inAddressBook->uniqueid)) {
+            return 0;
+        }
+    }
+
     /* uid */
     if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
         return 0;
@@ -9066,6 +9098,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
     struct carddav_data mycdata = { 0 };
     struct index_record record;
     char *vcard_uid = NULL;
+    char *mailbox = NULL;
     json_t *entry = NULL;
     int r = 0;
 
@@ -9089,6 +9122,8 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
        because _card_from_record() will overwrite value with group member data */
     mycdata.dav.imap_uid = cdata->dav.imap_uid;
     mycdata.dav.createdmodseq = cdata->dav.createdmodseq;
+    mycdata.dav.mailbox_byname = cdata->dav.mailbox_byname;
+    mycdata.dav.mailbox = mailbox = xstrdupnull(cdata->dav.mailbox);
     mycdata.vcard_uid = vcard_uid = xstrdupnull(cdata->vcard_uid);
 
     if (cdata->jmapversion == JMAPCACHE_CARDVERSION) {
@@ -9170,6 +9205,7 @@ static int _cardquery_cb(void *rock, struct carddav_data *cdata)
 
 done:
     if (entry) json_decref(entry);
+    free(mailbox);
     free(vcard_uid);
     return r;
 }
