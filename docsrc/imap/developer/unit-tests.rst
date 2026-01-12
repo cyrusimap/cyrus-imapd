@@ -9,12 +9,13 @@ Table of Contents
 -  `1. Introduction <#introduction>`__
 -  `2. Running The Tests <#running-the-tests>`__
 
-   -  `2.1. Setting Up The Machine <#setting-up-the-machine>`__
-   -  `2.2 Configure Script <#configure-scripts>`__
-   -  `2.3 Make <#make>`__
-   -  `2.4 Using Valgrind <#using-valgrind>`__
-   -  `2.5 The Tests Are Failing <#the-tests-are-failing>`__
-   -  `2.6 Debugging A Test <#debugging-a-test>`__
+   -  `2.1. Consider using cyrus-docker <#consider-using-cyrus-docker>`__
+   -  `2.2. Setting Up The Machine <#setting-up-the-machine>`__
+   -  `2.3 Configure Script <#configure-scripts>`__
+   -  `2.4 Make <#make>`__
+   -  `2.5 Using Valgrind <#using-valgrind>`__
+   -  `2.6 The Tests Are Failing <#the-tests-are-failing>`__
+   -  `2.7 Debugging A Test <#debugging-a-test>`__
 
 -  `3. Adding Your Own Tests <#adding-your-own-tests>`__
 
@@ -35,7 +36,15 @@ is primarily *integration testing*.  This page covers the CUnit test suite.
 
 This section takes you through the process of running Cyrus' unit tests.
 
-2.1. Setting Up The Machine
+2.1. Consider using cyrus-docker
+--------------------------------
+
+Before you proceed with the instructions below, consider whether you could just
+use cyrus-docker, cyd, and dar.  Those tools let you hack on Cyrus without
+setting up your own development environment.  They're documented on `the
+developer overview page <imap/developer>`.
+
+2.2. Setting Up The Machine
 ---------------------------
 
 Cyrus' unit tests are all located in a new directory,
@@ -56,7 +65,7 @@ Alternately, you can download the CUnit source, build it and install it.
 It's not a complicated or difficult library, this shouldn't take long.
 When you've done, install it in ``/usr/include`` and ``/usr/lib``.
 
-2.2 Configure Script
+2.3 Configure Script
 --------------------
 
 Because of the dependency on the CUnit library, the tests are disabled
@@ -73,7 +82,7 @@ by default; this means you need enable them with an option to the
     checking for CUnit/CUnit.h... yes
     ...
 
-2.3 Make
+2.4 Make
 --------
 
 First you need to build Cyrus itself, using the traditional ``all:``
@@ -149,7 +158,7 @@ Let's take a closer look at what's happening here.
     it ran and how many passed and failed. The key thing to look at here
     is the rightmost column, it should be all zero.
 
-2.4 Using Valgrind
+2.5 Using Valgrind
 ------------------
 
 Some failure modes are subtle, and cannot be detected in the C code
@@ -210,7 +219,7 @@ useful. I would have made running the tests under Valgrind the only
 option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
-2.5 The Tests Are Failing
+2.6 The Tests Are Failing
 -------------------------
 
 So you've noticed that some of the tests are failing. Let me make the
@@ -237,7 +246,7 @@ most benefit out of unit testing
    report <http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/>`__
    and consider writing tests for the existing code.
 
-2.6 Debugging A Test
+2.7 Debugging A Test
 ~~~~~~~~~~~~~~~~~~~~
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
