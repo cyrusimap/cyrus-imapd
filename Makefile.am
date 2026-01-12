@@ -374,6 +374,7 @@ EXTRA_DIST = \
     man/translatesieve.8 \
     master/README \
     netnews/inn.diffs \
+    perl/fix-makefile.pl \
     perl/annotator/Daemon.pm \
     perl/annotator/Makefile.PL \
     perl/annotator/MANIFEST \

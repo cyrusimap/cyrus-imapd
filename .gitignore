@@ -166,6 +166,8 @@ missing
 netnews/remotepurge
 notifyd/notifyd
 notifyd/notifytest
+perl/**/Makefile.ORIG
+perl/**/Makefile.NEW
 perl/annotator/Cyrus-Annotator-Daemon-*/
 perl/annotator/Makefile.old
 perl/annotator/build.cfg
