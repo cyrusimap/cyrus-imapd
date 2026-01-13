@@ -263,9 +263,8 @@ with the -f 'format' option.
 ``-f tap``
     TAP is a common format which originated with Perl and is now widely used,
     see http://en.wikipedia.org/wiki/Test_Anything_Protocol for more
-    information.  This seems to prints a single character for each test, or
-    something.  I'm not sure what it's useful for, since if a test fails you
-    don't know which one or why.
+    information.  Cassandane's implementation is very rudimentary, but should
+    generally produce valid TAP.
 
 You can run just a subset of tests by giving arguments to testrunner.pl.
 Tests to run are most commonly specified as:
