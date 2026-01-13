@@ -37,7 +37,7 @@ sub test_basic_entity_tests
 
     my $regotten_group = $user->contacts->get($group->id);
     $self->assert_cmp_deeply(
-        { $member->uid => Test::Deep::bool(1) },
+        { $member->uid => bool(1) },
         $regotten_group->members,
     );
 
@@ -68,7 +68,7 @@ sub test_basic_entity_tests
     my $imap = $user->imap;
 
     $self->assert_cmp_deeply(
-        Test::Deep::superhashof({ other => 'lr' }),
+        superhashof({ other => 'lr' }),
         { $imap->getacl('INBOX')->@* },
     );
 

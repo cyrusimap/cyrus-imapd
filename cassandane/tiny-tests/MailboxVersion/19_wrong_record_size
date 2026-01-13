@@ -1,7 +1,6 @@
 #!perl
 use Cassandane::Tiny;
 use Cyrus::IndexFile;
-use Test::Deep ':v1';
 
 # Cyrus should handle an incorrect record size v19 record (144 instead of 112)
 # from an earlier attempt at deploying v20 mailboxes

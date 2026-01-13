@@ -1,6 +1,5 @@
 #!perl
 use Cassandane::Tiny;
-use Test::Deep ':v1';
 
 sub test_note_changes
     :JMAPExtensions

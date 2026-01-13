@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 use Cassandane::Util::Base64JMAP;
 use Cyrus::IndexFile;
-use Test::Deep ':v1';
 
 # Ensure v20 index files are right. Note that we don't set an explicit
 # :MailboxVersion(20) here (yet) because this test is testing the *latest*
