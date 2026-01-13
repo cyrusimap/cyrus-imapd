@@ -1,51 +1,52 @@
 .. _imap-developer-cunit:
 
-Unit Tests
-==========
+The CUnit test suite
+====================
 
 Table of Contents
 -----------------
 
 -  `1. Introduction <#introduction>`__
--  `2. Running The Tests <#running-the-tests>`__
+-  `2. Running the tests <#running-the-tests>`__
 
    -  `2.1. Consider using cyrus-docker <#consider-using-cyrus-docker>`__
-   -  `2.2. Setting Up The Machine <#setting-up-the-machine>`__
-   -  `2.3 Configure Script <#configure-scripts>`__
+   -  `2.2. Setting up the machine <#setting-up-the-machine>`__
+   -  `2.3 Configure script <#configure-scripts>`__
    -  `2.4 Make <#make>`__
    -  `2.5 Using Valgrind <#using-valgrind>`__
-   -  `2.6 The Tests Are Failing <#the-tests-are-failing>`__
-   -  `2.7 Debugging A Test <#debugging-a-test>`__
+   -  `2.6 The tests are failing <#the-tests-are-failing>`__
+   -  `2.7 Debugging a test <#debugging-a-test>`__
 
--  `3. Adding Your Own Tests <#adding-your-own-tests>`__
+-  `3. Adding your own tests <#adding-your-own-tests>`__
 
-   -  `3.1 Where To Put Your Tests <#where-to-put-your-tests>`__
-   -  `3.2 Adding A New Suite <#adding-a-new-suite>`__
-   -  `3.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
-   -  `3.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
+   -  `3.1 Where to put your tests <#where-to-put-your-tests>`__
+   -  `3.2 Adding a new suite <#adding-a-new-suite>`__
+   -  `3.3 Adding a test to a Suite <#adding-a-test-to-a-suite>`__
+   -  `3.4 Suite init and cleanup <#suite-init-and-cleanup>`__
 
 1. Introduction
 ---------------
 
 Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
-primarily *unit testing*.  The other is written in Perl, using Test::Unit, and
-is primarily *integration testing*.  This page covers the CUnit test suite.
+primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
+using Test::Unit, and is primarily *integration testing*.  This page covers the
+CUnit test suite.
 
-2. Running The Tests
+2. Running the tests
 --------------------
 
 This section takes you through the process of running Cyrus' unit tests.
 
 2.1. Consider using cyrus-docker
---------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Before you proceed with the instructions below, consider whether you could just
 use cyrus-docker, cyd, and dar.  Those tools let you hack on Cyrus without
 setting up your own development environment.  They're documented on `the
 developer overview page <imap/developer>`.
 
-2.2. Setting Up The Machine
----------------------------
+2.2. Setting up the machine
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Cyrus' unit tests are all located in a new directory,
 ``cyrus-imapd/cunit/``. They're written in C, like the remainder of
@@ -65,8 +66,8 @@ Alternately, you can download the CUnit source, build it and install it.
 It's not a complicated or difficult library, this shouldn't take long.
 When you've done, install it in ``/usr/include`` and ``/usr/lib``.
 
-2.3 Configure Script
---------------------
+2.3 Configure script
+^^^^^^^^^^^^^^^^^^^^
 
 Because of the dependency on the CUnit library, the tests are disabled
 by default; this means you need enable them with an option to the
@@ -83,7 +84,7 @@ by default; this means you need enable them with an option to the
     ...
 
 2.4 Make
---------
+^^^^^^^^
 
 First you need to build Cyrus itself, using the traditional ``all:``
 target.
@@ -159,7 +160,7 @@ Let's take a closer look at what's happening here.
     is the rightmost column, it should be all zero.
 
 2.5 Using Valgrind
-------------------
+^^^^^^^^^^^^^^^^^^
 
 Some failure modes are subtle, and cannot be detected in the C code
 itself; this is where `the Valgrind program <http://valgrind.org/>`__
@@ -219,8 +220,8 @@ useful. I would have made running the tests under Valgrind the only
 option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
-2.6 The Tests Are Failing
--------------------------
+2.6 The tests are failing
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 So you've noticed that some of the tests are failing. Let me make the
 guiding principle of unit testing as clear as possible: **THE UNIT TESTS
@@ -246,8 +247,8 @@ most benefit out of unit testing
    report <http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/>`__
    and consider writing tests for the existing code.
 
-2.7 Debugging A Test
-~~~~~~~~~~~~~~~~~~~~
+2.7 Debugging a test
+^^^^^^^^^^^^^^^^^^^^
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
 executable, it's a shell script which sets up some environment variables
@@ -283,13 +284,13 @@ debugging a failing test somewhat challenging. The solution is:
 Note the **-t** option. This turns off test timeouts, which is very
 useful for manual debugging.
 
-3. Adding Your Own Tests
+3. Adding your own tests
 ------------------------
 
 Adding your own tests is quite simple. Here's how.
 
-3.1 Where To Put Your Tests
----------------------------
+3.1 Where to put your tests
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The unit test code in Cyrus is contained in a set of C source files in
 the ``cunit`` directory. For reasons too complex to go into here, these
@@ -307,8 +308,8 @@ existing tests, the sensible thing to do is to `add a new test to the
 existing suite <#adding-a-test-to-a-suite>`__. Otherwise, you'll need to
 `add a new Suite <#adding-a-new-suite>`__.
 
-3.2 Adding A New Suite
-----------------------
+3.2 Adding a new suite
+^^^^^^^^^^^^^^^^^^^^^^
 
 Each Suite is a single C source file in the ``cunit/`` directory. Your
 first step is to create a new C source file. For this example, you'll
@@ -455,8 +456,8 @@ and this time passing.
     Suite: crc32
       Test: map ... passed
 
-3.3 Adding A Test To A Suite
-----------------------------
+3.3 Adding a test to a suite
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Adding a new test to an existing test is easy: all you have to do is add
 a new function to an existing C source file in the ``cunit/`` directory.
@@ -538,8 +539,8 @@ Now run ``make check`` and you'll see your test being built and run.
       Test: map ... passed
       Test: iovec ... passed
 
-3.4 Suite Setup And Teardown
-----------------------------
+3.4 Suite setup and teardown
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sometimes the behaviour of the functions under test depend on external
 influences such as environment variables, global variables, or the
