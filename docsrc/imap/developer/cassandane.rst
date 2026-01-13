@@ -380,14 +380,14 @@ Cassandane::Instance
 
     To create a default Instance:
 
-    .. code::
+    .. code:: perl
 
         my $instance = Cassandane::Instance->new();
 
     To create an Instance with a non-default parameter in the
     configuration file:
 
-    .. code::
+    .. code:: perl
 
         my $config = Cassandane::Config->default()->clone();
         $config->set(conversations => 'on');
@@ -397,7 +397,7 @@ Cassandane::Instance
     daemon.  This is rarely a useful setup.  To add a service, in this case
     the imapd daemon:
 
-    .. code::
+    .. code:: perl
 
         $instance->add_service(name => 'imap');
 
@@ -405,14 +405,14 @@ Cassandane::Instance
     configuration files, then starts the master process and waits for
     all the defined services to be running (as reported by netstat).
 
-    .. code::
+    .. code:: perl
 
         $instance->start();
 
     Stopping the instance kills all master process and all services
     as gracefully as possible, and waits for them to die.
 
-    .. code::
+    .. code:: perl
 
         $instance->stop();
 
@@ -420,14 +420,14 @@ Cassandane::Instance
     derived from the abstract Cassandane::MessageStore class.  To create
     a store for a particular service in an Instance:
 
-    .. code::
+    .. code:: perl
 
         $store = $instance->get_service('imap')->create_store();
 
     For the imapd service in particular, Cassandane::IMAPMessageStore
     wraps a Mail::IMAPTalk object which can be retrieved thus:
 
-    .. code::
+    .. code:: perl
 
         my $imaptalk = $store->get_client();
 
@@ -441,7 +441,7 @@ Cassandane::Config
     not be modified directly but should be cloned (see below).  To get
     the default object:
 
-    .. code::
+    .. code:: perl
 
         my $config = Cassandane::Config->default();
 
@@ -449,7 +449,7 @@ Cassandane::Config
     clone() method can be used to create a new Config object based on a
     parent Config object.  The child remembers it's parent.
 
-    .. code::
+    .. code:: perl
 
         my $child_config = $parent_config->clone();
 
@@ -458,7 +458,7 @@ Cassandane::Config
     object itself, but get() will walk back up the ancestry chain until
     it finds a matching key.
 
-    .. code::
+    .. code:: perl
 
         $config->set(conversations => 'on');
         $config->set(foo => '1', bar => '2');
@@ -467,7 +467,7 @@ Cassandane::Config
 
     The typical use for a Config object is:
 
-    .. code::
+    .. code:: perl
 
         my $config = Cassandane::Config->default()->clone();
         $config->set(conversations => 'on');
@@ -480,13 +480,13 @@ Cassandane::Message
 
     To create a new default Message object
 
-    .. code::
+    .. code:: perl
 
         my $msg = Cassandane::Message->new();
 
     To create a Message object read from a file handle
 
-    .. code::
+    .. code:: perl
 
         my $fh = ...
         my $msg = Cassandane::Message->new(fh => $fh);
@@ -494,56 +494,56 @@ Cassandane::Message
     To get all the RFC822 headers of a given name, as a reference
     to an array of strings:
 
-    .. code::
+    .. code:: perl
 
         my $values = $msg->get_headers('Received');
 
     To get an RFC822 header and enforce that there is only a single
     header of that name, use
 
-    .. code::
+    .. code:: perl
 
         my $value = $msg->get_header('From');
 
     To set an RFC822 header, replacing any previous headers of
     the same name:
 
-    .. code::
+    .. code:: perl
 
         $msg->set_headers('From', 'Foo Bar <foo@bar.org>');
 
     To set multiple RFC822 headers with the same name, replacing
     any previous headers of that name:
 
-    .. code::
+    .. code:: perl
 
         my @values = ('baz', 'quux');
         $msg->set_headers('Received', @values);
 
     To add an RFC822 header:
 
-    .. code::
+    .. code:: perl
 
         $msg->add_header('Subject', 'Hello World');
 
     To set the RFC822 body (as one big string)
 
-    .. code::
+    .. code:: perl
 
         $msg->set_body('....one enormous string...');
 
     To get a non-RFC822 attribute (this may have be placed on the message
     as a side effect of it's creation e.g. during an IMAP FETCH command):
 
-    .. code::
+    .. code:: perl
 
-        my $cid = $msg->get_attribute('cid);
+        my $cid = $msg->get_attribute('cid');
 
 Cassandane::Generator
     Creates new Message objects with a number of useful default values
     based on random words.  Has a constructor and a single function
 
-    .. code::
+    .. code:: perl
 
         my $gen = Cassandane::Generator->new();
         my $msg = $gen->generate();
@@ -605,7 +605,7 @@ attributes entirely -- but you probably shouldn't inherit from this anyway
 So for example, you might test a feature that's new in master with
 something like:
 
-::
+.. code:: perl
 
     sub test_my_new_feature
         :min_version_3_0
@@ -617,7 +617,7 @@ And you might continue to test some hypothetical feature that's been
 discontinued on master but still exists in the stable branch with
 something like:
 
-::
+.. code:: perl
 
     sub test_my_obsolete_feature
         :max_version_2_5
@@ -629,7 +629,7 @@ Cassandane::Instance offers ``get_version()``.  It's able to detect versions as
 far back as 2.5.0.  So if you need to do some version-based conditionalisation
 within a test function (or within infrastructure), you can use something like:
 
-::
+.. code:: perl
 
     my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
 
