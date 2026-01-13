@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Test::Deep ();
+use Test::Deep::Hashbag ();
 use Import::Into ();
 
 sub import {
@@ -16,6 +17,7 @@ sub import {
   warnings->import();
 
   Test::Deep->import::into($caller, ':v1');
+  Test::Deep::Hashbag->import::into($caller);
 
   return;
 }
