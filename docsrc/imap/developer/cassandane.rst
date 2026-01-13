@@ -18,6 +18,8 @@ Table of Contents
    -  `3.1. Helper classes <#helper-classes>`__
    -  `3.2. Targeting specific versions <#targeting-specific-versions>`__
 
+-  `4. An example test <#an-example-test>`__
+
 1. Introduction
 ---------------
 
@@ -694,3 +696,123 @@ within a test function (or within infrastructure), you can use something like:
     my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
 
 Cassandane::Test::Skip implements the skip handling.
+
+4. An example test
+------------------
+
+.. code-block:: perl
+   :linenos:
+
+    sub test_card_query_inaddressbook
+        :needs_dependency_icalvcard
+        ($self)
+    {
+        my $user = $self->default_user;
+        my $jmap = $user->jmap;
+
+        xlog $self, "create cards in default address book";
+        my $c1 = $user->contacts->create;
+        my $c2 = $user->contacts->create;
+
+        xlog $self, "create cards in second addressbook";
+        my $abook2 = $user->addressbooks->create;
+        my $c3 = $abook2->create_card;
+        my $c4 = $abook2->create_card;
+
+        xlog $self, "query by addressBookId";
+        my $res = $jmap->request([
+            ['ContactCard/query', { filter => { inAddressBook => $abook2->id } } ],
+        ]);
+
+        $self->assert_cmp_deeply(
+            bag($c3->id . "", $c4->id .""),
+            $res->single_sentence('ContactCard/query')->arguments->{ids},
+        );
+
+        xlog $self, "query by bogus addressBookId";
+        $res = $jmap->request([
+            ['ContactCard/query', { filter => { inAddressBook => 'foo' } } ]
+        ]);
+
+        $self->assert_deep_equals(
+            {
+                type => 'invalidArguments',
+                arguments => [ 'filter/inAddressBook' ]
+            },
+            $res->single_sentence('error')->arguments,
+        );
+    }
+
+This example shows off many of the most common things you'll be using when
+writing Cassandane tests.  First, we see the ``needs_dependency_icalvcard``
+attribute, telling the test planner to skip this test when ``icalvcard`` is not
+compiled into Cyrus.
+
+It then sets ``$user`` to the default user.  Most tests only need one user, and
+so can use the default user instead of creating one.  The test calls
+``$user->jmap`` to get a JMAP client for the user.  Although the client is a
+Cassandane::JMAPTester, you'll find most of the relevant documentation in
+`JMAP::Tester <https://metacpan.org/pod/JMAP::Tester>`__, its parent class.
+That JMAP client has methods for performing JMAP upload and download, and even
+performing arbitrary HTTP requests (with the ``http_request`` method), but most
+of the time, you'll just use ``request``, which takes a hash or array reference
+and turns it into a JMAP request.  Hash references can provide any JMAP request
+properties needed.  Array references become the methodCalls property, with any
+missing call ids automatically populated.
+
+The result of a method call might be a `failure
+<https://metacpan.org/pod/JMAP::Tester::Result::Failure>`__ object, indicating
+a non-2xx response, but most of the time it will be a `response
+<https://metacpan.org/pod/JMAP::Tester::Response>`__ object.  That object
+represents any JMAP response, even if every method response is an error.  It
+implements the `sentence collection
+<https://metacpan.org/pod/JMAP::Tester::Role::SentenceCollection>`__ interface,
+meaning it has (among others) these methods:
+
+sentences
+    This returns a list of Sentence objects, which represent the elements in
+    the ``methodResponses`` property.  Each Invocation (per RFC 8620) becomes a
+    Sentence.
+
+sentence_named
+    This takes a sentence name (like "Email/get") and returns the sentence from
+    the response that has that name.  If there isn't exactly one sentence with
+    that name, an exception is thrown.
+
+single_sentence
+    This method asserts that the response has exactly one sentence in it.  If a
+    sentence name is passed as an argument to this method, it also asserts that
+    the sentence has that name.  If both assertions are true, the sentence in
+    returned.
+
+Every sentence has methods for accessing the first, second, and third items in
+the array it represents:  name, arguments, and client_id.
+
+We'll see much of this used in this test, soon!
+
+From lines 8 through 15, the test is creating test data.  To make it easy to
+make test data (for example, to hide the creation of boring mandatory
+properties), TestUser objects have factories for creating test data.  Here, we
+see ``$user->contacts`` used to get the ContactCard factory, and then to create
+two cards.  The calls to ``create`` aren't being passed any arguments because
+this test doesn't care about any of the properties the objects might have.  If
+it did, then those properties could be supplied in a hash reference passed to
+the method.  Missing mandatory properties will still be filled in.
+
+Line 13 creates an AddressBook using the address book factory and then lines 14
+and 15 create new contact cards by using the ``create_card`` method on that
+address book object.  Most test entity objects have methods for finding or
+creating related data.  For a more comprehensive look at the methods available,
+look at the files in ``cassandane/Cassandane/TestEntity/DataType``.  You can
+view them in your editor, or using the ``perldoc`` program to format their
+documentation.
+
+With all the test data created, line 18 performs a JMAP request and gets back a
+Response object.  Then, line 22 starts a deep comparison assertion against the
+result.  We use a few of the JMAP::Tester methods described above:
+``single_sentence`` to find the query result (and to assert that it was all we
+got), and ``arguments`` to get at the arguments returned with the
+ContactCard/query response.
+
+The rest of the test is more of the same.
+
