@@ -431,6 +431,66 @@ Cassandane::Instance
 
         my $imaptalk = $store->get_client();
 
+    The Cassandane::Instance can also produce TestUser objects for handling the
+    data of individual users.  There are two methods:
+
+    .. code:: perl
+
+       # This will perform initialization for the user, ensuring some basic
+       # normal bookkeeping was done, and then return a TestUser object:
+       my $testuser = $instance->create_user('username');
+
+       # This will just create the TestUser object, without touching any data
+       # on disk.  (Its protocol clients will work, and Cyrus will create
+       # whatever records are needed as they're accessed.)
+       my $testuser = $instance->create_user_without_setup('username');
+
+    Also, the method ``default_user`` will return a default user for the
+    running test, generally named ``cassandane``.
+
+Cassandane::TestUser
+    This class represents a Cyrus user, and provides methods for getting
+    protocol clients and creating test data.
+
+    You can get a TestUser by calling ``create_user`` or
+    ``create_user_without_setup`` on the Cassandane::Instance object.
+
+    The following methods are provided:
+
+    ``jmap`` and ``jmap_ws``
+        These methods provide cached JMAP clients (Cassandane::JMAPTester and
+        Cassandane::JMAPTesterWS, respectively).  They have all of Cyrus's
+        capabilities enabled by default.
+
+    ``new_jmap`` and ``new_jmap_ws``
+        These methods construct new JMAP clients (Cassandane::JMAPTester and
+        Cassandane::JMAPTesterWS, respectively).  They have all of Cyrus's
+        capabilities enabled by default, but you can pass an array of using
+        strings to pick different capabilities.  Alternatively, you can pass a
+        hashref of options, which will be passed along to the JMAP::Tester
+        constructor.
+
+    ``carddav`` and ``caldav``
+        These methods return cached Net::CardDAVTalk and Net::CalDAVTalk
+        objects, respectively, for interacting with the user's data over those
+        protocols.
+
+    ``imap``
+        This method returns a new Mail::IMAPTalk object, for interacting with
+        the user's data over IMAP.
+
+    test data entity methods
+        These methods return test data factories.  For more information run
+        ``perldoc cassandane/Cassandane/TestEntity/DataType/{TYPE}.pm`` for the
+        type you're interested in.  In general, they will have the methods
+        ``get`` and ``create``, to retrieve or create new instances of that
+        datatype.
+
+        * addressbooks
+        * contacts
+        * emails
+        * mailboxes
+
 Cassandane::Config
     Encapsulates the configuration information present in an imapd.conf
     format configuration file.  Config objects are useful for passing
