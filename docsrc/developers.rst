@@ -17,7 +17,8 @@ we hope to make it easier for you to contribute.
 
     Contributing to the documentation <imap/developer/documentation>
     Contributing code and tests <imap/developer>
-    Using the CUnit test suite <imap/developer/cunit>
+    The CUnit (C) test suite <imap/developer/cunit>
+    The Cassandane (Perl) test suite <imap/developer/cassandane>
 
 Cyrus Internals
 ===============
