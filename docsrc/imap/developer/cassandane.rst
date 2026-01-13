@@ -16,6 +16,7 @@ Table of Contents
 -  `3. Adding your own tests <#adding-your-own-tests>`__
 
    -  `3.1. Helper classes <#helper-classes>`__
+   -  `3.2. Targeting specific versions <#targeting-specific-versions>`__
 
 1. Introduction
 ---------------
@@ -42,8 +43,164 @@ developer overview page <imap/developer>`.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you're not going to use cyrus-docker, you need to set up Cassandane, Cyrus
-and your system.  Read the file ``cassandane/doc/setting_up.txt`` and follow
-the instructions there.
+and your system.  This slog is described here:
+
+Cassandane is designed to be operated on a day-to-day basis as an
+unprivileged user.  However, Cassandane needs root to make some small
+one-time adjustments to be performed to your system before it will run
+at all.  This section documents those steps.
+
+#.  Before doing anything else, make sure you have all the pre-reqs
+    listed in ``cassandane/doc/README.deps`` installed.  A good way to check
+    is:
+
+    ::
+
+        $ cd ~/my/cassandane/workarea
+        $ make -j4
+        ...
+        testrunner.pl syntax OK
+        Cassandane/ThreadedGenerator.pm syntax OK
+        Cassandane/MasterEvent.pm syntax OK
+        Cassandane/PortManager.pm syntax OK
+        Cassandane/IMAPMessageStore.pm syntax OK
+        ...
+
+#.  The passwd and group maps need valid entries for user "cyrus" and group
+    "mail".  If you want to generate coverage reports eventually, you probably
+    also want a group called "cyrus", and make that the "cyrus" user's primary
+    group.  Use your system's adduser/addgroup or equivalent tools for this.
+
+    On Debian, something like this:
+
+    ::
+
+        $ sudo adduser --system --group cyrus
+        $ sudo adduser cyrus mail
+
+    NOTE: User 'cyrus' must actually be in 'group' mail, or the annotator
+    will fail to start.
+
+#.  You need to be able to run a program as the "cyrus" user, preferably
+    without entering your password all the time.  And you need processes
+    that you start with sudo to inherit your core file settings.  One way of
+    doing this is to add the following at the *end* of your /etc/sudoers file
+
+    ::
+
+        Defaults:username rlimit_core=default
+        username ALL = (cyrus) NOPASSWD: ALL
+
+    Obviously, replace 'username' with your username.
+
+#.  You need to tell Cassandane how to find Cyrus, which means you need to
+    decide where to put Cyrus.  You've got two main options:
+
+      *  Fully installed Cyrus build in some prefix, specified by passing
+         --prefix=/some/prefix to configure.  The default prefix is
+         /usr/local, but that's a nuisance cause you have to install as root.
+         If you do this, you'll need to always pass the correct --prefix
+         argument to configure when building Cyrus for testing.
+
+         ::
+
+             $ cd ~/my/cyrus/workarea
+             $ ./configure --prefix=/some/prefix \
+                 [your other configure options]
+             $ make && make install
+
+      *  Partially installed Cyrus build in a temp directory.  If you do this,
+         you'll need to always pass the correct DESTDIR when installing Cyrus
+         for testing.
+
+         ::
+
+             $ cd ~/my/cyrus/workarea
+             $ ./configure [your other configure options]
+             $ make && make DESTDIR=/var/tmp/cyrus install
+
+    Whichever you choose, for best results, install Cyrus to a directory
+    on a tmpfs filesystem.  You'll probably end up making a small wrapper
+    script with all your usual configure options anyway, so adding --prefix to
+    that is low additional effort.
+
+    Now copy the cassandane.ini.example from the source tree to a file called
+    "cassandane.ini" in your home directory, and start configuring.
+
+    ::
+
+        $ cp /path/to/cyrus-imapd/cassandane/cassandane.ini.example ~/cassandane.ini
+        $ vi ~/cassandane.ini
+        [cyrus default]
+        prefix = [the --prefix Cyrus is configured for]
+        destdir = [the DESTDIR you passed to make install, if any]
+
+    Also note that you can do other combinations too, the trick is to
+    set up the 'cyrus default' section in the cassandane.ini such that
+
+      * 'prefix' is the value of --prefix you used when you ran the Cyrus
+        configure script.  Default is /usr/cyrus (which is not the default for
+        the Cyrus configure script!)
+
+      * 'destdir' is the value of DESTDIR when you did 'make install' in
+        the Cyrus directory.  Default is empty.
+
+#.  More cassandane.ini configuration.
+
+    You need to tell Casssandane where to keep its run-time state.  For
+    best performance, this should be a directory on a tmpfs filesystem.
+    You set this in the cassandane.rootdir setting in cassandane.ini
+
+    While you're in there anyway, there's some other things you really ought to
+    set:
+
+    * cassandane.cleanup: default is no, but "yes" is more sensible.  You can
+      always override this as needed with the --no-cleanup option at run time
+    * cassandane.maxworkers: default is "1", but this is excruciatingly slow.
+      Anecdotally, two times the number of CPUs in your system seems about
+      right, if your system is not otherwise heavily loaded.
+    * config.zoneinfo_dir: set this to the path to the zoneinfo directory
+      from the cyrus-timezones package.  If you got this from cyruslibs, it's
+      probably /usr/local/cyruslibs/share/cyrus-timezones/zoneinfo
+
+    But for the most part, read the comments from the example file, they are
+    the authoritative documentation here.
+
+#.  It's also a good idea to set some kernel tunables.
+
+    When dumping core files, use the PID of the dumping process
+    in the name, so that if multiple processes dump core during the
+    test you'll see all the core files instead of just one named "core".
+
+    ::
+
+        # echo 1 >/proc/sys/kernel/core_uses_pid
+
+    As a security feature, Linux won't generate cores for processes
+    which have changed ownership.  This prevents any of the Cyrus
+    processes in your test ever dumping core, so you want to turn
+    that feature off.
+
+    ::
+
+        # echo 1 >/proc/sys/fs/suid_dumpable
+
+    Finally, some Linux systems might require to unlimit the size of
+    core dumps. As suid_dumpable, this shouldn't normally be set on
+    production systems.
+
+    ::
+
+        # ulimit -c unlimited
+
+Now, to run Cassandane use this command
+
+    ::
+
+        $ cd ~/my/cassandane/workarea
+        $ ./testrunner.pl
+
+NOTE: Cassandane will internally run 'sudo' to become user 'cyrus'
 
 2.3. Running tests
 ^^^^^^^^^^^^^^^^^^
@@ -425,4 +582,55 @@ Cassandane::Generator
     messageid
         a string
 
-Good luck and good testing!
+3.2 Targeting specific versions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you're writing a new Cyrus feature, you can (and should) mark tests for that
+feature as requiring the new version of Cyrus.  Because a newer version of
+Cassandane is sometimes run against older versions of Cyrus, this lets the test
+running skip tests that absolutely require a newer Cyrus.
+
+There are two new magical subroutine attribute patterns:
+
+* ``:min_version_x_y_z``
+* ``:max_version_x_y_z``
+
+…where in both cases y and z are optional.
+
+These only apply to test suites inheriting from Cassandane::Cyrus::TestCase.
+Test suites inheriting from Cassandane::Unit::TestCase will ignore these
+attributes entirely -- but you probably shouldn't inherit from this anyway
+(unless you're testing Cassandane itself).
+
+So for example, you might test a feature that's new in master with
+something like:
+
+::
+
+    sub test_my_new_feature
+        :min_version_3_0
+    {
+         # [...]
+    }
+
+And you might continue to test some hypothetical feature that's been
+discontinued on master but still exists in the stable branch with
+something like:
+
+::
+
+    sub test_my_obsolete_feature
+        :max_version_2_5
+    {
+        # [...]
+    }
+
+Cassandane::Instance offers ``get_version()``.  It's able to detect versions as
+far back as 2.5.0.  So if you need to do some version-based conditionalisation
+within a test function (or within infrastructure), you can use something like:
+
+::
+
+    my ($major, $minor, $revision, $extra) = Cassandane::Instance->get_version()
+
+Cassandane::Test::Skip implements the skip handling.
