@@ -374,7 +374,7 @@ the job of writing tests that access Cyrus.  This section provides a
 brief overview.
 
 Cassandane::Instance
-    Encapsulates an instance of Cyrus, with it's own directory
+    Encapsulates an instance of Cyrus, with its own directory
     structure, configuration files, master process, and one or more
     services such as imapd.
 
@@ -418,7 +418,7 @@ Cassandane::Instance
 
     Interactions with services are handled via one of the classed
     derived from the abstract Cassandane::MessageStore class.  To create
-    a store for a paerticular service in an Instance:
+    a store for a particular service in an Instance:
 
     .. code::
 
