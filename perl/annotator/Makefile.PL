@@ -10,13 +10,24 @@ WriteMakefile(
     'NAME'      => 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
     'VERSION_FROM' => "$build->{top_srcdir}/perl/annotator/Daemon.pm", # finds $VERSION
-    # This is a disgusting hack to effectively disable the stupid
-    # behaviour of the generated Makefile which moves itself aside
-    # on a 'make clean' instead of on 'make distclean'.
-    'MAKEFILE_OLD' => 'Makefile',
 );
 
-sub MY::postamble {
+package MY; # so that "SUPER" works
+
+# prevent 'clean' target from renaming the Makefile
+sub clean
+{
+    my @clean = split "\n", shift->SUPER::clean(@_);
+
+    # suppresses these actions:
+    #   $(NOECHO) $(RM_F) $(MAKEFILE_OLD)
+    #   - $(MV) $(FIRST_MAKEFILE) $(MAKEFILE_OLD) $(DEV_NULL)
+    @clean = grep { $_ !~ m/\Q$(MAKEFILE_OLD)\E/ } @clean;
+
+    return join "\n", @clean;
+}
+
+sub postamble {
     return <<"EOT";
 
 VPATH=$build->{top_srcdir}/perl/annotator

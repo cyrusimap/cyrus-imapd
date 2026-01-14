@@ -9,23 +9,6 @@ my $build = do './build.cfg' || die "build.cfg $!";
 
 my $LIB_SASL = $build->{LIB_SASL} || '-lsasl2';
 
-# override default xs.c rule with a VPATH-aware version
-sub MY::xs_c
-{
-    return <<"EOT";
-
-.xs.c: .xs
-\t\$(XSUBPPRUN) \$(XSPROTOARG) \$(XSUBPPARGS) \$(XSUBPP_EXTRA_ARGS) \$< > \$*.xsc && \$(MV) \$*.xsc \$@
-
-EOT
-}
-
-# xs_c above is adequate, override this to get it out of the way
-sub MY::xs_o
-{
-    ;
-}
-
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
@@ -39,13 +22,42 @@ WriteMakefile(
     'INC'       => "-I$build->{top_srcdir}/lib -I$build->{top_srcdir}/perl/sieve -I$build->{top_srcdir}/perl/sieve/lib $build->{SASLFLAGS} $build->{SSL_CFLAGS}",
     'OBJECT'    => 'managesieve.o',
     'LD'        => $Config{ld} . " $build->{GCOV_LDFLAGS}",
-    # This is a disgusting hack to effectively disable the stupid
-    # behaviour of the generated Makefile which moves itself aside
-    # on a 'make clean' instead of on 'make distclean'.
-    'MAKEFILE_OLD' => 'Makefile',
 );
 
-sub MY::postamble {
+package MY; # so that "SUPER" works right
+
+# prevent 'clean' target from renaming the Makefile
+sub clean
+{
+    my @clean = split "\n", shift->SUPER::clean(@_);
+
+    # suppresses these actions:
+    #   $(NOECHO) $(RM_F) $(MAKEFILE_OLD)
+    #   - $(MV) $(FIRST_MAKEFILE) $(MAKEFILE_OLD) $(DEV_NULL)
+    @clean = grep { $_ !~ m/\Q$(MAKEFILE_OLD)\E/ } @clean;
+
+    return join "\n", @clean;
+}
+
+# override default xs.c rule with a VPATH-aware version
+sub xs_c
+{
+    return <<"EOT";
+
+.xs.c: .xs
+\t\$(XSUBPPRUN) \$(XSPROTOARG) \$(XSUBPPARGS) \$(XSUBPP_EXTRA_ARGS) \$< > \$*.xsc && \$(MV) \$*.xsc \$@
+
+EOT
+}
+
+# xs_c above is adequate, override this to get it out of the way
+sub xs_o
+{
+    ;
+}
+
+sub postamble
+{
     return <<"EOT";
 
 VPATH=$build->{top_srcdir}/perl/sieve/managesieve
