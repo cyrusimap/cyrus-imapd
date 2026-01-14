@@ -36,3 +36,4 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
     operations
     developers
     support
+    glossary

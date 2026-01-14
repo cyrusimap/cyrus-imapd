@@ -8,3 +8,4 @@ Overview
 
     imap/concepts/features
     imap/concepts/overview_and_concepts
+    imap/rfc-support

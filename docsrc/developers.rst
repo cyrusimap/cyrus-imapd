@@ -16,6 +16,7 @@ we hope to make it easier for you to contribute.
     :maxdepth: 1
 
     Contributing to the documentation <imap/developer/documentation>
+    Documentation style guide <styles>
     Contributing code and tests <imap/developer>
     The CUnit (C) test suite <imap/developer/cunit>
     The Cassandane (Perl) test suite <imap/developer/cassandane>
