@@ -27,9 +27,9 @@ Optional Components
 .. toctree::
     :maxdepth: 2
 
-    download/installation/manage-dav
-    download/installation/virus
-    download/installation/mta/configuration
+    /download/installation/manage-dav
+    /download/installation/virus
+    /download/installation/mta/configuration
 
 Setting up syslog
 =================

@@ -10,5 +10,5 @@ Setup
 
     imap/developer/compiling
     imap/installing
-    imap/download/upgrade
+    download/upgrade
     imap/concepts/deployment

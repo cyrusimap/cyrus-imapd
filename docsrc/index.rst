@@ -29,11 +29,11 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
     :maxdepth: 2
     :caption: Contents:
 
-    download
+    download/index
     quickstart
     overview
     setup
     operations
     developers
-    support
+    support/index
     glossary
