@@ -1,4 +1,4 @@
-/* fud.c -- long-lived finger information provider */
+/* fud.c - long-lived finger information provider */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

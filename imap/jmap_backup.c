@@ -1,4 +1,4 @@
-/* jmap_backup.c -- Routines for handling JMAP Backup/restoreXxx requests */
+/* jmap_backup.c - Routines for handling JMAP Backup/restoreXxx requests */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

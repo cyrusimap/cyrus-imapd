@@ -1,4 +1,4 @@
-/* actions.c -- executes the commands for timsieved */
+/* actions.c - executes the commands for timsieved */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

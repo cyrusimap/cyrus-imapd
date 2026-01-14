@@ -1,4 +1,4 @@
-/* lsort.c -- linked list (merge) sort
+/* lsort.c - linked list (merge) sort
  *
  * public domain code by Ray Gardner.
  *

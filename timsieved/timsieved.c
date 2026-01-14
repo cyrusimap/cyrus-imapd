@@ -1,4 +1,4 @@
-/* timsieved.c -- main file for timsieved (sieve script accepting program) */
+/* timsieved.c - main file for timsieved (sieve script accepting program) */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

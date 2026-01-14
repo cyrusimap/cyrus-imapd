@@ -1,4 +1,4 @@
-/* search_sort.h -- Sort criteria definition for search */
+/* search_sort.h - Sort criteria definition for search */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

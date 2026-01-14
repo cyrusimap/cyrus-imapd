@@ -1,4 +1,4 @@
-/* cyr_synclog.c -- add a line to the sync log file for replication */
+/* cyr_synclog.c - add a line to the sync log file for replication */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

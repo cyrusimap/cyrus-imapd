@@ -1,4 +1,4 @@
-/* vcard_support.h -- Helper functions for vcard */
+/* vcard_support.h - Helper functions for vcard */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

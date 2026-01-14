@@ -1,4 +1,4 @@
-/* http_rss.c -- Routines for handling RSS feeds of mailboxes in httpd */
+/* http_rss.c - Routines for handling RSS feeds of mailboxes in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* itip_support.h -- Routines for dealing with iTIP */
+/* itip_support.h - Routines for dealing with iTIP */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

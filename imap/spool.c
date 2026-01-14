@@ -1,4 +1,4 @@
-/* spool.c -- Routines for spooling/parsing messages from a prot stream */
+/* spool.c - Routines for spooling/parsing messages from a prot stream */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

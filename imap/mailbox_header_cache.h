@@ -1,5 +1,5 @@
-/* mailbox_header_cache.h -- Lookup functions for mailbox headers we cache in
-                             the cyrus.cache file
+/* mailbox_header_cache.h - Lookup functions for mailbox headers we cache in
+                            the cyrus.cache file
  */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */

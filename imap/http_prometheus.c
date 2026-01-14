@@ -1,4 +1,4 @@
-/* http_prometheus.c -- Routines for handling Prometheus requests in httpd */
+/* http_prometheus.c - Routines for handling Prometheus requests in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
