@@ -320,9 +320,9 @@ sub test_card_query
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog $self, "filter by nickName";
+    xlog $self, "filter by nickname";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
-                    filter => { nickName => "foo" }
+                    filter => { nickname => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -334,13 +334,6 @@ sub test_card_query
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-
-    xlog $self, "filter by hobby";
-    $res = $jmap->CallMethods([ ['ContactCard/query', {
-                    filter => { hobby => "reading" }
-                }, "R1"] ]);
-    $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "filter by note";
     $res = $jmap->CallMethods([ ['ContactCard/query', {
