@@ -1,4 +1,4 @@
-/* cyr_qsort_r.h -- Cyrus compatibility header for qsort_r
+/* cyr_qsort_r.h - Cyrus compatibility header for qsort_r
  *
  * Always use the QSORT_R_COMPAR_ARGS macro to declare the
  * comparison function, e.g.

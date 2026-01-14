@@ -1,4 +1,4 @@
-/* test.c -- tester for libcyrus_sieve */
+/* test.c - tester for libcyrus_sieve */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 /* usage: "test message script"

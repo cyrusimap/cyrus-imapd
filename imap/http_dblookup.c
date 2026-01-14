@@ -1,4 +1,4 @@
-/* http_dblookup.c -- Routines for dealing with HTTP based db lookups */
+/* http_dblookup.c - Routines for dealing with HTTP based db lookups */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

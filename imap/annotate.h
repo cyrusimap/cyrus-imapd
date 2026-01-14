@@ -1,4 +1,4 @@
-/* annotate.h -- Annotation manipulation routines */
+/* annotate.h - Annotation manipulation routines */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

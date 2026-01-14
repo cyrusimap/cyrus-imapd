@@ -1,4 +1,4 @@
-/* pop3d.c -- POP3 server protocol parsing */
+/* pop3d.c - POP3 server protocol parsing */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
