@@ -1,4 +1,4 @@
-/* crash.c: deliberately crash to get a core file */
+/* crash.c - deliberately crash to get a core file */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* squat_dump.c -- SQUAT-based index dumping tool */
+/* squat_dump.c - SQUAT-based index dumping tool */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

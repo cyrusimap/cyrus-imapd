@@ -1,4 +1,4 @@
-/* request.h -- request to execute functions on the timsieved server */
+/* request.h - request to execute functions on the timsieved server */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* hashset.c -- library for building a set of hashed keys (evenly distributed) */
+/* hashset.c - library for building a set of hashed keys (evenly distributed) */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

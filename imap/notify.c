@@ -1,4 +1,4 @@
-/* notify.c -- Module to notify of new mail */
+/* notify.c - Module to notify of new mail */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* caldav_db.h -- abstract interface for per-user CalDAV database */
+/* caldav_db.h - abstract interface for per-user CalDAV database */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

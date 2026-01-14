@@ -1,4 +1,4 @@
-/* sqldb.h -- abstract interface for sqlite databases */
+/* sqldb.h - abstract interface for sqlite databases */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

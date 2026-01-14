@@ -1,4 +1,4 @@
-/* ctl_mboxlist.c -- do DB related operations on mboxlist */
+/* ctl_mboxlist.c - do DB related operations on mboxlist */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
