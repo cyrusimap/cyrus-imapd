@@ -3011,6 +3011,8 @@ enum contactsquery_sort {
     CONTACTS_SORT_NAME,
     /* Comparators for ContactCard */
     CONTACTS_SORT_LASTNAME2,
+    CONTACTS_SORT_CREATED,
+    CONTACTS_SORT_UPDATED,
    /* Flag for descending sort */
     CONTACTS_SORT_DESC = 0x80,
 };
@@ -8427,6 +8429,10 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
 
 struct card_filter {
     const char *uid;
+    const char *createdBefore;
+    const char *createdAfter;
+    const char *updatedBefore;
+    const char *updatedAfter;
     mbentry_t *inAddressBook;
     hash_table *inCardGroup;
     struct contact_textfilter *fullName;
@@ -8516,6 +8522,23 @@ static void *card_filter_parse(json_t *arg, void *rock)
             }
         }
         buf_free(&cid);
+    }
+
+    /* createdBefore */
+    if (JNOTNULL(json_object_get(arg, "createdBefore"))) {
+        jmap_readprop(arg, "createdBefore", 0, NULL, "s", &f->createdBefore);
+    }
+    /* createdAfter */
+    if (JNOTNULL(json_object_get(arg, "createdAfter"))) {
+        jmap_readprop(arg, "createdAfter", 0, NULL, "s", &f->createdAfter);
+    }
+    /* updatedBefore */
+    if (JNOTNULL(json_object_get(arg, "updatedBefore"))) {
+        jmap_readprop(arg, "updatedBefore", 0, NULL, "s", &f->updatedBefore);
+    }
+    /* updatedAfter */
+    if (JNOTNULL(json_object_get(arg, "updatedAfter"))) {
+        jmap_readprop(arg, "updatedAfter", 0, NULL, "s", &f->updatedAfter);
     }
 
     /* fullName */
@@ -8690,6 +8713,14 @@ static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
                 jmap_parse_strings(arg, parser, field);
             }
         }
+        else if (!strcmp(field, "createdBefore") ||
+                 !strcmp(field, "createdAfter")  ||
+                 !strcmp(field, "updatedBefore") ||
+                 !strcmp(field, "updatedAfter")) {
+            if (!json_is_utcdate(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
@@ -8710,6 +8741,8 @@ static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
         !strcmp(comp->property, "name/given") ||
         !strcmp(comp->property, "name/surname") ||
         !strcmp(comp->property, "name/surname2") ||
+        !strcmp(comp->property, "created") ||
+        !strcmp(comp->property, "updated") ||
         !strcmp(comp->property, "nickname") ||
         !strcmp(comp->property, "organization")) {
         return 1;
@@ -8901,6 +8934,32 @@ static int card_filter_match_address(json_t *jentry,
     return ret;
 }
 
+static int card_filter_match_timestamp(json_t *card, const char *propname,
+                                       const char *filter, bool want_after)
+{
+    /* If we don't have a filter time, skip the test (pass) */
+    if (!filter) return 1;
+
+    const char *datestr = json_string_value(json_object_get(card, propname));
+
+    /* If we don't have the specified time property, the test fails */
+    if (!datestr) return 0;
+
+    /* Compare the card time and filter time
+       UTCDate strings: ASCII order == datetime order */
+    int r = strcmp(datestr, filter);
+
+    if (want_after) {
+        /* If card time is before filter time, the fails */
+        if (r < 0) return 0;
+    }
+    /* If card time is after filter time, the fails */
+    else if (r >= 0) return 0;
+
+    /* Otherwise, the test passes */
+    return 1;
+}
+
 static const char *name_vals[] =     { "name", NULL };
 static const char *email_vals[] =    { "address", "label", NULL };
 static const char *phone_vals[] =    { "number", "label", NULL };
@@ -8930,6 +8989,14 @@ static int card_filter_match(void *vf, void *rock)
 
     /* uid */
     if (f->uid && strcmpsafe(cdata->vcard_uid, f->uid)) {
+        return 0;
+    }
+
+    /* Match time filters */
+    if (!card_filter_match_timestamp(card, "created", f->createdBefore, 0) ||
+        !card_filter_match_timestamp(card, "created", f->createdAfter,  1) ||
+        !card_filter_match_timestamp(card, "updated", f->updatedBefore, 0) ||
+        !card_filter_match_timestamp(card, "updated", f->updatedAfter,  1)) {
         return 0;
     }
 
@@ -9141,11 +9208,15 @@ static enum contactsquery_sort *cardquery_buildsort(json_t *jsort)
             sort[i] = CONTACTS_SORT_LASTNAME;
         else if (!strcmp(prop, "name/surname2"))
             sort[i] = CONTACTS_SORT_LASTNAME2;
+        else if (!strcmp(prop, "created"))
+            sort[i] = CONTACTS_SORT_CREATED;
+        else if (!strcmp(prop, "updated"))
+            sort[i] = CONTACTS_SORT_UPDATED;
+        /* Non-standard comparators */
         else if (!strcmp(prop, "nickname"))
             sort[i] = CONTACTS_SORT_NICKNAME;
         else if (!strcmp(prop, "organization"))
             sort[i] = CONTACTS_SORT_COMPANY;
-        /* Comparators for CardGroup */
         else if (!strcmp(prop, "name"))
             sort[i] = CONTACTS_SORT_NAME;
 
@@ -9225,6 +9296,16 @@ static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
             case CONTACTS_SORT_LASTNAME2:
                 vala = jsname_sortas(ja, "surname2", &bufa);
                 valb = jsname_sortas(jb, "surname2", &bufb);
+                break;
+            case CONTACTS_SORT_CREATED:
+                /* UTCDate strings: ASCII order == datetime order */
+                vala = json_string_value(json_object_get(ja, "created"));
+                valb = json_string_value(json_object_get(jb, "created"));
+                break;
+            case CONTACTS_SORT_UPDATED:
+                /* UTCDate strings: ASCII order == datetime order */
+                vala = json_string_value(json_object_get(ja, "updated"));
+                valb = json_string_value(json_object_get(jb, "updated"));
                 break;
             case CONTACTS_SORT_NICKNAME:
                 vala = json_string_value(json_object_get(ja, "nickname"));
