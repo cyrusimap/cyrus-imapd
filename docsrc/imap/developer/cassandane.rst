@@ -3,22 +3,7 @@
 The Cassandane test suite
 =========================
 
-Table of Contents
------------------
-
--  `1. Introduction <#introduction>`__
--  `2. Running The Tests <#running-the-tests>`__
-
-   -  `2.1. Consider using cyrus-docker <#consider-using-cyrus-docker>`__
-   -  `2.2. Setting up the machine <#setting-up-the-machine>`__
-   -  `2.3. Running tests <#running-tests>`__
-
--  `3. Adding your own tests <#adding-your-own-tests>`__
-
-   -  `3.1. Helper classes <#helper-classes>`__
-   -  `3.2. Targeting specific versions <#targeting-specific-versions>`__
-
--  `4. An example test <#an-example-test>`__
+.. contents::
 
 1. Introduction
 ---------------

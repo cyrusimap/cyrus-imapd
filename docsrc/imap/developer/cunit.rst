@@ -3,26 +3,7 @@
 The CUnit test suite
 ====================
 
-Table of Contents
------------------
-
--  `1. Introduction <#introduction>`__
--  `2. Running the tests <#running-the-tests>`__
-
-   -  `2.1. Consider using cyrus-docker <#consider-using-cyrus-docker>`__
-   -  `2.2. Setting up the machine <#setting-up-the-machine>`__
-   -  `2.3 Configure script <#configure-scripts>`__
-   -  `2.4 Make <#make>`__
-   -  `2.5 Using Valgrind <#using-valgrind>`__
-   -  `2.6 The tests are failing <#the-tests-are-failing>`__
-   -  `2.7 Debugging a test <#debugging-a-test>`__
-
--  `3. Adding your own tests <#adding-your-own-tests>`__
-
-   -  `3.1 Where to put your tests <#where-to-put-your-tests>`__
-   -  `3.2 Adding a new suite <#adding-a-new-suite>`__
-   -  `3.3 Adding a test to a Suite <#adding-a-test-to-a-suite>`__
-   -  `3.4 Suite init and cleanup <#suite-init-and-cleanup>`__
+.. contents::
 
 1. Introduction
 ---------------
