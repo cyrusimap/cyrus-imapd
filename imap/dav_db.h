@@ -48,4 +48,6 @@ int dav_reconstruct_user(const char *userid, const char *audit_tool);
 int dav_attach_userid(sqldb_t *db, const char *userid);
 int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox);
 
+int dav_count_recs(sqldb_t *db, const char *table, int *count);
+
 #endif /* DAV_DB_H */

@@ -307,6 +307,16 @@ static int jmap_sieve_get(jmap_req_t *req)
         }
     }
     else {
+        int count = 0;
+        sievedb_count(db, &count);
+        if (count > req->settings->limits[MAX_OBJECTS_IN_GET]) {
+            err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                            "description",
+                            "number of ids exceeds maxObjectsInGet limit");
+            jmap_error(req, err);
+            goto done;
+        }
+
         sievedb_foreach(db, &getscript, &get);
     }
 
