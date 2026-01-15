@@ -385,7 +385,6 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
     cmp = a->skip - b->skip;
     if (cmp) return cmp;
 
-#ifdef HAVE_RECUR_BY_REF
     short i;
     for (i = 0; i < ICAL_BY_NUM_PARTS; i++) {
         cmp = a->by[i].size - b->by[i].size;
@@ -396,39 +395,6 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
                          a->by[i].size * sizeof(a->by[i].data[0]));
         if (cmp) return cmp;
     }
-#else /* !HAVE_RECUR_BY_REF */
-    cmp = memcmp(a->by_minute, b->by_minute,
-                 sizeof(a->by_minute) / sizeof(a->by_minute[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_hour, b->by_hour,
-                 sizeof(a->by_hour) / sizeof(a->by_hour[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_day, b->by_day,
-                 sizeof(a->by_day) / sizeof(a->by_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_month_day, b->by_month_day,
-                 sizeof(a->by_month_day) / sizeof(a->by_month_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_year_day, b->by_year_day,
-                 sizeof(a->by_year_day) / sizeof(a->by_year_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_week_no, b->by_week_no,
-                 sizeof(a->by_week_no) / sizeof(a->by_week_no[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_month, b->by_month,
-                 sizeof(a->by_month) / sizeof(a->by_month[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_set_pos, b->by_set_pos,
-                 sizeof(a->by_set_pos) / sizeof(a->by_set_pos[0]));
-    if (cmp) return cmp;
-#endif /* HAVE_RECUR_BY_REF */
 
     return 0;
 }
@@ -489,11 +455,7 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
     entry->icaliter = icaliter;
     entry->next = icalrecur_iterator_next(entry->icaliter);
     entry->recur = recur;
-#ifdef HAVE_RECUR_BY_REF
     icalrecurrencetype_ref(recur);
-#else /* !HAVE_RECUR_BY_REF */
-    entry->recur->rscale = xstrdupnull(recur->rscale);
-#endif /* HAVE_RECUR_BY_REF */
 }
 
 static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
@@ -553,13 +515,7 @@ multirrule_iterator_for_range(icalcomponent *comp,
             multirrule_iterator_add(&iter, recur, dtstart, range.start);
         }
 
-#ifdef HAVE_RECUR_BY_REF
         icalrecurrencetype_unref(recur);
-#else /* !HAVE_RECUR_BY_REF */
-        else {
-            icalrecurrencetype_unref(recur);
-        }
-#endif
     }
 
     return iter;
@@ -3282,7 +3238,6 @@ EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop
 
 #endif /* HAVE_LIBICALVCARD */
 
-#ifdef HAVE_RECUR_BY_REF
 EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 {
     icalrecurrencetype_t *rt = icalvalue_get_recur(val);
@@ -3291,137 +3246,5 @@ EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 
     return rt;
 }
-
-#else /* !HAVE_RECUR_BY_REF */
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_new(void)
-{
-    icalrecurrencetype_t *rt =
-        icalmemory_new_buffer(sizeof(icalrecurrencetype_t));
-
-    if (!rt) return NULL;
-
-    icalrecurrencetype_clear(rt);
-
-    return rt;
-}
-
-EXPORTED void icalrecurrencetype_unref(icalrecurrencetype_t *rt)
-{
-    icalerror_check_arg_rv((rt != NULL), "rt");
-
-    if (rt->rscale) icalmemory_free_buffer(rt->rscale);
-
-    icalmemory_free_buffer(rt);
-}
-
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt)
-{
-    icalrecurrencetype_t *res;
-
-    icalerror_check_arg_rz((rt != NULL), "rt");
-
-    res = icalrecurrencetype_new();
-    if (!res) {
-        return NULL;
-    }
-
-    memcpy(res, rt, sizeof(*res));
-
-    if (res->rscale) {
-        res->rscale = icalmemory_strdup(res->rscale);
-        if (!res->rscale) {
-            icalrecurrencetype_unref(res);
-            return NULL;
-        }
-    }
-
-    return res;
-}
-
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str)
-{
-    icalrecurrencetype_t rt = icalrecurrencetype_from_string(str);
-    icalrecurrencetype_t *res = icalrecurrencetype_clone(&rt);
-
-    if (rt.rscale) icalmemory_free_buffer(rt.rscale);
-
-    return res;
-}
-
-EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
-{
-    icalrecurrencetype_t rt = icalvalue_get_recur(val);
-
-    return icalrecurrencetype_clone(&rt);
-}
-
-EXPORTED short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
-                                      icalrecurrencetype_byrule rule)
-{
-    switch (rule) {
-    case ICAL_BY_MONTH:     return rt->by_month;
-    case ICAL_BY_WEEK_NO:   return rt->by_week_no;
-    case ICAL_BY_YEAR_DAY:  return rt->by_year_day;
-    case ICAL_BY_MONTH_DAY: return rt->by_month_day;
-    case ICAL_BY_DAY:       return rt->by_day;
-    case ICAL_BY_HOUR:      return rt->by_hour;
-    case ICAL_BY_MINUTE:    return rt->by_minute;
-    case ICAL_BY_SECOND:    return rt->by_second;
-    case ICAL_BY_SET_POS:   return rt->by_set_pos;
-    default:                return NULL;
-    }
-}
-
-EXPORTED short icalrecur_byrule_size(icalrecurrencetype_t *rt,
-                                     icalrecurrencetype_byrule rule)
-{
-    short *byX, max, size;
-
-    switch (rule) {
-    case ICAL_BY_MONTH:
-        byX = rt->by_month;
-        max = ICAL_BY_MONTH_SIZE;
-        break;
-    case ICAL_BY_WEEK_NO:
-        byX = rt->by_week_no;
-        max = ICAL_BY_WEEKNO_SIZE;
-        break;
-    case ICAL_BY_YEAR_DAY:
-        byX = rt->by_year_day;
-        max = ICAL_BY_YEARDAY_SIZE;
-        break;
-    case ICAL_BY_MONTH_DAY:
-        byX = rt->by_month_day;
-        max = ICAL_BY_MONTHDAY_SIZE;
-        break;
-    case ICAL_BY_DAY:
-        byX = rt->by_day;
-        max = ICAL_BY_DAY_SIZE;
-        break;
-    case ICAL_BY_HOUR:
-        byX = rt->by_hour;
-        max = ICAL_BY_HOUR_SIZE;
-        break;
-    case ICAL_BY_MINUTE:
-        byX = rt->by_minute;
-        max = ICAL_BY_MINUTE_SIZE;
-        break;
-    case ICAL_BY_SECOND:
-        byX = rt->by_second;
-        max = ICAL_BY_SECOND_SIZE;
-        break;
-    case ICAL_BY_SET_POS:
-        byX = rt->by_set_pos;
-        max = ICAL_BY_SETPOS_SIZE;
-        break;
-    default:
-        return 0;
-    }
-
-    for (size = 0; size < max && byX[size] != ICAL_RECURRENCE_ARRAY_MAX; size++);
-
-    return size;
-}
-#endif /* !HAVE_RECUR_BY_REF */
 
 #endif /* HAVE_ICAL */
