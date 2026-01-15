@@ -39,6 +39,11 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
+    "myst_parser",
+]
+
+myst_enable_extensions = [
+    "substitution",
 ]
 
 extensions.append("sphinxlocal.roles.cyrusman")
@@ -64,7 +69,10 @@ gettext_compact = False
 templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = ".rst"
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
 # The encoding of source files.
 # source_encoding = 'utf-8-sig'
@@ -482,6 +490,10 @@ rst_prolog += """
 ## rst_prolog += """
 ## .. |imap_version_master_renamed| replace:: 3.0
 ## """
+
+common_substitutions = {
+"cli-dash-c-text": "Use the specified configuration file *config-file* rather than the default :cyrusman:`imapd.conf(5)`."
+}
 
 # Bloilerplate configuration file texts.
 rst_prolog += """

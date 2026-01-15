@@ -2237,6 +2237,11 @@ AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
         [*],    [WARN_DOCDEPS([GitPython])])
 
+AX_PYTHON_MODULE([myst_parser], [], [python3])
+AS_CASE([$HAVE_PYMOD_MYST_PARSER],
+        [yes],  [],
+        [*],    [WARN_DOCDEPS([myst_parser])])
+
 AX_PYTHON_MODULE([sphinx_rtd_theme], [], [python3])
 AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
         [yes],  [],
@@ -2246,6 +2251,7 @@ AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" \
            -a x"$have_ppvr" = xyes \
            -a x"$HAVE_PYMOD_GIT" = xyes \
+           -a x"$HAVE_PYMOD_MYST_PARSER" = xyes \
            -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 
 AH_TOP([
