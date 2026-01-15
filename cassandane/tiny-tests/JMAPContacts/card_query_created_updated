@@ -1,0 +1,95 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_created_updated
+    :needs_dependency_icalvcard
+    ($self)
+{
+    my $carddav = $self->{carddav};
+    my $jmap = $self->{jmap};
+    my $user = $self->default_user;
+
+    xlog $self, "create card with non-UTC CREATED (to test sorting)";
+    my $uid  = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$uid.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID;VALUE=TEXT:$uid
+FN:No Name
+CREATED:20260102T000000+1200
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+        }, 'R1']
+    ]);
+    my $c1_id = $res->[0][1]{list}[0]{id};
+
+    xlog $self, "create additional cards";
+    my $c2 = $user->contacts->create({created => '2026-01-02T00:00:00Z',
+                                      updated => '2026-01-03T00:00:00Z'});
+    my $c3 = $user->contacts->create({created => '2026-01-03T00:00:00Z',
+                                      updated => '2026-01-04T00:00:00Z'});
+
+    xlog $self, "query by created and updated";
+    $res = $jmap->CallMethods([
+        ['ContactCard/query', {
+            filter => {
+                createdBefore => '2026-01-03T00:00:00Z'
+            },
+            sort => [{
+                property => 'created',
+                isAscending => JSON::false,
+            }],
+        }, 'R1'],
+        ['ContactCard/query', {
+            filter => {
+                createdAfter => '2026-01-03T00:00:00Z'
+            }
+        }, 'R2'],
+        ['ContactCard/query', {
+            filter => {
+                updatedBefore => '2026-01-04T00:00:00Z'
+            }
+        }, 'R3'],
+        ['ContactCard/query', {
+            filter => {
+                updatedAfter => '2026-01-04T00:00:00Z'
+            }
+        }, 'R4'],
+        ['ContactCard/query', {
+            filter => {
+                operator => 'AND',
+                conditions => [
+                    { createdBefore => '2026-01-03T00:00:00Z' },
+                    { updatedAfter  => '2026-01-03T00:00:00Z' }
+                ]
+            }
+        }, 'R5']
+    ]);
+    $self->assert_deep_equals(
+        [ $c2->id, $c1_id ],
+        $res->[0][1]{ids}
+    );
+    $self->assert_deep_equals(
+        [ $c3->id ],
+        $res->[1][1]{ids}
+    );
+    $self->assert_deep_equals(
+        [ $c2->id ],
+        $res->[2][1]{ids}
+    );
+    $self->assert_deep_equals(
+        [ $c3->id ],
+        $res->[3][1]{ids}
+    );
+    $self->assert_deep_equals(
+        [ $c2->id ],
+        $res->[4][1]{ids}
+    );
+}

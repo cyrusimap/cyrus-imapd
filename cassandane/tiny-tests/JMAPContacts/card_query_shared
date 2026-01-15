@@ -346,12 +346,12 @@ sub test_card_query_shared
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
 
-    xlog $self, "filter by nickName";
+    xlog $self, "filter by nickname";
     $res = $jmap->CallMethods([ [
         'ContactCard/query',
         {
             accountId => 'manifold',
-            filter    => { nickName => "nick1" }
+            filter    => { nickname => "nick1" }
         },
         "R1"
     ] ]);
@@ -370,18 +370,6 @@ sub test_card_query_shared
     ] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{ $res->[0][1]{ids} });
-
-    xlog $self, "filter by hobby";
-    $res = $jmap->CallMethods([ [
-        'ContactCard/query',
-        {
-            accountId => 'manifold',
-            filter    => { hobby => "reading" }
-        },
-        "R1"
-    ] ]);
-    $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{ $res->[0][1]{ids} });
 
     xlog $self, "filter by note";
     $res = $jmap->CallMethods([ [
