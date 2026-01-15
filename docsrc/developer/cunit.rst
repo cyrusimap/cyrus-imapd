@@ -24,7 +24,7 @@ This section takes you through the process of running Cyrus' unit tests.
 Before you proceed with the instructions below, consider whether you could just
 use cyrus-docker, cyd, and dar.  Those tools let you hack on Cyrus without
 setting up your own development environment.  They're documented on `the
-developer overview page <imap/developer>`.
+developer overview page </developer/index>`.
 
 2.2. Setting up the machine
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

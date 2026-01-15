@@ -34,6 +34,6 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
     overview
     setup
     operations
-    developers
+    developer/index
     support/index
     glossary
