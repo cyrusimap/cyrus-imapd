@@ -1691,7 +1691,6 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     json_object_set_new(recur, "interval", json_integer(rrule->interval));
 
-#ifdef HAVE_RSCALE
     /* rscale */
     if (rrule->rscale) {
         s = xstrdup(rrule->rscale);
@@ -1715,7 +1714,6 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
             skip = "omit";
     }
     json_object_set_new(recur, "skip", json_string(skip));
-#endif
 
     /* firstDayOfWeek */
     s = xstrdup(icalrecur_weekday_to_string(rrule->week_start));

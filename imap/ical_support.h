@@ -74,19 +74,6 @@ extern short icalrecur_byrule_size(icalrecurrencetype_t *rt,
 #define HAVE_VPOLL_SUPPORT
 #endif
 
-#ifndef HAVE_NEW_CLONE_API
-/* Allow us to compile without #ifdef HAVE_NEW_CLONE_API everywhere */
-#define icalcomponent_clone           icalcomponent_new_clone
-#define icalproperty_clone            icalproperty_new_clone
-#define icalparameter_clone           icalparameter_new_clone
-#endif
-
-#ifndef HAVE_GET_COMPONENT_NAME
-/* This should never match anything in the wild
-   which means that we can't patch X- components */
-#define icalcomponent_get_component_name(comp)  "X-CYR-"
-#endif
-
 /* Initialize libical timezones. */
 extern void ical_support_init(void);
 
@@ -263,16 +250,6 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
-
-#ifndef HAVE_RSCALE
-
-/* Functions to replace those not available in libical < v1.0 */
-
-#define icalrecurrencetype_month_is_leap(month) 0
-#define icalrecurrencetype_month_month(month) month
-
-#endif /* HAVE_RSCALE */
-
 
 /* Wrappers to fetch managed attachment parameters by kind */
 

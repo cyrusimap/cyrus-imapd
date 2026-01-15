@@ -71,9 +71,7 @@ EXPORTED void ical_support_init(void)
               EX_CONFIG);
     }
 
-#ifdef HAVE_ICALPARSER_CTRL
     icalparser_set_ctrl(ICALPARSER_CTRL_OMIT);
-#endif
 
     syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
                        __func__, timezones->num_elements);
