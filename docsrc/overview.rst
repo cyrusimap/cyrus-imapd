@@ -6,6 +6,6 @@ Overview
 .. toctree::
     :maxdepth: 2
 
-    imap/concepts/features
-    imap/concepts/overview_and_concepts
-    imap/rfc-support
+    concepts/features
+    concepts/overview_and_concepts
+    rfc-support

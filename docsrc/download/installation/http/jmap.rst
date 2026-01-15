@@ -28,13 +28,13 @@ so manually, assuming you have the source.
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob conversations
        :end-before: endblob conversations
 
    |
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob conversations_db
       :end-before: endblob conversations_db
 

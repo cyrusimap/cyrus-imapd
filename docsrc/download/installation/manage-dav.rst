@@ -48,7 +48,7 @@ The Cyrus httpd service is configured using options in :cyrusman:`imapd.conf(5)`
 
 .. sidebar:: httpmodules
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob httpmodules
        :end-before: endblob httpmodules
 
@@ -73,7 +73,7 @@ As with other Cyrus services, the Cyrus httpd service uses
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob allowplaintext
        :end-before: endblob allowplaintext
 

@@ -133,11 +133,11 @@ Release notes live under ``docsrc/imap/download/release-notes/``.
 2. Review the contents of all the `changes/next/*` files.  Flesh out the new
    release notes document accordingly.  (Compare previous `...-beta*` and
    `x.y.0` release notes to get a sense of the tone and level of detail.)
-3. Review `docsrc/imap/download/upgrade.rst`, also with reference to the
+3. Review `docsrc/download/upgrade.rst`, also with reference to the
    `changes/next/*` files.  Make any necessary updates.  We expect people
    upgrading to the new version to follow these instructions, so they'd better
    be as complete and correct as we can get them.
-4. Review `docsrc/imap/rfc-support.rst`, also with reference to the
+4. Review `docsrc/rfc-support.rst`, also with reference to the
    `changes/next/*` files, and make any necessary updates.  Also compare this
    file with the version of it on the stable branch.  Check for any changes
    that don't have an accompanying `changes/next` file, and if there are any,
