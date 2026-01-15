@@ -196,11 +196,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "ical", json_false());
 #endif
-#ifdef HAVE_LIBICALVCARD
-    json_object_set_new(dependency, "icalvcard", json_true());
-#else
-    json_object_set_new(dependency, "icalvcard", json_false());
-#endif
 #ifdef HAVE_ICU
     json_object_set_new(dependency, "icu4c", json_true());
 #else

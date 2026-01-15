@@ -40,7 +40,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-#ifdef HAVE_LIBICALVCARD
 static int jmap_addressbook_get(struct jmap_req *req);
 static int jmap_addressbook_changes(struct jmap_req *req);
 static int jmap_addressbook_set(struct jmap_req *req);
@@ -51,7 +50,6 @@ static int jmap_card_querychanges(struct jmap_req *req);
 static int jmap_card_set(struct jmap_req *req);
 static int jmap_card_copy(struct jmap_req *req);
 static int jmap_card_parse(jmap_req_t *req);
-#endif /* HAVE_LIBICALVCARD */
 
 static int jmap_contactgroup_get(struct jmap_req *req);
 static int jmap_contactgroup_changes(struct jmap_req *req);
@@ -91,7 +89,6 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
 // clang-format off
 static jmap_method_t jmap_contact_methods_standard[] = {
-#ifdef HAVE_LIBICALVCARD
     {
         "AddressBook/get",
         JMAP_URN_CONTACTS,
@@ -152,7 +149,6 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         &jmap_card_parse,
         JMAP_NEED_CSTATE
     },
-#endif /* HAVE_LIBICALVCARD */
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -223,10 +219,8 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_contact_methods_standard, settings);
 
-#ifdef HAVE_LIBICALVCARD
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_CONTACTS, json_object());
-#endif
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
@@ -252,13 +246,8 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 }
 
 HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
-#ifdef HAVE_LIBICALVCARD
                                       struct auth_state *authstate,
                                       const char *authuserid,
-#else
-                                      struct auth_state *authstate __attribute__((unused)),
-                                      const char *authuserid __attribute__((unused)),
-#endif
                                       const char *accountid)
 {
     char *cardhomename = carddav_mboxname(accountid, NULL);
@@ -271,7 +260,6 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
         goto done;
     }
 
-#ifdef HAVE_LIBICALVCARD
     int rights = httpd_myrights(authstate, mbentry);
     int is_main_account = !strcmpsafe(authuserid, accountid);
 
@@ -280,7 +268,6 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
                                   "maxAddressBooksPerCard", 1,
                                   "mayCreateAddressBook",
                                   is_main_account || (rights & JACL_CREATECHILD)));
-#endif
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());
@@ -4994,8 +4981,6 @@ static int jmap_contact_copy(struct jmap_req *req)
                           &_contact_from_record, &_contact_set_create);
 }
 
-
-#ifdef HAVE_LIBICALVCARD
 
 /*****************************************************************************
  * JMAP AddressBook API
@@ -13160,138 +13145,3 @@ done:
     free(mediatype);
     return res;
 }
-
-#else /* !HAVE_LIBICALVCARD */
-
-static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
-{
-    struct mailbox *mailbox = NULL;
-    struct vparse_card *vcard = NULL;
-    char *mboxid = NULL, *prop = NULL, *mediatype = NULL;
-    uint32_t uid;
-    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
-    int res = HTTP_OK;
-    mbentry_t *freeme = NULL;
-    int r;
-
-    if (ctx->blobid[0] != 'V') return 0;
-
-    if (!jmap_decode_rawdata_blobid(ctx->blobid, &mboxid, &uid,
-                                    NULL, NULL, &prop, &guid)) {
-        res = HTTP_BAD_REQUEST;
-        goto done;
-    }
-
-    if (!prop && ctx->accept_mime) {
-        /* Make sure client can handle blob type. */
-        if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-            strcmp(ctx->accept_mime, "text/vcard")) {
-            res = HTTP_NOT_ACCEPTABLE;
-            goto done;
-        }
-        buf_setcstr(&ctx->content_type, ctx->accept_mime);
-    }
-
-    const mbentry_t *mbentry;
-    if (ctx->from_accountid) {
-        mboxlist_lookup_by_uniqueid(mboxid, &freeme, NULL);
-        mbentry = freeme;
-    }
-    else {
-        mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-    }
-    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    /* Open mailbox, we need it now */
-    r = mailbox_open_irl(mbentry->name, &mailbox);
-    if (r) {
-        ctx->errstr = error_message(r);
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    /* Load vCard data */
-    struct index_record record;
-    r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r == IMAP_NOTFOUND) {
-        res = HTTP_NOT_FOUND;
-        goto done;
-    }
-
-    if (!r) {
-        vcard = record_to_vcard(mailbox, &record);
-    }
-    if (!vcard) {
-        ctx->errstr = "failed to load record";
-        res = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
-    if (prop) {
-        /* Fetching a particular property as a blob */
-        struct vparse_entry *entry = vparse_get_entry(vcard->objects, NULL, prop);
-        struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
-
-        if (!entry ||
-            !vcard_prop_decode_value(entry, &ctx->blob, &mediatype, &prop_guid) ||
-            message_guid_cmp(&guid, &prop_guid)) {
-            res = HTTP_NOT_FOUND;
-            goto done;
-        }
-        else if (ctx->accept_mime) {
-            if (strcmp(ctx->accept_mime, "application/octet-stream") &&
-                strcmp(ctx->accept_mime, mediatype)) {
-                res = HTTP_NOT_ACCEPTABLE;
-                goto done;
-            }
-            buf_setcstr(&ctx->content_type, ctx->accept_mime);
-        }
-        else if (mediatype) {
-            buf_setcstr(&ctx->content_type, mediatype);
-        }
-        else buf_reset(&ctx->content_type);
-
-        buf_setcstr(&ctx->encoding, "BINARY");
-    }
-    else {
-        if (!ctx->accept_mime || !strcmp(ctx->accept_mime, "text/vcard")) {
-            struct vparse_entry *entry =
-                vparse_get_entry(vcard->objects, NULL, "VERSION");
-
-            buf_setcstr(&ctx->content_type, "text/vcard");
-            if (entry)
-                buf_printf(&ctx->content_type, "; version=%s", entry->v.value);
-        }
-
-        buf_setcstr(&ctx->encoding, "8BIT");
-        vparse_tobuf(vcard, &ctx->blob);
-    }
-
-done:
-    if (res != HTTP_OK && !ctx->errstr) {
-        const char *desc = NULL;
-        switch (res) {
-            case HTTP_BAD_REQUEST:
-                desc = "invalid contact blobid";
-                break;
-            case HTTP_NOT_FOUND:
-                desc = "failed to find blob by contact blobid";
-                break;
-            default:
-                desc = error_message(res);
-        }
-        ctx->errstr = desc;
-    }
-    if (vcard) vparse_free_card(vcard);
-    mailbox_close(&mailbox);
-    mboxlist_entry_free(&freeme);
-    free(mboxid);
-    free(prop);
-    free(mediatype);
-    return res;
-}
-
-#endif /* HAVE_LIBICALVCARD */

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_card_set_update_empty
-    :needs_dependency_icalvcard :MagicPlus :NoAltNameSpace
+    :MagicPlus :NoAltNameSpace
     ($self)
 {
     my $jmap = $self->{jmap};

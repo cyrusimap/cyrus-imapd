@@ -10,12 +10,15 @@
 #ifdef HAVE_ICAL
 
 #include <libical/ical.h>
+#include <libical/vcard.h>
+
 #undef icalerror_warn
 #define icalerror_warn(message) \
 {syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
 #include "dav_util.h"
 #include "mailbox.h"
+
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
@@ -244,10 +247,6 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 #endif /* HAVE_ICAL */
 
-#ifdef HAVE_LIBICALVCARD
-
-#include <libical/vcard.h>
-
 /**
  * Looks up a property parameter by name.
  *
@@ -261,6 +260,4 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
  */
 extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                            const char *name);
-#endif /* HAVE_LIBICALVCARD */
-
 #endif /* ICAL_SUPPORT_H */

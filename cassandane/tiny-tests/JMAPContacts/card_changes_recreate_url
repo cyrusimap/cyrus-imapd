@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_card_changes_recreate_url
-    :needs_dependency_icalvcard
     ($self)
 {
     $ENV{DEBUGDAV} = 1;

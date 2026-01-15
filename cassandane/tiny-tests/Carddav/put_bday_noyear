@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_put_bday_noyear
-    :needs_dependency_icalvcard
     ($self)
 {
     my $CardDAV = $self->{carddav};

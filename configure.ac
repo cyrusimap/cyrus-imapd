@@ -1525,7 +1525,7 @@ dnl
 
         PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
-                LIBS="$LIBS ${ICAL_LIBS}"
+                LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
                 with_ical=yes
                 ],
                 AC_MSG_ERROR([Need libical for http]))
@@ -1535,14 +1535,6 @@ dnl
                 AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
                         [Do we have support for PARTICIPANT-TYPE=VOTER?]),
                 [], [[#include <libical/ical.h>]])
-
-        dnl Check for libicalvcard
-        AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
-                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
-                 LIBS="$LIBS -licalvcard"
-                 with_icalvcard=yes
-                ],
-                with_icalvcard=no)
 
         dnl vcardparser_set_xprop_value_kind will be new in libical 4.0
         AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
@@ -2469,7 +2461,6 @@ External dependencies:
    zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
-   icalvcard:          $with_icalvcard
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet

@@ -3452,7 +3452,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
             cdata->dav.creationdate = new->internaldate.tv_sec;
 
         /* Load message containing the resource and parse vcard data */
-#ifdef HAVE_LIBICALVCARD
         vcardcomponent *vcard = record_to_vcard_x(mailbox, new);
 
         if (!vcard) {
@@ -3466,22 +3465,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         r = carddav_writecard_x(carddavdb, cdata, vcard, ispinned);
 
         vcardcomponent_free(vcard);
-#else
-        struct vparse_card *vcard = record_to_vcard(mailbox, new);
-
-        if (!vcard || !vcard->objects) {
-            xsyslog(LOG_ERR, "record_to_vcard() failed",
-                    "record=<%u> mailbox=<%s>",
-                    cdata->dav.imap_uid, mailbox_name(mailbox));
-            r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
-            vparse_free_card(vcard);
-            goto done;
-        }
-
-        r = carddav_writecard(carddavdb, cdata, vcard->objects, ispinned);
-
-        vparse_free_card(vcard);
-#endif /* HAVE_LIBICALVCARD */
     }
 
 done:
