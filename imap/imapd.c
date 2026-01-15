@@ -414,6 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "OBJECTID=ACCOUNTID",    CAPA_POSTAUTH,           { 0 } }, /* draft-degennaro-imap-objectid-accountid */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
       { .statep = &imapd_preview_enabled }                    },
@@ -6905,6 +6906,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     struct dlist *use;
     struct mailbox *mailbox = NULL;
     char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+    char accountid[UUID_STR_LEN];
     mbentry_t *parent = NULL;
     const char *origname = name;
     struct listargs listargs = {
@@ -7359,7 +7361,10 @@ localcreate:
         list_data(&listargs);
     }
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
+    // ACCOUNTID_NEEDS_FIXING
+    strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
+
+    prot_printf(imapd_out, "%s OK [MAILBOXID (%s) ACCOUNTID (%s)] Completed\r\n", tag, mailboxid, accountid);
 
     imapd_check(NULL, 0);
 
@@ -9630,6 +9635,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         }
         else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
             statusitems |= STATUS_MAILBOXID;
+        }
+        else if (!strcmp(arg.s, "accountid")) {        /* draft-degennaro-imap-objectid-accountid */
+            statusitems |= STATUS_ACCOUNTID;
         }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
@@ -14056,7 +14064,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity", "unseen",
                     "highestmodseq", "appendlimit", "size", "mailboxid",
                     "deleted", "deleted-storage",
-                    "", "", "",  // placeholders for unused bits
+                    "accountid", "", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
