@@ -70,7 +70,6 @@
 #include "imap/imap_err.h"
 
 
-#ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
 
 static int rscale_cmp(const void *a, const void *b)
@@ -78,8 +77,6 @@ static int rscale_cmp(const void *a, const void *b)
     /* Convert to uppercase since that's what we prefer to output */
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
-#endif /* HAVE_RSCALE */
-
 
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
@@ -680,13 +677,11 @@ static const struct cal_comp_t {
 static void my_caldav_init(struct buf *serverinfo)
 {
     buf_printf(serverinfo, " LibiCal/%s", ICAL_VERSION);
-#ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
         icalarray_sort(rscale_calendars, &rscale_cmp);
 
         buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
-#endif
 
     namespace_calendar.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
@@ -709,12 +704,7 @@ static void my_caldav_init(struct buf *serverinfo)
         namespace_calendar.allow |= ALLOW_CAL_ATTACH;
 
     if (config_getswitch(IMAPOPT_CALDAV_ACCEPT_INVALID_RRULES)) {
-#ifdef HAVE_INVALID_RRULE_HANDLING
         ical_set_invalid_rrule_handling_setting(ICAL_RRULE_IGNORE_INVALID);
-#else
-        syslog(LOG_WARNING,
-               "Your version of libical can not accept invalid RRULEs");
-#endif
     }
 
     if (namespace_tzdist.enabled) {
@@ -4048,7 +4038,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         hashu64_enumerate(&overrides, &strip_past_override, &orock);
 
-#ifdef HAVE_RSCALE
         /* Make sure we support the provided RSCALE in an RRULE */
         if (rscale_calendars && rt->rscale && *rt->rscale) {
             /* Perform binary search on sorted icalarray */
@@ -4071,7 +4060,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
         }
-#endif /* HAVE_RSCALE */
     }
 
     /* Check for changed UID */

@@ -264,13 +264,6 @@ static json_t *buildinfo()
 #endif
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
 
-    /* iCalendar features */
-#ifdef HAVE_ICALPARSER_CTRL
-    json_object_set_new(ical, "ctrl", json_true());
-#else
-    json_object_set_new(ical, "ctrl", json_false());
-#endif
-
     /* Internal version numbers */
 #ifdef USE_SIEVE
     json_object_set_new(version, "BYTECODE_MIN_VERSION",
