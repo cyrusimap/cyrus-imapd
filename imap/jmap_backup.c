@@ -157,7 +157,7 @@ static void jmap_restore_parse(jmap_req_t *req,
                 icaldurationtype_from_string(json_string_value(arg));
 
             if (!icaldurationtype_is_bad_duration(dur)) {
-                restore->cutoff = time(0) - icaldurationtype_as_seconds(dur);
+                restore->cutoff = time(0) - icaldurationtype_as_utc_seconds(dur);
             }
         }
 

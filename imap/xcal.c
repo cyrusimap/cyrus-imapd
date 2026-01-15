@@ -677,7 +677,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
             xmlFree(content);
             content = xmlNodeGetContent(node);
             p.duration = icaldurationtype_from_string((const char *) content);
-            if (icaldurationtype_as_seconds(p.duration) == 0) break;
+            if (icaldurationtype_as_utc_seconds(p.duration) == 0) break;
         }
         else {
             syslog(LOG_WARNING,
