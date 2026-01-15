@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_card_set_addressbookids
-    :needs_dependency_icalvcard
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

@@ -3209,8 +3209,6 @@ EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
 
 #endif
 
-#ifdef HAVE_LIBICALVCARD
-
 EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                              const char *name)
 {
@@ -3235,8 +3233,6 @@ EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop
 
     return NULL;
 }
-
-#endif /* HAVE_LIBICALVCARD */
 
 EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 {

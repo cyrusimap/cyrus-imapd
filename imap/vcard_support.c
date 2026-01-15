@@ -264,14 +264,12 @@ static void add_type_pref(const char *key __attribute__((unused)),
 
         vparse_add_param(ventry, "TYPE", "pref");
     }
-#ifdef HAVE_LIBICALVCARD
     else {
         vcardenumarray_element pref = { .val = VCARD_TYPE_PREF };
         vcardproperty *prop = ((struct preferred_prop *) data)->prop;
 
         vcardproperty_add_type_parameter(prop, &pref);
     }
-#endif
 }
 
 EXPORTED void vcard_to_v3(struct vparse_card *vcard)
@@ -618,8 +616,6 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
     buf_free(&buf);
 }
 
-#ifdef HAVE_LIBICALVCARD
-
 EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
 {
     vcardcomponent *vcard = vcardcomponent_new_from_string(str);
@@ -759,5 +755,3 @@ EXPORTED const char *vcardproperty_get_xparam_value(vcardproperty *prop,
 
     return NULL;
 }
-
-#endif /* HAVE_LIBVCARDVCARD */
