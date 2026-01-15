@@ -318,35 +318,35 @@ Several options exist within :cyrusman:`imapd.conf(5)` to aid in the
 distribution of new users and mailboxes within a murder; across servers
 and partitions.  We recommend exploring these:
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob partition_select_mode
         :end-before: endblob partition_select_mode
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob partition_select_exclude
         :end-before: endblob partition_select_exclude
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob partition_select_usage_reinit
         :end-before: endblob partition_select_usage_reinit
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob partition_select_soft_usage_limit
         :end-before: endblob partition_select_soft_usage_limit
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob serverlist
         :end-before: endblob serverlist
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob serverlist_select_mode
         :end-before: endblob serverlist_select_mode
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob serverlist_select_usage_reinit
         :end-before: endblob serverlist_select_usage_reinit
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob serverlist_select_soft_usage_limit
         :end-before: endblob serverlist_select_soft_usage_limit
 

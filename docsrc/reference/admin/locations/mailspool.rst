@@ -14,11 +14,11 @@ Additionally, on servers with more than one spool partition, that
 partition in which new user mailboxes are to be created is specified by
 the ``defaultpartition`` directive.
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob partition-name
         :end-before: endblob partition-name
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob defaultpartition
         :end-before: endblob defaultpartition
 
@@ -47,11 +47,11 @@ Metadata Partitions
 The configuration directives to do so are quite similar to
 those for data partitions:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob metapartition_files
         :end-before: endblob metapartition_files
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob metapartition-name
         :end-before: endblob metapartition-name
 

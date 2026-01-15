@@ -47,12 +47,12 @@ Additional features of this functionality include;
 To enable the automatic creation of mailboxes, set the following options
 in :cyrusman:`imapd.conf(5)`.
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_quota
     :end-before: endblob autocreate_quota
 
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_post
     :end-before: endblob autocreate_post
 
@@ -62,14 +62,14 @@ options.
 Autocreation of mailboxes
 -------------------------
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_inbox_folders
     :end-before: endblob autocreate_inbox_folders
 
 Automatic quota settings
 ------------------------
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_quota_messages
     :end-before: endblob autocreate_quota_messages
 
@@ -77,41 +77,41 @@ Automatic quota settings
 Autocreation of Sieve scripts
 -----------------------------
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_sieve_folders
     :end-before: endblob autocreate_sieve_folders
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_sieve_script
     :end-before: endblob autocreate_sieve_script
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_sieve_script_compile
     :end-before: endblob autocreate_sieve_script_compile
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_sieve_script_compiled
     :end-before: endblob autocreate_sieve_script_compiled
 
 Automated folder subscriptions
 ------------------------------
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_subscribe_folders
     :end-before: endblob autocreate_subscribe_folders
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_subscribe_sharedfolders
     :end-before: endblob autocreate_subscribe_sharedfolders
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_subscribe_sharedfolders_all
     :end-before: endblob autocreate_subscribe_sharedfolders_all
 
 Autocreation of users
 ---------------------
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
     :start-after: startblob autocreate_users
     :end-before: endblob autocreate_users
 

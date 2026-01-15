@@ -11,7 +11,7 @@ Configuration
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob calendarprefix
        :end-before: endblob calendarprefix
 
@@ -39,7 +39,7 @@ calendar named Default for user "murch" would reside in the mailbox named
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob caldav_allowscheduling
        :end-before: endblob caldav_allowscheduling
 
@@ -59,13 +59,13 @@ user MUST have an existing IMAP Inbox in order for the calendars to be created.
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob caldav_create_default
       :end-before: endblob caldav_create_default
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob caldav_create_attach
       :end-before: endblob caldav_create_attach
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob caldav_create_sched
       :end-before: endblob caldav_create_sched
 
@@ -98,7 +98,7 @@ default, but can be enabled with the "caldav_allowcalendaradmin" option.
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob caldav_allowcalendaradmin
       :end-before: endblob caldav_allowcalendaradmin
 
@@ -348,19 +348,19 @@ Configuration
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob zoneinfo_db_path
        :end-before: endblob zoneinfo_db_path
 
    |
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob zoneinfo_db
        :end-before: endblob zoneinfo_db
 
    |
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob zoneinfo_dir
        :end-before: endblob zoneinfo_dir
 
@@ -453,7 +453,7 @@ allows CalDAV servers to:
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob caldav_allowscheduling
        :end-before: endblob caldav_allowscheduling
 

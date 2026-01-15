@@ -148,9 +148,9 @@ html_context = {
     "conf_py_path": "/docsrc/",
     "source_suffix": source_suffix,
     "githubexclude": [
-        "imap/reference/manpages/usercommands/sieveshell",
-        "imap/reference/manpages/systemcommands/cyradm",
-        "imap/reference/manpages/configs/imapd.conf",
+        "reference/manpages/usercommands/sieveshell",
+        "reference/manpages/systemcommands/cyradm",
+        "reference/manpages/configs/imapd.conf",
     ],
 }
 
@@ -283,10 +283,10 @@ import glob, os, io
 
 # Which paths relate to which man page sections
 pathset = [
-    ("imap/reference/manpages/systemcommands/", 8),
+    ("reference/manpages/systemcommands/", 8),
     ("imap/developer/libraries/", 3),
-    ("imap/reference/manpages/usercommands/", 1),
-    ("imap/reference/manpages/configs/", 5),
+    ("reference/manpages/usercommands/", 1),
+    ("reference/manpages/configs/", 5),
 ]
 
 # For each man page section/path,

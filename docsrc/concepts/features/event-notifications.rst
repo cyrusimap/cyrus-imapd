@@ -60,7 +60,7 @@ issued.
 
     This event notification is added to Cyrus IMAP outside of any RFC.
 
-.. literalinclude:: ../../../_static/event_notifications/AclChange.json
+.. literalinclude:: ../../_static/event_notifications/AclChange.json
     :language: json
     :linenos:
 
@@ -86,7 +86,7 @@ in part, the counter-parts to
     *   Include an example event notification emitted for multiple flags
         being cleared.
 
-.. literalinclude:: ../../../_static/event_notifications/FlagsClear.json
+.. literalinclude:: ../../_static/event_notifications/FlagsClear.json
     :language: json
     :linenos:
 
@@ -109,7 +109,7 @@ respectively.
     *   Include an example event notification emitted for multiple flags
         being set.
 
-.. literalinclude:: ../../../_static/event_notifications/FlagsSet.json
+.. literalinclude:: ../../_static/event_notifications/FlagsSet.json
     :language: json
     :linenos:
 
@@ -118,7 +118,7 @@ respectively.
 Login
 -----
 
-.. literalinclude:: ../../../_static/event_notifications/Login.json
+.. literalinclude:: ../../_static/event_notifications/Login.json
     :language: json
     :linenos:
 
@@ -127,7 +127,7 @@ Login
 Logout
 ------
 
-.. literalinclude:: ../../../_static/event_notifications/Logout.json
+.. literalinclude:: ../../_static/event_notifications/Logout.json
     :language: json
     :linenos:
 
@@ -136,7 +136,7 @@ Logout
 MailboxCreate
 -------------
 
-.. literalinclude:: ../../../_static/event_notifications/MailboxCreate.json
+.. literalinclude:: ../../_static/event_notifications/MailboxCreate.json
     :language: json
     :linenos:
 
@@ -153,7 +153,7 @@ MailboxDelete
 ..
     Mar 10 13:59:36 kolab notifyd[18204]: EVENT, , , ,  "{"event":"MailboxDelete","timestamp":"2015-03-10T13:59:36.279+01:00","service":"imaps","mailboxID":"imap://jane.doe@example.org@kolab.example.org/INBOX;UIDVALIDITY=1425991710","uri":"imap://jane.doe@example.org@kolab.example.org/INBOX;UIDVALIDITY=1425991710","pid":18210,"user":"cyrus-admin","vnd.cmu.sessionId":"kolab.example.org-18210-1425992375-1-10616182148387168471"}"
 
-.. literalinclude:: ../../../_static/event_notifications/MailboxDelete.json
+.. literalinclude:: ../../_static/event_notifications/MailboxDelete.json
     :language: json
     :linenos:
 
@@ -162,7 +162,7 @@ MailboxDelete
 MailboxRename
 -------------
 
-.. literalinclude:: ../../../_static/event_notifications/MailboxRename.json
+.. literalinclude:: ../../_static/event_notifications/MailboxRename.json
     :language: json
     :linenos:
 
@@ -171,7 +171,7 @@ MailboxRename
 MailboxSubscribe
 ----------------
 
-.. literalinclude:: ../../../_static/event_notifications/MailboxSubscribe.json
+.. literalinclude:: ../../_static/event_notifications/MailboxSubscribe.json
     :language: json
     :linenos:
 
@@ -180,7 +180,7 @@ MailboxSubscribe
 MailboxUnSubscribe
 ------------------
 
-.. literalinclude:: ../../../_static/event_notifications/MailboxUnSubscribe.json
+.. literalinclude:: ../../_static/event_notifications/MailboxUnSubscribe.json
     :language: json
     :linenos:
 
@@ -189,7 +189,7 @@ MailboxUnSubscribe
 MessageAppend
 -------------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageAppend.json
+.. literalinclude:: ../../_static/event_notifications/MessageAppend.json
     :language: json
     :linenos:
 
@@ -198,7 +198,7 @@ MessageAppend
 MessageCopy
 -----------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageCopy.json
+.. literalinclude:: ../../_static/event_notifications/MessageCopy.json
     :language: json
     :linenos:
 
@@ -212,7 +212,7 @@ MessageExpire
 MessageExpunge
 --------------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageExpunge.json
+.. literalinclude:: ../../_static/event_notifications/MessageExpunge.json
     :language: json
     :linenos:
 
@@ -225,7 +225,7 @@ MessageMove
 
     The ``MessageMove`` event is an event type not documented in an RFC.
 
-.. literalinclude:: ../../../_static/event_notifications/MessageMove.json
+.. literalinclude:: ../../_static/event_notifications/MessageMove.json
     :language: json
     :linenos:
 
@@ -234,7 +234,7 @@ MessageMove
 MessageNew
 ----------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageNew.json
+.. literalinclude:: ../../_static/event_notifications/MessageNew.json
     :language: json
     :linenos:
 
@@ -243,7 +243,7 @@ MessageNew
 MessageRead
 -----------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageRead.json
+.. literalinclude:: ../../_static/event_notifications/MessageRead.json
     :language: json
     :linenos:
 
@@ -252,7 +252,7 @@ MessageRead
 MessageTrash
 ------------
 
-.. literalinclude:: ../../../_static/event_notifications/MessageTrash.json
+.. literalinclude:: ../../_static/event_notifications/MessageTrash.json
     :language: json
     :linenos:
 
@@ -268,7 +268,7 @@ QuotaChange
     notification, if the quota change leads the quota root to allow more
     resources than currently in use.
 
-.. literalinclude:: ../../../_static/event_notifications/QuotaChange.json
+.. literalinclude:: ../../_static/event_notifications/QuotaChange.json
     :language: json
     :linenos:
 
@@ -286,7 +286,7 @@ the :ref:`imap-features-namespaces-personal`.
     Quota being exceeded on shared folders cannot include an "owner" for
     the quota root.
 
-.. literalinclude:: ../../../_static/event_notifications/QuotaExceed.json
+.. literalinclude:: ../../_static/event_notifications/QuotaExceed.json
     :language: json
     :linenos:
 
@@ -301,7 +301,7 @@ The ``QuotaWithin`` event typically follows a
 :ref:`imap-features-event-notifications-messagemove` [#]_, or
 :ref:`imap-features-event-notifications-quotachange` [#]_.
 
-.. literalinclude:: ../../../_static/event_notifications/QuotaWithin.json
+.. literalinclude:: ../../_static/event_notifications/QuotaWithin.json
     :language: json
     :linenos:
 
@@ -345,7 +345,7 @@ CalendarAlarm
 The ``CalendarAlarm`` event occurs when a calendar event triggers an
 alarm.
 
-.. literalinclude:: ../../../_static/event_notifications/CalendarAlarm.json
+.. literalinclude:: ../../_static/event_notifications/CalendarAlarm.json
     :language: json
     :linenos:
 
@@ -361,7 +361,7 @@ a supported option for third party developers at this time.
 
 The ``ApplePushService`` event occurs when
 
-.. literalinclude:: ../../../_static/event_notifications/ApplePushService.json
+.. literalinclude:: ../../_static/event_notifications/ApplePushService.json
     :language: json
     :linenos:
 

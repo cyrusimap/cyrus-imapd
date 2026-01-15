@@ -31,18 +31,18 @@ Controlling Socket Locations
 Locations of sockets may be tailored to the needs of different
 sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob idlesocket
         :end-before: endblob idlesocket
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob lmtpsocket
         :end-before: endblob lmtpsocket
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob notifysocket
         :end-before: endblob notifysocket
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob ptloader_sock
         :end-before: endblob ptloader_sock

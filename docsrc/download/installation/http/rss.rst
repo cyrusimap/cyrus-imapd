@@ -25,7 +25,7 @@ List of mailboxes: rss_feeds
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob rss_feeds
        :end-before: endblob rss_feeds
 
@@ -57,7 +57,7 @@ Display of mailbox list: rss_feedlist_template
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob rss_feedlist_template
        :end-before: endblob rss_feedlist_template
 

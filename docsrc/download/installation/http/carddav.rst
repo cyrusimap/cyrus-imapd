@@ -11,7 +11,7 @@ Configuration
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob addressbookprefix
        :end-before: endblob addressbookprefix
 
@@ -47,7 +47,7 @@ created.
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
       :start-after: startblob carddav_allowaddressbookadmin
       :end-before: endblob carddav_allowaddressbookadmin
 

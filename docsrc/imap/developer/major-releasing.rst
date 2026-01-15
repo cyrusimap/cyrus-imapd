@@ -112,15 +112,15 @@ series will be 3.8 (and then master will become 3.9).
 6. Add release notes infrastructure:
 
    a. Make the directories for the new series:
-      ``mkdir -p docsrc/imap/download/release-notes/<series>/x``
+      ``mkdir -p docsrc/download/release-notes/<series>/x``
       (note the `x`, it's important for some historical reason)
    b. Make the directories for the new dev version:
-      ``mkdir -p docsrc/imap/download/release-notes/<dev>/x``
-   c. Create `docsrc/imap/download/release-notes/<version>/index.rst`
+      ``mkdir -p docsrc/download/release-notes/<dev>/x``
+   c. Create `docsrc/download/release-notes/<version>/index.rst`
       for each of these, with stub contents.  It's easiest to just
       copy and update from an older one.
    d. Add stub release notes for alpha0.  This will be a file called
-      `docsrc/imap/download/release-notes/<series>/x/<series>.0-alpha0.rst`.
+      `docsrc/download/release-notes/<series>/x/<series>.0-alpha0.rst`.
       If we've been doing dev snapshots from master, start by copying the
       release notes from the most recent one of those.  If we haven't, then
       you will be starting with a blank document, in which case it's easiest
@@ -303,11 +303,11 @@ This work mostly happens on the new branch.
 3. Review the contents of all the `changes/next/*` files.  Flesh out the new
    release notes document accordingly.  (Compare previous `...-beta1` release
    notes to get a sense of the tone and level of detail.)
-4. Review `docsrc/imap/download/upgrade.rst`, also with reference to the
+4. Review `docsrc/download/upgrade.rst`, also with reference to the
    `changes/next/*` files.  Make any necessary updates.  We expect people
    upgrading to the new version to follow these instructions, so they'd better
    be as complete and correct as we can get them.
-5. Review `docsrc/imap/rfc-support.rst`, also with reference to the
+5. Review `docsrc/rfc-support.rst`, also with reference to the
    `changes/next/*` files, and make any necessary updates.  Also compare this
    file with the version of it on the stable branch.  Check for any changes
    that don't have an accompanying `changes/next` file, and if there are any,

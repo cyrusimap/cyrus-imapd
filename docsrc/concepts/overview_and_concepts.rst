@@ -145,10 +145,10 @@ For a complete reference to Access Rights, please see
 Rights are combined through concatenation.  Please see
 :ref:`imap-admin-access-control-combining-rights`
 
-.. include:: /imap/reference/admin/access-control/defaults.rst
+.. include:: /reference/admin/access-control/defaults.rst
     :start-after: _imap-admin-access-control-defaults:
 
-.. include:: /imap/reference/admin/access-control/identifiers.rst
+.. include:: /reference/admin/access-control/identifiers.rst
     :start-after: _imap-admin-access-control-identifiers:
     :end-before: _imap-admin-access-control-authorization-mechanisms:
 
@@ -242,14 +242,14 @@ Quotas are manipulated via these subcommands within the
     * :ref:`imap-reference-manpages-systemcommands-cyradm-listquota`
     * :ref:`imap-reference-manpages-systemcommands-cyradm-listquotaroot`
 
-..  include:: /imap/reference/admin/quotas.rst
+..  include:: /reference/admin/quotas.rst
     :start-after: _imap-admin-quotas-repair:
     :end-before: _imap-admin-quotas-config:
 
-..  include:: /imap/reference/admin/quotas/quotatypes.rst
+..  include:: /reference/admin/quotas/quotatypes.rst
     :start-after: _imap-admin-quotas-types:
 
-..  include:: /imap/reference/admin/quotas/quotaroots.rst
+..  include:: /reference/admin/quotas/quotaroots.rst
     :start-after: _imap-admin-quotas-roots:
 
 Controlling Quota Behavior
@@ -334,7 +334,7 @@ Quotas and Partitions
 
 Quota roots are independent of partitions. A single quota root can apply to mailboxes in different partitions.
 
-..  include: /imap/reference/admin/quotas.rst
+..  include: /reference/admin/quotas.rst
     :start-after:`_imap-admin-quotas-database:`
     :end-before:`_imap-admin-quotas-convert-db:`
 

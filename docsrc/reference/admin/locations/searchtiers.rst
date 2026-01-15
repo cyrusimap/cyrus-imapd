@@ -14,7 +14,7 @@ Default Search Tier Name
 Specify the name of the default search tier using the `defaultsearchtier`
 setting:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob defaultsearchtier
         :end-before: endblob defaultsearchtier
 
@@ -57,6 +57,6 @@ will be adding three search partitions.
 
 These settings are in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob searchpartition-name
         :end-before: endblob searchpartition-name

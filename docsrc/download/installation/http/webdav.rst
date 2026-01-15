@@ -11,7 +11,7 @@ Configuration
 
     |change-default-config|
 
-   .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+   .. include:: /reference/manpages/configs/imapd.conf.rst
        :start-after: startblob davdriveprefix
        :end-before: endblob davdriveprefix
 

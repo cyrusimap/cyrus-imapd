@@ -17,7 +17,7 @@ The main configuration directory is referred to as ``<configdirectory>``
 in Cyrus IMAP documentation, and is set via the ``configdirectory``
 entry in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob configdirectory
         :end-before: endblob configdirectory
 
@@ -44,47 +44,47 @@ The links above document the purpose, DB type and choices for those
 files.  You may adjust the locations of these database files via various
 settings in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob annotation_db_path
         :end-before: endblob annotation_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob backup_db_path
         :end-before: endblob backup_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob duplicate_db_path
         :end-before: endblob duplicate_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob mboxlist_db_path
         :end-before: endblob mboxlist_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob newsrc_db_path
         :end-before: endblob newsrc_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob ptscache_db_path
         :end-before: endblob ptscache_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quota_db_path
         :end-before: endblob quota_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob statuscache_db_path
         :end-before: endblob statuscache_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob tls_sessions_db_path
         :end-before: endblob tls_sessions_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob userdeny_db_path
         :end-before: endblob userdeny_db_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob zoneinfo_db_path
         :end-before: endblob zoneinfo_db_path
 
@@ -130,19 +130,19 @@ In addition to the files, are several directories:
 As with the DB files, above, many of these, too, may be relocated via
 settings in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob mboxname_lockpath
         :end-before: endblob mboxname_lockpath
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob proc_path
         :end-before: endblob proc_path
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob ptloader_sock
         :end-before: endblob ptloader_sock
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quota_db_path
         :end-before: endblob quota_db_path
 
@@ -153,23 +153,23 @@ settings in :cyrusman:`imapd.conf(5)`:
     hierarchy.  If you use any other DB type, then this will be
     the actual filename.
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob sieveusehomedir
         :end-before: endblob sieveusehomedir
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob sievedir
         :end-before: endblob sievedir
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob idlesocket
         :end-before: endblob idlesocket
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob lmtpsocket
         :end-before: endblob lmtpsocket
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob notifysocket
         :end-before: endblob notifysocket
 

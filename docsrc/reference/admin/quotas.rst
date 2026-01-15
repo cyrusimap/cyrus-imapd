@@ -31,37 +31,37 @@ Controlling Quota Behavior
 How restrictive quotas will be may be tailored to the needs of different
 sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob lmtp_over_quota_perm_failure
         :end-before: endblob lmtp_over_quota_perm_failure
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob lmtp_strict_quota
         :end-before: endblob lmtp_strict_quota
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quotawarnpercent
         :end-before: endblob quotawarnpercent
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quotawarnsize
         :end-before: endblob quotawarnsize
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quotawarnmsg
         :end-before: endblob quotawarnmsg
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob autocreate_quota
         :end-before: endblob autocreate_quota
 
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob autocreate_quota_messages
         :end-before: endblob autocreate_quota_messages
 
@@ -75,11 +75,11 @@ skiplist) or in "quotalegacy" format, which is a filesystem hierarchy.
 This is controlled by the ``quota_db`` setting in
 :cyrusman:`imapd.conf(5)`.  Here's more about the pertinent settings:
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quota_db
         :end-before: endblob quota_db
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob quota_db_path
         :end-before: endblob quota_db_path
 

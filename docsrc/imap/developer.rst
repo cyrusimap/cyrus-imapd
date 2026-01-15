@@ -12,7 +12,7 @@ Getting Started
     developer/process
     developer/overview
     developer/compiling
-    installing
+    /installing
     developer/developer-testing
     developer/coverage
     developer/jmap

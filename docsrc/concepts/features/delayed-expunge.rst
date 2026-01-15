@@ -31,7 +31,7 @@ Configuring Cyrus IMAP for Delayed Expunge
 To enable or disable Delayed Expunge, please check the following
 settings in :cyrusman:`imapd.conf(5)`.
 
-    .. include:: /imap/reference/manpages/configs/imapd.conf.rst
+    .. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob expunge_mode
         :end-before: endblob expunge_mode
 

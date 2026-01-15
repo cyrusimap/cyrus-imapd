@@ -32,7 +32,7 @@ Enabling
 Archive operation in Cyrus is enabled via the ``archive_enabled``
 setting in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archive_enabled
         :end-before: endblob archive_enabled
 
@@ -41,7 +41,7 @@ Defining
 
 The configuration suite provides directives to define these partitions:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archivepartition-name
         :end-before: endblob archivepartition-name
 
@@ -51,15 +51,15 @@ Controlling
 And to control the criteria used to manage migration of data between
 partitions:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archive_after
         :end-before: endblob archive_after
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archive_maxsize
         :end-before: endblob archive_maxsize
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archive_keepflagged
         :end-before: endblob archive_keepflagged
 

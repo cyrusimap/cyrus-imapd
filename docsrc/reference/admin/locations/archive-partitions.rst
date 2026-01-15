@@ -7,7 +7,7 @@ Archive Partitions
 Archive partitions are defined by the ``archivepartition-name`` option
 in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /imap/reference/manpages/configs/imapd.conf.rst
+.. include:: /reference/manpages/configs/imapd.conf.rst
         :start-after: startblob archivepartition-name
         :end-before: endblob archivepartition-name
 

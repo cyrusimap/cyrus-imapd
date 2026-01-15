@@ -9,6 +9,6 @@ Setup
     :maxdepth: 2
 
     imap/developer/compiling
-    imap/installing
+    installing
     download/upgrade
-    imap/concepts/deployment
+    concepts/deployment
