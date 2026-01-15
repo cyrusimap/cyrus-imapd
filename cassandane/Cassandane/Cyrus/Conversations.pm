@@ -1160,8 +1160,8 @@ sub test_rename_between_users
 
     # folder IDs should be "INBOX", "foo", "bar"
 
-    my $res = $talk->status('INBOX.foo', ['mailboxid']);
-    my $fooid = $res->{'mailboxid'}->[0];
+    my $res = $talk->status('INBOX.foo', ['uniqueid']);
+    my $fooid = $res->{'uniqueid'}->[0];
 
     my %data = $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['SHOW']);
     my %mdata = $self->{instance}->run_dbcommand($mdirs->{user}{conversations}, $format, ['SHOW']);
@@ -1194,8 +1194,8 @@ sub test_rename_between_users
     $self->{store}->set_folder("INBOX.again");
     $self->make_message("Again Msg");
 
-    $res = $talk->status('INBOX.again', ['mailboxid']);
-    my $againid = $res->{'mailboxid'}->[0];
+    $res = $talk->status('INBOX.again', ['uniqueid']);
+    my $againid = $res->{'uniqueid'}->[0];
 
     $talk->rename("user.manifold.foo", "INBOX.foo");
 
