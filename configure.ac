@@ -1536,11 +1536,6 @@ dnl
                         [Do we have support for PARTICIPANT-TYPE=VOTER?]),
                 [], [[#include <libical/ical.h>]])
 
-        dnl icalrecurrencetype_new will be new in libical 4.0
-        AC_CHECK_LIB(ical, icalrecurrencetype_new,
-                AC_DEFINE(HAVE_RECUR_BY_REF,[],
-                        [Do we have support for icalrecurrencetype by reference?]))
-
         dnl Check for libicalvcard
         AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
                  AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])

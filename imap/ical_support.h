@@ -32,43 +32,12 @@ extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
 #define icalproperty_set_recurrence(prop, rt)                   \
     icalproperty_set_value(prop, icalvalue_new_recurrence(rt))
 
-#ifdef HAVE_RECUR_BY_REF
 #define ICAL_RECURRENCE_ARRAY_MAX            0x7f7f
 #define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(rt, tt)
 #define icalvalue_new_recurrence(rt)         icalvalue_new_recur(rt)
 #define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, rt)
 #define icalrecur_byrule_size(rt, rule)      (rt->by[rule].size)
 #define icalrecur_byrule_data(rt, rule)      (rt->by[rule].data)
-
-#else /* !HAVE_RECUR_BY_REF */
-typedef enum icalrecurrencetype_byrule
-{
-    ICAL_BY_MONTH = 0,
-    ICAL_BY_WEEK_NO,
-    ICAL_BY_YEAR_DAY,
-    ICAL_BY_MONTH_DAY,
-    ICAL_BY_DAY,
-    ICAL_BY_HOUR,
-    ICAL_BY_MINUTE,
-    ICAL_BY_SECOND,
-    ICAL_BY_SET_POS,
-
-    ICAL_BY_NUM_PARTS
-} icalrecurrencetype_byrule;
-
-#define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(*(rt), tt)
-#define icalvalue_new_recurrence(rt)         icalvalue_new_recur(*(rt))
-#define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, *(rt))
-
-extern icalrecurrencetype_t *icalrecurrencetype_new(void);
-extern icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt);
-extern icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str);
-extern void icalrecurrencetype_unref(icalrecurrencetype_t *rt);
-extern short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
-                                    icalrecurrencetype_byrule rule);
-extern short icalrecur_byrule_size(icalrecurrencetype_t *rt,
-                                   icalrecurrencetype_byrule rule);
-#endif /* HAVE_RECUR_BY_REF */
 
 #ifdef HAVE_PARTTYPE_VOTER
 #define HAVE_VPOLL_SUPPORT
