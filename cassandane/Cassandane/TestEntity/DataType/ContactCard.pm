@@ -1,10 +1,27 @@
 use v5.28.0;
 package Cassandane::TestEntity::DataType::ContactCard;
 
+=head1 NAME
+
+Cassandane::TestEntity::DataType::ContactCard - the ContactCard entity datatype
+
+=head1 FACTORY METHODS
+
+=cut
+
 package Cassandane::TestEntity::Factory::ContactCard {
     use Moo;
 
     use Data::GUID ();
+
+=head1 create_group
+
+    my $card = $user->contacts->create_group({...});
+
+This is like the generic C<create> method, but will always set the C<kind>
+property to "group".
+
+=cut
 
     sub create_group {
         my ($self, $prop) = @_;
@@ -15,6 +32,18 @@ package Cassandane::TestEntity::Factory::ContactCard {
             kind => 'group',
         });
     }
+
+=head1 create
+
+The create method will provide sensible defaults, as usual, but additionally:
+
+If the C<name> argument is a plain string, it will be promoted to:
+
+    { full => $name }
+
+...meaning that you don't need to think much about name properties too hard.
+
+=cut
 
     sub fill_in_creation_defaults {
         my ($self, $prop) = @_;
@@ -45,6 +74,10 @@ package Cassandane::TestEntity::Factory::ContactCard {
     no Moo;
 }
 
+=head1 INSTANCE METHODS
+
+=cut
+
 package Cassandane::TestEntity::Instance::ContactCard {
     use Moo;
 
@@ -74,10 +107,24 @@ package Cassandane::TestEntity::Instance::ContactCard {
         return $res->{content};
     }
 
+=head2 as_vcard3
+
+This returns a byte string of the ContactCard in vCard 3.0 format, produced by
+making a GET request against the CardDAV endpoint.
+
+=cut
+
     sub as_vcard3 {
         my ($self) = @_;
         $self->_as_vcard('3.0');
     }
+
+=head2 as_vcard4
+
+This returns a byte string of the ContactCard in vCard 4.0 format, produced by
+making a GET request against the CardDAV endpoint.
+
+=cut
 
     sub as_vcard4 {
         my ($self) = @_;
@@ -99,15 +146,41 @@ package Cassandane::TestEntity::Instance::ContactCard {
         return $struct->{objects}[0];
     }
 
+=head2 as_vcard3_struct
+
+This method returns a data structure representing the parsed vCard of this
+card, which will be fetched from the server, requesting version 3.0.  The parse
+will be the 0th object returned by a parse with L<Text::VCardFast>.
+
+=cut
+
     sub as_vcard3_struct {
         my ($self) = @_;
         $self->_as_vcard_struct('3.0');
     }
 
+=head2 as_vcard3_struct
+
+This is identical to L<as_vcard4_struct>, but request vCard v4.0.
+
+=cut
+
     sub as_vcard4_struct {
         my ($self) = @_;
         $self->_as_vcard_struct('4.0');
     }
+
+=head2 add_member
+
+    $card->add_member($card_or_uid);
+
+This method must be called on a group-kind card.  Otherwise, an exception will
+be raised.
+
+This will add the given UID to the group's members.  If the argument was a
+contact card instance, that card's UID will be added.
+
+=cut
 
     sub add_member {
         my ($self, $card_or_uid) = @_;
@@ -133,6 +206,15 @@ package Cassandane::TestEntity::Instance::ContactCard {
         $self->factory->_update($self => { members => \%new_members });
         return;
     }
+
+=head2 create_member
+
+    $group_card->create_member({ ... });
+
+This method is sugar for creating a new card (using the given hashref, if any,
+as properties) and then adding it to the group card.
+
+=cut
 
     sub create_member {
         my ($self, $props) = @_;

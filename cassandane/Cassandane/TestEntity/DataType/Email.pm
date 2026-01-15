@@ -1,6 +1,12 @@
 use v5.28.0;
 package Cassandane::TestEntity::DataType::Email;
 
+=head1 NAME
+
+Cassandane::TestEntity::DataType::Email - the Email entity datatype
+
+=cut
+
 package Cassandane::TestEntity::Factory::Email {
     use Moo;
     use Cassandane::TestEntity::AutoSetup;
