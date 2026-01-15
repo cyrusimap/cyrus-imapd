@@ -125,7 +125,7 @@ of the previous, and reset only when a new stable series forks.  The release
 notes for the developer snapshots will form the starting point for the release
 notes of the next major release.
 
-Release notes live under ``docsrc/imap/download/release-notes/``.
+Release notes live under ``docsrc/download/release-notes/``.
 
 1. Copy the release notes from the previous snapshot of this series into
    a new file for this snapshot.  If this is the first snapshot of the series,
