@@ -1,96 +1,38 @@
 #include "cunit/unit.h"
 #include "imap/auditlog.h"
 
-#include "lib/sessionid.h"
 #include "lib/libconfig.h"
+
+#include <syslog.h>
 
 #define DBDIR "test-auditlog-dbdir"
 
-extern void hidden_auditlog_begin(struct buf *buf, const char *action);
-extern void hidden_auditlog_push(struct buf *buf,
-                                 const char *key,
-                                 const char *value);
-extern void hidden_auditlog_finish(struct buf *buf);
-
 static int set_up(void)
 {
-    session_clear_id();
-    trace_set_id(NULL, 0);
+    config_read_string("configdirectory: "DBDIR"/conf\n"
+                       "auditlog: yes\n");
     return 0;
 }
 
 static int tear_down(void)
 {
-    session_clear_id();
-    trace_set_id(NULL, 0);
+    config_reset();
     return 0;
 }
 
-static void test_session_id(void)
+static void test_basic(void)
 {
-    struct buf buf = BUF_INITIALIZER;
-    char match[32 + MAX_SESSIONID_SIZE];
+    const uint64_t bytes_in = 1123, bytes_out = 98714;
+    char expect[1024];
 
-    /* need basic configuration for session_new_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    /* don't need exhaustive format testing, logfmt.testc already does that */
+    snprintf(expect, sizeof(expect),
+             "event=%s used.bytes.in=%" PRIu64 " used.bytes.out=%" PRIu64,
+             "auditlog.traffic", bytes_in, bytes_out);
 
-    session_new_id();
-    snprintf(match, sizeof(match), " sessionid=<%s> ", session_id());
-
-    CU_SYSLOG_MATCH_SUBSTR(match);
-    hidden_auditlog_begin(&buf, "session id test");
-    hidden_auditlog_push(&buf, "key", "value");
-    hidden_auditlog_finish(&buf);
-    CU_ASSERT_SYSLOG(/*all*/0, 1);
-
-    config_reset();
-    system("rm -rf " DBDIR);
-    buf_free(&buf);
-}
-
-static void test_trace_id(void)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    trace_set_id("sometraceid", 0);
-
-    CU_SYSLOG_MATCH_SUBSTR(" r.tid=<sometraceid> ");
-    hidden_auditlog_begin(&buf, "trace id test");
-    hidden_auditlog_push(&buf, "key", "value");
-    hidden_auditlog_finish(&buf);
-    CU_ASSERT_SYSLOG(/*all*/0, 1);
-
-    buf_free(&buf);
-}
-
-static void test_auditlog_push(void)
-{
-    static const struct {
-        const char *value;
-        const char *expect;
-    } tests[] = {
-        { "",                           " k=<>" },
-        { NULL,                         " k=<>" },
-        { "no brackets",                " k=<no brackets>" },
-        { "<outer brackets swallowed>", " k=<outer brackets swallowed>" },
-        { "inner <brackets> kept",      " k=<inner <brackets> kept>" },
-        { "<unclosed bracket kept",     " k=<<unclosed bracket kept>" },
-        { "unopened bracket kept>",     " k=<unopened bracket kept>>" },
-    };
-    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
-    struct buf buf = BUF_INITIALIZER;
-    unsigned i;
-
-    for (i = 0; i < n_tests; i++) {
-        buf_reset(&buf);
-        hidden_auditlog_push(&buf, "k", tests[i].value);
-
-        CU_ASSERT_STRING_EQUAL(buf_cstring(&buf), tests[i].expect);
-    }
-
-    buf_free(&buf);
+    CU_SYSLOG_MATCH_SUBSTR(expect);
+    auditlog_traffic(bytes_in, bytes_out);
+    CU_ASSERT_SYSLOG(/* all */ 0, 1);
 }
 
 /* vim: set ft=c: */

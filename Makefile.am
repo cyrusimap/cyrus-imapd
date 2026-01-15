@@ -681,7 +681,7 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-    imap/mutex_fake.c imap/auditlog.c imap/spool.c imap/search_expr.c \
+    imap/mutex_fake.c imap/spool.c imap/search_expr.c \
     master/event.c master/cronevent.c
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit

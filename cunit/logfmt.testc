@@ -1,8 +1,11 @@
 #include "cunit/unit.h"
 #include "lib/logfmt.h"
 
-#include "libconfig.h"
-#include "sessionid.h"
+#include "imap/mailbox.h"
+#include "imap/mboxlist.h"
+
+#include "lib/libconfig.h"
+#include "lib/sessionid.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,6 +15,7 @@
 
 static int set_up(void)
 {
+    config_read_string("configdirectory: "DBDIR"/conf\n");
     session_clear_id();
     trace_set_id(NULL, 0);
     return 0;
@@ -21,6 +25,7 @@ static int tear_down(void)
 {
     session_clear_id();
     trace_set_id(NULL, 0);
+    config_reset();
     return 0;
 }
 
@@ -313,17 +318,12 @@ static void test_logfmt_push_session(void)
     struct logfmt lf = LOGFMT_INITIALIZER;
     unsigned i;
 
-    /* need basic configuration for session_new_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
-
     for (i = 0; i < n_tests; i++) {
         char match[32 + MAX_SESSIONID_SIZE] = {0};
 
         if (tests[i].with_session_id) {
             session_new_id();
-            snprintf(match, sizeof(match), " sessionid=%s ", session_id());
+            snprintf(match, sizeof(match), " r.sessionid=%s ", session_id());
         }
 
         if (tests[i].with_trace_id) {
@@ -337,7 +337,7 @@ static void test_logfmt_push_session(void)
         if (tests[i].with_session_id)
             CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), match));
         else
-            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " sessionid="));
+            CU_ASSERT_PTR_NULL(strstr(logfmt_cstring(&lf), " r.sessionid="));
 
         if (tests[i].with_trace_id)
             CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf),
@@ -376,6 +376,90 @@ static void test_logfmt_push_caller(void)
 
     actual_func = strstr(logfmt_cstring(&lf), "caller.func");
     CU_ASSERT_SUBSTR_EQUAL(actual_func, expect_func, strlen(expect_func));
+
+    logfmt_fini(&lf);
+}
+
+static void test_logfmt_push_mailbox(void)
+{
+    #define INTNAME  "user.sentinel.name"
+    #define EXTNAME  "user/sentinel/name" /* admin namespace */
+    #define UNIQUEID "sentinel_uniqueid"
+    #define JMAPID   "sentinel_mboxid"
+    struct mailbox test_mailbox = {
+        .mbentry = &(struct mboxlist_entry){
+            .name = xstrdup(INTNAME),
+            .uniqueid = xstrdup(UNIQUEID),
+            .jmapid = xstrdup(JMAPID),
+        },
+    };
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    logfmt_init(&lf, "test_logfmt_push_mailbox");
+
+    logfmt_push_mailbox(&lf, &test_mailbox);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.name=" EXTNAME));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.uniqueid=" UNIQUEID));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.mailboxid=" JMAPID));
+
+    free(test_mailbox.mbentry->name);
+    free(test_mailbox.mbentry->uniqueid);
+    free(test_mailbox.mbentry->jmapid);
+    logfmt_fini(&lf);
+    #undef INTNAME
+    #undef EXTNAME
+    #undef UNIQUEID
+    #undef JMAPID
+}
+
+static void test_logfmt_push_mbname(void)
+{
+    #define INTNAME "user.sentinel.name"
+    #define EXTNAME "user/sentinel/name" /* admin namespace */
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    mbname_t *mbname = NULL;
+
+    logfmt_init(&lf, "test_logfmt_push_mbname");
+
+    mbname = mbname_from_intname(INTNAME);
+    logfmt_push_mbname(&lf, NULL, mbname);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "mbox.name=" EXTNAME));
+
+    mbname_free(&mbname);
+    logfmt_fini(&lf);
+}
+
+static void test_logfmt_push_record(void)
+{
+    static const char msg[] = "banana";
+    struct index_record test_record = {
+        .uid = UINT32_C(123),
+        .modseq = UINT64_C(234),
+        .system_flags = FLAG_DELETED | FLAG_SEEN,
+        .guid = MESSAGE_GUID_INITIALIZER,
+        .size = strlen(msg),
+    };
+    char expect_guid[32];
+    char expect_size[32];
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    message_guid_generate(&test_record.guid, msg, sizeof(msg));
+    snprintf(expect_guid, sizeof(expect_guid), "msg.guid=%s",
+             message_guid_encode(&test_record.guid));
+    snprintf(expect_size, sizeof(expect_size), "msg.size=" SIZE_T_FMT,
+             strlen(msg));
+
+    logfmt_init(&lf, "test_logfmt_push_record");
+
+    logfmt_push_record(&lf, &test_record);
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.imapuid=123"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.modseq=234"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), "msg.sysflags=DE|SE"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), expect_guid));
+    CU_ASSERT_PTR_NOT_NULL(strstr(logfmt_cstring(&lf), expect_size));
 
     logfmt_fini(&lf);
 }

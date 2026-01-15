@@ -298,7 +298,7 @@ EXPORTED void logfmt_push_session(struct logfmt *lf)
     const char *traceid = trace_id();
 
     if (session_have_id()) {
-        logfmt_push(lf, "sessionid", session_id());
+        logfmt_push(lf, "r.sessionid", session_id());
     }
 
     if (traceid) {

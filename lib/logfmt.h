@@ -41,4 +41,11 @@ extern void logfmt_push_caller(struct logfmt *lf,
                                int line,
                                const char *func);
 
+/* n.b. There are also data type-specific logfmt_push_foo() functions for
+ * structs that this module has no visibility of, which are declared and
+ * defined alongside the struct.  You can find them with something like:
+ *
+ * $ ack 'void logfmt_push_'
+ *
+ */
 #endif

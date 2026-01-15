@@ -833,11 +833,11 @@ static int sieve_redirect(void *ac, void *ic,
     /* if we have a msgid, we can track our redirects */
     if (m->id) {
         snprintf(buf, sizeof(buf), "%s-%s", m->id, rc->addr);
-        sievedb = make_sieve_db(mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns));
+        sievedb = make_sieve_db(mbname_recipient(sd->mbname, mdata->ns));
 
         dkey.id = buf;
         dkey.to = sievedb;
-        dkey.date = ((deliver_data_t *) mc)->m->date;
+        dkey.date = m->date;
         /* ok, let's see if we've redirected this message before */
         if (duplicate_check(&dkey)) {
             duplicate_log(&dkey, "redirect");
@@ -864,7 +864,7 @@ static int sieve_redirect(void *ac, void *ic,
                           "message-id=%s target=<%s>",
                           m->id ? m->id : "<nomsgid>",
                           rc->addr);
-        auditlog_sieve("redirect",
+        auditlog_sieve("sieve.redirect",
                        ctx->userid, m->id, NULL, rc->addr, NULL, NULL);
         return SIEVE_OK;
     } else {
@@ -891,7 +891,7 @@ static int sieve_discard(void *ac __attribute__((unused)),
     xsyslog(LOG_INFO, "sieve discard",
                       "message-id=%s",
                       md->id ? md->id : "<nomsgid>");
-    auditlog_sieve("discard", NULL, md->id, NULL, NULL, NULL, NULL);
+    auditlog_sieve("sieve.discard", NULL, md->id, NULL, NULL, NULL, NULL);
 
     return SIEVE_OK;
 }
@@ -941,7 +941,7 @@ static int sieve_reject(void *ac, void *ic,
         xsyslog(LOG_INFO, "sieve LMTP reject",
                           "message-id=%s",
                           md->id ? md->id : "<nomsgid>");
-        auditlog_sieve("LMTP reject",
+        auditlog_sieve("sieve.lmtp-reject",
                        ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
@@ -957,7 +957,7 @@ static int sieve_reject(void *ac, void *ic,
                           "userid=<%s> message-id=%s",
                           mbname_userid(sd->mbname),
                           md->id ? md->id : "<nomsgid>");
-        auditlog_sieve("discard-reject",
+        auditlog_sieve("sieve.discard-reject",
                        ctx->userid, md->id, NULL, NULL, NULL, NULL);
         return SIEVE_OK;
     }
@@ -972,7 +972,7 @@ static int sieve_reject(void *ac, void *ic,
                           "message-id=%s target=<%s>",
                           md->id ? md->id : "<nomsgid>",
                           md->return_path);
-        auditlog_sieve("reject",
+        auditlog_sieve("sieve.reject",
                        ctx->userid, md->id, NULL, md->return_path, NULL, NULL);
         return SIEVE_OK;
     } else {
@@ -2095,7 +2095,7 @@ static int send_response(void *ac, void *ic,
                           "in.msgid=%s out.msgid=%s from=%s to=<%s>",
                           md->id ? md->id : "", outmsgid,
                           buf_cstring(&fromaddr), src->addr);
-        auditlog_sieve("vacation response",
+        auditlog_sieve("sieve.vacation",
                        ctx->userid, md->id, outmsgid,
                        NULL, buf_cstring(&fromaddr), src->addr);
         buf_free(&fromaddr);

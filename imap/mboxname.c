@@ -1411,7 +1411,7 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, unsigned optio
     return 0;
 }
 
-EXPORTED struct namespace *mboxname_get_adminnamespace()
+EXPORTED struct namespace *mboxname_get_adminnamespace(void)
 {
     static struct namespace ns;
     if (!admin_namespace) {
@@ -3379,4 +3379,15 @@ done:
     mbname_free(&mbname1);
     mbname_free(&mbname2);
     return ancestor;
+}
+
+EXPORTED void logfmt_push_mbname(struct logfmt *lf,
+                                 const char *key,
+                                 const mbname_t *mbname)
+{
+    if (!admin_namespace) mboxname_get_adminnamespace();
+
+    if (!key) key = "mbox.name";
+
+    logfmt_push(lf, key, mbname_extname(mbname, admin_namespace, NULL));
 }

@@ -8569,3 +8569,34 @@ EXPORTED int mailbox_set_datafile_timestamps(struct mailbox *mailbox,
 
     return 0;
 }
+
+EXPORTED void logfmt_push_mailbox(struct logfmt *lf,
+                                  const struct mailbox *mailbox)
+{
+    if (mailbox) {
+        mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
+
+        logfmt_push_mbname(lf, "mbox.name", mbname);
+        logfmt_push(lf, "mbox.uniqueid", mailbox_uniqueid(mailbox));
+        logfmt_push(lf, "mbox.mailboxid", mailbox_jmapid(mailbox));
+
+        mbname_free(&mbname);
+    }
+    else {
+        logfmt_push(lf, "mbox", NULL);
+    }
+}
+
+EXPORTED void logfmt_push_record(struct logfmt *lf,
+                                 const struct index_record *record)
+{
+    char sysflags[FLAGMAPSTR_MAXLEN] = {0};
+
+    flags_to_str(record, sysflags);
+
+    logfmt_pushf(lf, "msg.imapuid", "%" PRIu32, record->uid);
+    logfmt_pushf(lf, "msg.modseq", MODSEQ_FMT, record->modseq);
+    logfmt_push(lf, "msg.sysflags", sysflags);
+    logfmt_push(lf, "msg.guid", message_guid_encode(&record->guid));
+    logfmt_pushf(lf, "msg.size", UINT64_FMT, record->size);
+}
