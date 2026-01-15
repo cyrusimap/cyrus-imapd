@@ -50,7 +50,7 @@ covered by the following copyright message. However, please note that
 in older distributions, there may still be files that have the old
 copyright text.
 
-::
+.. code:: none
 
     * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
     *
