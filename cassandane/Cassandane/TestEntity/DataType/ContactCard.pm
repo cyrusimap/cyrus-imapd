@@ -146,10 +146,24 @@ making a GET request against the CardDAV endpoint.
         return $struct->{objects}[0];
     }
 
+=head2 as_vcard3_struct
+
+This method returns a data structure representing the parsed vCard of this
+card, which will be fetched from the server, requesting version 3.0.  The parse
+will be the 0th object returned by a parse with L<Text::VCardFast>.
+
+=cut
+
     sub as_vcard3_struct {
         my ($self) = @_;
         $self->_as_vcard_struct('3.0');
     }
+
+=head2 as_vcard3_struct
+
+This is identical to L<as_vcard4_struct>, but request vCard v4.0.
+
+=cut
 
     sub as_vcard4_struct {
         my ($self) = @_;
