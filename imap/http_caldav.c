@@ -3777,7 +3777,7 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
         if (prop) {
             struct icaldurationtype duration = icalproperty_get_duration(prop);
 
-            if (icaldurationtype_as_seconds(duration) < 0) {
+            if (icaldurationtype_as_utc_seconds(duration) < 0) {
                 /* NOTE: Per RFC 5545, Section 3.8.2.5, DURATION > 0,
                    but DURATION == 0 occurs frequently enough in the wild
                    for us to allow it */

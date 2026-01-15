@@ -970,8 +970,8 @@ static int deliver_merge_add(icalcomponent *ical,  // current iCalendar
     };
 
     if (!icaldurationtype_is_null_duration(duration) &&
-        icaldurationtype_as_seconds(duration) !=
-        icaldurationtype_as_seconds(icalcomponent_get_duration(master_comp))) {
+        icaldurationtype_as_utc_seconds(duration) !=
+        icaldurationtype_as_utc_seconds(icalcomponent_get_duration(master_comp))) {
         /* Change in event duration */
         rdate.period.start = dtstart;
         rdate.period.duration = duration;
