@@ -5010,7 +5010,7 @@ static json_t *addressbookrights_to_jmap(int rights)
             (rights & JACL_WRITEALL) == JACL_WRITEALL,
             "mayDelete",
             (rights & JACL_DELETE) == JACL_DELETE,
-            "mayAdmin",
+            "mayShare",
             (rights & JACL_ADMIN_ADDRBOOK) == JACL_ADMIN_ADDRBOOK);
 }
 
@@ -5035,7 +5035,7 @@ addressbook_sharewith_to_rights_iter:
             mask = JACL_WRITEALL;
         else if (!strcmp("mayDelete", name))
             mask = JACL_DELETE;
-        else if (!strcmp("mayAdmin", name))
+        else if (!strcmp("mayShare", name))
             mask = JACL_ADMIN_ADDRBOOK;
         else
             continue;
@@ -5529,7 +5529,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
                     if (!json_is_boolean(jval) ||
                             (strcmp(right, "mayRead") &&
                              strcmp(right, "mayWrite") &&
-                             strcmp(right, "mayAdmin") &&
+                             strcmp(right, "mayShare") &&
                              strcmp(right, "mayDelete"))) {
 
                         jmap_parser_push(parser, "shareWith");

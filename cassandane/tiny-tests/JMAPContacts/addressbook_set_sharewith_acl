@@ -43,7 +43,7 @@ sub test_addressbook_set_sharewith_acl
         },
     }, {
         rights => {
-            mayAdmin => JSON::true,
+            mayShare => JSON::true,
         },
         acl => 'wa',
    }, {
@@ -78,7 +78,7 @@ sub test_addressbook_set_sharewith_acl
         my %mergedrights = ((
             mayRead => JSON::false,
             mayWrite => JSON::false,
-            mayAdmin => JSON::false,
+            mayShare => JSON::false,
             mayDelete => JSON::false,
         ), %{$_->{wantRights}});
 
