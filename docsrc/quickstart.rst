@@ -2,14 +2,6 @@
 Quickstart Guide
 ================
 
-
-.. toctree::
-
-    imap/quickstart/introduction
-
-.. Coming Soon
-.. -----------
-
 Quick install
 =============
 

@@ -36,10 +36,10 @@ Release notes
 =============
 
 Write up the release notes, and add them to the appropriate location under
-``docsrc/imap/download/release-notes/``.  They will not yet be linked up.
+``docsrc/download/release-notes/``.  They will not yet be linked up.
 Build the documentation locally with ``make doc-html``, then check the new
 release notes file in your brower to make sure it's correct and complete.
-It will be in ``doc/html/imap/download/release-notes/...``.
+It will be in ``doc/html/download/release-notes/...``.
 
 Commit the new release notes with a message like ``docs: release notes for
 cyrus-imapd <version>``, but don't push it yet.  You might want to keep these
