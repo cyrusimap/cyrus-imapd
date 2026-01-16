@@ -1,4 +1,4 @@
-/* rfc822tok.c -- RFC 822/RFC 2822 tokenizer */
+/* rfc822tok.c - RFC 822/RFC 2822 tokenizer */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

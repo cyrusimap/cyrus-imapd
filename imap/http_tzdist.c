@@ -1,4 +1,4 @@
-/* http_tzdist.c -- Routines for handling tzdist service requests in httpd */
+/* http_tzdist.c - Routines for handling tzdist service requests in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

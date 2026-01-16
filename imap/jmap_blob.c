@@ -1,4 +1,4 @@
-/* jmap_blob.c -- Routines for handling JMAP Blob requests */
+/* jmap_blob.c - Routines for handling JMAP Blob requests */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

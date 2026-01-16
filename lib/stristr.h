@@ -1,4 +1,4 @@
-/* stristr.h -- locate a substring case-insensitively
+/* stristr.h - locate a substring case-insensitively
  */
 
 #ifndef INCLUDED_STRISTR_H

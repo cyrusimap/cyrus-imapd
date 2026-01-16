@@ -1,4 +1,4 @@
-/* http_carddav.h -- Routines for dealing with CARDDAV in httpd */
+/* http_carddav.h - Routines for dealing with CARDDAV in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

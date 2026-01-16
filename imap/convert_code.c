@@ -1,4 +1,4 @@
-/* convert_code.c: Convert IMAP_* error to sysexits.h exit status */
+/* convert_code.c - Convert IMAP_* error to sysexits.h exit status */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

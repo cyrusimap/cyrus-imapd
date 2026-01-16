@@ -1,4 +1,4 @@
-/* jmap_calendar.c -- Routines for handling JMAP calendar messages */
+/* jmap_calendar.c - Routines for handling JMAP calendar messages */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
