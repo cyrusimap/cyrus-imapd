@@ -196,11 +196,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "ical", json_false());
 #endif
-#ifdef HAVE_LIBICALVCARD
-    json_object_set_new(dependency, "icalvcard", json_true());
-#else
-    json_object_set_new(dependency, "icalvcard", json_false());
-#endif
 #ifdef HAVE_ICU
     json_object_set_new(dependency, "icu4c", json_true());
 #else
@@ -263,13 +258,6 @@ static json_t *buildinfo()
     json_object_set_new(search, "xapian", json_false());
 #endif
     json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
-
-    /* iCalendar features */
-#ifdef HAVE_ICALPARSER_CTRL
-    json_object_set_new(ical, "ctrl", json_true());
-#else
-    json_object_set_new(ical, "ctrl", json_false());
-#endif
 
     /* Internal version numbers */
 #ifdef USE_SIEVE

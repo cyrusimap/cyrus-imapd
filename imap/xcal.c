@@ -645,7 +645,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
         struct icalperiodtype p;
 
         p.start = p.end = icaltime_null_time();
-        p.duration = icaldurationtype_from_int(0);
+        p.duration = icaldurationtype_from_seconds(0);
 
         node = xmlFirstElementChild(xtype);
         if (!node) {
@@ -677,7 +677,7 @@ static icalvalue *xml_element_to_icalvalue(xmlNodePtr xtype,
             xmlFree(content);
             content = xmlNodeGetContent(node);
             p.duration = icaldurationtype_from_string((const char *) content);
-            if (icaldurationtype_as_int(p.duration) == 0) break;
+            if (icaldurationtype_as_utc_seconds(p.duration) == 0) break;
         }
         else {
             syslog(LOG_WARNING,
@@ -852,7 +852,7 @@ static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
 
     /* Get the property type */
     propname = ucase(icalmemory_tmp_copy((const char *) xprop->name));
-    kind = icalenum_string_to_property_kind(propname);
+    kind = icalproperty_string_to_kind(propname);
     if (kind == ICAL_NO_PROPERTY) {
         syslog(LOG_WARNING, "Unknown xCal property type: %s", propname);
         return NULL;
@@ -896,7 +896,7 @@ static icalproperty *xml_element_to_icalproperty(xmlNodePtr xprop)
     }
     typestr = ucase(icalmemory_tmp_copy((const char *) node->name));
     valkind = !strcmp(typestr, "UNKNOWN") ? ICAL_X_VALUE :
-        icalenum_string_to_value_kind(typestr);
+        icalvalue_string_to_kind(typestr);
     if (valkind == ICAL_NO_VALUE) {
         syslog(LOG_WARNING, "Unknown xCal value type for %s property: %s",
                propname, typestr);
@@ -974,7 +974,7 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
 
     /* Get component type */
     kind =
-        icalenum_string_to_component_kind(
+        icalcomponent_string_to_kind(
             ucase(icalmemory_tmp_copy((const char *) xcomp->name)));
     if (kind == ICAL_NO_COMPONENT) {
         syslog(LOG_WARNING, "Unknown xCal component type: %s", xcomp->name);

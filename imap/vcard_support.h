@@ -7,6 +7,8 @@
 
 #include <config.h>
 
+#include <libical/vcard.h>
+
 #include "vparse.h"
 
 #include "mailbox.h"
@@ -29,10 +31,6 @@ extern void vcard_to_v3(struct vparse_card *vcard);
 extern void vcard_to_v4(struct vparse_card *vcard);
 
 
-#ifdef HAVE_LIBICALVCARD
-
-#include <libical/vcard.h>
-
 extern vcardcomponent *vcard_parse_string_x(const char *str);
 extern vcardcomponent *vcard_parse_buf_x(const struct buf *buf);
 extern struct buf *vcard_as_buf_x(vcardcomponent *vcard);
@@ -47,7 +45,5 @@ extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
 
 extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                   const char *name);
-
-#endif /* HAVE_LIBICALVCARD */
 
 #endif /* VCARD_SUPPORT_H */

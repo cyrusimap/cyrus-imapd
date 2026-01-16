@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_card_set_create_bday_noyear
-    :needs_dependency_icalvcard
     ($self)
 {
     my $jmap = $self->{jmap};

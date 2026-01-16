@@ -1521,10 +1521,10 @@ static int action_expand(struct transaction_t *txn)
 
                 /* UT and local time 1 second before onset */
                 off.seconds = -1;
-                ut = icaltime_add(obs->onset, off);
+                ut = icalduration_extend(obs->onset, off);
 
                 off.seconds = obs->offset_from;
-                local = icaltime_add(ut, off);
+                local = icalduration_extend(ut, off);
 
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
@@ -1536,7 +1536,7 @@ static int action_expand(struct transaction_t *txn)
                 icaltime_adjust(&ut, 0, 0, 0, 1);
 
                 off.seconds = obs->offset_to;
-                local = icaltime_add(ut, off);
+                local = icalduration_extend(ut, off);
 
                 buf_printf(body,
                            "%s  " CTIME_FMT " UT = " CTIME_FMT " %s"
@@ -1784,13 +1784,11 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
     if (prop) rrule = icalproperty_get_recurrence(prop);
     if (!rrule) return 0;
 
-#ifdef HAVE_RSCALE
     if (rrule->rscale && strcasecmp(rrule->rscale, "GREGORIAN")) {
         /* POSIX rules are based on Gregorian calendar only */
         icalrecurrencetype_unref(rrule);
         return 0;
     }
-#endif
 
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
     at = icalproperty_get_dtstart(prop);

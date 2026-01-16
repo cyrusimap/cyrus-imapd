@@ -1525,57 +1525,16 @@ dnl
 
         PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
-                LIBS="$LIBS ${ICAL_LIBS}"
+                LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
                 with_ical=yes
                 ],
                 AC_MSG_ERROR([Need libical for http]))
-
-        dnl libical may have been built without RSCALE support
-        AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
-                [AC_DEFINE(HAVE_RSCALE,[], [Build RSCALE support into httpd?])],
-                [AC_MSG_NOTICE([Your version of libical can not support non-gregorian recurrences])])
-
-        dnl icalcomponent_clone will be new in libical 3.1.0
-        AC_CHECK_LIB(ical, icalcomponent_clone,
-                AC_DEFINE(HAVE_NEW_CLONE_API,[],
-                        [Do we have support for new clone API?]))
-
-        dnl ical_set_invalid_rrule_handling_setting will be new in libical 3.1.0
-        AC_CHECK_LIB(ical, ical_set_invalid_rrule_handling_setting,
-                AC_DEFINE(HAVE_INVALID_RRULE_HANDLING,[],
-                        [Do we have support for controlling invalid RRULE handline?]))
-
-        dnl icalcomponent_get_component_name will be new in libical 3.1.0
-        AC_CHECK_LIB(ical, icalcomponent_get_component_name,
-                AC_DEFINE(HAVE_GET_COMPONENT_NAME,[],
-                        [Do we have support for fetching X- component names?]))
-
-        dnl Check if libical parser allows setting CONTROL char handling
-        AC_CHECK_LIB(ical, icalparser_get_ctrl,
-            [
-                AC_DEFINE(HAVE_ICALPARSER_CTRL,[], [Can we omit CONTROL characters?])
-                have_ical_ctrl=yes
-            ],
-            have_ical_ctrl=no)
 
         dnl Check if libical supports PARTICIPANT-TYPE=VOTER
         AC_CHECK_DECL([ICAL_PARTICIPANTTYPE_VOTER],
                 AC_DEFINE(HAVE_PARTTYPE_VOTER,[],
                         [Do we have support for PARTICIPANT-TYPE=VOTER?]),
                 [], [[#include <libical/ical.h>]])
-
-        dnl icalrecurrencetype_new will be new in libical 4.0
-        AC_CHECK_LIB(ical, icalrecurrencetype_new,
-                AC_DEFINE(HAVE_RECUR_BY_REF,[],
-                        [Do we have support for icalrecurrencetype by reference?]))
-
-        dnl Check for libicalvcard
-        AC_CHECK_LIB(icalvcard, vcardcomponent_new, [
-                 AC_DEFINE(HAVE_LIBICALVCARD,[],[Do we have the icalvcard library?])
-                 LIBS="$LIBS -licalvcard"
-                 with_icalvcard=yes
-                ],
-                with_icalvcard=no)
 
         dnl vcardparser_set_xprop_value_kind will be new in libical 4.0
         AC_CHECK_LIB(icalvcard, vcardparser_set_xprop_value_kind,
@@ -2502,7 +2461,6 @@ External dependencies:
    zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
-   icalvcard:          $with_icalvcard
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet
@@ -2518,9 +2476,6 @@ Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
    xapian_cjk_tokens:  $xapian_cjk_tokens
-
-iCalendar features:
-   ctrl:               $have_ical_ctrl
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD

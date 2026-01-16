@@ -554,7 +554,7 @@ static int process_alarm_cb(icalcomponent *comp,
                 base = end;
             }
             base.is_date = 0; /* need an actual time for triggers */
-            alarmtime = icaltime_add(base, trigger.duration);
+            alarmtime = icalduration_extend(base, trigger.duration);
         }
         else {
             /* absolute */
@@ -807,7 +807,7 @@ static int is_supported_component(icalcomponent *ical)
 
     if (!is_supported) {
         xsyslog(LOG_DEBUG, "alarms are not supported for iCalendar component",
-                "kind=<%s>", icalenum_component_kind_to_string(kind));
+                "kind=<%s>", icalcomponent_kind_to_string(kind));
     }
 
     return is_supported;

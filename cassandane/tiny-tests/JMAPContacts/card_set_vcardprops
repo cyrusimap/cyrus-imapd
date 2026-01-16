@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_card_set_vcardprops
-    :needs_dependency_icalvcard :MailboxLegacyDirs
+    :MailboxLegacyDirs
     ($self)
 {
     my $jmap = $self->{jmap};

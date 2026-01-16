@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_card_query_multi_sort
-    :min_version_3_9 :needs_dependency_icalvcard
+    :min_version_3_9
     ($self)
 {
     my $jmap = $self->{jmap};

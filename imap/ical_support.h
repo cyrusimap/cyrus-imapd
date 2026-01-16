@@ -10,12 +10,15 @@
 #ifdef HAVE_ICAL
 
 #include <libical/ical.h>
+#include <libical/vcard.h>
+
 #undef icalerror_warn
 #define icalerror_warn(message) \
 {syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
 #include "dav_util.h"
 #include "mailbox.h"
+
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
@@ -32,7 +35,6 @@ extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
 #define icalproperty_set_recurrence(prop, rt)                   \
     icalproperty_set_value(prop, icalvalue_new_recurrence(rt))
 
-#ifdef HAVE_RECUR_BY_REF
 #define ICAL_RECURRENCE_ARRAY_MAX            0x7f7f
 #define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(rt, tt)
 #define icalvalue_new_recurrence(rt)         icalvalue_new_recur(rt)
@@ -40,51 +42,8 @@ extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
 #define icalrecur_byrule_size(rt, rule)      (rt->by[rule].size)
 #define icalrecur_byrule_data(rt, rule)      (rt->by[rule].data)
 
-#else /* !HAVE_RECUR_BY_REF */
-typedef enum icalrecurrencetype_byrule
-{
-    ICAL_BY_MONTH = 0,
-    ICAL_BY_WEEK_NO,
-    ICAL_BY_YEAR_DAY,
-    ICAL_BY_MONTH_DAY,
-    ICAL_BY_DAY,
-    ICAL_BY_HOUR,
-    ICAL_BY_MINUTE,
-    ICAL_BY_SECOND,
-    ICAL_BY_SET_POS,
-
-    ICAL_BY_NUM_PARTS
-} icalrecurrencetype_byrule;
-
-#define icalrecurrence_iterator_new(rt, tt)  icalrecur_iterator_new(*(rt), tt)
-#define icalvalue_new_recurrence(rt)         icalvalue_new_recur(*(rt))
-#define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, *(rt))
-
-extern icalrecurrencetype_t *icalrecurrencetype_new(void);
-extern icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt);
-extern icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str);
-extern void icalrecurrencetype_unref(icalrecurrencetype_t *rt);
-extern short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
-                                    icalrecurrencetype_byrule rule);
-extern short icalrecur_byrule_size(icalrecurrencetype_t *rt,
-                                   icalrecurrencetype_byrule rule);
-#endif /* HAVE_RECUR_BY_REF */
-
 #ifdef HAVE_PARTTYPE_VOTER
 #define HAVE_VPOLL_SUPPORT
-#endif
-
-#ifndef HAVE_NEW_CLONE_API
-/* Allow us to compile without #ifdef HAVE_NEW_CLONE_API everywhere */
-#define icalcomponent_clone           icalcomponent_new_clone
-#define icalproperty_clone            icalproperty_new_clone
-#define icalparameter_clone           icalparameter_new_clone
-#endif
-
-#ifndef HAVE_GET_COMPONENT_NAME
-/* This should never match anything in the wild
-   which means that we can't patch X- components */
-#define icalcomponent_get_component_name(comp)  "X-CYR-"
 #endif
 
 /* Initialize libical timezones. */
@@ -257,23 +216,12 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 #endif
 
 /* Functions that should be declared in libical */
-#define icaltimezone_set_zone_directory set_zone_directory
 
 #define icalcomponent_get_tzuntil_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_TZUNTIL_PROPERTY)
 
 #define icalcomponent_get_acknowledged_property(comp) \
     icalcomponent_get_first_property(comp, ICAL_ACKNOWLEDGED_PROPERTY)
-
-#ifndef HAVE_RSCALE
-
-/* Functions to replace those not available in libical < v1.0 */
-
-#define icalrecurrencetype_month_is_leap(month) 0
-#define icalrecurrencetype_month_month(month) month
-
-#endif /* HAVE_RSCALE */
-
 
 /* Wrappers to fetch managed attachment parameters by kind */
 
@@ -299,10 +247,6 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 #endif /* HAVE_ICAL */
 
-#ifdef HAVE_LIBICALVCARD
-
-#include <libical/vcard.h>
-
 /**
  * Looks up a property parameter by name.
  *
@@ -316,6 +260,4 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
  */
 extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                            const char *name);
-#endif /* HAVE_LIBICALVCARD */
-
 #endif /* ICAL_SUPPORT_H */

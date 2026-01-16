@@ -12,6 +12,7 @@
 #include "mboxlist.h"
 #include "strarray.h"
 #include "util.h"
+#include "vcard_support.h"
 #include "vparse.h"
 
 struct carddav_db;
@@ -188,10 +189,6 @@ int carddav_remove(struct mailbox *mailbox,
 /* calculate a mailbox name */
 char *carddav_mboxname(const char *userid, const char *name);
 
-#ifdef HAVE_LIBICALVCARD
-
-#include "vcard_support.h"
-
 int carddav_writecard_x(struct carddav_db *carddavdb, struct carddav_data *cdata,
                         vcardcomponent *vcard, int ispinned);
 
@@ -201,6 +198,5 @@ int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
                     const char *userid, struct auth_state *authstate,
                     int ignorequota, uint32_t oldsize);
 
-#endif /* HAVE_LIBICALVCARD */
 
 #endif /* CARDDAV_DB_H */

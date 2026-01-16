@@ -70,7 +70,6 @@
 #include "imap/imap_err.h"
 
 
-#ifdef HAVE_RSCALE
 #include <unicode/uversion.h>
 
 static int rscale_cmp(const void *a, const void *b)
@@ -78,8 +77,6 @@ static int rscale_cmp(const void *a, const void *b)
     /* Convert to uppercase since that's what we prefer to output */
     return strcmp(ucase(*((char **) a)), ucase(*((char **) b)));
 }
-#endif /* HAVE_RSCALE */
-
 
 static time_t compile_time;
 static struct buf ical_prodid_buf = BUF_INITIALIZER;
@@ -680,13 +677,11 @@ static const struct cal_comp_t {
 static void my_caldav_init(struct buf *serverinfo)
 {
     buf_printf(serverinfo, " LibiCal/%s", ICAL_VERSION);
-#ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
         icalarray_sort(rscale_calendars, &rscale_cmp);
 
         buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
-#endif
 
     namespace_calendar.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;
@@ -709,12 +704,7 @@ static void my_caldav_init(struct buf *serverinfo)
         namespace_calendar.allow |= ALLOW_CAL_ATTACH;
 
     if (config_getswitch(IMAPOPT_CALDAV_ACCEPT_INVALID_RRULES)) {
-#ifdef HAVE_INVALID_RRULE_HANDLING
         ical_set_invalid_rrule_handling_setting(ICAL_RRULE_IGNORE_INVALID);
-#else
-        syslog(LOG_WARNING,
-               "Your version of libical can not accept invalid RRULEs");
-#endif
     }
 
     if (namespace_tzdist.enabled) {
@@ -3787,7 +3777,7 @@ static int validate_dtend_duration(icalcomponent *comp, struct error_t *error)
         if (prop) {
             struct icaldurationtype duration = icalproperty_get_duration(prop);
 
-            if (icaldurationtype_as_int(duration) < 0) {
+            if (icaldurationtype_as_utc_seconds(duration) < 0) {
                 /* NOTE: Per RFC 5545, Section 3.8.2.5, DURATION > 0,
                    but DURATION == 0 occurs frequently enough in the wild
                    for us to allow it */
@@ -4048,7 +4038,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
         hashu64_enumerate(&overrides, &strip_past_override, &orock);
 
-#ifdef HAVE_RSCALE
         /* Make sure we support the provided RSCALE in an RRULE */
         if (rscale_calendars && rt->rscale && *rt->rscale) {
             /* Perform binary search on sorted icalarray */
@@ -4071,7 +4060,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 goto done;
             }
         }
-#endif /* HAVE_RSCALE */
     }
 
     /* Check for changed UID */
@@ -4778,7 +4766,7 @@ static int apply_prop_timerange(struct icalperiodtype *range,
 
     if (!icaldurationtype_is_null_duration(period.duration)) {
         /* Calculate end time from duration */
-        period.end = icaltime_add(period.start, period.duration);
+        period.end = icalduration_extend(period.start, period.duration);
     }
     else if (icaltime_is_null_time(period.end)) period.end = period.start;
 
@@ -5364,7 +5352,7 @@ static int expand_cb(icalcomponent *comp,
             
         case ICAL_DURATION_PROPERTY:
             /* Set DURATION to be for this occurrence */
-            icalproperty_set_duration(prop, icaltime_subtract(end, start));
+            icalproperty_set_duration(prop, icalduration_from_times(end, start));
             break;
             
         case ICAL_RECURRENCEID_PROPERTY:
@@ -5455,7 +5443,7 @@ static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
             /* Calculate duration of master component */
             dtstart = icalcomponent_get_dtstart(comp);
             dtend = icalcomponent_get_dtend(comp);
-            dtduration = icaltime_subtract(dtend, dtstart);
+            dtduration = icalduration_from_times(dtend, dtstart);
             break;
         }
     }
@@ -5480,7 +5468,7 @@ static void limit_caldata(icalcomponent *ical, struct icalperiodtype *limit)
 
         /* Check span of original occurrence */
         dtstart = recurid;
-        dtend = icaltime_add(dtstart, dtduration);
+        dtend = icalduration_extend(dtstart, dtduration);
         recurspan = icaltime_span_new(dtstart, dtend, 1);
         if (icaltime_span_overlaps(&recurspan, &limitspan)) continue;
 
@@ -7288,7 +7276,7 @@ static void add_freebusy(struct icaltimetype *recurid,
     if (recurid) newfb->recurid = *recurid;
 
     if (icaltime_is_date(*start)) {
-        newfb->per.duration = icaltime_subtract(*end, *start);
+        newfb->per.duration = icalduration_from_times(*end, *start);
         newfb->per.end = icaltime_null_time();
         start->is_date = 0;  /* MUST be DATE-TIME */
         newfb->per.start = icaltime_convert_to_zone(*start, utc_zone);
@@ -7787,7 +7775,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
 
         isdur = !icaldurationtype_is_null_duration(fb->per.duration);
         end = !isdur ? fb->per.end :
-            icaltime_add(fb->per.start, fb->per.duration);
+            icalduration_extend(fb->per.start, fb->per.duration);
 
         /* Skip periods of different type or that don't overlap */
         if ((fb->type != next_fb->type) ||
@@ -7796,7 +7784,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
         /* Coalesce into next busytime */
         next_isdur = !icaldurationtype_is_null_duration(next_fb->per.duration);
         next_end = !next_isdur ? next_fb->per.end :
-            icaltime_add(next_fb->per.start, next_fb->per.duration);
+            icalduration_extend(next_fb->per.start, next_fb->per.duration);
 
         if (icaltime_compare(end, next_end) >= 0) {
             /* Current period subsumes next */
@@ -7806,7 +7794,7 @@ HIDDEN icalcomponent *busytime_to_ical(struct freebusy_filter *fbfilter,
         else if (isdur && next_isdur) {
             /* Both periods are durations */
             struct icaldurationtype overlap =
-                icaltime_subtract(end, next_fb->per.start);
+                icalduration_from_times(end, next_fb->per.start);
 
             next_fb->per.duration.days += fb->per.duration.days - overlap.days;
         }
@@ -8190,7 +8178,7 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
     }
     else {
         /* Set end based on period */
-        fbfilter.end = icaltime_add(fbfilter.start, period);
+        fbfilter.end = icalduration_extend(fbfilter.start, period);
     }
 
 

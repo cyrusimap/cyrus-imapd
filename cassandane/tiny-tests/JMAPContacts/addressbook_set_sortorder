@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_addressbook_set_sortorder
-    :needs_dependency_icalvcard
     ($self)
 {
     my $jmap = $self->{jmap};

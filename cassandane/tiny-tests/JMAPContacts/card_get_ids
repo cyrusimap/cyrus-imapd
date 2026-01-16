@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_card_get_ids
-    :needs_dependency_icalvcard
     ($self)
 {
     my $jmap = $self->{jmap};
