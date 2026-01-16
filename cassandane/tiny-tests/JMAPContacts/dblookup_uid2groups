@@ -220,6 +220,8 @@ sub test_dblookup_uid2groups
         ['ContactCard/set', {
             create => {
                 ownGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => 'owngroup2' },
                     members => {
@@ -238,6 +240,8 @@ sub test_dblookup_uid2groups
         ['ContactCard/set', {
             create => {
                 otherGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => 'othergroup2' },
                     members => {

@@ -70,6 +70,8 @@ sub test_dblookup_expandcard
         ['ContactCard/set', {
             create => {
                 sharedContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'sharedcontact@local'
@@ -87,6 +89,8 @@ sub test_dblookup_expandcard
         ['ContactCard/set', {
             create => {
                 sharedContact1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'sharedcontact2Pref@local',
@@ -99,11 +103,15 @@ sub test_dblookup_expandcard
                     addressBookIds => { $other2SharedAbookId2 => JSON::true }
                 },
                 sharedContact2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                     },
                     addressBookIds => { $other2SharedAbookId2 => JSON::true }
                 },
                 unsharedContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'unsharedcontact@local'
@@ -126,6 +134,8 @@ sub test_dblookup_expandcard
         ['ContactCard/set', {
             create => {
                 ownContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'ownContact@local'
@@ -155,6 +165,8 @@ sub test_dblookup_expandcard
         ['ContactCard/set', {
             create => {
                 ownGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     members => {
                         $otherSharedContactUid => JSON::true,
@@ -179,6 +191,8 @@ sub test_dblookup_expandcard
         ['ContactCard/set', {
             create => {
                 sharedGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     members => {
                         $ownContactUid => JSON::true,

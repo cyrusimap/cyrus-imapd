@@ -24,6 +24,8 @@ sub test_email_query_fromcontactcarduid_wildcard
         ['ContactCard/set', {
             create => {
                 contact1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     addressBookIds => { $abookId1 => JSON::true },
                     emails => {
                         e1 => {
@@ -41,6 +43,8 @@ sub test_email_query_fromcontactcarduid_wildcard
         ['ContactCard/set', {
             create => {
                 group1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     name => { full => 'Group1' },
                     members => {

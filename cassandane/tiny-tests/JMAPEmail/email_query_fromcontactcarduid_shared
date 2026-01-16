@@ -62,6 +62,8 @@ sub test_email_query_fromcontactcarduid_shared
         ['ContactCard/set', {
             create => {
                 sharedContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'sharedcontact@local'
@@ -79,6 +81,8 @@ sub test_email_query_fromcontactcarduid_shared
         ['ContactCard/set', {
             create => {
                 sharedContact2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'sharedcontact2@local'
@@ -87,6 +91,8 @@ sub test_email_query_fromcontactcarduid_shared
                     addressBookIds => { $abookId2 => JSON::true }
                 },
                 unsharedContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'unsharedcontact@local'
@@ -107,6 +113,8 @@ sub test_email_query_fromcontactcarduid_shared
         ['ContactCard/set', {
             create => {
                 ownContact => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     emails => {
                         e1 => {
                             address => 'ownContact@local'
@@ -124,6 +132,8 @@ sub test_email_query_fromcontactcarduid_shared
         ['ContactCard/set', {
             create => {
                 ownGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     members => {
                         $sharedContactUid => JSON::true,
@@ -146,6 +156,8 @@ sub test_email_query_fromcontactcarduid_shared
         ['ContactCard/set', {
             create => {
                 sharedGroup => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     kind => 'group',
                     members => {
                         $ownContactUid => JSON::true,

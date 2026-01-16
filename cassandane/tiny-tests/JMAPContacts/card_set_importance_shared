@@ -30,9 +30,16 @@ sub test_card_set_importance_shared
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     xlog $self, "create contact";
-    my $res = $jmap->CallMethods([['ContactCard/set', {
-                    accountId => 'manifold',
-                    create => {"1" => {name => { full => "John Doe" }}}
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'manifold',
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0', 
+                    name => { full => "John Doe" }
+                }
+            }
     }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);

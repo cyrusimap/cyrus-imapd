@@ -12,6 +12,8 @@ sub test_card_query_windowing
         ['ContactCard/set', {
             create => {
                 card1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     uid => 'XXX-UID-1',
                     organizations => {
                         'o1' => {
@@ -20,6 +22,8 @@ sub test_card_query_windowing
                     }
                 },
                 card2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     uid => 'XXX-UID-2',
                     organizations => {
                         'o1' => {
@@ -28,6 +32,8 @@ sub test_card_query_windowing
                     }
                 },
                 card3 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     uid => 'XXX-UID-3',
                     organizations => {
                         'o1' => {
@@ -36,6 +42,8 @@ sub test_card_query_windowing
                     }
                 },
                 card4 => {
+                    '@type' => 'Card',
+                    version => '1.0',
                     uid => 'XXX-UID-4',
                     organizations => {
                         'o1' => {

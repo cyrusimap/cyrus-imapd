@@ -66,6 +66,8 @@ sub test_card_copy
     my $blobid = $res->{blobId};
 
     my $card =  {
+        '@type' => 'Card',
+        version => '1.0',
         name => { full => "foo bar" },
 #        "avatar" => {
 #            "blobId" => $blobid,
