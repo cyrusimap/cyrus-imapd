@@ -7,7 +7,7 @@ use Config;
 my $build = do './build.cfg' || die "build.cfg: $!";
 
 WriteMakefile(
-    'NAME'	=> 'Cyrus::Annotator::Daemon',
+    'NAME'      => 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
     'VERSION_FROM' => "$build->{top_srcdir}/perl/annotator/Daemon.pm", # finds $VERSION
     # This is a disgusting hack to effectively disable the stupid
