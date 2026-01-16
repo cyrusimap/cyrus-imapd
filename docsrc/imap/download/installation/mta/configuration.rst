@@ -1,5 +1,3 @@
-:orphan:
-
 .. _imap-configuring-the-mta:
 
 ===================

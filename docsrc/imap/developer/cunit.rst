@@ -1,81 +1,38 @@
-.. _imap-developer-unit-tests:
+.. _imap-developer-cunit:
 
-..  Note: This document was converted from the original by Nic Bernstein
-    (Onlight).  Any formatting mistakes are my fault and not the
-    original author's.
+The CUnit test suite
+====================
 
-Unit Tests
-==========
-
-Table of Contents
------------------
-
--  `1. Introduction <#introduction>`__
--  `2. What Is A Unit Test? <#what-is-a-unit-test>`__
--  `3. Running The Tests <#running-the-tests>`__
-
-   -  `3.1. Setting Up The Machine <#setting-up-the-machine>`__
-   -  `3.2 Configure Script <#configure-scripts>`__
-   -  `3.3 Make <#make>`__
-   -  `3.4 Using Valgrind <#using-valgrind>`__
-   -  `3.5 The Tests Are Failing <#the-tests-are-failing>`__
-   -  `3.6 Debugging A Test <#debugging-a-test>`__
-
--  `4. Adding Your Own Tests <#adding-your-own-tests>`__
-
-   -  `4.1 Where To Put Your Tests <#where-to-put-your-tests>`__
-   -  `4.2 Adding A New Suite <#adding-a-new-suite>`__
-   -  `4.3 Adding A Test To A Suite <#adding-a-test-to-a-suite>`__
-   -  `4.4 Suite Init And Cleanup <#suite-init-and-cleanup>`__
+.. contents::
 
 1. Introduction
 ---------------
 
-Recently, a set of regression unit tests has been added to Cyrus. This
-document explains the purpose implementation of those unit tests, and
-gives an example of how to add more unit tests (because there are never
-enough unit tests!).
+Cyrus IMAP includes two test suites.  One is written in C, using CUnit, and is
+primarily *unit testing*.  The other, known as Cassandane, is written in Perl,
+using Test::Unit, and is primarily *integration testing*.  This page covers the
+CUnit test suite.
 
-2. What Is A Unit Test?
------------------------
-
-The `definition on Wikipedia <http://en.wikipedia.org/wiki/Unit_test>`__
-sheds some light:
-
-    ...\ **unit testing** is a method by which individual units of
-    source code are tested to determine if they are fit for use. A unit
-    is the smallest testable part of an application.
-
-In other words, unit testing is about verifying that small pieces of
-code, like individual functions, modules, or classes, work in isolation.
-It is **not** about testing the system as a whole.
-
-The tests implemented here are also **regression tests**, which in
-`Wikipedia's words <http://en.wikipedia.org/wiki/Regression_testing>`__
-means:
-
-    **Regression testing** is any type of software testing that seeks to
-    uncover software errors after changes to the program (e.g. bugfixes
-    or new functionality) have been made, by retesting the program. The
-    intent of regression testing is to assure that a change, such as a
-    bugfix, did not introduce new bugs.
-
-In other words, the tests are designed to be easy to run and to work out
-fully automatically whether they have passed or failed, so that they can
-be run usefully by people who didn't write them.
-
-3. Running The Tests
+2. Running the tests
 --------------------
 
 This section takes you through the process of running Cyrus' unit tests.
 
-3.1. Setting Up The Machine
----------------------------
+2.1. Consider using cyrus-docker
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Before you proceed with the instructions below, consider whether you could just
+use cyrus-docker, cyd, and dar.  Those tools let you hack on Cyrus without
+setting up your own development environment.  They're documented on `the
+developer overview page <imap/developer>`.
+
+2.2. Setting up the machine
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Cyrus' unit tests are all located in a new directory,
 ``cyrus-imapd/cunit/``. They're written in C, like the remainder of
 Cyrus, and use the `CUnit library from
-SourceForge <http://cunit.sourceforge.net/>`__, with some home grown
+SourceForge <https://cunit.sourceforge.net/>`__, with some home grown
 wrappers and other improvements to make our lives easier.
 
 Your first step is step is to ensure that the CUnit library (including
@@ -90,8 +47,8 @@ Alternately, you can download the CUnit source, build it and install it.
 It's not a complicated or difficult library, this shouldn't take long.
 When you've done, install it in ``/usr/include`` and ``/usr/lib``.
 
-3.2 Configure Script
---------------------
+2.3 Configure script
+^^^^^^^^^^^^^^^^^^^^
 
 Because of the dependency on the CUnit library, the tests are disabled
 by default; this means you need enable them with an option to the
@@ -107,8 +64,8 @@ by default; this means you need enable them with an option to the
     checking for CUnit/CUnit.h... yes
     ...
 
-3.3 Make
---------
+2.4 Make
+^^^^^^^^
 
 First you need to build Cyrus itself, using the traditional ``all:``
 target.
@@ -183,8 +140,8 @@ Let's take a closer look at what's happening here.
     it ran and how many passed and failed. The key thing to look at here
     is the rightmost column, it should be all zero.
 
-3.4 Using Valgrind
-------------------
+2.5 Using Valgrind
+^^^^^^^^^^^^^^^^^^
 
 Some failure modes are subtle, and cannot be detected in the C code
 itself; this is where `the Valgrind program <http://valgrind.org/>`__
@@ -244,8 +201,8 @@ useful. I would have made running the tests under Valgrind the only
 option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
-3.5 The Tests Are Failing
--------------------------
+2.6 The tests are failing
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 So you've noticed that some of the tests are failing. Let me make the
 guiding principle of unit testing as clear as possible: **THE UNIT TESTS
@@ -271,8 +228,8 @@ most benefit out of unit testing
    report <http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/>`__
    and consider writing tests for the existing code.
 
-3.6 Debugging A Test
-~~~~~~~~~~~~~~~~~~~~
+2.7 Debugging a test
+^^^^^^^^^^^^^^^^^^^^
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
 executable, it's a shell script which sets up some environment variables
@@ -308,13 +265,13 @@ debugging a failing test somewhat challenging. The solution is:
 Note the **-t** option. This turns off test timeouts, which is very
 useful for manual debugging.
 
-4. Adding Your Own Tests
+3. Adding your own tests
 ------------------------
 
 Adding your own tests is quite simple. Here's how.
 
-4.1 Where To Put Your Tests
----------------------------
+3.1 Where to put your tests
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The unit test code in Cyrus is contained in a set of C source files in
 the ``cunit`` directory. For reasons too complex to go into here, these
@@ -332,8 +289,8 @@ existing tests, the sensible thing to do is to `add a new test to the
 existing suite <#adding-a-test-to-a-suite>`__. Otherwise, you'll need to
 `add a new Suite <#adding-a-new-suite>`__.
 
-4.2 Adding A New Suite
-----------------------
+3.2 Adding a new suite
+^^^^^^^^^^^^^^^^^^^^^^
 
 Each Suite is a single C source file in the ``cunit/`` directory. Your
 first step is to create a new C source file. For this example, you'll
@@ -480,8 +437,8 @@ and this time passing.
     Suite: crc32
       Test: map ... passed
 
-4.3 Adding A Test To A Suite
-----------------------------
+3.3 Adding a test to a suite
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Adding a new test to an existing test is easy: all you have to do is add
 a new function to an existing C source file in the ``cunit/`` directory.
@@ -563,8 +520,8 @@ Now run ``make check`` and you'll see your test being built and run.
       Test: map ... passed
       Test: iovec ... passed
 
-4.4 Suite Setup And Teardown
-----------------------------
+3.4 Suite setup and teardown
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Sometimes the behaviour of the functions under test depend on external
 influences such as environment variables, global variables, or the

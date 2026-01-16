@@ -4,9 +4,12 @@ About Cyrus
 What is Cyrus
 -------------
 
-Electronic mail is a major infrastructure service of most organizations. At Carnegie Mellon the use of electronic mail has overshadowed the use of all other distributed services since the early 1990s. At that time, the Andrew Mail and Bulletin Board System (AMS) was a universally available service, and departments without AMS ran their own mail systems. AMS has since been deprecated, and Project Cyrus is now the campus-wide mail system.
+Electronic mail is a major infrastructure service of most organizations. At Carnegie Mellon the use of electronic mail has overshadowed the use of all other distributed services since the early 1990s. At that time, the Andrew Mail and Bulletin Board System (AMS) was a universally available service, and departments without AMS ran their own mail systems.  When, in 1994, CMU wanted to move to a better scalable, standards-compliant mail system that met or exceeded the feature set of AMS, it started the Cyrus project.  AMS was later deprecated, and Cyrus IMAP became the campus-wide mail system.  Later still, Carnegie Mellon moved to Gmail.  Cyrus IMAP is now maintained by `Fastmail <https://www.fastmail.com/>`_.
+
 
 Cyrus is a highly scalable enterprise mail system designed for use in enterprise environments of various sizes using standards based technologies. Cyrus technologies scale from independent use in email departments to a system centrally managed in a large enterprise.
+
+Cyrus IMAP is named after Cyrus The Great (559 - 530 B.C.) who founded the Persian kingdom. Cyrus the Great also founded the world's first modern postal system whose motto was: "stopped by neither snow, rain, heat or gloom of night". The Pony Express was based on the Persian system and later the United States Postal Service adopted the slightly modified version of the Persian motto as their own.
 
 What is IMAP?
 -------------

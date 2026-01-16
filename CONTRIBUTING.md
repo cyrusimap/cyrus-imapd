@@ -3,7 +3,7 @@
 So, you want to contribute to Cyrus?  Great!
 
 You'll probably want to join the [cyrus-devel mailing
-list](https://www.cyrusimap.org/imap/support/feedback-mailing-lists.html#feedback-mailing-lists)
+list](https://www.cyrusimap.org/dev/imap/support/feedback-mailing-lists.html#feedback-mailing-lists)
 where development issues get discussed.  You don't need to, but if you're
 considering doing a substantial amount of work, it's a good idea to ask about
 it first.
@@ -15,7 +15,7 @@ need to know to get your work reviewed, approved, and into Cyrus.
 
 Cyrus doesn't have a hard and fast style guide, *but it will*.  For now,
 consult the [Cyrus hacking
-docs](https://www.cyrusimap.org/imap/developer/guidance/hacking.html), which
+docs](https://www.cyrusimap.org/dev/imap/developer/guidance/hacking.html), which
 spell out some of the standards of formatting and construction.  This document
 is, at present, quite out of date.  You are probably best served by just
 copying the style of the surrounding code.
@@ -34,10 +34,10 @@ assumption.
 There are two kinds of tests:
 
 * The [Cassandane test
-  suite](https://www.cyrusimap.org/imap/developer/developer-testing.html) is an
+  suite](https://www.cyrusimap.org/dev/imap/developer/developer-testing.html) is an
   integration test suite.  It can and should be run against your build of
   Cyrus, and it's right there in the repo under `./cassandane`.
-* The [cunit tests](https://www.cyrusimap.org/imap/developer/unit-tests.html)
+* The [cunit tests](https://www.cyrusimap.org/dev/imap/developer/cunit.html)
   are located in the Cyrus IMAP repository, in `./cunit` and run by `make
   check`.  You should run these, too.
 

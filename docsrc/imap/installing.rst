@@ -29,6 +29,7 @@ Optional Components
 
     download/installation/manage-dav
     download/installation/virus
+    download/installation/mta/configuration
 
 Setting up syslog
 =================
