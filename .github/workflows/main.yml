@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-        image: ghcr.io/cyrusimap/cyrus-docker:bookworm
+        image: ghcr.io/cyrusimap/cyrus-docker:bookworm-libs68
         options: --init
     steps:
     - uses: actions/checkout@v4
