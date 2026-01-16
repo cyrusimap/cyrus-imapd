@@ -5,6 +5,8 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include <stdbool.h>
+
 #include "index.h"
 #include "mailbox.h"
 #include "mboxevent.h"
@@ -40,6 +42,8 @@ struct appendstate {
     const struct namespace *namespace;
     const struct auth_state *auth_state;
     int isadmin;
+
+    bool no_annotator;
 
     /* one event notification to send per appended message */
     enum event_type event_type;
