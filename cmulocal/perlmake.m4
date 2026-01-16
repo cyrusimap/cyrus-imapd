@@ -17,7 +17,8 @@ AC_CONFIG_COMMANDS($1/Makefile,[
         && $PERL ${ac_top_srcdir}/$1/Makefile.PL $MAKE_MAKER_ARGS \
         && mv Makefile Makefile.ORIG \
         && $PERL ${ac_top_srcdir}/perl/fix-makefile.pl Makefile.ORIG > Makefile.NEW \
-        && mv Makefile.NEW Makefile
+        && mv Makefile.NEW Makefile \
+        && rm Makefile.ORIG
     ) || as_fn_error $? "failed to generate Makefile for $1"
 ],[
     PERL="${PERL}"
