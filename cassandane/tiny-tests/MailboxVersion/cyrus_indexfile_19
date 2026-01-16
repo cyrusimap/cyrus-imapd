@@ -1,7 +1,6 @@
 #!perl
 use Cassandane::Tiny;
 use Cyrus::IndexFile;
-use Test::Deep ':v1';
 
 # This tests both a bit of the interface of Cyrus::IndexFile and also that
 # cyrus itself is writing out index files correctly according to the
