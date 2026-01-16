@@ -1523,12 +1523,12 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([ICAL], [libical >= 3.0.10], [
+        PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS}"
                 with_ical=yes
                 ],
-                AC_MSG_ERROR([Need libical 3.0.10 for http]))
+                AC_MSG_ERROR([Need libical for http]))
 
         dnl libical may have been built without RSCALE support
         AC_CHECK_LIB(ical, icalrecurrencetype_rscale_is_supported,
