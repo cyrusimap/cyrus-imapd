@@ -354,6 +354,29 @@ EXPORTED int dav_close(sqldb_t **dbp)
     return sqldb_close(dbp);
 }
 
+static int count_cb(sqlite3_stmt *stmt, void *rock)
+{
+    int *count = (int *) rock;
+
+    *count = sqlite3_column_int(stmt, 0);
+
+    return 0;
+}
+
+EXPORTED int dav_count_recs(sqldb_t *db, const char *table, int *count)
+{
+    static struct buf stmt = BUF_INITIALIZER;
+
+    /* Can't use bindvals for table name so create SQL on-the-fly */
+    buf_setcstr(&stmt, "SELECT COUNT(*) FROM ");
+    buf_appendcstr(&stmt, table);
+    buf_appendcstr(&stmt, " WHERE alive = 1;");
+
+    *count = 0;
+
+    return sqldb_exec(db, buf_cstring(&stmt), NULL, &count_cb, count);
+}
+
 
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox

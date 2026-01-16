@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_empty_ids
+    :needs_dependency_icalvcard
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $user = $self->default_user;
+
+    xlog $self, "create more cards than limit (5)";
+    $user->contacts->create for 1..6;
+
+    xlog $self, "attempt to get all cards";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+        }, 'R1']
+    ]);
+
+    $self->assert_cmp_deeply([
+        'error',
+        {
+            type => 'requestTooLarge',
+            description => "number of ids exceeds maxObjectsInGet limit"
+        },
+        'R1'],
+        $res->[0]);
+}
