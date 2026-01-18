@@ -157,7 +157,7 @@ sub new
         jmap => 1,
         deliver => 1,
         adminstore => 1,
-        services => [ 'imap', 'http', 'sieve', 'backupcyrusd' ]
+        services => [ 'imap', 'http', 'sieve' ]
     }, @args);
 
     $self->needs('component', 'jmap');
