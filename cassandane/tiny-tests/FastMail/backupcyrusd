@@ -6,6 +6,7 @@ use Cyrus::Backup;
 use Cyrus::Backup::Restore;
 
 sub test_backupcyrusd
+    :min_version_3_13 :want_service_backupcyrusd
 {
     my ($self) = @_;
 
