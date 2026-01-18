@@ -44,6 +44,42 @@ sub clean
     return join "\n", @clean;
 }
 
+# massage uninstall_from_sitedirs rule so that top level 'make distcheck'
+# can succeed.
+# there is no 'sub uninstall_from_sitedirs' to override, all the install
+# and uninstall rules are generated in one go by 'sub install'.  so
+# override and manipulate that
+sub install
+{
+    my @orig = split "\n", shift->SUPER::install(@_);
+    my @modified;
+
+    my @inject = (
+        '$(RM_F) "$(DESTINSTALLSITEARCH)/auto/$(FULLEXT)/.packlist"',
+        '$(RM_F) "$(DESTINSTALLSITEARCH)/perllocal.pod"',
+    );
+
+    my $got_uninstall_from_sitedirs = 0;
+    foreach my $line (@orig) {
+        if ($line =~ m/^uninstall_from_sitedirs ::/) {
+            $got_uninstall_from_sitedirs = 1;
+            push @modified, $line;
+        }
+        elsif ($got_uninstall_from_sitedirs) {
+            $line =~ s{\Q$(SITEARCHEXP)\E}{\$(DESTINSTALLSITEARCH)};
+            push @modified, $line;
+
+            push @modified, "\t$_" for @inject;
+            $got_uninstall_from_sitedirs = 0;
+        }
+        else {
+            push @modified, $line;
+        }
+    }
+
+    return join "\n", @modified;
+}
+
 # override default xs.c rule with a VPATH-aware version
 sub xs_c
 {
