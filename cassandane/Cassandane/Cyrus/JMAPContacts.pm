@@ -69,6 +69,7 @@ sub new
                  httpmodules => 'carddav jmap',
                  httpallowcompress => 'no',
                  vcard_max_size => 100000,
+                 jmap_max_objects_in_get => '5',
                  jmap_nonstandard_extensions => 'yes');
 
     my $self = $class->SUPER::new({

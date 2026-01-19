@@ -813,6 +813,16 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
         }
     }
     else {
+        int count = 0;
+        carddav_count(db, &count);
+        if (count > req->settings->limits[MAX_OBJECTS_IN_GET]) {
+            err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                            "description",
+                            "number of ids exceeds maxObjectsInGet limit");
+            jmap_error(req, err);
+            goto done;
+        }
+
         rock.rows = 0;
         r = carddav_get_cards(db, mbentry, req->userid, NULL, kind, cb, &rock);
         if (r) goto done;

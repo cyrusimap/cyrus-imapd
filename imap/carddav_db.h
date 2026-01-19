@@ -188,6 +188,8 @@ int carddav_remove(struct mailbox *mailbox,
 /* calculate a mailbox name */
 char *carddav_mboxname(const char *userid, const char *name);
 
+int carddav_count(struct carddav_db *carddavdb, int *count);
+
 #ifdef HAVE_LIBICALVCARD
 
 #include "vcard_support.h"

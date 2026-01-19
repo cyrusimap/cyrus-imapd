@@ -450,26 +450,9 @@ EXPORTED int sievedb_get_updates(struct sieve_db *sievedb,
     return r;
 }
 
-static int count_cb(sqlite3_stmt *stmt, void *rock)
-{
-    int *count = (int *) rock;
-
-    *count = sqlite3_column_int(stmt, 0);
-
-    return 0;
-}
-
-#define CMD_COUNTREC "SELECT COUNT(name) FROM sieve_scripts WHERE alive = 1;"
-
 EXPORTED int sievedb_count(struct sieve_db *sievedb, int *count)
 {
-    int r;
-
-    *count = 0;
-
-    r = sqldb_exec(sievedb->db, CMD_COUNTREC, NULL, &count_cb, count);
-
-    return r;
+    return dav_count_recs(sievedb->db, "sieve_scripts", count);
 }
 
 static int lock_and_execute(struct mailbox *mailbox,

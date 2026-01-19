@@ -1803,3 +1803,8 @@ EXPORTED int caldav_get_floating_events(struct caldav_db *caldavdb,
 
     return r;
 }
+
+EXPORTED int caldav_count(struct caldav_db *caldavdb, int *count)
+{
+    return dav_count_recs(caldavdb->db, "ical_objs", count);
+}
