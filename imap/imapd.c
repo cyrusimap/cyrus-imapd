@@ -414,7 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
-    { "OBJECTID=ACCOUNTID",    CAPA_POSTAUTH,           { 0 } }, /* draft-degennaro-imap-objectid-accountid */
+    { "OBJECTIDBIS",           CAPA_POSTAUTH,           { 0 } }, /* draft-degennaro-imap-objectid-accountid */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
       { .statep = &imapd_preview_enabled }                    },
@@ -4711,6 +4711,9 @@ static void prot_print_client_capa(struct protstream *pout, unsigned capa)
     if (capa & CAPA_UTF8_ACCEPT) {
         prot_puts(pout, " UTF8=ACCEPT");
     }
+    if (capa & CAPA_OBJECTIDBIS) {
+        prot_puts(pout, " OBJECTIDBIS");
+    }
 }
 
 /*
@@ -7364,7 +7367,12 @@ localcreate:
     // ACCOUNTID_NEEDS_FIXING
     strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
 
-    prot_printf(imapd_out, "%s OK [CREATED (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
+    if (client_capa & CAPA_OBJECTIDBIS) {
+        prot_printf(imapd_out, "%s OK [CREATED (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
+    }
+    else {
+        prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed in ACCOUNTID (%s)\r\n", tag, mailboxid);
+    }
 
     imapd_check(NULL, 0);
 
@@ -9636,7 +9644,7 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
             statusitems |= STATUS_MAILBOXID;
         }
-        else if (!strcmp(arg.s, "accountid")) {        /* draft-degennaro-imap-objectid-accountid */
+        else if (!strcmp(arg.s, "accountid") && (client_capa & CAPA_OBJECTIDBIS)) {        /* draft-degennaro-imap-objectid-accountid */
             statusitems |= STATUS_ACCOUNTID;
         }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
@@ -14743,6 +14751,10 @@ static void cmd_enable(char *tag)
         else if (!strcasecmp(arg.s, "uidonly")) {
             client_behavior_mask |= CB_UIDONLY;
             new_capa |= CAPA_UIDONLY;
+        }
+        else if (!strcasecmp(arg.s, "objectids")) {
+            client_behavior_mask |= CB_OBJECTID;
+            new_capa |= CAPA_OBJECTIDBIS;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
             client_behavior_mask |= CB_UTF8ACCEPT;
