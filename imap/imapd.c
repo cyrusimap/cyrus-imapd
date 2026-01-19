@@ -9646,7 +9646,7 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "accountid") && (client_capa & CAPA_OBJECTIDBIS)) {        /* draft-degennaro-imap-objectid-accountid */
             statusitems |= STATUS_ACCOUNTID;
         }
-        else if (!strcmp(arg.s, "objectid") (client_capa & CAPA_OBJECTIDBIS)) {
+        else if (!strcmp(arg.s, "objectid") && (client_capa & CAPA_OBJECTIDBIS)) {
             statusitems |= STATUS_OBJECTID;
         }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */

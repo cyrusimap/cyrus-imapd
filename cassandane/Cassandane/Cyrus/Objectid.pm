@@ -190,6 +190,7 @@ sub test_objectidbis
     $talk->create('bar');
     $talk->select('bar');
     my $status2 = $talk->status('bar', "(mailboxid accountid)");
+    my $status3 = $talk->status('bar', "(objectid)");
 
     $talk->rename('foo', 'renamed');
     my $status3 = $talk->status('renamed', "(mailboxid)");
@@ -198,7 +199,7 @@ sub test_objectidbis
     $self->assert_str_equals($status1->{mailboxid}[0], $status3->{mailboxid}[0]);
     $self->assert_str_equals($status2->{mailboxid}[0], $status4->{mailboxid}[0]);
 
-    $talk->list('', '*', 'return', [ "status", [ "mailboxid", "accountid" ] ]);
+    $talk->list('', '*', 'return', [ "status", [ "mailboxid", "accountid", "objectid" ] ]);
 }
 
 1;
