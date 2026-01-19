@@ -7364,7 +7364,7 @@ localcreate:
     // ACCOUNTID_NEEDS_FIXING
     strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s) ACCOUNTID (%s)] Completed\r\n", tag, mailboxid, accountid);
+    prot_printf(imapd_out, "%s OK [CREATED (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
 
     imapd_check(NULL, 0);
 
@@ -9722,6 +9722,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_ACCOUNTID) {        /* objectidbis */
+        prot_printf(imapd_out, "%cACCOUNTID (%s)", sepchar, sd->accountid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
