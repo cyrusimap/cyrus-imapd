@@ -824,7 +824,12 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     /* RFC 8474 and draft-degennaro-imap-objectid-accountid */
     // ACCOUNTID_NEEDS_FIXING
     char *accountid = mboxname_to_userid(state->mboxname);
-    prot_printf(state->out, "* OK [MAILBOXID (%s) ACCOUNTID (%s)] Ok\r\n", state->mailboxid, accountid);
+    if (client_capa & CAPA_OBJECTIDBIS) {
+       prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Ok\r\n", state->mailboxid, accountid);
+    }
+    else {
+       prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    }
     free(accountid);
 
     /* RFC 4467 */

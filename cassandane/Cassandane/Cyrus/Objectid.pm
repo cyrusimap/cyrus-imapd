@@ -166,4 +166,39 @@ EOF
     # XXX and then what???  is this test incomplete?
 }
 
+#
+# Test uniqueid and rename
+#
+sub test_objectidbis
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # sub folders of another user - one is subscribable
+    $self->{instance}->create_user("other",
+                                   subdirs => [ 'sub', ['sub', 'folder'] ]);
+    $admintalk->setacl("user.other.sub.folder", "cassandane", "lrswipkxtecdan");
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+    $talk->select('foo');
+    my $status1 = $talk->status('foo', "(mailboxid)");
+    $talk->enable('objectidbis');
+    $talk->create('bar');
+    $talk->select('bar');
+    my $status2 = $talk->status('bar', "(mailboxid accountid)");
+
+    $talk->rename('foo', 'renamed');
+    my $status3 = $talk->status('renamed', "(mailboxid)");
+    my $status4 = $talk->status('bar', "(mailboxid)");
+
+    $self->assert_str_equals($status1->{mailboxid}[0], $status3->{mailboxid}[0]);
+    $self->assert_str_equals($status2->{mailboxid}[0], $status4->{mailboxid}[0]);
+
+    $talk->list('', '*', 'return', [ "status", [ "mailboxid", "accountid" ] ]);
+}
+
 1;

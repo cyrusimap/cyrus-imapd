@@ -7364,14 +7364,13 @@ localcreate:
         list_data(&listargs);
     }
 
-    // ACCOUNTID_NEEDS_FIXING
-    strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
-
     if (client_capa & CAPA_OBJECTIDBIS) {
-        prot_printf(imapd_out, "%s OK [CREATED (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
+        // ACCOUNTID_NEEDS_FIXING
+        strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
+        prot_printf(imapd_out, "%s OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
     }
     else {
-        prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed in ACCOUNTID (%s)\r\n", tag, mailboxid);
+        prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
     }
 
     imapd_check(NULL, 0);
@@ -9647,6 +9646,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "accountid") && (client_capa & CAPA_OBJECTIDBIS)) {        /* draft-degennaro-imap-objectid-accountid */
             statusitems |= STATUS_ACCOUNTID;
         }
+        else if (!strcmp(arg.s, "objectid") (client_capa & CAPA_OBJECTIDBIS)) {
+            statusitems |= STATUS_OBJECTID;
+        }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
         }
@@ -9730,6 +9732,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_OBJECTID) {        /* RFC 8474 */
+        prot_printf(imapd_out, "%cOBJECTID (MAILBOXID %s ACCOUNTID %s)", sepchar, sd->mailboxid, sd->accountid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_ACCOUNTID) {        /* objectidbis */
@@ -14076,7 +14082,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity", "unseen",
                     "highestmodseq", "appendlimit", "size", "mailboxid",
                     "deleted", "deleted-storage",
-                    "accountid", "", "",  // placeholders for unused bits
+                    "accountid", "objectid", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
@@ -14752,7 +14758,7 @@ static void cmd_enable(char *tag)
             client_behavior_mask |= CB_UIDONLY;
             new_capa |= CAPA_UIDONLY;
         }
-        else if (!strcasecmp(arg.s, "objectids")) {
+        else if (!strcasecmp(arg.s, "objectidbis")) {
             client_behavior_mask |= CB_OBJECTID;
             new_capa |= CAPA_OBJECTIDBIS;
         }
