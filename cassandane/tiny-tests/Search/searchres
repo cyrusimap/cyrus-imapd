@@ -1,0 +1,275 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchres
+    :NoAltNameSpace :min_version_3_7
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [qw( INBOX.target )] ],
+    ]);
+
+    xlog $self, "Append some emails into the folders";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: foo\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+        E => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test3\r
+Message-Id: <messageid3\@foo>\r
+In-Reply-To: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test E\r
+EOF
+        F => <<"EOF",
+From: <foo\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test F\r
+EOF
+        G => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid5\@foo>\r
+In-Reply-To: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    $imaptalk->append('INBOX', "()", $raw{A}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{B}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{C}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{D}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{E}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{F}) || die $@;
+    $imaptalk->append('INBOX', "()", $raw{G}) || die $@;
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    xlog $self, "Search the (un)selected mailbox (should fail)";
+    my $res = $imaptalk->_imap_cmd('SEARCH', 0, 'esearch',
+                                   'RETURN', '(SAVE)',
+                                   'subject', 'test');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Now select a mailbox";
+    $res = $imaptalk->select("INBOX");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Search results should be empty";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(0, scalar keys %{$res});
+
+    xlog $self, "Attempt to Search the newly selected mailbox and others";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                                'IN', '(SELECTED PERSONAL)', 'RETURN', '(SAVE)',
+                                'subject', 'test');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Search the selected mailbox for minimum and save";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                                'RETURN', '(SAVE MIN)',
+                                'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar keys %{$res});
+    $self->assert_str_equals('1', $res->{'1'}->{uid});
+
+    xlog $self, "Search the mailbox for maximum and save";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(MAX SAVE)',
+                                'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar keys %{$res});
+    $self->assert_str_equals('7', $res->{'7'}->{uid});
+
+    xlog $self, "Search the mailbox for minimum & maximum and save";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(MAX SAVE MIN)',
+                                'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(2, scalar keys %{$res});
+    $self->assert_str_equals('1', $res->{'1'}->{uid});
+    $self->assert_str_equals('7', $res->{'7'}->{uid});
+
+    xlog $self, "Search the mailbox for all and save";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(SAVE)',
+                                'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(6, scalar keys %{$res});
+    $self->assert_str_equals('1', $res->{'1'}->{uid});
+    $self->assert_str_equals('3', $res->{'3'}->{uid});
+    $self->assert_str_equals('4', $res->{'4'}->{uid});
+    $self->assert_str_equals('5', $res->{'5'}->{uid});
+    $self->assert_str_equals('6', $res->{'6'}->{uid});
+    $self->assert_str_equals('7', $res->{'7'}->{uid});
+
+    xlog $self, "Store using the search results";
+    $res = $imaptalk->store('$', '+flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(6, scalar keys %{$res});
+    $self->assert_str_equals('1', $res->{'1'}->{uid});
+    $self->assert_str_equals('3', $res->{'3'}->{uid});
+    $self->assert_str_equals('4', $res->{'4'}->{uid});
+    $self->assert_str_equals('5', $res->{'5'}->{uid});
+    $self->assert_str_equals('6', $res->{'6'}->{uid});
+    $self->assert_str_equals('7', $res->{'7'}->{uid});
+
+    xlog $self, "Copy using the search results";
+    $res = $imaptalk->copy('$', 'INBOX.target');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->get_response_code('copyuid');
+    $self->assert_str_equals('1,3:7', $res->[1]);
+    $self->assert_str_equals('1:6', $res->[2]);
+
+    xlog $self, "Expunge the first message";
+    $res = $imaptalk->store('1', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(5, scalar keys %{$res});
+    $self->assert_str_equals('3', $res->{'2'}->{uid});
+    $self->assert_str_equals('4', $res->{'3'}->{uid});
+    $self->assert_str_equals('5', $res->{'4'}->{uid});
+    $self->assert_str_equals('6', $res->{'5'}->{uid});
+    $self->assert_str_equals('7', $res->{'6'}->{uid});
+
+    xlog $self, "Expunge the middle message in the search results range";
+    $res = $imaptalk->store('4', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(4, scalar keys %{$res});
+    $self->assert_str_equals('3', $res->{'2'}->{uid});
+    $self->assert_str_equals('4', $res->{'3'}->{uid});
+    $self->assert_str_equals('6', $res->{'4'}->{uid});
+    $self->assert_str_equals('7', $res->{'5'}->{uid});
+
+    xlog $self, "Expunge the 1st message in the 1st range and the last in the 2nd";
+    $res = $imaptalk->store('2,5', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(2, scalar keys %{$res});
+    $self->assert_str_equals('4', $res->{'2'}->{uid});
+    $self->assert_str_equals('6', $res->{'3'}->{uid});
+
+    xlog $self, "Search the mailbox for a from address in the saved results";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(SAVE ALL)',
+                                'uid', '$', 'from', 'foo');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Fetch using the search results";
+    $res = $imaptalk->fetch('$', 'UID');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar keys %{$res});
+    $self->assert_str_equals('6', $res->{'3'}->{uid});
+}

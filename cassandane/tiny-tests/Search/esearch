@@ -1,0 +1,293 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_esearch
+    :NoAltNameSpace :needs_search_xapian :Conversations :min_version_3_7
+{
+    my ($self) = @_;
+
+    xlog $self, "Create shared folder, writeable by cassandane user";
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("shared");
+    $admintalk->setacl("shared", "cassandane", "lrsip");
+
+    xlog $self, "Create some personal folders";
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( INBOX.a INBOX.a.b.c INBOX.d INBOX.d.e INBOX.f )] ],
+        [ 'subscribe' => [qw( INBOX.a.b INBOX.d )] ],
+        [ 'subscribe' => [qw( shared )] ],
+    ]);
+
+    xlog $self, "Remove 'p' right from most  personal folders";
+    $imaptalk->setacl("INBOX.a", "anyone", "-p");
+    $imaptalk->setacl("INBOX.a.b", "anyone", "-p");
+    $imaptalk->setacl("INBOX.a.b.c", "anyone", "-p");
+    $imaptalk->setacl("INBOX.d", "anyone", "-p");
+    $imaptalk->setacl("INBOX.d.e", "anyone", "-p");
+
+    my $alldata = $imaptalk->list("", "*");
+
+    $self->assert_mailbox_structure($alldata, '.', {
+        'INBOX'                 => [qw( \\HasChildren )],
+        'INBOX.a'               => [qw( \\HasChildren )],
+        'INBOX.a.b'             => [qw( \\HasChildren )],
+        'INBOX.a.b.c'           => [qw( \\HasNoChildren )],
+        'INBOX.d'               => [qw( \\HasChildren )],
+        'INBOX.d.e'             => [qw( \\HasNoChildren )],
+        'INBOX.f'               => [qw( \\HasNoChildren )],
+        'shared'                => [qw( \\HasNoChildren )],
+    });
+
+    xlog $self, "Append some emails into the folders";
+    my %raw = (
+        A => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test A\r
+EOF
+        B => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test B\r
+EOF
+        C => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test\r
+Message-Id: <messageid1\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+Message-Id: <reply2\@foo>\r
+In-Reply-To: <messageid1\@foo>\r
+\r
+test C\r
+EOF
+        D => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+        E => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test3\r
+Message-Id: <messageid3\@foo>\r
+In-Reply-To: <messageid2\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test E\r
+EOF
+        F => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test F\r
+EOF
+        G => <<"EOF",
+From: <from\@local>\r
+To: to\@local\r
+Subject: test2\r
+Message-Id: <messageid5\@foo>\r
+In-Reply-To: <messageid4\@foo>\r
+Date: Wed, 7 Dec 2019 22:11:11 +1100\r
+MIME-Version: 1.0\r
+Content-Type: text/plain\r
+\r
+test D\r
+EOF
+    );
+
+    $imaptalk->append('INBOX',       "()", $raw{A}) || die $@;
+    $imaptalk->append('INBOX',       "()", $raw{B}) || die $@;
+    $imaptalk->append('INBOX',       "()", $raw{C}) || die $@;
+    $imaptalk->append('INBOX.a',     "()", $raw{B}) || die $@;
+    $imaptalk->append('INBOX.a.b',   "()", $raw{C}) || die $@;
+    $imaptalk->append('INBOX.a.b.c', "()", $raw{D}) || die $@;
+    $imaptalk->append('INBOX.d',     "()", $raw{E}) || die $@;
+    $imaptalk->append('INBOX.f',     "()", $raw{F}) || die $@;
+    $imaptalk->append('shared',      "()", $raw{G}) || die $@;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    xlog $self, "Unselected Esearch with empty source opts (should fail)";
+    my $res = $imaptalk->_imap_cmd('ESEARCH', 0, 'esearch',
+                                   'IN', '()',
+                                   'subject', 'test');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Search the (un)selected mailbox (should fail)";
+    $res = $imaptalk->_imap_cmd('ESEARCH', 0, 'esearch',
+                                   'IN', '(SELECTED)',
+                                   'subject', 'test');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Now select a mailbox";
+    $res = $imaptalk->select("INBOX");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Search the newly selected mailbox";
+    @results = ();
+    $res = $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                                'IN', '(SELECTED)', 'RETURN', '(MIN MAX ALL)',
+                                'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_num_equals(1, $results[0][3]);
+    $self->assert_num_equals(3, $results[0][5]);
+    $self->assert_str_equals('1:3', $results[0][7]);
+
+    xlog $self, "Search the personal namespace, returning just counts";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(PERSONAL)', 'RETURN', '(COUNT)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(6, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_num_equals(3, $results[0][3]);
+    $self->assert_str_equals('INBOX.a', $results[1][0][3]);
+    $self->assert_num_equals(1, $results[1][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[2][0][3]);
+    $self->assert_num_equals(1, $results[2][3]);
+    $self->assert_str_equals('INBOX.a.b.c', $results[3][0][3]);
+    $self->assert_num_equals(1, $results[3][3]);
+    $self->assert_str_equals('INBOX.d', $results[4][0][3]);
+    $self->assert_num_equals(1, $results[4][3]);
+    $self->assert_str_equals('INBOX.f', $results[5][0][3]);
+    $self->assert_num_equals(1, $results[5][3]);
+
+    xlog $self, "Search the subscribed folders";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBSCRIBED)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(4, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[1][0][3]);
+    $self->assert_str_equals('INBOX.d', $results[2][0][3]);
+    $self->assert_str_equals('shared', $results[3][0][3]);
+
+    xlog $self, "Search the Inboxes (deliverable)";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(INBOXES)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(2, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.f', $results[1][0][3]);
+
+    xlog $self, "Search a subtree";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBTREE INBOX.a)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @results);
+    $self->assert_str_equals('INBOX.a', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[1][0][3]);
+    $self->assert_str_equals('INBOX.a.b.c', $results[2][0][3]);
+
+    xlog $self, "Search a limited subtree";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBTREE-ONE INBOX.a)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(2, scalar @results);
+    $self->assert_str_equals('INBOX.a', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[1][0][3]);
+
+    xlog $self, "Search a single folder without a match";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(MAILBOXES INBOX.e)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(0, scalar @results);
+
+    xlog $self, "Search a single folder with a match";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(MAILBOXES INBOX.f)',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('INBOX.f', $results[0][0][3]);
+
+    xlog $self, "Search a multiple folders with only one match)";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(MAILBOXES (INBOX.e INBOX.f))',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('INBOX.f', $results[0][0][3]);
+
+    xlog $self, "Search multiple sourcesand make sure there are no duplicates";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(SUBSCRIBED SELECTED SUBTREE-ONE INBOX.a MAILBOXES (INBOX.e shared))',
+                         'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(5, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[1][0][3]);
+    $self->assert_str_equals('INBOX.d', $results[2][0][3]);
+    $self->assert_str_equals('shared', $results[3][0][3]);
+    $self->assert_str_equals('INBOX.a', $results[4][0][3]);
+
+    xlog $self, "Fuzzy search the personal namespace";
+    @results = ();
+    $imaptalk->_imap_cmd('ESEARCH', 0, \%handlers,
+                         'IN', '(PERSONAL)', 'FUZZY', 'subject', 'test');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+    $self->assert_str_equals('INBOX.a', $results[1][0][3]);
+    $self->assert_str_equals('INBOX.a.b', $results[2][0][3]);
+}

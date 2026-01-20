@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_from
+{
+    my ($self) = @_;
+
+    xlog $self, "test SEARCH with the FROM predicate";
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my %from_domains;
+    my $N = 20;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+        my ($dom) = ($msg->from() =~ m/(@[^>]*)>/);
+        $from_domains{$dom} = 1;
+        xlog $self, "Message uid " . $msg->uid() . " from domain " . $dom;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    my @found;
+    foreach my $dom (keys %from_domains)
+    {
+        xlog $self, "searching for: FROM $dom";
+        my $uids = $talk->search('from', { Quote => $dom })
+            or die "Cannot search: $@";
+        my $expected_uids = _fgrep_msgs(\%exp, 'from', $dom);
+        $self->assert_deep_equals($expected_uids, $uids);
+        map { $found[$_] = 1 } @$uids;
+    }
+
+    xlog $self, "checking all the message were found";
+    for (1..$N)
+    {
+        $self->assert($found[$_],
+                      "UID $_ was not returned from a SEARCH");
+    }
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp);
+}

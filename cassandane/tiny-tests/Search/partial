@@ -1,0 +1,140 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_partial
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    # delete the 1st and 6th
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    # search and return non-existent messages
+    @results = ();
+    my $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                   'RETURN', '(PARTIAL -100:-1)', '100:300');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('-1:-100', $results[0][2][0]);
+    $self->assert_null($results[0][2][1]);
+
+    # search and return all messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '()', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('2:5,7:10', $results[0][2]);
+
+    # attempt search with all and partial
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(ALL PARTIAL 1:2)', 'UNDELETED');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # search and return first 2 messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL 1:2)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('1:2', $results[0][2][0]);
+    $self->assert_str_equals('2:3', $results[0][2][1]);
+
+    # search and return next 2 messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL 3:4)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('3:4', $results[0][2][0]);
+    $self->assert_str_equals('4:5', $results[0][2][1]);
+
+    # flag the last message
+    $imaptalk->store('10', '+FLAGS', '(\\flagged)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # search and return next 2 messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL 5:6)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('5:6', $results[0][2][0]);
+    $self->assert_str_equals('7:8', $results[0][2][1]);
+
+    # search and return last 2 messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL -1:-2)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('-1:-2', $results[0][2][0]);
+    $self->assert_str_equals('9:10', $results[0][2][1]);
+
+    # search and return the previous 2 messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL -3:-4)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('-3:-4', $results[0][2][0]);
+    $self->assert_str_equals('7:8', $results[0][2][1]);
+
+    # search and return middle 2 messages by UID
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL 2:3)',
+                                'UID', '4:8', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('2:3', $results[0][2][0]);
+    $self->assert_str_equals('5,7', $results[0][2][1]);
+
+    # search and return non-existent messages
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(PARTIAL 9:10)', 'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('PARTIAL', $results[0][1]);
+    $self->assert_str_equals('9:10', $results[0][2][0]);
+    $self->assert_null($results[0][2][1]);
+
+    # search and return count, min, max, and partial
+    @results = ();
+    $res = $imaptalk->_imap_cmd('SEARCH', 0, \%handlers,
+                                'RETURN', '(MIN MAX COUNT PARTIAL 3:4)',
+                                'UNDELETED');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('COUNT', $results[0][1]);
+    $self->assert_str_equals('8', $results[0][2]);
+    $self->assert_str_equals('MIN', $results[0][3]);
+    $self->assert_str_equals('2', $results[0][4]);
+    $self->assert_str_equals('MAX', $results[0][5]);
+    $self->assert_str_equals('10', $results[0][6]);
+    $self->assert_str_equals('PARTIAL', $results[0][7]);
+    $self->assert_str_equals('3:4', $results[0][8][0]);
+    $self->assert_str_equals('4:5', $results[0][8][1]);
+}
