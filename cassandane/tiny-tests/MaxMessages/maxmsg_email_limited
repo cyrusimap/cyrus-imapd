@@ -6,7 +6,7 @@ sub test_maxmsg_email_limited
 {
     my ($self) = @_;
 
-    my $mailbox_maxmessages_email = $LIMITED;
+    my $mailbox_maxmessages_email = $self->LIMITED;
     $self->{instance}->{config}->set(
         mailbox_maxmessages_email => $mailbox_maxmessages_email,
     );
@@ -34,7 +34,7 @@ sub test_maxmsg_email_limited
     my $carddav = $self->{carddav};
     my $addrbookid = $carddav->NewAddressBook('foo');
     $self->assert_not_null($addrbookid);
-    foreach my $i (1..$LOTS) {
+    foreach my $i (1..$self->LOTS) {
         $self->put_vcard($addrbookid);
     }
 
@@ -42,17 +42,17 @@ sub test_maxmsg_email_limited
     my $caldav = $self->{caldav};
     my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
     $self->assert_not_null($calendarid);
-    foreach my $i (1..$LOTS) {
+    foreach my $i (1..$self->LOTS) {
         $self->put_vevent($calendarid);
     }
 
     # should be able to upload lots of sieve scripts
-    foreach my $i (1..$LOTS) {
+    foreach my $i (1..$self->LOTS) {
         $self->put_script();
     }
 
     # should be able to upload lots of jmap submissions
-    foreach my $i (1..$LOTS) {
+    foreach my $i (1..$self->LOTS) {
         $self->put_submission();
     }
 }

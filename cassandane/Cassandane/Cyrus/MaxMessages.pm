@@ -49,8 +49,8 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Generator;
 use Cassandane::Util::Log;
 
-my $LOTS = 20;
-my $LIMITED = 5;
+sub LOTS { 20 }
+sub LIMITED { 5 }
 
 sub new
 {
@@ -66,7 +66,7 @@ sub new
         httpallowcompress => 'no',
         icalendar_max_size => 100000,
         jmap_nonstandard_extensions => 'yes',
-        sieve_maxscripts => $LOTS,
+        sieve_maxscripts => $class->LOTS,
         vcard_max_size => 100000,
     );
 
