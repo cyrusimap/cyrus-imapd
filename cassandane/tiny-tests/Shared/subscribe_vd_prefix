@@ -1,0 +1,11 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_subscribe_vd_prefix
+    :VirtDomains :CrossDomains
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('matt@example.com',
+                                   'matthew@example.com');
+}
