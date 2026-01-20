@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_incremental
+    :SearchEngineSquat
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $err;
+
+    # some initial messages - enough to definitely force a doc_ID_map realloc
+    # when incrementally reindexing later
+    for (1..50) {
+        $self->make_message();
+    }
+
+    # make a message with no subject, to, or from
+    # this used to trigger an indexing bug and produce a corrupt index,
+    # which would lead to a crash during incremental reindex
+    my $weird = $self->make_message(undef, to => undef, from => undef);
+    xlog "weird message:\n" . $weird->as_string();
+
+    sleep(1);
+
+    # initial non-incremental index
+    (undef, $err) = $self->run_squatter('-vv');
+    $self->assert_matches(qr{indexed 51 messages}, $err);
+
+    # incremental reindex with no changes to mailbox
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 0 messages}, $err);
+
+    # delete, expunge, and cyr_expire some messages
+    # n.b. this does not unindex the message in any way
+    $imap->store('5', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $imap->expunge();
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $self->{instance}->run_command({cyrus => 1}, 'cyr_expire', '-X', '0');
+
+    # incremental reindex after one message expunged
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 0 messages}, $err);
+
+    # make one new message
+    for (1) {
+        $self->make_message();
+    }
+    sleep(1);
+
+    # incremental reindex after one new message
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 1 messages}, $err);
+
+    # incremental reindex with no changes to mailbox
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 0 messages}, $err);
+
+    # make some new messages
+    for (1..10) {
+        $self->make_message();
+    }
+    sleep(1);
+
+    # incremental reindex after new messages
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 10 messages}, $err);
+
+    # incremental reindex with no changes to mailbox
+    (undef, $err) = $self->run_squatter('-i', '-vv');
+    $self->assert_matches(qr{indexed 0 messages}, $err);
+}
