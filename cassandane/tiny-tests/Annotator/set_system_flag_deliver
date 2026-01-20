@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_set_system_flag_deliver
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    my $flag = '\\Flagged';
+
+    my %exp;
+    $exp{A} = $self->{gen}->generate(subject => "Message A");
+    $exp{A}->set_body("set_flag $flag\r\n");
+    $self->{instance}->deliver($exp{A});
+    $exp{A}->set_attributes(flags => ['\\Recent', $flag]);
+
+    # Local delivery adds headers we can't predict or control,
+    # which change the SHA1 of delivered messages, so we can't
+    # be checking the GUIDs here.
+    $self->{store}->set_fetch_attributes('uid', 'flags');
+    $self->check_messages(\%exp, check_guid => 0);
+}

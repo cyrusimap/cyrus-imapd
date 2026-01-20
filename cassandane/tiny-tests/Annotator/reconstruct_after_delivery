@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_reconstruct_after_delivery
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    xlog $self, "Testing reconstruct after delivery";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $msgs{1}->set_body("set_shared_annotation /comment testvalue\r\n");
+    $imaptalk->create("INBOX.subfolder");
+    $self->{instance}->deliver($msgs{1}, user => "cassandane");
+
+    xlog $self, "Check that the message made it";
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    # run a fresh reconstruct
+    my $out = "$self->{instance}->{basedir}/$self->{_name}-reconstruct.stdout";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => { 'stdout' => $out },
+        }, 'reconstruct', '-u', 'cassandane');
+
+    # check the output
+    $out = slurp_file($out);
+    xlog $self, $out;
+
+    $self->assert_does_not_match(qr/ updating /, $out);
+}
