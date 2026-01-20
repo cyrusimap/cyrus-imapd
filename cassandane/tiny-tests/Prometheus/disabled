@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_disabled
+    :min_version_3_1 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{starts} = [ grep { $_->{name} ne 'promstatsd' } @{$instance->{starts}} ];
+    $instance->{config}->set(prometheus_enabled => 'no');
+
+    $self->_start_instances();
+
+    # no stats directory
+    my $stats_dir = "$self->{instance}->{basedir}/conf/stats";
+    $self->assert_not_file_test($stats_dir, '-d');
+
+    # no http report
+    my $response = $self->http_report();
+    $self->assert_equals(404, $response->{status});
+}

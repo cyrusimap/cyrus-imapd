@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+# tests for pathological quotaroot/partition subdivisions
+sub test_quota_commitments
+    :min_version_3_1 :Partition2
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $inbox = 'user.cassandane';  # allocate top level quota here
+    my $child = "$inbox.child";
+    my $gchild1 = "$child.cat"; # we'll stick this one on a sep part
+    my $gchild2 = "$child.dog"; # give this one its own quota
+    my $gchild3 = "$child.sheep"; # normal, but sorts after weird ones
+    my $ggchild1 = "$gchild1.manx"; # and give this one its own quota
+    my $ggchild2 = "$gchild1.siamese"; # and this one back on def part
+    my $interm = "$inbox.foo.bar.baz"; # contains intermediate folders
+    my $inbox2 = 'user.cassandane-child'; # hyphen! own quota
+
+    # make some folders
+    foreach my $f ($child, $gchild1, $gchild2, $gchild3, $ggchild1,
+                   $ggchild2, $interm, $inbox2) {
+        $admintalk->create($f);
+        $self->assert_str_equals('ok',
+                                 $admintalk->get_last_completion_response());
+    }
+
+    # stick one of them on a different partition
+    $admintalk->rename($gchild1, $gchild1, 'p2');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # but not one of its children
+    $admintalk->rename($ggchild2, $ggchild2, 'default');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # create a mess of quotas
+    $admintalk->setquota($inbox, '(STORAGE 8000)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setquota($gchild2, '(STORAGE 4000)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setquota($ggchild1, '(STORAGE 2000)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setquota($inbox2, '(STORAGE 1000)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->logout();
+
+    sleep 3;
+
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+
+    # now we expect default partition to have 8000 + 4000 + 1000 committed
+    $self->assert_equals(13000, $report->{'cyrus_usage_quota_commitment'}->{'partition="default",resource="STORAGE"'}->{value});
+
+    # and p2 partition to have 8000 + 2000 committed
+    $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment'}->{'partition="p2",resource="STORAGE"'}->{value});
+}

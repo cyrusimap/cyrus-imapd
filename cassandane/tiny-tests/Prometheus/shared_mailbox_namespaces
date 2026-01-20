@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_shared_mailbox_namespaces
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $ns1 = 'foo';
+    my $ns2 = 'bar';
+    my @folders = map { ("$ns1.$_", "$ns2.$_" ) }
+                      qw(cat sheep dog interm.interm.rabbit);
+
+    foreach my $f (@folders) {
+        $admintalk->create($f);
+        $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    }
+
+    sleep 3;
+
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+
+    my $num_folders = 4;
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj > 3 || ($maj == 3 && $min > 4)) {
+        $num_folders = 7;
+    }
+
+    # expect to find $num_folders folders on each of 'foo' and 'bar' namespaces
+    $self->assert_equals($num_folders, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
+
+    $self->assert_equals($num_folders, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
+}
