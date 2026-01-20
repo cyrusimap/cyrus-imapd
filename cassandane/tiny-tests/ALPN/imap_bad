@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_bad
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    eval {
+        $self->do_imap_starttls($talk, [ 'bogus' ]);
+    };
+
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches($alpn_fail_pattern, $e);
+    $self->assert_num_equals(Mail::IMAPTalk::Unconnected, $talk->state());
+}

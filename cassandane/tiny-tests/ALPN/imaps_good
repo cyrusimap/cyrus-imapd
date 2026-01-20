@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imaps_good
+{
+    my ($self) = @_;
+
+    my $imaps = $self->{instance}->get_service('imaps');
+    my $store = $imaps->create_store(username => 'cassandane');
+    my $talk = $store->get_client(); # correct ALPN map is the default
+
+    $talk->select("INBOX");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, 'imap');
+}
