@@ -1,0 +1,151 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_scheduling_privileges
+    :VirtDomains
+    ($self)
+{
+    my $service = $self->{instance}->get_service("http");
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "Remove schedule-send privileges";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user.cassandane.#calendars.Outbox",
+                       "cassandane", "-789");
+
+    my $org_uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $org_href = "Default/$org_uuid.ics";
+    my $org_event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$org_uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Create an event as organizer";
+    $CalDAV->Request('PUT', $org_href, $org_event,
+                     'Content-Type' => 'text/calendar');
+
+    xlog $self, "Verify that no iMIP invite is sent";
+    $self->assert_caldav_notified();
+
+    xlog $self, "We should have generated a syslog message about lack of privs";
+    $self->assert_syslog_matches($self->{instance},
+        qr/No schedule-send-invite privilege for user cassandane on Outbox/);
+
+    xlog $self, "Restore schedule-send-invite privilege";
+    $admintalk->setacl("user.cassandane.#calendars.Outbox",
+                       "cassandane", "+8");
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Update the organizer event";
+    $org_event =~ s/20160831T183000/20160831T193000/;
+    $CalDAV->Request('PUT', $org_href, $org_event,
+                     'Content-Type' => 'text/calendar');
+
+    xlog $self, "Verify that an iMIP invite is sent";
+    $self->assert_caldav_notified({
+        method => 'REQUEST',
+        recipient => "friend\@example.com",
+        is_update => JSON::true
+    });
+
+    my $att_uuid = "cfebc73f8201-6de280c9-edff-4019-8ebd";
+    my $att_href = "Default/$att_uuid.ics";
+    my $att_event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$att_uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:friend\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ORGANIZER;CN=Test User:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Create an attendee event";
+    $CalDAV->Request('PUT', $att_href, $att_event,
+                     'Content-Type' => 'text/calendar');
+
+    # we don't say anything when we add a NEEDS-ACTION item
+    $self->assert_caldav_notified();
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Update the attendee event";
+    $att_event =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=TENTATIVE/;
+    $CalDAV->Request('PUT', $att_href, $att_event,
+                     'Content-Type' => 'text/calendar');
+
+    xlog $self, "Verify that no iMIP invite is sent";
+    $self->assert_caldav_notified();
+
+    xlog $self, "We should have generated a syslog message about lack of privs";
+    $self->assert_syslog_matches($self->{instance},
+        qr/No schedule-send-reply privilege for user cassandane on Outbox/);
+
+    xlog $self, "Restore schedule-send-reply privilege";
+    $admintalk->setacl("user.cassandane.#calendars.Outbox",
+                       "cassandane", "+7");
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "Update the attendee event again";
+    $att_event =~ s/PARTSTAT=TENTATIVE/PARTSTAT=ACCEPTED/;
+    $CalDAV->Request('PUT', $att_href, $att_event,
+                     'Content-Type' => 'text/calendar');
+
+    xlog $self, "Verify that an iMIP reply is sent";
+    $self->assert_caldav_notified({
+        method => 'REPLY',
+        recipient => 'friend@example.com',
+        event => {
+            participants => {
+                'cassandane@example.com' => {
+                    'scheduleStatus' => 'accepted',
+                    'email' => 'cassandane@example.com'
+                }
+            }
+        }
+    });
+}
