@@ -1,0 +1,143 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_admin_inbox_imm
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing that an admin can delete the INBOX of a user";
+    xlog $self, "and it will delete the whole user, immediate delete version";
+
+    # can't do the magic disconnect handling on older perl
+    return if ($] < 5.010);
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+    my $sharedfolder = 'shared';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Create a shared folder";
+    $admintalk->create($sharedfolder)
+        or $self->fail("Cannot create folder $sharedfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $admintalk->setacl($sharedfolder, admin => 'lrswipkxtecdan');
+    $admintalk->setacl($sharedfolder, cassandane => 'lrsip');
+
+    xlog $self, "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog $self, "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+    $talk->unselect();
+
+    xlog $self, "Generate a message in $sharedfolder";
+    my %exp_shared;
+    $store->set_folder($sharedfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_shared{A} = $self->make_message("Message $sharedfolder A");
+    $self->check_messages(\%exp_shared);
+
+    xlog $self, "Set \\Seen on message A";
+    $talk->store('1', '+flags', '(\\Seen)');
+    $talk->unselect();
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "Subscribe to INBOX";
+    $talk->subscribe("INBOX");
+
+    xlog $self, "Install a sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+keep;
+EOF
+    );
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Verify user data files/directories exist";
+    my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
+    $self->assert_file_test($data->{user}{'sub'}, '-f');
+    $self->assert_file_test($data->{user}{seen}, '-f');
+    $self->assert_file_test($data->{user}{dav}, '-f');
+    $self->assert_file_test($data->{user}{counters}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{xapianactive}, '-f');
+    $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
+    $self->assert_file_test($data->{xapian}{t1}, '-d');
+
+    xlog $self, "admin can delete $inbox";
+    $admintalk->delete($inbox);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    {
+        # shut up
+        local $SIG{__DIE__};
+        local $SIG{__WARN__} = sub { 1 };
+
+        xlog $self, "Client was disconnected";
+        my $Res = eval { $talk->select($inbox) };
+        $self->assert_null($Res);
+
+        # reconnect
+        $talk = $store->get_client();
+    }
+
+    xlog $self, "Cannot select $inbox anymore";
+    $talk->select($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog $self, "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+
+    xlog $self, "Verify user data directories have been deleted";
+    if (($maj > 3 || ($maj == 3 && $min > 4))
+        && !$self->{instance}->{config}->get_bool('mailbox_legacy_dirs'))
+    {
+        # Entire UUID-hashed directory should be removed
+        $self->assert_not_file_test(dirname($data->{user}{dav}), '-e');
+    }
+    else {
+        # Name-hashed directory will be left behind, so check individual files
+        $self->assert_not_file_test($data->{user}{'sub'}, '-e');
+        $self->assert_not_file_test($data->{user}{seen}, '-e');
+        $self->assert_not_file_test($data->{user}{dav}, '-e');
+        $self->assert_not_file_test($data->{user}{counters}, '-e');
+        $self->assert_not_file_test($data->{user}{conversations}, '-e');
+        $self->assert_not_file_test($data->{user}{xapianactive}, '-e');
+    }
+    $self->assert_not_file_test($data->{user}{sieve}, '-e');
+    $self->assert_not_file_test($data->{xapian}{t1}, '-e');
+
+    $self->check_syslog($self->{instance});
+}

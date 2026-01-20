@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_no_delete_with_children
+    :DelayedDelete :min_version_3_3
+{
+    my ($self) = @_;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $subfolder = 'INBOX.foo';
+    my $subsubfolder = 'INBOX.foo.bar';
+
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->create($subsubfolder)
+        or $self->fail("Cannot create folder $subsubfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->delete($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $self->check_syslog($self->{instance});
+}

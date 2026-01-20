@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cyr_expire_delete
+    :DelayedDelete :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $store = $self->{store};
+    my $adminstore = $self->{adminstore};
+    my $talk = $store->get_client();
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = 'INBOX';
+    my $subfoldername = 'foo';
+    my $subfolder = 'INBOX.foo';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Append a messages to $inbox";
+    my %msg_inbox;
+    $msg_inbox{A} = $self->make_message('Message A in $inbox');
+    $self->check_messages(\%msg_inbox);
+
+    xlog $self, "Append 3 messages to $subfolder";
+    my %msg_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $msg_sub{A} = $self->make_message('Message A in $subfolder');
+    $msg_sub{B} = $self->make_message('Message B in $subfolder');
+    $msg_sub{C} = $self->make_message('Message C in $subfolder');
+    $self->check_messages(\%msg_sub);
+
+    $self->check_folder_ondisk($inbox, expected => \%msg_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%msg_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "Delete $subfolder";
+    $talk->unselect();
+    $talk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Ensure we can't select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($subfolder);
+
+    xlog $self, "Ensure we still have messages in $inbox";
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->check_messages(\%msg_inbox);
+
+    my ($datapath) = $self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername");
+    $self->assert_not_null($datapath);
+
+    xlog $self, "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+
+    # the folder should not exist now!
+    $self->assert_not_file_test($datapath, '-d');
+
+    # and not exist from mbpath either...
+    $self->assert_null($self->{instance}->folder_to_deleted_directories("user.cassandane.$subfoldername"));
+
+    $self->check_syslog($self->{instance});
+}
