@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lsub_delete
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.deltest") || die;
+    $imaptalk->create("INBOX.deltest.sub1") || die;
+    $imaptalk->create("INBOX.deltest.sub2") || die;
+    $imaptalk->subscribe("INBOX.deltest") || die;
+    $imaptalk->subscribe("INBOX.deltest.sub2") || die;
+    my $subdata = $imaptalk->lsub("INBOX.deltest", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.deltest'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.deltest.sub2'
+          ],
+    ], "LSUB deltest setup mismatch: " . Dumper($subdata));
+
+    $imaptalk->delete("INBOX.deltest.sub2");
+    my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
+    $self->assert_deep_equals($onedata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.deltest'
+          ],
+    ], "LSUB deltest.sub2 after delete mismatch: " . Dumper($onedata));
+}

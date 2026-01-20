@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test LSUB behaviour
+#
+sub test_lsub_toplevel
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $alldata = $imaptalk->lsub("", "*");
+    $self->assert_deep_equals($alldata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.asub'
+          ],
+          [
+            [],
+            '.',
+            'user.other.sub.folder'
+          ]
+    ], "LSUB all data mismatch: "  . Dumper($alldata));
+
+    my $topdata = $imaptalk->lsub("", "%");
+    $self->assert_deep_equals($topdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\Noselect',
+              '\\HasChildren'
+            ],
+            '.',
+            'user'
+          ],
+    ], "LSUB top data mismatch:" . Dumper($topdata));
+}
