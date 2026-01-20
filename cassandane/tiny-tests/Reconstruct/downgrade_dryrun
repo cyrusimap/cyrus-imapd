@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_downgrade_dryrun
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Add two messages";
+    $self->make_message('Message A');
+    $self->make_message('Message B');
+
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $file = "$dir/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+    $fh->close();
+
+    my $version = $index->header('MinorVersion');
+    my $hdr_size = $index->header('StartOffset');
+    my $rec_size = $index->header('RecordSize');
+    $self->assert_num_equals(2, $index->header('Exists'));
+
+    xlog $self, "Test setting to version 13";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-n', '-V', '13');
+
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+    $fh->close();
+
+    $self->assert_num_equals($version, $index->header('MinorVersion'));
+    $self->assert_num_equals($hdr_size, $index->header('StartOffset'));
+    $self->assert_num_equals($rec_size, $index->header('RecordSize'));
+    $self->assert_num_equals(2, $index->header('Exists'));
+
+    xlog $self, "Actually set to version 13";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'reconstruct', '-V', '13');
+
+    $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    $index = Cyrus::IndexFile->new($fh);
+    $fh->close();
+
+    $self->assert_num_equals(13, $index->header('MinorVersion'));
+    $self->assert_num_equals(128, $index->header('StartOffset'));
+    $self->assert_num_equals(104, $index->header('RecordSize'));
+    $self->assert_num_equals(2, $index->header('Exists'));
+}
