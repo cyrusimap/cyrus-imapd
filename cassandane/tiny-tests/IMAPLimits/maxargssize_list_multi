@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_list_multi
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('LIST', { Quote => '' }, [ "X" x 25, "X" x 25 ]);
+}

@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_setmetadata
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('SETMETADATA', 'INBOX',
+                                 [ "X" x 25, { Quote => "X" x 25 } ] );
+}

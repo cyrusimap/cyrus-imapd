@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxquoted
+{
+    my ($self) = @_;
+
+    # Oversized mailbox name
+    $self->assert_cmd_bye_toobig('SELECT', { Quote => "X" x 26 });
+}

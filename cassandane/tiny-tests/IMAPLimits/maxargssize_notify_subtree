@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_notify_subtree
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('NOTIFY', 'SET',
+                                 [ 'SUBTREE', [ "X" x 25, "X" x 25 ] ] );
+}

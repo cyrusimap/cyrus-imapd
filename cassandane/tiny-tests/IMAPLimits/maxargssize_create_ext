@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_create_ext
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('CREATE',
+                                 "X" x 5, [ "X" x 5, [ "X" x 25, "X" x 25 ] ] );
+}

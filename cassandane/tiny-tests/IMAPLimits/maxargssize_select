@@ -1,0 +1,11 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_select
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('SELECT', 'INBOX',
+                                 [ 'QRESYNC', [ '1234567890', '1234567890' ],
+                                   'ANNOTATE' ] );
+}

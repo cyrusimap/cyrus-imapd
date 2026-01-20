@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_literal_minus
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $talk->_imap_socket_out($talk->{CmdId}++ . " APPEND INBOX {4097+}\015\012");
+    $self->assert_no_toobig($talk);
+    $self->assert_bye_toobig();
+}

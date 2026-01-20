@@ -1,0 +1,108 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxliteral_sync
+{
+    my ($self) = @_;
+
+    # Unlike oversized non-sync literals which fatal() in one central location,
+    # oversized sync literals fail with a NO response in multiple places,
+    # so we test as many of those places as possible.
+    # Having said that, arguments parsed in cmdloop() or in get_search_criterion()
+    # are mostly handled centrally.
+
+    # Authenticated State
+
+    # Synchronizing literals are the default in IMAPTalk v4.05 (and earlier)
+    my $talk = $self->{store}->get_client(NoLiteralPlus => 1);
+
+    $self->assert_cmd_no_toobig($talk, 'SELECT',
+                                { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'ID',
+                                [ { Literal => "X" x 26 } ]);
+
+    $self->assert_cmd_no_toobig($talk, 'ID',
+                                [ { Quote => 'foo' }, { Literal => "X" x 26 } ] );
+
+    $self->assert_cmd_no_toobig($talk, 'LIST',
+                                { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'LIST',
+                                { Quote => '' }, { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'NOTIFY',
+                                'SET', [ 'MAILBOXES', [ { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'LISTRIGHTS',
+                                'INBOX', { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'SETACL',
+                                'INBOX', 'anyone', { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'GETMETADATA',
+                                'INBOX', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'GETMETADATA',
+                                'INBOX', [ { Literal => "X" x 26 } ] );
+
+    $self->assert_cmd_no_toobig($talk, 'SETMETADATA',
+                                'INBOX', [ { Literal => "X" x 26 } ] );
+
+    $self->assert_cmd_no_toobig($talk, 'SETMETADATA',
+                                'INBOX', [ '/comment', { Literal => "X" x 26 } ] );
+
+    $self->assert_cmd_no_toobig($talk, 'XAPPLEPUSHSERVICE',
+                                { Literal => "X" x 26 });
+
+    $self->assert_cmd_no_toobig($talk, 'XAPPLEPUSHSERVICE',
+                                'FOO', { Literal => "X" x 26 });
+
+    # Selected State
+    $talk->select('INBOX');
+
+    $self->assert_cmd_no_toobig($talk, 'FETCH',
+                                '1', [ 'ANNOTATION',
+                                       [ { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'FETCH',
+                                '1', [ 'BODY[HEADER.FIELDS',
+                                       [ { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'FETCH',
+                                '1', [ 'RFC822.HEADER.LINES',
+                                       [ { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'STORE',
+                                '1', 'ANNOTATION', [ { Literal => "X" x 26 } ] );
+
+    $self->assert_cmd_no_toobig($talk, 'STORE',
+                                '1', 'ANNOTATION',
+                                [ { Quote => '/comment' },
+                                  [ { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'STORE',
+                                '1', 'ANNOTATION',
+                                [ { Quote => '/comment' },
+                                  [ { Quote => 'value' },
+                                    { Literal => "X" x 26 } ] ] );
+
+    $self->assert_cmd_no_toobig($talk, 'SEARCH',
+                                'HEADER', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'SEARCH',
+                                'HEADER', 'SUBJECT', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'SEARCH',
+                                'ANNOTATION', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'SEARCH',
+                                'ANNOTATION', '/comment', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'SEARCH',
+                                'ANNOTATION', '/comment',
+                                'value', { Literal => "X" x 26 } );
+
+    $self->assert_cmd_no_toobig($talk, 'ESEARCH',
+                                'IN', [ 'MAILBOXES', { Literal => "X" x 26 } ] );
+}

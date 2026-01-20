@@ -1,0 +1,11 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_setmetadata2
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('SETMETADATA', 'INBOX',
+                                 [ '/shared', { Quote => "X" x 25 },
+                                   '/shared', { Quote => "X" x 25 } ] );
+}
