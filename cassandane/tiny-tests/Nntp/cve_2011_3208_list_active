@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cve_2011_3208_list_active
+{
+    my ($self) = @_;
+
+    my $client = $self->{client};
+    my $wildmat = '';
+    while (length $wildmat < 1024+$stack_slosh)
+    {
+        $wildmat .= ($wildmat eq '' ? '' : '.');
+        $wildmat .= random_word();
+        $client->list('active', $wildmat);
+        $self->assert_num_equals(215, $client->code());
+        $self->assert($client->message() =~ m/List of newsgroups follows/i);
+    }
+}

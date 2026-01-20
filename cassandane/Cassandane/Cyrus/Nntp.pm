@@ -88,59 +88,11 @@ sub tear_down
 
 my $stack_slosh = 256;
 
-sub test_cve_2011_3208_list_newsgroups
-{
-    my ($self) = @_;
-
-    my $client = $self->{client};
-    my $wildmat = '';
-    while (length $wildmat < 1024+$stack_slosh)
-    {
-        $wildmat .= ($wildmat eq '' ? '' : '.');
-        $wildmat .= random_word();
-        $client->list('newsgroups', $wildmat);
-        $self->assert_num_equals(215, $client->code());
-        $self->assert($client->message() =~ m/List of newsgroups follows/i);
-    }
-}
-
-sub test_cve_2011_3208_list_active
-{
-    my ($self) = @_;
-
-    my $client = $self->{client};
-    my $wildmat = '';
-    while (length $wildmat < 1024+$stack_slosh)
-    {
-        $wildmat .= ($wildmat eq '' ? '' : '.');
-        $wildmat .= random_word();
-        $client->list('active', $wildmat);
-        $self->assert_num_equals(215, $client->code());
-        $self->assert($client->message() =~ m/List of newsgroups follows/i);
-    }
-}
-
     # The NEWNEWS command is disabled by default.
 Cassandane::Cyrus::TestCase::magic(AllowNewNews => sub {
     shift->config_set(allownewnews => 1);
 });
 
-sub test_cve_2011_3208_newnews
-    :AllowNewNews
-{
-    my ($self) = @_;
-
-    my $client = $self->{client};
-    my $wildmat = '';
-    my $since = time() - 3600;
-    while (length $wildmat < 1024+$stack_slosh)
-    {
-        $wildmat .= ($wildmat eq '' ? '' : '.');
-        $wildmat .= random_word();
-        $client->newnews($wildmat, $since);
-        $self->assert_num_equals(230, $client->code());
-        $self->assert($client->message() =~ m/List of new articles follows/i);
-    }
-}
+use Cassandane::Tiny::Loader 'tiny-tests/Nntp';
 
 1;
