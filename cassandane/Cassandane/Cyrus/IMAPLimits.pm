@@ -45,17 +45,28 @@ use Data::Dumper;
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
-my $email = <<EOF;
-Subject: foo
-Date: bar
-From: <foobar\@example.com>
+sub email
+{
+    my $email = <<~EOF;
+    Subject: foo
+    Date: bar
+    From: <foobar\@example.com>
 
-Body
-EOF
+    Body
+    EOF
 
-$email =~ s/\r?\n/\r\n/gs;
+    $email =~ s/\r?\n/\r\n/gs;
 
-my $toobig_email = $email . "X" x 100;
+    return $email;
+}
+
+sub toobig_email
+{
+    my ($self) = @_;
+
+    my $email = $self->email;
+    return $email . 'X' x 100;
+}
 
 # Check that we got an untagged BYE [TOOBIG] response
 sub assert_bye_toobig

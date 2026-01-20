@@ -5,6 +5,8 @@ sub test_maxargssize_append_annot
 {
     my ($self) = @_;
 
+    my $email = $self->email;
+
     # Use MULTIAPPEND, fail the second
     $self->assert_cmd_bye_toobig('APPEND', 'INBOX',
                                  { Literal => $email },

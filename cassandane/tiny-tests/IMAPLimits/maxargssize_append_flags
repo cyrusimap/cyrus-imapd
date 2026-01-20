@@ -6,5 +6,5 @@ sub test_maxargssize_append_flags
     my ($self) = @_;
 
     $self->assert_cmd_bye_toobig('APPEND', 'INBOX',
-                                 [ "X" x 25, "X" x 25 ], { Literal => $email } );
+                                 [ "X" x 25, "X" x 25 ], { Literal => $self->email } );
 }
