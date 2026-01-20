@@ -1,0 +1,128 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_uidbatches
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my @results;
+    my %handlers =
+    (
+        uidbatches => sub
+        {
+            my (undef, $uidbatches) = @_;
+            push(@results, $uidbatches);
+        },
+    );
+
+    $imaptalk->examine('INBOX');
+
+    # batch size of 10 on empty mailbox
+    @results = ();
+    my $tag = $imaptalk->{CmdId};
+    my $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('TAG', $results[0][0][0]);
+    $self->assert_str_equals($tag, $results[0][0][1]);
+    $self->assert_null($results[0][1]);
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 50;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    # expunge some messages
+    $imaptalk->store('1,14:17,41,43,45', '+FLAGS', '(\\Deleted)');
+    $imaptalk->expunge();
+
+    # for manual debugging
+    $imaptalk->fetch('1:*', 'UID');
+
+    # batch size of 1 (below the minimum)
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '1');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr/[TOOSMALL]/i, $imaptalk->get_last_error());
+
+    # eleven batches of size of 10000
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10000', '1:11');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr/[LIMIT]/i, $imaptalk->get_last_error());
+
+    # batch size of 50 with less than 50 messages
+    @results = ();
+    $tag = $imaptalk->{CmdId};
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '50');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('TAG', $results[0][0][0]);
+    $self->assert_str_equals($tag, $results[0][0][1]);
+    $self->assert_str_equals('50:1', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 25
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '25');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('50:23,22:1', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 10
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('50:38,37:28,27:18,13:4,3:1', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 10, first batch only
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '1:1');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('50:38', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 10, second & third batches
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '2:3');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('37:28,27:18', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 10, fifth & sixth batches
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '5:6');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals('3:1', $results[0][1]);
+    $self->assert_null($results[0][2]);
+
+    # batch size of 10, nonexistent batch
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '7:7');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_null($results[0][1]);
+
+    # bad syntax
+    @results = ();
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers);
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, 'X');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '6:');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '6:5');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '5:6', 'X');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+}
