@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test big conversation rename
+#
+sub test_rename_bigconversation
+     :Conversations :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my %exp;
+
+    $imaptalk->create("INBOX.user-src.subdir") || die;
+    $self->{store}->set_folder("INBOX.user-src.subdir");
+    $self->{store}->set_fetch_attributes('uid');
+
+    $exp{A} = $self->make_message("Message A");
+
+    for (1..200) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    }
+
+    $imaptalk->select("INBOX.user-src.subdir") || die;
+
+    $self->check_conversations();
+
+    $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
+    $imaptalk->select("INBOX.user-dst.subdir") || die;
+
+    $self->check_conversations();
+}

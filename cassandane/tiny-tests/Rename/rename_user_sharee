@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rename_user_sharee
+    :AllowMoves :NoAltNameSpace :ReverseACLs :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename with shares";
+
+    my %exp;
+
+    $admintalk->create("user.foo") || die;
+    $admintalk->create("user.foo.shared") || die;
+    $admintalk->setacl("user.foo.shared", 'cassandane' => 'lrs') || die;
+
+    $admintalk->create("user.foo.#calendars") || die;
+    $admintalk->create("user.foo.#calendars.events") || die;
+    $admintalk->setacl("user.foo.#calendars.events", 'cassandane' => 'lrs') || die;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.sub");
+    $imaptalk->subscribe("INBOX.sub");
+    $imaptalk->subscribe("user.foo.shared");
+    $imaptalk->subscribe("user.foo.#calendars.events");
+
+    my $structure = {
+        'INBOX' => [ '\\HasChildren' ],
+        'INBOX.sub'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo.#calendars.events'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo.shared'  => [ '\\Subscribed', '\\HasNoChildren' ],
+    };
+
+
+    my $list = $imaptalk->list([qw( vendor.cmu-dav )], '', '*', 'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $newstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "newuser");
+    my $newtalk = $newstore->get_client();
+
+    $list = $newtalk->list([qw( vendor.cmu-dav )], '', '*', 'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+}

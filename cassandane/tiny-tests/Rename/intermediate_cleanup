@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_intermediate_cleanup
+    :min_version_3_1 :max_version_3_4 :NoAltNameSpace :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.a.b.c.subdir") || die;
+    $imaptalk->create("INBOX.x.y.z.subdir") || die;
+    $imaptalk->create("INBOX.INBOX.subinbox") || die;
+    $imaptalk->create("INBOX.INBOX.a.b") || die;
+
+    _match_intermediates($self,
+        'user.cassandane.a' => undef,
+        'user.cassandane.a.b' => undef,
+        'user.cassandane.a.b.c' => undef,
+        'user.cassandane.x' => undef,
+        'user.cassandane.x.y' => undef,
+        'user.cassandane.x.y.z' => undef,
+        'user.cassandane.INBOX.a' => undef,
+    );
+
+    $imaptalk->create("INBOX.x.y");
+
+    _match_intermediates($self);
+
+    $imaptalk->delete("INBOX.x.y.z.subdir");
+
+    _match_intermediates($self,
+        'user.cassandane.x.y.z' => 1,
+    );
+
+    $imaptalk->delete("INBOX.x.y");
+
+    _match_intermediates($self,
+        'user.cassandane.x' => 1,
+    );
+
+    $imaptalk->delete("INBOX.INBOX.a.b");
+
+    _match_intermediates($self,
+        'user.cassandane.INBOX.a' => 1,
+    );
+
+    _dbset($self, 'user.cassandane.old', '%(I 66eb299a-35a8-423d-a0a6-90cbacfd153a T di C 1 F 1 M 1538674002)');
+
+    $imaptalk->create("INBOX.old.foo");
+
+    _match_intermediates($self,
+        'user.cassandane.old' => undef,
+    );
+
+    $imaptalk->delete("INBOX.old.foo");
+
+    _match_intermediates($self,
+        'user.cassandane.old' => 1,
+    );
+
+    my %set = (
+      'user.cassandane.hanging' => '%(I b13ba9d4-9d40-4474-911f-77346a73d747 T i C 1 F 1 M 1538674002)',
+      'user.cassandane.a'       => undef,
+      'user.cassandane.a.b'     => undef,
+      'user.cassandane.x'       => '%(I 7c89e632-04a0-4560-9a59-18b07c13ddff T i C 1 F 1 M 1538674002)',
+      'user.cassandane.x.y'     => '%(I 385d7a66-6173-4b5e-9340-0301ac55b373 T i C 1 F 1 M 1538674002)',
+    );
+
+    # NOTE: This is all very specific!
+    foreach my $key (keys %set) {
+      _dbset($self, $key, $set{$key});
+    }
+
+    $self->{instance}->getsyslog();
+
+    # perform startup magic
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        'ctl_cyrusdb', '-r',
+    );
+
+    _match_intermediates($self, %set);
+}

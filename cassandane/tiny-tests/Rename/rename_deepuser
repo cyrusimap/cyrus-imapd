@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rename_deepuser
+    :AllowMoves :Replication :SyncLog :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename";
+
+    $admintalk->create("user.cassandane.foo") || die;
+    $admintalk->create("user.cassandane.bar") || die;
+    $admintalk->create("user.cassandane.bar.sub folder") || die;
+
+    # replicate and check initial state
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('cassandane');
+    unlink($synclogfname);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user.cassandane', 'user.newuser');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user.newuser.bar.sub folder");
+    $self->assert(not $admintalk->get_last_error());
+
+    # replicate and check the renames
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('newuser');
+}
