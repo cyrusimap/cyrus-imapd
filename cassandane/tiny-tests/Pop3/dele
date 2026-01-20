@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_dele
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing whether the DELE command removes messages";
+
+    xlog $self, "Ensure a messages exist, before logging in to POP";
+    my %exp;
+    $exp{A} = $self->make_message('Message A');
+    $exp{B} = $self->make_message('Message B');
+    $exp{C} = $self->make_message('Message C');
+
+    my $talk = $self->{store}->get_client();
+    my $client = $self->{pop_store}->get_client();
+
+    my $prestat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(3, $prestat->{unseen});
+    $self->assert_num_equals(3, $prestat->{messages});
+
+    my $r = $client->command('DELE', 2)->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
+    $client->command('QUIT');
+    $r = $client->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
+
+    my $poststat = $talk->status('INBOX', '(highestmodseq unseen messages)');
+    $self->assert_num_equals(2, $poststat->{unseen});
+    $self->assert_num_equals(2, $poststat->{messages});
+    $self->assert_num_gt($prestat->{highestmodseq}, $poststat->{highestmodseq});
+}
