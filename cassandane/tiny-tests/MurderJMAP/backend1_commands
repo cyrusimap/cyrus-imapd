@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_backend1_commands
+    :min_version_3_5
+{
+    my ($self) = @_;
+    my $result;
+
+    my $backend1_svc = $self->{instance}->get_service("http");
+    my $backend1_host = $backend1_svc->host();
+    my $backend1_port = $backend1_svc->port();
+
+    my $backend1_jmap = $self->{instance}->new_jmaptester_for_user(
+        $self->default_user,
+    );
+
+    # upload a blob
+    my $upload_res = $backend1_jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"some test",
+        type      => 'text/plain',
+    });
+
+    # request should not have been proxied
+    $self->assert_null($upload_res->http_response->header('Via'));
+
+    # download the same blob
+    my $resp = $backend1_jmap->Download({ accept => 'text/plain' },
+                                     'cassandane', $upload_res->blob_id);
+
+    # request should not have been proxied
+    $self->assert_null($resp->{headers}{via});
+
+    # content should match
+    $self->assert_str_equals('text/plain', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    # XXX test other commands
+}

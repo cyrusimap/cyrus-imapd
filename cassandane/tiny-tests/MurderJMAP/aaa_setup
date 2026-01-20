@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_aaa_setup
+{
+    my ($self) = @_;
+
+    # does everything set up and tear down cleanly?
+    $self->assert(1);
+}
