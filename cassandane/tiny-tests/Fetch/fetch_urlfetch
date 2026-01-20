@@ -1,0 +1,130 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch_urlfetch
+{
+    my ($self) = @_;
+
+    my %exp_sub;
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $store->set_folder("INBOX");
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body;
+
+    # Subpart 1
+    $body = "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: text/plain; charset=UTF-8\r\n"
+    . "\r\n"
+    . "body1"
+    . "\r\n";
+
+    # Subpart 2
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: multipart/mixed;boundary=frontier\r\n"
+    . "\r\n";
+
+    # Subpart 2.1
+    $body .= "--frontier\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "\r\n"
+    . "body21"
+    . "\r\n";
+
+    # End subpart 2
+    $body .= "--frontier--\r\n";
+
+    # Subpart 3
+    my $msg3 = ""
+    . "Return-Path: <Ava.Nguyen\@local>\r\n"
+    . "Mime-Version: 1.0\r\n"
+    . "Content-Type: text/plain\r\n"
+    . "Content-Transfer-Encoding: 7bit\r\n"
+    . "Subject: bar\r\n"
+    . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+    . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+    . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+    . "To: Test User <test\@local>\r\n"
+    . "\r\n"
+    . "body3";
+
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n"
+    . "Content-Type: message/rfc822\r\n"
+    . "\r\n"
+    . $msg3
+    . "\r\n";
+
+    # End body
+    $body .= "--047d7b33dd729737fe04d3bde348--";
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    );
+
+    my $uid;
+    my %handlers =
+    (
+        appenduid => sub
+        {
+            my ($cmd, $ids) = @_;
+            $uid = ${$ids}[1];
+        },
+    );
+
+    my $res;
+
+    # Copy the whole message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=HEADER",
+            "URL", "/INBOX/;uid=1/;section=TEXT",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{$uid}->{body}, $body);
+
+    # Merge the headers of an embedded RFC822 message with a plaintext subpart
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3.HEADER",
+            "URL", "/INBOX/;uid=1/;section=2.1",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "body21");
+
+    # Extract an embedded RFC822 message into a new standalone message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "body3");
+
+    # Extract part of an embedded RFC822 message into a new standalone message
+    $res = $talk->_imap_cmd('append', 0, \%handlers,
+        'INBOX', [], "14-Jul-2013 17:01:02 +0000",
+        "CATENATE", [
+            "URL", "/INBOX/;uid=1/;section=3.HEADER",
+            "URL", "/INBOX/;uid=1/;section=3.TEXT;partial=1.3",
+        ],
+    );
+    $self->assert_not_null($uid);
+    $res = $talk->fetch($uid, '(BODY.PEEK[TEXT] BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE)])');
+    $self->assert_str_equals($res->{$uid}->{headers}->{'content-type'}[0], "text/plain");
+    $self->assert_str_equals($res->{$uid}->{body}, "ody");
+}

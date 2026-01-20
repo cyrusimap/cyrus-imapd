@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch_section_nomultipart
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->make_message(
+        "foo",
+        from =>  Cassandane::Address->new(
+            localpart => 'foo',
+            domain    => 'example.com',
+        ),
+        mime_type => "text/plain",
+        body => "body1",
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "body1");
+
+    # RFC 3501: "Every message has at least one part number."
+    $res = $imaptalk->fetch('1', '(BODY[1.MIME])');
+    $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
+    $self->assert(not $res->{'1'}->{body} =~ m/body1/);
+
+    $res = $imaptalk->fetch('1', '(BODY[HEADER])');
+    $self->assert($res->{'1'}->{body} =~ m/Content-Type/);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[HEADER.FIELDS (FROM)])');
+    $self->assert_str_equals($res->{'1'}->{headers}->{from}[0], "<foo\@example.com>");
+
+    $res = $imaptalk->fetch('1', '(BODY[1.HEADER])');
+    $self->assert_null($res->{'1'}->{body});
+
+    # invalid
+    $res = $imaptalk->fetch('1', '(BODY[0])');
+    $self->assert_null($res->{'1'}->{body});
+
+    # invalid
+    $res = $imaptalk->fetch('1', '(BODY[1.1])');
+    $self->assert_null($res->{'1'}->{body});
+
+    # invalid
+    $res = $imaptalk->fetch('1', '(BODY[0.1])');
+    $self->assert_null($res->{'1'}->{body});
+
+    # invalid
+    $res = $imaptalk->fetch('1', '(BODY[1.0])');
+    $self->assert_null($res->{'1'}->{body});
+
+    $res = $imaptalk->fetch('1', '(BINARY[1]<0.2>)');
+    $self->assert_str_equals($res->{'1'}->{binary}, "bo");
+
+    $res = $imaptalk->fetch('1', '(BINARY[1]<2.10>)');
+    $self->assert_str_equals($res->{'1'}->{binary}, "dy1");
+
+    $res = $imaptalk->fetch('1', '(BINARY[1]<10.12>)');
+    $self->assert_str_equals($res->{'1'}->{binary}, "");
+}

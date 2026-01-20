@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unknown_cte
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $ct = "multipart/mixed";
+    my $boundary = "mitomycin";
+
+    # Subpart 1
+    my $body = ""
+    . "--$boundary\r\n"
+    . "Content-Type: text/plain; charset=\"utf8\"\r\n"
+    . "\r\n"
+    . "The attachment to this email is meaningless gibberish\r\n";
+
+    # Subpart 2
+    $body .= ""
+    . "--$boundary\r\n"
+    . "Content-Disposition: attachment; filename=\"gibberish.dat\"\r\n"
+    . "Content-Type: application/octet-stream; name=\"gibberish.dat\"\r\n"
+    . "Content-Transfer-Encoding: x-no-such-encoding\r\n"
+    . "\r\n"
+    . "There'll never be a decoder for this encoding, so this\r\n"
+    . "text can't possibly ever decode to something coherent.\r\n"
+    . "--$boundary--\r\n";
+
+    my $msg = $self->make_message("foo",
+        mime_type => $ct,
+        mime_boundary => $boundary,
+        body => $body
+    );
+    my $uid = $msg->{attrs}->{uid};
+    my $res;
+
+    # fetch BINARY.PEEK should fail
+    $res = $imaptalk->fetch('1', '(BINARY.PEEK[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # fetch BINARY.SIZE should fail
+    $res = $imaptalk->fetch('1', '(BINARY.SIZE[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # enable UID mode...
+    $imaptalk->uid(1);
+
+    # UID fetch BINARY.PEEK should fail
+    $res = $imaptalk->fetch($uid, '(BINARY.PEEK[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+
+    # UID fetch BINARY.SIZE should fail
+    $res = $imaptalk->fetch($uid, '(BINARY.SIZE[2])');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{UNKNOWN-CTE}, $imaptalk->get_last_error());
+}

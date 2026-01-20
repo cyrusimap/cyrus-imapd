@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test COPY behaviour with a very long sequence set
+#
+sub test_fetch_header
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.dest");
+    $self->make_message("Test Message");
+
+    # unfortunately, you can't see the data that went over the wire very easily
+    # in IMAPTalk - but we know the headers will be in a literal, so..
+    my $body = "";
+    $imaptalk->literal_handle_control(new IO::Scalar \$body);
+    my $res = $imaptalk->fetch('1', '(UID FLAGS BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])');
+    $imaptalk->literal_handle_control(0);
+
+    $self->assert(defined $res, "Fetch feturned a response");
+    $self->assert_matches(qr/^Message-ID: <[^>]+>\s+$/, $body);
+}

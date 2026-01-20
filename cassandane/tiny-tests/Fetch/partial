@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_partial
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    # expunge the 1st and 6th
+    $imaptalk->store('1,6', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->expunge();
+
+    # fetch all
+    my $res = $imaptalk->fetch('1:*', '(UID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'1'}->{uid}, "2");
+    $self->assert_str_equals($res->{'2'}->{uid}, "3");
+    $self->assert_str_equals($res->{'3'}->{uid}, "4");
+    $self->assert_str_equals($res->{'4'}->{uid}, "5");
+    $self->assert_str_equals($res->{'5'}->{uid}, "7");
+    $self->assert_str_equals($res->{'6'}->{uid}, "8");
+    $self->assert_str_equals($res->{'7'}->{uid}, "9");
+    $self->assert_str_equals($res->{'8'}->{uid}, "10");
+
+    # fetch first 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL 1:2)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'1'}->{uid}, "2");
+    $self->assert_str_equals($res->{'2'}->{uid}, "3");
+
+    # fetch next 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL 3:4)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'3'}->{uid}, "4");
+    $self->assert_str_equals($res->{'4'}->{uid}, "5");
+
+    # fetch last 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL -1:-2)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'8'}->{uid}, "10");
+    $self->assert_str_equals($res->{'7'}->{uid}, "9");
+
+    # fetch the previous 2
+    $res = $imaptalk->fetch('1:*', '(UID) (PARTIAL -3:-4)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'6'}->{uid}, "8");
+    $self->assert_str_equals($res->{'5'}->{uid}, "7");
+
+    # enable UID mode...
+    $imaptalk->uid(1);
+
+    # fetch the middle 2 by UID
+    $res = $imaptalk->fetch('4:8', '(UID) (PARTIAL 2:3)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_str_equals($res->{'5'}->{uid}, "5");
+    $self->assert_str_equals($res->{'7'}->{uid}, "7");
+}

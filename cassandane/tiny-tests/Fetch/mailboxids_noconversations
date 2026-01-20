@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailboxids_noconversations
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # make a message
+    my $msg = $self->make_message("test message");
+    my $uid = $msg->{attrs}->{uid};
+
+    # expect FETCH MAILBOXES to be rejected
+    my $res = $imaptalk->fetch('1', '(MAILBOXES)');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # expect FETCH MAILBOXIDS to be rejected
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+}

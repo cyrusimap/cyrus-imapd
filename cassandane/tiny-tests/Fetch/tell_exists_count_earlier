@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_tell_exists_count_earlier
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->select('user.cassandane');
+
+    $self->make_message("Test Message 1");
+    $admintalk->fetch('1:*', '(flags)');
+
+    $self->make_message("Test Message 2");
+    $admintalk->fetch('2:*', '(flags)');
+
+    $self->make_message("Test Message 3");
+    $admintalk->fetch('3:*', '(uid flags)');
+
+    $admintalk->unselect();
+    $admintalk->select('user.cassandane');
+
+    $imaptalk->store('2', '+flags', '(\\Flagged)');
+    $self->make_message("Test Message 4");
+
+    my %handlers;
+    {
+        my $sawfetch = -1;
+        my $sawmsg2fetch = -1;
+        my $sawmsg3fetch = -1;
+        my $sawmsg4fetch = -1;
+        use Data::Dumper;
+        $handlers{fetch} = sub {
+            $sawfetch = 1 if $sawfetch < 0;
+
+            if ($_[2] == 2) { $sawmsg2fetch = $_[2] }
+            elsif ($_[2] == 3) {
+                $sawmsg3fetch = $_[2];
+                die "Got FETCH for 3 before 2" if $sawmsg2fetch < 0;
+            }
+            elsif ($_[2] == 3) {
+                $sawmsg4fetch = $_[2];
+                die "Got FETCH for 4 before 2" if $sawmsg2fetch < 0;
+                die "Got FETCH for 4 before 3" if $sawmsg3fetch < 0;
+            }
+            else { }
+        };
+        $handlers{exists} = sub { die "Got EXISTS after FETCH for $_[2]" if $sawfetch > 0; };
+    }
+
+    $admintalk->_imap_cmd("fetch", 1, \%handlers, \'3:*', '(uid flags)');
+}

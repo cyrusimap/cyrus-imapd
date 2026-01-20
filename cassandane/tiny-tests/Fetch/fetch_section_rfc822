@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch_section_rfc822
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $body = ""
+    . "From: sub\@domain.org\r\n"
+    . "Date: Sun, 12 Aug 2012 12:34:56 +0300\r\n"
+    . "Subject: submsg\r\n"
+    . "\r\n"
+    . "foo";
+
+    $self->make_message("foo",
+        mime_type => "message/rfc822",
+        body => $body,
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, "foo");
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.1])');
+    $self->assert_str_equals($res->{'1'}->{body}, "foo");
+}
