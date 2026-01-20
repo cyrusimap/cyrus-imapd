@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_xrename
+    :SlowIO :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my @resp;
+    my %handlers =
+    (
+        ok => sub
+        {
+            my (undef, $ok) = @_;
+            push(@resp, $ok);
+        },
+    );
+
+    xlog $self, "Create some personal folders";
+    my $talk = $self->{store}->get_client();
+    $self->setup_mailbox_structure($talk, [
+        [ 'create' => [qw( INBOX.src INBOX.src.child INBOX.src.child.grand)] ],
+    ]);
+
+    xlog $self, "rename mailbox tree";
+    @resp = ();
+    $talk->_imap_cmd('XRENAME', 0, \%handlers, "INBOX.src", "INBOX.dst");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_str_equals('[INPROGRESS', $resp[0][0]);
+    # we shouldn't have a count or total
+    $self->assert_null($resp[0][1][1]);
+    $self->assert_null($resp[0][1][2]);
+    $self->assert_str_equals('rename', $resp[0][3]);
+    $self->assert_str_equals('INBOX.src', $resp[0][4]);
+    $self->assert_str_equals('INBOX.dst', $resp[0][5]);
+    $self->assert_str_equals('INBOX.src.child', $resp[1][4]);
+    $self->assert_str_equals('INBOX.dst.child', $resp[1][5]);
+    $self->assert_str_equals('INBOX.src.child.grand', $resp[2][4]);
+    $self->assert_str_equals('INBOX.dst.child.grand', $resp[2][5]);
+}
