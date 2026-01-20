@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_recover_skipstamp
+{
+    my ($self) = @_;
+
+    my $dbdir = $self->{instance}->get_basedir() . "/conf/db";
+
+    # no 'ctl_cyrusdb -r' on startup
+    $self->{instance}->remove_start('recover');
+    $self->{instance}->start();
+
+    # expect skipstamp file to be missing
+    $self->assert_not_file_test("$dbdir/skipstamp", '-e');
+
+    # cyrus processes will whinge about missing skipstamp file
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join "\n", $self->{instance}->getsyslog();
+        $self->assert_matches(qr/skipstamp is missing/, $syslog);
+        $self->assert_matches(qr/DBERROR: skipstamp/, $syslog);
+    }
+
+    # shut down, enable recover, and restart
+    $self->{instance}->stop();
+    # n.b. no "re_use_dir" here, because we need cyrus.conf regenerated
+    $self->{instance}->add_recover();
+    $self->{instance}->start();
+
+    # skipstamp file should be present now
+    $self->assert_file_test("$dbdir/skipstamp", '-e');
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join "\n", $self->{instance}->getsyslog();
+
+        # recover should have logged itself updating skipstamp
+        $self->assert_matches(qr/updating recovery stamp/, $syslog);
+
+        # cyrus processes should not whinge about missing skipstamp file
+        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
+        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+    }
+}
