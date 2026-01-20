@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_get_none
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get vacation";
+    my $res = $jmap->CallMethods([
+        ['VacationResponse/get', {
+            properties => ['isEnabled']
+    }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('VacationResponse/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('singleton', $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isEnabled});
+    $self->assert(not exists $res->[0][1]{list}[0]{subject});
+}
