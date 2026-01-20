@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test LSUB behaviour
+#
+sub test_list_percent
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my @inbox_flags = qw( \\HasNoChildren );
+    my @inter_flags = qw( \\HasChildren );
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj < 3) {
+        unshift @inbox_flags, qw( \\Noinferiors );
+        unshift @inter_flags, qw( \\Noselect );
+    }
+    elsif ($maj == 3 && $min < 5) {
+        unshift @inter_flags, qw( \\Noselect );
+    }
+
+    my $alldata = $imaptalk->list("", "%");
+    $self->assert_deep_equals($alldata, [
+          [
+            \@inbox_flags,
+            '/',
+            'INBOX'
+          ],
+          [
+            \@inter_flags,
+            '/',
+            '2001'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '/',
+            'Drafts'
+          ]
+    ], "LIST data mismatch: "  . Dumper($alldata, \@inbox_flags));
+}
