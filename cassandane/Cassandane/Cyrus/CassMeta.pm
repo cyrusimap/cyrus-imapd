@@ -13,7 +13,10 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
 # See Cassandane::Cyrus::TestCase::_create_instances()
-my @all_instance_names = qw(instance replica frontend backend2);
+sub all_instance_names
+{
+    return qw(instance replica frontend backend2);
+}
 
 sub new
 {

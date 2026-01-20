@@ -30,7 +30,7 @@ sub test_cyrusdb_default_backends
         userdeny_db => 'flat',
     );
 
-    foreach my $instance_name (@all_instance_names) {
+    foreach my $instance_name ($self->all_instance_names) {
         my $instance = $self->{$instance_name}
             || die "instance '$instance_name' not found";
 
