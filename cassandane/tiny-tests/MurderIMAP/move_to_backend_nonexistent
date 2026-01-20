@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_move_to_backend_nonexistent
+{
+    my ($self) = @_;
+
+    my $dest_folder = 'INBOX.dest';
+
+    # put some messages into the INBOX
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $self->{frontend_store});
+    $exp{B} = $self->make_message("Message B", store => $self->{frontend_store});
+    $exp{C} = $self->make_message("Message C", store => $self->{frontend_store});
+
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{backend1_store}->get_client();
+
+    # create a destination folder (on both frontend and backend)
+    $frontend->create($dest_folder);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # nuke the destination folder (on the backend only)
+    $backend->localdelete($dest_folder);
+    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+
+    my $f_folders = $frontend->list('', '*');
+    $self->assert_deep_equals(
+        [[[ '\\HasChildren' ], '.', 'INBOX' ],
+         [[ '\\HasNoChildren' ], '.', 'INBOX.dest' ]],
+        $f_folders);
+
+    my $b_folders = $backend->list('', '*');
+    $self->assert_deep_equals(
+        [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
+        $b_folders);
+
+    # try to move a message to dest
+    $frontend->move($exp{A}->get_attribute('uid'), $dest_folder);
+
+    # it should fail nicely
+    $self->assert_str_equals('no', $frontend->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/, $frontend->get_last_error());
+
+    # try to copy a message to dest
+    $frontend->copy($exp{B}->get_attribute('uid'), $dest_folder);
+
+    # it should fail nicely
+    $self->assert_str_equals('no', $frontend->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/, $frontend->get_last_error());
+}

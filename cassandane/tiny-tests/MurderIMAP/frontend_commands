@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_frontend_commands
+{
+    my ($self) = @_;
+    my $result;
+
+    my $frontend = $self->{frontend_store}->get_client();
+
+    # should be able to list
+    $result = $frontend->list("", "*");
+    $self->assert_not_null($result);
+
+    # select a folder that doesn't exist yet
+    $result = $frontend->select('INBOX.newfolder');
+    $self->assert_null($result);
+    $self->assert_matches(qr/Mailbox does not exist/i,
+                          $frontend->get_last_error());
+
+    # create should be proxied through
+    $result = $frontend->create('INBOX.newfolder');
+    $self->assert_not_null($result);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # should be able to select it now
+    $result = $frontend->select('INBOX.newfolder');
+    $self->assert_not_null($result);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # should be able to getmetadata
+    $result = $frontend->getmetadata('INBOX',
+                                     '/shared/vendor/cmu/cyrus-imapd/size');
+    $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $result = $frontend->getmetadata('(INBOX INBOX.newfolder)',
+                                     '/shared/vendor/cmu/cyrus-imapd/size');
+    $self->assert_not_null($result);
+    $self->assert(exists $result->{'INBOX'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert(exists $result->{'INBOX.newfolder'}{'/shared/vendor/cmu/cyrus-imapd/size'});
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # check frontend version for which resource type to use
+    my $res_mailbox = 'MAILBOX';
+    my ($maj, $min) = Cassandane::Instance->get_version('murder');
+    if ($maj < 3 || ($maj == 3 && $min < 9)) {
+        $res_mailbox = 'X-NUM-FOLDERS';
+    }
+
+    my $frontend_admin = $self->{frontend_adminstore}->get_client();
+    $result = $frontend_admin->setquota('user.cassandane',
+                                        "(STORAGE 1024 MESSAGE 5000 $res_mailbox 100)");
+    $self->assert_not_null($result);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # enable should be proxied through
+    $result = $frontend->enable('qresync');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # should be able to fetch vanished
+    $result = $frontend->uid(1);
+    $result = $frontend->fetch('1:*', ['FLAGS'],
+                               ['CHANGEDSINCE', '1', 'VANISHED']);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # XXX test other commands
+}
