@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_proc_starts
+    :NoStartInstances :needs_component_idled
+{
+    my ($self) = @_;
+
+    # we used to recommend starting idled from START, and it will
+    # still work like that, so using it here saves me mocking something
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    # entries listed in START run to completion before master fully
+    # starts up.  if they fork themselves and hang around (like idled
+    # does) then that's their business, but master can't and doesn't
+    # track them
+    my @output = $self->{instance}->run_cyr_info('proc');
+
+    $self->assert_num_equals(0, scalar @output);
+}

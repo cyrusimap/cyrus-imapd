@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conf_default
+{
+    my ($self) = @_;
+
+    # conf-default spits out all the defaults.  can't do much to
+    # check the actual contents, short of duplicating lib/imapoptions
+    # in here, but we can at least make sure it runs without crashing
+    # and its output looks reasonably sane
+
+    foreach my $line ($self->{instance}->run_cyr_info('conf-default')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+
+        $self->assert_not_null($name);
+        $self->assert_not_null($value);
+
+        if (Cassandane::Config::is_bitfield($name)) {
+            foreach my $v (split /\s+/, $value) {
+                $self->assert_not_null(Cassandane::Config::is_bitfield_bit($name, $v));
+            }
+        }
+    }
+}

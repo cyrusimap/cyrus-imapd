@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bitfield_after_multiple_names
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # fields like vnd.cyrus.jmapquery=x-cyrus-jmapquery pushed the offset
+    # for any fields after that to be off by one (for each field with
+    # multiple names)
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'snooze' },
+        { sieve_extensions => 'snooze' },
+    );
+}

@@ -1,0 +1,13 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lint
+{
+    my ($self) = @_;
+
+    xlog $self, "test 'cyr_info conf-lint' in the simplest case";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+    $self->assert_deep_equals([], \@output);
+}

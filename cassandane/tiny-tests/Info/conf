@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conf
+{
+    my ($self) = @_;
+
+    my %imapd_conf;
+    my $filename = $self->{instance}->_imapd_conf();
+    open my $fh, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $imapd_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $imapd_conf{$name} = $value;
+        }
+    }
+    close $fh;
+
+    my %cyr_info_conf;
+    foreach my $line ($self->{instance}->run_cyr_info('conf')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
+
+    # remove _db: values which are same as default, but coded in
+    # so that we'll have them in the config
+    delete $imapd_conf{$_} for grep { not $cyr_info_conf{$_} } grep { m/_db$/ } keys %imapd_conf;
+
+    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
+}
