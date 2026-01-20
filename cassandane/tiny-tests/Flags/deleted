@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that
+#  - the \Deleted flag can be set
+#  - the message still exists with \Deleted in flags
+#  - after EXPUNGE the message is gone
+#  - UIDs remain stable after the expunge
+#  - message numbers remain contiguous after the expunge
+#    even when UIDs aren't contiguous anymore
+#
+sub test_deleted
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Append 3 messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $msg{C} = $self->make_message('Message C');
+    $msg{C}->set_attributes(id => 3,
+                            uid => 3,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Mark the middle message \\Deleted";
+    my $res = $talk->store('2', '+flags', '(\\Deleted)');
+    $self->assert_deep_equals({ '2' => { 'flags' => [ '\\Deleted' ] }}, $res);
+    $msg{B}->set_attribute(flags => ['\\Deleted']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Expunge the middle message";
+    $talk->expunge();
+    delete $msg{B};
+    $msg{A}->set_attribute(id => 1);
+    $msg{C}->set_attribute(id => 2);
+    $self->check_messages(\%msg);
+#
+#     $talk->store($seq', '+flags', '(\\flagged)') or die $@;
+}

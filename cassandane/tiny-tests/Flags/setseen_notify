@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_setseen_notify
+    :Conversations :FastMailEvent :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Throw away existing notify";
+    $self->{instance}->getnotify();
+
+    xlog $self, "Add a messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    my $notify1 = $self->{instance}->getnotify();
+
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    my $res = $talk->store('1', '+flags', '\\Seen');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+
+    my $notify2 = $self->{instance}->getnotify();
+
+    my $payload1 = decode_json($notify1->[0]{MESSAGE});
+    my $payload2 = decode_json($notify2->[0]{MESSAGE});
+    $self->assert($payload2->{modseq} > $payload1->{modseq}, "modseq has increased: $payload2->{modseq} > $payload1->{modseq}");
+}

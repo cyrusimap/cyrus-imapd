@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that
+#  - multiple flags can be set together
+#  - flags can be set and cleared without affecting other flags
+#  - other messages aren't affected by those changes
+#  - flags are persistent across sessions
+#
+sub test_multi_flags
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set many flags on message A";
+    my $res = $talk->store('1', '+flags',
+                           '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Flagged \\Draft
+                                   \\Deleted \\Seen)
+                              ]}}, $res);
+    $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Deleted \\Seen)]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Flagged on message A";
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Draft \\Deleted \\Seen)
+                              ]}}, $res);
+    $msg{A}->set_attribute(flags => [qw(\\Answered \\Draft \\Deleted \\Seen)]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Draft and \\Deleted on message A";
+    $res = $talk->store('1', '-flags', '(\\Draft \\Deleted)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Seen)
+                              ]}}, $res);
+    $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Draft and \\Flagged on message A";
+    $res = $talk->store('1', '+flags', '(\\Draft \\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Flagged \\Draft \\Seen)
+                              ]}}, $res);
+    $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Seen)]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set to just \\Answered and \\Seen on message A";
+    $res = $talk->store('1', 'flags', '(\\Answered \\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [
+                                qw(\\Answered \\Seen)
+                              ]}}, $res);
+    $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Walk through every combination of flags";
+    my %rev_map = (
+        1 => '\\Answered',
+        2 => '\\Flagged',
+        4 => '\\Draft',
+        8 => '\\Deleted',
+        16 => '\\Seen' );
+    my $max = (2 ** scalar keys %rev_map) - 1;
+    for (my $i = 0 ; $i <= $max ; $i++)
+    {
+        my @flags;
+        for (my $m = 1 ; defined($rev_map{$m}) ; $m *= 2)
+        {
+            push(@flags, $rev_map{$m}) if ($i & $m);
+        }
+        xlog $self, "Setting " . join(',',@flags) . " on message A";
+        my $res = $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
+        $self->assert_deep_equals({ '1' => { 'flags' => \@flags }}, $res);
+        $msg{A}->set_attribute(flags => \@flags);
+        $self->check_messages(\%msg);
+    }
+
+    xlog $self, "Reconnect, all the flags should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}

@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+# check that seen flags are set correctly on body fetch
+sub test_setseen
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add three messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $msg{C} = $self->make_message('Message C');
+    $msg{C}->set_attributes(id => 3,
+                            uid => 3,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Fetch body of message A";
+    my $res = $talk->fetch('1', '(body[])');
+    $self->assert_deep_equals([ '\\Seen' ], $res->{1}->{flags});
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Fetch body.peek of message B";
+    $res = $talk->fetch('2', '(body.peek[])');
+    $self->assert(not exists $res->{2}->{flags});
+    $self->check_messages(\%msg);
+
+    xlog $self, "Fetch binary of message C";
+    $res = $talk->fetch('3', '(binary[])');
+    $self->assert_deep_equals([ '\\Seen' ], $res->{3}->{flags});
+    $msg{C}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Reconnect, \\Seen should still be on messages A and C";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}
