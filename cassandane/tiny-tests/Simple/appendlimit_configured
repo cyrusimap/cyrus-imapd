@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_appendlimit_configured
+    :min_version_3_6 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $desired_limit = "52428800"; # based on known failure
+
+    $self->{instance}->{config}->set('maxmessagesize' => $desired_limit);
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we've configured it, it'd better be what we asked for!
+    $self->assert_str_equals("appendlimit=$desired_limit", $appendlimits[0]);
+}

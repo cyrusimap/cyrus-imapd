@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_appendlimit_default
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $capa = $imaptalk->capability();
+    my @appendlimits = grep { m/^appendlimit/ } keys %{$capa};
+
+    # should be only one appendlimit
+    $self->assert_num_equals(1, scalar @appendlimits);
+
+    # we do not support per-mailbox limits, so it must have a value too
+    $self->assert_matches(qr{^appendlimit=\d+$}, $appendlimits[0]);
+
+    # and since we haven't configured it, it ought to be the default
+    # value, which is BYTESIZE_UNLIMITED (2147483647).
+    $self->assert_str_equals("appendlimit=2147483647", $appendlimits[0]);
+}
