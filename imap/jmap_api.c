@@ -1285,6 +1285,11 @@ HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
                 req->counters.submissionfoldersmodseq :
                 req->counters.submissionmodseq;
             break;
+        case MBTYPE_JMAPPUSHSUB:
+            modseq = is_folder ?
+                req->counters.jmappushsubfoldersmodseq :
+                req->counters.jmappushsubmodseq;
+            break;
         case MBTYPE_SIEVE:
             modseq = is_folder ?
                 req->counters.sievefoldersmodseq :

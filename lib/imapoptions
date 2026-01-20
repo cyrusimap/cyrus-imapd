@@ -1401,6 +1401,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
    only IETF standard JMAP functionality is supported. */
 
+{ "jmap_push_types", "Mailbox Email EmailSubmission Calendar CalendarEvent Contact", STRING, "UNRELEASED" }
+/* Space-separated list of JMAP object types to which push
+   notifications can be subscribed. */
+
 { "jmap_pushpoll", "60s", DURATION, "3.6.0" }
 /* The interval for polling for changes on an EventSource connection or
    when push has been ennabled on a WebSocket channel.

@@ -57,10 +57,12 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'carddav caldav');
+    $config->set(httpmodules => 'carddav caldav jmap');
+    $config->set(conversations => 'yes');
     $config->set(httpallowcompress => 'no');
     return $class->SUPER::new({
         adminstore => 1,
+        jmap => 1,
         config => $config,
         services => ['imap', 'http'],
     }, @_);
@@ -70,6 +72,9 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+    ]);
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
     $self->{carddav} = Net::CardDAVTalk->new(
@@ -157,6 +162,64 @@ EOF
     );
 
     # XXX: actually compare to the UID
+}
+
+sub test_pushsubs
+    :min_version_3_9 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $CardDAV = $self->{carddav};
+
+    xlog "create subscription";
+    my $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            create => {
+                "1" => {
+                    deviceClientId => "a889-ffea-910",
+                    url => "https://example.com/push/?device=X8980fc&client=12c6d086",
+                    types => [ "Mailbox", "Email" ]
+                },
+            },
+         }, "R1"]
+    ]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    $res = $CardDAV->Request('GET', '/dblookup/pushsubs', '',
+        User => 'cassandane'
+    );
+
+    my $json = eval { decode_json($res->{content}) };
+    my $code = $json->[0]{verificationCode};
+
+    $self->assert_str_equals($id, $json->[0]{id});
+    $self->assert_equals(JSON::false, $json->[0]{isVerified});
+    $self->assert_not_null($json->[0]{url});
+    $self->assert_not_null($code);
+
+    xlog "verify subscription";
+    $res = $jmap->CallMethods([
+        ['PushSubscription/set', {
+            update => {
+                $id => {
+                    verificationCode => $code
+                },
+            },
+         }, "R1"]
+    ]);
+
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    $res = $CardDAV->Request('GET', '/dblookup/pushsubs', '',
+        User => 'cassandane'
+    );
+
+    $json = eval { decode_json($res->{content}) };
+
+    $self->assert_str_equals($id, $json->[0]{id});
+    $self->assert_equals(JSON::true, $json->[0]{isVerified});
 }
 
 1;
