@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test uses the AV engine, which can be very slow to initialise.
+sub test_remove_infected_slow
+    :NoAltNamespace
+{
+    my ($self) = @_;
+
+    # set up a shared folder that's easy to write to
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('shared.folder');
+    $admintalk->setacl('shared.folder', 'cassandane' => 'lrswipkxtecd');
+
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(1, $talk->uid());
+    $talk->select("shared.folder");
+    $self->assert_num_equals(1, $talk->uid());
+
+    # put some test messages in INBOX (and verify)
+    $self->{store}->set_folder("INBOX");
+    my %cass_exp;
+    $cass_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $cass_exp{2} = $self->make_message("clean", uid => 2);
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
+
+    # put some test messages in shared.folder (and verify)
+    $self->{store}->set_folder("shared.folder");
+    my %shared_exp;
+    $shared_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $shared_exp{2} = $self->make_message("clean", uid => 2);
+    $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
+
+    # run cyr_virusscan
+    my $out = "$self->{instance}->{basedir}/$self->{_name}-cyr_virusscan.stdout";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => { 'stdout' => $out },
+        }, 'cyr_virusscan', '-r');
+
+    # check the output
+    # user.cassandane                       1  UNREAD  Eicar-Test-Signature
+    # shared.folder                         1  UNREAD  Eicar-Test-Signature
+    $out = slurp_file($out);
+    xlog $self, $out;
+
+    # XXX is there a better way than hard coding UID:1 ?
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+        $self->assert_matches(
+            qr/user\.cassandane\s+1\s+UNREAD\s+Eicar(?:-Test){0,1}-Signature/,
+            $out);
+        $self->assert_matches(
+            qr/shared\.folder\s+1\s+UNREAD\s+Eicar(?:-Test){0,1}-Signature/,
+            $out);
+    }
+    else {
+        # pre-3.0 a different output format was used
+        $self->assert_matches(
+            qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar(?:-Test){0,1}-Signature/,
+            $out);
+        $self->assert_matches(
+            qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar(?:-Test){0,1}-Signature/,
+            $out);
+    }
+
+    # make sure the infected ones were expunged, but the clean ones weren't
+    $self->{store}->set_folder("INBOX");
+    delete $cass_exp{1};
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
+
+    $self->{store}->set_folder("shared.folder");
+    delete $shared_exp{1};
+    $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
+}
