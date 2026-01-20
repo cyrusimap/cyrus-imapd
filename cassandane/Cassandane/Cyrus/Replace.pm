@@ -67,29 +67,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub test_replace_different_mailbox
-    :min_version_3_9
-{
-    my ($self) = @_;
-
-    my $talk = $self->{store}->get_client();
-
-    my %exp;
-    $exp{A} = $self->make_message("Message A", store => $self->{store});
-    $self->check_messages(\%exp);
-
-    $talk->create("INBOX.foo");
-    $talk->select('INBOX');
-
-    %exp = ();
-    $exp{B} = $self->{gen}->generate(subject => "Message B", uid => 1);
-
-    $talk->_imap_cmd('REPLACE', 0, '', "1", "INBOX.foo",
-                     { Literal => $exp{B}->as_string() });
-    $self->check_messages({});
-
-    $self->{store}->set_folder("INBOX.foo");
-    $self->check_messages(\%exp);
-}
+use Cassandane::Tiny::Loader 'tiny-tests/Replace';
 
 1;
