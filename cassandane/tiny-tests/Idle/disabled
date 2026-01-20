@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_disabled
+{
+    my ($self) = @_;
+
+    xlog $self, "Test that the IDLE command can be disabled in";
+    xlog $self, "imapd.conf by setting imapidlepoll = 0";
+
+    xlog $self, "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '0');
+    $self->{instance}->start();
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+
+    xlog $self, "The server should not report the IDLE capability";
+    $self->assert(!$talk->capability()->{idle});
+
+    xlog $self, "The IDLE command should not be recognised";
+    # Note that we don't use idle_begin() because that will get
+    # upset if we get "tag BAD ..." back instead of "+ something".
+    my $r = $talk->_imap_cmd('idle', 0, '');
+    $self->assert_null($r);
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Unrecognized command/, $talk->get_last_error());
+}

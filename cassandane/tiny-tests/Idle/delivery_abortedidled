@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_delivery_abortedidled
+    :needs_component_idled
+{
+    my ($self) = @_;
+
+    xlog $self, "Test the IDLE command vs local delivery, idled started but aborted";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->start_and_abort_idled();
+
+    $self->common_delivery();
+}
