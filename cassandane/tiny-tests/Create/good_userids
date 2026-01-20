@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_good_userids
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_userids = (
+        'user.$RACL',
+    );
+
+    foreach my $u (@good_userids) {
+        $admintalk->create($u);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+}
