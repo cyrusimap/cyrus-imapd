@@ -1,0 +1,24 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_nomatch
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $errfile = $self->{instance}->get_basedir() . '/relocate.err';
+
+    my $mailbox = 'user.nonexistent';
+
+    $self->{instance}->run_command({
+        cyrus => 1,
+        redirects => {
+            stderr => $errfile,
+        },
+    }, 'relocate_by_id', $mailbox);
+
+    my $output = slurp_file($errfile);
+
+    # better complain if the mailbox requested doesn't exist!
+    $self->assert_matches(qr{$mailbox: mailbox not found}, $output);
+}

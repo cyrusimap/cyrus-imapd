@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_shared_nodomain
+    :min_version_3_6
+{
+    my ($self) = @_;
+
+    my $adminstore = $self->{adminstore};
+    my $admintalk = $adminstore->get_client();
+
+    my $mbox = "shared.magic";
+    my $subfolder = "shared.magic.foo";
+
+    $admintalk->create($mbox);
+    $admintalk->setacl($mbox, admin => 'lrswipkxtecdan');
+    $admintalk->create($subfolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $adminstore->set_folder($subfolder);
+    $self->make_message("Email", store => $adminstore) or die;
+
+    # Create the search database.
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $basedir = $self->{instance}{basedir};
+    open(FH, "-|", "find", $basedir);
+    my @files = grep { m{/magic/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "files exist";
+    $self->assert_not_equals(0, scalar @files);
+
+    $self->{instance}->run_command({ cyrus => 1 },
+        'relocate_by_id', $mbox );
+
+    open(FH, "-|", "find", $basedir);
+    @files = grep { m{/magic/} and not m{/conf/lock/} } <FH>;
+    close(FH);
+
+    xlog $self, "no files left for this user";
+    $self->assert_equals(0, scalar @files);
+}
