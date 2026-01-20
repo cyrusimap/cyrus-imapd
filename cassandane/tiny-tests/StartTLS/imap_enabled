@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_enabled
+    :TLS :needs_dependency_openssl :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(allowstarttls => 'on');
+
+    $self->_start_instances();
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # STARTTLS should be advertised
+    my $res = $talk->capability();
+    $self->assert_not_null($res->{starttls});
+
+    # STARTTLS should succeed
+    $talk->_imap_cmd('starttls', 0, 'starttls');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $ca_file = abs_path("data/certs/cacert.pem");
+    IO::Socket::SSL->start_SSL($talk->{Socket},
+                               SSL_ca_file => $ca_file,
+                               SSL_verifycn_scheme => 'none',
+    );
+    $self->assert_str_equals('IO::Socket::SSL', ref $talk->{Socket});
+}
