@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mboxname
+    :NoAltNameSpace :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create mailbox with mUTF7 encoded name";
+    my $res = $talk->_imap_cmd('CREATE', 0, "", "INBOX.&JgA-");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "ENABLE UTF8=ACCEPT";
+    $res = $talk->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+
+    xlog $self, "Create a mailbox with denormalized mailbox name";
+    $res = $talk->_imap_cmd('CREATE', 0, "", "INBOX.Å");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Create a child mailbox with normalized mailbox name";
+    $res = $talk->_imap_cmd('CREATE', 0, "", "INBOX.Å.B");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Verify that LIST responses use UTF8 mailbox names";
+    $res = $talk->list("", "*");
+    $self->assert_mailbox_structure($res, '.', {
+        'INBOX'     => [qw( \\HasChildren )],
+        'INBOX.☀'  => [qw( \\HasNoChildren )],
+        'INBOX.Å'   => [qw( \\HasChildren )],
+        "INBOX.Å.B" => [qw( \\HasNoChildren )],
+    });
+
+    xlog $self, "EXAMINE mailbox with UTF8 mailbox name";
+    $res = $talk->_imap_cmd('EXAMINE', 0, "", "INBOX.☀");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->unselect();
+
+    xlog $self, "RENAME mailbox with denormalized mailbox names";
+    $res = $talk->_imap_cmd('RENAME', 0, "", "INBOX.Å", "INBOX.Ω");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "DELETE a child mailbox with normalized mailbox name";
+    $res = $talk->_imap_cmd('DELETE', 0, "", "INBOX.Ω.B");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Verify that LIST responses use UTF8 mailbox names";
+    $res = $talk->list("", "*");
+    $self->assert_mailbox_structure($res, '.', {
+        'INBOX'    => [qw( \\HasChildren )],
+        'INBOX.☀' => [qw( \\HasNoChildren )],
+        "INBOX.Ω"  => [qw( \\HasNoChildren )],
+    });
+}

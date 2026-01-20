@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_search_sort_thread
+    :NoAltNameSpace :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Make some messages";
+    my $uid = 1;
+    my %msgs;
+    for (1..10)
+    {
+        $msgs{$uid} = $self->make_message("Message $uid");
+        $msgs{$uid}->set_attribute('uid', $uid);
+        $uid++;
+    }
+
+    my $talk = $self->{store}->get_client();
+
+    # Verify that pre-ENABLE search/sort/thread work as expected
+    my $uids = $talk->search('charset', 'us-ascii', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $uids = $talk->sort('(size)', 'us-ascii', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $uids = $talk->thread('orderedsubject', 'us-ascii', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "ENABLE UTF8=ACCEPT";
+    my $res = $talk->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+
+    # Using CHARSET after UTF8=ACCEPT should fail
+    $uids = $talk->search('charset', 'us-ascii', 'all');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    $uids = $talk->search('all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Using CHARSET other than UTF-8 after UTF8=ACCEPT should fail
+    $uids = $talk->sort('(size)', 'us-ascii', 'all');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    $uids = $talk->sort('(size)', 'utf8', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Using CHARSET other than UTF-8 after UTF8=ACCEPT should fail
+    $uids = $talk->thread('orderedsubject', 'us-ascii', 'all');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    $uids = $talk->thread('orderedsubject', 'utf8', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
