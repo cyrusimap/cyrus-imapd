@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_carddav_put_v3tov4uid
+    :needs_dependency_icalvcard
+    ($self)
+{
+    # This is a regression test that asserts that CardDAV clients
+    # can rewrite the UID of a version 3 vCard by prefixing that
+    # UID value with "urn:uuid" and switching to vCard version 4.
+    # This violates the CardDAV spec and would require Cyrus to
+    # reject the PUT with a no-uid-conflict precondition error.
+    # This test only exists to assert that we support this broken
+    # behavior temporarily.
+    #
+    # Note that the brokeness leaks into the Contact API. The
+    # updated card is reported as updated, even though the *id*
+    # of the Contact object changed. This is bogus in JMAP, but
+    # again, it's here because it was broken that way all the time.
+
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    $ENV{DEBUGDAV} = 1;
+
+    # Initialize JMAP contact state and DAV sync-token.
+    my $res = $jmap->CallMethods([
+        ['Contact/get', { ids => [] }, 'R1']
+    ]);
+    my $contactState = $res->[0][1]{state};
+    $self->assert_not_null($contactState);
+
+    my ($syncChanged, $syncRemoved, $syncErrors, $syncToken) =
+        $carddav->SyncContactLinks('Default');
+
+    # Create contact with Contact API.
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                1 => {
+                    lastName => 'test',
+                }
+            }
+        }, 'R1'],
+        ['Contact/get', {
+            ids => ['#1'],
+            properties => ['x-href', 'uid'],
+        }, 'R2'],
+    ]);
+    my $href = $res->[1][1]{list}[0]{'x-href'};
+    $self->assert_not_null($href);
+    my $v3uid = $res->[1][1]{list}[0]{'uid'};
+    $self->assert_not_null($v3uid);
+
+    # Sync changes with JMAP and CardDAV.
+    $res = $jmap->CallMethods([
+        ['Contact/changes', {
+            sinceState => $contactState,
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([$v3uid], $res->[0][1]{created});
+    $contactState = $res->[0][1]{newState};
+
+    ($syncChanged, $syncRemoved, $syncErrors, $syncToken) =
+        $carddav->SyncContactLinks('Default', syncToken => $syncToken);
+    $self->assert_deep_equals([$href], [keys %$syncChanged]);
+
+    # Rewrite UID in vCard by prefixing urn:uuid.
+    my $vcard = $carddav->Request('GET', $href)->{content};
+    my $v4uid = "urn:uuid:$v3uid";
+    $self->assert($vcard =~ s/^UID:$v3uid\r/UID:$v4uid/m);
+    $self->assert($vcard =~ s/^VERSION:3.0\r/VERSION:4.0\r/m);
+    $carddav->Request('PUT', $href, $vcard, 'Content-Type' => 'text/vcard');
+
+    # Sync changes with JMAP and CardDAV.
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            properties => ['uid'],
+        }, 'R1'],
+        ['Contact/changes', {
+            sinceState => $contactState,
+        }, 'R2']
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($v4uid, $res->[0][1]{list}[0]{uid});
+    $self->assert_deep_equals([$v4uid], $res->[1][1]{updated});
+    $contactState = $res->[0][1]{newState};
+
+    ($syncChanged, $syncRemoved, $syncErrors, $syncToken) =
+        $carddav->SyncContactLinks('Default', syncToken => $syncToken);
+    $self->assert_deep_equals([$href], [keys %$syncChanged]);
+}
