@@ -15,6 +15,6 @@ sub test_imap_bad
 
     my $e = $@;
     $self->assert_not_null($e);
-    $self->assert_matches($alpn_fail_pattern, $e);
+    $self->assert_matches($self->alpn_fail_pattern, $e);
     $self->assert_num_equals(Mail::IMAPTalk::Unconnected, $talk->state());
 }

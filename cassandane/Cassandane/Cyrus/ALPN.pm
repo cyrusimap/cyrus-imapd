@@ -52,10 +52,12 @@ use Cassandane::Util::Log;
 # When ALPN negotiation fails, depending on the openssl version, we might get
 # a sensible error message, or an opaque reference to "1120".
 # https://github.com/openssl/openssl/issues/24300
-my $alpn_fail_pattern = qr{(?: tlsv1\salert\sno\sapplication\sprotocol
-                            |  ssl3_read_bytes:reason\(1120\)
-                            |  SSL\sroutines::reason\(1120\)
-                            )}x;
+sub alpn_fail_pattern {
+  return qr{(?: tlsv1\salert\sno\sapplication\sprotocol
+             |  ssl3_read_bytes:reason\(1120\)
+             |  SSL\sroutines::reason\(1120\)
+           )}x;
+}
 
 sub new
 {

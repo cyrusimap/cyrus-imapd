@@ -16,5 +16,5 @@ sub test_https_bad
 
     $self->assert_num_equals(0, $response->{success});
     $self->assert_str_equals('Internal Exception', $response->{reason});
-    $self->assert_matches($alpn_fail_pattern, $response->{content});
+    $self->assert_matches($self->alpn_fail_pattern, $response->{content});
 }
