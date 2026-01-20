@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_list_order_racl
+    :ReverseACLs :min_version_3_1 :NoAltNamespace
+{
+    my $self = shift;
+    return $self->do_test_list_order(@_);
+}
