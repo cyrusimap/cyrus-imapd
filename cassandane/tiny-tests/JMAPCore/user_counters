@@ -13,7 +13,7 @@ sub test_user_counters
     ];
 
     my $res = $jmap->CallMethods([
-        ['UserCounters/get', {}, "R1"]
+        ['UserCounters/get', { accountId => 'cassandane' }, "R1"]
     ], $using);
 
     my %expect = map {; $_ => 1 } qw(
