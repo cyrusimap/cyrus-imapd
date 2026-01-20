@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_list_groupaccess_noracl
+    :min_version_3_7 :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.groupaccess");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.otheruser.groupaccess",
+                       "group:group co", "lrswipkxtecdan");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $list = $imaptalk->list("", "*");
+    my @boxes = sort map { $_->[2] } @{$list};
+
+    $self->assert_deep_equals(\@boxes,
+                              ['INBOX', 'user.otheruser.groupaccess']);
+}
