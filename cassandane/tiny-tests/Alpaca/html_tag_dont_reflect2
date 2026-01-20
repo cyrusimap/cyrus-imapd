@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_html_tag_dont_reflect2
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # as above, but with no command!
+    my $saw_untagged_bad = 0;
+    imap_cmd_with_tag($talk, '<script>do_attack</script>',
+                             { IdleResponse => 1 },
+                             '', 0,
+                             { 'bad' => sub { $saw_untagged_bad++ } });
+
+    # the only acceptable response to this is an untagged BAD or BYE!
+    # any tagged response will reflect an attacker-supplied payload to
+    # the victim
+    $self->assert_num_equals(1, $saw_untagged_bad);
+}

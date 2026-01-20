@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_http_post_drop_connection3
+    :TLS :needs_dependency_openssl
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # first command after STARTTLS should be treated same as first command
+    $talk->_imap_cmd('starttls', 0, 'starttls');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $ca_file = abs_path("data/certs/cacert.pem");
+    IO::Socket::SSL->start_SSL($talk->{Socket},
+                               SSL_ca_file => $ca_file,
+                               SSL_verifycn_scheme => 'none',
+    );
+    $self->assert_str_equals('IO::Socket::SSL', ref $talk->{Socket});
+
+    # mimic a HTTP client sending "POST / HTTP/1.1\r\n" command,
+    # expect "* BYE This is an IMAP server" and disconnect
+    # throws "IMAPTalk: Connection was unexpectedly closed by host"
+    eval {
+        imap_cmd_with_tag($talk, 'POST',
+                                 '/', 0, '/',
+                                 'HTTP/1.1');
+    };
+    # XXX can't see the real exception text cause cass obscures it,
+    # XXX but there should have at least been some exception
+    $self->assert_not_null($@);
+    $self->assert_str_equals('This is an IMAP server',
+                             $talk->get_response_code('bye'));
+
+    # should be back to unconnected state
+    $self->assert_num_equals(0, $talk->state());
+}

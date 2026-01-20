@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_http_headers_bad
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # mimic a HTTP connection sending "key: value\r\n" headers.
+    # make sure one that looks like a valid imap command can't be used
+    # to reset any consecutive error counter, by rejecting the tag
+    my $saw_untagged_bad = 0;
+    imap_cmd_with_tag($talk, 'Accept:',
+                             { IdleResponse => 1 },
+                             'noop', 0,
+                             { 'bad' => sub { $saw_untagged_bad++ } });
+
+    $self->assert_num_equals(1, $saw_untagged_bad);
+}

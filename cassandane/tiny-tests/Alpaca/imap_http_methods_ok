@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_http_methods_ok
+{
+    my ($self) = @_;
+
+    # get a normal, already logged in IMAP connection
+    my $talk = $self->{store}->get_client();
+
+    my @http_methods = qw(
+        ACL BIND LOCK MKCALENDAR MKCOL PATCH POST
+        PROPFIND PROPPATCH PUT REPORT SEARCH UNBIND
+    );
+
+    # HTTP method names are not forbidden tags during a normal IMAP session
+    foreach my $meth (@http_methods) {
+        imap_cmd_with_tag($talk, $meth, 'noop', 0, 'noop');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+}

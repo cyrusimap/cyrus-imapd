@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_consecutive_syntax_errors_drop_connection
+{
+    my ($self) = @_;
+
+    $self->{store}->disconnect();
+    my $sock = create_client_socket($self->{store}->{address_family},
+                                    $self->{store}->{host},
+                                    $self->{store}->{port});
+
+    # 50 lines of just "bogus \r\n", that is the tag 'bogus' and a space
+    # but no command, which cyrus will reject with "bogus BAD Null command"
+    my @request = ('bogus ') x 50;
+    foreach my $line (@request) {
+        $sock->send("$line\015\012") or die "send: $!";
+        last if not $sock->connected();
+    }
+
+    # if the connection hasn't been dropped already, send a logout so the
+    # test doesn't hang
+    $sock->send(". logout\015\012") if $sock->connected();
+
+    my @response;
+    while (defined(my $line = $sock->getline())) {
+        $line =~ s/\015?\012//;
+        push @response, $line;
+    }
+
+    # double check that our request contained more lines than cyrus'
+    # syntax error limit of 10
+    $self->assert_num_gt(10, scalar @request);
+
+    # cyrus should have dropped the connection before we sent all the lines
+    $self->assert_num_lt(scalar @request, scalar @response);
+
+    # should have gotten as many BAD responses as cyrus's limit
+    $self->assert_contains(qr{BAD}, \@response, 10);
+
+    # snarky last response back from the server
+    $self->assert_matches(qr{This is an IMAP server}, $response[-1]);
+}
