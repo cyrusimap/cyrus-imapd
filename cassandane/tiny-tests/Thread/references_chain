@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_references_chain
+{
+    my ($self) = @_;
+
+    xlog $self, "test THREAD with a linear chain of inter-message references";
+    xlog $self, "and apparently similar subjects";
+    my $talk = $self->{store}->get_client();
+    my $res;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my %exp_by_sub;
+    my $N = 20;
+    my @subjects = ( 'cosby sweater', 'brooklyn', 'portland' );
+    for (1..$N)
+    {
+        my $sub = $subjects[($_ - 1) % scalar(@subjects)];
+        $exp_by_sub{$sub} ||= [];
+        my $msg;
+        if (scalar @{$exp_by_sub{$sub}})
+        {
+            my $parent = $exp_by_sub{$sub}->[-1];
+            $msg = $self->make_message("Re: " . $parent->subject,
+                                       references => [ $parent ]);
+        }
+        else
+        {
+            $msg = $self->make_message($sub);
+        }
+        push(@{$exp_by_sub{$sub}}, $msg);
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    my @expthreads;
+
+    xlog $self, "The REFERENCES algorithm gives the true thread structure which is deep";
+    foreach my $sub (@subjects)
+    {
+        push(@expthreads, [ map { $_->uid } @{$exp_by_sub{$sub}} ]);
+    }
+    $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals(\@expthreads, $res);
+
+# From RFC5256
+#          The top level or "root" in ORDEREDSUBJECT threading contains
+#          the first message of every thread.  All messages in the root
+#          are siblings of each other.  The second message of a thread is
+#          the child of the first message, and subsequent messages of the
+#          thread are siblings of the second message and hence children of
+#          the message at the root.  Hence, there are no grandchildren in
+#          ORDEREDSUBJECT threading.
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    @expthreads = ();
+    foreach my $sub (@subjects)
+    {
+        my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
+        my $parent = shift(@thread);
+        push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
+    }
+    $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals(\@expthreads, $res);
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp);
+}

@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_references_loop
+{
+    my ($self) = @_;
+
+    xlog $self, "test THREAD with a loop configuration of inter-message references";
+    xlog $self, "and a missing common parent (Bug 3784)";
+    my $talk = $self->{store}->get_client();
+    my $res;
+    my %exp;
+
+    xlog $self, "Generate message B, which References itself and some other messages";
+    my $msgB = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 1);
+    $msgB->set_headers('Message-Id', '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
+    $msgB->set_headers('References',
+                        '<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBA030200003300019722@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBD530200003300019726@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
+    $msgB->set_headers('In-Reply-To', '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
+    $self->_save_message($msgB);
+    $exp{1} = $msgB;
+
+    xlog $self, "Generate message C, which References itself and some other messages";
+    my $msgC = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 2);
+    $msgC->set_headers('Message-Id', '<478B52E10200003300019E06@gwia1.boku.ac.at>');
+    $msgC->set_headers('References',
+                        '<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2D7F0200003300019DA2@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2E9F0200003300019DA5@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2F0E0200003300019DA8@gwia1.boku.ac.at>' . "\n" .
+                        '<478B32C40200003300019DB1@gwia1.boku.ac.at>' . "\n" .
+                        '<478B38C40200003300019DBD@gwia1.boku.ac.at>' . "\n" .
+                        '<478B52E10200003300019E06@gwia1.boku.ac.at>');
+    $msgC->set_headers('In-Reply-To',  '<478B52E10200003300019E06@gwia1.boku.ac.at>');
+    $self->_save_message($msgC);
+    $exp{2} = $msgC;
+
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    xlog $self, "The REFERENCES algorithm gives the true thread";
+    xlog $self, "structure which is flat";
+    $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([[[1], [2]]], $res);
+
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([[1, 2]], $res);
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp, keyed_on => 'uid');
+}
