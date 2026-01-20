@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_replication_trashseen
+    :min_version_3_1 :needs_component_replication :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+    $master_store->set_fetch_attributes('uid', 'cid');
+    $replica_store->set_fetch_attributes('uid', 'cid');
+
+    my $mtalk = $master_store->get_client();
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    xlog $self, "checking message A on master";
+    $self->check_messages(\%exp, store => $master_store);
+
+    $mtalk->create("INBOX.Trash");
+    $mtalk->select("INBOX");
+    $mtalk->store('1', '+flags', '\\Seen');
+    $mtalk->move('1', 'INBOX.Trash');
+    $mtalk->select('INBOX.Trash');
+    $mtalk->store('1', '-flags', '\\Seen');
+
+    xlog $self, "running replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}

@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# test reconstruct of larger conversation
+#
+sub test_reconstruct_splitconv
+    :min_version_3_1 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..20) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+
+    $talk->create('foo');
+    $talk->copy('1:*', 'foo');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    # first run WITHOUT splitting
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # then run WITH splitting, and see the changed CIDs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r', '-S');
+
+    for (5..9) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    for (10..14) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A10"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    for (15..19) {
+      $exp{"A$_"}->set_attributes(cid => $exp{"A15"}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    $exp{"A20"}->set_attributes(cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # zero everything out
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-z', 'cassandane');
+
+    # rebuild
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-b', 'cassandane');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+
+    # support for -Z was added after 3.8
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    return if ($maj < 3 or ($maj == 3 and $min < 8));
+
+    # zero out ONLY two CIDs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb',
+                                    '-Z' => $exp{"A15"}->make_cid(),
+                                    '-Z' => $exp{"A10"}->make_cid(),
+                                    'cassandane');
+    for (10..19) {
+      $exp{"A$_"}->set_attributes(cid => undef, basecid => undef);
+    }
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("foo");
+    $self->check_messages(\%exp, keyed_on => 'uid');
+    $talk->select("INBOX");
+}

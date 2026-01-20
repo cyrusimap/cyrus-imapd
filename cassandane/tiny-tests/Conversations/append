@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_append
+    :min_version_3_0 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message B";
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message C";
+    $exp{C} = $self->make_message("Message C");
+    $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
+    my $actual = $self->check_messages(\%exp);
+
+    xlog $self, "generating message D";
+    $exp{D} = $self->make_message("Message D");
+    $exp{D}->set_attributes(uid => 4, cid => $exp{D}->make_cid());
+    $self->check_messages(\%exp);
+}

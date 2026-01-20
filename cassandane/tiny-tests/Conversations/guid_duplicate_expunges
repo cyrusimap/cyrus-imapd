@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test limits on GUID duplicates
+#
+sub test_guid_duplicate_expunges
+    :min_version_3_3 :LowEmailLimits :DelayedExpunge
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.dest");
+
+    for (1..9) {
+        $talk->select("INBOX");
+        my $r = $talk->copy("1", "INBOX.dest");
+        $self->assert_not_null($r);
+        $talk->select("INBOX.dest");
+        $talk->store('1:*', '+flags', '(\\Deleted)');
+        $talk->expunge();
+    }
+
+    $talk->select("INBOX");
+    my $r = $talk->copy("1", "INBOX.dest");
+    $self->assert_null($r);
+    $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
+}

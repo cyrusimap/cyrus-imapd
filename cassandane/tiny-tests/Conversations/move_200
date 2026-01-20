@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test MOVE of messages after conversation split
+#
+sub test_move_200
+    :min_version_3_1 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..99) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"B"}->set_attributes(uid => 101, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    for (1..99) {
+      $exp{"B$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"B$_"}->set_attributes(uid => 101+$_, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+    }
+    $exp{"C"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"C"}->set_attributes(uid => 201, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.foo");
+    $talk->select("INBOX");
+    # NOTE: 110 here becomes 109 after '9' is already moved
+    $talk->fetch('9,110', '(emailid threadid)');
+    $talk->move('9', "INBOX.foo");
+    $talk->move('109', "INBOX.foo");
+    $talk->select("INBOX.foo");
+    my $res = $talk->fetch('1:2', '(emailid threadid)');
+    my $emailid1 = $res->{1}{emailid}[0];
+    my $threadid1 = $res->{1}{threadid}[0];
+    my $emailid2 = $res->{2}{emailid}[0];
+    my $threadid2 = $res->{2}{threadid}[0];
+    $self->assert_str_equals($threadid1, $exp{A}->make_thrid());
+    $self->assert_str_equals($threadid2, $exp{B}->make_thrid());
+
+    # XXX probably should split the jmap stuff below into a separate
+    # XXX test, so we can just mark it :needs_component_jmap instead
+    # XXX of hacking it up like this... :)
+    my $buildinfo = Cassandane::BuildInfo->new();
+    if (not $buildinfo->get('component', 'jmap')) {
+        return;
+    }
+
+    my $jmap = $self->{jmap};
+    xlog $self, "create bar mailbox";
+    $res = $jmap->CallMethods(
+        [
+            ['Mailbox/set', { create => { "1" => {
+                            name => "bar",
+             }}}, "R1"]
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $bar = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods(
+        [
+            ['Email/set', { update => {
+                 $emailid1 => { mailboxIds => { $bar => $JSON::true } },
+                 $emailid2 => { mailboxIds => { $bar => $JSON::true } },
+             }}, "R1"]
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
+
+    $self->assert_str_equals('Email/set', $res->[0][0]);
+    $self->assert(exists $res->[0][1]{updated}{$emailid1});
+    $self->assert(exists $res->[0][1]{updated}{$emailid2});
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    $res = $jmap->CallMethods(
+        [
+            ['Email/get', { ids => [$emailid1,$emailid2], properties => ['threadId'] }, "R1"],
+        ],
+        [ qw( urn:ietf:params:jmap:core urn:ietf:params:jmap:mail ) ],
+    );
+
+    $self->assert_str_equals('Email/get', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my %map = map { $_->{id} => $_->{threadId} } @{$res->[0][1]{list}};
+    $self->assert_str_equals($map{$emailid1}, $threadid1);
+    $self->assert_str_equals($map{$emailid2}, $threadid2);
+}
