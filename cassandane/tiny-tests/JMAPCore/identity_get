@@ -13,9 +13,11 @@ sub test_identity_get
     ];
 
     my $res = $jmap->CallMethods([
-        ['Identity/get', { }, 'R1'],
-        ['Identity/get', { ids => undef }, 'R2'],
-        ['Identity/get', { ids => [] }, 'R3'],
+        ['Identity/get', { accountId => 'cassandane'               }, 'R1'],
+        ['Identity/get', { accountId => 'cassandane', ids => undef }, 'R2'],
+        ['Identity/get', { accountId => 'cassandane', ids => []    }, 'R3'],
+        ['Identity/get', { accountId => JSON::null                 }, 'R4'],
+        ['Identity/get', {                                         }, 'R5'],
     ], $using);
 
     $self->assert_str_equals('Identity/get', $res->[0][0]);
@@ -30,4 +32,24 @@ sub test_identity_get
 
     $self->assert_deep_equals([], $res->[2][1]{list});
     $self->assert_not_null($res->[2][1]->{state});
+
+    $self->assert_deep_equals([
+        'error',
+        {
+            type => 'invalidArguments',
+            arguments => [ 'accountId' ]
+        },
+        'R4'
+        ], $res->[3]
+    );
+
+    $self->assert_deep_equals([
+        'error',
+        {
+            type => 'invalidArguments',
+            arguments => [ 'accountId' ]
+        },
+        'R5'
+        ], $res->[4]
+    );
 }
