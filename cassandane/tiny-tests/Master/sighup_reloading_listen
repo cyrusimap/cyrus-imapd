@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sighup_reloading_listen
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    # Note: we need to wait for SIGHUP to be processed; prefork can do the trick
+    # to help us check that
+    my $srv = $self->lemming_service(tag => 'A', prefork => 1);
+    $self->start();
+    $self->lemming_wait(A => { live => 1 });
+
+    xlog $self, "preforked, so one lemming running already";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+        $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+    $self->lemming_wait(A => { live => 2 });
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+        $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog $self, "always at least one live lemming";
+    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+        $self->lemming_census());
+
+
+    xlog $self, "change service listen port in cyrus.conf and reload";
+    my $port1 = $srv->port();
+    $srv->set_port();
+    my $port2 = $srv->port();
+    $self->assert_not_equals($port1, $port2);
+    $self->{instance}->_generate_master_conf();
+    $self->{instance}->send_sighup();
+    # Here is the trick with prefork: wait for the previously forked A instance
+    # to die and be replaced by a new one
+    $self->lemming_wait(A => { live => 1, dead => 2 });
+
+    $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
+        $self->lemming_census());
+
+    $lemm = lemming_connect($srv);
+    $self->lemming_wait(A => { live => 2 });
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 2, dead => 2 } },
+        $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog $self, "always at least one live lemming";
+    $self->assert_deep_equals({ A => { live => 1, dead => 3 } },
+        $self->lemming_census());
+}

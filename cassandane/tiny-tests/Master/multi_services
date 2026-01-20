@@ -1,0 +1,54 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test multiple running programs in SERVICES
+#
+sub test_multi_services
+{
+    my ($self) = @_;
+
+    xlog $self, "multiple successful services";
+    my $srvA = $self->lemming_service(tag => 'A');
+    my $srvB = $self->lemming_service(tag => 'B');
+    my $srvC = $self->lemming_service(tag => 'C');
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    my $lemmA = lemming_connect($srvA);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A =>  { live => 1, dead => 0 } },
+                              $self->lemming_census());
+
+    my $lemmB = lemming_connect($srvB);
+
+    xlog $self, "two connected so two lemmings forked";
+    $self->assert_deep_equals({
+                                A => { live => 1, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                              }, $self->lemming_census());
+
+    my $lemmC = lemming_connect($srvC);
+
+    xlog $self, "three connected so three lemmings forked";
+    $self->assert_deep_equals({
+                                A => { live => 1, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                                C => { live => 1, dead => 0 },
+                              }, $self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+    lemming_push($lemmB, 'success');
+    lemming_push($lemmC, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({
+                                A => { live => 0, dead => 1 },
+                                B => { live => 0, dead => 1 },
+                                C => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
+}

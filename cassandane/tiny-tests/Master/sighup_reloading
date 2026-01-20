@@ -1,0 +1,105 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sighup_reloading
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srvA = $self->lemming_service(tag => 'A');
+    $self->start();
+    my $srvB = $self->lemming_service(tag => 'B');
+
+
+    my $lemmA = lemming_connect($srvA);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+        $self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+        $self->lemming_census());
+
+    xlog $self, "connection fails due to unexisting lemming";
+    my $lemmB;
+    eval
+    {
+        $lemmB = lemming_connect($srvB);
+    };
+    $self->assert_null($lemmB);
+
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+        $self->lemming_census());
+
+
+    xlog $self, "add service in cyrus.conf and reload";
+    $self->{instance}->_generate_master_conf();
+    $self->{instance}->send_sighup();
+
+    $lemmA = lemming_connect($srvA);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+        $self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+        $self->lemming_census());
+
+    $lemmB = lemming_connect($srvB);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+                                B => { live => 1, dead => 0 } },
+        $self->lemming_census());
+
+    lemming_push($lemmB, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+                                B => { live => 0, dead => 1 } },
+        $self->lemming_census());
+
+
+    xlog $self, "remove service in cyrus.conf and reload";
+    $self->{instance}->remove_service('A');
+    $self->{instance}->_generate_master_conf();
+    $self->{instance}->send_sighup();
+
+    # wait a moment for the sighup to be processed
+    # XXX next test does something tricky with prefork/wait,
+    # XXX but i'm not sure if that can be used here.
+    sleep 1;
+
+    xlog $self, "connection fails due to unexisting lemming";
+    $lemmA = undef;
+    eval
+    {
+        $lemmA = lemming_connect($srvA);
+    };
+    $self->assert_null($lemmA);
+
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+                                B => { live => 0, dead => 1 } },
+        $self->lemming_census());
+
+    $lemmB = lemming_connect($srvB);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+                                B => { live => 1, dead => 1 } },
+        $self->lemming_census());
+
+    lemming_push($lemmB, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 },
+                                B => { live => 0, dead => 2 } },
+        $self->lemming_census());
+}

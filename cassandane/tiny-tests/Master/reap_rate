@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_reap_rate
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing latency after which cyrus reaps dead children";
+
+    my $max_latency = 1.0;  # seconds
+
+    my $srv = $self->lemming_service(tag => 'A');
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    xlog $self, "Build a vast flock of lemmings";
+    my @lemmings;
+    for (1..100)
+    {
+        push(@lemmings, lemming_connect($srv));
+    }
+    $self->assert_deep_equals({
+                                A => { live => 100, dead => 0 },
+                              }, $self->lemming_census());
+
+    # This technique avoids having new connections at the
+    # same time as we're trying to measure reaping latency,
+    # which can hide racy bugs in the main select() loop.
+    xlog $self, "Killing all the lemmings one by one";
+    my $ss = new Cassandane::Util::Sample;
+    while (my $lemm = shift @lemmings)
+    {
+        my $t = lemming_push($lemm, 'success');
+        $self->assert($t < $max_latency,
+                      "Child reap latency is >= $max_latency sec");
+        $ss->add($t);
+    }
+    xlog $self, "Reap times: $ss";
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({
+                                A => { live => 0, dead => 100 },
+                              }, $self->lemming_census());
+}

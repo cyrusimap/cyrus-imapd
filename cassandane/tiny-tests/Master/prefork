@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test a preforked single running program in SERVICES
+#
+sub test_prefork
+{
+    my ($self) = @_;
+
+    xlog $self, "single successful service";
+    my $srv = $self->lemming_service(prefork => 1);
+    $self->start();
+    $self->lemming_wait(A => { live => 1 });
+
+    xlog $self, "preforked, so one lemming running already";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+                              $self->lemming_census());
+
+    my $lemm1 = lemming_connect($srv);
+    $self->lemming_wait(A => { live => 2 });
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+                              $self->lemming_census());
+
+    my $lemm2 = lemming_connect($srv);
+    $self->lemming_wait(A => { live => 3 });
+
+    xlog $self, "connected again so two additional lemmings forked";
+    $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
+                              $self->lemming_census());
+
+    lemming_push($lemm1, 'success');
+    lemming_push($lemm2, 'success');
+
+    xlog $self, "always at least one live lemming";
+    $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
+                              $self->lemming_census());
+}

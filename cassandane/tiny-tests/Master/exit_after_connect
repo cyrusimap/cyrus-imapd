@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test a single program in SERVICES which fails after connect
+#
+sub test_exit_after_connect
+{
+    my ($self) = @_;
+
+    xlog $self, "single service will exit after connect";
+    my $srv = $self->lemming_service();
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+                              $self->lemming_census());
+
+    xlog $self, "push the lemming off the cliff";
+    lemming_push($lemm, 'exit');
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+                              $self->lemming_census());
+
+    xlog $self, "can connect again";
+    $lemm = lemming_connect($srv);
+    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
+                              $self->lemming_census());
+
+    xlog $self, "push the lemming off the cliff";
+    lemming_push($lemm, 'exit');
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+                              $self->lemming_census());
+}

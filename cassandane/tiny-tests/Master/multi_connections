@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test multiple connections to a single running program in SERVICES
+#
+sub test_multi_connections
+{
+    my ($self) = @_;
+
+    xlog $self, "multiple connections to a single successful service";
+    my $srv = $self->lemming_service();
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    my $lemm1 = lemming_connect($srv);
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+                              $self->lemming_census());
+
+    my $lemm2 = lemming_connect($srv);
+
+    xlog $self, "two connected so two lemmings forked";
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+                              $self->lemming_census());
+
+    my $lemm3 = lemming_connect($srv);
+
+    xlog $self, "three connected so three lemmings forked";
+    $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
+                              $self->lemming_census());
+
+    lemming_push($lemm1, 'success');
+    lemming_push($lemm2, 'success');
+    lemming_push($lemm3, 'success');
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 3 } },
+                              $self->lemming_census());
+}

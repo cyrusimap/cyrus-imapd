@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_daemon_exits
+{
+    my ($self) = @_;
+
+    my $lemming_delay = 500; #ms
+    my $test_delay = 10; #s
+
+    xlog $self, "Test a program in the DAEMON section which fails";
+    $self->lemming_daemon(tag => 'A', delay => $lemming_delay, mode => 'exit');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
+
+    $self->{instance}->start();
+
+    # make sure it runs long enough for the child janitor to wake up
+    sleep $test_delay;
+
+    # master had better still be running!
+    $self->assert($self->{instance}->is_running(),
+                  "master is no longer running");
+
+    # make sure those lemmings did actually die
+    my $census = $self->lemming_census();
+    # XXX upper limit on this should be MAX_READY_FAILS if we run for less
+    # XXX than MAX_READY_FAIL_INTERVAL seconds, but the delayed restart of
+    # XXX failed daemons doesn't seem to be actually delayed???
+    $self->assert_num_gte(1, $census->{A}->{dead});
+
+    # there'll be syslog errors as long as this is running, so stop it early
+    $self->{instance}->stop(no_check_syslog => 1);
+    # then consume and check them
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{too many failures for});
+}

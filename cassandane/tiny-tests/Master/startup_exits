@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_startup_exits
+{
+    my ($self) = @_;
+
+    xlog $self, "Test a program in the START section which fails";
+    $self->lemming_start(tag => 'A', delay => 100, mode => 'exit');
+    $self->lemming_start(tag => 'B', delay => 200, mode => 'exit');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
+    eval
+    {
+        $self->start();
+    };
+    xlog $self, "start failed (as expected): $@" if $@;
+
+    xlog $self, "master should have exited when first startup failed";
+    $self->assert(!$self->{instance}->is_running());
+
+    xlog $self, "expect 1 dead lemming";
+    $self->assert_deep_equals({
+                                A => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
+}

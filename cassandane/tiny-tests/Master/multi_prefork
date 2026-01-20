@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test multiple running programs in SERVICES, some preforked.
+#
+sub test_multi_prefork
+{
+    my ($self) = @_;
+
+    xlog $self, "multiple successful service some preforked";
+    my $srvA = $self->lemming_service(tag => 'A', prefork => 2);
+    my $srvB = $self->lemming_service(tag => 'B'); # no preforking
+    my $srvC = $self->lemming_service(tag => 'C', prefork => 3);
+    $self->start();
+
+    # wait for lemmings to be preforked
+    $self->lemming_wait(A => { live => 2 }, C => { live => 3 });
+
+    my @lemmings;
+    my $lemm;
+
+    xlog $self, "connect to A once";
+    $lemm = lemming_connect($srvA);
+    $self->lemming_wait(A => { live => 3 });
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({
+                                A => { live => 3, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
+
+    xlog $self, "connect to A again";
+    $lemm = lemming_connect($srvA);
+    $self->lemming_wait(A => { live => 4 });
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({
+                                A => { live => 4, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
+
+    xlog $self, "connect to A a third time";
+    $lemm = lemming_connect($srvA);
+    $self->lemming_wait(A => { live => 5 });
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({
+                                A => { live => 5, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
+
+    xlog $self, "connect to B";
+    $lemm = lemming_connect($srvB);
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({
+                                A => { live => 5, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
+
+    foreach $lemm (@lemmings)
+    {
+        lemming_push($lemm, 'success');
+    }
+
+    xlog $self, "our lemmings are gone, others have replaced them";
+    $self->assert_deep_equals({
+                                A => { live => 2, dead => 3 },
+                                B => { live => 0, dead => 1 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
+}
