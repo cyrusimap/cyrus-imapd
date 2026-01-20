@@ -1,0 +1,101 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Mailbox test of the NOTIFY command (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, "", "SET",
+                               "(PERSONAL (MailboxName SubscriptionChange))");
+
+    xlog $self, "Create mailbox in other session";
+    $othertalk->create("INBOX.rename-me");
+
+    # Should get LIST response
+    $res = $store->idle_response('LIST', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    my $list = $talk->get_response_code('list');
+    $self->assert_str_equals('INBOX.rename-me', $list->[0][2]);
+
+    xlog $self, "Subscribe mailbox in other session";
+    $othertalk->subscribe("INBOX.rename-me");
+
+    # Should get LIST response with \Subscribed
+    $res = $store->idle_response('LIST', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $list = $talk->get_response_code('list');
+    $self->assert_str_equals('\\Subscribed', $list->[0][0][0]);
+    $self->assert_str_equals('INBOX.rename-me', $list->[0][2]);
+
+    xlog $self, "Rename mailbox in other session";
+    $othertalk->rename("INBOX.rename-me", "INBOX.delete-me");
+
+    # Use our own handler since IMAPTalk will lose OLDNAME
+    my %handlers =
+    (
+        list => sub
+        {
+            my (undef, $data) = @_;
+            $list = [ $data ];
+        },
+    );
+
+    # Should get LIST response with OLDNAME
+    $res = $store->idle_response(\%handlers, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_str_equals('INBOX.delete-me', $list->[0][2]);
+    $self->assert_str_equals('OLDNAME', $list->[0][3][0]);
+    $self->assert_str_equals('INBOX.rename-me', $list->[0][3][1][0]);
+
+    xlog $self, "Delete mailbox in other session";
+    $othertalk->delete("INBOX.delete-me");
+
+    # Should get LIST response with \NonExistent
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $list = $talk->get_response_code('list');
+    $self->assert_str_equals('\\NonExistent', $list->[0][0][0]);
+    $self->assert_str_equals('INBOX.delete-me', $list->[0][2]);
+
+    xlog $self, "Disable Notify";
+    $res = $talk->_imap_cmd('NOTIFY', 0, "", "NONE");
+
+    xlog $self, "Create mailbox in other session";
+    $othertalk->create("INBOX.foo");
+
+    # Should get no unsolicited responses
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no unsolicited responses");
+}
