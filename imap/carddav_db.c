@@ -17,6 +17,7 @@
 #include "mboxevent.h"
 #include "times.h"
 #include "util.h"
+#include "vcard_support.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
@@ -1434,10 +1435,6 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
-#ifdef HAVE_LIBICALVCARD
-
-#include "vcard_support.h"
-
 EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                                  struct carddav_data *cdata,
                                  vcardcomponent *vcard,
@@ -1639,5 +1636,3 @@ EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
 
     return r;
 }
-
-#endif /* HAVE_LIBICALVCARD */

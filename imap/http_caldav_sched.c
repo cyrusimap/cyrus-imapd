@@ -1473,7 +1473,7 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
         struct icaldurationtype olddur = icalproperty_get_duration(oldprop);
         struct icaldurationtype newdur = icalproperty_get_duration(newprop);
 
-        return (icaldurationtype_as_int(olddur) != icaldurationtype_as_int(newdur));
+        return (icaldurationtype_as_utc_seconds(olddur) != icaldurationtype_as_seconds(newdur));
     }
     else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY) ||
              (kind == ICAL_ATTACH_PROPERTY)) {

@@ -87,6 +87,7 @@ sub set_up
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:contacts',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/backup',
         'https://cyrusimap.org/ns/jmap/contacts',

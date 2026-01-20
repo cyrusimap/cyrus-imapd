@@ -4652,8 +4652,6 @@ done:
     return r;
 }
 
-#ifdef HAVE_LIBICALVCARD
-
 static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
                             struct getsearchtext_rock *str)
 {
@@ -4774,98 +4772,6 @@ done:
     return r;
 }
 
-#else /* !HAVE_LIBICALVCARD */
-
-static void _add_vcard_singlval(struct vparse_card *card, const char *key, struct buf *buf)
-{
-    struct vparse_entry *entry;
-    for (entry = card->properties; entry; entry = entry->next) {
-        if (strcasecmp(entry->name, key)) continue;
-        const char *val = entry->v.value;
-        if (val && val[0]) {
-            if (buf_len(buf)) buf_putc(buf, ' ');
-            buf_appendcstr(buf, val);
-        }
-    }
-}
-
-static void _add_vcard_multival(struct vparse_card *card, const char *key, struct buf *buf)
-{
-    struct vparse_entry *entry;
-    for (entry = card->properties; entry; entry = entry->next) {
-        if (strcasecmp(entry->name, key)) continue;
-        const strarray_t *sa = entry->v.values;
-        int i;
-        for (i = 0; i < strarray_size(sa); i++) {
-            const char *val = strarray_nth(sa, i);
-            if (val && val[0]) {
-                if (buf_len(buf)) buf_putc(buf, ' ');
-                buf_appendcstr(buf, val);
-            }
-        }
-    }
-}
-
-static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
-                            struct getsearchtext_rock *str)
-{
-    struct vparse_card *vcard = NULL;
-    int r = 0;
-    struct buf buf = BUF_INITIALIZER;
-
-    /* Parse the message into a vcard object */
-    const struct buf *vcardbuf = NULL;
-    if (encoding || strcasecmp(charset_canon_name(charset), "utf-8")) {
-        if (charset_to_utf8(&buf, buf_cstring(raw), buf_len(raw), charset, encoding)) {
-            /* could be a bogus header - ignore */
-            goto done;
-        }
-        vcardbuf = &buf;
-    }
-    else {
-        vcardbuf = raw;
-    }
-
-    vcard = vcard_parse_string(buf_cstring(vcardbuf));
-    if (!vcard || !vcard->objects) {
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    buf_reset(&buf);
-
-    // these are all the things that we think might be interesting
-    _add_vcard_singlval(vcard->objects, "fn", &buf);
-    _add_vcard_singlval(vcard->objects, "email", &buf);
-    _add_vcard_singlval(vcard->objects, "tel", &buf);
-    _add_vcard_singlval(vcard->objects, "url", &buf);
-    _add_vcard_singlval(vcard->objects, "impp", &buf);
-    _add_vcard_singlval(vcard->objects, "x-social-profile", &buf);
-    _add_vcard_singlval(vcard->objects, "x-fm-online-other", &buf);
-    _add_vcard_singlval(vcard->objects, "nickname", &buf);
-    _add_vcard_singlval(vcard->objects, "note", &buf);
-
-    _add_vcard_multival(vcard->objects, "n", &buf);
-    _add_vcard_multival(vcard->objects, "org", &buf);
-    _add_vcard_multival(vcard->objects, "adr", &buf);
-
-    if (buf.len) {
-        charset_t utf8 = charset_lookupname("utf-8");
-        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
-        charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
-                        str->charset_flags);
-        str->receiver->end_part(str->receiver);
-        charset_free(&utf8);
-        buf_reset(&buf);
-    }
-
-done:
-    if (vcard) vparse_free_card(vcard);
-    buf_free(&buf);
-    return r;
-}
-
-#endif /* HAVE_LIBICALVCARD */
 #endif /* USE_HTTPD */
 
 EXPORTED int index_want_attachextract(const char *type, const char *subtype)

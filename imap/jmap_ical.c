@@ -1413,7 +1413,8 @@ HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
 
     icaltimetype icaltx = icaltime_from_timet_with_zone(tx, 0, utc);
     icaltimetype icalty = icaltime_from_timet_with_zone(ty, 0, utc);
-    struct icaldurationtype icaldur = icaltime_subtract(icalty, icaltx);
+    struct icaldurationtype icaldur =
+        icaldurationtype_normalize(icalduration_from_times(icalty, icaltx));
     icaldur.is_neg = is_neg;
     jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
@@ -1561,48 +1562,6 @@ static struct icaltimetype dtstart_from_ical(icalcomponent *comp,
     return dt;
 }
 
-static struct icaltimetype dtend_from_ical(icalcomponent *comp,
-                                           jstimezones_t *jstzones)
-{
-    struct icaltimetype dtend;
-    icalproperty *end_prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-    icalproperty *dur_prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
-    struct icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
-
-    if (end_prop) {
-        dtend = icalproperty_get_dtend(end_prop);
-        const char *tzid = tzid_from_icalprop(end_prop, 1, jstzones);
-        icaltimezone* tz = jstimezones_lookup_tzid(jstzones, tzid);
-        if (tz && tz != dtend.zone) {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            if (dtend.zone != utc) {
-                // Prefer our IANA timezone definition
-                dtend.zone = tz;
-            }
-            else {
-                // Bogus UTC datetime with TZID
-                dtend = icaltime_convert_to_zone(dtend, tz);
-            }
-        }
-    }
-    else if (dur_prop) {
-        struct icaldurationtype duration;
-        if (icalproperty_get_value(dur_prop)) {
-            duration = icalproperty_get_duration(dur_prop);
-        } else {
-            duration = icaldurationtype_null_duration();
-        }
-        dtend = icaltime_add(dtstart, duration);
-    }
-    else dtend = dtstart;
-
-    /* Normalize floating DTEND to DTSTART time zone, if any */
-    if (!dtend.zone) dtend.zone = dtstart.zone;
-
-    return dtend;
-}
-
-
 /* Compare int in ascending order. */
 static int compare_int(const void *aa, const void *bb)
 {
@@ -1732,7 +1691,6 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
 
     json_object_set_new(recur, "interval", json_integer(rrule->interval));
 
-#ifdef HAVE_RSCALE
     /* rscale */
     if (rrule->rscale) {
         s = xstrdup(rrule->rscale);
@@ -1756,7 +1714,6 @@ static json_t* recurrencerule_from_ical(icalproperty *prop, icaltimezone *untilt
             skip = "omit";
     }
     json_object_set_new(recur, "skip", json_string(skip));
-#endif
 
     /* firstDayOfWeek */
     s = xstrdup(icalrecur_weekday_to_string(rrule->week_start));
@@ -1952,10 +1909,11 @@ override_rdate_from_ical(icalproperty *prop)
         /* Determine duration */
         struct icaldurationtype icaldur;
         if (!icaltime_is_null_time(rdate.period.end)) {
-            icaldur = icaltime_subtract(rdate.period.end, rdate.period.start);
+            icaldur = icalduration_from_times(rdate.period.end, rdate.period.start);
         } else {
             icaldur = rdate.period.duration;
         }
+        icaldur = icaldurationtype_normalize(icaldur);
         struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
         jmapical_duration_from_icalduration(icaldur, &dur);
         jmapical_duration_as_string(&dur, &buf);
@@ -3350,13 +3308,43 @@ virtuallocations_from_ical(icalcomponent *comp)
 static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *dur,
                                  jstimezones_t *jstzones)
 {
-    struct icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
-    struct icaltimetype dtend = dtend_from_ical(comp, jstzones);
-    if (!icaltime_is_null_time(dtend)) {
-        time_t tstart = icaltime_as_timet_with_zone(dtstart, dtstart.zone);
-        time_t tend = icaltime_as_timet_with_zone(dtend, dtend.zone);
-        jmapical_duration_between_unixtime(tstart, 0, tend, 0, dur);
+    struct icaldurationtype icaldur = icaldurationtype_null_duration();
+    icalproperty *dur_prop =
+        icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY);
+    icalproperty *end_prop =
+        icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
+
+    if (dur_prop) {
+        icaldur = icalproperty_get_duration(dur_prop);
     }
+    else if (end_prop) {
+        struct icaltimetype dtstart = dtstart_from_ical(comp, jstzones);
+        icaltimetype dtend = icalproperty_get_dtend(end_prop);
+        const char *tzid = tzid_from_icalprop(end_prop, 1, jstzones);
+        icaltimezone* tz = jstimezones_lookup_tzid(jstzones, tzid);
+        if (tz && tz != dtend.zone) {
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            if (dtend.zone != utc) {
+                // Prefer our IANA timezone definition
+                dtend.zone = tz;
+            }
+            else {
+                // Bogus UTC datetime with TZID
+                dtend = icaltime_convert_to_zone(dtend, tz);
+            }
+        }
+        else if (!dtend.zone) {
+            // Normalize floating DTEND to DTSTART time zone, if any.
+            dtend.zone = dtstart.zone;
+        }
+
+        if (!icaltime_is_null_time(dtend)) {
+          icaldur = icalduration_from_times(dtend, dtstart);
+          icaldur = icaldurationtype_normalize(icaldur);
+        }
+    }
+
+    jmapical_duration_from_icalduration(icaldur, dur);
 }
 
 static json_t*
@@ -3909,7 +3897,7 @@ calendarevent_from_ical(icalcomponent *comp,
         if (ical) {
             icalproperty_method icalmethod = icalcomponent_get_method(ical);
             if (icalmethod != ICAL_METHOD_NONE) {
-                char *method = xstrdupsafe(icalenum_method_to_string(icalmethod));
+                char *method = xstrdupsafe(icalproperty_method_to_string(icalmethod));
                 lcase(method);
                 json_object_set_new(event, "method", json_string(method));
                 free(method);
@@ -4838,7 +4826,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser,
     if (tzstart != tzend) {
         /* Add DTEND */
         struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
-        icaltimetype dtend = icaltime_add(dtstart, icaldur);
+        icaltimetype dtend = icalduration_extend(dtstart, icaldur);
         dtend = icaltime_convert_to_zone(dtend, tzend);
         icalproperty *prop = insert_icaltimeprop(comp, dtend, 1, ICAL_DTEND_PROPERTY);
         if (prop) xjmapid_to_ical(prop, endzone_location_id);
@@ -7936,7 +7924,7 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "method");
     if (json_is_string(jprop) && !is_exc) {
         const char *val = json_string_value(jprop);
-        icalproperty_method method = icalenum_string_to_method(val);
+        icalproperty_method method = icalproperty_string_to_method(val);
         if (method == ICAL_METHOD_NONE) {
             jmap_parser_invalid(parser, "method");
         }

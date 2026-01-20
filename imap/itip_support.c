@@ -365,8 +365,8 @@ HIDDEN icalcomponent *master_to_recurrence(icalcomponent *master,
         struct icaltimetype end = _get_datetime(master, endprop);
 
         // calculate and re-apply the diff
-        struct icaldurationtype diff = icaltime_subtract(end, start);
-        struct icaltimetype newend = icaltime_add(newstart, diff);
+        struct icaldurationtype diff = icalduration_from_times(end, start);
+        struct icaltimetype newend = icalduration_extend(newstart, diff);
 
         icaltimezone *endzone = (icaltimezone *)icaltime_get_timezone(end);
         icalproperty_set_dtend(endprop,
@@ -970,8 +970,8 @@ static int deliver_merge_add(icalcomponent *ical,  // current iCalendar
     };
 
     if (!icaldurationtype_is_null_duration(duration) &&
-        icaldurationtype_as_int(duration) !=
-        icaldurationtype_as_int(icalcomponent_get_duration(master_comp))) {
+        icaldurationtype_as_utc_seconds(duration) !=
+        icaldurationtype_as_utc_seconds(icalcomponent_get_duration(master_comp))) {
         /* Change in event duration */
         rdate.period.start = dtstart;
         rdate.period.duration = duration;
@@ -1402,7 +1402,7 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     default:
         /* Unknown METHOD -- ignore it */
         syslog(LOG_ERR, "Unknown iTIP method: %s",
-               icalenum_method_to_string(method));
+               icalproperty_method_to_string(method));
 
         sched_data->flags &= ~SCHEDFLAG_IS_REPLY;
         goto inbox;

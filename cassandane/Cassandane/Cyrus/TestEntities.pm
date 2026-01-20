@@ -72,14 +72,10 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/debug',
     ]);
-
-    my $buildinfo = Cassandane::BuildInfo->new();
-    if ($buildinfo->get('dependency', 'icalvcard')) {
-        $self->{jmap}->AddUsing('urn:ietf:params:jmap:contacts');
-    }
 }
 
 use Cassandane::Tiny::Loader 'tiny-tests/TestEntities';

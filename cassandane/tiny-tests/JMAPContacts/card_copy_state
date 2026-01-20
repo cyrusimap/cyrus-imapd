@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_card_copy_state
-    :needs_dependency_icalvcard
     ($self)
 {
     my $jmap = $self->{jmap};

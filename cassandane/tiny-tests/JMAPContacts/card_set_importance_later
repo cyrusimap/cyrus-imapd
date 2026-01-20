@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_card_set_importance_later
-    :min_version_3_1 :needs_dependency_icalvcard
+    :min_version_3_1
     ($self)
 {
     my $jmap = $self->{jmap};

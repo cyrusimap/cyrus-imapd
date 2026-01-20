@@ -644,7 +644,7 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
 
     /* Get the property type */
     propname = ucase(icalmemory_tmp_copy(json_string_value(jtype)));
-    kind = icalenum_string_to_property_kind(propname);
+    kind = icalproperty_string_to_kind(propname);
     if (kind == ICAL_NO_PROPERTY) {
         syslog(LOG_WARNING, "Unknown jCal property type: %s", propname);
         return NULL;
@@ -653,7 +653,7 @@ static icalproperty *json_array_to_icalproperty(json_t *jprop)
     /* Get the value type */
     typestr = json_string_value(jvaltype);
     valkind = !strcmp(typestr, "unknown") ? ICAL_X_VALUE :
-        icalenum_string_to_value_kind(ucase(icalmemory_tmp_copy(typestr)));
+        icalvalue_string_to_kind(ucase(icalmemory_tmp_copy(typestr)));
     if (valkind == ICAL_NO_VALUE) {
         syslog(LOG_WARNING, "Unknown jCal value type for %s property: %s",
                propname, typestr);
@@ -752,7 +752,7 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
     }
 
     type = json_string_value(jtype);
-    kind = icalenum_string_to_component_kind(ucase(icalmemory_tmp_copy(type)));
+    kind = icalcomponent_string_to_kind(ucase(icalmemory_tmp_copy(type)));
     if (kind == ICAL_NO_COMPONENT) {
         syslog(LOG_WARNING, "Unknown jCal component type: %s", type);
         return NULL;

@@ -71,9 +71,7 @@ EXPORTED void ical_support_init(void)
               EX_CONFIG);
     }
 
-#ifdef HAVE_ICALPARSER_CTRL
     icalparser_set_ctrl(ICALPARSER_CTRL_OMIT);
-#endif
 
     syslog(LOG_DEBUG, "%s: found " SIZE_T_FMT " timezones",
                        __func__, timezones->num_elements);
@@ -82,6 +80,7 @@ EXPORTED void ical_support_init(void)
     /* Initialize libicalvcard extended property values */
     vcardparser_set_xprop_value_kind(vcard_xprop_value_func, NULL);
 #endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
+    icalproperty_set_allow_empty_properties(true);
 
     initialized = 1;
 }
@@ -286,7 +285,7 @@ static icaltimetype icalcomponent_get_mydtend(icalcomponent *comp)
         } else {
             duration = icaldurationtype_null_duration();
         }
-        dtend = icaltime_add(dtstart, duration);
+        dtend = icalduration_extend(dtstart, duration);
     }
     else dtend = dtstart;
 
@@ -386,7 +385,6 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
     cmp = a->skip - b->skip;
     if (cmp) return cmp;
 
-#ifdef HAVE_RECUR_BY_REF
     short i;
     for (i = 0; i < ICAL_BY_NUM_PARTS; i++) {
         cmp = a->by[i].size - b->by[i].size;
@@ -397,39 +395,6 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
                          a->by[i].size * sizeof(a->by[i].data[0]));
         if (cmp) return cmp;
     }
-#else /* !HAVE_RECUR_BY_REF */
-    cmp = memcmp(a->by_minute, b->by_minute,
-                 sizeof(a->by_minute) / sizeof(a->by_minute[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_hour, b->by_hour,
-                 sizeof(a->by_hour) / sizeof(a->by_hour[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_day, b->by_day,
-                 sizeof(a->by_day) / sizeof(a->by_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_month_day, b->by_month_day,
-                 sizeof(a->by_month_day) / sizeof(a->by_month_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_year_day, b->by_year_day,
-                 sizeof(a->by_year_day) / sizeof(a->by_year_day[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_week_no, b->by_week_no,
-                 sizeof(a->by_week_no) / sizeof(a->by_week_no[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_month, b->by_month,
-                 sizeof(a->by_month) / sizeof(a->by_month[0]));
-    if (cmp) return cmp;
-
-    cmp = memcmp(a->by_set_pos, b->by_set_pos,
-                 sizeof(a->by_set_pos) / sizeof(a->by_set_pos[0]));
-    if (cmp) return cmp;
-#endif /* HAVE_RECUR_BY_REF */
 
     return 0;
 }
@@ -490,11 +455,7 @@ static void multirrule_iterator_add(struct multirrule_iterator *iter,
     entry->icaliter = icaliter;
     entry->next = icalrecur_iterator_next(entry->icaliter);
     entry->recur = recur;
-#ifdef HAVE_RECUR_BY_REF
     icalrecurrencetype_ref(recur);
-#else /* !HAVE_RECUR_BY_REF */
-    entry->recur->rscale = xstrdupnull(recur->rscale);
-#endif /* HAVE_RECUR_BY_REF */
 }
 
 static icaltimetype multirrule_iterator_next(struct multirrule_iterator *iter)
@@ -554,13 +515,7 @@ multirrule_iterator_for_range(icalcomponent *comp,
             multirrule_iterator_add(&iter, recur, dtstart, range.start);
         }
 
-#ifdef HAVE_RECUR_BY_REF
         icalrecurrencetype_unref(recur);
-#else /* !HAVE_RECUR_BY_REF */
-        else {
-            icalrecurrencetype_unref(recur);
-        }
-#endif
     }
 
     return iter;
@@ -588,7 +543,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     if (!range_span.start) range_span.start = epoch;
     if (!range_span.end) {
         if (!icaldurationtype_is_null_duration(range.duration)) {
-            icaltimetype end = icaltime_add(range.start, range.duration);
+            icaltimetype end = icalduration_extend(range.start, range.duration);
             range_span.end = icaltime_to_timet(end, NULL);
         }
         else range_span.end = eternity;
@@ -628,7 +583,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
         event_length = icalcomponent_get_duration(mastercomp);
         if (icaldurationtype_is_null_duration(event_length) &&
             icaltime_is_date(dtstart)) {
-            event_length = icaldurationtype_from_int(60 * 60 * 24);  /* P1D */
+            event_length = icaldurationtype_from_seconds(60 * 60 * 24);  /* P1D */
         }
 
         /* add any RDATEs first, since EXDATE items can override them */
@@ -643,14 +598,14 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             icaltimetype mystart, myend;
             if (icalperiodtype_is_null_period(rdate.period)) {
                 mystart = rdate.time;
-                myend = icaltime_add(mystart, event_length);
+                myend = icalduration_extend(mystart, event_length);
             }
             else {
                 mystart = rdate.period.start;
                 if (icaldurationtype_is_null_duration(rdate.period.duration))
                     myend = rdate.period.end;
                 else
-                    myend = icaltime_add(mystart, rdate.period.duration);
+                    myend = icalduration_extend(mystart, rdate.period.duration);
             }
             if (icaltime_is_null_time(mystart))
                 continue;
@@ -745,7 +700,7 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
             }
             if (icaltime_compare(xitem, ritem)) {
                 /* not excluded - process this recurrence-id */
-                struct icaltimetype thisend = icaltime_add(ritem, event_length);
+                struct icaltimetype thisend = icalduration_extend(ritem, event_length);
                 icaltime_span this_span = {
                     rtime, icaltime_to_timet(thisend, floatingtz), 0 /* is_busy */
                 };
@@ -1296,7 +1251,7 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 struct icaldurationtype dur = icaldurationtype_null_duration();
 
                 dur.days = 1;
-                period.end = icaltime_add(period.start, dur);
+                period.end = icalduration_extend(period.start, dur);
             }
             else
                 memcpy(&period.end, &period.start, sizeof(struct icaltimetype));
@@ -1375,8 +1330,8 @@ icalcomponent_get_utc_timespan(icalcomponent *comp,
                 /* DTSTART is not DATE-TIME */
                 struct icaldurationtype dur;
 
-                dur = icaldurationtype_from_int(60*60*24 - 1);  /* P1D */
-                icaltime_add(period.end, dur);
+                dur = icaldurationtype_from_seconds(60*60*24 - 1);  /* P1D */
+                icalduration_extend(period.end, dur);
             }
         }
         else {
@@ -1491,9 +1446,9 @@ icalrecurrenceset_get_utc_timespan(icalcomponent *ical,
                     struct icaldurationtype duration;
                     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
-                    duration = icaltime_subtract(period.end, period.start);
+                    duration = icalduration_from_times(period.end, period.start);
                     icaltimetype end =
-                        icaltime_add(icaltime_convert_to_zone(recur->until, utc),
+                        icalduration_extend(icaltime_convert_to_zone(recur->until, utc),
                                      duration);
 
                     if (icaltime_compare(period.end, end) < 0)
@@ -2186,7 +2141,7 @@ static void apply_patch_component(struct path_segment_t *path_seg,
                     icalcomponent *override = NULL;
                     struct icaltimetype start = path_seg->match.comp.rid;
                     struct icaltimetype end =
-                        icaltime_add(start, icalcomponent_get_duration(master));
+                        icalduration_extend(start, icalcomponent_get_duration(master));
                     icalcomponent_foreach_recurrence(master, start, end,
                                                      &create_override,
                                                      &override);
@@ -3254,8 +3209,6 @@ EXPORTED void icalcomponent_set_jmapid(icalcomponent *comp, const char *id)
 
 #endif
 
-#ifdef HAVE_LIBICALVCARD
-
 EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                              const char *name)
 {
@@ -3281,9 +3234,6 @@ EXPORTED vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop
     return NULL;
 }
 
-#endif /* HAVE_LIBICALVCARD */
-
-#ifdef HAVE_RECUR_BY_REF
 EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 {
     icalrecurrencetype_t *rt = icalvalue_get_recur(val);
@@ -3292,137 +3242,5 @@ EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
 
     return rt;
 }
-
-#else /* !HAVE_RECUR_BY_REF */
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_new(void)
-{
-    icalrecurrencetype_t *rt =
-        icalmemory_new_buffer(sizeof(icalrecurrencetype_t));
-
-    if (!rt) return NULL;
-
-    icalrecurrencetype_clear(rt);
-
-    return rt;
-}
-
-EXPORTED void icalrecurrencetype_unref(icalrecurrencetype_t *rt)
-{
-    icalerror_check_arg_rv((rt != NULL), "rt");
-
-    if (rt->rscale) icalmemory_free_buffer(rt->rscale);
-
-    icalmemory_free_buffer(rt);
-}
-
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_clone(icalrecurrencetype_t *rt)
-{
-    icalrecurrencetype_t *res;
-
-    icalerror_check_arg_rz((rt != NULL), "rt");
-
-    res = icalrecurrencetype_new();
-    if (!res) {
-        return NULL;
-    }
-
-    memcpy(res, rt, sizeof(*res));
-
-    if (res->rscale) {
-        res->rscale = icalmemory_strdup(res->rscale);
-        if (!res->rscale) {
-            icalrecurrencetype_unref(res);
-            return NULL;
-        }
-    }
-
-    return res;
-}
-
-EXPORTED icalrecurrencetype_t *icalrecurrencetype_new_from_string(const char *str)
-{
-    icalrecurrencetype_t rt = icalrecurrencetype_from_string(str);
-    icalrecurrencetype_t *res = icalrecurrencetype_clone(&rt);
-
-    if (rt.rscale) icalmemory_free_buffer(rt.rscale);
-
-    return res;
-}
-
-EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
-{
-    icalrecurrencetype_t rt = icalvalue_get_recur(val);
-
-    return icalrecurrencetype_clone(&rt);
-}
-
-EXPORTED short *icalrecur_byrule_data(icalrecurrencetype_t *rt,
-                                      icalrecurrencetype_byrule rule)
-{
-    switch (rule) {
-    case ICAL_BY_MONTH:     return rt->by_month;
-    case ICAL_BY_WEEK_NO:   return rt->by_week_no;
-    case ICAL_BY_YEAR_DAY:  return rt->by_year_day;
-    case ICAL_BY_MONTH_DAY: return rt->by_month_day;
-    case ICAL_BY_DAY:       return rt->by_day;
-    case ICAL_BY_HOUR:      return rt->by_hour;
-    case ICAL_BY_MINUTE:    return rt->by_minute;
-    case ICAL_BY_SECOND:    return rt->by_second;
-    case ICAL_BY_SET_POS:   return rt->by_set_pos;
-    default:                return NULL;
-    }
-}
-
-EXPORTED short icalrecur_byrule_size(icalrecurrencetype_t *rt,
-                                     icalrecurrencetype_byrule rule)
-{
-    short *byX, max, size;
-
-    switch (rule) {
-    case ICAL_BY_MONTH:
-        byX = rt->by_month;
-        max = ICAL_BY_MONTH_SIZE;
-        break;
-    case ICAL_BY_WEEK_NO:
-        byX = rt->by_week_no;
-        max = ICAL_BY_WEEKNO_SIZE;
-        break;
-    case ICAL_BY_YEAR_DAY:
-        byX = rt->by_year_day;
-        max = ICAL_BY_YEARDAY_SIZE;
-        break;
-    case ICAL_BY_MONTH_DAY:
-        byX = rt->by_month_day;
-        max = ICAL_BY_MONTHDAY_SIZE;
-        break;
-    case ICAL_BY_DAY:
-        byX = rt->by_day;
-        max = ICAL_BY_DAY_SIZE;
-        break;
-    case ICAL_BY_HOUR:
-        byX = rt->by_hour;
-        max = ICAL_BY_HOUR_SIZE;
-        break;
-    case ICAL_BY_MINUTE:
-        byX = rt->by_minute;
-        max = ICAL_BY_MINUTE_SIZE;
-        break;
-    case ICAL_BY_SECOND:
-        byX = rt->by_second;
-        max = ICAL_BY_SECOND_SIZE;
-        break;
-    case ICAL_BY_SET_POS:
-        byX = rt->by_set_pos;
-        max = ICAL_BY_SETPOS_SIZE;
-        break;
-    default:
-        return 0;
-    }
-
-    for (size = 0; size < max && byX[size] != ICAL_RECURRENCE_ARRAY_MAX; size++);
-
-    return size;
-}
-#endif /* !HAVE_RECUR_BY_REF */
 
 #endif /* HAVE_ICAL */
