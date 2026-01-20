@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_nonadmin_group_mgmt
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($talk->capability()->{xusergroups});
+
+    # group management commands are admin-only
+    $talk->_imap_cmd('GETUSERGROUP', 0, '', 'cassandane');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:foo');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    $talk->_imap_cmd('UNSETUSERGROUP', 0, '', 'cassandane', 'group:foo');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}
