@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxmsg_addressbook_limited
+    :JMAPExtensions :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $mailbox_maxmessages_addressbook = $LIMITED;
+    $self->{instance}->{config}->set(
+        mailbox_maxmessages_addressbook => $mailbox_maxmessages_addressbook,
+    );
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $carddav = $self->{carddav};
+    my $addrbookid = $carddav->NewAddressBook('foo');
+    $self->assert_not_null($addrbookid);
+
+    # should be able to upload 5
+    foreach my $i (1..$mailbox_maxmessages_addressbook) {
+        $self->put_vcard($addrbookid);
+    }
+
+    # but any more should be rejected
+    eval {
+        $self->put_vcard($addrbookid);
+    };
+    my $e = $@;
+    $self->assert_not_null($e);
+    $self->assert_matches(qr{quota-not-exceeded}, $e);
+
+    # should have syslogged about it too
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{client hit per-addressbook exists limit});
+
+    # should be able to upload lots of calendar events
+    my $caldav = $self->{caldav};
+    my $calendarid = $caldav->NewCalendar({name => 'mycalendar'});
+    $self->assert_not_null($calendarid);
+    foreach my $i (1..$LOTS) {
+        $self->put_vevent($calendarid);
+    }
+
+    # should be able to upload lots of sieve scripts
+    foreach my $i (1..$LOTS) {
+        $self->put_script();
+    }
+
+    # should be able to upload lots of jmap submissions
+    foreach my $i (1..$LOTS) {
+        $self->put_submission();
+    }
+
+    # should be able to upload lots of regular emails
+    foreach my $i (1..$LOTS) {
+        $self->put_email();
+    }
+}
