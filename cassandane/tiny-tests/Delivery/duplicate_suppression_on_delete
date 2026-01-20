@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_duplicate_suppression_on_delete
+    :DuplicateSuppressionOn :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour with duplicate suppression on";
+    xlog $self, "interaction with DELETE + CREATE [IRIS-723]";
+
+    # test data from hipsteripsum.me
+    my $folder = "INBOX.mixtape";
+
+    xlog $self, "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Delete the folder";
+    $imaptalk->unselect();
+    $imaptalk->delete($folder)
+        or die "Cannot delete $folder: $@";
+
+    xlog $self, "Create another folder of the same name";
+    $imaptalk->create($folder)
+        or die "Cannot create another $folder: $@";
+
+    xlog $self, "Check that all messages are gone";
+    $self->{store}->set_folder($folder);
+    $self->check_messages({}, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Try to deliver the same message to the new folder";
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}

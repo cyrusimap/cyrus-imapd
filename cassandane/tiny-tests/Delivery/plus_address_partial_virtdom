@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_plus_address_partial_virtdom
+    :FuzzyMatch :VirtDomains :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour of plus addressing with virtdomains";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("domuser\@example.com");
+    my $domstore = $self->{instance}->get_service('imap')->create_store(username => "domuser\@example.com") || die "can't create store";
+    $self->{store} = $domstore;
+    my $domtalk = $domstore->get_client();
+
+    my $folder = "INBOX.Projects";
+
+    xlog $self, "Create folders";
+    $domtalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $domstore->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, user => "domuser+Projects.Grass\@example.com");
+
+    xlog $self, "Check that the message made it";
+    $domstore->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}

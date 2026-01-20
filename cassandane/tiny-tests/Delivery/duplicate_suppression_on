@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_duplicate_suppression_on
+    :DuplicateSuppressionOn :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour with duplicate suppression on";
+
+    # test data from hipsteripsum.me
+    my $folder1 = "INBOX.sustainable";
+    my $folder2 = "INBOX.artisan";
+
+    xlog $self, "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder1)
+        or die "Cannot create $folder1: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, folder => $folder1);
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($folder1);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Try to deliver the same message again";
+    $self->{instance}->deliver($msgs{1}, folder => $folder1);
+
+    xlog $self, "Check that second copy of the message didn't make it";
+    $self->{store}->set_folder($folder1);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Rename the folder";
+    $imaptalk->rename($folder1, $folder2)
+        or die "Cannot rename $folder1 to $folder2: $@";
+
+    xlog $self, "Try to deliver the same message again";
+    $self->{instance}->deliver($msgs{1}, folder => $folder2);
+
+    xlog $self, "Check that third copy of the message DIDN'T make it";
+    # This is the whole point of duplicate_mailbox_mode = uniqueid.
+    $self->{store}->set_folder($folder2);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
