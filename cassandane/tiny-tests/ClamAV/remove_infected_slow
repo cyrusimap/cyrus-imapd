@@ -23,14 +23,14 @@ sub test_remove_infected_slow
     # put some test messages in INBOX (and verify)
     $self->{store}->set_folder("INBOX");
     my %cass_exp;
-    $cass_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $cass_exp{1} = $self->make_message("eicar attached", uid => 1, $self->eicar_attached);
     $cass_exp{2} = $self->make_message("clean", uid => 2);
     $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
 
     # put some test messages in shared.folder (and verify)
     $self->{store}->set_folder("shared.folder");
     my %shared_exp;
-    $shared_exp{1} = $self->make_message("eicar attached", uid => 1, %eicar_attached);
+    $shared_exp{1} = $self->make_message("eicar attached", uid => 1, $self->eicar_attached);
     $shared_exp{2} = $self->make_message("clean", uid => 2);
     $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
 

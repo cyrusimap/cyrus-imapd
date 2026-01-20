@@ -50,31 +50,37 @@ use Cassandane::Instance;
 
 $Data::Dumper::Sortkeys = 1;
 
-my %eicar_attached = (
-    mime_type => "multipart/mixed",
-    mime_boundary => "boundary",
-    body => ""
-        . "--boundary\r\n"
-        . "Content-Type: text/plain\r\n"
-        . "\r\n"
-        . "body"
-        . "\r\n"
-        . "--boundary\r\n"
-        . "Content-Disposition: attachment; filename=eicar.txt;\r\n"
-        . "Content-Type: text/plain\r\n"
-        . "\r\n"
-        # This is the EICAR AV test file:
-        # http://www.eicar.org/83-0-Anti-Malware-Testfile.html
-        . 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
-        . "\r\n"
-        . "--boundary\r\n",
-);
+sub eicar_attached
+{
+    return (
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => ""
+            . "--boundary\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "\r\n"
+            . "body"
+            . "\r\n"
+            . "--boundary\r\n"
+            . "Content-Disposition: attachment; filename=eicar.txt;\r\n"
+            . "Content-Type: text/plain\r\n"
+            . "\r\n"
+            # This is the EICAR AV test file:
+            # http://www.eicar.org/83-0-Anti-Malware-Testfile.html
+            . 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+            . "\r\n"
+            . "--boundary\r\n",
+    );
+}
 
-my %custom_header = (
-    'extra_headers' => [
-        [ 'x-delete-me' => 'please' ],
-    ],
-);
+sub custom_header
+{
+    return (
+        'extra_headers' => [
+            [ 'x-delete-me' => 'please' ],
+        ],
+    );
+}
 
 sub new
 {

@@ -13,8 +13,8 @@ sub test_notify_deleted
     # put some test messages in INBOX (and verify)
     $self->{store}->set_folder("INBOX");
     my %cass_exp;
-    $cass_exp{1} = $self->make_message("custom header 1", uid => 1, %custom_header);
-    $cass_exp{2} = $self->make_message("custom header 2", uid => 2, %custom_header);
+    $cass_exp{1} = $self->make_message("custom header 1", uid => 1, $self->custom_header);
+    $cass_exp{2} = $self->make_message("custom header 2", uid => 2, $self->custom_header);
     $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
 
     # run cyr_virusscan
