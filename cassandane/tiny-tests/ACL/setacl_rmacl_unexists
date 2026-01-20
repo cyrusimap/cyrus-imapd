@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_setacl_rmacl_unexists
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.rmunexists");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $admintalk->setacl("user.cassandane.rmunexists", "foo", "lrswipkxtecdn");
+    $admintalk->setacl("user.cassandane.rmunexists", "foo", "-a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}

@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+#Magic word virtdomains in name sets config virtdomains = userid
+sub test_virtdomains_noinherit2
+    :NoAltNamespace :CrossDomains
+{
+    my ($self) = @_;
+
+    my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')
+                        // 'internal';
+    my $cass_defdom = "cassandane\@$defaultdomain";
+    my $cass_dom = 'cassandane@uhoh.org';
+
+    # get stores that authenticate as each username
+    $self->{instance}->create_user($cass_dom);
+    my $imap = $self->{instance}->get_service('imap');
+    my $defdom_store = $imap->create_store(username => $cass_defdom);
+    my $dom_store = $imap->create_store(username => $cass_dom);
+
+    # set up a target folder and some permissions
+    $self->{instance}->create_user('banana');
+    my $folder = 'user.banana';
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl($folder, cassandane => 'lrs');
+    $admintalk->setacl($folder, $cass_dom => 'lrswip');
+    $admintalk->getacl($folder);
+
+    # make the stores all look at the same folder
+    $self->{store}->set_folder($folder);
+    $defdom_store->set_folder($folder);
+    $dom_store->set_folder($folder);
+
+    # 'cassandane' should NOT be able to make a message
+    eval {
+        $self->make_message("message from cassandane",
+                            store => $self->{store});
+    };
+    my $err = q{} . $@;
+    $self->assert_matches(qr/permission denied/i, $err);
+
+    # 'cassandane@{defaultdomain}' should NOT be able to make a message
+    eval {
+        $self->make_message("message from $cass_defdom",
+                            store => $defdom_store);
+    };
+    $err = q{} . $@;
+    $self->assert_matches(qr/permission denied/i, $err);
+
+    # 'cassandane@somedomain' should be able to make a message
+    $self->make_message("message from $cass_dom", store => $dom_store);
+}

@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_setacl_rmacl
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.rmacl");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $admintalk->setacl("user.cassandane.rmacl", "foo", "lrswipkxtecdan");
+    $admintalk->setacl("user.cassandane.rmacl", "foo", "-a");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
