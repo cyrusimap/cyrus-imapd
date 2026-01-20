@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_delete_removed_delay
+    :DelayedDelete :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", undef);
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->delete("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+}
