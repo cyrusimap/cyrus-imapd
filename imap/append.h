@@ -5,6 +5,8 @@
 #ifndef INCLUDED_APPEND_H
 #define INCLUDED_APPEND_H
 
+#include <stdbool.h>
+
 #include "index.h"
 #include "mailbox.h"
 #include "mboxevent.h"
@@ -21,7 +23,7 @@ struct appendstate {
     /* mailbox we're appending to */
     struct mailbox *mailbox;
     /* do we own it? */
-    unsigned int close_mailbox_when_done:1;
+    bool close_mailbox_when_done;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
@@ -39,7 +41,8 @@ struct appendstate {
     /* for annotations */
     const struct namespace *namespace;
     const struct auth_state *auth_state;
-    int isadmin;
+    bool isadmin;
+    bool disable_annotator;
 
     /* one event notification to send per appended message */
     enum event_type event_type;

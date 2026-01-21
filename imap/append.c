@@ -137,7 +137,7 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
     r = append_setup_mbox(as, mailbox, userid, auth_state,
                           aclcheck, quotacheck, namespace, isadmin, event_type);
     if (r) mailbox_close(&mailbox);
-    else as->close_mailbox_when_done = 1;
+    else as->close_mailbox_when_done = true;
 
     return r;
 }
@@ -178,7 +178,7 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     }
     as->namespace = namespace;
     as->auth_state = auth_state;
-    as->isadmin = isadmin;
+    as->isadmin = !!isadmin;
 
     /* initialize seen list creator */
     as->internalseen = mailbox_internal_seen(mailbox, as->userid);
@@ -1075,7 +1075,8 @@ havefile:
     r = mailbox_copyfile_fdptr(linkfile ? linkfile : stagefile, fname, nolink, fdptr);
     if (r) goto out;
 
-    if (config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
+    if (!as->disable_annotator &&
+        config_getstring(IMAPOPT_ANNOTATION_CALLOUT) &&
         (mbtype_isa(mailbox_mbtype(mailbox)) == MBTYPE_EMAIL)) {
         if (flags)
             newflags = strarray_dup(flags);

@@ -526,6 +526,9 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
         /* mark as $restored */ 
         strarray_add(flags, "$restored");
 
+        /* disable annotator */
+        as.disable_annotator = true;
+
         /* append the message to the mailbox. */
         r = append_fromstage(&as, &body, stage,
                              (struct timespec *) &record->internaldate,
