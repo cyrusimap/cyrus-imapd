@@ -1,0 +1,135 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_pref
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Create a contact using the old style, set 'pref' using the new style,
+    # confirm they both agree
+    my $contact = {
+        firstName => 'first',
+        lastName => 'last',
+        emails => [
+            {
+                type => 'other',
+                label => 'default',
+                value => 'original_default@local',
+                isDefault => JSON::true,
+            },
+        ]
+    };
+
+    xlog $self, "create contact";
+    my $res = $jmap->CallMethods([[
+        'Contact/set', {
+            create => {
+                "1" => $contact
+            },
+        }, "R1",
+    ]]);
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    # Confirm default in both APIs. Call both first just so we can see both
+    # outputs if one fails tests below
+    xlog $self, "get contact $id";
+
+    my $contact_res = $jmap->CallMethods([[
+        'Contact/get', { ids => [ $id ] }, "R2"
+    ]]);
+    my $card_res = $jmap->CallMethods([[
+        'ContactCard/get', { ids => [ $id ] }, "R2"
+    ]]);
+
+    $self->assert_deep_equals(
+        [{
+            type      => 'other',
+            value     => 'original_default@local',
+            isDefault => JSON::true,
+            label     => 'default',
+        }],
+        $contact_res->[0][1]{list}[0]{emails},
+    );
+
+    my @email_ids = keys %{$card_res->[0][1]{list}[0]{emails}};
+    $self->assert_num_equals(1, 0+@email_ids);
+
+    my $email_id = shift @email_ids;
+
+    $self->assert_deep_equals(
+        {
+            address => 'original_default@local',
+            pref    => 1,
+            label   => 'default',
+        },
+        $card_res->[0][1]{list}[0]{emails}{$email_id},
+    );
+
+    # Add an email
+    $res = $jmap->CallMethods([[
+        'ContactCard/set' => {
+            update => {
+                $id => {
+                    emails => {
+                        $email_id => $card_res->[0][1]{list}[0]{emails}{$email_id},
+                        another => {
+                            address => 'new@local',
+                            label   => 'new',
+                        },
+                    },
+                },
+            },
+        }, "R1",
+    ]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    # Ensure defaults are still sane
+    $contact_res = $jmap->CallMethods([[
+        'Contact/get', { ids => [ $id ] }, "R2"
+    ]]);
+    $card_res = $jmap->CallMethods([[
+        'ContactCard/get', { ids => [ $id ] }, "R2"
+    ]]);
+
+    $self->assert_deep_equals(
+        [
+            {
+                type      => 'other',
+                value     => 'original_default@local',
+                isDefault => JSON::true,
+                label     => 'default',
+            },
+            {
+                type      => 'other',
+                value     => 'new@local',
+                isDefault => JSON::false,
+                label     => 'new',
+            },
+        ],
+        [
+            sort {
+                $a->{label} cmp $b->{label}
+            } @{$contact_res->[0][1]{list}[0]{emails}},
+        ]
+    );
+
+    $self->assert_deep_equals(
+        {
+            $email_id => {
+                address => 'original_default@local',
+                pref    => 1,
+                label   => 'default',
+            },
+            another => {
+                address => 'new@local',
+                label   => 'new',
+            },
+        },
+        $card_res->[0][1]{list}[0]{emails}
+    );
+}
