@@ -3883,6 +3883,7 @@ bail:
 static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
 {
     const char *mboxname = kin->sval;
+    int r;
 
     user_nslock_t *user_nslock = user_nslock_lockmb_w(mboxname);
 
@@ -3890,9 +3891,20 @@ static int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
     int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
     if (sstate->flags & SYNC_FLAG_LOCALONLY)
         delflags |= MBOXLIST_DELETE_LOCALONLY;
-    int r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
+
+    if (!mboxlist_delayed_delete_isenabled()) {
+        r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                    sstate->userid, sstate->authstate,
                                    NULL, delflags);
+    } else if (mboxname_isdeletedmailbox(mboxname, NULL)) {
+        r = mboxlist_deletemailbox(mboxname, sstate->userisadmin,
+                                   sstate->userid, sstate->authstate,
+                                   NULL, delflags);
+    } else {
+        r = mboxlist_delayed_deletemailbox(mboxname, sstate->userisadmin,
+                                           sstate->userid, sstate->authstate,
+                                           NULL, delflags);
+    }
 
     user_nslock_release(&user_nslock);
 
@@ -4268,11 +4280,24 @@ static int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     int delflags = MBOXLIST_DELETE_FORCE | MBOXLIST_DELETE_SILENT;
     if (sstate->flags & SYNC_FLAG_LOCALONLY)
         delflags |= MBOXLIST_DELETE_LOCALONLY;
+
     for (i = list->count; i; i--) {
         const char *name = strarray_nth(list, i-1);
-        r = mboxlist_deletemailbox(name, sstate->userisadmin,
-                                   sstate->userid, sstate->authstate,
-                                   NULL, delflags);
+
+        if (!mboxlist_delayed_delete_isenabled()) {
+            r = mboxlist_deletemailbox(name, sstate->userisadmin,
+                                       sstate->userid, sstate->authstate,
+                                       NULL, delflags);
+        } else if (mboxname_isdeletedmailbox(name, NULL)) {
+            r = mboxlist_deletemailbox(name, sstate->userisadmin,
+                                       sstate->userid, sstate->authstate,
+                                       NULL, delflags);
+        } else {
+            r = mboxlist_delayed_deletemailbox(name, sstate->userisadmin,
+                                               sstate->userid, sstate->authstate,
+                                               NULL, delflags);
+        }
+
         if (r) goto done;
     }
 
