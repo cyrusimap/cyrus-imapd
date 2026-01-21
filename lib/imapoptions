@@ -626,6 +626,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    assumed. */
 */
 
+{ "caldav_max_expanded_instances", 1000, INT, "UNRELEASED" }
+/* The maximum number of individual instances that can be
+   expanded for a recurring calender component in a calendar-query
+   report.
+.PP
+   If the number of instances to be expanded exceeds this limit,
+   the calendar-data property will be returned with a status of
+   422 Unprocessable Content.
+*/
+
 { "caldav_maxdatetime", "20380119T031407Z", STRING, "2.5.0" }
 /* The latest date and time accepted by the server (ISO format).  This
    value is also used for expanding non-terminating recurrence rules.
