@@ -4406,7 +4406,8 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind, json_t *jcard,
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
 #pragma GCC diagnostic pop
 
-    modseq_t cmodseq = req->counters.highestmodseq + 1;
+    modseq_t cmodseq =
+        mboxname_nextmodseq(mailbox_name(*mailbox), 0, MBTYPE_ADDRESSBOOK, 0);
     r = carddav_store(*mailbox, card, resourcename, cmodseq, flags, &annots,
                       req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
