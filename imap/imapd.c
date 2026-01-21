@@ -11632,7 +11632,8 @@ enum mupdate_op {
 
 static int xfer_mupdate(enum mupdate_op op,
                         const char *mboxname, const char *part,
-                        const char *servername, const char *acl)
+                        const char *servername, const char *acl,
+                        const char *jmapid)
 {
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     int retry = 0;
@@ -11649,7 +11650,7 @@ retry:
     if (op == MUPDATE_DELETE)
         r = mupdate_delete(mupdate_h, mboxname);
     else if (op == MUPDATE_ACTIVATE)
-        r = mupdate_activate(mupdate_h, mboxname, buf, acl);
+        r = mupdate_activate(mupdate_h, mboxname, buf, acl, jmapid);
     else
         r = mupdate_deactivate(mupdate_h, mboxname, buf);
 
@@ -11847,7 +11848,8 @@ static int xfer_deactivate(struct xfer_header *xfer)
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
         r = xfer_mupdate(MUPDATE_DEACTIVATE, item->mbentry->name,
-                         item->mbentry->partition, config_servername, NULL);
+                         item->mbentry->partition, config_servername,
+                         NULL, NULL);
         if (r) {
             syslog(LOG_ERR,
                    "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
@@ -12310,7 +12312,7 @@ static int xfer_reactivate(struct xfer_header *xfer)
             !(xfer->sync_cs.flags & SYNC_FLAG_SIEVE_MAILBOX)) {
             /* Don't activate #sieve on remote, remove it from mupdate */
             r = xfer_mupdate(MUPDATE_DELETE, item->mbentry->name,
-                             NULL, NULL, NULL);
+                             NULL, NULL, NULL, NULL);
             if (r) {
                 syslog(LOG_ERR, "MUPDATE: can't delete mailbox entry '%s': %s",
                            item->mbentry->name, error_message(r));
@@ -12400,8 +12402,8 @@ static void xfer_recover(struct xfer_header *xfer)
         case XFER_DEACTIVATED:
             /* Tell murder it's back here and active */
             r = xfer_mupdate(MUPDATE_ACTIVATE, item->mbentry->name,
-                             item->mbentry->partition,
-                             config_servername, item->mbentry->acl);
+                             item->mbentry->partition, config_servername,
+                             item->mbentry->acl, item->mbentry->jmapid);
             if (r) {
                 syslog(LOG_ERR,
                        "Could not back out mupdate during move of %s (%s)",
@@ -14173,7 +14175,7 @@ static void cmd_mupdatepush(char *tag, char *name)
              config_servername, mbentry->partition);
 
   retry:
-    r = mupdate_activate(mupdate_h, intname, buf, mbentry->acl);
+    r = mupdate_activate(mupdate_h, intname, buf, mbentry->acl, mbentry->jmapid);
 
     if (r && !retry) {
         syslog(LOG_INFO, "MUPDATE: lost connection, retrying");

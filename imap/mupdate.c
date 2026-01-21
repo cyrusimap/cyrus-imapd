@@ -90,7 +90,8 @@ struct conn {
 
     SSL *tlsconn;
     void *tls_comp;     /* TLS compression method, if any */
-    int compress_done;  /* have we done a successful compress? */
+
+    uint32_t client_capa;
 
     int idle;
 
@@ -166,7 +167,8 @@ static void cmd_authenticate(struct conn *C,
                       const char *clientstart);
 static void cmd_set(struct conn *C,
              const char *tag, const char *mailbox,
-             const char *location, const char *acl, enum settype t);
+             const char *location, const char *acl,
+             struct dlist *extargs, enum settype t);
 static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
               int send_ok, int send_delete);
 static void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
@@ -176,6 +178,7 @@ static void cmd_starttls(struct conn *C, const char *tag);
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 #endif
+static void cmd_enable(struct conn *C, const char *tag, strarray_t *args);
 static void shut_down(int code) __attribute__((noreturn));
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
@@ -656,19 +659,35 @@ static mupdate_docmd_result_t docmd(struct conn *c)
         }
         else if (!c->userid) goto nologin;
         else if (!strcmp(c->cmd.s, "Activate")) {
+            struct dlist *extargs = NULL;
+
             if (ch != ' ') goto missingargs;
             ch = getstring(c->pin, c->pout, &(c->arg1));
             if (ch != ' ') goto missingargs;
             ch = getstring(c->pin, c->pout, &(c->arg2));
             if (ch != ' ') goto missingargs;
             ch = getstring(c->pin, c->pout, &(c->arg3));
+            if (ch == ' ') {
+                ch = mupdate_parse_mailbox_extargs(c->pin, &extargs);
+                if (ch == EOF) {
+                    dlist_free(&extargs);
+                    goto badargs;
+                }
+            }
             CHECKNEWLINE(c, ch);
 
-            if (c->streaming) goto notwhenstreaming;
-            if (!masterp) goto masteronly;
+            if (c->streaming) {
+                dlist_free(&extargs);
+                goto notwhenstreaming;
+            }
+            if (!masterp) {
+                dlist_free(&extargs);
+                goto masteronly;
+            }
 
             cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
-                    c->arg3.s, SET_ACTIVE);
+                    c->arg3.s, extargs, SET_ACTIVE);
+            dlist_free(&extargs);
         }
         else goto badcmd;
         break;
@@ -699,7 +718,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
             if (!masterp) goto masteronly;
 
             cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s,
-                    NULL, SET_DEACTIVATE);
+                    NULL, NULL, SET_DEACTIVATE);
         }
         else if (!strcmp(c->cmd.s, "Delete")) {
             if (ch != ' ') goto missingargs;
@@ -709,7 +728,29 @@ static mupdate_docmd_result_t docmd(struct conn *c)
             if (c->streaming) goto notwhenstreaming;
             if (!masterp) goto masteronly;
 
-            cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, SET_DELETE);
+            cmd_set(c, c->tag.s, c->arg1.s, NULL, NULL, NULL, SET_DELETE);
+        }
+        else goto badcmd;
+        break;
+
+    case 'E':
+        if (!c->userid) goto nologin;
+        else if (!strcmp(c->cmd.s, "Enable")) {
+            strarray_t args = STRARRAY_INITIALIZER;
+
+            if (ch != ' ') goto missingargs;
+            do {
+                ch = getword(c->pin, &(c->arg1));
+                if (!c->arg1.s[0]) {
+                    strarray_fini(&args);
+                    goto missingargs;
+                }
+                strarray_append(&args, c->arg1.s);
+            } while (ch == ' ');
+            CHECKNEWLINE(c, ch);
+
+            cmd_enable(c, c->tag.s, &args);
+            strarray_fini(&args);
         }
         else goto badcmd;
         break;
@@ -784,7 +825,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
             if (c->streaming) goto notwhenstreaming;
             if (!masterp) goto masteronly;
 
-            cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, SET_RESERVE);
+            cmd_set(c, c->tag.s, c->arg1.s, c->arg2.s, NULL, NULL, SET_RESERVE);
         }
         else goto badcmd;
         break;
@@ -810,7 +851,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
             }
 
             /* if we've already done COMPRESS fail */
-            if (c->compress_done) {
+            if (c->client_capa & CAPA_COMPRESS) {
                 prot_printf(c->pout,
                             "%s BAD Can't Starttls after Compress\r\n",
                             c->tag.s);
@@ -1000,12 +1041,13 @@ static void dobanner(struct conn *c)
     }
 
 #ifdef HAVE_ZLIB
-    if (!c->compress_done && !c->tls_comp) {
+    if (!(c->client_capa & CAPA_COMPRESS) && !c->tls_comp) {
         prot_printf(c->pout, "* COMPRESS \"DEFLATE\"\r\n");
     }
 #endif
 
     prot_printf(c->pout, "* PARTIAL-UPDATE\r\n");
+    prot_printf(c->pout, "* MAILBOX-EXTENDED\r\n");
 
     prot_printf(c->pout,
                 "* OK MUPDATE \"%s\" \"Cyrus IMAP\" \"%s\" \"%s\"\r\n",
@@ -1335,6 +1377,7 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
     mbentry->name = xstrdupnull(mb->mailbox);
 
     mbentry->server = xstrdupnull(mb->location);
+    mbentry->jmapid = xstrdupnull(mb->jmapid);
 
     c = strchr(mbentry->server, '!');
     if (c) {
@@ -1416,10 +1459,12 @@ static struct mbent *database_lookup(const char *name, const mbentry_t *mbentry,
         out->mailbox = mpool_strdup(pool, name);
         out->location = mpool_strdup(pool, location);
         free(location);
+        if (mbentry->jmapid) out->jmapid = mpool_strdup(pool, mbentry->jmapid);
     }
     else {
         out->mailbox = xstrdup(name);
         out->location = location;
+        out->jmapid = xstrdupnull(mbentry->jmapid);
     }
 
     if (my_mbentry) mboxlist_entry_free(&my_mbentry);
@@ -1537,7 +1582,8 @@ static void log_update(const char *mailbox,
 
 static void cmd_set(struct conn *C,
              const char *tag, const char *mailbox,
-             const char *location, const char *acl, enum settype t)
+             const char *location, const char *acl,
+             struct dlist *extargs, enum settype t)
 {
     struct mbent *m;
     char *oldlocation = NULL;
@@ -1640,6 +1686,10 @@ static void cmd_set(struct conn *C,
 
             newm->t = t;
 
+            const char *jmapid = NULL;
+            dlist_getatom(extargs, "JMAPID", &jmapid);
+            newm->jmapid = xstrdupnull(jmapid);
+
             /* re-scope */
             m = newm;
         }
@@ -1709,12 +1759,16 @@ static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
                 "%s MAILBOX "
                 "{" SIZE_T_FMT "+}\r\n%s "
                 "{" SIZE_T_FMT "+}\r\n%s "
-                "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                "{" SIZE_T_FMT "+}\r\n%s",
                 tag,
                 strlen(m->mailbox), m->mailbox,
                 strlen(m->location), m->location,
                 strlen(m->acl), m->acl
             );
+        if (m->jmapid && (C->client_capa & CAPA_MAILBOXEXT)) {
+            prot_printf(C->pout, " (JMAPID %s)", m->jmapid);
+        }
+        prot_puts(C->pout, "\r\n");
 
     } else if (m && m->t == SET_RESERVE) {
         prot_printf(C->pout,
@@ -1766,12 +1820,16 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
                         "%s MAILBOX "
                         "{" SIZE_T_FMT "+}\r\n%s "
                         "{" SIZE_T_FMT "+}\r\n%s "
-                        "{" SIZE_T_FMT "+}\r\n%s\r\n",
+                        "{" SIZE_T_FMT "+}\r\n%s",
                         C->streaming,
                         strlen(m->mailbox), m->mailbox,
                         strlen(m->location), m->location,
                         strlen(m->acl), m->acl
                     );
+                if (m->jmapid && (C->client_capa & CAPA_MAILBOXEXT)) {
+                    prot_printf(C->pout, " (JMAPID %s)", m->jmapid);
+                }
+                prot_puts(C->pout, "\r\n");
 
                 break;
             case SET_RESERVE:
@@ -1964,7 +2022,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
 #ifdef HAVE_ZLIB
 static void cmd_compress(struct conn *C, const char *tag, const char *alg)
 {
-    if (C->compress_done) {
+    if (C->client_capa & CAPA_COMPRESS) {
         prot_printf(C->pout,
                     "%s BAD DEFLATE active via COMPRESS\r\n", tag);
     }
@@ -1990,7 +2048,7 @@ static void cmd_compress(struct conn *C, const char *tag, const char *alg)
         prot_setcompress(C->pin);
         prot_setcompress(C->pout);
 
-        C->compress_done = 1;
+        C->client_capa |= CAPA_COMPRESS;
     }
 }
 #else
@@ -2002,6 +2060,34 @@ void cmd_compress(struct conn *C __attribute__((unused)),
           EX_SOFTWARE);
 }
 #endif /* HAVE_ZLIB */
+
+static void cmd_enable(struct conn *C, const char *tag, strarray_t *args)
+{
+    uint32_t new_capa = 0;
+    int i, n = strarray_size(args);
+
+    for (i = 0; i < n; i++) {
+        const char *arg = strarray_nth(args, i);
+
+        if (!strcasecmp(arg, "mailbox-extended"))
+            new_capa |= CAPA_MAILBOXEXT;
+    }
+
+    /* filter out already enabled extensions */
+    new_capa ^= C->client_capa;
+
+    if (new_capa) {
+        prot_printf(C->pout, "%s ENABLED", tag);
+        if (new_capa & CAPA_MAILBOXEXT)
+            prot_puts(C->pout, " MAILBOX-EXTENDED");
+        prot_puts(C->pout, "\r\n");
+    }
+
+    /* track the new capabilities */
+    C->client_capa |= new_capa;
+
+    prot_printf(C->pout, "%s OK \"done\"\r\n", tag);
+}
 
 static void shut_down(int code)
 {
@@ -2469,6 +2555,7 @@ void mupdate_unready(void)
 void free_mbent(struct mbent *p)
 {
     if (!p) return;
+    free(p->jmapid);
     free(p->location);
     free(p->mailbox);
     free(p);
