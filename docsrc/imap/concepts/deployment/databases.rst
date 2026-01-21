@@ -69,10 +69,27 @@ Annotations (annotations.db)
 ----------------------------
 
 This database contains mailbox and server annotations, including WebDAV
-properties. The database is indexed by mailbox name (empty for server
-annotations) + annotation name + userid (empty for shared annotations) and each
-data record contains the value size, value data, content-type of the data and
-timestamp of the record. The format is each record is as follows::
+properties. The database key starts with the cached mailbox name, UUID, or the
+empty string for server annotations, and is followed by the annotation name,
+then the userid.  Each data record contains the value size, value data,
+content-type of the data and timestamp of the record.
+
+For annotations, including WebDAV properties, where the same value is retrieved
+for all users and the value cannot be set per user, the `userid` part of the
+database key is `[.OwNeR.]` or the empty string.
+
+When `userid` is the empty string, the `\\0` after it is still present.
+
+For annotations, where each user can set a distinct value, overwriting the
+value of the mailbox owner, when the owner sets the value, it again uses
+the empty string or `[.OwNeR.]` for `userid`. Others use their authentication id
+as `userid`.  Handling such values is facilitated by functions from `annotate.h`
+containing `mask` in their name.
+
+When the authenticated user is administrator, `userid` is the empty string
+or `[.OwNeR.]`.
+
+The format is each record is as follows::
 
     Key: <Mailbox Name>\0<Annotation Name>\0<Userid>\0
 
