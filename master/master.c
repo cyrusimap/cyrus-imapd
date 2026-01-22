@@ -1237,13 +1237,19 @@ static void reap_child(void)
     struct service *wd;
     int failed;
 
-    while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > -1) {
-        if (pid == 0) {
-            if (errno == EINTR) {
-                errno = 0;
+    while (1) {
+        errno = 0;
+        pid = waitpid((pid_t) -1, &status, WNOHANG);
+        if (pid <= 0) {
+            switch (errno) {
+            case EINTR:     /* waitpid was interrupted, try again */
                 continue;
+            case ECHILD:    /* no more children */
+            case 0:         /* (WNOHANG) no children have exited */
+            default:        /* some kind of error */
+                errno = 0;
+                return;
             }
-            break;
         }
 
         /* account for the child */
