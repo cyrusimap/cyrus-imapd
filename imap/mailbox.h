@@ -734,10 +734,11 @@ extern void mailbox_iter_done(struct mailbox_iter **iterp);
 
 struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
-extern int mailbox_add_dav(struct mailbox *mailbox);
+extern int mailbox_add_dav(struct mailbox *mailbox, hashu64_table *cmodseqs);
 extern int mailbox_delete_dav(struct mailbox *mailbox);
-extern int mailbox_add_sieve(struct mailbox *mailbox);
-extern int mailbox_add_email_alarms(struct mailbox *mailbox);
+extern int mailbox_add_sieve(struct mailbox *mailbox, hashu64_table *cmodseqs);
+extern int mailbox_add_email_alarms(struct mailbox *mailbox,
+                                    hashu64_table *cmodseqs);
 
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 __attribute__((nonnull))

@@ -355,6 +355,12 @@ EXPORTED int dav_close(sqldb_t **dbp)
 }
 
 
+struct recon_rock {
+    const char *userid;
+    uint32_t last_mbtype;
+    hashu64_table cmodseqs;
+};
+
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
  */
@@ -366,10 +372,10 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
                               )
 {
 #ifdef WITH_JMAP
-    const char *userid = (const char *) rock;
+    struct recon_rock *rrock = (struct recon_rock *) rock;
     struct buf attrib = BUF_INITIALIZER;
 #endif
-    int (*addproc)(struct mailbox *) = NULL;
+    int (*addproc)(struct mailbox *, hashu64_table *) = NULL;
     int writelock = 0;
     int r = 0;
 
@@ -380,6 +386,11 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     case MBTYPE_CALENDAR:
     case MBTYPE_COLLECTION:
     case MBTYPE_ADDRESSBOOK:
+        if (mbentry->mbtype != rrock->last_mbtype) {
+            rrock->last_mbtype = mbentry->mbtype;
+            free_hashu64_table(&rrock->cmodseqs, NULL);
+            construct_hashu64_table(&rrock->cmodseqs, 10240, 0);
+        }
         addproc = &mailbox_add_dav;
         writelock = 1; // write lock so we can delete stale index records
         break;
@@ -395,7 +406,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
         break;
 
     case MBTYPE_EMAIL:
-        r = annotatemore_lookup(mbentry->name, "/specialuse", userid, &attrib);
+        r = annotatemore_lookup(mbentry->name, "/specialuse", rrock->userid, &attrib);
         if (!r && buf_len(&attrib)) {
             strarray_t *specialuse =
                 strarray_split(buf_cstring(&attrib), NULL, 0);
@@ -417,7 +428,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
             r = mailbox_open_iwl(mbentry->name, &mailbox);
         else
             r = mailbox_open_irl(mbentry->name, &mailbox);
-        if (!r) r = addproc(mailbox);
+        if (!r) r = addproc(mailbox, &rrock->cmodseqs);
         mailbox_close(&mailbox);
     }
 
@@ -473,8 +484,15 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
         if (!r) r = caldav_alarm_set_reconstruct(reconstruct_db);
 #endif
         // reconstruct everything
-        if (!r) r = mboxlist_usermboxtree(userid, NULL,
-                                          _dav_reconstruct_mb, (void *) userid, 0);
+        if (!r) {
+            struct recon_rock rrock =
+                { userid, MBTYPE_UNKNOWN, HASHU64_TABLE_INITIALIZER };
+
+            r = mboxlist_usermboxtree(userid, NULL,
+                                      _dav_reconstruct_mb, &rrock, 0);
+
+            free_hashu64_table(&rrock.cmodseqs, NULL);
+        }
 #ifdef WITH_DAV
         // make sure all the alarms are resolved
         if (!r) r = caldav_alarm_process(0, NULL, /*dryrun*/1);
