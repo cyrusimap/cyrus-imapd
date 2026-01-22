@@ -5,20 +5,12 @@
 # CMU_PERL_MAKEMAKER
 # ------------------
 AC_DEFUN([CMU_PERL_MAKEMAKER],[
-AC_CONFIG_FILES([$1/Makefile.PL])
+AC_CONFIG_FILES([$1/build.cfg:perl/build.cfg.in])
 AC_CONFIG_COMMANDS($1/Makefile,[
-    ( cd $1;
-      $PERL Makefile.PL $MAKE_MAKER_ARGS;
-      $PERL -i -pe'next unless /^uninstall_from_sitedirs ::/;
-		print $_;
-		$_ = <>;
-		s/\$\(SITEARCHEXP\)/\$\(DESTINSTALLSITEARCH\)/;
-		$_ .= <<'END';
-	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/auto/\$(FULLEXT)/.packlist\"
-	\$(RM_F) \"\$(DESTINSTALLSITEARCH)/perllocal.pod\"
-END
-	  ' Makefile
-    )
+    ( pwd && cd $1 && pwd \
+      && $PERL ${ac_top_srcdir}/$1/Makefile.PL $MAKE_MAKER_ARGS
+    ) || as_fn_error $? "failed to generate Makefile for $1"
+
 ],[
     PERL="${PERL}"
     MAKE_MAKER_ARGS="PREFIX=${prefix}"
