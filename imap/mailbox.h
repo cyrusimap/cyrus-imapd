@@ -574,6 +574,7 @@ extern const struct mboxlist_entry *mailbox_mbentry(const struct mailbox *mailbo
 extern const char *mailbox_name(const struct mailbox *mailbox);
 extern const char *mailbox_uniqueid(const struct mailbox *mailbox);
 extern const char *mailbox_jmapid(const struct mailbox *mailbox);
+extern const char *mailbox_inboxid(const struct mailbox *mailbox);
 extern const char *mailbox_partition(const struct mailbox *mailbox);
 extern const char *mailbox_acl(const struct mailbox *mailbox);
 extern const char *mailbox_quotaroot(const struct mailbox *mailbox);

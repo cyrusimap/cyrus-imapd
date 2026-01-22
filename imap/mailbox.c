@@ -1144,6 +1144,11 @@ EXPORTED const char *mailbox_jmapid(const struct mailbox *mailbox)
     return mbentry->jmapid ? mbentry->jmapid : mailbox->h.jmapid;
 }
 
+EXPORTED const char *mailbox_inboxid(const struct mailbox *mailbox)
+{
+    return mailbox->mbentry->inboxid;
+}
+
 EXPORTED const char *mailbox_partition(const struct mailbox *mailbox)
 {
     return mailbox->mbentry->partition;
@@ -5712,7 +5717,9 @@ EXPORTED int mailbox_create(const char *name,
     int hasquota;
     const char *fname;
     mbname_t *mbname = NULL;
+    const char *userid = NULL;
     struct mailbox *mailbox = NULL;
+    int is_inbox = 0;
     int n;
     int createfnames[] = { META_INDEX, META_HEADER, 0 };
 
@@ -5727,7 +5734,8 @@ EXPORTED int mailbox_create(const char *name,
 
     /* needs to be an exclusive namelock to create a mailbox */
     mbname = mbname_from_intname(name);
-    int haslock = user_nslock_islocked(mbname_userid(mbname));
+    userid = mbname_userid(mbname);
+    int haslock = user_nslock_islocked(userid);
     assert(haslock == LOCK_EXCLUSIVE);
 
     r = mboxname_lock(mailbox->lockname, &mailbox->namelock, LOCK_EXCLUSIVE);
@@ -5743,6 +5751,23 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->mbentry->acl = xstrdup(acl);
     mailbox->mbentry->mbtype = mbtype;
     mailbox->mbentry->uniqueid = xstrdup(uniqueid);
+
+    if (userid) {
+        // add inboxid to mbentry
+        if (!strarray_size(mbname_boxes(mbname))) {
+            mailbox->mbentry->inboxid = xstrdup(uniqueid);
+            is_inbox = 1;
+        }
+        else {
+            mbentry_t *usermbentry = NULL;
+            mbname_set_boxes(mbname, NULL);
+            mboxlist_lookup(mbname_intname(mbname), &usermbentry, NULL);
+            if (usermbentry) {
+                mailbox->mbentry->inboxid = xstrdup(usermbentry->uniqueid);
+                mboxlist_entry_free(&usermbentry);
+            }
+        }
+    }
 
     // fill out the header too
     mailbox->h.name = xstrdup(name);
@@ -5922,8 +5947,7 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->header_dirty = 1;
 
     // If this is a new v19 (or earlier) INBOX, force creation of a v1 conv.db
-    if (minor_version < 20 &&
-        mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
+    if (minor_version < 20 && is_inbox) {
         int is_readonly = mailbox->is_readonly ||
             mailbox->index_locktype == LOCK_SHARED;
         r = conversations_open_user_version(mbname_userid(mbname), is_readonly,
