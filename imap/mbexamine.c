@@ -295,6 +295,9 @@ static int do_examine(struct findall_data *data, void *rock)
                 if (mailbox->i.minor_version >= 8) {
                     printf(" MODSEQ:" MODSEQ_FMT, record->modseq);
 
+                    if (mailbox->i.minor_version >= 16)
+                        printf(" CMODSEQ:" MODSEQ_FMT, record->createdmodseq);
+
                     if (mailbox->i.minor_version >= 13) {
                         printf("  CID: " CONV_FMT, record->cid);
 

@@ -3436,6 +3436,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         int ispinned = (new->system_flags & FLAG_FLAGGED) ? 1 : 0;
 
         cdata->dav.modseq = new->modseq;
+        cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = carddav_update(carddavdb, cdata, ispinned);
     }
@@ -3555,6 +3556,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
         /* just a flags update to an existing record */
         cdata->dav.modseq = new->modseq;
+        cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = caldav_write(caldavdb, cdata);
     }
@@ -3659,6 +3661,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     else if (wdata->dav.imap_uid == new->uid) {
         /* just a flags update to an existing record */
         wdata->dav.modseq = new->modseq;
+        wdata->dav.createdmodseq = new->createdmodseq;
         wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
         r = webdav_write(webdavdb, wdata);
@@ -3846,7 +3849,8 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     return r;
 }
 
-EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
+EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox,
+                                      hashu64_table *cmodseqs __attribute__((unused)))
 {
     const message_t *msg;
     int r = 0;
@@ -4094,7 +4098,8 @@ static int mailbox_abort_sieve(struct mailbox *mailbox)
     return 0;
 }
 
-EXPORTED int mailbox_add_sieve(struct mailbox *mailbox)
+EXPORTED int mailbox_add_sieve(struct mailbox *mailbox,
+                               hashu64_table *cmodseqs __attribute__((unused)))
 {
     const message_t *msg;
     int r = 0;
@@ -6021,7 +6026,7 @@ static int chkchildren(const mbentry_t *mbentry,
 }
 
 #ifdef WITH_DAV
-EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
+EXPORTED int mailbox_add_dav(struct mailbox *mailbox, hashu64_table *cmodseqs)
 {
     const message_t *msg;
     int r = 0;
@@ -6036,7 +6041,47 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
                                                   ITER_STEP_BACKWARD | ITER_SKIP_UNLINKED);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        r = mailbox_update_dav(mailbox, NULL, record);
+        struct index_record copyrecord = *record;
+
+        if (cmodseqs) {
+            if (copyrecord.createdmodseq == 0 ||
+                hashu64_lookup(copyrecord.createdmodseq, cmodseqs)) {
+                /* Non-existent or duplicate cmodseq - choose a new one */
+
+                xsyslog(LOG_NOTICE,
+                        "DAV object has been missing/duplicate cmodseq,"
+                        " rewriting record",
+                        "mailbox=<%s> record=<%u>",
+                        mailbox_name(mailbox), copyrecord.uid);
+
+                if (hashu64_lookup(copyrecord.modseq, cmodseqs)) {
+                    /* Existing modseq is already a cmodseq - use next modseq */
+                    copyrecord.createdmodseq = mailbox_modseq_dirty(mailbox);
+                }
+                else {
+                    /* Otherwise, just use modseq */
+                    copyrecord.createdmodseq = copyrecord.modseq;
+                }
+                r = mailbox_rewrite_index_record(mailbox, &copyrecord);
+
+                if (r) {
+                    xsyslog(LOG_ERR, "rewriting record failed",
+                            "mailbox=<%s> record=<%u> err=<%s>",
+                            mailbox_name(mailbox), copyrecord.uid,
+                            error_message(r));
+                    break;
+                }
+
+                /* Bump deletedmodseq (can no longer detect changes reliably) */
+                mailbox->i.deletedmodseq = mailbox->i.highestmodseq;
+            }
+            else {
+                /* Track used cmodseqs */
+                hashu64_insert(copyrecord.createdmodseq, (void *) 1, cmodseqs);
+            }
+        }
+
+        r = mailbox_update_dav(mailbox, NULL, &copyrecord);
 
         if (r == IMAP_NO_MSGGONE) {
             if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
@@ -6045,7 +6090,6 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
                 continue;
             }
 
-            struct index_record copyrecord = *record;
             copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
             copyrecord.silentupdate = 1;
 

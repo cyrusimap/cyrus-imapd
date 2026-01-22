@@ -3191,11 +3191,11 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
             if (mbtype_isa(mailbox_mbtype(newmailbox)) == MBTYPE_SIEVE) {
 #ifdef USE_SIEVE
-                mailbox_add_sieve(newmailbox);
+                mailbox_add_sieve(newmailbox, NULL);
 #endif
 #ifdef WITH_DAV
             } else {
-                mailbox_add_dav(newmailbox);
+                mailbox_add_dav(newmailbox, NULL);
 #endif
             }
 
