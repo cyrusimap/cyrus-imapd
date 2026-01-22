@@ -1751,6 +1751,9 @@ static int sendupdate(const mbentry_t *mbentry, void *rock)
 
     if (!C) return -1;
 
+    int r = mboxlist_yield();
+    if (r) return r;
+
     m = database_lookup(mbentry->name, mbentry, NULL);
     if (!m) return -1;
 

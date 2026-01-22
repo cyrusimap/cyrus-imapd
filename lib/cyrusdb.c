@@ -650,6 +650,12 @@ EXPORTED int cyrusdb_unlink(const char *backend, const char *fname, int flags)
     return db->unlink(fname, flags);
 }
 
+EXPORTED int cyrusdb_yield(struct db *db)
+{
+    if (!db || !db->backend->yield) return 0;
+    return db->backend->yield(db->engine);
+}
+
 EXPORTED cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
