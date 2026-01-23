@@ -1,6 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
+use Data::GUID qw(guid_string);
+
 sub test_cardgroup_get_v4
     :min_version_3_9
     ($self)
@@ -23,56 +25,71 @@ sub test_cardgroup_get_v4
     my $res = $jmap->CallMethods([['AddressBook/get', {}, "R1"]]);
     my $abookId = $res->[0][1]{list}[0]{id};
 
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $member1 = 'urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af';
-    my $member2 = 'urn:uuid:b8767877-b4a1-4c70-9acc-505d3819e519';
-    my $href = "Default/$id.vcf";
-    my $card = <<EOF;
-BEGIN:VCARD
-VERSION:4.0
-KIND:group
-UID:$id
-FN:The Doe Family
-MEMBER:$member1
-MEMBER:$member2
-END:VCARD
-EOF
+    for my $cards (qw( none prefix noprefix)) {
+        my $id    = guid_string();
+        my $uuid1 = guid_string();
+        my $uuid2 = guid_string();
 
-    $card =~ s/\r?\n/\r\n/gs;
-    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+        my $member1 = "urn:uuid:$uuid1";
+        my $member2 = "urn:uuid:$uuid2";
 
-    $res = $jmap->CallMethods([
-        ['ContactCard/get', {
-        }, 'R1']
-    ]);
-
-    my $want_jscard = {
-        '@type' => 'Card',
-        version => '1.0',
-        addressBookIds => { $abookId => JSON::true },
-        'cyrusimap.org:href' => $carddav->fullpath() . $href,
-        uid => $id,
-        kind => 'group',
-        name => {
-            full => 'The Doe Family'
-        },
-        members => {
-            $member1 => JSON::true,
-            $member2 => JSON::true
+        if ($cards eq 'none') {
+            # do nothing!
+        } elsif ($cards eq 'prefix') {
+            $self->default_user->contacts->create({ uid => $member1 });
+            $self->default_user->contacts->create({ uid => $member2 });
+        } elsif ($cards eq 'noprefix') {
+            $self->default_user->contacts->create({ uid => $uuid1 });
+            $self->default_user->contacts->create({ uid => $uuid2 });
         }
-    };
 
-    
-    my $have_jscard = $res->[0][1]{list}[0];
+        my $href = "Default/$id.vcf";
+        my $card = <<~"EOF";
+        BEGIN:VCARD
+        VERSION:4.0
+        KIND:group
+        UID:$id
+        FN:The Doe Family
+        MEMBER:$member1
+        MEMBER:$member2
+        END:VCARD
+        EOF
 
-    # Delete generated fields
-    delete $have_jscard->{id};
-    delete $have_jscard->{blobId};
-    delete $have_jscard->{'cyrusimap.org:blobId'};
-    delete $have_jscard->{'cyrusimap.org:size'};
+        $card =~ s/\r?\n/\r\n/gs;
+        $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
 
-    # Normalize and compare cards
-    normalize_jscard($want_jscard);
-    normalize_jscard($have_jscard);
-    $self->assert_deep_equals($want_jscard, $have_jscard);
+        $res = $jmap->CallMethods([
+            ['ContactCard/get', {
+            }, 'R1']
+        ]);
+
+        my $want_jscard = {
+            '@type' => 'Card',
+            version => '1.0',
+            addressBookIds => { $abookId => JSON::true },
+            'cyrusimap.org:href' => $carddav->fullpath() . $href,
+            uid => $id,
+            kind => 'group',
+            name => {
+                full => 'The Doe Family'
+            },
+            members => {
+                $member1 => JSON::true,
+                $member2 => JSON::true
+            }
+        };
+
+        my ($have_jscard) = grep {; $_->{uid} eq $id } $res->[0][1]{list}->@*;
+
+        # Delete generated fields
+        delete $have_jscard->{id};
+        delete $have_jscard->{blobId};
+        delete $have_jscard->{'cyrusimap.org:blobId'};
+        delete $have_jscard->{'cyrusimap.org:size'};
+
+        # Normalize and compare cards
+        normalize_jscard($want_jscard);
+        normalize_jscard($have_jscard);
+        $self->assert_deep_equals($want_jscard, $have_jscard);
+    }
 }
