@@ -1,0 +1,7 @@
+Option: annotation_db
+Type: STRINGLIST
+Allowed-Values: skiplist, twom, twoskip
+Default: twoskip
+Last-Modified: 3.13.1
+
+The cyrusdb backend to use for mailbox annotations.

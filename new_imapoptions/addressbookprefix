@@ -1,0 +1,9 @@
+Option: addressbookprefix
+Type: STRING
+Default: #addressbooks
+Last-Modified: 2.5.0
+
+The prefix for the addressbook mailboxes hierarchies.  The hierarchy
+delimiter will be automatically appended.  The public addressbook
+hierarchy will be at the toplevel of the shared namespace.  A
+user's personal addressbook hierarchy will be a child of their Inbox.

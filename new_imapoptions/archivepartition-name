@@ -1,0 +1,13 @@
+Option: archivepartition-name
+Type: STRING
+Default: NULL
+Last-Modified: 3.0.0
+For-Documentation-Only: true
+
+The pathname of the archive partition ``name``, corresponding to
+spool partition **partition-name**.  For any mailbox residing in
+a directory on **partition-name**, the archived messages will be
+stored in a corresponding directory on **archivepartition-name**.
+Note that not every **partition-name** option is strictly required
+to have a corresponding **archivepartition-name** option, but that
+without one there's no benefit to enabling archiving.
