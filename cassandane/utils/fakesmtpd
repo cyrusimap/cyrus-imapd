@@ -35,5 +35,5 @@ my $smtpd = Cassandane::Net::SMTPServer->new({
     store_msg => 1,
     messages_dir => "$basedir/smtpd/",
 });
-$smtpd->run() or die;
-exit 0; # Never reached
+
+$smtpd->run(); # never returns (calls exit itself)
