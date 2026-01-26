@@ -7665,17 +7665,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
     member:
     case VCARD_MEMBER_PROPERTY: {
         json_t *members = json_object_get_vanew(obj, "members", "{}");
-        struct carddav_data *cdata = NULL;
-        int r = carddav_lookup_uid(crock->db, NULL, prop_value, &cdata);
-
-        if (r == CYRUSDB_NOTFOUND &&
-            !strncmp(prop_value, "urn:uuid:", 9) &&
-            !carddav_lookup_uid(crock->db, NULL, prop_value+9, &cdata)) {
-            prop_value += 9;
-        }
 
         json_object_set_new(members, prop_value, json_true());
-
         break;
     }
 
