@@ -414,6 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "OBJECTIDBIS",           CAPA_POSTAUTH,           { 0 } }, /* draft-degennaro-imap-objectid-accountid */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
       { .statep = &imapd_preview_enabled }                    },
@@ -4710,6 +4711,9 @@ static void prot_print_client_capa(struct protstream *pout, unsigned capa)
     if (capa & CAPA_UTF8_ACCEPT) {
         prot_puts(pout, " UTF8=ACCEPT");
     }
+    if (capa & CAPA_OBJECTIDBIS) {
+        prot_puts(pout, " OBJECTIDBIS");
+    }
 }
 
 /*
@@ -6905,6 +6909,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     struct dlist *use;
     struct mailbox *mailbox = NULL;
     char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+    char accountid[UUID_STR_LEN];
     mbentry_t *parent = NULL;
     const char *origname = name;
     struct listargs listargs = {
@@ -7359,7 +7364,14 @@ localcreate:
         list_data(&listargs);
     }
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
+    if (client_capa & CAPA_OBJECTIDBIS) {
+        // ACCOUNTID_NEEDS_FIXING
+        strncpy(accountid, mbname_userid(mbname), UUID_STR_LEN-1);
+        prot_printf(imapd_out, "%s OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Completed\r\n", tag, mailboxid, accountid);
+    }
+    else {
+        prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
+    }
 
     imapd_check(NULL, 0);
 
@@ -9631,6 +9643,12 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
             statusitems |= STATUS_MAILBOXID;
         }
+        else if (!strcmp(arg.s, "accountid") && (client_capa & CAPA_OBJECTIDBIS)) {        /* draft-degennaro-imap-objectid-accountid */
+            statusitems |= STATUS_ACCOUNTID;
+        }
+        else if (!strcmp(arg.s, "objectid") && (client_capa & CAPA_OBJECTIDBIS)) {
+            statusitems |= STATUS_OBJECTID;
+        }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
         }
@@ -9714,6 +9732,14 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_OBJECTID) {        /* RFC 8474 */
+        prot_printf(imapd_out, "%cOBJECTID (MAILBOXID %s ACCOUNTID %s)", sepchar, sd->mailboxid, sd->accountid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_ACCOUNTID) {        /* objectidbis */
+        prot_printf(imapd_out, "%cACCOUNTID (%s)", sepchar, sd->accountid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
@@ -14056,7 +14082,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity", "unseen",
                     "highestmodseq", "appendlimit", "size", "mailboxid",
                     "deleted", "deleted-storage",
-                    "", "", "",  // placeholders for unused bits
+                    "accountid", "objectid", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
@@ -14731,6 +14757,10 @@ static void cmd_enable(char *tag)
         else if (!strcasecmp(arg.s, "uidonly")) {
             client_behavior_mask |= CB_UIDONLY;
             new_capa |= CAPA_UIDONLY;
+        }
+        else if (!strcasecmp(arg.s, "objectidbis")) {
+            client_behavior_mask |= CB_OBJECTID;
+            new_capa |= CAPA_OBJECTIDBIS;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
             client_behavior_mask |= CB_UTF8ACCEPT;
