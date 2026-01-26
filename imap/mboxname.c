@@ -215,8 +215,9 @@ static int mboxname_lock_item(const char *mboxname, struct mboxlock **mboxlockpt
 
 done:
     if (r) {
-        xsyslog(LOG_ERR, "can not lock mailbox",
-                "name=<%s> error=<%s>", mboxname, error_message(r));
+        if (!(nonblock && r == IMAP_MAILBOX_LOCKED))
+            xsyslog(LOG_ERR, "can not lock mailbox",
+                    "name=<%s> error=<%s>", mboxname, error_message(r));
         remove_lockitem(lockitem);
     }
     else if (mboxlockptr) {
