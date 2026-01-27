@@ -7679,6 +7679,11 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         vcardstrarray *sortas = NULL;
         const char *sort = NULL;
 
+        if (!org) {
+            /* Value was not parsed as structured, so use the raw value */
+            name = prop_value;
+        }
+
         param = vcardproperty_get_first_parameter(prop, VCARD_SORTAS_PARAMETER);
         if (param) {
             sortas = vcardparameter_get_sortas(param);
@@ -7687,7 +7692,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         }
 
         jprop = json_pack("{s:o* s:o* s:s*}",
-                          "name", *name ? jmap_utf8string(name) : NULL,
+                          "name", name && *name ? jmap_utf8string(name) : NULL,
                           "units", units, "sortAs", sort);
 
         for (size_t i = 1; i < num_comp; i++) {

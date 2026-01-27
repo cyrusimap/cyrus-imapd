@@ -45,6 +45,8 @@ REV:2008-04-24T19:52:43Z
 IMPP;PROP-ID=OS1;X-SERVICE-TYPE=Facebook:foo
 X-SOCIAL-PROFILE;PROP-ID=OS2;TYPE=GitHub;X-USER=foo:
 X-FM-ONLINE-OTHER;PROP-ID=OS3:https://www.example.com
+ITEM1.ORG;PROP-ID=O2;VALUE=X:foo;bar
+ITEM1.X-ABLABEL:
 END:VCARD
 EOF
 
@@ -83,6 +85,9 @@ EOF
                 units => [
                     { name => 'foo' }
                 ]
+            },
+            O2 => {
+                name => 'foo;bar'
             }
         },
         titles => {
