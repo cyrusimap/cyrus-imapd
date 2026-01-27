@@ -1,4 +1,4 @@
-/* byteorder.c -- convert 32 and 64-bit values between host and network byte order */
+/* byteorder.c - convert 32 and 64-bit values between host and network byte order */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

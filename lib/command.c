@@ -1,4 +1,4 @@
-/* command.c -- utility functions for running commands */
+/* command.c - utility functions for running commands */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

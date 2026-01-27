@@ -1,4 +1,4 @@
-/* defaultalarms.h -- functions for dealing with default calendar alarms */
+/* defaultalarms.h - functions for dealing with default calendar alarms */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

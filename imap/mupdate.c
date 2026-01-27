@@ -1,4 +1,4 @@
-/* mupdate.c -- cyrus murder database master */
+/* mupdate.c - cyrus murder database master */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

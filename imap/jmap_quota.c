@@ -1,4 +1,4 @@
-/* jmap_quota.c -- Routines for handling JMAP Quota requests */
+/* jmap_quota.c - Routines for handling JMAP Quota requests */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

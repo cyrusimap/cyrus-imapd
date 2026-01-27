@@ -1,4 +1,4 @@
-/* lsort.h -- linked list (merge) sort
+/* lsort.h - linked list (merge) sort
  */
 
 #ifndef INCLUDED_LSORT_H

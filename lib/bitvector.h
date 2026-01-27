@@ -1,4 +1,4 @@
-/* bitvector.h -- bit vector functions */
+/* bitvector.h - bit vector functions */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* bc_emit.c -- sieve bytecode - pass 2 of the compiler */
+/* bc_emit.c - sieve bytecode - pass 2 of the compiler */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

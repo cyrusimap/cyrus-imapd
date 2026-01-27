@@ -1,4 +1,4 @@
-/* index.h -- Routines for dealing with the index file in the imapd */
+/* index.h - Routines for dealing with the index file in the imapd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* http_caldav_sched.c -- Routines for dealing with CALDAV scheduling in httpd */
+/* http_caldav_sched.c - Routines for dealing with CALDAV scheduling in httpd */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

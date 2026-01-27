@@ -1,4 +1,4 @@
-/* calsched_support.c -- utility functions for dealing with calendar scheduling */
+/* calsched_support.c - utility functions for dealing with calendar scheduling */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

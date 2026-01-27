@@ -1,4 +1,4 @@
-/* saslclient.c -- shared SASL code for server-server authentication */
+/* saslclient.c - shared SASL code for server-server authentication */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* jmap_mail_query.h -- Helper routines for JMAP Email queries. */
+/* jmap_mail_query.h - Helper routines for JMAP Email queries. */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

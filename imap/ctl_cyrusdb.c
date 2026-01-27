@@ -1,4 +1,4 @@
-/* ctl_cyrusdb.c -- Program to perform operations common to all cyrus DBs */
+/* ctl_cyrusdb.c - Program to perform operations common to all cyrus DBs */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

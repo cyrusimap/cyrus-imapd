@@ -1,4 +1,4 @@
-/* css3_color.c -- Routines for handling css3 colors */
+/* css3_color.c - Routines for handling css3 colors */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* dav_util.c -- utility functions for dealing with DAV database */
+/* dav_util.c - utility functions for dealing with DAV database */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

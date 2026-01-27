@@ -1,4 +1,4 @@
-/* ctl_zoneinfo.c -- Program to perform operations on zoneinfo db */
+/* ctl_zoneinfo.c - Program to perform operations on zoneinfo db */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
