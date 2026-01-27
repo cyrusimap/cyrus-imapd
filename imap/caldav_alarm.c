@@ -1572,6 +1572,9 @@ static int find_scheduled_email(const char *emailid,
     struct conversations_state *cstate = NULL;
     int r;
 
+    frock->mboxname = NULL;
+    frock->uid = 0;
+
     r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
@@ -1591,15 +1594,18 @@ static int find_scheduled_email(const char *emailid,
         if (strlen(emailid) == JMAP_LEGACY_EMAILID_SIZE - 1)
             guid = emailid + 1;
     }
-    if (!guid) return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+    if (guid) {
+        r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+        if (r == IMAP_OK_COMPLETED) r = 0;
+    }
+
     conversations_commit(&cstate);
 
-    if (r == IMAP_OK_COMPLETED) r = 0;
-    else if (!frock->mboxname) r = IMAP_NOTFOUND;
+    if (r) return r;
 
-    return r;
+    if (frock->mboxname && frock->uid) return 0;
+    return IMAP_NOTFOUND;
 }
 
 static int count_cb(sqlite3_stmt *stmt, void *rock)
