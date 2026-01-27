@@ -19,6 +19,7 @@
 .dirstamp
 .libs
 .sphinx-build.stamp
+/.tags
 README
 VERSION
 Makefile.in
