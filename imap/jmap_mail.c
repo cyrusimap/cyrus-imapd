@@ -2660,16 +2660,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
         if ((s = json_string_value(json_object_get(filter, "listId")))) {
             /* non-standard */
-            struct buf buf = BUF_INITIALIZER;
-            const char *val = s;
-            if (!strchr(s, '<')) {
-                buf_putc(&buf, '<');
-                buf_appendcstr(&buf, s);
-                buf_putc(&buf, '>');
-                val = buf_cstring(&buf);
-            }
-            _email_search_string(this, val, "listid");
-            buf_free(&buf);
+            _email_search_string(this, s, "listid");
         }
         if ((s = json_string_value(json_object_get(filter, "messageId")))) {
             const search_attr_t *attr = search_attr_find("message-id");

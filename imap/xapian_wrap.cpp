@@ -1640,7 +1640,11 @@ static Xapian::Query *query_new_listid(const xapian_db_t *db,
     Xapian::Query *q = NULL;
     std::string prefix(get_term_prefix(partnum));
 
-    std::string val = parse_listid(str);
+    // Enclose list-id query value in angle brackets.
+    std::string listid = str[0] == '<' ?
+        std::string(str) : '<' + std::string(str) + '>';
+
+    std::string val = parse_listid(listid.c_str());
     if (!val.empty()) {
         q = new Xapian::Query(prefix + val);
     }
