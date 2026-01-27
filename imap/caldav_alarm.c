@@ -1871,10 +1871,10 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         /* Locate email in \Scheduled mailbox */
         r = find_scheduled_email(emailid, &frock);
 
-        if (r || !frock.mboxname) {
+        if (r || !frock.mboxname || !frock.uid) {
             syslog(LOG_ERR,
-                   "IOERROR: failed to find \\Scheduled mailbox for user %s (%s)",
-                   frock.userid, error_message(r));
+                   "IOERROR: failed to find scheduled email %s for user %s (%s)",
+                   emailid, userid, error_message(r));
         }
         else if ((r = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
             syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
