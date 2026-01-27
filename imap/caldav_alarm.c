@@ -1569,30 +1569,32 @@ static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
 static int find_scheduled_email(const char *emailid,
                                 struct find_sched_rock *frock)
 {
-    struct conversations_state *cstate = NULL;
-    int r;
+    const char *guid = NULL;
 
     frock->mboxname = NULL;
     frock->uid = 0;
 
-    r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
+    if (emailid[0] == JMAP_EMAILID_PREFIX) {
+        if (strlen(emailid) != JMAP_EMAILID_SIZE - 1) return IMAP_INVALID_IDENTIFIER;
+    } else if (emailid[0] == JMAP_LEGACY_EMAILID_PREFIX) {
+        if (strlen(emailid) != JMAP_LEGACY_EMAILID_SIZE - 1) return IMAP_INVALID_IDENTIFIER;
+        guid = emailid + 1;
+    } else {
+        return IMAP_INVALID_IDENTIFIER;
+    }
+
+    struct conversations_state *cstate = NULL;
+    int r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
                frock->userid);
         return r;
     }
 
-    const char *guid = NULL;
     if (emailid[0] == JMAP_EMAILID_PREFIX) {
         static char guidrep[2*MESSAGE_GUID_SIZE+1];
-
-        if (strlen(emailid) == JMAP_EMAILID_SIZE - 1 &&
-            !conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep))
-            guid = guidrep;
-    }
-    else if (emailid[0] == JMAP_LEGACY_EMAILID_PREFIX) {
-        if (strlen(emailid) == JMAP_LEGACY_EMAILID_SIZE - 1)
-            guid = emailid + 1;
+        r = conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep);
+        if (!r) guid = guidrep;
     }
 
     if (guid) {
