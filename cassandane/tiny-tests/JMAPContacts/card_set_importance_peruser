@@ -23,6 +23,8 @@ sub test_card_set_importance_peruser
         ['ContactCard/set', {
             create => {
                 c1 => {
+                    '@type' => 'Card',
+                    version => '1.0', 
                     name => { full => 'John Doe' },
                     'cyrusimap.org:importance' => 1.0,
                 },

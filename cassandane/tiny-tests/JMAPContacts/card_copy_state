@@ -27,6 +27,8 @@ sub test_card_copy_state
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     my $card =  {
+        '@type' => 'Card',
+        version => '1.0',
         name => { full => "foo bar" },
     };
 

@@ -5212,7 +5212,7 @@ static const jmap_property_t addressbook_props[] = {
     {
         "name",
         NULL,
-        0
+        JMAP_PROP_MANDATORY
     },
     {
         "description",
@@ -6098,12 +6098,12 @@ static const jmap_property_t card_props[] = {
     {
         "@type",
         NULL,
-        0
+        JMAP_PROP_MANDATORY
     },
     {
         "version",
         NULL,
-        0
+        JMAP_PROP_MANDATORY
     },
     {
         "created",

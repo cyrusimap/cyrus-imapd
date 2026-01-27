@@ -317,6 +317,7 @@ enum {
     JMAP_PROP_REJECT_GET = (1<<4), // reject as unknown in Foo/get
     JMAP_PROP_REJECT_SET = (1<<5), // reject as unknown in Foo/set
     JMAP_PROP_EXTERNAL   = (1<<6), // property is stored externally
+    JMAP_PROP_MANDATORY  = (1<<7), // MUST be present in Foo/set{create}
 };
 
 extern const jmap_property_t *jmap_property_find(const char *name,
@@ -341,6 +342,12 @@ struct jmap_get {
 
 typedef int jmap_args_parse_cb(jmap_req_t *, struct jmap_parser *,
                                const char *arg, json_t *val, void *);
+
+extern hash_table *jmap_get_validate_props(jmap_req_t *req,
+                                           struct jmap_parser *parser,
+                                           const jmap_property_t *valid_props,
+                                           const char *key,
+                                           json_t *arg);
 
 extern void jmap_get_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_t valid_props[],

@@ -7,14 +7,36 @@ sub test_cardgroup_changes
 {
     my $jmap = $self->{jmap};
 
-# Update to Card[Group]/[get|set] once implemented
     xlog $self, "create contacts";
-    my $res = $jmap->CallMethods([['ContactCard/set', {create => {
-                        "a" => {firstName => "a", lastName => "a"},
-                        "b" => {firstName => "b", lastName => "b"},
-                        "c" => {firstName => "c", lastName => "c"},
-                        "d" => {firstName => "d", lastName => "d"}
-                    }}, "R1"]]);
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "a" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    firstName => "a",
+                    lastName => "a"
+                },
+                "b" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    firstName => "b",
+                    lastName => "b"
+                },
+                "c" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    firstName => "c",
+                    lastName => "c"
+                },
+                "d" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    firstName => "d",
+                    lastName => "d"
+                }
+            }
+         }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
@@ -22,6 +44,10 @@ sub test_cardgroup_changes
     my $contactB = $res->[0][1]{created}{"b"}{id};
     my $contactC = $res->[0][1]{created}{"c"}{id};
     my $contactD = $res->[0][1]{created}{"d"}{id};
+    $self->assert_not_null($contactA);
+    $self->assert_not_null($contactB);
+    $self->assert_not_null($contactC);
+    $self->assert_not_null($contactD);
 
     xlog $self, "get contact groups state";
     $res = $jmap->CallMethods([['ContactCard/get', {}, "R2"]]);
@@ -30,6 +56,8 @@ sub test_cardgroup_changes
     xlog $self, "create contact group 1";
     $res = $jmap->CallMethods([['ContactCard/set', {create => {
         "1" => {
+            '@type' => 'Card',
+            version => '1.0',
             kind => 'group',
             name => { full => "group1" },
             members => { $contactA => JSON::true, $contactB => JSON::true }
@@ -38,6 +66,7 @@ sub test_cardgroup_changes
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id1);
 
     xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactCard/changes', {
@@ -57,6 +86,8 @@ sub test_cardgroup_changes
     xlog $self, "create contact group 2";
     $res = $jmap->CallMethods([['ContactCard/set', {create => {
         "2" => {
+            '@type' => 'Card',
+            version => '1.0',
             kind => 'group',
             name => { full => "group2" },
             members =>  { $contactC => JSON::true, $contactD => JSON::true }
@@ -65,6 +96,7 @@ sub test_cardgroup_changes
     $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
+    $self->assert_not_null($id2);
 
     xlog $self, "get contact group updates (since last change)";
     $res = $jmap->CallMethods([['ContactCard/changes', {
