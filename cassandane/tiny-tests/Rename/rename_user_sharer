@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rename_user_sharer
+    :AllowMoves :NoAltNameSpace :ReverseACLs :Replication
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename with shares";
+
+    my %exp;
+
+    $admintalk->create("user.foo") || die;
+    $admintalk->create("user.foo.shared") || die;
+    $admintalk->setacl("user.foo.shared", 'cassandane' => 'lrs') || die;
+
+    $admintalk->create("user.foo.#calendars") || die;
+    $admintalk->create("user.foo.#calendars.events") || die;
+    $admintalk->setacl("user.foo.#calendars.events",
+                       'cassandane' => 'lrs') || die;
+
+    $admintalk->setacl("user.foo", 'cassandane' => 'lrs') || die;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.sub");
+    $imaptalk->subscribe("INBOX.sub");
+    $imaptalk->subscribe("user.foo.shared");
+    $imaptalk->subscribe("user.foo.#calendars.events");
+
+    my $structure = {
+        'INBOX' => [ '\\HasChildren' ],
+        'INBOX.sub'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo'  => [ '\\HasChildren' ],
+        'user.foo.#calendars.events'  => [ '\\Subscribed', '\\HasNoChildren' ],
+        'user.foo.shared'  => [ '\\Subscribed', '\\HasNoChildren' ],
+    };
+
+    xlog $self, "Verify initial mailbox list";
+    my $list = $imaptalk->list(['vendor.cmu-dav'], '', '*',
+                               'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    xlog $self, "Replicate and verify initial mailbox list";
+    $self->run_replication(user => 'cassandane');
+    $self->run_replication(user => 'foo');
+
+    my $replicatalk = $self->{replica_store}->get_client();
+    $list = $replicatalk->list(['vendor.cmu-dav'], '', '*',
+                               'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    xlog $self, "Rename sharer";
+    $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user.foo', 'user.bar');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $structure->{$_ =~ s/\.foo/.bar/r} =
+        delete $structure->{$_} for keys %$structure;
+
+    xlog $self, "Verify shares and subscriptions have been renamed";
+    $imaptalk = $self->{store}->get_client();
+    $list = $imaptalk->list(['vendor.cmu-dav'], '', '*',
+                            'return', ['subscribed']);
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    delete $structure->{'INBOX'};
+    delete $structure->{'user.bar'};
+
+    $imaptalk = $self->{store}->get_client();
+    $list = $imaptalk->list(['vendor.cmu-dav', 'subscribed'], '', '*');
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+
+    xlog $self, "Replicate and verify subscriptions have been renamed";
+    $self->run_replication(user => 'cassandane');
+    $self->run_replication(user => 'bar');
+
+    $replicatalk = $self->{replica_store}->get_client();
+    $list = $replicatalk->list(['vendor.cmu-dav', 'subscribed'], '', '*');
+
+    $self->assert_mailbox_structure($list, '.', $structure);
+}

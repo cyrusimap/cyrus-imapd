@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_max_userflags
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    my %allflags;
+    for (my $i = 0 ; $i < MAX_USER_FLAGS ; $i++)
+    {
+        my $flag;
+
+        for (;;)
+        {
+            $flag = '$' . ucfirst(random_word());
+            if (!defined $allflags{$flag})
+            {
+                $allflags{$flag} = $i;
+                last;
+            }
+        }
+
+        xlog $self, "Set $flag on message A";
+        my $res = $talk->store('1', '+flags', "($flag)");
+        $self->assert_deep_equals({ '1' => { 'flags' => [ "$flag" ] }},
+                                  $res);
+        $msg{A}->set_attribute(flags => [$flag]);
+        $self->check_messages(\%msg);
+
+        xlog $self, "Clear $flag on message A";
+        $res = $talk->store('1', '-flags', "($flag)");
+        $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+        $msg{A}->set_attribute(flags => []);
+        $self->check_messages(\%msg);
+    }
+
+    xlog $self, "Cannot set one more wafer-thin user flag";
+    my $flag = '$Farnarkle';
+    $self->assert_null($allflags{$flag});
+    my $res = $talk->store('1', '+flags', "($flag)");
+    my $e = $@;
+    $self->assert_null($res);
+    $self->assert_matches(qr/Too many user flags in mailbox/, $e);
+
+    # We should have generated an IOERROR
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: out of flags/);
+
+    xlog $self, "Can set all the flags at once";
+    my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
+    xlog $self, "Set all the user flags on message A";
+    $res = $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ @flags ] }},
+                              $res);
+    $msg{A}->set_attribute(flags => [@flags]);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Reconnect, all the flags should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}

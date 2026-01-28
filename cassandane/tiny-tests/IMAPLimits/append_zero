@@ -1,0 +1,11 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_zero
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $talk->_imap_cmd('APPEND', 0, '', 'INBOX', { Literal => '' } );
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}

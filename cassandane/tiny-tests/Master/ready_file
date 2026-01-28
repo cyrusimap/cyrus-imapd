@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_ready_file
+{
+    my ($self) = @_;
+
+    # config isn't fully initialised until start() is called, so we can't
+    # just read these the sensible way. instead, predict the defaults.
+    my $ready_file = $self->{instance}->get_basedir() . '/master.ready';
+    my $pid_file = $self->{instance}->get_basedir() . '/run/master.pid';
+
+    # pid file should not already exist
+    my $pid_sb = stat($pid_file);
+    $self->assert_null($pid_sb);
+
+    # ready file should not already exist
+    my $ready_sb = stat($ready_file);
+    $self->assert_null($ready_sb);
+
+    # start cyrus
+    $self->start();
+
+    # pid file should exist now
+    $pid_sb = stat($pid_file);
+    $self->assert_not_null($pid_sb);
+
+    # ready file should exist soon...
+    $ready_sb = stat($ready_file);
+    $self->assert_not_null($ready_sb);
+
+    # ready file should be newer than pid file
+    $self->assert_num_gte($pid_sb->mtime, $ready_sb->mtime);
+}

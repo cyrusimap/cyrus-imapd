@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_nonincremental
+    :SearchEngineSquat
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $n = 0;
+
+    for (1..5) {
+        # make a new message
+        $self->make_message();
+        $n++;
+
+        # do a full reindex
+        my (undef, $err) = $self->run_squatter('-vv');
+
+        # better have indexed them all, not just the new one!
+        $self->assert_matches(qr{indexed $n messages}, $err);
+    }
+
+    # make a message with no subject, to, or from
+    $self->make_message(undef, to => undef, from => undef);
+    $n++;
+
+    # do a full reindex
+    my (undef, $err) = $self->run_squatter('-vv');
+
+    # better have indexed them all, not just the new one!
+    $self->assert_matches(qr{indexed $n messages}, $err);
+}

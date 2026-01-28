@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lint_services
+    :want_service_http :needs_component_httpd :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        'http_sasl_mech_list' => 'PLAIN',
+        'http_sasl_trust_fund' => 'street art',
+        'http_tcp_keepalive' => 'yes',
+        'http_trust_fund' => 'street art',
+    );
+
+    $self->_start_instances();
+
+    xlog $self, "test 'cyr_info conf-lint' with service-specific config";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+
+    $self->assert_deep_equals(
+        [ sort(
+            "http_trust_fund: street art\n",
+            # XXX we don't verify sasl keys, so this isn't reported
+            #"http_sasl_trust_fund: street art\n",
+        ) ],
+        [ sort @output ]
+    );
+}

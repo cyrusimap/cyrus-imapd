@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lsub
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $alldata = $imaptalk->lsub("", "2001");
+    $self->assert_deep_equals($alldata, [
+          [
+            [
+              '\\Noselect',
+              '\\HasChildren'
+            ],
+            '/',
+            '2001'
+          ]
+    ], "LSUB data mismatch: "  . Dumper($alldata));
+}

@@ -1,0 +1,195 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# More tests for UNCHANGEDSINCE, RFC4551 section 3.2.
+#
+# - success/failure is per-message, i.e. the update can
+#   fail on one message and succeed on another.
+# - example 11: STORE UNCHANGEDSINCE +FLAGS \Seen on a set
+#   of messages where some are expunged and some have been
+#   modified since: response is NO because of the expunged
+#   messages, with a MODIFIED response code.
+#
+#
+#
+# TODO: Once the client specified the UNCHANGEDSINCE modifier in a STORE
+# command, the server MUST include the MODSEQ fetch response data items
+# in all subsequent unsolicited FETCH responses.  Once the client
+# specified the UNCHANGEDSINCE modifier in a STORE command, the server
+# MUST include the MODSEQ fetch response data items in all subsequent
+# unsolicited FETCH responses.
+#
+# TODO the untagged FETCH response is returned even when
+#   .SILENT is used
+#
+sub test_unchangedsince_multi
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags modseq));
+
+    xlog $self, "Add some messages";
+    my %msg;
+    for (my $i = 1 ; $i <= 26 ; $i++)
+    {
+        my $letter = chr(64 + $i);  # A ... Z
+        $msg{$letter} = $self->make_message('Message ' . $letter);
+        $msg{$letter}->set_attributes(id => $i,
+                                      uid => $i,
+                                      flags => []);
+    }
+
+    xlog $self, "Bump the modseq on M,N,O";
+    my $res = $talk->store('13,14,15', '+flags', '(\\Draft)');
+    $self->assert_deep_equals({
+        '13' => { 'flags' => [ '\\Draft' ] },
+        '14' => { 'flags' => [ '\\Draft' ] },
+        '15' => { 'flags' => [ '\\Draft' ] },
+    }, $res);
+    $msg{M}->set_attribute(flags => ['\\Draft']);
+    $msg{N}->set_attribute(flags => ['\\Draft']);
+    $msg{O}->set_attribute(flags => ['\\Draft']);
+
+    my $act0 = $self->check_messages(\%msg);
+
+    {
+        my $store2 = $self->{instance}->get_service('imap')->create_store();
+        $store2->connect();
+        $store2->_select();
+        my $talk2 = $store2->get_client();
+        xlog $self, "Delete and expunge D,E,F from another session";
+        for (my $i = 4 ; $i <= 6 ; $i++)
+        {
+            my $letter = chr(64 + $i);  # D, E, F
+            my $res = $talk2->store($i, '+flags', '(\\Deleted)');
+            $self->assert_deep_equals({
+                "$i" => { 'flags' => [ '\\Deleted' ] }
+            }, $res);
+            delete $msg{$letter};
+        }
+        $talk2->expunge();
+        $store2->disconnect();
+    }
+
+
+    my %fetched;
+    my $modified;
+    my %handlers =
+    (
+        fetch => sub
+        {
+            my ($response, $rr, $id) = @_;
+
+            # older versions of Mail::IMAPTalk don't have
+            # the 3rd argument.  We can't test properly in
+            # those circumstances.
+            $self->assert_not_null($id);
+
+            $fetched{$id} = $rr;
+        },
+        modified => sub
+        {
+            my ($response, $rr) = @_;
+            # we should not get more than one of these ever
+            $self->assert_null($modified);
+            $modified = $rr;
+        }
+    );
+
+    # Note: Mail::IMAPTalk::store() doesn't support modifiers
+    # so we have to resort to the lower level interface.
+
+    xlog $self, "Changing a flag on multiple messages";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+                 \'1:*', ['unchangedsince', get_modseq($act0, 'Z')],
+                  '+flags', ['\\Flagged']);
+    my $res1 = $talk->get_last_completion_response();
+
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    $msg{B}->set_attribute(flags => ['\\Flagged']);
+    $msg{C}->set_attribute(flags => ['\\Flagged']);
+    # D,E,F deleted
+    $msg{G}->set_attribute(flags => ['\\Flagged']);
+    $msg{H}->set_attribute(flags => ['\\Flagged']);
+    $msg{I}->set_attribute(flags => ['\\Flagged']);
+    $msg{J}->set_attribute(flags => ['\\Flagged']);
+    $msg{K}->set_attribute(flags => ['\\Flagged']);
+    $msg{L}->set_attribute(flags => ['\\Flagged']);
+    # M,N,O should fail the conditional store
+    $msg{M}->set_attribute(flags => ['\\Draft']);
+    $msg{N}->set_attribute(flags => ['\\Draft']);
+    $msg{O}->set_attribute(flags => ['\\Draft']);
+    $msg{P}->set_attribute(flags => ['\\Flagged']);
+    $msg{Q}->set_attribute(flags => ['\\Flagged']);
+    $msg{R}->set_attribute(flags => ['\\Flagged']);
+    $msg{S}->set_attribute(flags => ['\\Flagged']);
+    $msg{T}->set_attribute(flags => ['\\Flagged']);
+    $msg{U}->set_attribute(flags => ['\\Flagged']);
+    $msg{V}->set_attribute(flags => ['\\Flagged']);
+    $msg{W}->set_attribute(flags => ['\\Flagged']);
+    $msg{X}->set_attribute(flags => ['\\Flagged']);
+    $msg{Y}->set_attribute(flags => ['\\Flagged']);
+    $msg{Z}->set_attribute(flags => ['\\Flagged']);
+    # We start a new session in check_messages, so we
+    # have to renumber here to account for deletion
+    for (my $i = 7 ; $i <= 26 ; $i++)
+    {
+        my $letter = chr(64 + $i);  # G ... Z
+        $msg{$letter}->set_attribute(id => $i-3);
+    }
+    my $act1 = $self->check_messages(\%msg);
+
+# TODO: this fails with current Cyrus code
+#     xlog $self, "returns a NO response?";
+#     $self->assert_str_equals('NO', $res1);
+
+    xlog $self, "updated modseq?";
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
+    $self->assert(get_modseq($act1, 'B') > get_modseq($act0, 'B'));
+    $self->assert(get_modseq($act1, 'C') > get_modseq($act0, 'C'));
+    # D,E,F deleted
+    $self->assert(get_modseq($act1, 'G') > get_modseq($act0, 'G'));
+    $self->assert(get_modseq($act1, 'H') > get_modseq($act0, 'H'));
+    $self->assert(get_modseq($act1, 'I') > get_modseq($act0, 'I'));
+    $self->assert(get_modseq($act1, 'J') > get_modseq($act0, 'J'));
+    $self->assert(get_modseq($act1, 'K') > get_modseq($act0, 'K'));
+    $self->assert(get_modseq($act1, 'L') > get_modseq($act0, 'L'));
+    # M,N,O have the same modseq
+    $self->assert(get_modseq($act1, 'M') == get_modseq($act0, 'M'));
+    $self->assert(get_modseq($act1, 'N') == get_modseq($act0, 'N'));
+    $self->assert(get_modseq($act1, 'O') == get_modseq($act0, 'O'));
+    $self->assert(get_modseq($act1, 'P') > get_modseq($act0, 'P'));
+    $self->assert(get_modseq($act1, 'Q') > get_modseq($act0, 'Q'));
+    $self->assert(get_modseq($act1, 'R') > get_modseq($act0, 'R'));
+    $self->assert(get_modseq($act1, 'S') > get_modseq($act0, 'S'));
+    $self->assert(get_modseq($act1, 'T') > get_modseq($act0, 'T'));
+    $self->assert(get_modseq($act1, 'U') > get_modseq($act0, 'U'));
+    $self->assert(get_modseq($act1, 'V') > get_modseq($act0, 'V'));
+    $self->assert(get_modseq($act1, 'W') > get_modseq($act0, 'W'));
+    $self->assert(get_modseq($act1, 'X') > get_modseq($act0, 'X'));
+    $self->assert(get_modseq($act1, 'Y') > get_modseq($act0, 'Y'));
+    $self->assert(get_modseq($act1, 'Z') > get_modseq($act0, 'Z'));
+
+    xlog $self, "returned MODIFIED response code?";
+    $self->assert_not_null($modified);
+    $self->assert_deep_equals($modified, ['13:15']);
+
+    xlog $self, "sent untagged FETCH responses with the new modseq?";
+    # also tells about the 3 messages which were deleted since
+    # the last command
+    $self->assert_num_equals(23, scalar keys %fetched);
+    foreach my $i (1..3, 7..12, 16..26)
+    {
+        my $letter = chr(64 + $i);
+        $self->assert_not_null($fetched{$i});
+        $self->assert_num_equals(get_modseq($act1, $letter),
+                                 get_modseq_from_fetch(\%fetched, $i));
+    }
+
+}

@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_proxy_search
+{
+    my ($self) = @_;
+    my $result;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "EXPUNGE the 1st, 6th, and 10th";
+    $imaptalk->store('1,6,10', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->expunge();
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->examine('INBOX');
+
+    xlog $self, "SEARCH ALL";
+    my $res = $frontend->search('all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_str_equals($res->[0], "1");
+    $self->assert_str_equals($res->[1], "2");
+    $self->assert_str_equals($res->[2], "3");
+    $self->assert_str_equals($res->[3], "4");
+    $self->assert_str_equals($res->[4], "5");
+    $self->assert_str_equals($res->[5], "6");
+    $self->assert_str_equals($res->[6], "7");
+
+    xlog $self, "UID SEARCH ALL";
+    $frontend->uid(1);
+    $res = $frontend->search('all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_str_equals($res->[0], "2");
+    $self->assert_str_equals($res->[1], "3");
+    $self->assert_str_equals($res->[2], "4");
+    $self->assert_str_equals($res->[3], "5");
+    $self->assert_str_equals($res->[4], "7");
+    $self->assert_str_equals($res->[5], "8");
+    $self->assert_str_equals($res->[6], "9");
+
+    xlog $self, "ESEARCH ALL";
+    my @results = ();
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    $res = $frontend->_imap_cmd('ESEARCH', 0, \%handlers, 'ALL');
+    $self->assert_str_equals('ok', $res);
+    $self->assert_str_equals($results[0][3], "2:5,7:9");
+}

@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_none
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    $self->do_imap_starttls($talk, undef);
+
+    $talk->login('cassandane', 'secret');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select("INBOX");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_alpn_protocol($talk->{Socket}, undef);
+}

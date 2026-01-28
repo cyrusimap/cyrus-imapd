@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# XXX version gated to 3.4+ for now to keep travis happy, but if we
+# XXX backport the fix we should change or remove the gate...
+sub test_simple
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message("term2", body => "term1") || die;
+    $self->make_message("term2", body => "term1") || die;
+    $self->make_message("term1", body => "term2") || die;
+    $self->make_message("term3", body => "term4") || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @tests = ({
+        search => ['body', 'term1'],
+        wantUids => [1,2],
+    }, {
+        search => ['text', 'term1'],
+        wantUids => [1,2,3],
+    }, {
+        search => ['subject', 'term2'],
+        wantUids => [1,2],
+    }, {
+        search => ['subject', 'term3'],
+        wantUids => [4],
+    }, {
+        search => ['body', 'term4'],
+        wantUids => [4],
+    }, {
+        search => ['fuzzy', 'body', 'term4'],
+        wantUids => [4],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['from', 'text/plain'],
+        wantUids => [],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['to', 'text/plain'],
+        wantUids => [],
+    }, {
+        # we don't index content-type, make sure we actually didn't
+        search => ['subject', 'text/plain'],
+        wantUids => [],
+    });
+
+    foreach (@tests) {
+        $self->{instance}->getsyslog();
+
+        my $uids = $imap->search(@{$_->{search}}) || die;
+        $self->assert_deep_equals($_->{wantUids}, $uids);
+
+        $self->assert_syslog_matches($self->{instance}, qr{Squat run});
+    }
+}

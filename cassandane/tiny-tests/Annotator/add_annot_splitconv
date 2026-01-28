@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_add_annot_splitconv
+    :min_version_3_1 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    $self->{instance}->{config}->set(conversations_max_thread => 5);
+
+    $self->start_my_instances();
+
+    my $entry = '/comment';
+    my $attrib = 'value.shared';
+    # Data thanks to http://hipsteripsum.me
+    my $value1 = 'you_probably_havent_heard_of_them';
+
+    $self->{store}->set_fetch_attributes('uid', 'cid', 'basecid', "annotation ($entry $attrib)");
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating replies";
+    for (1..4) {
+      $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+      $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
+    }
+    $exp{"B"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{"B"}->set_attributes(uid => 6, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+
+    $exp{C} = $self->{gen}->generate(subject => "Re: Message A", references => [ $exp{A} ]);
+    $exp{C}->set_body("set_shared_annotation $entry $value1\r\n");
+    $self->{instance}->deliver($exp{C});
+    $exp{C}->set_annotation($entry, $attrib, $value1);
+    $exp{C}->set_attributes(uid => 7, cid => $exp{B}->make_cid(), basecid => $exp{A}->make_cid());
+
+    # Local delivery adds headers we can't predict or control,
+    # which change the SHA1 of delivered messages, so we can't
+    # be checking the GUIDs here.
+    $self->check_messages(\%exp, keyed_on => 'uid', check_guid => 0);
+}

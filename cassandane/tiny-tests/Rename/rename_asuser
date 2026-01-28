@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test LSUB behaviour
+#
+sub test_rename_asuser
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.user-src") || die;
+    $self->{store}->set_folder("INBOX.user-src");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX.user-src") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
+    $imaptalk->select("INBOX.user-dst") || die;
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+}

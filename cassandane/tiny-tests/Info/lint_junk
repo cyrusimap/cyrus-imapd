@@ -1,0 +1,14 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lint_junk
+    :ConfigJunk
+{
+    my ($self) = @_;
+
+    xlog $self, "test 'cyr_info conf-lint' with junk in the config";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+    $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
+}

@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_plus_address_inbox_inbox
+    :FuzzyMatch :NoAltNameSpace :MailboxLegacyDirs
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour of plus addressing where INBOX.INBOX* is targetted";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    my $folder = "INBOX.INBOX";
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+
+    $imaptalk->setacl($folder, 'anyone' => 'p');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $folder = "INBOX.INBOX.exists";
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $msgs{2} = $self->{gen}->generate(subject => "Message 2");
+    $msgs{2}->set_attribute(uid => 2);
+    $msgs{3} = $self->{gen}->generate(subject => "Message 3");
+    $msgs{3}->set_attribute(uid => 3);
+
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+inbox");
+    $self->{instance}->deliver($msgs{2}, user => "cassandane+inbox.DNE");
+    $self->{instance}->deliver($msgs{3}, user => "cassandane+DNE");
+
+    xlog $self, "Check that the messages made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    $msgs{1} = $self->{gen}->generate(subject => "Message 4");
+    $msgs{1}->set_attribute(uid => 1);
+    $msgs{2} = $self->{gen}->generate(subject => "Message 5");
+    $msgs{2}->set_attribute(uid => 2);
+    $msgs{3} = $self->{gen}->generate(subject => "Message 6");
+    $msgs{3}->set_attribute(uid => 3);
+
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+inbox.exists");
+    $self->{instance}->deliver($msgs{2}, user => "cassandane+inbox.exists.DNE");
+    $self->{instance}->deliver($msgs{3}, user => "cassandane+inbox.exists.DNE.sub");
+
+    xlog $self, "Check that the message made it to INBOX.INBOX.exists";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}

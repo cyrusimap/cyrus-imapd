@@ -1,0 +1,14 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bitfield_with_multiple_names_legacy
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # legacy names always come back in cyr_info as their current name
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'x-cyrus-jmapquery' },
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+    );
+}

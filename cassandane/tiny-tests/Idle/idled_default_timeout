@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_idled_default_timeout
+    :needs_component_idled
+{
+    my ($self) = @_;
+
+    # The default timeout if `imapidlepoll` isn't set in imapd.conf
+    # is set to 60 seconds. If idled is not broken, then we should
+    # return immediately(pretty much), instead of having to wait all
+    # of 60 seconds.
+    xlog $self, "Set idle poll timeout 60 seconds";
+    $self->{instance}->{config}->set(imapidlepoll => '60');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    xlog $self, "Starting up the instance";
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+    $store->_select();
+
+    xlog $self, "Sending the IDLE command";
+    $store->idle_begin()
+        or die "IDLE failed: $@";
+
+    my $date1 = DateTime->from_epoch(epoch => time());
+
+    xlog $self, "Poll for any unsolicited response - should be none";
+    my $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    xlog $self, "Poll for any unsolicited response - should be none";
+    $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    $r = $store->idle_response({}, 5);
+    $self->assert($r, "received an unsolicited response");
+    $r = $store->idle_response({}, 5);
+    $self->assert($r, "received an unsolicited response");
+    $r = $store->idle_response({}, 1);
+    $self->assert(!$r, "no more unsolicited responses");
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    xlog $self, "Sending DONE continuation";
+    $store->idle_end({});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $date2 = DateTime->from_epoch(epoch => time());
+
+    my $dur = $date2->epoch - $date1->epoch;
+    $self->assert($dur < 15, "IDLE took longer than expected");
+}

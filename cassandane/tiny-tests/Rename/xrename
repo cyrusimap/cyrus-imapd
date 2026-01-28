@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_xrename
+        :min_version_3_8_2
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.src") || die;
+    $self->{store}->set_folder("INBOX.src");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX.src") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->_imap_cmd('XRENAME', 0, '', "INBOX.src", "INBOX.dst");
+    $imaptalk->select("INBOX.dst") || die;
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+}

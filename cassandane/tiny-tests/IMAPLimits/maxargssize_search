@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_search
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('SEARCH',
+                                 'TEXT', "X" x 25, 'TEXT', { Quote => "X" x 25 } );
+}

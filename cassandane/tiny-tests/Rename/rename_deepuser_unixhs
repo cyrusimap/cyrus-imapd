@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rename_deepuser_unixhs
+    :AllowMoves :Replication :SyncLog :UnixHierarchySep
+    :needs_component_replication
+{
+    my ($self) = @_;
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Test user rename";
+
+    $admintalk->create("user/cassandane/foo") || die;
+    $admintalk->create("user/cassandane/bar") || die;
+    $admintalk->create("user/cassandane/bar/sub") || die;
+
+    # replicate and check initial state
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('cassandane');
+    unlink($synclogfname);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user/cassandane', 'user/new.user');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user/new.user/bar/sub");
+    $self->assert(not $admintalk->get_last_error());
+
+    # replicate and check the renames
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('new.user');
+}

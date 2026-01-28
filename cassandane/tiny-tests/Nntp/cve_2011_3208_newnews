@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cve_2011_3208_newnews
+    :AllowNewNews
+{
+    my ($self) = @_;
+
+    my $client = $self->{client};
+    my $wildmat = '';
+    my $since = time() - 3600;
+    while (length $wildmat < 1024+$self->stack_slosh)
+    {
+        $wildmat .= ($wildmat eq '' ? '' : '.');
+        $wildmat .= random_word();
+        $client->newnews($wildmat, $since);
+        $self->assert_num_equals(230, $client->code());
+        $self->assert($client->message() =~ m/List of new articles follows/i);
+    }
+}

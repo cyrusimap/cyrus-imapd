@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_lint_channels
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        'sync_log_channels' => 'banana',
+        'banana_sync_host' => 'banana.internal',
+        'banana_sync_trust_fund' => 'street art',
+        'banana_tcp_keepalive' => 'yes',
+        'banana_sasl_mech_list' => 'PLAIN',
+    );
+
+    $self->_start_instances();
+
+    xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
+
+    my @output = $self->{instance}->run_cyr_info('conf-lint');
+    @output = grep { !m/_db: / } @output;  # skip database types
+
+    $self->assert_deep_equals(
+        [ sort(
+            "banana_sync_trust_fund: street art\n",
+            "banana_tcp_keepalive: yes\n",
+            "banana_sasl_mech_list: PLAIN\n",
+        ) ],
+        [ sort @output ]
+    );
+}

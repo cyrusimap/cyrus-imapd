@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_service_associate
+{
+    my ($self) = @_;
+
+    xlog $self, "sending a SIGHUP to a master process with services";
+    xlog $self, "whose listen= parameters give more than one result in";
+    xlog $self, "getaddrinfo(), such as an IPv4 and IPv6 (Bug 3771)";
+
+    my $host = 'localhost';
+
+    $self->lemming_service(tag => 'foo', host => undef);
+
+    $self->{instance}->start();
+    $self->{instance}->send_sighup();
+    $self->{instance}->stop();
+}

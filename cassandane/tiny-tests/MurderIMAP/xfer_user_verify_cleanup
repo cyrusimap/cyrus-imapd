@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_xfer_user_verify_cleanup
+    :AllowMoves :NoAltNamespace :Conversations
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    # set up some data for cassandane on backend1
+    my $expected = $self->populate_user($self->{instance},
+                                        $self->{backend1_store},
+                                        [qw(INBOX INBOX.Drafts)]);
+
+    my $imaptalk = $self->{backend1_store}->get_client();
+    my $admintalk = $self->{backend1_adminstore}->get_client();
+    my $backend2_servername = $self->{backend2}->get_servername();
+
+    xlog $self, "Subscribe to INBOX";
+    $imaptalk->subscribe("INBOX");
+
+    xlog $self, "Install a sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+keep;
+EOF
+    );
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Verify user mailbox directories exist";
+    my $inbox_dir = $self->{instance}->folder_to_directory('INBOX');
+    my $drafts_dir = $self->{instance}->folder_to_directory('INBOX.Drafts');
+    $self->assert_file_test($inbox_dir, '-d');
+    $self->assert_file_test($drafts_dir, '-d');
+
+    xlog $self, "Verify user data files/directories exist";
+    my $data = $self->{instance}->run_mbpath('-u', 'cassandane');
+    $self->assert_file_test($data->{user}{'sub'}, '-f');
+    $self->assert_file_test($data->{user}{counters}, '-f');
+    $self->assert_file_test($data->{user}{conversations}, '-f');
+    $self->assert_file_test($data->{user}{xapianactive}, '-f');
+    $self->assert_file_test("$data->{user}{sieve}/defaultbc", '-f');
+    $self->assert_file_test($data->{xapian}{t1}, '-d');
+
+    # now xfer the cassandane user to backend2
+    my $ret = $admintalk->_imap_cmd('xfer', 0, {},
+                                    'user.cassandane', $backend2_servername);
+
+    xlog $self, "Verify user mailbox directories have been deleted";
+    $self->assert_not_file_test($inbox_dir, '-e');
+    $self->assert_not_file_test($drafts_dir, '-e');
+
+    xlog $self, "Verify user data files/directories have been deleted";
+    $self->assert_not_file_test($data->{user}{'sub'}, '-e');
+    $self->assert_not_file_test($data->{user}{counters}, '-e');
+    $self->assert_not_file_test($data->{user}{conversations}, '-e');
+    $self->assert_not_file_test($data->{user}{xapianactive}, '-e');
+    $self->assert_not_file_test($data->{user}{sieve}, '-e');
+    $self->assert_not_file_test($data->{xapian}{t1}, '-e');
+}

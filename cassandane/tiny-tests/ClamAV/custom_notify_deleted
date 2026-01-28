@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test uses the '-s search-string' invocation, which is much faster
+# than waiting for the AV engine to load when we just care about whether
+# the custom notification gets sent
+# XXX https://github.com/cyrusimap/cyrus-imapd/issues/2516 might be
+# XXX backported to 3.0 if anyone volunteers to test it
+sub test_custom_notify_deleted
+    :NoStartInstances
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    # set up a custom notification template
+    $self->{instance}->{config}->set(
+        virusscan_notification_subject => 'custom ½ subject',
+        virusscan_notification_template =>
+            abs_path('data/custom-notification-template'),
+    );
+    $self->_start_instances();
+
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    # put some test messages in INBOX (and verify)
+    $self->{store}->set_folder("INBOX");
+    my %cass_exp;
+    $cass_exp{1} = $self->make_message("custom header 1", uid => 1, $self->custom_header);
+    $cass_exp{2} = $self->make_message("custom header 2", uid => 2, $self->custom_header);
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
+
+    # run cyr_virusscan
+    $self->{instance}->run_command({ cyrus => 1, },
+                                   'cyr_virusscan', '-r', '-n',
+                                   '-s', 'header "x-delete-me" "please"');
+
+    # let's see what's in there now
+    my $found_notifications = 0;
+    $self->{store}->read_begin();
+    while (my $msg = $self->{store}->read_message()) {
+        # should not be any of our test messages remaining
+        $self->assert_null($msg->get_header('x-cassandane-unique'));
+
+        # if we find something that looks like a notification, check it
+                if ($msg->get_header('message-id') =~ m{^<cmu-cyrus-\d+-\d+-\d+\@}) {
+            $found_notifications ++;
+
+            my $subject = $msg->get_header('subject');
+#            xlog $self, "subject: $subject";
+
+            # make sure our custom subject was used (and correctly encoded)
+            $self->assert_str_equals('=?UTF-8?Q?custom_=C2=BD_subject?=',
+                                     $subject);
+
+            my $body = $msg->get_body();
+#            xlog $self, "body:\n>>>>>>\n$body<<<<<<";
+
+            # make sure report body includes all our infected tests
+            foreach my $exp (values %cass_exp) {
+                my $message_id = $exp->get_header('message-id');
+                $self->assert_matches(qr/Message-ID: $message_id/, $body);
+
+                my $subject = $exp->get_header('subject');
+                $self->assert_matches(qr/Subject: $subject/, $body);
+
+                my $uid = $exp->get_attribute('uid');
+                $self->assert_matches(qr/IMAP UID: $uid/, $body);
+            }
+
+            # make sure the message was removed for the reason we expect
+            $self->assert_matches(qr/Cyrus Administrator Targeted Removal/,
+                                  $body);
+
+            # make sure our custom notification template was used
+            $self->assert_matches(qr/^custom notification!/, $body);
+
+            # make sure message was qp-encoded
+            $self->assert_matches(qr/with =C2=BD as much 8bit/, $body);
+        }
+    }
+    $self->{store}->read_end();
+
+    # finally, there should've been exactly one notification email sent
+    $self->assert_num_equals(1, $found_notifications);
+}

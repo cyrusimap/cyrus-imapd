@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bad_userids
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @bad_userids = (
+        'user',
+        'user.anyone',
+        'user.anonymous',
+        'user.%SHARED',
+        #'user..foo', # silently fixed by namespace conversion
+    );
+
+    foreach my $u (@bad_userids) {
+        $admintalk->create($u);
+        $self->assert_str_equals('no',
+            $admintalk->get_last_completion_response());
+    }
+}

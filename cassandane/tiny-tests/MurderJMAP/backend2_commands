@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_backend2_commands
+    :min_version_3_5
+{
+    my ($self) = @_;
+    my $result;
+
+    my $backend2_svc = $self->{backend2}->get_service("http");
+    my $backend2_host = $backend2_svc->host();
+    my $backend2_port = $backend2_svc->port();
+
+    my $backend2_jmap = $self->{backend2}->new_jmaptester_for_user(
+        $self->default_user,
+    );
+
+    # try to upload a blob
+    my $upload_res = $backend2_jmap->upload({
+        accountId => 'cassandane',
+        blob      => \"some test",
+        type      => 'text/plain',
+    });
+
+    # user doesn't exist on this backend, so upload url should not exist
+    $self->assert_num_equals(404, $upload_res->http_response->code);
+    $self->assert_str_equals('Not Found', $upload_res->http_response->message);
+
+    $self->assert(!$upload_res->is_success);
+
+#    # XXX test other commands
+}

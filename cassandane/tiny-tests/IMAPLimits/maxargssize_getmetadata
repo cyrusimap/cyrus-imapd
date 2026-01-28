@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_getmetadata
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('GETMETADATA', 'INBOX', [ "X" x 25, "X" x 25 ] );
+}

@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sighup_recycling
+{
+    my ($self) = @_;
+
+    my $host = 'localhost';
+
+    my $srv = $self->lemming_service(tag => 'foo', prefork => 1);
+    $self->start();
+    $self->lemming_wait(foo => { live => 1 });
+
+    xlog $self, "preforked, so one lemming running already";
+    $self->assert_deep_equals({ foo => { live => 1, dead => 0 } },
+        $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+    $self->lemming_wait(foo => { live => 2 });
+
+    xlog $self, "connected so one lemming forked";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 0 } },
+        $self->lemming_census());
+
+    $self->{instance}->send_sighup();
+    $self->lemming_wait(foo => { live => 2, dead => 1 });
+
+    xlog $self, "recycled, so expect one dead lemming";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 1 } },
+        $self->lemming_census());
+
+    $self->{instance}->send_sighup();
+    $self->lemming_wait(foo => { live => 2, dead => 2 });
+
+    xlog $self, "recycled, again so expect one more dead lemming";
+    $self->assert_deep_equals({ foo => { live => 2, dead => 2 } },
+        $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog $self, "always at least one live lemming";
+    $self->assert_deep_equals({ foo => { live => 1, dead => 3 } },
+        $self->lemming_census());
+}

@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test COPY behaviour with a very long sequence set
+#
+sub test_copy_longset_slow
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.dest");
+    for (1..2000) {
+        $self->make_message("Message $_");
+    }
+    my $list = join(',', map { $_ * 2 } 1..1000);
+
+    $imaptalk->copy($list, "INBOX.dest");
+
+    # XXX this doesn't even verify that the messages were copied!
+}

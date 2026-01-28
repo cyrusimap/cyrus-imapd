@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_recover_skipcleanshutdown
+{
+    my ($self) = @_;
+
+    my $dbdir = $self->{instance}->get_basedir() . "/conf/db";
+
+    # need to start up once to create a reusable basedir
+    $self->{instance}->start();
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    # act like we were previously shut down cleanly by some rc script,
+    # but without a skipstamp somehow
+    create_empty_file("$dbdir/skipcleanshutdown");
+    unlink "$dbdir/skipstamp";
+    $self->assert_not_file_test("$dbdir/skipstamp", '-e');
+
+    # start 'er up
+    $self->{instance}->start();
+
+    # recover should have created a skipstamp file, despite skipcleanshutdown
+    $self->assert_file_test("$dbdir/skipstamp", '-e');
+    my $prev_skipstamp_mtime = (stat "$dbdir/skipstamp")[9];
+
+    # and skipcleanshutdown should have been removed
+    $self->assert_not_file_test("$dbdir/skipcleanshutdown", '-e');
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join "\n", $self->{instance}->getsyslog();
+
+        # recover should not claim this was a normal start
+        $self->assert_does_not_match(qr/starting normally/, $syslog);
+
+        # recover should have logged itself updating skipstamp
+        $self->assert_matches(qr/updating recovery stamp/, $syslog);
+
+        # cyrus processes should not whinge about missing skipstamp file
+        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
+        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+    }
+
+    # shut down "cleanly" again, but this time leaving skipstamp alone
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+    create_empty_file("$dbdir/skipcleanshutdown");
+
+    # restart
+    $self->{instance}->start();
+
+    # skipstamp file should be present and unmodified since previous run
+    $self->assert_file_test("$dbdir/skipstamp", '-e');
+    my $skipstamp_mtime = (stat "$dbdir/skipstamp")[9];
+    $self->assert_num_equals($prev_skipstamp_mtime, $skipstamp_mtime);
+
+    # and skipcleanshutdown should have been removed
+    $self->assert_not_file_test("$dbdir/skipcleanshutdown", '-e');
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my $syslog = join "\n", $self->{instance}->getsyslog();
+
+        # recover should claim this was a normal start
+        $self->assert_matches(qr/starting normally/, $syslog);
+
+        # recover should not have updated skipstamp
+        $self->assert_does_not_match(qr/updating recovery stamp/, $syslog);
+
+        # cyrus processes should not whinge about missing skipstamp file
+        $self->assert_does_not_match(qr/skipstamp is missing/, $syslog);
+        $self->assert_does_not_match(qr/DBERROR: skipstamp/, $syslog);
+    }
+}

@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bitfield_size_conf
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    # The original code used 1<<j where j could be >= 31, which was undefined
+    # behaviour and also overflowed, meaning fileinto would also list
+    # vnd.cyrus.jmapquery!
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'fileinto' },
+        { sieve_extensions => 'fileinto' },
+    );
+}

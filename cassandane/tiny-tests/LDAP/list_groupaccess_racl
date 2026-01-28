@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_list_groupaccess_racl
+    :ReverseACLs :min_version_3_1 :NoAltNamespace :Conversations
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.groupaccess");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $precounters = $self->{store}->get_counters();
+
+    $admintalk->setacl("user.otheruser.groupaccess",
+                       "group:group co", "lrswipkxtecdn");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $postcounters = $self->{store}->get_counters();
+    $self->assert_num_not_equals($precounters->{raclmodseq}, $postcounters->{raclmodseq}, "RACL modseq changed");
+
+    if (get_verbose()) {
+        my $format = $self->{instance}->{config}->get('mboxlist_db');
+        $self->{instance}->run_command(
+            { cyrus => 1, },
+            'cyr_dbtool',
+            "$self->{instance}->{basedir}/conf/mailboxes.db",
+            $format,
+            'show'
+        );
+    }
+
+    my $list = $imaptalk->list("", "*");
+    my @boxes = sort map { $_->[2] } @{$list};
+
+    $self->assert_deep_equals(\@boxes,
+                              ['INBOX', 'user.otheruser.groupaccess']);
+}

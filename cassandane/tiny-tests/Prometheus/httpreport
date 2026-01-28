@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_httpreport
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    # do something that'll get counted
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+
+    my $last_timestamp = 0;
+    my $last_value = undef;
+
+    # get a few consecutive reports
+    for (1..3) {
+        sleep 3;
+
+        my $response = $self->http_report();
+
+        $self->assert($response->{success});
+        $self->assert(length $response->{content});
+
+        my $report = parse_report($response->{content});
+
+        $self->assert(scalar keys %{$report});
+        $self->assert(exists $report->{cyrus_imap_connections_total});
+
+        my $stat = $report->{cyrus_imap_connections_total}->{'service="imap"'};
+
+        # timestamp is the report time, not the time the stat was last counted,
+        # so it should have a new timestamp in each report...
+        $self->assert_not_equals($last_timestamp, $stat->{timestamp});
+
+        # ... even though we don't expect its value to have changed
+        if (defined $last_value) {
+            $self->assert_equals($last_value, $stat->{value});
+        }
+
+        $last_timestamp = $stat->{timestamp};
+        $last_value = $stat->{value};
+    }
+}

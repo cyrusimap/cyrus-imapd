@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_admin_getusergroup
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # should have the xusergroups capability
+    $self->assert_not_null($admintalk->capability()->{xusergroups});
+
+    # get a user's groups
+    my $usergroups = $self->imap_getusergroup($admintalk, 'cassandane');
+    $self->assert_not_null($usergroups->{'cassandane'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group c'});
+    $self->assert_not_null($usergroups->{'cassandane'}->{'group:group co'});
+    $self->assert_null($usergroups->{'cassandane'}->{'group:group o'});
+
+    # get a group's users
+    $usergroups = $self->imap_getusergroup($admintalk, 'group:group co');
+    $self->assert_not_null($usergroups->{'group:group co'});
+    $self->assert_not_null($usergroups->{'group:group co'}->{'cassandane'});
+    $self->assert_not_null($usergroups->{'group:group co'}->{'otheruser'});
+    $self->assert_null($usergroups->{'group:group co'}->{'nobody'});
+}

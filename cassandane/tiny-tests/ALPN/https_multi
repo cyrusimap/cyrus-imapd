@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_https_multi
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'http/1.1', 'http/1.0' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(1, $response->{success});
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}

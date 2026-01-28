@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_good_mailboxes_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_mailboxes = (
+        'user/cassandane/$RACL',
+        'user/cassandane/.foo', # with unixhs, this is not a double-sep!
+        'user/foo.',
+        'user/foo./bar', # with unixhs, this is not a double-sep!
+    );
+
+    foreach my $m (@good_mailboxes) {
+        $admintalk->create($m);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+}

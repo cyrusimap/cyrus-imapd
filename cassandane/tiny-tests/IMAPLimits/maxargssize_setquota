@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_setquota
+{
+    my ($self) = @_;
+
+    my $store = $self->{adminstore};
+    my $talk = $store->get_client();
+
+    $talk->_send_cmd('SETQUOTA', 'user.cassandane',
+                     [ 'STORAGE', '1234567890',
+                       'MESSAGE', '1234567890',
+                       'MAILBOX', '1234567890' ] );
+    $self->assert_bye_toobig($store);
+}

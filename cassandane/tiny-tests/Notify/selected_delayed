@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_selected_delayed
+    :needs_component_idled :min_version_3_9
+{
+    my ($self) = @_;
+
+    xlog $self, "Selected-delayed test of the NOTIFY command (idled required)";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    my $otherstore = $svc->create_store();
+    my $othertalk = $otherstore->get_client();
+
+    xlog $self, "The server should report the NOTIFY capability";
+    $self->assert($talk->capability()->{notify});
+
+    xlog $self, "Enable Notify";
+    my $res = $talk->_imap_cmd('NOTIFY', 0, 'STATUS', 'SET',
+                               "(SELECTED-DELAYED (MessageNew MessageExpunge FlagChange))");
+
+    xlog $self, "Examine INBOX";
+    $talk->examine("INBOX");
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    # Should get EXISTS, RECENT response
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
+
+    xlog $self, "EXPUNGE message from INBOX in other session";
+    $othertalk->select("INBOX");
+    $res = $othertalk->store('1', '+flags', '(\\Deleted)');
+    $res = $othertalk->expunge();
+
+    # Should get FETCH response, but NO EXPUNGE response
+    $res = $store->idle_response('FETCH', 3);
+    $self->assert($res, "received an unsolicited response");
+    $res = $store->idle_response({}, 1);
+    $self->assert(!$res, "no more unsolicited responses");
+
+    my $fetch = $talk->get_response_code('fetch');
+    $self->assert_num_equals(1, $fetch->{1}{uid});
+    $self->assert_str_equals('\\Recent', $fetch->{1}{flags}[0]);
+    $self->assert_str_equals('\\Deleted', $fetch->{1}{flags}[1]);
+
+    xlog $self, "Poll for changes";
+    $talk->noop();
+
+    # Should get EXPUNGE response
+    $self->assert_num_equals(1, $talk->get_response_code('expunge'));
+}

@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_append_reply
+    :min_version_3_0 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message B";
+    $exp{B} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
+    $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+}

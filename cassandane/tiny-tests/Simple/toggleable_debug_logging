@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_toggleable_debug_logging
+    :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $config_debug = $self->{instance}->{config}->get_bool('debug', 'no');
+    my $imaptalk = $self->{store}->get_client();
+
+    # can't do anything without captured syslog
+    if (!$self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "can't examine syslog, test is useless";
+        return;
+    }
+
+    # find our imapd pid from syslog
+    my $loginpat = qr{
+        \bimap\[(\d+)\]:\sevent=login\.good
+        .+
+        u\.username=cassandane
+    }x;
+    my @logins = $self->{instance}->getsyslog($loginpat);
+    $self->assert_num_equals(1, scalar @logins);
+    $logins[0] =~ m/$loginpat/;
+    my $imapd_pid = $1;
+
+    for (1..5) {
+        $imaptalk->unselect();
+        my $res = $imaptalk->select('INBOX');
+        $self->assert_str_equals('ok',
+                                 $imaptalk->get_last_completion_response());
+
+        # this is really looking at cassandane's own injected syslog
+        # output, so it depends on the injected syslog doing the right
+        # thing with masking
+        my $selectpat = qr/open: user cassandane opened INBOX/;
+        my @lines = $self->{instance}->getsyslog($selectpat);
+        if ($config_debug) {
+            $self->assert_num_equals(1, scalar @lines);
+            $self->assert_matches(qr/imap\[$imapd_pid\]:/, $lines[0]);
+        }
+        else {
+            $self->assert_num_equals(0, scalar @lines);
+        }
+
+        $config_debug = !$config_debug;
+
+        # toggle debug logging by sending SIGUSR1
+        my $count = kill 'SIGUSR1', $imapd_pid;
+        $self->assert_num_equals(1, $count);
+
+        # we can also look for the message logged by cyrus at the
+        # time it toggles the value
+        my $statuspat = qr/debug logging turned (on|off)/;
+        @lines = $self->{instance}->getsyslog($statuspat);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/imap\[$imapd_pid\]:/, $lines[0]);
+        $lines[0] =~ $statuspat;
+        my $status = $1;
+        if ($config_debug) {
+            $self->assert_str_equals('on', $status);
+        }
+        else {
+            $self->assert_str_equals('off', $status);
+        }
+    }
+}

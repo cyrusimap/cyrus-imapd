@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_append_annot
+{
+    my ($self) = @_;
+
+    my $email = $self->email;
+
+    # Use MULTIAPPEND, fail the second
+    $self->assert_cmd_bye_toobig('APPEND', 'INBOX',
+                                 { Literal => $email },
+                                 'ANNOTATION',
+                                 [ "X" x 25, [ 'VALUE', { Quote => "X" x 25 } ] ],
+                                 { Literal => $email } );
+}

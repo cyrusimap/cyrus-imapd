@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_basic_idled
+    :needs_component_idled
+{
+    my ($self) = @_;
+
+    xlog $self, "Basic test of the IDLE command, idled started";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+    $self->common_basic();
+}

@@ -201,46 +201,6 @@ sub shared_subscribe_common
     });
 }
 
-sub test_subscribe
-{
-    my ($self) = @_;
-
-    $self->shared_subscribe_common('firstuser', 'seconduser');
-}
-
-sub test_subscribe_prefix
-{
-    my ($self) = @_;
-
-    # one user is a prefix of the other!
-    $self->shared_subscribe_common('chris', 'christopher');
-}
-
-sub test_subscribe_vd
-    :VirtDomains :CrossDomains
-{
-    my ($self) = @_;
-
-    $self->shared_subscribe_common('firstuser@example.com',
-                                   'seconduser@example.com');
-}
-
-sub test_subscribe_vd_prefix
-    :VirtDomains :CrossDomains
-{
-    my ($self) = @_;
-
-    $self->shared_subscribe_common('matt@example.com',
-                                   'matthew@example.com');
-}
-
-sub test_subscribe_vd_prefix2
-    :VirtDomains :CrossDomains
-{
-    my ($self) = @_;
-
-    $self->shared_subscribe_common('jim@example.com',
-                                   'jim@example.coma.example.com');
-}
+use Cassandane::Tiny::Loader 'tiny-tests/Shared';
 
 1;

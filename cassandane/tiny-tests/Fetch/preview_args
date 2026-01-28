@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_preview_args
+    :min_version_3_5 :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # make a message
+    my $msg = $self->make_message("test message");
+    my $uid = $msg->{attrs}->{uid};
+
+    my $res;
+
+    # expect no modifier to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect empty modifier list to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW ())');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # expect bad modifier name to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW (FOO))');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # expect lazy modifier to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY))');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect lazy + bad modifier to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY FOO))');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+}

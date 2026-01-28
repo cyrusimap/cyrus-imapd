@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test rename a folder with subfolders
+#
+sub test_rename_withsub_dom
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.a");
+    $imaptalk->create("INBOX.b");
+    $imaptalk->create("INBOX.c");
+
+    $self->{store}->set_folder("INBOX.c");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+
+    $imaptalk->select("INBOX.c") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->rename("INBOX.c", "INBOX.b.c") || die;
+    $imaptalk->rename("INBOX.b", "INBOX.a.b") || die;
+
+    $imaptalk->select("INBOX.a.b.c") || die;
+    my @postdata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @postdata);
+}

@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test evil INBOX rename possibilities
+#
+sub test_rename_inbox_intermediate
+    :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->{store}->set_folder("INBOX");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+
+    $imaptalk->select("INBOX") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->create("INBOX.foo.bar");
+    $imaptalk->rename("INBOX.foo", "INBOX") && die "rename should fail";
+
+    $imaptalk->select("INBOX") || die;
+    my @postinboxdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postinboxdata);
+}

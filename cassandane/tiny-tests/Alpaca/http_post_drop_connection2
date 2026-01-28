@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_http_post_drop_connection2
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # consume initial capabilities response
+    my ($ok, $capability) = $talk->_parse_response('', { IdleResponse => 1 });
+    $self->assert_str_equals('ok', $ok);
+    $self->assert_str_equals('capability', $capability);
+
+    # as above, but mimic a HTTP connection trying sneak a POST request
+    # past by requesting a resource whose name is a valid IMAP command
+    # which accepts an argument, e.g. "POST authenticate HTTP/1.1\r\n"
+    eval {
+        imap_cmd_with_tag($talk, 'POST',
+                                 'authenticate', 0, 'authenticate',
+                                 'HTTP/1.1');
+    };
+    # XXX can't see the real exception text cause cass obscures it,
+    # XXX but there should have at least been some exception
+    $self->assert_not_null($@);
+    $self->assert_str_equals('This is an IMAP server',
+                             $talk->get_response_code('bye'));
+
+    # should be back to unconnected state
+    $self->assert_num_equals(0, $talk->state());
+}

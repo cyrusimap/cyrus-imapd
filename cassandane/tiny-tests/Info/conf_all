@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conf_all
+{
+    my ($self) = @_;
+
+    my %imapd_conf;
+    my $filename = $self->{instance}->_imapd_conf();
+    open my $fh, '<', $filename
+        or die "Cannot open $filename for reading: $!";
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $imapd_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $imapd_conf{$name} = $value;
+        }
+    }
+    close $fh;
+
+    my %cyr_info_conf;
+    foreach my $line ($self->{instance}->run_cyr_info('conf-all')) {
+        chomp $line;
+        my ($name, $value) = split /\s*:\s*/, $line, 2;
+
+        # conf-all outputs ALL configured values (including defaults)
+        # but we can only really test for the ones we know we put there
+        next if not exists $imapd_conf{$name};
+
+        if (Cassandane::Config::is_bitfield($name)) {
+            my @values = split /\s+/, $value;
+            $cyr_info_conf{$name} = join q{ }, sort @values;
+        }
+        else {
+            $cyr_info_conf{$name} = $value;
+        }
+    }
+
+    $self->assert_deep_equals(\%imapd_conf, \%cyr_info_conf);
+}

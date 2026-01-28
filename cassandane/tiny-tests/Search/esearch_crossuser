@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_esearch_crossuser
+    :NoAltNamespace :SearchFuzzyAlways
+{
+    my ($self) = @_;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 10;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+
+    $self->{instance}->create_user("otheruser");
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->setacl("user.otheruser", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.otheruser", cassandane => 'lrswipkxtecdn');
+    $admintalk->create("user.otheruser.sub");
+
+    $admintalk->create("user.third");
+    $admintalk->setacl("user.third", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.third", cassandane => 'lrswipkxtecdn');
+
+    $admintalk->select("user.cassandane");
+    $admintalk->move("1:5", "user.otheruser.sub");
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("inbox");
+    my $res = $imaptalk->_imap_cmd('ESEARCH', 0, 'esearch',
+                                   'IN', '(subtree user.otheruser)',
+                                   'body', 'this');
+
+
+    $self->assert_not_null($res);
+}

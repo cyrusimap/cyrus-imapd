@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch_flags_before_exists
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->select('user.cassandane');
+    $self->make_message("Test Message");
+    # this sets the state with EXISTS = 1
+    $admintalk->fetch('1:*', '(flags)');
+
+    $self->make_message("Test Message");
+#    $res = $admintalk->fetch('1:*', '(flags)');
+
+    # need to make our own handlers
+    my %handlers;
+    {
+        my $sawfetch = -1;
+        use Data::Dumper;
+        $handlers{fetch} = sub { $sawfetch = $_[2] if $sawfetch < $_[2] };
+        $handlers{exists} = sub { die "Got exists count too late for $_[2]" if $_[2] <= $sawfetch };
+    }
+
+    # expecting to see EXISTS 2 before FETCH 2
+    $admintalk->_imap_cmd("fetch", 1, \%handlers, \'1:*', '(flags)');
+}

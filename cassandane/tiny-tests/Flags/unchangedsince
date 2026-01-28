@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test UNCHANGEDSINCE modifier; RFC4551 section 3.2.
+# - changing a flag with current modseq equal to the
+#   UNCHANGEDSINCE value
+#       - updates the flag
+#       - updates modseq
+#       - sends an untagged FETCH response
+#       - the FETCH response has the new modseq
+#       - returns an OK response
+#       - the UID does not appear in the MODIFIED response code
+# - ditto less than
+# - changing a flag with current modseq greater than the
+#   UNCHANGEDSINCE value
+#       - doesn't update the flag
+#       - doesn't update modseq
+#       - sent no FETCH untagged response
+#       - returns an OK response
+#       - but reports the UID in the MODIFIED response code
+#
+sub test_unchangedsince
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags modseq));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    my $act0 = $self->check_messages(\%msg);
+
+    my %fetched;
+    my $modified;
+    my %handlers =
+    (
+        fetch => sub
+        {
+            my ($response, $rr, $id) = @_;
+
+            # older versions of Mail::IMAPTalk don't have
+            # the 3rd argument.  We can't test properly in
+            # those circumstances.
+            $self->assert_not_null($id);
+
+            $fetched{$id} = $rr;
+        },
+        modified => sub
+        {
+            my ($response, $rr) = @_;
+            # we should not get more than one of these ever
+            $self->assert_null($modified);
+            $modified = $rr;
+        }
+    );
+
+    # Note: Mail::IMAPTalk::store() doesn't support modifiers
+    # so we have to resort to the lower level interface.
+
+    xlog $self, "Changing a flag with current modseq == UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+                 '1', ['unchangedsince', get_modseq($act0, 'A')],
+                  '+flags', ['\\Flagged']);
+    my $res1 = $talk->get_last_completion_response();
+    #   - updates the flag
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    my $act1 = $self->check_messages(\%msg);
+    xlog $self, "returns an OK response?";
+    $self->assert_str_equals('ok', $res1);
+    xlog $self, "updated modseq?";
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
+    xlog $self, "returned no MODIFIED response code?";
+    $self->assert_null($modified);
+    xlog $self, "sent an untagged FETCH response?";
+    $self->assert_num_equals(1, scalar keys %fetched);
+    $self->assert_not_null($fetched{1});
+    xlog $self, "the FETCH response has the new modseq?";
+    $self->assert_num_equals(get_modseq($act1, 'A'),
+                             get_modseq_from_fetch(\%fetched, 1));
+
+    xlog $self, "Changing a flag with current modseq < UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+                 '1', ['unchangedsince', get_modseq($act1, 'A')+1],
+                  '-flags', ['\\Flagged']);
+    my $res2 = $talk->get_last_completion_response();
+    #   - updates the flag
+    $msg{A}->set_attribute(flags => []);
+    my $act2 = $self->check_messages(\%msg);
+    xlog $self, "returns an OK response?";
+    $self->assert_str_equals('ok', $res2);
+    xlog $self, "updated modseq?";
+    $self->assert(get_modseq($act2, 'A') > get_modseq($act0, 'A'));
+    xlog $self, "returned no MODIFIED response code?";
+    $self->assert_null($modified);
+    xlog $self, "sent an untagged FETCH response?";
+    $self->assert_num_equals(1, scalar keys %fetched);
+    $self->assert_not_null($fetched{1});
+    xlog $self, "the FETCH response has the new modseq?";
+    $self->assert_num_equals(get_modseq($act2, 'A'),
+                             get_modseq_from_fetch(\%fetched, 1));
+
+    xlog $self, "Changing a flag with current modseq > UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+                 '1', ['unchangedsince', get_modseq($act2, 'A')-1],
+                  '+flags', ['\\Flagged']);
+    my $res3 = $talk->get_last_completion_response();
+    #   - doesn't update the flag
+    $msg{A}->set_attribute(flags => []);
+    my $act3 = $self->check_messages(\%msg);
+    xlog $self, "returns an OK response?";
+    $self->assert_str_equals('ok', $res3);
+    xlog $self, "didn't update modseq?";
+    $self->assert_num_equals(get_modseq($act3, 'A'), get_modseq($act2, 'A'));
+    xlog $self, "reports the UID in the MODIFIED response code?";
+    $self->assert_not_null($modified);
+    $self->assert_deep_equals($modified, [1]);
+    xlog $self, "sent no FETCH untagged response?";
+    $self->assert_num_equals(0, scalar keys %fetched);
+}

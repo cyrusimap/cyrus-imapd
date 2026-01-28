@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_duplicate_suppression_off
+    :DuplicateSuppressionOff :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour with duplicate suppression off";
+
+    # test data from hipsteripsum.me
+    my $folder = "INBOX.thundercats";
+
+    xlog $self, "Create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Try to deliver the same message again";
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that second copy of the message made it";
+    $msgs{2} = $msgs{1}->clone();
+    $msgs{2}->set_attribute(uid => 2);
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}

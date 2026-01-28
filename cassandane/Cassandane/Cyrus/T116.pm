@@ -68,25 +68,6 @@ Cassandane::Cyrus::TestCase::magic(T116 => sub {
     $testcase->config_set(virtdomains => 'userid');
 });
 
-sub test_list_inbox
-    :T116
-{
-    my ($self) = @_;
-    my $adminstore = $self->{adminstore};
-    my $admintalk = $adminstore->get_client();
-
-    xlog $self, "Test Cyrus extension which renames a user to a different partition";
-
-    # create and prepare the user
-    $admintalk->create('user.test@inbox.com');
-    $admintalk->setacl('user.test@inbox.com', 'admin', 'lrswipkxtecda');
-
-    $admintalk->create('user.test@inbox2.com');
-    $admintalk->setacl('user.test@inbox2.com', 'admin', 'lrswipkxtecda');
-
-    my @list = $admintalk->list('', '*');
-    my @items = sort map { $_->[2] } @list;
-    $self->assert_deep_equals(\@items, ['user.cassandane', 'user.test@inbox.com', 'user.test@inbox2.com']);
-}
+use Cassandane::Tiny::Loader 'tiny-tests/T116';
 
 1;

@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_http_disabled
+    :TLS :needs_dependency_openssl
+{
+    my ($self) = @_;
+
+    my $ca_file = abs_path("data/certs/cacert.pem");
+    my $http = HTTP::Tiny->new(
+        max_redirect => 0,
+        SSL_options => {
+            SSL_ca_file => $ca_file,
+            SSL_verifycn_scheme => 'none'
+        }
+    );
+
+    # frontend should NOT offer TLS upgrade and should redirect to https://
+    my $frontend_svc = $self->{frontend}->get_service("http");
+    my $frontend_host = $frontend_svc->host();
+    my $frontend_port = $frontend_svc->port();
+
+    my $scheme = "http";
+    my $host = "$frontend_host:$frontend_port";
+    my $hier_part = "//$host/jmap/";
+    my $url = "$scheme:$hier_part";
+
+    my $req = {
+        method => 'GET',
+        uri => $url,
+        headers => {
+            'Host' => $host,
+            'Connection' => 'Upgrade',
+            'Upgrade' => 'TLS/1.2'
+        },
+        content => '',
+    };
+
+    my $res = $http->request('GET', $url);
+    $self->assert_str_equals('301', $res->{status});
+    $self->assert_matches(qr/https:$hier_part/, $res->{headers}->{location});
+
+    # backend should NOT offer TLS upgrade and should redirect to https://
+    my $backend_svc = $self->{instance}->get_service("http");
+    my $backend_host = $backend_svc->host();
+    my $backend_port = $backend_svc->port();
+
+    $host = "$backend_host:$backend_port";
+    $hier_part = "//$host/jmap/";
+    $url = "$scheme:$hier_part";
+
+    $req = {
+        method => 'GET',
+        uri => $url,
+        headers => {
+            'Host' => $host,
+            'Connection' => 'Upgrade',
+            'Upgrade' => 'TLS/1.2'
+        },
+        content => '',
+    };
+
+    $res = $http->request('GET', $url);
+    $self->assert_str_equals('301', $res->{status});
+    $self->assert_matches(qr/https:$hier_part/, $res->{headers}->{location});
+}

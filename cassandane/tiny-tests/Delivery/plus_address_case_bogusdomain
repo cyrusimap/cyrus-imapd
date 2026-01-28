@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_plus_address_case_bogusdomain
+    :FuzzyMatch :VirtDomains
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour of plus addressing where case matches";
+
+    my $folder = "INBOX.ApplePie";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    my $r = $self->{instance}->deliver(
+                $msgs{1},
+                user => "cassandane+applepie\@bogusdomain"
+            );
+    # expect deliver to exit with EC_DATAERR
+    $self->assert_not_equals(0, $r);
+
+    xlog $self, "Check that the message didn't make it";
+    $self->{store}->set_folder($folder);
+    $self->check_messages({}, check_guid => 0, keyed_on => 'uid');
+}

@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_alternate_ptscache_db_path
+    :min_version_3_0_8 :AltPTSDBPath
+{
+    my ($self) = @_;
+
+    # just interact with the store, and it should work
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->list('user.cassandane', '*');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $confdir = $self->{instance}->{basedir} . "/conf";
+    $self->assert_file_test($confdir . "/non-default-ptscache.db");
+    $self->assert_not_file_test($confdir . "/ptclient/ptscache.db");
+}

@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_subscribe
+{
+    my ($self) = @_;
+
+    $self->shared_subscribe_common('firstuser', 'seconduser');
+}

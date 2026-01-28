@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_proc_crashed_services
+{
+    my ($self) = @_;
+
+    # no clients => no service daemons => no processes
+    my @output = $self->{instance}->run_cyr_info('proc');
+    $self->assert_num_equals(0, scalar @output);
+
+    # master spawns service processes when clients connect to them
+    my $imap_svc = $self->{instance}->get_service('imap');
+    my @clients;
+    foreach (1..5) {
+        # five concurrent connections for a single user is normal,
+        # e.g. thunderbird does this
+        my $store = $imap_svc->create_store(username => 'cassandane');
+        my $imaptalk = $store->get_client();
+        push @clients, $imaptalk if $imaptalk;
+    }
+
+    # better have got some clients from that!
+    $self->assert_num_gte(1, scalar @clients);
+
+    # five clients => five service daemons => five processes
+    @output = $self->{instance}->run_cyr_info('proc');
+    $self->assert_num_equals(scalar @clients, scalar @output);
+
+    my @pids = sort map { (split /\s+/, $_, 2)[0] } @output;
+    $self->assert_num_equals(scalar @clients, scalar @pids);
+
+    # crash service processes one at a time, expect proc count to decrease
+    while (scalar @pids) {
+        my $pid = shift @pids;
+        kill 'SEGV', $pid;
+        usleep 250_000;
+
+        my @cores = $self->{instance}->find_cores();
+        if (@cores) {
+            # if we dumped core, there'd better only be one core file
+            $self->assert_num_equals(1, scalar @cores);
+
+            # don't barf on it existing during shutdown
+            unlink $cores[0];
+        }
+
+        # sanitizers might complain about the SEGV
+        my $ubsan_logdir = $self->{instance}->_sanitizer_log_dir("ubsan");
+        unlink("$ubsan_logdir/ubsan.$pid");
+        my $asan_logdir = $self->{instance}->_sanitizer_log_dir("asan");
+        unlink("$asan_logdir/asan.$pid");
+
+        @output = $self->{instance}->run_cyr_info('proc');
+        $self->assert_num_equals(scalar @pids, scalar @output);
+    }
+
+    # prevent a lot of "Connection closed by other end" noise by claiming
+    # and discarding the client's socket before its DESTROY is called
+    while (scalar @clients) {
+        my $old = shift @clients;
+
+        $old->release_socket(1);
+    }
+}

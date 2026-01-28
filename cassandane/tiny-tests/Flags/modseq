@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test interaction between RFC4551 modseq and STORE FLAGS
+#  - setting a flag bumps the message's modseq
+#    and the folder's highestmodseq
+#  - clearing a flag bumps the message's modseq etc
+#  - setting an already-set flag does not bump modseq
+#    (actually this isn't explicitly stated in RFC4551)
+#  - clearing an already-clear flag does not bump modseq
+#    (actually this isn't explicitly stated in RFC4551)
+#  - modseq of other messages is never affected
+#
+# TODO: test that changing a flag results in an untagged
+#       FETCH response.
+# TODO: test the .SILENT suffix
+#
+sub test_modseq
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags modseq));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    my $act0 = $self->check_messages(\%msg);
+    my $hms0 = $self->get_highestmodseq();
+
+    xlog $self, "Set \\Flagged on message A";
+    my $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_not_null($res);
+    $self->assert_deep_equals([ '\\Flagged' ], $res->{1}->{flags});
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    my $act1 = $self->check_messages(\%msg);
+    my $hms1 = $self->get_highestmodseq();
+    xlog $self, "A should have a new modseq higher than any other message";
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'B'));
+    $self->assert(get_modseq($act1, 'B') == get_modseq($act0, 'B'));
+    $self->assert($hms1 > $hms0);
+    $self->assert(get_modseq($act1, 'A') == $hms1);
+
+    xlog $self, "Set \\Flagged on message A while already set";
+    $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({}, $res);
+    $self->assert_equals('ok', $talk->get_last_completion_response());
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    my $act2 = $self->check_messages(\%msg);
+    my $hms2 = $self->get_highestmodseq();
+    xlog $self, "A should have not changed modseq";
+    $self->assert(get_modseq($act2, 'A') == get_modseq($act1, 'A'));
+    $self->assert(get_modseq($act2, 'B') == get_modseq($act1, 'B'));
+    $self->assert($hms2 == $hms1);
+    $self->assert(get_modseq($act2, 'A') == $hms2);
+
+    xlog $self, "Clear \\Flagged on message A";
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_not_null($res);
+    $self->assert_deep_equals([], $res->{1}->{flags});
+    $msg{A}->set_attribute(flags => []);
+    my $act3 = $self->check_messages(\%msg);
+    my $hms3 = $self->get_highestmodseq();
+    xlog $self, "A should have a new modseq higher than any other message";
+    $self->assert(get_modseq($act3, 'A') > get_modseq($act2, 'A'));
+    $self->assert(get_modseq($act3, 'A') > get_modseq($act2, 'B'));
+    $self->assert(get_modseq($act3, 'B') == get_modseq($act2, 'B'));
+    $self->assert($hms3 > $hms2);
+    $self->assert(get_modseq($act3, 'A') == $hms3);
+
+    xlog $self, "Clear \\Flagged on message A while already clear";
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({}, $res);
+    $self->assert_equals('ok', $talk->get_last_completion_response());
+    $msg{A}->set_attribute(flags => []);
+    my $act4 = $self->check_messages(\%msg);
+    my $hms4 = $self->get_highestmodseq();
+    xlog $self, "A should have not changed modseq";
+    $self->assert(get_modseq($act4, 'A') == get_modseq($act3, 'A'));
+    $self->assert(get_modseq($act4, 'B') == get_modseq($act3, 'B'));
+    $self->assert($hms4 == $hms3);
+    $self->assert(get_modseq($act4, 'A') == $hms4);
+}

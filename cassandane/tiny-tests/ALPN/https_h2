@@ -1,0 +1,23 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_https_h2
+    :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'h2' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    # HTTP::Tiny can't speak h2, so the request itself will fail
+    $self->assert_num_equals(0, $response->{success});
+    $self->assert_str_equals('Internal Exception', $response->{reason});
+
+    # but we can still examine the log to check the ALPN result
+    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
+}

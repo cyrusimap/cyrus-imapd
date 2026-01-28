@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that
+#  - the \Flagged flag can be set
+#  - the \Flagged flag can be cleared again
+#  - other messages don't get the \Flagged flag
+#  - once set, it's persistent across sessions
+#
+sub test_flagged
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Flagged on message A";
+    my $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Flagged' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Clear \\Flagged on message A";
+    $res = $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Set \\Flagged on message A again";
+    $res = $talk->store('1', '+flags', '(\\Flagged)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Flagged' ] }}, $res);
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    $self->check_messages(\%msg);
+
+    xlog $self, "Reconnect, \\Flagged should still be on message A";
+    $self->{store}->disconnect();
+    $self->{store}->connect();
+    $self->{store}->_select();
+    $self->check_messages(\%msg);
+}

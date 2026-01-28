@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imaps_bad
+{
+    my ($self) = @_;
+
+    my $imaps = $self->{instance}->get_service('imaps');
+    my $store = $imaps->create_store(username => 'cassandane');
+    my $talk;
+
+    eval {
+        $talk = $store->get_client(OverrideALPN => [ 'bogus' ]);
+    };
+    my $e = $@;
+
+    $self->assert_not_null($e);
+    $self->assert_matches($self->alpn_fail_pattern, $e);
+}

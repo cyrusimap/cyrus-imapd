@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_list_return
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('LIST',
+                                 { Quote => '' }, '*', 'RETURN',
+                                 [ 'SUBSCRIBED', 'CHILDREN',
+                                   'MYRIGHTS', 'SPECIAL-USE' ] );
+}

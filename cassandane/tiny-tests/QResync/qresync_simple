@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_qresync_simple
+{
+    my ($self) = @_;
+
+    xlog $self, "Make some messages";
+    my $uid = 1;
+    my %msgs;
+    for (1..50)
+    {
+        $msgs{$uid} = $self->make_message("Message $uid");
+        $msgs{$uid}->set_attribute('uid', $uid);
+        $uid++;
+    }
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+
+    xlog $self, "Mark some messages \\Deleted";
+    $talk->enable("qresync");
+    $talk->store('5:10,25:45', '+flags', '(\\Deleted)');
+
+    xlog $self, "Expunge messages";
+    $talk->expunge();
+    my @vanished = $talk->get_response_code('vanished');
+    $self->assert_equals("5:10,25:45", $vanished[0][0]);
+
+    xlog "QResync mailbox";
+    $talk->unselect();
+    $talk->select("INBOX", "(QRESYNC ($uidvalidity 0))" => 1);
+    @vanished = $talk->get_response_code('vanished');
+    $self->assert_num_equals(23, $talk->get_response_code('exists'));
+    $self->assert_equals("5:10,25:45", $vanished[0][1]);
+}

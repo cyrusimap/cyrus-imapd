@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_https_bad
+    :want_service_https :needs_component_httpd
+{
+    my ($self) = @_;
+
+    # skip past setup logs
+    $self->{instance}->getsyslog();
+
+    my $https = $self->{instance}->get_service('https');
+    my $alpn_map = [ 'bogus' ];
+
+    my $response = $self->do_https_request($https, $alpn_map);
+
+    $self->assert_num_equals(0, $response->{success});
+    $self->assert_str_equals('Internal Exception', $response->{reason});
+    $self->assert_matches($self->alpn_fail_pattern, $response->{content});
+}

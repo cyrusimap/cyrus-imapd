@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that
+#  - the \Seen flag can be set
+#  - the \Seen flag can be cleared again
+#  - other messages don't get the \Seen flag
+#  - once set, it's persistent across sessions
+#
+# Note that we do this test again for \Flagged because
+# \Seen is a special case in the backend.
+#
+# TODO: test that \Seen gets set as a side effect of
+# doing body fetches.
+#
+sub test_seen_otheruser
+    :NoAltNamespace
+{
+    my ($self) = @_;
+
+    # no particular reason to use an admin rather than just another user,
+    # but it's easy
+    $self->{instance}->create_user("otheruser");
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user.cassandane", otheruser => 'lrswipkxtecdn');
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $otherstore = $self->{instance}->get_service('imap')->create_store(username => 'otheruser');
+    my $othertalk = $otherstore->get_client(username => 'otheruser');
+    $otherstore->set_fetch_attributes(qw(uid flags));
+
+    xlog $self, "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+                            uid => 1,
+                            flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+                            uid => 2,
+                            flags => []);
+    $self->check_messages(\%msg, $self->{store});
+
+    # select AFTER creating messages so we don't get \Recent
+    $othertalk->select('user.cassandane');
+    $othertalk->unselect();
+    $othertalk->select('user.cassandane');
+    $otherstore->set_folder('user.cassandane');
+
+    xlog $self, "Set \\Seen on message A";
+    my $res = $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->check_messages(\%msg, store => $otherstore);
+    $msg{A}->set_attribute(flags => ['\\Seen']);
+    $self->check_messages(\%msg, store => $self->{store});
+
+    xlog $self, "Set \\Seen on message A as otheruser";
+    $res = $othertalk->store('1', '+flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [ '\\Seen' ] }}, $res);
+    $self->check_messages(\%msg, store => $otherstore);
+    $self->check_messages(\%msg, store => $self->{store});
+
+    xlog $self, "Clear \\Seen on message A";
+    $res = $talk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->check_messages(\%msg, store => $otherstore);
+    $msg{A}->set_attribute(flags => []);
+    $self->check_messages(\%msg, store => $self->{store});
+
+    xlog $self, "Clear \\Seen on message A as otheruser";
+    $res = $othertalk->store('1', '-flags', '(\\Seen)');
+    $self->assert_deep_equals({ '1' => { 'flags' => [] }}, $res);
+    $self->check_messages(\%msg, store => $otherstore);
+    $self->check_messages(\%msg, store => $self->{store});
+}

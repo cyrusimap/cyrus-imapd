@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_startup
+{
+    my ($self) = @_;
+
+    xlog $self, "Test a program in the START section";
+    $self->lemming_start(tag => 'A', delay => 100, mode => 'success');
+    $self->lemming_start(tag => 'B', delay => 200, mode => 'success');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
+    $self->start();
+
+    xlog $self, "expect 2 dead lemmings";
+    $self->assert_deep_equals({
+                                A => { live => 0, dead => 1 },
+                                B => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
+}

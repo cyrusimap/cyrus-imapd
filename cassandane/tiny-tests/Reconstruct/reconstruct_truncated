@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test truncated file
+#
+sub test_reconstruct_truncated
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "subject $_");
+        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
+    }
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX") || die;
+
+    my @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert_contains('6', \@records);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+
+    @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert_contains('6', \@records);
+
+    # this needs a bit of magic to know where to write... so
+    # we do some hard-coded cyrus.index handling
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    my $file = "$dir/cyrus.index";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    my $offset = $index->header('StartOffset') + (5 * $index->header('RecordSize'));
+    $fh->truncate($offset);
+    $fh->close();
+
+    # this time, the reconstruct will create the records again
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+
+    # XXX - this actually deletes everything, so we unselect and reselect.  A
+    # too-short cyrus.index is a fatal error, so we don't even try to read it.
+    $imaptalk->unselect();
+    $imaptalk->select("INBOX") || die;
+
+    @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert_contains('6', \@records);
+    $self->assert_not_contains('11', \@records);
+
+    # We should have generated a SYNCERROR or two
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: refreshing index/);
+}
+#
+# Test removed file
+#
+sub test_reconstruct_removedfile
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "subject $_");
+        $self->{store}->write_message($msg, flags => ["\\Seen", "\$NotJunk"]);
+    }
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX") || die;
+
+    my @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert_contains('6', \@records);
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct');
+
+    @records = $imaptalk->search("all");
+    $self->assert_num_equals(10, scalar @records);
+    $self->assert_contains('6', \@records);
+
+    # this needs a bit of magic to know where to write... so
+    # we do some hard-coded cyrus.index handling
+    my $dir = $self->{instance}->folder_to_directory('user.cassandane');
+    unlink("$dir/6.");
+
+    # this time, the reconstruct will fix up the broken record and re-insert later
+    $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', 'user.cassandane');
+
+    @records = $imaptalk->search("all");
+    $self->assert_num_equals(9, scalar @records);
+    $self->assert_not_contains('6', \@records);
+}

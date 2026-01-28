@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test APPEND of messages to IMAP
+#
+sub test_append
+{
+    my ($self) = @_;
+
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message B";
+    $exp{B} = $self->make_message("Message B");
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message C";
+    $exp{C} = $self->make_message("Message C");
+    $self->check_messages(\%exp);
+
+    xlog $self, "generating message D";
+    $exp{D} = $self->make_message("Message D");
+    $self->check_messages(\%exp);
+}

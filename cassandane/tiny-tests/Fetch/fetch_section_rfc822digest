@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fetch_section_rfc822digest
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $ct = "multipart/digest; boundary=\"foo\"";
+    my $from = "sub\@domain.org";
+    my $date = "Sun, 12 Aug 2012 12:34:56 +0300";
+    my $subj = "submsg";
+
+    my $body = ""
+    . "From: $from\r\n"
+    . "Date: $date\r\n"
+    . "Subject: $subj\r\n"
+    . "Content-Type: $ct\r\n"
+    . "\r\n"
+    . "prologue\r\n"
+    . "\r\n"
+    . "--foo\r\n"
+    . "\r\n"
+    . "From: m1\@example.com\r\n"
+    . "Subject: m1\r\n"
+    . "\r\n"
+    . "m1 body\r\n"
+    . "\r\n"
+    . "--foo\r\n"
+    . "X-Mime: m2 header\r\n"
+    . "\r\n"
+    . "From: m2\@example.com\r\n"
+    . "Subject: m2\r\n"
+    . "\r\n"
+    . "m2 body\r\n"
+    . "\r\n"
+    . "--foo--\r\n"
+    . "\r\n"
+    . "epilogue\r\n"
+    . "\r\n";
+
+    $self->make_message("foo",
+        mime_type => "message/rfc822",
+        body => $body,
+    );
+
+    my $res;
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[TEXT])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1])');
+    $self->assert_str_equals($res->{'1'}->{body}, $body);
+
+    $res = $imaptalk->fetch('1', '(BODY.PEEK[1.HEADER])');
+    $self->assert_str_equals($res->{'1'}->{headers}->{"content-type"}[0], $ct);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"date"}[0], $date);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"from"}[0], $from);
+    $self->assert_str_equals($res->{'1'}->{headers}->{"subject"}[0], $subj);
+}

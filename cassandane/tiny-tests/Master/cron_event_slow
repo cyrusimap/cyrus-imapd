@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cron_event_slow
+{
+    my ($self) = @_;
+
+    my $srv = $self->lemming_service(tag => 'A');
+
+    # schedule an event to run a few times a little after the current time,
+    # and check that it does
+    my @offsets = (1, 3, 20);
+
+    my $now = time;
+    my $localtz = DateTime::TimeZone->new(name => 'local');
+    my @minutes;
+    foreach my $offset (@offsets) {
+        my $dt = DateTime->from_epoch(epoch => $now, time_zone => $localtz);
+        $dt->add(minutes => $offset);
+        push @minutes, $dt->minute;
+    }
+    $self->lemming_event(tag => 'B',
+                         mode => 'success',
+                         cron => join(',', @minutes) . " * * * *");
+    $self->start();
+
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5 * 60 + 5);
+
+    $self->assert_deep_equals({
+        'B'  => { live => 0, dead => 2 },
+    }, $self->lemming_census());
+}

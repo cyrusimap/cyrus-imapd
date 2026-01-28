@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_imap_disabled
+    :TLS :needs_dependency_openssl
+{
+    my ($self) = @_;
+
+    # get a pristine connection
+    $self->{store}->disconnect();
+    my $talk = $self->{store}->get_client(NoLogin => 1);
+
+    # STARTTLS should NOT be advertised
+    my $res = $talk->capability();
+    $self->assert_null($res->{starttls});
+
+    # STARTTLS should be unrecognized command
+    $talk->_imap_cmd('starttls', 0, 'starttls');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+}

@@ -1,0 +1,13 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_create_multiple
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Rubbish", "(USE (\\Junk \\Trash \\Sent))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+}

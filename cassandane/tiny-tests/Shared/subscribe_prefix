@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_subscribe_prefix
+{
+    my ($self) = @_;
+
+    # one user is a prefix of the other!
+    $self->shared_subscribe_common('chris', 'christopher');
+}

@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+# XXX version gated to 3.4+ for now to keep travis happy, but if we
+# XXX backport the fix we should change or remove the gate...
+sub test_skip_unmodified
+    :SearchEngineSquat :min_version_3_4
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+
+    $self->make_message() || die;
+
+    sleep(1);
+
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{Squat skipping mailbox});
+
+    $self->{instance}->getsyslog();
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v', '-s', '0');
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{Squat skipping mailbox});
+}

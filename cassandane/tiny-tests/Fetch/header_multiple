@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_header_multiple
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $extra_headers = [
+        ['x-nice-day-for', 'start again (come on)' ],
+        ['x-awkward', 'interjection' ],
+        ['x-nice-day-for', 'white wedding' ],
+        ['x-nice-day-for', 'start agaaain' ],
+    ];
+
+    my %exp;
+    $exp{1} = $self->make_message('message 1',
+                                  'extra_headers' => $extra_headers);
+    $exp{2} = $self->make_message('nice day');
+    $self->check_messages(\%exp);
+
+    my $res = $talk->fetch('1:*',
+                           '(BODY.PEEK[HEADER.FIELDS (x-nice-day-for)])');
+    $self->assert_num_equals(2, scalar keys %{$res});
+
+    my $expected = {
+        'x-nice-day-for' => [
+            'start again (come on)',
+            'white wedding',
+            'start agaaain',
+        ],
+    };
+    $self->assert_deep_equals($expected, $res->{1}->{headers});
+    $self->assert_deep_equals({}, $res->{2}->{headers});
+}

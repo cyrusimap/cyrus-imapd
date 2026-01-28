@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_proc_periodic_events_slow
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10; # seconds
+
+    # periodic events first fire immediately at startup, and then every
+    # 'period' minutes thereafter. the fastest we can schedule them is
+    # every 1 minute, so this test must run for at least several real
+    # minutes
+    $self->{instance}->add_event(
+        name => 'sleeper',
+        argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        period => 1,
+    );
+    $self->{instance}->start();
+
+    sleep 2; # offset our checks a little to avoid races
+
+    # observe for three cycles
+    my $observations = 3;
+    while ($observations > 0) {
+        # event should have fired and be running
+        my @output = $self->{instance}->run_cyr_info('proc');
+        $self->assert_num_equals(1, scalar @output);
+
+        # wait for it to finish and check again
+        sleep $sleeper_time;
+        @output = $self->{instance}->run_cyr_info('proc');
+        $self->assert_num_equals(0, scalar @output);
+
+        # skip final wait if we're done
+        $observations--;
+        last if $observations == 0;
+
+        # wait until next period
+        sleep 60 - $sleeper_time;
+    }
+}

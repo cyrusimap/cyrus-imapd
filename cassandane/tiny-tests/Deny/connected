@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_connected
+{
+    my ($self) = @_;
+
+    xlog $self, "Test that cyr_deny shuts down any connected sessions";
+
+    xlog $self, "Create a user";
+    my $user = 'gastropub';
+    $self->{instance}->create_user($user);
+
+    xlog $self, "Set up a logged-in client for each of two users";
+    my $cass_talk = $self->{store}->get_client();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $user_store = $svc->create_store(username => $user);
+    my $user_talk = $user_store->get_client();
+
+    xlog $self, "Check that we can run a command in each of the two clients";
+    my $res;
+    $res = $cass_talk->status('inbox', [ 'messages' ]);
+    $self->assert_deep_equals({ messages => 0 }, $res);
+    $res = $user_talk->status('inbox', [ 'messages' ]);
+    $self->assert_deep_equals({ messages => 0 }, $res);
+
+    $user_talk->clear_response_code('alert');
+
+    xlog $self, "Deny the user";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', $user);
+
+    xlog $self, "Check that we can run a command in the unaffected user";
+    $res = $cass_talk->status('inbox', [ 'messages' ]);
+    $self->assert_deep_equals({ messages => 0 }, $res);
+
+    xlog $self, "Check that the affected user is disconnected";
+    $res = undef;
+    # Either is_open will return undef, or die; both of these
+    # are good.  If it returned 1 we should worry.
+    eval { $res = $user_talk->is_open(); };
+    $self->assert_null($res);
+
+    # Could do this, but Mail::IMAPTalk drops ALERTs in a BYE response
+#     $self->assert_matches(qr/Access to this service has been blocked/i,
+#                         $user_talk->get_response_code('alert'));
+}

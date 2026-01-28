@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_periodic_event_slow
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing regular events";
+
+    my $srv = $self->lemming_service(tag => 'A');
+    # This is the fastest we can schedule events - every 1 minute
+    # so in the absence of a per-process time machine our test will
+    # need to run for several real minutes.
+    $self->lemming_event(tag => 'B', mode => 'success', period => 1);
+    $self->start();
+
+    xlog $self, "periodic events run immediately";
+
+    xlog $self, "waiting 5 mins for events to fire, plus some slop";
+    sleep(5*60 + 5);
+
+    $self->assert_deep_equals({
+                                B => { live => 0, dead => 6 },
+                              }, $self->lemming_census());
+}

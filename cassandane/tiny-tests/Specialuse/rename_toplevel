@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+# Test that you can rename a special use folder
+sub test_rename_toplevel
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Junk", "(USE (\\Junk))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->rename("INBOX.Junk", "INBOX.Other");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+}

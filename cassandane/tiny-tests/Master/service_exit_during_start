@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test a single program in SERVICES which fails during startup
+#
+sub test_service_exit_during_start
+{
+    my ($self) = @_;
+    my $lemm;
+
+    xlog $self, "single service will exit during startup";
+    my $srv = $self->lemming_service(mode => 'exit', delay => 100);
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    xlog $self, "connection fails due to dead lemming";
+    eval
+    {
+        $lemm = lemming_connect($srv);
+    };
+    $self->assert_null($lemm);
+
+    xlog $self, "expect 5 dead lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+                              $self->lemming_census());
+
+    xlog $self, "connections should fail because service disabled";
+    eval
+    {
+        $lemm = lemming_connect($srv);
+    };
+    $self->assert_null($lemm);
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
+                              $self->lemming_census());
+
+    if ($self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "check that the error was syslogged";
+        my @lines = $self->{instance}->getsyslog(qr/too many failures for service/);
+        $self->assert_num_equals(1, scalar @lines);
+        $self->assert_matches(qr/disabling until next SIGHUP/, $lines[0]);
+    }
+}

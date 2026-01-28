@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_status_after_expunge
+{
+    my ($self, $folder, %params) = @_;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $subfolder = 'INBOX.foo';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Generate messages in $subfolder";
+    $store->set_folder($subfolder);
+    $store->_select();
+    for (1..5) {
+        $self->make_message("Message $subfolder $_");
+    }
+    $talk->unselect();
+    $talk->select($subfolder);
+
+    my $stat = $talk->status($subfolder, '(highestmodseq unseen messages)');
+    $self->assert_equals(5, $stat->{unseen});
+    $self->assert_equals(5, $stat->{messages});
+
+    $talk->store('1,3,5', '+flags', '(\\Seen)');
+
+    $stat = $talk->status($subfolder, '(highestmodseq unseen messages)');
+    $self->assert_equals(2, $stat->{unseen});
+    $self->assert_equals(5, $stat->{messages});
+
+    $talk->store('1:*', '+flags', '(\\Deleted \\Seen)');
+    $talk->expunge();
+
+    $stat = $talk->status($subfolder, '(highestmodseq unseen messages)');
+    $self->assert_equals(0, $stat->{unseen});
+    $self->assert_equals(0, $stat->{messages});
+}

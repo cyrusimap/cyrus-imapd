@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_guid_duplicate_total_count
+    :min_version_3_3 :LowEmailLimits
+{
+    my ($self) = @_;
+    my %exp;
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.M1");
+    $talk->create("INBOX.M2");
+    $talk->create("INBOX.M3");
+    $talk->create("INBOX.M4");
+    $talk->create("INBOX.M5");
+
+    $talk->select("INBOX");
+
+    my $r1 = $talk->copy("1", "INBOX.M1");
+    my $r2 = $talk->copy("1", "INBOX.M2");
+    my $r3 = $talk->copy("1", "INBOX.M3");
+    my $r4 = $talk->copy("1", "INBOX.M4");
+    my $r5 = $talk->copy("1", "INBOX.M5");
+
+    $self->assert_not_null($r1);
+    $self->assert_not_null($r2);
+    $self->assert_not_null($r3);
+    $self->assert_not_null($r4);
+    $self->assert_null($r5);
+    $self->assert_matches(qr/Too many identical emails/, $talk->get_last_error());
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{IOERROR: conversations GUID limit});
+}

@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxforkrate
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing enforcement of the maxforkrate= parameter";
+
+    # A very loose error factor.  We don't care too much if the
+    # enforcement is slightly off, it's a rough resource limit and
+    # fairness measure not a precise QoS issue.  Also, even modest fork
+    # rates may be difficult to achieve when running under Valgrind, and
+    # we don't want that to cause the test to fail spuriously.
+    my $epsilon = 0.2;
+    my $fast = 10.0;        # forks/sec
+    my $slow = 5.0;         # forks/sec
+
+    my $srvA = $self->lemming_service(tag => 'A');
+    my $srvB = $self->lemming_service(tag => 'B', maxforkrate => int($slow));
+    $self->start();
+
+    xlog $self, "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+                              $self->lemming_census());
+
+    xlog $self, "Test that we can achieve the fast forks rate on the unlimited service";
+    my $r = $self->measure_fork_rate($srvA, $fast);
+    xlog $self, "Actual rate: $r";
+    $self->assert($r >= (1.0-$epsilon)*$fast,
+                  "Fork rate too slow, for $r wanted $fast");
+    $self->assert($r <= (1.0+$epsilon)*$fast,
+                  "Fork rate too fast, for $r wanted $fast");
+
+    xlog $self, "Test that the fork rate is limited on the limited service";
+    $r = $self->measure_fork_rate($srvB, $fast);
+    xlog $self, "Actual rate: $r";
+    $self->assert($r >= (1.0-$epsilon)*$slow,
+                  "Fork rate too slow, got $r wanted $slow");
+    $self->assert($r <= (1.0+$epsilon)*$slow,
+                  "Fork rate too fast, got $r wanted $slow");
+
+    xlog $self, "no more live lemmings";
+    $self->assert_deep_equals({
+                                A => { live => 0, dead => 100 },
+                                B => { live => 0, dead => 100 },
+                              }, $self->lemming_census());
+}

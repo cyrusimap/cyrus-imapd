@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annot_dupe
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Rubbish", "(USE (\\Trash))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+}

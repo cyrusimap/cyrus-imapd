@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bz3781
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing that a folder can be deleted when there is";
+    xlog $self, "unexpected files in the proc directory (Bug 3781)";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->check_folder_ondisk($subfolder);
+
+    xlog $self, "Create unexpected files in proc directory";
+    my $procdir = $self->{instance}->{basedir} . "/conf/proc";
+    POSIX::close(POSIX::creat("$procdir/xxx", 0600)); # non-numeric name
+    POSIX::close(POSIX::creat("$procdir/123", 0600)); # valid name but empty
+
+    xlog $self, "can delete $subfolder";
+    $talk->delete($subfolder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($subfolder);
+
+    # We should have generated an IOERROR
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: bogus filename/);
+}

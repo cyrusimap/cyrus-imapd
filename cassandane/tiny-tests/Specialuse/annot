@@ -1,0 +1,15 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_annot
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->setmetadata("INBOX.Trash", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+}

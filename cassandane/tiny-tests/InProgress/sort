@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sort
+    :SlowIO :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my @resp;
+    my %handlers =
+    (
+        ok => sub
+        {
+            my (undef, $ok) = @_;
+            push(@resp, $ok);
+        },
+    );
+
+    xlog "generate some test messages";
+    foreach (1..100) {
+        $self->make_message("Message $_", size => 128_000);
+    }
+
+    xlog $self, "sort messages";
+    my $talk = $self->{store}->get_client();
+    @resp = ();
+    $talk->_imap_cmd('SORT', 0, \%handlers,
+                     '(ARRIVAL)', 'US-ASCII', '1:100', 'BODY', 'needle');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_str_equals('[INPROGRESS', $resp[0][0]);
+    # we don't know what the exact count will be, be we know the total
+    $self->assert_matches(qr/^[0-9]+$/, $resp[0][1][1]);
+    $self->assert_str_equals('100', $resp[0][1][2]);
+}

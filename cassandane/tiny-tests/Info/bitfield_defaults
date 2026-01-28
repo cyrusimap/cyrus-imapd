@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bitfield_defaults
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $defaults = "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target";
+
+    $self->_set_and_get_fields(
+        { sieve_extensions => $defaults },
+        { sieve_extensions => $defaults },
+        'conf-default',
+    );
+}

@@ -66,38 +66,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub test_syncproto_dump_restore
-{
-    my ($self) = @_;
-
-    xlog $self, "Create folders";
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->create("subfolder");
-    $imaptalk->subscribe("subfolder");
-    $imaptalk->create("Sent");
-    $imaptalk->setmetadata("Sent", "/private/specialuse", "\\Sent");
-
-    xlog $self, "Create messages";
-    $self->make_message("Message A");
-    $self->{store}->set_folder("INBOX.subfolder");
-    $self->make_message("Message B");
-    $self->make_message("Message C");
-
-    $imaptalk->select("INBOX");
-    $imaptalk->store("1", "+flags", "\\Seen");
-    $imaptalk->store("1", "+flags", "aflag");
-
-    my $adminstore = $self->{adminstore};
-    my $admintalk = $adminstore->get_client();
-    my $sp = Cyrus::SyncProto->new($admintalk);
-    my $as = Cyrus::AccountSync->new($sp);
-    my $data = $as->dump_user(username => 'cassandane');
-    $self->assert_null($as->dump_user(username => 'newuser'));
-    $as->undump_user(username => 'newuser', data => $data);
-    my $newdata = $as->dump_user(username => 'newuser');
-    $self->assert_deep_equals($data, $newdata);
-    $as->delete_user(username => 'newuser');
-    $self->assert_null($as->dump_user(username => 'newuser'));
-}
+use Cassandane::Tiny::Loader 'tiny-tests/SyncProto';
 
 1;

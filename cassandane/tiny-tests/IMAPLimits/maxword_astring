@@ -1,0 +1,10 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxword_astring
+{
+    my ($self) = @_;
+
+    # Oversized mailbox name
+    $self->assert_cmd_bye_toobig('SELECT', "X" x 26);
+}

@@ -1,0 +1,11 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_fetch_annot2
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('FETCH', '1',
+                                 [ 'ANNOTATION',
+                                   [ "X" x 5, [ "X" x 25, "X" x 25 ] ] ] );
+}

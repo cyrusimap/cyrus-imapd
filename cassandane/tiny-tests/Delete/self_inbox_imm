@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_self_inbox_imm
+    :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing that a non-admin can delete an a subfolder";
+    xlog $self, "but cannot delete their own INBOX, immediate delete version";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+    my $subfolder = 'INBOX.foo';
+
+    xlog $self, "First create a sub folder";
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog $self, "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog $self, "can delete the subfolder";
+    $talk->unselect();
+    $talk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Cannot select the subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog $self, "But the message in $inbox is still there";
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->check_messages(\%exp_inbox);
+
+    xlog $self, "cannot delete our own $inbox";
+    $talk->delete($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Operation is not supported/i, $talk->get_last_error());
+
+    xlog $self, "And the message in $inbox is still there";
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->check_messages(\%exp_inbox);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    $self->check_syslog($self->{instance});
+}

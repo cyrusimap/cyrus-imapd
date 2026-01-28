@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_subjects
+{
+    my ($self) = @_;
+
+    xlog $self, "test THREAD with no inter-message references";
+    xlog $self, "but apparently similar subjects";
+    my $talk = $self->{store}->get_client();
+    my $res;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my %exp_by_sub;
+    my $N = 20;
+    my @subjects = ( 'quinoa', 'selvedge', 'messenger bag' );
+    for (1..$N)
+    {
+        my $sub = $subjects[($_ - 1) % scalar(@subjects)];
+        $exp_by_sub{$sub} ||= [];
+        my $msg = $self->make_message(("Re: " x scalar(@{$exp_by_sub{$sub}})) . $sub);
+        push(@{$exp_by_sub{$sub}}, $msg);
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    my @expthreads;
+    foreach my $sub (@subjects)
+    {
+        my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
+        my $parent = shift(@thread);
+        push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
+    }
+
+    xlog $self, "The REFERENCES algorithm gives one thread per subject, even";
+    xlog $self, "though the References headers are completely missing";
+    $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals(\@expthreads, $res);
+
+    xlog $self, "The ORDEREDSUBJECT algorithm gives one thread per subject";
+    $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals(\@expthreads, $res);
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp);
+}

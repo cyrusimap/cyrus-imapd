@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test rename a folder with subfolders, domain user
+#
+sub test_rename_withsub
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("renameuser\@example.com");
+    my $domstore = $self->{instance}->get_service('imap')->create_store(username => "renameuser\@example.com");
+    my $domtalk = $domstore->get_client();
+
+    $domtalk->create("INBOX.a");
+    $domtalk->create("INBOX.b");
+    $domtalk->create("INBOX.c");
+
+    $domstore->set_folder("INBOX.c");
+    $domstore->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $domstore->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $domstore->write_end();
+
+    $domtalk->select("INBOX.c") || die;
+    my @predata = $domtalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $domtalk->rename("INBOX.c", "INBOX.b.c") || die;
+    $domtalk->rename("INBOX.b", "INBOX.a.b") || die;
+
+    $domtalk->select("INBOX.a.b.c") || die;
+    my @postdata = $domtalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @postdata);
+}

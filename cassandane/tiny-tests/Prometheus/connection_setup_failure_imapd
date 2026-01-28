@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_connection_setup_failure_imapd
+    :min_version_3_2 :TLS
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+
+    my $svc = $instance->get_service('imaps');
+    $self->assert_not_null($svc);
+
+    # we're gonna try to connect to it unencrypted, so it fails
+    my $store = $svc->create_store('type' => 'imap');
+    $self->assert_not_null($store);
+
+    my $badconns = 2 + int(rand(4)); # between 2-5 tries
+    for (1 .. $badconns) {
+        # try to connect to it using a plain text client
+        # and expect the server to drop the connection
+        eval {
+            $store->get_client();
+        };
+        my $error = $@;
+        $self->assert_not_null($error);
+    }
+
+    # wait a bit for the prometheus report to refresh
+    sleep 3;
+
+    # check the prom report
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+
+    my $active = $report->{'cyrus_imap_active_connections'};
+    $self->assert_not_null($active);
+    my $ready = $report->{'cyrus_imap_ready_listeners'};
+    $self->assert_not_null($ready);
+    my $total = $report->{'cyrus_imap_connections_total'};
+    $self->assert_not_null($total);
+    my $shutdown = $report->{'cyrus_imap_shutdown_total'};
+    $self->assert_not_null($shutdown);
+
+    my $service_label = 'service="imaps"';
+
+    # number of active connections should definitely not be negative
+    $self->assert_num_gte(0, $active->{$service_label}->{value});
+
+    # number of active connections should in fact be zero
+    $self->assert_num_equals(0, $active->{$service_label}->{value});
+
+    # number of ready listeners should be zero or one, depending on
+    # whether it felt like preforking
+    $self->assert_num_gte(0, $ready->{$service_label}->{value});
+    $self->assert_num_lte(1, $ready->{$service_label}->{value});
+
+    # should not have had any successful connections to imaps
+    $self->assert(not exists $total->{$service_label});
+
+    # should be $badconns error shutdowns counted
+    $self->assert_num_equals(
+        $badconns,
+        $shutdown->{"$service_label,status=\"error\""}->{value}
+    );
+
+    # XXX someday: expect to find $badconns setup failures counted
+}

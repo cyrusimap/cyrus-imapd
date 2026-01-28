@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+# XXX this isn't really the right place for this test
+sub test_ipurge_mboxevent
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $shared_folder = 'shared.folder';
+
+    # set up a shared folder that's easy to write to
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create($shared_folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl($shared_folder, 'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # put some test messages in shared.folder
+    my $talk = $self->{store}->get_client();
+    $self->{store}->set_folder($shared_folder);
+    $self->{store}->_select();
+    for (1..5) {
+        $self->make_message("message in $shared_folder $_");
+    }
+    $talk->unselect();
+    $talk->select($shared_folder);
+
+    my $stat = $talk->status($shared_folder, '(highestmodseq unseen messages)');
+    $self->assert_num_equals(5, $stat->{unseen});
+    $self->assert_num_equals(5, $stat->{messages});
+
+    # consume/discard earlier events that we don't care about
+    $self->{instance}->getnotify();
+
+    # run ipurge, and collect any mboxevents it generates
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        qw( ipurge -v -i -d 2 ), $shared_folder
+    );
+    my $events = $self->{instance}->getnotify();
+
+    # if it stays selected you see the intermittent state
+    $talk->unselect();
+
+    # the messages we just created should've been expunged
+    $stat = $talk->status($shared_folder, '(highestmodseq unseen messages)');
+    $self->assert_num_equals(0, $stat->{unseen});
+    $self->assert_num_equals(0, $stat->{messages});
+
+    # examine the mboxevents
+    foreach (@{$events}) {
+        my $e = decode_json($_->{MESSAGE});
+        # uri must contain the mailbox!
+        $self->assert_matches(qr{^imap://(?:[^/]+)/shared\.folder;UIDVALIDITY=},
+                              $e->{uri});
+    }
+}

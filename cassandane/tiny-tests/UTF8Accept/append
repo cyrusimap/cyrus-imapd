@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append
+    :NoAltNameSpace :min_version_3_9
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $MsgTxt = <<EOF;
+From: blah\@xyz.com
+To: whoever\@whereever.com
+Subject: you are a ☀
+
+Hello
+EOF
+    $MsgTxt =~ s/\n/\015\012/g;
+
+    xlog $self, "Create mailbox with mUTF7 encoded name";
+    my $res = $talk->_imap_cmd('CREATE', 0, "", "INBOX.&JgA-");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Using UTF8 before UTF8=ACCEPT should fail
+    xlog $self, "Attempt to append message with UTF-8 header to mailbox";
+    $res = $talk->_imap_cmd('APPEND', 0, "", "INBOX.&JgA-",
+                            'UTF8', [ { Literal => $MsgTxt } ]);
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "ENABLE UTF8=ACCEPT";
+    $res = $talk->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+
+    xlog $self, "Append message with UTF-8 header to mailbox";
+    $res = $talk->_imap_cmd('APPEND', 0, "", "INBOX.☀",
+                            'UTF8', [ { Literal => $MsgTxt } ]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Catenate message with UTF-8 header to mailbox";
+    $res = $talk->_imap_cmd('APPEND', 0, "", "INBOX.☀",
+                            'CATENATE', [ 'UTF8', [ { Literal => $MsgTxt } ] ]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}

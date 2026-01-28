@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_select
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog $self, "SELECTing INBOX";
+    $imaptalk->select("INBOX");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog $self, "SELECTing inbox";
+    $imaptalk->select("inbox");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog $self, "CREATEing sub folders";
+    $imaptalk->create("INBOX.sub");
+    $self->assert(!$imaptalk->get_last_error());
+    $imaptalk->create("inbox.blub");
+    $self->assert(!$imaptalk->get_last_error());
+
+    xlog $self, "SELECTing subfolders";
+    $imaptalk->select("inbox.sub");
+    $self->assert(!$imaptalk->get_last_error());
+    $imaptalk->select("INbOX.blub");
+    $self->assert(!$imaptalk->get_last_error());
+}

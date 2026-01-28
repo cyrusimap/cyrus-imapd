@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_cyrusdb_default_backends
+{
+    my ($self) = @_;
+
+    my @regular_databases = qw(
+        annotation_db
+        conversations_db
+        duplicate_db
+        mboxkey_db
+        mboxlist_db
+        ptscache_db
+        search_indexed_db
+        seenstate_db
+        statuscache_db
+        sync_cache_db
+        tls_sessions_db
+        zoneinfo_db
+    );
+
+    my @regular_backends = grep { defined }
+                           ($ENV{CASSANDANE_DEFAULT_DB}, 'twom', 'twoskip');
+
+    my %irregular_databases = (
+        quota_db => 'quotalegacy',
+        subscription_db => 'skiplist', # usually 'flat', but we overrode it!
+        tlscache_db => 'twoskip',
+        userdeny_db => 'flat',
+    );
+
+    foreach my $instance_name ($self->all_instance_names) {
+        my $instance = $self->{$instance_name}
+            || die "instance '$instance_name' not found";
+
+        if ($instance->{buildinfo}->get('cyrusdb', undef)) {
+            # Cassandane sets cyrusdb backends explicitly for Cyrus versions
+            # that report which backends they support
+
+            foreach my $database (@regular_databases) {
+                xlog "checking $database for $instance_name...";
+
+                my $backend = $instance->{config}->get($database);
+
+                # expect it to be set, and to a known backend
+                $self->assert_not_null($backend);
+                $self->assert_contains($backend, \@regular_backends);
+            }
+
+            while (my ($database, $expect_backend) = each %irregular_databases) {
+                xlog "checking $database for $instance_name...";
+
+                my $backend = $instance->{config}->get($database);
+
+                $self->assert_not_null($backend);
+                $self->assert_str_equals($expect_backend, $backend);
+            }
+        }
+        else {
+            # other backends should not have been explicitly set
+            foreach my $database (@regular_databases, keys %irregular_databases) {
+                xlog "checking $database for $instance_name...";
+
+                my $backend = $instance->{config}->get($database);
+
+                if ($database eq 'subscription_db') {
+                    # we overrode this one in the constructor
+                    $self->assert_not_null($backend);
+                    $self->assert_str_equals('skiplist', $backend);
+                }
+                else {
+                    $self->assert_null($backend);
+                }
+            }
+        }
+    }
+}

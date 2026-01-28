@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_duplicate_suppression_on_badmbox
+    :DuplicateSuppressionOn :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    xlog $self, "Testing behaviour with duplicate suppression on";
+    xlog $self, "interaction with attempted delivery to a";
+    xlog $self, "non-existant mailbox";
+
+    my $folder = "INBOX.nonesuch";
+    # DO NOT create the target folder
+
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that the message made it, to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog $self, "Create a folder of the given name";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+        or die "Cannot create $folder: $@";
+
+    xlog $self, "Try to deliver the same message to the new folder";
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog $self, "Check that the message made it, to the given folder";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}

@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unrelated
+{
+    my ($self) = @_;
+
+    xlog $self, "test THREAD with no inter-message references";
+    xlog $self, "and all different subjects";
+    my $talk = $self->{store}->get_client();
+    my $res;
+
+    xlog $self, "append some messages";
+    my %exp;
+    my $N = 20;
+    for (1..$N)
+    {
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+    }
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp);
+
+    xlog $self, "The REFERENCES algorithm gives each message in a singleton thread";
+    $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
+
+    xlog $self, "The ORDEREDSUBJECT algorithm gives each message in a singleton thread";
+    $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp);
+}

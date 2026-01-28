@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_proc_daemons
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $sleeper_time = 10; # seconds
+    my $daemons = 3;
+
+    for my $i (1 .. $daemons) {
+        # you wouldn't usually run a daemon that exits and needs to be
+        # restarted every ten seconds, but it's useful for testing
+        # that cyr_info proc notices the pid changing
+        $self->{instance}->add_daemon(
+            name => "sleeper$i",
+            argv => [ realpath('utils/sleeper'), $sleeper_time ],
+        );
+    }
+    $self->{instance}->start();
+
+    sleep 2; # offset our checks a little to avoid races
+
+    my $observations = 3;
+    my %lastpid = map {; "sleeper$_" => 0 } (1 .. $daemons);
+    while ($observations > 0) {
+        my @output = $self->{instance}->run_cyr_info('proc');
+
+        # always exactly one process per daemon
+        $self->assert_num_equals($daemons, scalar @output);
+
+        # expect a new pid for each daemon each time
+        foreach my $line (@output) {
+            my ($pid, $servicename, $host, $user, $mailbox, $cmd)
+                = split /\s/, $line, 6;
+            $self->assert_num_not_equals($lastpid{$servicename}, $pid);
+            $lastpid{$servicename} = $pid;
+        }
+
+        # skip final wait if we're done
+        $observations--;
+        last if $observations == 0;
+
+        # wait for next restart
+        sleep $sleeper_time;
+    }
+}

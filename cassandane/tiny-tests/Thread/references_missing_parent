@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_references_missing_parent
+{
+    my ($self) = @_;
+
+    xlog $self, "test THREAD with two messages which share a common parent";
+    xlog $self, "which is not seen on the server";
+    my $talk = $self->{store}->get_client();
+    my $res;
+    my %exp;
+
+    xlog $self, "Message A is never seen by the server";
+    my $msgA = $self->{gen}->generate(subject => "put a bird on it");
+
+    xlog $self, "Generate message B, which References message A";
+    my $msgB = $self->make_message("Re: " . $msgA->subject,
+                                   uid => 1,
+                                   references => [ $msgA ]);
+    $exp{1} = $msgB;
+
+    xlog $self, "Generate message C, which References message A";
+    my $msgC = $self->make_message("Re: " . $msgA->subject,
+                                   uid => 2,
+                                   references => [ $msgA ]);
+    $exp{2} = $msgC;
+
+    xlog $self, "check the messages got there";
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    xlog $self, "The REFERENCES algorithm gives the true thread";
+    xlog $self, "structure which is flat with a missing common parent";
+    $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([[[1],[2]]], $res);
+
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
+    $self->assert_deep_equals([[1, 2]], $res);
+
+    xlog $self, "Double-check the messages are still there";
+    $self->check_messages(\%exp, keyed_on => 'uid');
+}

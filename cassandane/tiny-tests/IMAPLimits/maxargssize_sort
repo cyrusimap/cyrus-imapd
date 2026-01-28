@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxargssize_sort
+{
+    my ($self) = @_;
+
+    $self->assert_cmd_bye_toobig('SORT',
+                                 [ 'ARRIVAL', 'CC', 'DATE',
+                                   'FROM', 'REVERSE', 'SIZE', 'TO' ],
+                                 'UTF-8', 'ALL');
+}

@@ -1,0 +1,9 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_upgrade_from_2
+{
+    my ($self) = @_;
+
+    $self->upgrade_from_2_common(undef);
+}

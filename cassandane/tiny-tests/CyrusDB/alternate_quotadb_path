@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_alternate_quotadb_path
+{
+    my ($self) = @_;
+
+    my $quota_db_path = $self->{instance}->get_basedir()
+                        . '/conf/non-default-quotas.db';
+
+    $self->{instance}->{config}->set(quota_db => 'twoskip');
+    $self->{instance}->{config}->set(quota_db_path => $quota_db_path);
+    $self->{instance}->start();
+
+    $self->_force_db_creations();
+
+    # Check that ctl_cyrusdb -c (checkpoint) uses correct db filename.
+    # If it mistakenly tries to use the default filename, it will error
+    # out due to it not existing.
+    eval {
+        $self->{instance}->run_command({
+            cyrus => 1,
+        }, 'ctl_cyrusdb', '-c');
+    };
+    $self->assert(not $@);
+
+    # TODO more/better checks
+}

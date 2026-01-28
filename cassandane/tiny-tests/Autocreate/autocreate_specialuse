@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_autocreate_specialuse
+     :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+    my $list = $talk->list('', '*', 'return', ['special-use']);
+
+    my %map = (
+        drafts => 'Drafts',
+        junk => 'SPAM',
+        sent => 'Sent',
+        trash => 'Trash',
+    );
+    foreach my $item (@$list) {
+        my $key;
+        foreach my $flag (@{$item->[0]}) {
+            next unless $flag =~ m/\\(.*)/;
+            $key = $1;
+            last if $map{$key};
+        }
+        my $name = delete $map{$key};
+        next unless $name;
+        $self->assert_str_equals("INBOX.$name", $item->[2]);
+    }
+    $self->assert_num_equals(0, scalar keys %map);
+}

@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# test upgrade tooling
+#
+sub test_upgrade
+    :min_version_3_12 :Conversations
+{
+    my ($self) = @_;
+    my %exp;
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "generating message A";
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    $talk->create('foo');
+
+    # shouldn't reconstruct
+    xlog $self, "Upgrade shouldn't have anything to do";
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/conv-output1.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    my $data = slurp_file($outfile);
+    $self->assert_matches(qr/already version/, $data);
+
+    # should reconstruct
+    xlog $self, "Upgrade shouldn't have anything to do, but we also used -R";
+    $self->{instance}->run_command(
+      { cyrus => 1, redirects => { stdout => $outfile } },
+      'ctl_conversationsdb', '-U', '-R', '-r', '-v',
+    );
+    $data = slurp_file($outfile);
+    $self->assert_does_not_match(qr/already version/, $data);
+
+    # nuke the version key
+    my $dirs = $self->{instance}->run_mbpath(-u => 'cassandane');
+    my $format = $self->{instance}->{config}->get('conversations_db');
+    $self->{instance}->run_dbcommand($dirs->{user}{conversations}, $format, ['DELETE', '$VERSION']);
+
+    xlog $self, "Upgrade with deleted VERSION should recalc";
+    $outfile = "$basedir/conv-output2.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    $data = slurp_file($outfile);
+    $self->assert_matches(qr/user.cassandane.foo/, $data);
+
+
+    xlog $self, "Upgrade again should have nothing to do";
+    $outfile = "$basedir/conv-output3.txt";
+    $self->{instance}->run_command({ cyrus => 1, redirects => { stdout => $outfile } }, 'ctl_conversationsdb', '-U', '-r', '-v');
+    $data = slurp_file($outfile);
+    $self->assert_matches(qr/already version/, $data);
+}

@@ -1,0 +1,13 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_bitfield_with_multiple_names_new
+    :min_version_3_2 :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->_set_and_get_fields(
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+        { sieve_extensions => 'vnd.cyrus.jmapquery' },
+    );
+}

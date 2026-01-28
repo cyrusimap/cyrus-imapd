@@ -52,10 +52,12 @@ use Cassandane::Util::Log;
 # When ALPN negotiation fails, depending on the openssl version, we might get
 # a sensible error message, or an opaque reference to "1120".
 # https://github.com/openssl/openssl/issues/24300
-my $alpn_fail_pattern = qr{(?: tlsv1\salert\sno\sapplication\sprotocol
-                            |  ssl3_read_bytes:reason\(1120\)
-                            |  SSL\sroutines::reason\(1120\)
-                            )}x;
+sub alpn_fail_pattern {
+  return qr{(?: tlsv1\salert\sno\sapplication\sprotocol
+             |  ssl3_read_bytes:reason\(1120\)
+             |  SSL\sroutines::reason\(1120\)
+           )}x;
+}
 
 sub new
 {
@@ -150,107 +152,6 @@ sub assert_alpn_protocol
     }
 }
 
-sub test_imap_none
-{
-    my ($self) = @_;
-
-    # get a pristine connection
-    $self->{store}->disconnect();
-    my $talk = $self->{store}->get_client(NoLogin => 1);
-
-    $self->do_imap_starttls($talk, undef);
-
-    $talk->login('cassandane', 'secret');
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $talk->select("INBOX");
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $self->assert_alpn_protocol($talk->{Socket}, undef);
-}
-
-sub test_imap_good
-{
-    my ($self) = @_;
-
-    # get a pristine connection
-    $self->{store}->disconnect();
-    my $talk = $self->{store}->get_client(NoLogin => 1);
-
-    $self->do_imap_starttls($talk, [ 'imap' ]);
-
-    $talk->login('cassandane', 'secret');
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $talk->select("INBOX");
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $self->assert_alpn_protocol($talk->{Socket}, 'imap');
-}
-
-sub test_imap_bad
-{
-    my ($self) = @_;
-
-    # get a pristine connection
-    $self->{store}->disconnect();
-    my $talk = $self->{store}->get_client(NoLogin => 1);
-
-    eval {
-        $self->do_imap_starttls($talk, [ 'bogus' ]);
-    };
-
-    my $e = $@;
-    $self->assert_not_null($e);
-    $self->assert_matches($alpn_fail_pattern, $e);
-    $self->assert_num_equals(Mail::IMAPTalk::Unconnected, $talk->state());
-}
-
-sub test_imaps_none
-{
-    my ($self) = @_;
-
-    my $imaps = $self->{instance}->get_service('imaps');
-    my $store = $imaps->create_store(username => 'cassandane');
-    my $talk = $store->get_client(OverrideALPN => undef);
-
-    $talk->select("INBOX");
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $self->assert_alpn_protocol($talk->{Socket}, undef);
-}
-
-sub test_imaps_good
-{
-    my ($self) = @_;
-
-    my $imaps = $self->{instance}->get_service('imaps');
-    my $store = $imaps->create_store(username => 'cassandane');
-    my $talk = $store->get_client(); # correct ALPN map is the default
-
-    $talk->select("INBOX");
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    $self->assert_alpn_protocol($talk->{Socket}, 'imap');
-}
-
-sub test_imaps_bad
-{
-    my ($self) = @_;
-
-    my $imaps = $self->{instance}->get_service('imaps');
-    my $store = $imaps->create_store(username => 'cassandane');
-    my $talk;
-
-    eval {
-        $talk = $store->get_client(OverrideALPN => [ 'bogus' ]);
-    };
-    my $e = $@;
-
-    $self->assert_not_null($e);
-    $self->assert_matches($alpn_fail_pattern, $e);
-}
-
 sub do_https_request
 {
     my ($self, $service, $alpn_map) = @_;
@@ -282,132 +183,6 @@ sub do_https_request
     return $response;
 }
 
-sub test_https_none
-    :want_service_https :needs_component_httpd
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = undef;
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    $self->assert_num_equals(1, $response->{success});
-    $self->assert_alpn_protocol(undef, undef);
-}
-
-sub test_https_http10
-    :want_service_https :needs_component_httpd
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'http/1.0' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    $self->assert_num_equals(1, $response->{success});
-    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
-}
-
-sub test_https_http11
-    :want_service_https :needs_component_httpd
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'http/1.1' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    $self->assert_num_equals(1, $response->{success});
-    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
-}
-
-sub test_https_multi
-    :want_service_https :needs_component_httpd
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'http/1.1', 'http/1.0' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    $self->assert_num_equals(1, $response->{success});
-    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
-}
-
-sub test_https_h2
-    :want_service_https :needs_component_httpd :needs_dependency_nghttp2
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'h2' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    # HTTP::Tiny can't speak h2, so the request itself will fail
-    $self->assert_num_equals(0, $response->{success});
-    $self->assert_str_equals('Internal Exception', $response->{reason});
-
-    # but we can still examine the log to check the ALPN result
-    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
-}
-
-sub test_https_multi2
-    :want_service_https :needs_component_httpd :needs_dependency_nghttp2
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'h2', 'http/1.1', 'http/1.0' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    # HTTP::Tiny can't speak h2, so the request itself will fail
-    $self->assert_num_equals(0, $response->{success});
-    $self->assert_str_equals('Internal Exception', $response->{reason});
-
-    # but we can still examine the log to check the ALPN result
-    $self->assert_alpn_protocol(undef, $alpn_map->[0]);
-}
-
-sub test_https_bad
-    :want_service_https :needs_component_httpd
-{
-    my ($self) = @_;
-
-    # skip past setup logs
-    $self->{instance}->getsyslog();
-
-    my $https = $self->{instance}->get_service('https');
-    my $alpn_map = [ 'bogus' ];
-
-    my $response = $self->do_https_request($https, $alpn_map);
-
-    $self->assert_num_equals(0, $response->{success});
-    $self->assert_str_equals('Internal Exception', $response->{reason});
-    $self->assert_matches($alpn_fail_pattern, $response->{content});
-}
+use Cassandane::Tiny::Loader 'tiny-tests/ALPN';
 
 1;

@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_autocreate_sieve_script_generation
+    :min_version_3_0 :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $basedir = $self->{instance}->get_basedir();
+    my $sieve_script_path = $basedir . "/conf/foo_sieve.script";
+    my $hitfolder = "INBOX.NewFolder";
+    my $testfolder = "INBOX.TestFolder";
+    my $missfolder = "INBOX";
+
+    open(FH, '>', "$sieve_script_path")
+        or die "Cannot open $sieve_script_path for writing: $!";
+    print FH "require \[\"fileinto\", \"mailbox\"\];";
+    print FH "if mailboxexists \"$testfolder\"  {";
+    print FH "fileinto \"$hitfolder\";";
+    print FH "}";
+    close(FH);
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('foo');
+    $self->assert_file_test("$sievedir/foo_sieve.script.script", '-f');
+    $self->assert_file_test("$sievedir/defaultbc", '-f');
+    $self->assert_file_test("$sievedir/foo_sieve.script.bc", '-f');
+}

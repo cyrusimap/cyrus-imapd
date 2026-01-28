@@ -1,0 +1,13 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_maxmessagesize_sync_literal
+{
+    my ($self) = @_;
+
+    # Synchronizing literals are the default in IMAPTalk v4.05 (and earlier)
+    my $talk = $self->{store}->get_client(NoLiteralPlus => 1);
+
+    $self->assert_cmd_no_toobig($talk, 'APPEND',
+                                'INBOX', { Literal => $self->toobig_email } );
+}

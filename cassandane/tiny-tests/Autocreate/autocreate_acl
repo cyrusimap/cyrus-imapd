@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_autocreate_acl
+    :min_version_3_1 :needs_component_sieve :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my %folder_acls = (
+        'INBOX'         => [qw( foo lrswipkxtecdan )],
+        'INBOX.Drafts'  => [qw( foo lrswipkxtecdan )],
+        'INBOX.Sent'    => [qw( foo lrswipkxtecdan )],
+        'INBOX.SPAM'    => [qw( foo lrswipkxtecdan )],
+        'INBOX.Trash'   => [qw( foo lrswipkxtecdan )],
+        'INBOX.plus'    => [qw( foo lrswipkxtecdan anyone p )],
+    );
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    while (my ($folder, $acl) = each %folder_acls) {
+        my $res = $talk->getacl($folder);
+        $self->assert_deep_equals($folder_acls{$folder}, $res);
+    }
+}

@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_log_missing_acl
+{
+    my ($self) = @_;
+
+    $self->start_my_instances();
+
+    my $imap = $self->{store}->get_client();
+    my $admin = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+
+    my @testCases = ({
+        flag => '$Artisanal',
+        acl => 'lrsitne',
+        need_rights => 'w'
+    }, {
+        flag => '\Seen',
+        acl => 'lritne',
+        need_rights => 's'
+    });
+
+    foreach (@testCases) {
+        $admin->setacl("user.other", "cassandane", $_->{acl}) or die;
+
+        $self->{instance}->getsyslog();
+        $self->{store}->set_folder('Other Users.other');
+        $self->make_message("Email", body => "set_flag $_->{flag}\r\n",
+            store => $self->{store}) or die;
+        my $wantLog = qr{
+            could\snot\swrite\sflag\sdue\smissing\sACL:
+            (?:\s[^=]+=<[^>]*>)*
+            \sflag=<\Q$_->{flag}\E>
+            \sneed_rights=<$_->{need_rights}>
+        }x;
+        $self->assert_syslog_matches($self->{instance}, $wantLog);
+    }
+}

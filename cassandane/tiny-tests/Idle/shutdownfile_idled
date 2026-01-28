@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_shutdownfile_idled
+    :needs_component_idled
+{
+    my ($self) = @_;
+
+    xlog $self, "Test the IDLE command vs the shutdownfile, idled started";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+                                 argv => [ 'idled' ]);
+    $self->{instance}->start();
+    $self->common_shutdownfile();
+}
