@@ -1869,27 +1869,27 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         struct index_record sched_rec;
 
         /* Locate email in \Scheduled mailbox */
-        r = find_scheduled_email(emailid, &frock);
+        int r1 = find_scheduled_email(emailid, &frock);
 
-        if (r || !frock.mboxname || !frock.uid) {
+        if (r1 || !frock.mboxname || !frock.uid) {
             syslog(LOG_ERR,
                    "IOERROR: failed to find scheduled email %s for user %s (%s)",
-                   emailid, userid, error_message(r));
+                   emailid, userid, error_message(r1));
         }
-        else if ((r = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
+        else if ((r1 = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
             syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
-                   frock.mboxname, error_message(r));
+                   frock.mboxname, error_message(r1));
         }
-        else if ((r = mailbox_find_index_record(sched_mbox,
-                                                frock.uid, &sched_rec))) {
+        else if ((r1 = mailbox_find_index_record(sched_mbox,
+                                                 frock.uid, &sched_rec))) {
             syslog(LOG_ERR, "IOERROR: failed find message %u in %s: %s",
-                   frock.uid, frock.mboxname, error_message(r));
+                   frock.uid, frock.mboxname, error_message(r1));
         }
         else {
-            r = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
+            r1 = move_to_mailboxid(sched_mbox, &sched_rec, destmboxid,
                                   time(0), setkeywords, 0/*is_snoozed*/);
 
-            if (r) {
+            if (r1) {
                 syslog(LOG_ERR, "IOERROR: failed to move %s:%u (%s)",
                        frock.mboxname, frock.uid, error_message(r));
 

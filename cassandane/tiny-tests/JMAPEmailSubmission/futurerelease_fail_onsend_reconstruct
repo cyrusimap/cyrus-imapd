@@ -1,0 +1,118 @@
+#!perl
+use Cassandane::Tiny;
+sub test_futurerelease_fail_onsend_reconstruct
+    :needs_component_calalarmd :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # created and onSend properties
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "Create Drafts, Scheduled, and Sent mailboxes";
+    my $res = $jmap->CallMethods([
+        [ 'Identity/get', {}, "R0" ],
+        [ 'Mailbox/set', {
+            create => {
+                "1" => {
+                    name => "Drafts",
+                    role => "drafts"
+                },
+                "2" => {
+                    name => "Scheduled",
+                    role => "scheduled"
+                },
+                "3" => {
+                    name => "Sent",
+                    role => "sent"
+                }
+            }
+         }, "R1"],
+    ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $draftsid = $res->[1][1]{created}{"1"}{id};
+    my $schedid = $res->[1][1]{created}{"2"}{id};
+    my $sentid = $res->[1][1]{created}{"3"}{id};
+
+    # create a draft and send it, but don't move it to Scheduled folder
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'm1' => {
+                    mailboxIds => {
+                        $draftsid => JSON::true,
+                    },
+                    keywords => {
+                        '$draft' => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'cassandane@local'
+                    }],
+                    to => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    subject => 'foo',
+                },
+            },
+        }, 'R1'],
+        [ 'EmailSubmission/set', {
+            create => {
+                '1' => {
+                    identityId => $identityid,
+                    emailId  => '#m1',
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => {
+                                "holdfor" => "1",
+                            }
+                        },
+                        rcptTo => [
+                            {
+                                email => 'rcpt1@localhost',
+                            }],
+                    },
+                    onSend => {
+                        moveToMailboxId => $sentid,
+                    }
+                },
+            }
+        }, "R2" ],
+    ] );
+
+    my $emailid1 = $res->[0][1]->{created}{m1}{id};
+    $self->assert_not_null($emailid1);
+
+    my $msgsubid1 = $res->[1][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid1);
+
+    xlog $self, "Verify 1 event was added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+    xlog $self, "Trigger delivery of email submission";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $now->epoch() + 60 );
+
+    # We should have generated an IOERROR
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/IOERROR: failed to find scheduled email/);
+
+    xlog $self, "Verify no events left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+
+    xlog $self, "Verify reconstruct doesn't put an event back into the alarm db";
+    $self->{instance}->run_command({ cyrus => 1 }, 'dav_reconstruct', 'cassandane');
+
+    xlog $self, "Verify no events added to alarmdb from the reconstruct";
+    $alarmdata = $self->{instance}->getalarmdb();
+
+    my $count = @$alarmdata;
+    xlog $self, "Events: $count";
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}
