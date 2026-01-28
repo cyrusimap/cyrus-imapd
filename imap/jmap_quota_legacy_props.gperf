@@ -1,0 +1,38 @@
+%{
+/* jmap_quota_legacy_props.h -- Lookup functions Legacy JMAP Quota properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      QUOTA_LEGACY_PROP_
+%define word-array-name       quota_legacy_prop_array
+%define length-table-name     quota_legacy_prop_lengths
+%define hash-function-name    quota_legacy_prop_hash
+%define lookup-function-name  quota_legacy_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",    NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+"used",  NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+"total", NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+%%
+
+static const jmap_prop_hash_table_t jmap_quota_legacy_props_map = {
+    quota_legacy_prop_array,
+    QUOTA_LEGACY_PROP_TOTAL_KEYWORDS,
+    QUOTA_LEGACY_PROP_MIN_HASH_VALUE,
+    QUOTA_LEGACY_PROP_MAX_HASH_VALUE,
+    &quota_legacy_prop_lookup
+};

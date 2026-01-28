@@ -61,6 +61,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_mail_props.h"
+#include "imap/jmap_mail_thread_props.h"
 
 static int jmap_email_query(jmap_req_t *req);
 static int jmap_email_querychanges(jmap_req_t *req);
@@ -176,6 +178,9 @@ static jmap_method_t jmap_mail_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t email_props  = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t thread_props = JMAP_PROPERTY_SET_INITIALIZER;
+
 /* NULL terminated list of supported jmap_email_query sort fields */
 struct email_sortfield {
     const char *name;
@@ -266,6 +271,9 @@ static ptrarray_t empty_ptrarray = PTRARRAY_INITIALIZER;
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_mail_methods_standard, settings);
+
+    jmap_build_prop_set(&jmap_email_props_map, &email_props, settings);
+    jmap_build_prop_set(&jmap_thread_props_map, &thread_props, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_MAIL, json_object());
@@ -6491,22 +6499,6 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
     return r;
 }
 
-// clang-format off
-static const jmap_property_t thread_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "emailIds",
-        NULL,
-        0
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_thread_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -6514,7 +6506,7 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, thread_props, /*allow_null_ids*/0,
+    jmap_get_parse(req, &parser, &thread_props, /*allow_null_ids*/0,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -8546,209 +8538,6 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
     ptrarray_fini(&rock.mboxes);
 }
 
-// clang-format off
-static const jmap_property_t email_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "blobId",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "threadId",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "mailboxIds",
-        NULL,
-        0
-    },
-    {
-        "keywords",
-        NULL,
-        0
-    },
-    {
-        "size",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "receivedAt",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "headers",
-        NULL,
-        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    {
-        "header:*",
-        NULL,
-        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    {
-        "messageId",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "inReplyTo",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "references",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "sender",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "from",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "to",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "cc",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "bcc",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "replyTo",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "subject",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "sentAt",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "bodyStructure",
-        NULL,
-        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    {
-        "bodyValues",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "textBody",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "htmlBody",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "attachments",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "hasAttachment",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "preview",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "addedDates",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "removedDates",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "trustedSender",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "spamScore",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "calendarEvents",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "previousCalendarEvent",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "isDeleted",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "imageSize",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "snoozed",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "bimiBlobId",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    {
-        "createdModseq",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "deliveredTo",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -8757,7 +8546,7 @@ static int jmap_email_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, email_props, /*allow_null_ids*/0,
+    jmap_get_parse(req, &parser, &email_props, /*allow_null_ids*/0,
                    &_email_getargs_parse, &args, &get, &err);
     if (!err) {
         /* header:Xxx properties */
@@ -13837,7 +13626,7 @@ static int jmap_email_set(jmap_req_t *req)
     struct jmap_set set = JMAP_SET_INITIALIZER;
 
     json_t *err = NULL;
-    jmap_set_parse(req, &parser, email_props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, &email_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

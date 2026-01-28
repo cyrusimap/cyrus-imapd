@@ -30,6 +30,7 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/jmap_vacation_props.h"
 
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
@@ -57,6 +58,8 @@ static jmap_method_t jmap_vacation_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
+
+static jmap_property_set_t vacation_props = JMAP_PROPERTY_SET_INITIALIZER;
 
 static int sieve_vacation_enabled = 0;
 
@@ -91,6 +94,8 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 
     jmap_add_methods(jmap_vacation_methods_standard, settings);
 
+    jmap_build_prop_set(&jmap_vacation_props_map, &vacation_props, settings);
+
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_VACATION, json_object());
 
@@ -107,47 +112,6 @@ HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)
 }
 
 /* VacationResponse/get method */
-// clang-format off
-static const jmap_property_t vacation_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "isEnabled",
-        NULL,
-        0
-    },
-    {
-        "fromDate",
-        NULL,
-        0
-    },
-    {
-        "toDate",
-        NULL,
-        0
-    },
-    {
-        "subject",
-        NULL,
-        0
-    },
-    {
-        "textBody",
-        NULL,
-        0
-    },
-    {
-        "htmlBody",
-        NULL,
-        0
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
 
 #define STATUS_ACTIVE    (1<<0)
 #define STATUS_CUSTOM    (1<<1)
@@ -277,7 +241,7 @@ static int jmap_vacation_get(jmap_req_t *req)
     int r = 0;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, vacation_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &vacation_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -526,7 +490,7 @@ static int jmap_vacation_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, vacation_props, NULL, NULL, &set, &jerr);
+    jmap_set_parse(req, &parser, &vacation_props, NULL, NULL, &set, &jerr);
     if (jerr) goto done;
 
     r = sieve_ensure_folder(req->accountid, &mailbox, /*silent*/0);

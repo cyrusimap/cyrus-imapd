@@ -32,6 +32,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_mail_submission_props.h"
+#include "imap/jmap_mail_submission_identity_props.h"
 
 #define JMAP_SUBID_SIZE 12
 
@@ -90,9 +92,15 @@ static jmap_method_t jmap_emailsubmission_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t submission_props = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t identity_props   = JMAP_PROPERTY_SET_INITIALIZER;
+
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_emailsubmission_methods_standard, settings);
+
+    jmap_build_prop_set(&jmap_submission_props_map, &submission_props, settings);
+    jmap_build_prop_set(&jmap_identity_props_map, &identity_props, settings);
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_SUBMISSION, json_object());
@@ -1260,74 +1268,6 @@ static int getsubmission(jmap_req_t *req, struct jmap_get *get,
     return r;
 }
 
-// clang-format off
-static const jmap_property_t submission_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "identityId",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "emailId",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "threadId",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "envelope",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "sendAt",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "undoStatus",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "deliveryStatus",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "dsnBlobIds",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mdnBlobIds",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-
-    /* FM extensions */
-    {
-        "onSend",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "created",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1337,7 +1277,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     int created = 0;
     struct mailbox *mbox = NULL;
 
-    jmap_get_parse(req, &parser, submission_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &submission_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -1467,7 +1407,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_t *success_emailids = json_object();
 
     /* Parse request */
-    jmap_set_parse(req, &parser, submission_props,
+    jmap_set_parse(req, &parser, &submission_props,
                    &_submission_setargs_parse, &sub_args,
                    &set, &err);
     if (err) {
@@ -2317,124 +2257,6 @@ done:
 }
 
 /* Identity/get method */
-// clang-format off
-static const jmap_property_t identity_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "email",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "replyTo",
-        NULL,
-        0
-    },
-    {
-        "bcc",
-        NULL,
-        0
-    },
-    {
-        "textSignature",
-        NULL,
-        0
-    },
-    {
-        "htmlSignature",
-        NULL,
-        0
-    },
-    {
-        "mayDelete",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "displayName",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "addBccOnSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "saveSentToMailboxId",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "saveOnSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "useForAutoReply",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "isAutoConfigured",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "enableExternalSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpServer",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpPort",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpSSL",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpUser",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpPassword",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpRemoteService",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "popLinkId",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
 
 static int jmap_identity_get(jmap_req_t *req)
 {
@@ -2443,7 +2265,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, identity_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &identity_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
