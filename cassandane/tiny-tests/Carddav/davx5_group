@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_davx5_group
+    ($self)
+{
+    my $CardDAV = $self->{carddav};
+    my $Id = $CardDAV->NewAddressBook('foo');
+
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "$Id/$uid.vcf";
+    my $member1 = "x";
+    my $member2 = "y";
+    my $ua = 'DAVx5/4.5.8-gplay';
+
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+KIND:GROUP
+UID:$uid
+FN:My Group
+MEMBER:urn:uuid:$member1
+MEMBER:urn:uuid:$member2
+END:VCARD
+EOF
+
+    my $xml = <<EOF;
+<C:addressbook-multiget xmlns:D="DAV:"
+                    xmlns:C="urn:ietf:params:xml:ns:carddav">
+    <D:prop>
+      <D:getetag/>
+      <C:address-data content-type="text/vcard" version="4.0"/>
+    </D:prop>
+    <D:href>/dav/addressbooks/user/cassandane/$href</D:href>
+</C:addressbook-multiget>
+EOF
+
+    my %Headers = (
+      'Content-Type' => 'text/vcard',
+      'Authorization' => $CardDAV->auth_header(),
+      'User-Agent' => $ua
+    );
+
+    xlog $self, "PUT vCard v4 with DAVx5";
+    my $res = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(201, $res->{status});
+
+    xlog $self, "GET vCard v4 with DAVx5";    
+    $res = $CardDAV->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0',
+                             'User-Agent' => $ua);
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member2/, $card);
+
+    xlog $self, "Export addressbook as v4 with DAVx5";    
+    $res = $CardDAV->Request('GET', $Id, '',
+                             'Accept' => 'text/vcard; version=4.0',
+                             'User-Agent' => $ua);
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member2/, $card);
+
+    xlog $self, "Multiget vCard as v4 with DAVx5";    
+    $res = $CardDAV->Request('REPORT',
+                             "/dav/addressbooks/user/cassandane/$Id",
+                             $xml, Depth => 0,
+                             'Content-Type' => 'text/xml',
+                             'User-Agent' => $ua);
+
+    $card = $res->{"{DAV:}response"}[0]{"{DAV:}propstat"}[0]{"{DAV:}prop"}{"{urn:ietf:params:xml:ns:carddav}address-data"}{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:urn:uuid:$member2/, $card);
+
+    xlog $self, "GET vCard v4 with non-DAVx5 client";    
+    $res = $CardDAV->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:$member2/, $card);
+
+    xlog $self, "Export addressbook as v4 with non-DAVx5 client";    
+    $res = $CardDAV->Request('GET', $Id, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:$member2/, $card);
+
+    xlog $self, "Multiget vCard as v4 with non-DAVx5 client";    
+    $res = $CardDAV->Request('REPORT',
+                             "/dav/addressbooks/user/cassandane/$Id",
+                             $xml, Depth => 0,
+                             'Content-Type' => 'text/xml');
+
+    $card = $res->{"{DAV:}response"}[0]{"{DAV:}propstat"}[0]{"{DAV:}prop"}{"{urn:ietf:params:xml:ns:carddav}address-data"}{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/MEMBER:$member1/, $card);
+    $self->assert_matches(qr/MEMBER:$member2/, $card);
+}
