@@ -1569,37 +1569,45 @@ static int find_sched_cb(const conv_guidrec_t *rec, void *rock)
 static int find_scheduled_email(const char *emailid,
                                 struct find_sched_rock *frock)
 {
-    struct conversations_state *cstate = NULL;
-    int r;
+    const char *guid = NULL;
 
-    r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
+    frock->mboxname = NULL;
+    frock->uid = 0;
+
+    if (emailid[0] == JMAP_EMAILID_PREFIX) {
+        if (strlen(emailid) != JMAP_EMAILID_SIZE - 1) return IMAP_INVALID_IDENTIFIER;
+    } else if (emailid[0] == JMAP_LEGACY_EMAILID_PREFIX) {
+        if (strlen(emailid) != JMAP_LEGACY_EMAILID_SIZE - 1) return IMAP_INVALID_IDENTIFIER;
+        guid = emailid + 1;
+    } else {
+        return IMAP_INVALID_IDENTIFIER;
+    }
+
+    struct conversations_state *cstate = NULL;
+    int r = conversations_open_user(frock->userid, 1/*shared*/, &cstate);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to open conversations for user %s",
                frock->userid);
         return r;
     }
 
-    const char *guid = NULL;
     if (emailid[0] == JMAP_EMAILID_PREFIX) {
         static char guidrep[2*MESSAGE_GUID_SIZE+1];
-
-        if (strlen(emailid) == JMAP_EMAILID_SIZE - 1 &&
-            !conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep))
-            guid = guidrep;
+        r = conversations_jmapid_guidrep_lookup(cstate, emailid + 1, guidrep);
+        if (!r) guid = guidrep;
     }
-    else if (emailid[0] == JMAP_LEGACY_EMAILID_PREFIX) {
-        if (strlen(emailid) == JMAP_LEGACY_EMAILID_SIZE - 1)
-            guid = emailid + 1;
-    }
-    if (!guid) return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+    if (guid) {
+        r = conversations_guid_foreach(cstate, guid, find_sched_cb, frock);
+        if (r == IMAP_OK_COMPLETED) r = 0;
+    }
+
     conversations_commit(&cstate);
 
-    if (r == IMAP_OK_COMPLETED) r = 0;
-    else if (!frock->mboxname) r = IMAP_NOTFOUND;
+    if (r) return r;
 
-    return r;
+    if (frock->mboxname && frock->uid) return 0;
+    return IMAP_NOTFOUND;
 }
 
 static int count_cb(sqlite3_stmt *stmt, void *rock)
@@ -1863,10 +1871,10 @@ static int process_futurerelease(struct caldav_alarm_data *data,
         /* Locate email in \Scheduled mailbox */
         r = find_scheduled_email(emailid, &frock);
 
-        if (r || !frock.mboxname) {
+        if (r || !frock.mboxname || !frock.uid) {
             syslog(LOG_ERR,
-                   "IOERROR: failed to find \\Scheduled mailbox for user %s (%s)",
-                   frock.userid, error_message(r));
+                   "IOERROR: failed to find scheduled email %s for user %s (%s)",
+                   emailid, userid, error_message(r));
         }
         else if ((r = mailbox_open_iwl(frock.mboxname, &sched_mbox))) {
             syslog(LOG_ERR, "IOERROR: failed to open %s: %s",
