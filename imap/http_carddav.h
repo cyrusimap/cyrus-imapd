@@ -7,6 +7,11 @@
 
 #define DEFAULT_ADDRBOOK "Default"
 
+#define MEMBER_URI_PREFIX     "urn:uuid:"
+#define MEMBER_URI_PREFIX_LEN 9
+#define DAVX5_UA_STR          "DAVx5/"
+#define DAVX5_UA_STR_LEN      6
+
 /* Create the default addressbook for userid, if it doesn't exist. */
 extern int carddav_create_defaultaddressbook(const char *userid);
 
