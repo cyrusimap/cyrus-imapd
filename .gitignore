@@ -68,9 +68,9 @@ doc/legacy/netnews.png
 doc/text/
 docsrc/.doctrees/
 docsrc/build/
-docsrc/imap/reference/manpages/configs/imapd.conf.rst
-docsrc/imap/reference/manpages/systemcommands/cyradm.rst
-docsrc/imap/reference/manpages/usercommands/sieveshell.rst
+docsrc/reference/manpages/configs/imapd.conf.rst
+docsrc/reference/manpages/systemcommands/cyradm.rst
+docsrc/reference/manpages/usercommands/sieveshell.rst
 imap/arbitron
 imap/backupcyrusd
 imap/calalarmd
