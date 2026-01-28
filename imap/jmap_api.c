@@ -683,10 +683,23 @@ HIDDEN int jmap_api(struct transaction_t *txn,
         const char *accountid = httpd_userid;
         json_t *err = NULL;
         json_t *arg = json_object_get(args, "accountId");
-        if (arg && arg != json_null()) {
-            accountid = json_string_value(arg);
+        bool valid = false;
+        if (!strcmp(mp->name, "Core/echo")) {
+            /* No validation required */
+            valid = true;
         }
-        if (!accountid) {
+        else if (!arg) {
+            if (mp->flags & JMAP_NO_ACCOUNTID) {
+                /* Not present, but not expected */
+                valid = true;
+            }
+        }
+        else if (json_is_string(arg)) {
+            /* MUST be a string */
+            accountid = json_string_value(arg);
+            valid = true;
+        }
+        if (!valid) {
             err = json_pack("{s:s, s:[s]}",
                     "type", "invalidArguments", "arguments", "accountId");
             json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
