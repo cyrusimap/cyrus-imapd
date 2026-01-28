@@ -1,0 +1,9 @@
+Option: caldav_allowscheduling
+Type: ENUM
+Allowed-Values: off, on, apple
+Default: on
+Last-Modified: 2.5.0
+
+Enable calendar scheduling operations. If set to "apple", the
+server will emulate Apple CalendarServer behavior as closely as
+possible.

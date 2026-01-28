@@ -1,0 +1,9 @@
+Option: afspts_localrealms
+Type: STRING
+Default: NULL
+Last-Modified: 2.3.17
+
+The list of realms which are to be treated as local, and thus stripped
+during identifier canonicalization (for the AFSPTS ptloader module).
+This is different from loginrealms in that it occurs later in the
+authorization process (as the user id is canonified for PTS lookup).

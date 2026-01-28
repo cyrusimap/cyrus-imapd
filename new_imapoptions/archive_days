@@ -1,0 +1,8 @@
+Option: archive_days
+Type: DURATION
+Default: NULL
+Last-Modified: 3.1.8
+Deprecated-Since: 3.1.8
+Replaced-By: archive_after
+
+Deprecated in favour of ``archive_after``.

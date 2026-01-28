@@ -1,0 +1,15 @@
+Option: autocreate_quota_messages
+Type: INT
+Default: -1
+Last-Modified: 3.0.0
+
+If set to a value of zero or higher, users who have their INBOX
+folders created upon a successful login event (see
+``autocreate_quota``, or upon :cyrusman:`lmtpd(8)` message delivery if
+``autocreate_post`` is enabled, receive the message quota
+configured in this option.
+
+The default of -1 disables assigning message quota.
+
+For consistency with ``autocreate_quota``, a value of zero is treated
+as unlimited message quota, rather than a message quota of zero.

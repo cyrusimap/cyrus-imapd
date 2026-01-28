@@ -1,0 +1,8 @@
+Option: caldav_alarm_support_components
+Type: BITFIELD
+Allowed-Values: VEVENT, VTODO
+Default: VEVENT VTODO
+Last-Modified: 3.12.0
+
+Space-separated list of iCalendar component types for which
+calalarmd generates alarms.
