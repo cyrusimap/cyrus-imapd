@@ -86,9 +86,9 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-my $stack_slosh = 256;
+sub stack_slosh { 256 }
 
-    # The NEWNEWS command is disabled by default.
+# The NEWNEWS command is disabled by default.
 Cassandane::Cyrus::TestCase::magic(AllowNewNews => sub {
     shift->config_set(allownewnews => 1);
 });

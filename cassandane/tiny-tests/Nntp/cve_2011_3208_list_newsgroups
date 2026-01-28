@@ -7,7 +7,7 @@ sub test_cve_2011_3208_list_newsgroups
 
     my $client = $self->{client};
     my $wildmat = '';
-    while (length $wildmat < 1024+$stack_slosh)
+    while (length $wildmat < 1024+$self->stack_slosh)
     {
         $wildmat .= ($wildmat eq '' ? '' : '.');
         $wildmat .= random_word();
