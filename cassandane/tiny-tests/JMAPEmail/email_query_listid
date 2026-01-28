@@ -1,109 +1,155 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_email_query_listid
-    :min_version_3_3 :needs_component_sieve
-    :JMAPExtensions
-    ($self)
+my sub install_test($name, $arg) {
+    $name //= do {
+        my ( undef, undef, $line ) = caller;
+        "test_at_line_$line";
+    };
+
+    require Sub::Install;
+    Sub::Install::install_sub({
+        as   => "test_email_query_listid_$name",
+        code => sub ($self) {
+            $self->assert_email_query_listid($arg);
+        },
+    });
+}
+
+install_test("simple", {
+    header => "Foo <xxx.yyy.zzz>",
+    listId => "xxx.yyy.zzz",
+    wantMatch => 1,
+});
+
+install_test("whitespace", {
+    header => "Foo <xxx.y\tyy. ZZZ>",
+    listId => "xxx.yyy.zzz",
+    wantMatch => 1,
+});
+
+install_test("group", {
+    # as seen from Yahoo, Google, et al
+    header => "list aaa\@bbb.ccc; contact aaa-contact\@bbb.ccc",
+    listId => "aaa\@bbb.ccc",
+    wantMatch => 1,
+});
+
+install_test("group_ignore_space", {
+    # as seen from Yahoo, Google, et al
+    header => "list aaa\@bbb.ccc; contact aaa-contact\@bbb.ccc",
+    listId => 'aaa @ bbb . ccc',
+    wantMatch => 1,
+});
+
+install_test("group_ignore_contact", {
+    # as seen from Yahoo, Google, et al
+    header => "list aaa\@bbb.ccc; contact aaa-contact\@bbb.ccc",
+    listId => 'aaa-contact@bbb.ccc',
+    wantMatch => 0,
+});
+
+install_test("group_no_substring", {
+    # as seen from Yahoo, Google, et al
+    header => "list aaa\@bbb.ccc; contact aaa-contact\@bbb.ccc",
+    listId => 'aaa',
+    wantMatch => 0,
+});
+
+install_test("group_no_wildcard", {
+    # as seen from Yahoo, Google, et al
+    header => "list aaa\@bbb.ccc; contact aaa-contact\@bbb.ccc",
+    listId => 'aaa*',
+    wantMatch => 0,
+});
+
+install_test("no_bracket", {
+    # as seen from Sentry, just plain text
+    header => "sub3.sub2.sub1.top",
+    listId => "sub3.sub2.sub1.top",
+    wantMatch => 1,
+});
+
+install_test("unclosed_bracket", {
+    header => "Foo <xxx.yyy.zzz",
+    listId => "xxx.yyy.zzz",
+    wantMatch => 1,
+});
+
+install_test("phrase_html", {
+    # bogus id as seen in the wild
+    header => "\"<b>foo</b>\" <xxx.yyy.zzz>",
+    listId => "xxx.yyy.zzz",
+    wantMatch => 1,
+});
+
+install_test("phrase_and_list", {
+    # phrase followed by 'list'
+    header => "1234567890 list <xxx.yyy.zzz>",
+    listId => "xxx.yyy.zzz",
+    wantMatch => 1,
+});
+
+install_test("no_substring_search", {
+    header => "Foo <xxx.yyy.zzz>",
+    listId => "yyy",
+    wantMatch => 0,
+});
+
+install_test("no_wildcard_search", {
+    header => "Foo <xxx.yyy.zzz>",
+    listId => "xxx*",
+    wantMatch => 0,
+});
+
+sub assert_email_query_listid($self, $arg)
 {
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Append emails with list-id";
-    $self->make_message("msg1", # RFC 2919
-        extra_headers => [['list-id', "Foo <xxx.y\tyy. ZZZ>"]],
-        body => "msg1"
-    ) || die;
-    $self->make_message("msg2", # as seen at Yahoo, Google, et al
-        extra_headers => [['list-id', 'list aaa@bbb.ccc; contact aaa-contact@bbb.ccc']],
-        body => "msg2"
-    ) || die;
-    $self->make_message("msg3", # as seen from sentry, just plain text
-        extra_headers => [['list-id', 'sub3.sub2.sub1.top']],
-        body => "msg3"
-    ) || die;
-    $self->make_message("msg4", # as seen in the wild
-        extra_headers => [['list-id', '"<b>foo</b>" <xxx.yyy.zzz']],
-        body => "msg4"
-    ) || die;
-    $self->make_message("msg5", # as seen in the wild
-        extra_headers => [['list-id', '1234567890 list <xxx.yyy.zzz']],
-        body => "msg5"
-    ) || die;
+    $imap->create("matches") or die;
 
-    xlog "Run squatter";
-    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-Z');
+    $self->{instance}->install_sieve_script(<<"EOF"
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if allof(
+  jmapquery text:
+  {
+     "listId" : "$arg->{listId}"
+  }
+.
+)
+{
+  fileinto "matches";
+}
+EOF
+    );
 
-    my $using = [
-        'urn:ietf:params:jmap:core',
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-        'https://cyrusimap.org/ns/jmap/mail',
-        'https://cyrusimap.org/ns/jmap/debug',
-        'https://cyrusimap.org/ns/jmap/performance',
-    ];
+    xlog $self, "Deliver message";
+    $self->{instance}->deliver($self->{gen}->generate(
+        extra_headers => [['List-ID', $arg->{header}]],
+        body => 'test',
+    ));
 
+    my $wantMatch = $arg->{wantMatch} ? 1 : 0;
+
+    xlog $self, "Assert Sieve filter";
+    $imap->select('matches');
+    $self->assert_num_equals($wantMatch, $imap->get_response_code('exists'));    $imap->unselect();
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Query for 'listId' criteria";
     my $res = $jmap->CallMethods([
         ['Email/query', {
-            sort => [{
-                property => 'subject',
-            }],
-        }, 'R1'],
-    ], $using);
-    my @ids = @{$res->[0][1]{ids}};
-    $self->assert_num_equals(5, scalar @ids);
-
-    my @testCases = ({
-        desc => 'simple list-id',
-        listId => 'xxx.yyy.zzz',
-        wantIds => [$ids[0], $ids[3], $ids[4]],
-    }, {
-        desc => 'no substring search for list-id',
-        listId => 'yyy',
-        wantIds => [],
-    }, {
-        desc => 'no wildcard search for list-id',
-        listId => 'xxx.yyy.*',
-        wantIds => [],
-    }, {
-        desc => 'no substring search for list-id #2',
-        listId => 'foo',
-        wantIds => [],
-    }, {
-        desc => 'ignore whitespace',
-        listId => 'xxx . yyy . zzz',
-        wantIds => [$ids[0], $ids[3], $ids[4]],
-    }, {
-        desc => 'Groups-style list-id',
-        listId => 'aaa@bbb.ccc',
-        wantIds => [$ids[1]],
-    }, {
-        desc => 'Ignore contact in groups-style list-id',
-        listId => 'aaa-contact@bbb.ccc',
-        wantIds => [],
-    }, {
-        desc => 'Groups-style list-id with whitespace',
-        listId => 'aaa @ bbb . ccc',
-        wantIds => [$ids[1]],
-    }, {
-        desc => 'Also no substring search in groups-style list-id',
-        listId => 'aaa',
-        wantIds => [],
-    }, {
-        desc => 'unbracketed list-id',
-        listId => 'sub3.sub2.sub1.top',
-        wantIds => [$ids[2]],
-    });
-
-    foreach (@testCases) {
-        $res = $jmap->CallMethods([
-            ['Email/query', {
-                filter => {
-                    listId => $_->{listId},
-                },
-                sort => [{ property => 'subject' }],
-            }, 'R1'],
-        ], $using);
-        $self->assert_deep_equals($_->{wantIds}, $res->[0][1]{ids});
-    }
+            filter => {
+                listId => $arg->{listId},
+            },
+        }, 'R1' ]
+    ], [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+    $self->assert_num_equals($wantMatch, scalar @{$res->[0][1]{ids}});
 }
