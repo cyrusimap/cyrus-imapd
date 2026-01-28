@@ -15,6 +15,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
+#include "imap/jmap_core_usercounters_props.h"
 
 
 /* JMAP Core API Methods */
@@ -46,6 +47,8 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
+
+static jmap_property_set_t usercounters_props = JMAP_PROPERTY_SET_INITIALIZER;
 
 HIDDEN void jmap_core_init(jmap_settings_t *settings)
 {
@@ -139,8 +142,10 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 JMAP_USERCOUNTERS_EXTENSION, json_object());
 
         jmap_add_methods(jmap_core_methods_nonstandard, settings);
-    }
 
+        jmap_build_prop_set(&jmap_usercounters_props_map,
+                            &usercounters_props, settings);
+    }
 }
 
 HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
@@ -169,158 +174,6 @@ static int jmap_core_echo(jmap_req_t *req)
 }
 
 /* UserCounters/get method */
-// clang-format off
-static const jmap_property_t usercounters_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "highestModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mailModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "calendarModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "contactsModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "notesModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "submissionModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "sieveScriptModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mailDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "calendarDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "contactsDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "notesDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "submissionDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "sieveScriptDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mailFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "calendarFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "contactsFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "notesFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "submissionFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "sieveScriptFoldersModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mailFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "calendarFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "contactsFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "notesFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "submissionFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "sieveScriptFoldersDeletedModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "quotaModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "raclModSeq",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "uidValidity",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
 {
     /* Read script */
@@ -427,7 +280,7 @@ static int jmap_usercounters_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, usercounters_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &usercounters_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);

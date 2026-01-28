@@ -29,6 +29,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_notes_props.h"
 
 #define APPLE_NOTES_ID  "com.apple.mail-note"
 
@@ -66,6 +67,8 @@ static jmap_method_t jmap_notes_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t notes_props = JMAP_PROPERTY_SET_INITIALIZER;
+
 HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 {
     if (!config_getstring(IMAPOPT_NOTESMAILBOX)) return;
@@ -77,6 +80,8 @@ HIDDEN void jmap_notes_init(jmap_settings_t *settings)
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         jmap_add_methods(jmap_notes_methods_nonstandard, settings);
+
+        jmap_build_prop_set(&jmap_notes_props_map, &notes_props, settings);
     }
 }
 
@@ -378,42 +383,6 @@ static void not_found_cb(const char *id,
     }
 }
 
-// clang-format off
-static const jmap_property_t notes_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "isFlagged",
-        NULL,
-        0
-    },
-    {
-        "lastSaved",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "title",
-        NULL,
-        0
-    },
-    {
-        "body",
-        NULL,
-        0
-    },
-    {
-        "isHTML",
-        NULL,
-        0
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_note_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -425,7 +394,7 @@ static int jmap_note_get(jmap_req_t *req)
     struct buf buf = BUF_INITIALIZER;
     int rights;
 
-    jmap_get_parse(req, &parser, notes_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &notes_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -826,7 +795,7 @@ static int jmap_note_set(jmap_req_t *req)
     int rights, r;
 
     /* Parse request */
-    jmap_set_parse(req, &parser, notes_props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, &notes_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

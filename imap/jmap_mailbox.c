@@ -37,6 +37,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_mailbox_props.h"
 
 
 static int jmap_mailbox_get(jmap_req_t *req);
@@ -104,9 +105,13 @@ static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t mailbox_props = JMAP_PROPERTY_SET_INITIALIZER;
+
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
 {
     jmap_add_methods(jmap_mailbox_methods_standard, settings);
+
+    jmap_build_prop_set(&jmap_mailbox_props_map, &mailbox_props, settings);
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         jmap_add_methods(jmap_mailbox_methods_nonstandard, settings);
@@ -757,149 +762,6 @@ static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((
     json_array_append_new((json_t*) rock, json_string(id));
 }
 
-// clang-format off
-static const jmap_property_t mailbox_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "parentId",
-        NULL,
-        0
-    },
-    {
-        "role",
-        NULL,
-        0
-    },
-    {
-        "sortOrder",
-        NULL,
-        0
-    },
-    {
-        "totalEmails",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "unreadEmails",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "totalThreads",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "unreadThreads",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "myRights",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "isSubscribed",
-        NULL,
-        0
-    },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "isCollapsed",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "hidden",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "sort",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "identityRef",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "autoLearn",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "learnAsSpam",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "autoPurge",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "purgeOlderThanDays",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "onlyPurgeDeleted",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "suppressDuplicates",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_EXTERNAL
-    },
-    {
-        "shareWith",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "isSeenShared",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "storageUsed",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "color",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "showAsLabel",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "uniqueId",
-        JMAP_MAIL_EXTENSION,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -907,7 +769,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, mailbox_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &mailbox_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -1867,11 +1729,11 @@ static void _mboxset_args_parse(json_t *jargs,
 
     if (!is_create) {
         /* Any externally-stored properties? */
-        const char *key;
-        json_t *val;
-        json_object_foreach(jargs, key, val) {
-            const jmap_property_t *prop = jmap_property_find(key, mailbox_props);
-            if (prop && (prop->flags & JMAP_PROP_EXTERNAL)) {
+        for (int i = 0; i < ptrarray_size(&mailbox_props.external); i++) {
+            const jmap_property_t *prop =
+                ptrarray_nth(&mailbox_props.external, i);
+
+            if (json_object_get(jargs, prop->name)) {
                 args->has_ext_props = true;
                 break;
             }
@@ -4013,7 +3875,7 @@ static void _mboxset_parse(jmap_req_t *req,
     size_t i;
     memset(set, 0, sizeof(struct mboxset));
 
-    jmap_set_parse(req, parser, mailbox_props, &_mboxset_req_parse,
+    jmap_set_parse(req, parser, &mailbox_props, &_mboxset_req_parse,
                    set, &set->super, err);
 
     /* Validate onDestroyMoveToMailboxIfNoMailbox */

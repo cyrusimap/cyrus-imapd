@@ -1,0 +1,42 @@
+%{
+/* jmap_vacation_props.h -- Lookup functions for JMAP Vacation properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      VACATION_PROP_
+%define word-array-name       vacation_prop_array
+%define length-table-name     vacation_prop_lengths
+%define hash-function-name    vacation_prop_hash
+%define lookup-function-name  vacation_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",        NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"isEnabled", NULL, 0
+"fromDate",  NULL, 0
+"toDate",    NULL, 0
+"subject",   NULL, 0
+"textBody",  NULL, 0
+"htmlBody",  NULL, 0
+%%
+
+static const jmap_prop_hash_table_t jmap_vacation_props_map = {
+    vacation_prop_array,
+    VACATION_PROP_TOTAL_KEYWORDS,
+    VACATION_PROP_MIN_HASH_VALUE,
+    VACATION_PROP_MAX_HASH_VALUE,
+    &vacation_prop_lookup
+};

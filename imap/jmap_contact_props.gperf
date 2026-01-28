@@ -1,0 +1,70 @@
+%{
+/* jmap_contact_props.h -- Lookup functions for JMAP Contact properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      CONTACT_PROP_
+%define word-array-name       contact_prop_array
+%define length-table-name     contact_prop_lengths
+%define hash-function-name    contact_prop_hash
+%define lookup-function-name  contact_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",          NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"uid",         NULL, JMAP_PROP_IMMUTABLE
+"isFlagged",   NULL, 0
+"avatar",      NULL, 0
+"prefix",      NULL, 0
+"firstName",   NULL, 0
+"lastName",    NULL, 0
+"suffix",      NULL, 0
+"nickname",    NULL, 0
+"birthday",    NULL, 0
+"anniversary", NULL, 0
+"company",     NULL, 0
+"department",  NULL, 0
+"jobTitle",    NULL, 0
+"emails",      NULL, 0
+"phones",      NULL, 0
+"online",      NULL, 0
+"addresses",   NULL, 0
+"notes",       NULL, 0
+#
+# RFC 9555 conversion properties - for internal use only
+"vCardProps",  NULL, JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
+"vCardName",   NULL, JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
+"vCardParams", NULL, JMAP_PROP_REJECT_GET | JMAP_PROP_REJECT_SET | JMAP_PROP_SKIP_GET
+#
+# FM extensions
+"addressbookId", JMAP_CONTACTS_EXTENSION, 0
+# AJAXUI only
+"x-href",        JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+# AJAXUI only
+"x-hasPhoto",    JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
+# JMAPUI only
+"importance",    JMAP_CONTACTS_EXTENSION, 0
+"blobId",        JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
+"size",          JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
+%%
+
+static const jmap_prop_hash_table_t jmap_contact_props_map = {
+    contact_prop_array,
+    CONTACT_PROP_TOTAL_KEYWORDS,
+    CONTACT_PROP_MIN_HASH_VALUE,
+    CONTACT_PROP_MAX_HASH_VALUE,
+    &contact_prop_lookup
+};

@@ -1,0 +1,64 @@
+%{
+/* jmap_core_usercounters_props.h -- Lookup functions for JMAP Core properties */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,NULL,0
+%define constants-prefix      USERCOUNTERS_PROP_
+%define word-array-name       usercounters_prop_array
+%define length-table-name     usercounters_prop_lengths
+%define hash-function-name    usercounters_prop_hash
+%define lookup-function-name  usercounters_prop_lookup
+
+jmap_property_t;
+
+%%
+"id",                              NULL, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"highestModSeq",                   NULL, JMAP_PROP_SERVER_SET
+"mailModSeq",                      NULL, JMAP_PROP_SERVER_SET
+"calendarModSeq",                  NULL, JMAP_PROP_SERVER_SET
+"contactsModSeq",                  NULL, JMAP_PROP_SERVER_SET
+"notesModSeq",                     NULL, JMAP_PROP_SERVER_SET
+"submissionModSeq",                NULL, JMAP_PROP_SERVER_SET
+"sieveScriptModSeq",               NULL, JMAP_PROP_SERVER_SET
+"mailDeletedModSeq",               NULL, JMAP_PROP_SERVER_SET
+"calendarDeletedModSeq",           NULL, JMAP_PROP_SERVER_SET
+"contactsDeletedModSeq",           NULL, JMAP_PROP_SERVER_SET
+"notesDeletedModSeq",              NULL, JMAP_PROP_SERVER_SET
+"submissionDeletedModSeq",         NULL, JMAP_PROP_SERVER_SET
+"sieveScriptDeletedModSeq",        NULL, JMAP_PROP_SERVER_SET
+"mailFoldersModSeq",               NULL, JMAP_PROP_SERVER_SET
+"calendarFoldersModSeq",           NULL, JMAP_PROP_SERVER_SET
+"contactsFoldersModSeq",           NULL, JMAP_PROP_SERVER_SET
+"notesFoldersModSeq",              NULL, JMAP_PROP_SERVER_SET
+"submissionFoldersModSeq",         NULL, JMAP_PROP_SERVER_SET
+"sieveScriptFoldersModSeq",        NULL, JMAP_PROP_SERVER_SET
+"mailFoldersDeletedModSeq",        NULL, JMAP_PROP_SERVER_SET
+"calendarFoldersDeletedModSeq",    NULL, JMAP_PROP_SERVER_SET
+"contactsFoldersDeletedModSeq",    NULL, JMAP_PROP_SERVER_SET
+"notesFoldersDeletedModSeq",       NULL, JMAP_PROP_SERVER_SET
+"submissionFoldersDeletedModSeq",  NULL, JMAP_PROP_SERVER_SET
+"sieveScriptFoldersDeletedModSeq", NULL, JMAP_PROP_SERVER_SET
+"quotaModSeq",                     NULL, JMAP_PROP_SERVER_SET
+"raclModSeq",                      NULL, JMAP_PROP_SERVER_SET
+"uidValidity",                     NULL, JMAP_PROP_SERVER_SET
+%%
+
+static const jmap_prop_hash_table_t jmap_usercounters_props_map = {
+    usercounters_prop_array,
+    USERCOUNTERS_PROP_TOTAL_KEYWORDS,
+    USERCOUNTERS_PROP_MIN_HASH_VALUE,
+    USERCOUNTERS_PROP_MAX_HASH_VALUE,
+    &usercounters_prop_lookup
+};

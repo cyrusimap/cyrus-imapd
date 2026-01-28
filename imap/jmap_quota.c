@@ -15,6 +15,8 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
+#include "imap/jmap_quota_props.h"
+#include "imap/jmap_quota_legacy_props.h"
 
 
 static int jmap_legacy_quota_get(jmap_req_t *req);
@@ -58,6 +60,9 @@ static jmap_method_t jmap_quota_methods_nonstandard[] = {
 };
 // clang-format on
 
+static jmap_property_set_t quota_props        = JMAP_PROPERTY_SET_INITIALIZER;
+static jmap_property_set_t legacy_quota_props = JMAP_PROPERTY_SET_INITIALIZER;
+
 HIDDEN void jmap_quota_init(jmap_settings_t *settings)
 {
     json_object_set_new(settings->server_capabilities,
@@ -65,11 +70,16 @@ HIDDEN void jmap_quota_init(jmap_settings_t *settings)
 
     jmap_add_methods(jmap_quota_methods_standard, settings);
 
+    jmap_build_prop_set(&jmap_quota_props_map, &quota_props, settings);
+
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_QUOTA_EXTENSION, json_object());
 
         jmap_add_methods(jmap_quota_methods_nonstandard, settings);
+
+        jmap_build_prop_set(&jmap_quota_legacy_props_map,
+                            &legacy_quota_props, settings);
     }
 }
 
@@ -84,26 +94,6 @@ HIDDEN void jmap_quota_capabilities(json_t *account_capabilities)
 }
 
 /* Legacy Quota/get method */
-// clang-format off
-static const jmap_property_t legacy_quota_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "used",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "total",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
 
 static int jmap_legacy_quota_get(jmap_req_t *req)
 {
@@ -113,7 +103,7 @@ static int jmap_legacy_quota_get(jmap_req_t *req)
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
 
     /* Parse request */
-    jmap_get_parse(req, &parser, legacy_quota_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &legacy_quota_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -367,61 +357,6 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 }
 
 /* Quota/get method */
-// clang-format off
-static const jmap_property_t quota_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "resourceType",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "used",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "hardLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "warnLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "softLimit",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "scope",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "name",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "description",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    {
-        "types",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
 
 static void fetch_quotas(struct qrock_t *qrock)
 {
@@ -544,7 +479,7 @@ static int jmap_quota_get(jmap_req_t *req)
     struct qrock_t qrock = { req, NULL, { 0 }, NULL, HASH_TABLE_INITIALIZER };
 
     /* Parse request */
-    jmap_get_parse(req, &parser, quota_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &quota_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
