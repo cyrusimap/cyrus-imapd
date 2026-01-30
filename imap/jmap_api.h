@@ -369,6 +369,9 @@ struct jmap_set {
     json_t *update;
     json_t *destroy;
 
+    /* Internal Use */
+    json_t *update_external;
+
     /* Response fields */
     char *old_state;
     char *new_state;
