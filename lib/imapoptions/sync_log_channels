@@ -1,0 +1,12 @@
+Name: sync_log_channels
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+If specified, log all events to multiple log files in directories
+specified by each "channel".  Each channel can then be processed
+separately, such as by multiple sync_client(8)s in a mesh replication
+scheme, or by squatter(8) for rolling search index updates.
+
+You can use "" (the two-character string U+22 U+22) to mean the
+default sync channel. 

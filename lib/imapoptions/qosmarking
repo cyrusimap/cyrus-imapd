@@ -1,0 +1,9 @@
+Name: qosmarking
+Type: ENUM
+Allowed-Values: cs0 cs1 cs2 cs3 cs4 cs5 cs6 cs7 af11 af12 af13 af21 af22 af23
+ af31 af32 af33 af41 af42 af43 ef
+Default-Value: cs0
+Last-Modified: 2.5.0
+
+This specifies the Class Selector or Differentiated Services Code Point
+designation on IP headers (in the ToS field). 

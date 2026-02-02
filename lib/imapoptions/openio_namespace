@@ -1,0 +1,8 @@
+Name: openio_namespace
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+The OpenIO namespace used to store archived email messages. A namespace
+identifies the physical platform cyrus must contact. This directive is used
+by the OpenIO's SDK to locate its platform entry point. 

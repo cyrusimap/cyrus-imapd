@@ -1,0 +1,12 @@
+Name: popuseacl
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Enforce IMAP ACLs in the pop server.  Due to the nature of the POP3
+protocol, the only rights which are used by the pop server are 'r',
+'t', and 's' for the owner of the mailbox.  The 'r' right allows the
+user to open the mailbox and list/retrieve messages.  The 't' right
+allows the user to delete messages.  The 's' right allows messages
+retrieved by the user to have the \\Seen flag set (only if
+*popuseimapflags* is also enabled). 

@@ -1,0 +1,7 @@
+Name: event_exclude_specialuse
+Type: STRING
+Default-Value: \\Junk
+Last-Modified: 2.5.0
+
+Don't send event notification for folder with given special-use attributes.
+Set ALL for any folder. 

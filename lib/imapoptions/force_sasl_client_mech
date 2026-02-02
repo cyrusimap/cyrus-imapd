@@ -1,0 +1,9 @@
+Name: force_sasl_client_mech
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+Force preference of a given SASL mechanism for client side operations
+(e.g., murder environments).  This is separate from (and overridden by)
+the ability to use the <host shortname>_mechs option to set preferred
+mechanisms for a specific host. 

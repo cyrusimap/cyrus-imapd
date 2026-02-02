@@ -1,0 +1,7 @@
+Name: carddav_allowaddressbookadmin
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.1.2
+
+Enable per-user addressbook administration web UI on the CardDAV server. 
+

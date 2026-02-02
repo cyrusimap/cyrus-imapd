@@ -1,0 +1,7 @@
+Name: temp_path
+Type: STRING
+Default-Value: /tmp
+Last-Modified: 3.3.0
+
+The pathname to store temporary files in. It is recommended to
+use an in-memory filesystem such as tmpfs for this path. 

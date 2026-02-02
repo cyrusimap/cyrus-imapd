@@ -1,0 +1,11 @@
+Name: jmap_mail_max_size_attachments_per_email
+Type: BYTESIZE
+Default-Value: 10M
+Last-Modified: 3.8.0
+
+The value to return for the maxSizeAttachmentsPerEmail property of the JMAP
+\"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus JMAP
+implementation does not enforce this size limit.
+
+For backward compatibility, if no unit is specified, kibibytes is assumed.
+

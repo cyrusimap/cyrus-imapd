@@ -1,0 +1,8 @@
+Name: sasl_option
+Type: STRING
+Default-Value: 0
+Last-Modified: 2.3.17
+For-Documentation-Only: 1
+
+Any SASL option can be set by preceding it with **sasl_**.  This
+file overrides the SASL configuration file. 

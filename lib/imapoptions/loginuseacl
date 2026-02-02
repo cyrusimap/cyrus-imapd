@@ -1,0 +1,7 @@
+Name: loginuseacl
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+If enabled, any authentication identity which has **a** rights on a
+user's INBOX may log in as that user. 

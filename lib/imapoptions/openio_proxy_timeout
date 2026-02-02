@@ -1,0 +1,7 @@
+Name: openio_proxy_timeout
+Type: DURATION
+Default-Value: 5s
+Last-Modified: 3.1.8
+
+The OpenIO timeout to query to the PROXY services (default 5 sec). 
+

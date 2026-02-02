@@ -1,0 +1,9 @@
+Name: skiplist_always_checkpoint
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+If enabled, this option forces the skiplist cyrusdb backend to
+always checkpoint when doing a recovery.  This causes slightly
+more IO, but on the other hand leads to more efficient databases,
+and the entire file is already "hot". 

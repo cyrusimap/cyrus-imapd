@@ -1,0 +1,9 @@
+Name: boundary_limit
+Type: INT
+Default-Value: 1000
+Last-Modified: 2.5.0
+
+messages are parsed recursively and a deep enough MIME structure
+can cause a stack overflow.  Do not parse deeper than this many
+layers of MIME structure.  The default of 1000 is much higher
+than any sane message should have. 

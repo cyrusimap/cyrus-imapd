@@ -1,0 +1,8 @@
+Name: openio_autocreate
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
+on development environments. In production, the container should have been
+provisioned with the mailboxes. 

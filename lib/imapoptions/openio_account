@@ -1,0 +1,8 @@
+Name: openio_account
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+The OpenIO account used to account for stored emails. Accounts are unique
+in their namespace. They provides virtual partitions, with quotas and QoS
+features. 

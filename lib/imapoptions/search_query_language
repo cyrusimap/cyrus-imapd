@@ -1,0 +1,5 @@
+Name: search_query_language
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.3.0
+Deprecated-Since: 3.3.0

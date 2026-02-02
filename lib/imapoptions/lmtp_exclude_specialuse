@@ -1,0 +1,11 @@
+Name: lmtp_exclude_specialuse
+Type: STRING
+Default-Value: \\Snoozed
+Last-Modified: 3.1.8
+
+Don't allow delivery to folders with given special-use attributes.
+
+Note that "snoozing" of emails can currently only be done via the
+JMAP protocol, so delivery directly to the \Snoozed mailbox is
+prohibited by default as it will not be moved back into INBOX
+automatically. 

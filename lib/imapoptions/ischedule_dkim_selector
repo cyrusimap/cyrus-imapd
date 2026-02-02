@@ -1,0 +1,8 @@
+Name: ischedule_dkim_selector
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+Name of the selector subdividing the domain namespace.  This
+specifies the actual key used for iSchedule DKIM signing within the
+domain. 
