@@ -1,0 +1,9 @@
+Name: lmtp_fuzzy_mailbox_match
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+If enabled, and the mailbox specified in the detail part of the
+recipient (everything after the '+') does not exist, lmtpd will try
+to find the closest match (ignoring case, ignoring whitespace,
+falling back to parent) to the specified mailbox name. 

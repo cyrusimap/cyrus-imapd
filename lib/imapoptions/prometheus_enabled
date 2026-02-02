@@ -1,0 +1,7 @@
+Name: prometheus_enabled
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.1.2
+
+Whether tracking of metrics for Prometheus is enabled. 
+

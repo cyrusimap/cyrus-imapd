@@ -1,0 +1,7 @@
+Name: search_maxtime
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+The maximum number of seconds to run a search for before aborting.  Default
+of no value means search "forever" until other timeouts. 

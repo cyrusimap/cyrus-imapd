@@ -1,0 +1,7 @@
+Name: logtimestamps
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Include notations in the protocol telemetry logs indicating the number of
+seconds since the last command or response. 

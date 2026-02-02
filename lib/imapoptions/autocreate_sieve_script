@@ -1,0 +1,10 @@
+Name: autocreate_sieve_script
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+The full path of a file that contains a sieve script. This script
+automatically becomes a user's initial default sieve filter script.
+
+When this option is not defined, no default sieve filter is created.
+The file must be readable by the Cyrus daemon. 

@@ -1,0 +1,12 @@
+Name: lmtptxn_timeout
+Type: DURATION
+Default-Value: 5m
+Last-Modified: 3.1.8
+
+Timeout used during a lmtp transaction to a remote backend (e.g. in a
+murder environment).  Can be used to prevent hung lmtpds on proxy hosts
+when a backend server becomes unresponsive during a lmtp transaction.
+Change to zero for infinite.
+
+For backward compatibility, if no unit is specified, seconds is
+assumed. 

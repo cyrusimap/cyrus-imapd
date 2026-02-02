@@ -1,0 +1,8 @@
+Name: sync_log
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Enable replication action logging by lmtpd(8), imapd(8), pop3d(8),
+and nntpd(8).  The log {configdirectory}/sync/log is used by
+sync_client(8) for "rolling" replication. 

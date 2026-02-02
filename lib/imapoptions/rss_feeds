@@ -1,0 +1,9 @@
+Name: rss_feeds
+Type: STRING
+Default-Value: *
+Last-Modified: 2.5.0
+
+A wildmat pattern specifying which mailbox hierarchies should be
+treated as RSS feeds.  Only mailboxes matching the wildmat will
+have their messages available via RSS.  If not set, a default
+wildmat of "\*" (ALL mailboxes) will be used. 

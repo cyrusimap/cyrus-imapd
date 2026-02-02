@@ -1,0 +1,10 @@
+Name: serverlist_select_soft_usage_limit
+Type: INT
+Default-Value: 0
+Last-Modified: 2.5.0
+
+Limit of backend usage (%): if a backend is over that limit, it is
+automatically excluded from selection mode.
+
+If all backends are over that limit, this feature is not used anymore.
+

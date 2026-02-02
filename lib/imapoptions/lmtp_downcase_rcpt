@@ -1,0 +1,7 @@
+Name: lmtp_downcase_rcpt
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.5.0
+
+If enabled, lmtpd will convert the recipient addresses to lowercase
+(up to a '+' character, if present). 

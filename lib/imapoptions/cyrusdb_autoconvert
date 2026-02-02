@@ -1,0 +1,7 @@
+Name: cyrusdb_autoconvert
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.13.1
+
+Automatically convert any existing db to the configured engine for that
+database if possible. 

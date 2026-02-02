@@ -1,0 +1,8 @@
+Name: autocreate_subscribe_folders
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+A list of folder names, separated by "|", that the users get automatically subscribed to,
+when their INBOX is created. These folder names must have been included in the
+autocreateinboxfolders option of the imapd.conf. 

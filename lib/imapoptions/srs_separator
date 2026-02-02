@@ -1,0 +1,7 @@
+Name: srs_separator
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.1.2
+
+The separator to appear immediately after SRS[01] in rewritten addresses. 
+

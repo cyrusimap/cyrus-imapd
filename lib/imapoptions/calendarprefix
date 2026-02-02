@@ -1,0 +1,9 @@
+Name: calendarprefix
+Type: STRING
+Default-Value: #calendars
+Last-Modified: 2.5.0
+
+The prefix for the calendar mailboxes hierarchies.  The hierarchy
+delimiter will be automatically appended.  The public calendar
+hierarchy will be at the toplevel of the shared namespace.  A
+user's personal calendar hierarchy will be a child of their Inbox. 

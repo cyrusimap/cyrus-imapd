@@ -1,0 +1,10 @@
+Name: autocreate_sieve_script_compiled
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+The full path of a file that contains a compiled in bytecode sieve script. This script
+automatically becomes a user's initial default sieve filter script.  If this option is
+not specified, or the filename doesn't exist then the script defined by
+autocreate_sieve_script is compiled on the fly and installed as the user's default
+sieve script. 

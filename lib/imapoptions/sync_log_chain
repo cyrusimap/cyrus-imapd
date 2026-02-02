@@ -1,0 +1,7 @@
+Name: sync_log_chain
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.4.0
+
+Enable replication action logging by sync_server as well, allowing
+chaining of replicas.  Use this on 'B' for A => B => C replication layout. 
