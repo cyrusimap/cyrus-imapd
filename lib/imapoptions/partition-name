@@ -1,0 +1,11 @@
+Name: partition-name
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+For-Documentation-Only: 1
+
+The pathname of the partition *name*.  At least one partition
+pathname MUST be specified.  If the **defaultpartition** option is
+used, then its pathname MUST be specified.  For example, if the
+value of the **defaultpartion** option is **part1**, then the
+**partition-part1** field is required. 

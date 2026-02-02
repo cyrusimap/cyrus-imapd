@@ -1,0 +1,9 @@
+Name: davnotificationsprefix
+Type: STRING
+Default-Value: #notifications
+Last-Modified: 3.0.0
+
+The prefix for the DAV notifications hierarchy.  The hierarchy
+delimiter will be automatically appended.  The public notifications
+hierarchy will be at the toplevel of the shared namespace.  A
+user's personal notifications hierarchy will be a child of their Inbox. 

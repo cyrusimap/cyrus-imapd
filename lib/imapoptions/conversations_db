@@ -1,0 +1,7 @@
+Name: conversations_db
+Type: STRINGLIST
+Allowed-Values: skiplist sql twom twoskip
+Default-Value: skiplist
+Last-Modified: 3.13.1
+
+The cyrusdb backend to use for the per-user conversations database. 

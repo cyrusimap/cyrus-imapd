@@ -1,0 +1,7 @@
+Name: ldap_authz
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+SASL authorization ID for the LDAP server. 
+

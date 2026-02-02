@@ -1,0 +1,7 @@
+Name: partition_select_exclude
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+List of partitions to exclude from selection mode. 
+

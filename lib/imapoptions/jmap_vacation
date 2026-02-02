@@ -1,0 +1,7 @@
+Name: jmap_vacation
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.1.8
+
+If enabled, support the JMAP vacation extension. 
+

@@ -1,0 +1,7 @@
+Name: skiplist_unsafe
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+If enabled, this option forces the skiplist cyrusdb backend to
+not sync writes to the disk.  Enabling this option is NOT RECOMMENDED. 

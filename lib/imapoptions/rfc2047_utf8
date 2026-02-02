@@ -1,0 +1,11 @@
+Name: rfc2047_utf8
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+If enabled, imapd will parse any non-encoded character sequence in
+MIME header values as UTF8. This is useful for installations that
+either advertise the UTF8SMTP (:rfc:`5335`) extension or receive mails
+with improperly escaped UTF-8 byte sequences. It is recommended that
+this option is left disabled unless there is good reason to do
+otherwise. 

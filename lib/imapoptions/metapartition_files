@@ -1,0 +1,10 @@
+Name: metapartition_files
+Type: BITFIELD
+Allowed-Values: header index cache expunge squat annotations lock dav
+ archivecache
+Default-Value: 
+Last-Modified: 3.0.0
+
+Space-separated list of metadata files to be stored on a
+*metapartition* rather than in the mailbox directory on a spool
+partition. 

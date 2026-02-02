@@ -1,0 +1,9 @@
+Name: jmap_max_catenate_items
+Type: INT
+Default-Value: 100
+Last-Modified: 3.6.0
+
+The maximum number of items that can be catenated together by
+a JMAP Blob/upload action.  Returned as the maxDataSources property
+value of the JMAP \"urn:ietf:params:jmap:blob\" capabilities object.
+Default value is 100. 

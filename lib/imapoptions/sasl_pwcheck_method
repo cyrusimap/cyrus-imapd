@@ -1,0 +1,8 @@
+Name: sasl_pwcheck_method
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+For-Documentation-Only: 1
+
+The mechanism used by the server to verify plaintext passwords.
+Possible values include "auxprop", "saslauthd", and "pwcheck". 
