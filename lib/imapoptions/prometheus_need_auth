@@ -1,0 +1,7 @@
+Name: prometheus_need_auth
+Type: STRINGLIST
+Allowed-Values: none user admin
+Default-Value: admin
+Last-Modified: 3.1.2
+
+Authentication level required to fetch Prometheus metrics. 

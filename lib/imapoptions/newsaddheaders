@@ -1,0 +1,18 @@
+Name: newsaddheaders
+Type: BITFIELD
+Allowed-Values: to replyto
+Default-Value: to
+Last-Modified: 2.5.0
+
+Space-separated list of headers to be added to incoming usenet
+articles.  Added *To:* headers will contain email
+delivery addresses corresponding to each newsgroup in the
+*Newsgroups:* header.  Added *Reply-To:* headers will
+contain email delivery addresses corresponding to each newsgroup in
+the *Followup-To:* or *Newsgroups:* header.  If the
+specified header(s) already exist in an article, the email
+delivery addresses will be appended to the original header body(s).
+
+
+This option applies if and only if the **newspostuser** option is
+set. 

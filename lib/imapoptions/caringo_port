@@ -1,0 +1,5 @@
+Name: caringo_port
+Type: INT
+Default-Value: 80
+Last-Modified: 3.13.3
+Deprecated-Since: 3.13.3

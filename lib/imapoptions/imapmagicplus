@@ -1,0 +1,9 @@
+Name: imapmagicplus
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Only list a restricted set of mailboxes via IMAP by using
+userid+namespace syntax as the authentication/authorization id.
+Using userid+ (with an empty namespace) will list only subscribed
+mailboxes. 

@@ -1,0 +1,7 @@
+Name: maxlogins_per_host
+Type: INT
+Default-Value: 0
+Last-Modified: 3.12.0
+
+Maximum number of logged in sessions allowed per service per host,
+zero means no limit. 

@@ -1,0 +1,9 @@
+Name: search_skipdiacrit
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.5.0
+
+When searching, should diacriticals be stripped from the search
+terms.  The default is "true", a search for "hav" will match
+"Håvard".  This is not :rfc:`5051` compliant, but is backwards
+compatible, and may be preferred by some sites. 

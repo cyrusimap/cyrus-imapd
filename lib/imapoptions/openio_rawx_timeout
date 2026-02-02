@@ -1,0 +1,5 @@
+Name: openio_rawx_timeout
+Type: DURATION
+Default-Value: 30s
+Last-Modified: 3.13.3
+Deprecated-Since: 3.13.3

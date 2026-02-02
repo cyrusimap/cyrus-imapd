@@ -1,0 +1,7 @@
+Name: ldap_group_filter
+Type: STRING
+Default-Value: (cn=%u)
+Last-Modified: 2.3.17
+
+Specify a filter that searches for group identifiers.
+See ldap_filter for more options. 

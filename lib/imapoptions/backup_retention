@@ -1,0 +1,5 @@
+Name: backup_retention
+Type: DURATION
+Default-Value: 7d
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0

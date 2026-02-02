@@ -1,0 +1,7 @@
+Name: ldap_ca_file
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+Path to a file containing CA (Certificate Authority) certificate(s). 
+

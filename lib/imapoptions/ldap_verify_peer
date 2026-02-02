@@ -1,0 +1,7 @@
+Name: ldap_verify_peer
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+Require and verify server certificate.  If this option is yes,
+you must specify ldap_ca_file or ldap_ca_dir. 

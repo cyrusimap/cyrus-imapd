@@ -1,0 +1,8 @@
+Name: jmap_max_calls_in_request
+Type: INT
+Default-Value: 50
+Last-Modified: 3.1.6
+
+The maximum number of calls per JMAP request object.
+Returned as the maxCallsInRequest property value of the
+JMAP \"urn:ietf:params:jmap:core\" capabilities object. 

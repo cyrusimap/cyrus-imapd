@@ -1,0 +1,11 @@
+Name: proxy_compress
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Try to enable protocol-specific compression when performing a client
+connection to a backend server in the Cyrus Murder.
+
+Note that this should only be necessary over slow network
+connections.  Also note that currently only IMAP and MUPDATE support
+compression. 

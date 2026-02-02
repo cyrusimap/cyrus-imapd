@@ -1,0 +1,5 @@
+Name: srvtab
+Type: STRING
+Default-Value: 
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0

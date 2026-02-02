@@ -1,0 +1,7 @@
+Name: autocreate_users
+Type: STRING
+Default-Value: anyone
+Last-Modified: 2.5.0
+
+A space separated list of users and/or groups that are allowed their INBOX to be
+automatically created. 

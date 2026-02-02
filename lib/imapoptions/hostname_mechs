@@ -1,0 +1,10 @@
+Name: hostname_mechs
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+For-Documentation-Only: 1
+
+Force a particular list of SASL mechanisms to be used when authenticating
+to the backend server hostname (where hostname is the short hostname of
+the server in question). If it is not specified it will query the server
+for available mechanisms and pick one to use. - Cyrus Murder 

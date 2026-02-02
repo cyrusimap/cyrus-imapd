@@ -1,0 +1,11 @@
+Name: tls_ciphers
+Type: STRING
+Default-Value: DEFAULT
+Last-Modified: 2.5.0
+
+The list of SSL/TLS ciphers to allow.  The format of the string
+(and definition of "DEFAULT") is described in **ciphers(1)**.
+
+See also Mozilla's server-side TLS recommendations:
+
+https://wiki.mozilla.org/Security/Server_Side_TLS . 

@@ -1,0 +1,11 @@
+Name: search_attachment_extractor_idle_timeout
+Type: DURATION
+Default-Value: 5m
+Last-Modified: 3.10.0
+
+Defines the duration after which to close unused connections to
+the search attachment extractor service. If the idle timeout is
+less than search_attachment_extractor_request_timeout, then it
+is ignored and request timeout used instead.
+
+If no unit is specified, seconds is assumed. 

@@ -1,0 +1,14 @@
+Name: httpallowcors
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+A wildmat pattern specifying a list of origin URIs ( scheme "://"
+host [ ":" port ] ) that are allowed to make Cross-Origin Resource
+Sharing (CORS) requests on the server.  By default, CORS requests
+are disabled.
+
+Note that the scheme and host should both be lowercase, the port
+should be omitted if using the default for the scheme (80 for http,
+443 for https), and there should be no trailing '/' (e.g.:
+"http://www.example.com:8080", "https://example.org"). 
