@@ -1,0 +1,8 @@
+Name: mailbox_default_options
+Type: INT
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Default "options" field for the mailbox on create.  You'll want to know
+what you're doing before setting this, but it can apply some default
+annotations like duplicate suppression. 

@@ -1,0 +1,7 @@
+Name: quotawarnpercent
+Type: INT
+Default-Value: 90
+Last-Modified: 3.8.0
+
+The percent of quota utilization over which the server generates
+warnings. 

@@ -1,0 +1,9 @@
+Name: prometheus_stats_dir
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.1.2
+
+Directory to use for gathering prometheus statistics.  If specified,
+must be an absolute path.  If not specified, the default path
+$configdirectory/stats/ will be used.  It may be advantageous to locate this
+directory on ephemeral storage. 

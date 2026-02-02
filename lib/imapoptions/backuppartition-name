@@ -1,0 +1,6 @@
+Name: backuppartition-name
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0
+For-Documentation-Only: 1

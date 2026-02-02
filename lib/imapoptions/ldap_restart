@@ -1,0 +1,7 @@
+Name: ldap_restart
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+Specify whether or not LDAP I/O operations are automatically restarted
+if they abort prematurely. 

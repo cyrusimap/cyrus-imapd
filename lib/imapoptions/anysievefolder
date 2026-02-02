@@ -1,0 +1,7 @@
+Name: anysievefolder
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+It must be "yes" in order to permit the autocreation of any INBOX subfolder
+requested by a sieve filter, through the "fileinto" action. 

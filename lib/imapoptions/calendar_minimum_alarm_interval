@@ -1,0 +1,8 @@
+Name: calendar_minimum_alarm_interval
+Type: DURATION
+Default-Value: 5m
+Last-Modified: 3.8.0
+
+The minimum allowed interval between alarms for a recurring event.
+Primarily used to suppress alarms for MINUTELY and SECONDLY recurrences.
+The minimum value is 0, which will allow all alarms. 

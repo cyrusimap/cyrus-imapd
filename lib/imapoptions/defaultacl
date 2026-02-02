@@ -1,0 +1,7 @@
+Name: defaultacl
+Type: STRING
+Default-Value: anyone lrs
+Last-Modified: 2.3.17
+
+The Access Control List (ACL) placed on a newly-created (non-user)
+mailbox that does not have a parent mailbox. 

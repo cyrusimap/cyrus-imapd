@@ -1,0 +1,7 @@
+Name: caldav_create_sched
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.0.0
+
+Create the 'Inbox' and 'Outbox' calendars if they don't already exist. 
+

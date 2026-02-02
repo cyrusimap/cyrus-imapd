@@ -1,0 +1,14 @@
+Name: altnamespace
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.0.0
+
+Use the alternate IMAP namespace, where personal folders reside at the
+same level in the hierarchy as INBOX.
+
+This option ONLY applies where interaction takes place with the
+client/user.  Currently this is limited to the IMAP protocol (imapd)
+and Sieve scripts (lmtpd).  This option does NOT apply to admin tools
+such as cyradm (admins ONLY), reconstruct, quota, etc., NOR does it
+affect LMTP delivery of messages directly to mailboxes via
+plus-addressing.  The default changed in 3.0 from off to on. 

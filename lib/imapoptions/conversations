@@ -1,0 +1,8 @@
+Name: conversations
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+Enable the XCONVERSATIONS extensions.  Extract conversation
+tracking information from incoming messages and track them
+in per-user databases. 

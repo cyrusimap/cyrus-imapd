@@ -1,0 +1,9 @@
+Name: replicaonly
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.12.0
+
+If enabled, marks the server as only being a replica.  This will
+stop calalarmd from doing anything, and also deny any non-silent
+writes (nothing is allowed to increase modseq or uidvalidity).
+

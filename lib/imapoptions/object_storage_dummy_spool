@@ -1,0 +1,5 @@
+Name: object_storage_dummy_spool
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.13.3
+Deprecated-Since: 3.13.3
