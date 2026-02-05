@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Test::Deep ();
+use Test::Deep::JType ();
 use Test::Deep::Hashbag ();
 use Import::Into ();
 
@@ -18,6 +19,7 @@ sub import {
 
   Test::Deep->import::into($caller, ':v1');
   Test::Deep::Hashbag->import::into($caller);
+  Test::Deep::JType->import::into($caller);
 
   return;
 }
