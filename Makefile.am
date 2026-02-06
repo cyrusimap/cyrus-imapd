@@ -757,6 +757,11 @@ check-discrete: cunit/unit
 		echo "$$fails/$$tests tests failed" ; \
 		exit $$fails
 
+# Fast perl runner for cunit in parallel
+check-fast: cunit/unit
+	@echo "Running unit tests in parallel"
+	./cunit/pcunit $$JOBS
+
 check-%: cunit/unit
 	@echo "Running unit tests for $*"
 	@vg= ; \
