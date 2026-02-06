@@ -27,7 +27,7 @@ extern hash_table attrs_by_name; /* expose some search_expr internals */
 #define DATE1_END       "1354971600"
 #define DATE1_MID_TIME  1354928400
 
-#define DBDIR   "test-dbdir"
+#define DBDIR   "test-search-expr-dbdir"
 
 static void test_get_search_program(void)
 {

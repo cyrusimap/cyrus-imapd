@@ -5,7 +5,7 @@
 #include "lib/libcyr_cfg.h"
 #include "imap/global.h"
 
-#define DBDIR           "test-dbdir"
+#define DBDIR           "test-getxstring-dbdir"
 
 static int set_up(void)
 {

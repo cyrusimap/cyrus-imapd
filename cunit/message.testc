@@ -9,7 +9,7 @@
 #include "imap/mailbox.h"
 #include "imap/message.h"
 
-#define DBDIR           "test-dbdir"
+#define DBDIR           "test-message-dbdir"
 
 static int set_up(void)
 {

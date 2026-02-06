@@ -15,7 +15,7 @@
 #include "imap/user.h"
 #include "imap/imap_err.h"
 
-#define DBDIR           "test-dbdir"
+#define DBDIR           "test-annotate-dbdir"
 #define MBOXNAME1_INT   "user.smurf"
 #define MBOXNAME2_INT   "user.smurfette"
 #define MBOXNAME3_INT   "user.smurfine"

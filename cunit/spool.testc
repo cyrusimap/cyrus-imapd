@@ -9,7 +9,7 @@
 #include "imap/spool.h"
 #include "xunlink.h"
 
-#define DBDIR       "test-dbdir"
+#define DBDIR       "test-spool-dbdir"
 #define DELIVERED   "Fri, 29 Oct 2010 13:07:07 +1100"
 #define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"
 #define SECOND_RX   "Fri, 29 Oct 2010 13:03:03 +1100"
