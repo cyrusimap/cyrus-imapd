@@ -215,4 +215,26 @@ sub _parse_version
     }
 }
 
+sub docs_default_value
+{
+    my ($self) = @_;
+
+    my $dv = $self->default_value;
+
+    if (not defined $dv) {
+        return '<none>';
+    }
+    elsif (ref $dv eq 'ARRAY') {
+        return @$dv
+               ? join(' ', @$dv)
+               : '<empty string>';
+    }
+    elsif ($dv eq '') {
+        return '<empty string>';
+    }
+    else {
+        return $dv;
+    }
+}
+
 1;
