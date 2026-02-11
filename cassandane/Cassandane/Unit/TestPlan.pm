@@ -610,7 +610,7 @@ sub _default_test_list
 {
     my ($self) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my @tosuppress = split /\s+/, $cassini->val('cassandane', 'suppress', '');
 
     my %default;

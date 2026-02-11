@@ -601,7 +601,7 @@ sub _create_instances
 
     $instance_params{lsan_suppressions} = $self->{lsan_suppressions} // "";
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini  = Cassandane::Cassini->singleton();
 
     if ($want->{imapmurder} && $want->{httpmurder}) {
         # XXX Murder is implemented assuming that everything is on standard
@@ -1159,7 +1159,7 @@ sub post_tear_down
 
     if ($result eq 'pass'
         && ref $self->{cleanup_basedirs}
-        && Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup')
+        && Cassandane::Cassini->singleton()->bool_val('cassandane', 'cleanup')
     ) {
         foreach my $basedir (@{$self->{cleanup_basedirs}}) {
             xlog $self, "Cleaning up basedir " . $basedir;

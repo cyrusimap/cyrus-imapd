@@ -95,7 +95,7 @@ sub new
     my $class = shift;
     my %params = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $self = bless({
         name => undef,
@@ -268,7 +268,7 @@ sub get_version
         return $cached_sversion{$installation};
     }
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     # Need to check the named-installation directory AND the
     # default installation directory, before falling back to the
@@ -361,7 +361,7 @@ sub _rootdir
 {
     if (!defined $__cached_rootdir)
     {
-        my $cassini = Cassandane::Cassini->instance();
+        my $cassini = Cassandane::Cassini->singleton();
         $__cached_rootdir =
             $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     }
@@ -619,7 +619,7 @@ sub _find_binary
 {
     my ($self, $name) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $name_override = $cassini->val("cyrus $self->{installation}", $name);
     $name = $name_override if defined $name_override;
 
@@ -661,7 +661,7 @@ sub _valgrind_setup
 
     my @cmd;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
@@ -687,7 +687,7 @@ sub _binary
     my @cmd;
     my $valground = 0;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     if ($cassini->bool_val('valgrind', 'enabled') &&
         !($name =~ m/xapian.*$/) &&
@@ -1556,7 +1556,7 @@ sub _check_valgrind_logs
 {
     my ($self) = @_;
 
-    return unless Cassandane::Cassini->instance()->bool_val('valgrind', 'enabled');
+    return unless Cassandane::Cassini->singleton()->bool_val('valgrind', 'enabled');
 
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
 
@@ -1758,7 +1758,7 @@ sub find_cores
     my ($self) = @_;
     my $coredir = $self->{basedir} . '/conf/cores';
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $core_pattern = $cassini->get_core_pattern();
 
     my @cores;
@@ -2490,7 +2490,7 @@ sub _fork_command
         or die "Cannot cd to $cd: $!";
 
     # ulimit -c ...
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $coresizelimit = 0 + $cassini->val("cyrus $self->{installation}",
                                           'coresizelimit', '100');
     if ($coresizelimit <= 0) {

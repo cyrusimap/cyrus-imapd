@@ -7,7 +7,7 @@ sub test_netcaldavtalktests_fromje
 {
     my $CalDAV = $self->{caldav};
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $basedir = $cassini->val('caldavtalk', 'basedir');
 
     unless ($basedir) {

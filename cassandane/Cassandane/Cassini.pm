@@ -47,7 +47,7 @@ use Config::IniFiles;
 
 use Cassandane::Util::Log;
 
-my $instance;
+my $SINGLETON;
 
 sub homedir {
     my ($uid) = @_;
@@ -133,22 +133,22 @@ sub new
     my $core_pattern = $self->val('cassandane', 'core_pattern');
     $core_pattern = qr{$core_pattern} if $core_pattern;
 
-    $instance = $self
-        unless defined $instance;
+    $SINGLETON = $self
+        unless defined $SINGLETON;
     return $self;
 }
 
-sub instance
+sub singleton
 {
     my ($class) = @_;
 
-    if (!defined $instance)
+    if (!defined $SINGLETON)
     {
-        $instance = Cassandane::Cassini->new();
+        $SINGLETON = Cassandane::Cassini->new();
         die "Singleton broken in Cassini ctor!"
-            unless defined $instance;
+            unless defined $SINGLETON;
     }
-    return $instance;
+    return $SINGLETON;
 }
 
 sub val

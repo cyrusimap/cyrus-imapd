@@ -51,7 +51,7 @@ sub new
 {
     my ($class) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     my $failed_file = "$rootdir/failed";
     # if we can't write there, we just won't record failed tests!
