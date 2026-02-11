@@ -58,6 +58,7 @@ use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::GenericListener;
 use Cassandane::MessageStoreFactory;
+use Cassandane::Manifest;
 use Cassandane::Instance;
 use Cassandane::PortManager;
 use Cyrus::CheckReplication;
@@ -602,6 +603,7 @@ sub _create_instances
     $instance_params{lsan_suppressions} = $self->{lsan_suppressions} // "";
 
     my $cassini  = Cassandane::Cassini->singleton();
+    my $manifest = $cassini->manifest;
 
     if ($want->{imapmurder} && $want->{httpmurder}) {
         # XXX Murder is implemented assuming that everything is on standard
@@ -677,6 +679,8 @@ sub _create_instances
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
 
+        $manifest->record_start($class, $self->{_name}, 'main', $self->{instance});
+
         if ($want->{squatter}) {
             $self->{instance}->add_daemon(
                 name => 'squatter',
@@ -719,6 +723,8 @@ sub _create_instances
             $self->{replica}->add_services(@{$want->{services}});
             $self->{replica}->_setup_for_deliver()
                 if ($want->{deliver});
+
+            $manifest->record_start(ref($self), $self->{_name}, 'replica', $self->{replica});
         }
 
         if ($want->{imapmurder} || $want->{httpmurder})
@@ -768,6 +774,8 @@ sub _create_instances
             $self->{frontend}->add_services(@{$want->{services}});
             $self->{frontend}->_setup_for_deliver()
                 if ($want->{deliver});
+
+            $manifest->record_start($class, $self->{_name}, 'frontend', $self->{frontend});
 
             # arrange for frontend service to run on a known port
             if ($want->{imapmurder}) {
@@ -827,6 +835,8 @@ sub _create_instances
             $self->{backend2} = Cassandane::Instance->new(%backend2_params,
                                                           setup_mailbox => 0); # XXX ?
             $self->{backend2}->add_services(@{$want->{services}});
+
+            $manifest->record_start($class, $self->{_name}, 'backend2', $self->{backend2});
 
             # arrange for backend2 to push to mupdate on startup
             $self->{backend2}->add_start(name => 'mupdatepush',

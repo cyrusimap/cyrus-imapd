@@ -38,7 +38,7 @@
 #
 
 package Cassandane::Instance;
-use strict;
+use v5.28.0;
 use warnings;
 
 use experimental 'signatures';
@@ -218,6 +218,20 @@ sub id
 {
     my ($self) = @_;
     return $self->{name}; # XXX something cleverer?
+}
+
+sub name
+{
+    my ($self) = @_;
+    $self->_init_basedir_and_name;
+    return $self->{name};
+}
+
+sub basedir
+{
+    my ($self) = @_;
+    $self->_init_basedir_and_name;
+    return $self->{basedir};
 }
 
 sub default_mailbox_version

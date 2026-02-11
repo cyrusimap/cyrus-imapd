@@ -42,9 +42,12 @@
 package Cassandane::Cassini;
 use strict;
 use warnings;
+use experimental 'signatures';
+
 use Cwd qw(abs_path);
 use Config::IniFiles;
 
+use Cassandane::Manifest;
 use Cassandane::Util::Log;
 
 my $SINGLETON;
@@ -249,6 +252,21 @@ sub get_core_pattern
     my $core_pattern = $self->val('cassandane', 'core_pattern',
                                   '^core.*?(?:\.(\d+))?$');
     return qr{$core_pattern};
+}
+
+sub manifest ($self)
+{
+    $self->{_manifest} //= do {
+        my $rootdir = $self->val('cassandane', 'rootdir', '/var/tmp/cass');
+        my $rundir  = $self->val('cassandane', 'rundir', undef);
+
+        unless (defined $rundir) {
+            Carp::confess("can't create a manifest without a rundir!");
+        }
+
+        my $dbpath = "$rootdir/$rundir/manifest.sqlite";
+        Cassandane::Manifest->_new($dbpath);
+    };
 }
 
 1;
