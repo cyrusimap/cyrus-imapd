@@ -53,7 +53,15 @@ sub new
 
     my $cassini = Cassandane::Cassini->singleton();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
+    my $rundir  = $cassini->val('cassandane', 'rundir', undef);
+
+    unless ($rundir)
+    {
+        Carp::confess("can't construct Cassandane::Unit::Runner without Cassini rundir");
+    }
+
+    my $basedir = join q{/}, $rootdir, $rundir;
+    my $failed_file = "$basedir/failed";
     # if we can't write there, we just won't record failed tests!
 
     return bless {

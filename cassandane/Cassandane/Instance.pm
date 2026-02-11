@@ -368,6 +368,21 @@ sub _rootdir
     return $__cached_rootdir;
 }
 
+sub _rundir
+{
+    state $rundir //= do {
+        my $cassini = Cassandane::Cassini->singleton();
+        my $rundir  = $cassini->val('cassandane', 'rundir', undef);
+
+        unless ($rundir)
+        {
+            Carp::confess("can't construct Cassandane::Instance without Cassini rundir");
+        }
+
+        $rundir;
+    };
+}
+
 sub _make_instance_info
 {
     my ($name, $basedir) = @_;
@@ -402,7 +417,7 @@ sub _make_unique_instance_info
         $stamp .= sprintf("%02X", $workerid) if defined $workerid;
     }
 
-    my $rootdir = _rootdir();
+    my $rootdir = join q{/}, _rootdir(), _rundir();
 
     my $name;
     my $basedir;
@@ -478,22 +493,20 @@ sub get_basedir
 sub cleanup_leftovers
 {
     my $rootdir = _rootdir();
+    my $rundir  = _rundir();
 
     return if (!-d $rootdir);
     opendir ROOT, $rootdir
         or die "Cannot open directory $rootdir for reading: $!";
-    my @dirs;
+    my @to_rmtree;
     while (my $e = readdir(ROOT))
     {
-        # This must be kept in sync with _make_unique_instance_info,
-        # which is what names and creates these directories.
-        my $basedirpat = qr{
-            \d{6}               # UTC timestamp as HHMMSS
-            (?:[0-9A-F]{2,})?   # optional worker ID as 2+ hex digits
-            [0-9A-F]{2,}        # unique number as 2+ hex digits
-        }ax;
-
-        push(@dirs, $e) if $e =~ m/$basedirpat/;
+        # This must be kept in sync with testrunner.pl, which is what names and
+        # creates the rundirs
+        if ($e =~ /\A[0-9]{8}T[0-9]{6}\z/ && $e ne $rundir)
+        {
+            push @to_rmtree, $e;
+        }
     }
     closedir ROOT;
 
@@ -503,7 +516,7 @@ sub cleanup_leftovers
             xlog "Cleaning up old basedir $rootdir/$_";
         }
         rmtree "$rootdir/$_";
-    } @dirs;
+    } @to_rmtree;
 }
 
 sub add_service
