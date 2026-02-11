@@ -56,6 +56,12 @@ has documentation => (
     is => 'ro',
     predicate => 1,
 );
+has c_enum_size => (
+    isa => Maybe[Int],
+    is => 'rwp',
+    lazy => 1,
+    builder => sub { scalar shift->c_allowed_values; },
+);
 
 around BUILDARGS => sub
 {
@@ -235,6 +241,156 @@ sub docs_default_value
     else {
         return $dv;
     }
+}
+
+sub _c_name
+{
+    my ($name) = @_;
+
+    return 'IMAPOPT_' . uc($name);
+}
+
+sub c_name
+{
+    my ($self) = @_;
+
+    return _c_name($self->name);
+}
+
+sub _c_enum_name
+{
+    my ($name, $value) = @_;
+
+    my $e = 'IMAP_ENUM_' . uc($name) . '_' . uc($value);
+    $e =~ s/[^0-9A-Z_a-z]/_/g;
+
+    return $e;
+}
+
+sub c_last_modified
+{
+    my ($self) = @_;
+
+    return _parse_version('last_modified', $self->last_modified);
+}
+
+sub c_deprecated_since
+{
+    my ($self) = @_;
+
+    return $self->has_deprecated_since
+           ? '"' . $self->deprecated_since . '"'
+           : 'NULL';
+}
+
+sub c_replaced_by
+{
+    my ($self) = @_;
+
+    return $self->has_replaced_by
+           ? _c_name($self->replaced_by)
+           : _c_name('ZERO');
+}
+
+sub c_default_value
+{
+    my ($self) = @_;
+
+    my $type = $self->type;
+
+    if ($type eq 'BITFIELD') {
+        my $dv = join("\n\t\t\t | ",
+                      (map { _c_enum_name($self->name, $_) }
+                          @{$self->default_value}
+                      ), 0);
+
+        return ('uint64_t', $dv);
+    }
+    elsif ($type eq 'ENUM') {
+        return ('enum enum_value',
+                _c_enum_name($self->name, $self->default_value));
+    }
+    elsif ($type eq 'INT') {
+        return ('long', $self->default_value);
+    }
+    elsif ($type eq 'SWITCH') {
+        return ('long', $self->default_value);
+    }
+    elsif (_type_allows_null($type)) {
+        # BYTESIZE, DURATION, STRING, STRINGLIST
+        my $dv = defined $self->default_value
+                 ? '"' . $self->default_value . '"'
+                 : 'NULL';
+        return ('const char *', $dv);
+    }
+    else {
+        die "uh oh, i don't recognise type=$type";
+    }
+}
+
+sub c_allowed_values
+{
+    my ($self) = @_;
+
+    my $type = $self->type;
+    my @allowed_values = ();
+
+    if ($self->has_allowed_values) {
+        foreach my $v (@{$self->allowed_values}) {
+            my @aliases;
+
+            if ($type eq 'BITFIELD') {
+                @aliases = split '=', $v;
+                $v = shift @aliases;
+            }
+
+            my $e = $type eq 'STRINGLIST'
+                    ? 'IMAP_ENUM_ZERO'
+                    : _c_enum_name($self->name, $v);
+            push @allowed_values, [ $v, $e ];
+
+            foreach my $a (@aliases) {
+                push @allowed_values, [ $a, $e ];
+            }
+        }
+    }
+
+    # cache enum_size since we've effectively computed it now
+    $self->_set_c_enum_size(scalar @allowed_values);
+
+    return @allowed_values;
+}
+
+sub c_enum_defs
+{
+    my ($self) = @_;
+
+    my $type = $self->type;
+    my $idx = 0;
+    my @defs = ();
+
+    if ($self->has_allowed_values && $type ne 'STRINGLIST') {
+        foreach my $v (@{$self->allowed_values}) {
+            my $name = _c_enum_name($self->name, $v);
+            my $init;
+
+            if ($type eq 'BITFIELD') {
+                $init = '(UINT64_C(1)<<' . $idx . ')';
+            }
+            elsif ($idx == 0) {
+                $init = '0';
+            }
+            else {
+                $init = undef;
+            }
+
+            push @defs, [ $name, $init ];
+
+            $idx++;
+        }
+    }
+
+    return @defs;
 }
 
 1;
