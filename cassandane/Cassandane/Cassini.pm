@@ -148,7 +148,7 @@ sub singleton
     if (!defined $SINGLETON)
     {
         $SINGLETON = Cassandane::Cassini->new();
-        die "Singleton broken in Cassini ctor!"
+        die "Singleton broken in Cassini constructor!"
             unless defined $SINGLETON;
     }
     return $SINGLETON;

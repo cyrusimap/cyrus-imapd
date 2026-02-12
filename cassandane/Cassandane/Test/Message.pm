@@ -54,7 +54,7 @@ sub new
     return $self;
 }
 
-# Test default ctor
+# Test default constructor
 sub test_empty
 {
     my ($self) = @_;
