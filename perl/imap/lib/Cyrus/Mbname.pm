@@ -117,45 +117,6 @@ sub new_userfolder {
   return bless \%self, ref($class) || $class;
 }
 
-sub new_extuserfolder {
-  my $class = shift;
-  my $username = shift;
-  my $folder = shift;
-
-  my %self;
-  if ($username =~ s/\@(.*)//) {
-    $self{domain} = $1;
-  }
-  $self{localpart} = $username;
-
-  if (defined $folder) {
-    my @boxes = split /\//, $folder;
-
-    if (@boxes > 2 and $boxes[0] eq 'DELETED') {
-      shift @boxes;
-      $self{is_deleted} = hex(pop @boxes);
-    }
-
-    if (@boxes == 1 and $boxes[0] eq 'INBOX') {
-      shift @boxes;
-    }
-
-    elsif($boxes[0] eq 'user') {
-      shift @boxes;
-      $self{localpart} = shift @boxes;
-    }
-
-    else {
-      $self{boxes} = \@boxes;
-    }
-  }
-  else {
-    $self{boxes} = [];  # INBOX
-  }
-
-  return bless \%self, ref($class) || $class;
-}
-
 sub new_adminfolder {
   # this is basically new_intname, but with the domain on the end...
   my $class = shift;
@@ -261,17 +222,43 @@ sub dbname {
 
 sub userfolder {
   my $self = shift;
+  my $username = shift;
+  my $domain = $self->{domain};
+  my $localpart = $self->{localpart};
+
+  # let's see if this is a different user!
+  if ($username) {
+    if ($username =~ s/\@(.*)//) {
+      $domain = $1;
+    }
+    $localpart = $username;
+  }
 
   my @boxes = @{$self->{boxes}||[]};
 
-  s/\./\^/g for @boxes;
+  my $diffuser;
+  if ($domain ne $self->{domain}) {
+    $diffuser = $self->username;
+  }
+  elsif ($localpart ne $self->{localpart}) {
+    $diffuser = $self->localpart;
+  }
 
-  unshift @boxes, 'INBOX';
+  if ($diffuser) {
+    unshift @boxes, $diffuser;
+    unshift @boxes, 'user';
+  }
+  else {
+    # this user, it's my INBOX!
+    unshift @boxes, 'INBOX';
+  }
 
   if ($self->is_deleted) {
     unshift @boxes, 'DELETED';
     push @boxes, sprintf("%08X", $self->is_deleted);
   }
+
+  s/\./\^/g for @boxes;
 
   return join('.', @boxes);
 }
@@ -293,6 +280,13 @@ sub username {
   my $self = shift;
   return unless $self->{localpart};
   return $self->{domain} ? "$self->{localpart}\@$self->{domain}" : $self->{localpart};
+}
+
+sub is_inbox {
+  my $self = shift;
+  return 0 unless $self->{localpart};
+  return 0 if @{$self->boxes};
+  return 1;
 }
 
 1;

@@ -1,5 +1,6 @@
 package Cyrus::Mbentry;
 use Moo;
+
 use Cyrus::DList;
 use Cyrus::Mbname;
 
@@ -26,21 +27,27 @@ has uidvalidity => (isa => Int, is => 'rw');
 
 sub _parse_dlist {
   my ($self, $name, $details) = @_;
-  my $dlist = Cyrus::DList->parse_string($details, 0);
+  my $userid;
   if ($name =~ m/^N/) {
-    $name = Cyrus::Mbname->new_dbname($name)->intname();
+    my $mbname = eval { Cyrus::Mbname->new_dbname($name) };
+    die "Not a valid mbname $name = $details" unless $mbname;
+    $name = $mbname->intname;
     $self->{is_uuid} = 1;
   }
   if ($name =~ m/^I/) {
-    $self->{uniqueid} = substr($name, 1);
+    $self->{uniqueid} = substr($name, 1); # can't die!
     $self->{is_uuid} = 1;
   }
   if ($name =~ m/^J/) {
-    (undef, $self->{jmapid}) = split /\x1e/, $name;
+    my $val = substr($name, 1);
+    ($userid, $self->{jmapid}) = split /\x1e/, $val;
+    die "No jmapid in $name = $details" unless $self->{jmapid};
     $self->{is_uuid} = 1;
   }
   $self->{intname} = $name;
   $self->{type} = 'e';
+  my $dlist = Cyrus::DList->parse_string($details, 0);
+  die "Not a valid dlist $details" unless @{$dlist->{data}};
   foreach my $item (@{$dlist->{data}}) {
     if ($item->{key} eq 'A') {
       my %acls;
@@ -94,6 +101,9 @@ sub _parse_dlist {
       $self->{type} = $item->{data};
     }
   }
+
+  die "bad username for $name $details" if ($userid and $userid ne $self->username);
+
   return $self;
 }
 
@@ -156,5 +166,6 @@ sub is_intermediate { shift->has_type('i') }
 sub username { shift->name->username }
 sub userfolder { shift->name->userfolder }
 sub adminfolder { shift->name->adminfolder }
+sub is_inbox { shift->name->is_inbox }
 
 1;
