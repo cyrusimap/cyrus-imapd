@@ -200,6 +200,17 @@ sub is_allowed_value
     }
 }
 
+sub is_unreleased
+{
+    my ($self) = @_;
+
+    my $is_unreleased = $self->last_modified eq 'UNRELEASED'
+                        || ($self->has_deprecated_since
+                            && $self->deprecated_since eq 'UNRELEASED');
+
+    return $is_unreleased;
+}
+
 sub _parse_version
 {
     my ($field, $version) = @_;

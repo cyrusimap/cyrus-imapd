@@ -12,12 +12,7 @@ sub abstract { 'build c header file from imapoptions' }
 
 sub usage_desc { 'cheader %o imapoptions' }
 
-sub opt_spec
-{
-    return (
-        [ 'cc=s', 'specify the C compiler in use', { default => 'gcc' } ],
-    );
-}
+sub opt_spec { return Cyrus::IMAPOptions::App::common_opt_spec; }
 
 sub validate_args
 {
@@ -34,7 +29,12 @@ sub execute
 {
     my ($self, $opt, $args) = @_;
 
-    my $imapoptions = Cyrus::IMAPOptions->new(from_path => $args->[0]);
+    my $imapoptions = Cyrus::IMAPOptions->new(
+        from_path => $args->[0],
+        forbid_unreleased => $opt->{forbid_unreleased},
+    );
+
+    $imapoptions->check_unreleased($self->app->arg0);
 
     $self->header();
 

@@ -4,11 +4,16 @@ package Cyrus::IMAPOptions;
 use Moo;
 
 use Cyrus::IMAPOptions::Option;
-use Types::Standard qw(HashRef InstanceOf);
+use Types::Standard qw(Bool HashRef InstanceOf);
 
 has options => (
     isa => HashRef[InstanceOf['Cyrus::IMAPOptions::Option']],
     is => 'ro',
+);
+has forbid_unreleased => (
+    isa => Bool,
+    is => 'ro',
+    default => '0',
 );
 
 around BUILDARGS => sub
@@ -59,6 +64,40 @@ sub BUILD
 
             die "$opt_name: replaced by '$replaced_by' which is also deprecated"
                 if $self->options->{$replaced_by}->has_deprecated_since;
+        }
+    }
+}
+
+sub check_unreleased
+{
+    my ($self, $cmd) = @_;
+
+    my $warned_unreleased;
+
+    foreach my $option (values %{$self->options}) {
+        if (!$warned_unreleased && $option->is_unreleased) {
+            # This warning is to remind the release manager to replace
+            # "UNRELEASED" strings in lib/imapoptions with the version
+            # number that is about to be released.
+            # If you're not building a release, ignore it. :)
+            my $prefix;
+
+            if ($self->forbid_unreleased) {
+                $prefix = -t STDERR ? "\033[31;1merror:\033[0m" : 'error:';
+            }
+            else {
+                $prefix = -t STDERR ? "\033[33;1mwarning:\033[0m" : 'warning:',
+            }
+
+            my $msg = "$cmd: $prefix build contains UNRELEASED config options\n";
+
+            if ($self->forbid_unreleased) {
+                die $msg;
+            }
+            else {
+                print STDERR $msg;
+                $warned_unreleased = 1;
+            }
         }
     }
 }
