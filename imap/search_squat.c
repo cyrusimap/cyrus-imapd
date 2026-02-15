@@ -1053,7 +1053,7 @@ static int end_update(search_text_receiver_t *rx)
 static int can_match(enum search_op matchop, int partnum)
 {
     return (matchop == SEOP_MATCH || matchop == SEOP_FUZZYMATCH) &&
-        doctypes_by_part[partnum];
+        partnum != SEARCH_PART_NONE && doctypes_by_part[partnum];
 }
 
 const struct search_engine squat_search_engine = {
