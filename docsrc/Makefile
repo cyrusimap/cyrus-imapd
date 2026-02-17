@@ -63,11 +63,11 @@ doxygen:
 	@echo "Doxygen XML generated in _doxygen/xml/"
 
 init: doxygen ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
-	@echo "creating reference/manpages/systemcommands/cyradm.rst"
+	@echo "Creating reference/manpages/systemcommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/reference/manpages/systemcommands/cyradm.rst
-	@echo "creating reference/manpages/usercommands/sieveshell.rst"
+	@echo "Creating reference/manpages/usercommands/sieveshell.rst"
 	$(PERL2RST) sieveshell < ../perl/sieve/scripts/sieveshell.pl > $(SOURCEDIR)/reference/manpages/usercommands/sieveshell.rst
-	@echo "creating reference/manpages/configs/imapd.conf.rst"
+	@echo "Creating reference/manpages/configs/imapd.conf.rst"
 	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/reference/manpages/configs/imapd.conf.rst
 
 html: init
