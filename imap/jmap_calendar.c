@@ -9732,6 +9732,10 @@ static int jmap_principal_getavailability(struct jmap_req *req)
     /* Parse arguments */
     const char *s;
     json_t *myargs = json_copy(req->args); // shallow copy
+    if ((s = json_string_value(json_object_get(myargs, "accountId")))) {
+        /* already handled in jmap_api() */
+        json_object_del(myargs, "accountId");
+    }
     if ((s = json_string_value(json_object_get(myargs, "id")))) {
         principalid = xstrdup(s);
         json_object_del(myargs, "id");
