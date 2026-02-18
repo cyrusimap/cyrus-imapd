@@ -34,13 +34,13 @@ static jmap_method_t jmap_admin_methods_nonstandard[] = {
         "Admin/rewriteCalendarEventPrivacy",
         JMAP_ADMIN_EXTENSION,
         &jmap_admin_rewrite_calevent_privacy,
-        JMAP_NO_USERLOCK,
+        JMAP_NO_USERLOCK | JMAP_NO_ACCOUNTID,
     },
     {
         "Admin/migrateCalendarDefaultAlarms",
         JMAP_ADMIN_EXTENSION,
         &jmap_admin_migrate_defaultalarms,
-        JMAP_NO_USERLOCK,
+        JMAP_NO_USERLOCK | JMAP_NO_ACCOUNTID,
     },
     { NULL, NULL, NULL, 0}
 };
