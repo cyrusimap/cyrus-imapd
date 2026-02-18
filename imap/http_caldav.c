@@ -1175,10 +1175,14 @@ static int _scheduling_enabled(struct transaction_t *txn,
 
     annotatemore_lookupmask_mbox(mailbox, entry, "", &buf);
     /* legacy */
-    if (!strcasecmp(buf_cstring(&buf), "no"))
+    if (!strcasecmp(buf_cstring(&buf), "no") ||
+        !strcasecmp(buf_cstring(&buf), "F")) {
         is_enabled = 0;
-    if (!strcasecmp(buf_cstring(&buf), "F"))
-        is_enabled = 0;
+
+        syslog(LOG_DEBUG, "Scheduling disabled for user %s on mailbox %s"
+               " by CY:scheduling-enabled annotation",
+               httpd_userid, mailbox_name(mailbox));
+    }
 
     const char **hdr = spool_getheader(txn->req_hdrs, "Scheduling-Enabled");
     if (hdr && !strcasecmp(hdr[0], "F"))
