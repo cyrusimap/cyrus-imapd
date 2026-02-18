@@ -484,6 +484,7 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Cassini;
 use Cassandane::Util::Log;
 
 my @test_roots = (
@@ -1053,8 +1054,12 @@ sub run
         # first ^C stops spawning new work items
         while ($interrupted < 1 && ($witem = shift @workitems))
         {
-            $pool->assign($witem)
-                if ($self->{keep_going} || $result->was_successful());
+            if ($self->{keep_going} || $result->was_successful())
+            {
+                Cassandane::Cassini->singleton->manifest->record_start(
+                    $witem->{suite}, $witem->{testname});
+                $pool->assign($witem);
+            }
             while ($witem = $pool->retrieve(0))
             {
                 $self->_finish_workitem($witem, $result, $runner);
@@ -1072,6 +1077,8 @@ sub run
         # single threaded case: just run it all in-process
         foreach my $witem (@workitems)
         {
+            Cassandane::Cassini->singleton->manifest->record_start(
+                $witem->{suite}, $witem->{testname});
             $self->_run_workitem($witem, $result, $runner, 1);
             last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
         }

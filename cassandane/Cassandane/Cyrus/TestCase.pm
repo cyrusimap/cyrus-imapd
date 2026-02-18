@@ -603,7 +603,13 @@ sub _create_instances
     $instance_params{lsan_suppressions} = $self->{lsan_suppressions} // "";
 
     my $cassini  = Cassandane::Cassini->singleton();
-    my $manifest = $cassini->manifest;
+
+    my $class = ref $self;
+    (my $suite_dir = $class) =~ s/.*:://;
+    my $test_dir     = $self->{_name} =~ s/^test_//r;
+    my $rootdir      = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    my $rundir       = $cassini->val('cassandane', 'rundir');
+    my $test_basedir = join q{/}, $rootdir, $rundir, $suite_dir, $test_dir;
 
     if ($want->{imapmurder} && $want->{httpmurder}) {
         # XXX Murder is implemented assuming that everything is on standard
@@ -670,16 +676,13 @@ sub _create_instances
         $instance_params{old_jmap_ids} = $self->{old_jmap_ids}
             if exists $self->{old_jmap_ids};
 
-        my $class = ref $self;
-        my $name  = $self->{_name} =~ s/^test_//r;
-        $instance_params{description} = "main instance for test $class.$name";
+        $instance_params{description} = "main instance for test $class.$test_dir";
 
-        $self->{instance} = Cassandane::Instance->new(%instance_params);
+        $self->{instance} = Cassandane::Instance->new(%instance_params,
+                                                      basedir => "$test_basedir/main");
         $self->{instance}->add_services(@{$want->{services}});
         $self->{instance}->_setup_for_deliver()
             if ($want->{deliver});
-
-        $manifest->record_start($class, $self->{_name}, 'main', $self->{instance});
 
         if ($want->{squatter}) {
             $self->{instance}->add_daemon(
@@ -706,11 +709,10 @@ sub _create_instances
                 $replica_params{installation} = 'other';
             }
 
-            my $class = ref $self;
-            my $name  = $self->{_name} =~ s/^test_//r;
-            $replica_params{description} = "replica instance for test $class.$name";
+            $replica_params{description} = "replica instance for test $class.$test_dir";
             $self->{replica} = Cassandane::Instance->new(%replica_params,
-                                                         setup_mailbox => 0);
+                                                         setup_mailbox => 0,
+                                                         basedir => "$test_basedir/replica");
             my ($v) = Cassandane::Instance->get_version($replica_params{installation});
             if ($v < 3 || $want->{csyncreplica}) {
                 $self->{replica}->add_service(name => 'sync',
@@ -723,8 +725,6 @@ sub _create_instances
             $self->{replica}->add_services(@{$want->{services}});
             $self->{replica}->_setup_for_deliver()
                 if ($want->{deliver});
-
-            $manifest->record_start(ref($self), $self->{_name}, 'replica', $self->{replica});
         }
 
         if ($want->{imapmurder} || $want->{httpmurder})
@@ -761,12 +761,11 @@ sub _create_instances
                 $backend2_params{installation} = 'other';
             }
 
-            my $class = ref $self;
-            my $name  = $self->{_name} =~ s/^test_//r;
-            $frontend_params{description} = "murder frontend for test $class.$name";
+            $frontend_params{description} = "murder frontend for test $class.$test_dir";
             $frontend_params{config} = $frontend_conf;
             $self->{frontend} = Cassandane::Instance->new(%frontend_params,
-                                                          setup_mailbox => 0);
+                                                          setup_mailbox => 0,
+                                                          basedir => "$test_basedir/frontend");
             $self->{frontend}->add_service(name => 'mupdate',
                                            port => $mupdate_port,
                                            argv => ['mupdate', '-m'],
@@ -774,8 +773,6 @@ sub _create_instances
             $self->{frontend}->add_services(@{$want->{services}});
             $self->{frontend}->_setup_for_deliver()
                 if ($want->{deliver});
-
-            $manifest->record_start($class, $self->{_name}, 'frontend', $self->{frontend});
 
             # arrange for frontend service to run on a known port
             if ($want->{imapmurder}) {
@@ -830,13 +827,12 @@ sub _create_instances
                 proxy_password => 'mailproxy',
             );
 
-            $backend2_params{description} = "murder backend2 for test $class.$name";
+            $backend2_params{description} = "murder backend2 for test $class.$test_dir";
             $backend2_params{config} = $backend2_conf;
             $self->{backend2} = Cassandane::Instance->new(%backend2_params,
-                                                          setup_mailbox => 0); # XXX ?
+                                                          setup_mailbox => 0, # XXX ?
+                                                          basedir => "$test_basedir/backend2");
             $self->{backend2}->add_services(@{$want->{services}});
-
-            $manifest->record_start($class, $self->{_name}, 'backend2', $self->{backend2});
 
             # arrange for backend2 to push to mupdate on startup
             $self->{backend2}->add_start(name => 'mupdatepush',
