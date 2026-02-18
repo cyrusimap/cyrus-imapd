@@ -37,13 +37,12 @@
 #  OF THIS SOFTWARE.
 #
 
-# The Manifest provides a mapping between test names and the instance
-# directories used to run them.  Cassandane will run all its tests with
-# instance dirs in Cassandane's "rundir".  That's where you'll find
-# manifest.sqlite
+# The Manifest provides a record of which tests were run and whether they
+# passed.  You'll find manifest.sqlite in Cassandane's "rundir".  Each test
+# run has its own rundir, and each test run has its own manifest.
 #
-# With the manifest database, you can map failed tests back to their instance
-# directories for debugging.
+# Instance directories are now derived from the test structure directly:
+# $rootdir/$rundir/$suite/$test/$role
 
 package Cassandane::Manifest;
 use v5.28.0;
@@ -67,36 +66,33 @@ sub _new ($class, $dbpath)
 
     $dbh->do("PRAGMA journal_mode=WAL");
     $dbh->do(qq{
-        CREATE TABLE IF NOT EXISTS test_instances (
+        CREATE TABLE IF NOT EXISTS tests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             suite TEXT NOT NULL,
             test TEXT NOT NULL,
-            instance_role TEXT NOT NULL,
-            instance_name TEXT NOT NULL,
-            instance_basedir TEXT NOT NULL,
             started_at TEXT,
             finished_at TEXT,
             result TEXT,
-            UNIQUE(suite, test, instance_role)
+            UNIQUE(suite, test)
         )
     });
 
     return bless { dbh => $dbh }, $class;
 }
 
-sub record_start ($self, $suite_name, $test_name, $instance_role, $instance)
+sub record_start ($self, $suite_name, $test_name)
 {
     $suite_name =~ s/^Cassandane:://;
     $test_name  =~ s/^test_//;
 
     $self->{dbh}->do(
         q{
-            INSERT OR REPLACE INTO test_instances
-            (suite, test, instance_role, instance_name, instance_basedir, started_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            INSERT OR REPLACE INTO tests
+            (suite, test, started_at)
+            VALUES (?, ?, datetime('now'))
         },
         undef,
-        $suite_name, $test_name, $instance_role, $instance->name, $instance->basedir,
+        $suite_name, $test_name,
     );
 
     return;
@@ -109,7 +105,7 @@ sub record_completion ($self, $suite_name, $test_name, $result)
 
     $self->{dbh}->do(
         q{
-            UPDATE test_instances
+            UPDATE tests
             SET finished_at = datetime('now'), result = ?
             WHERE suite = ? AND test = ?
         },
