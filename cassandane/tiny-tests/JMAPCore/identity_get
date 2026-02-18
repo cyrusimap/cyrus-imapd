@@ -43,13 +43,8 @@ sub test_identity_get
         ], $res->[3]
     );
 
-    $self->assert_deep_equals([
-        'error',
-        {
-            type => 'invalidArguments',
-            arguments => [ 'accountId' ]
-        },
-        'R5'
-        ], $res->[4]
-    );
+    # accountId is auto-added by JMAPTester
+    $self->assert_num_equals(1, scalar @{$res->[4][1]{list}});
+    $self->assert_str_equals('cassandane', $res->[4][1]{list}[0]{id});
+    $self->assert_not_null($res->[4][1]->{state});
 }

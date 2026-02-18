@@ -11,6 +11,7 @@ sub test_echo_tls
     $self->assert_matches(qr/^https:/, $jmap->api_uri);
 
     my $req = {
+        accountId => \undef,  # suppress auto-add by JMAPTester
         hello => JSON::true,
         max => 5,
         stuff => { foo => "bar", empty => JSON::null }
@@ -18,6 +19,9 @@ sub test_echo_tls
 
     xlog $self, "send ping";
     my $res = $jmap->CallMethods([['Core/echo', $req, "R1"]]);
+
+    # Delete accountId from request since it won't be in the response
+    delete $req->{accountId};
 
     xlog $self, "check pong";
     $self->assert_not_null($res);

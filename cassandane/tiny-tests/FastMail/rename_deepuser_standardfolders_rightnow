@@ -71,7 +71,9 @@ sub test_rename_deepuser_standardfolders_rightnow
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
 
-    $data = $self->_fmjmap_ok('Mailbox/get', properties => ['name']);
+    $data = $self->_fmjmap_ok('Mailbox/get',
+                              accountId => 'newuser',
+                              properties => ['name']);
     my %byname_new = map { $_->{name} => $_->{id} } @{$data->{list}};
 
     $self->assert_deep_equals(\%byname, \%byname_new);
@@ -87,7 +89,10 @@ sub test_rename_deepuser_standardfolders_rightnow
     $self->check_replication('newuser');
 
     $rjmap->set_username_and_password('newuser', 'pass');
-    $data = $self->_fmjmap_ok('Mailbox/get', jmap => $rjmap, properties => ['name']);
+    $data = $self->_fmjmap_ok('Mailbox/get',
+                              jmap => $rjmap,
+                              accountId => 'newuser',
+                              properties => ['name']);
     my %byname_newrepl = map { $_->{name} => $_->{id} } @{$data->{list}};
 
     $self->assert_deep_equals(\%byname, \%byname_newrepl);
