@@ -398,6 +398,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     assert(sdata);
     static char static_uniqueid[UUID_STR_LEN];
     static char static_mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+    static char static_accountid[UUID_STR_LEN];
 
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
@@ -415,6 +416,11 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
         strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
+    // ACCOUNTID_NEEDS_FIXING
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    strncpy(static_accountid, userid, UUID_STR_LEN-1);
+    sdata->accountid = static_accountid;
+    free(userid);
 
     // need the cstate to get the right mailboxid
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);

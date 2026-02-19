@@ -821,8 +821,16 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
                 state->highestmodseq);
 
-    /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    /* RFC 8474 and draft-degennaro-imap-objectid-accountid */
+    // ACCOUNTID_NEEDS_FIXING
+    char *accountid = mboxname_to_userid(state->mboxname);
+    if (client_capa & CAPA_OBJECTIDBIS) {
+       prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Ok\r\n", state->mailboxid, accountid);
+    }
+    else {
+       prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    }
+    free(accountid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
