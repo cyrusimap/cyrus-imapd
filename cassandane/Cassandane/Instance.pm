@@ -1309,7 +1309,7 @@ sub _start_smtpd
             local *__ANON__ = "kill_smtpd";
             my $self = shift;
             xlog "killing fakesmtpd $smtppid";
-            kill(15, $smtppid);
+            kill('QUIT', $smtppid);
             $self->reap_command($smtppid);
         };
     }
