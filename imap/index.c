@@ -4692,8 +4692,6 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
     for (prop = vcardcomponent_get_first_property(vcard, VCARD_ANY_PROPERTY);
          prop;
          prop = vcardcomponent_get_next_property(vcard, VCARD_ANY_PROPERTY)) {
-        vcardstructuredtype *stp = NULL;
-        vcardstructuredtype st = { 1, { 0 } };
         const char *val;
 
         switch (vcardproperty_isa(prop)) {
@@ -4724,23 +4722,26 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
             break;
 
         case VCARD_ORG_PROPERTY: {
-            unsigned f;
-            size_t v;
-
-            st.field[0] = vcardproperty_get_org(prop);
-            stp = &st;
-
-            GCC_FALLTHROUGH
+            vcardstrarray *sa = vcardproperty_get_org(prop);
+            for (size_t i = 0; i < vcardstrarray_size(sa); i++) {
+                val = vcardstrarray_element_at(sa, i);
+                if (val && val[0]) {
+                    if (buf_len(&buf)) buf_putc(&buf, ' ');
+                    buf_appendcstr(&buf, val);
+                }
+            }
+            break;
+        }
 
         case VCARD_N_PROPERTY:
-        case VCARD_ADR_PROPERTY:
-            if (!stp) stp = vcardproperty_get_adr(prop);
+        case VCARD_ADR_PROPERTY: {
+            vcardstructuredtype *stt =
+                vcardvalue_get_structured(vcardproperty_get_value(prop));
 
-            for (f = 0; f < stp->num_fields; f++) {
-                vcardstrarray *vals = stp->field[f];
-
-                for (v = 0; vals && v < vcardstrarray_size(vals); v++) {
-                    val = vcardstrarray_element_at(vals, v);
+            for (size_t i = 0; i < vcardstructured_num_fields(stt); i++) {
+                vcardstrarray *sa = vcardstructured_field_at(stt, i);
+                for (size_t j = 0; j < vcardstrarray_size(sa); j++) {
+                    val = vcardstrarray_element_at(sa, j);
                     if (val && val[0]) {
                         if (buf_len(&buf)) buf_putc(&buf, ' ');
                         buf_appendcstr(&buf, val);
