@@ -57,7 +57,10 @@ sub execute
     my $max_enum_opts = 0;
     $imapoptions->iterate(sub {
         my (undef, $option) = @_;
-        $max_enum_opts = max($max_enum_opts, $option->c_enum_size);
+        if ($option->has_allowed_values) {
+            $max_enum_opts = max($max_enum_opts,
+                                 $option->allowed_values->count);
+        }
     });
 
     $self->footer($dummy_field, $max_enum_opts);

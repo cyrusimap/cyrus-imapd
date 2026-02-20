@@ -84,7 +84,7 @@ sub _print_option
     elsif ($option->has_allowed_values) {
         print "\n";
         print '#    Allowed values: ';
-        print join(', ', @{$option->allowed_values});
+        print join(', ', $option->allowed_values->values);
         print "\n";
     }
 
