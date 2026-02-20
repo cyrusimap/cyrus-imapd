@@ -783,8 +783,9 @@ static void cyr_vcardcomponent_transform(vcardcomponent *vcard,
         // N property is mandatory in vCard version 3.
         // XXX this should be covered by libical 4.0
         if (!vcardcomponent_get_first_property(vcard, VCARD_N_PROPERTY)) {
-            vcardstructuredtype st = { 5, { 0 } };  // 5 empty components
-            vcardcomponent_add_property(vcard, vcardproperty_new_n(&st));
+            vcardstructuredtype *st = vcardstructured_new(5);  // 5 empty components
+            vcardcomponent_add_property(vcard, vcardproperty_new_n(st));
+            vcardstructured_unref(st);
         }
     }
 
@@ -1457,8 +1458,9 @@ static int carddav_put(struct transaction_t *txn, void *obj,
         vcardcomponent_get_first_property(vcard, VCARD_FN_PROPERTY);
 
     if (!n) {
-        vcardstructuredtype st = { 5, { 0 } };  // 5 empty components
-        vcardcomponent_add_property(vcard, vcardproperty_new_n(&st));
+        vcardstructuredtype *st = vcardstructured_new(5);  // 5 empty components
+        vcardcomponent_add_property(vcard, vcardproperty_new_n(st));
+        vcardstructured_unref(st);
     }
     else if (!fn) {
         vcardcomponent_add_property(vcard, vcardproperty_new_fn(""));
