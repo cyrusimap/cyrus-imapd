@@ -4,8 +4,9 @@ package Cyrus::IMAPOptions::Option;
 use Moo;
 use feature 'state';
 
+use Cyrus::IMAPOptions::AllowedValues;
 use File::Basename;
-use Types::Standard qw(ArrayRef Bool Enum Int Maybe Split Str);
+use Types::Standard qw(ArrayRef Bool Enum InstanceOf Int Maybe Split Str);
 
 my @option_types = qw(BITFIELD BYTESIZE DURATION ENUM INT
                       STRING STRINGLIST SWITCH);
@@ -21,10 +22,9 @@ has type => (
     required => 1,
 );
 has allowed_values => (
-    isa => ArrayRef->of(Str)->plus_coercions(Split[qr/\s/]),
+    isa => Maybe[InstanceOf['Cyrus::IMAPOptions::AllowedValues']],
     is => 'ro',
     predicate => 1,
-    coerce => 1,
 );
 has default_value => (
     isa => Maybe[Str] | ArrayRef[Str],
@@ -55,12 +55,6 @@ has documentation => (
     isa => Maybe[ArrayRef[Str]],
     is => 'ro',
     predicate => 1,
-);
-has c_enum_size => (
-    isa => Maybe[Int],
-    is => 'rwp',
-    lazy => 1,
-    builder => sub { scalar shift->c_allowed_values; },
 );
 
 around BUILDARGS => sub
@@ -116,6 +110,7 @@ sub _from_file
     die "name must match filename"
         if $args->{name} ne fileparse($filename);
 
+    # transform default_value
     if ($args->{type} eq 'BITFIELD') {
         # BITFIELD type can have multiple values: split on whitespace
         $args->{default_value} = [ split /\s/, $args->{default_value} ];
@@ -128,6 +123,13 @@ sub _from_file
     }
     else {
         # nothing to transform
+    }
+
+    # transform allowed_values
+    if (my $str = delete $args->{allowed_values}) {
+        $args->{allowed_values} = Cyrus::IMAPOptions::AllowedValues->new(
+            from_string => $str
+        );
     }
 }
 
@@ -149,6 +151,10 @@ sub BUILD
 
         die "default_value '$dv' not allowed"
             if not $self->is_allowed_value($dv);
+
+        # Allowed-Values field cannot contain aliases
+        die "$type cannot use allowed_values aliases"
+            if $self->allowed_values->has_aliases;
     }
     elsif ($type eq 'BITFIELD') {
         # BITFIELD must have Allowed-Values field
@@ -192,11 +198,16 @@ sub is_allowed_value
     my ($self, $value) = @_;
 
     if (defined $value) {
-        my $found = grep { $_ eq $value } @{$self->allowed_values};
-        return !!$found;
+        if ($self->has_allowed_values) {
+            return $self->allowed_values->allows($value);
+        }
+        else {
+            # no allowed values means any value is allowed
+            return 1;
+        }
     }
     else {
-        return !!_type_allows_null($self->{type});
+        return !!_type_allows_null($self->type);
     }
 }
 
@@ -347,27 +358,22 @@ sub c_allowed_values
     my @allowed_values = ();
 
     if ($self->has_allowed_values) {
-        foreach my $v (@{$self->allowed_values}) {
-            my @aliases;
-
-            if ($type eq 'BITFIELD') {
-                @aliases = split '=', $v;
-                $v = shift @aliases;
-            }
+        foreach my $tuple ($self->allowed_values->values_and_aliases) {
+            my $v = $tuple->[0];
 
             my $e = $type eq 'STRINGLIST'
                     ? 'IMAP_ENUM_ZERO'
                     : _c_enum_name($self->name, $v);
+
             push @allowed_values, [ $v, $e ];
 
-            foreach my $a (@aliases) {
-                push @allowed_values, [ $a, $e ];
+            if ($type eq 'BITFIELD' and $self->allowed_values->has_aliases) {
+                foreach my $a (@{$tuple->[1]}) {
+                    push @allowed_values, [ $a, $e ];
+                }
             }
         }
     }
-
-    # cache enum_size since we've effectively computed it now
-    $self->_set_c_enum_size(scalar @allowed_values);
 
     return @allowed_values;
 }
@@ -381,8 +387,8 @@ sub c_enum_defs
     my @defs = ();
 
     if ($self->has_allowed_values && $type ne 'STRINGLIST') {
-        foreach my $v (@{$self->allowed_values}) {
-            my $name = _c_enum_name($self->name, $v);
+        foreach my $value ($self->allowed_values->values) {
+            my $name = _c_enum_name($self->name, $value);
             my $init;
 
             if ($type eq 'BITFIELD') {

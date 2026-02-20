@@ -148,7 +148,10 @@ sub _print_option
 
     print "    .. startblob $name\n\n";
 
-    print "``$name:`` " . $option->docs_default_value . "\n\n";
+    my $dv = $option->docs_default_value;
+    $dv =~ s/\*/\\\*/g;
+
+    print "``$name:`` $dv\n\n";
 
     if ($option->has_documentation) {
         foreach my $line (@{$option->documentation}) {
@@ -177,7 +180,8 @@ sub _print_option
     }
     elsif ($option->has_allowed_values) {
         print "    Allowed values: ";
-        print join(', ', map { "*$_*" } @{$option->allowed_values});
+        print join ', ', map { '*' . $_ . '*' }
+                         $option->allowed_values->value_alias_strings;
         print "\n\n";
     }
 
