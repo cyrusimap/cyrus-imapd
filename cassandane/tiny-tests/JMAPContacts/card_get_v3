@@ -39,7 +39,7 @@ PHOTO;PROP-ID=P1;ENCODING=b;TYPE=JPEG:c29tZSBwaG90bw==
 PHOTO;PROP-ID=P2;VALUE=X:
  https://example.com/contacts/foo/bar
 foo.ADR;PROP-ID=A1;JSCOMPS="s, ;2;3;4;5;6":;;1501 Broadway;New York;NY;10036;USA
-foo.GEO:40.7571383482188;-73.98695548990568
+foo.GEO:40.757138348218;-73.98695548990
 foo.TZ:-05:00
 REV:2008-04-24T19:52:43Z
 IMPP;PROP-ID=OS1;X-SERVICE-TYPE=Facebook:foo
@@ -105,7 +105,7 @@ EOF
                     { kind => 'postcode', value => '10036' },
                     { kind => 'country',  value => 'USA' }
                 ],
-                'coordinates' => 'geo:40.7571383482188,-73.98695548990568',
+                'coordinates' => 'geo:40.757138348218,-73.98695548990',
                 'timeZone' => 'Etc/GMT+5'
             }
         },
