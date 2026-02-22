@@ -46,10 +46,6 @@
 #include "strarray.h"
 #include "conversations.h"
 
-#if defined ENABLE_OBJECTSTORE
-#include "objectstore.h"
-#endif
-
 struct stagemsg {
     char fname[1024];
 
@@ -920,10 +916,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
     struct entryattlist *user_annots = user_annotsp ? *user_annotsp : NULL;
     struct entryattlist *system_annots = NULL;
     struct mboxevent *mboxevent = NULL;
-#if defined ENABLE_OBJECTSTORE
-    int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
-#endif
-
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1] = "";
     char *linkfile = NULL;
@@ -1091,36 +1083,6 @@ havefile:
         if (user_annotsp) *user_annotsp = user_annots;
     }
 
-    /* straight to archive? */
-    int in_object_storage = 0;
-#if defined ENABLE_OBJECTSTORE
-
-    if (object_storage_enabled)
-    {
-        uint32_t internal_flags;
-        r = msgrecord_get_internalflags(msgrec, &internal_flags);
-        if (r) goto out;
-
-        if (internal_flags & FLAG_INTERNAL_ARCHIVED) {
-            struct index_record record;
-            r = msgrecord_get_index_record(msgrec, &record);
-            if (!r) {
-                r = objectstore_put(mailbox, &record, fname);
-                if (!r) {
-                    // file in object store now; must delete local copy
-                    in_object_storage = 1;
-                }
-                else {
-                    // didn't manage to store it, so remove the ARCHIVED flag
-                    internal_flags &= ~FLAG_INTERNAL_ARCHIVED;
-                    r = msgrecord_set_internalflags(msgrec, internal_flags);
-                    if (r) goto out;
-                }
-            }
-        }
-    }
-#endif
-
     /* Handle flags the user wants to set in the message */
     if (flags) {
         r = append_apply_flags(as, mboxevent, msgrec, flags);
@@ -1133,12 +1095,6 @@ havefile:
     /* Write the new message record */
     r = msgrecord_append(msgrec);
     if (r) goto out;
-
-    if (in_object_storage) {  // must delete local file
-        if (xunlink(fname) == -1) // unlink should do it.
-            if (!remove(fname))  // we must insist
-                syslog(LOG_ERR, "Removing local file <%s> error", fname);
-    }
 
     /* Apply the annotations */
     if (user_annots || system_annots) {
@@ -1441,10 +1397,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     int msg;
     char *srcfname = NULL;
     char *destfname = NULL;
-    int object_storage_enabled = 0 ;
-#if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
-#endif
     int r = 0;
     int userflag;
     int i;
@@ -1608,20 +1560,9 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         int *fdptr = dst_internal_flags & FLAG_INTERNAL_ARCHIVED
                    ? &as->mailbox->archive_dirfd : &as->mailbox->spool_dirfd;
 
-        if (!(object_storage_enabled &&
-              src_internal_flags & FLAG_INTERNAL_ARCHIVED))   // if object storage do not move file
-           r = mailbox_copyfile_fdptr(srcfname, destfname, nolink, fdptr);
+        r = mailbox_copyfile_fdptr(srcfname, destfname, nolink, fdptr);
 
         if (r) goto out;
-
-#if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled &&
-            src_internal_flags & FLAG_INTERNAL_ARCHIVED) {
-            struct index_record record;
-            r = msgrecord_get_index_record(dst_msgrec, &record);
-            if (!r) r = objectstore_put(as->mailbox, &record, srcfname);   // put should just add the refcount.
-        }
-#endif
 
         /* Write out index file entry */
         r = msgrecord_append(dst_msgrec);

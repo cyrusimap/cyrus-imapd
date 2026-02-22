@@ -3374,39 +3374,39 @@ of the incoming network interface, or if no record is found, the
    "tzdist" listed in \fIhttpmodules\fR), then this configuration option
    or a compile time value MUST be specified. */
 
-{ "object_storage_enabled", 0, SWITCH, "3.0.0" }
+{ "object_storage_enabled", 0, SWITCH, "3.0.0", "UNRELEASED" }
 /* Is Object storage enabled for this server.  You also need to have
    archiving enabled and archivepartition for the mailbox.
    Only email files will be stored on object Storage archive partition will be
    used to store any other files. */
 
-{ "object_storage_dummy_spool", NULL, STRING, "3.0.0" }
+{ "object_storage_dummy_spool", NULL, STRING, "3.0.0", "UNRELEASED" }
 /* Dummy object storage spool; this is for test only.
    Spool where user directory (container) will be created to store all emails
    in a flat structure. */
 
-{ "openio_namespace", NULL, STRING, "3.0.0" }
+{ "openio_namespace", NULL, STRING, "3.0.0", "UNRELEASED" }
 /* The OpenIO namespace used to store archived email messages. A namespace
    identifies the physical platform cyrus must contact. This directive is used
    by the OpenIO's SDK to locate its platform entry point. */
 
-{ "openio_account", NULL, STRING, "3.0.0" }
+{ "openio_account", NULL, STRING, "3.0.0", "UNRELEASED" }
 /* The OpenIO account used to account for stored emails. Accounts are unique
    in their namespace. They provides virtual partitions, with quotas and QoS
    features. */
 
-{ "openio_rawx_timeout", "30s", DURATION, "3.1.8" }
+{ "openio_rawx_timeout", "30s", DURATION, "3.1.8", "UNRELEASED" }
 /* The OpenIO timeout to query to the RAWX services (default 30 sec). */
 
-{ "openio_proxy_timeout", "5s", DURATION, "3.1.8" }
+{ "openio_proxy_timeout", "5s", DURATION, "3.1.8", "UNRELEASED" }
 /* The OpenIO timeout to query to the PROXY services (default 5 sec). */
 
-{ "openio_autocreate", 0, SWITCH, "3.0.0" }
+{ "openio_autocreate", 0, SWITCH, "3.0.0", "UNRELEASED" }
 /* Allow the OpenIO SDK to autocreate containers. Mainly destined to be turned
    on development environments. In production, the container should have been
    provisioned with the mailboxes. */
 
-{ "openio_verbosity", NULL, STRING, "3.0.0" }
+{ "openio_verbosity", NULL, STRING, "3.0.0", "UNRELEASED" }
 /* Sets the logging verbosity of the OpenIO's internal behavior. Admissible
    values are: "warning", "notice", "info", "debug", "trace", "quiet".
    The default verbosity is "warning". Set to "notice" for a few lines on a
@@ -3416,13 +3416,13 @@ of the incoming network interface, or if no record is found, the
    the cyrus to be set in debug mode. The special "quiet" value disables all
    kinds of logging at the GLib level. */
 
-{ "caringo_hostname", NULL, STRING, "3.0.0" }
+{ "caringo_hostname", NULL, STRING, "3.0.0", "UNRELEASED" }
 /* The Caringo hostname used to store archived email messages. A hostname
    identifies the physical platform cyrus must contact. This directive is used
    by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP)
    on HTTP 1.1 using a RESTful architecture. */
 
-{ "caringo_port", 80, INT, "3.0.0" }
+{ "caringo_port", 80, INT, "3.0.0", "UNRELEASED" }
 /* The port of the caringo server (caringo_hostname); default is 80. */
 
 { "fastmailsharing", 0, SWITCH, "3.0.0" }
