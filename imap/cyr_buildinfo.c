@@ -122,11 +122,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "jmap", json_false());
 #endif
-#ifdef ENABLE_OBJECTSTORE
-    json_object_set_new(component, "objectstore", json_true());
-#else
-    json_object_set_new(component, "objectstore", json_false());
-#endif
 #ifdef ENABLE_DEBUG_SLOWIO
     json_object_set_new(component, "slowio", json_true());
 #else
@@ -165,11 +160,6 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "clamav", json_true());
 #else
     json_object_set_new(dependency, "clamav", json_false());
-#endif
-#ifdef WITH_OPENIO
-    json_object_set_new(dependency, "openio", json_true());
-#else
-    json_object_set_new(dependency, "openio", json_false());
 #endif
 #ifdef HAVE_NGHTTP2
     json_object_set_new(dependency, "nghttp2", json_true());

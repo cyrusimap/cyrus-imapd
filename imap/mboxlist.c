@@ -3161,7 +3161,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
         if (newmailbox) mailbox_delete(&newmailbox);
         if (partitionmove && newpartition)
-            mailbox_delete_cleanup(NULL, newpartition, newname,
+            mailbox_delete_cleanup(newpartition, newname,
                                    (mailbox_mbtype(oldmailbox) & MBTYPE_LEGACY_DIRS) ?
                                    NULL : mailbox_uniqueid(oldmailbox));
         mailbox_close(&oldmailbox);
@@ -3213,7 +3213,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
             /* this will sync-log the name anyway */
             mailbox_close(&oldmailbox);
-            mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
+            mailbox_delete_cleanup(oldpartition, oldname, olduniqueid);
             free(olduniqueid);
             free(oldpartition);
         }
