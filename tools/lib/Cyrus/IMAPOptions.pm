@@ -36,6 +36,7 @@ sub _from_path
     opendir my $dh, $path or die "$path: $!";
     while (readdir $dh) {
         next if m/^\./;
+        next if m/README/;
 
         my $opt_name = $_;
         eval {
