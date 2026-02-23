@@ -1,0 +1,24 @@
+Description:
+
+Refactored lib/imapoptions for easier maintenance and extensibility
+
+
+Documentation:
+
+lib/imapoptions/README.md
+
+
+Config changes:
+
+(all, or none, depending on how you think about it)
+
+
+Upgrade instructions:
+
+Need perl modules "Moo" and "App::Cmd".  In apt, these are libmoo-perl
+and libapp-cmd-perl.
+
+
+GitHub issue:
+
+None
