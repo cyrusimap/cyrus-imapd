@@ -1869,6 +1869,10 @@ case "${target_os}" in
         AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
 esac
 
+dnl perl module dependencies
+AX_PROG_PERL_MODULES([Moo], [], [AC_MSG_ERROR([Need perl module Moo])])
+AX_PROG_PERL_MODULES([App::Cmd], [], [AC_MSG_ERROR([Need perl module App::Cmd])])
+
 CMU_LIBWRAP
 
 # Figure out what directories we're linking against.
