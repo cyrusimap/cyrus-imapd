@@ -16,9 +16,34 @@ sub test_card_set_create_extra_rejected
                     version => '1.0', 
                     name => {
                         full => 'John',
+                    },
+                    extra => 'reserved'
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_null($res->[0][1]{created}{card1});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{card1}{type});
+
+    my @wantInvalidProps = (
+        "extra",
+    );
+    my @haveInvalidProps = sort @{$res->[0][1]{notCreated}{card1}{properties}};
+    $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                card1 => {
+                    '@type' => 'Card',
+                    version => '1.0', 
+                    name => {
+                        full => 'John',
                         extra => 'reserved',
                     },
-                    extra => 'reserved',
+                    'foo:extra' => 'reserved',
                     localizations => {
                         de => {
                             'name/extra' => 'reserved2',
@@ -33,11 +58,10 @@ sub test_card_set_create_extra_rejected
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{card1}{type});
 
-    my @wantInvalidProps = (
-        "extra",
+    @wantInvalidProps = (
         "localizations/de/name~1extra",
         "name/extra",
     );
-    my @haveInvalidProps = sort @{$res->[0][1]{notCreated}{card1}{properties}};
+    @haveInvalidProps = sort @{$res->[0][1]{notCreated}{card1}{properties}};
     $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
 }

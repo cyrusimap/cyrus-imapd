@@ -70,8 +70,8 @@ jmap_property_t;
 "cyrusimap.org:size",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
 "cyrusimap.org:href",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
 #
-# Allow unknown properties
-"*", NULL, 0
+# Allow vendor properties (prefix ':' name)
+"*:*", NULL, JMAP_PROP_SKIP_GET
 %%
 
 const jmap_prop_hash_table_t jmap_card_props_map = {

@@ -45,10 +45,35 @@ sub test_card_set_update_extra_rejected
         $res->[0][1]{notUpdated}{$cardId}{type});
 
     my @wantInvalidProps = (
-        "extra",
+        "extra"
+    );
+    my @haveInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId}{properties}};
+    $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => {
+                $cardId => {
+                    'foo:extra' => 'reserved',
+                    'name/extra' => 'reserved',
+                    localizations => {
+                        de => {
+                            'name/extra' => 'reserved2',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_null($res->[0][1]{created}{card1});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$cardId}{type});
+
+    @wantInvalidProps = (
         "localizations/de/name~1extra",
         "name/extra",
     );
-    my @haveInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId}{properties}};
+    @haveInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId}{properties}};
     $self->assert_deep_equals(\@wantInvalidProps, \@haveInvalidProps);
 }
