@@ -316,6 +316,7 @@ endif # SIEVE
 
 EXTRA_DIST = \
     COPYING \
+    Doxyfile \
     README.md \
     VERSION \
     cassandane \
