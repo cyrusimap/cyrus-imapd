@@ -736,6 +736,12 @@ EXPORTED int carddav_getmembers(struct carddav_db *carddavdb,
         (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         mbentry->uniqueid : mbentry->name;
 
+    if (!strncmpsafe(vcard_uid, "shared/", 7)) {
+        /* strip legacy "shared/" prefix -- no longer needed*/
+        vcard_uid += 7;
+        if (!*vcard_uid) return 0; // can't just be "shared/"
+    }
+
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox            } },
         { ":vcard_uid",    SQLITE_TEXT,    { .s = vcard_uid          } },
