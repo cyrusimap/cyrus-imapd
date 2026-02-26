@@ -32,7 +32,7 @@ sub _cyrus_perl_search_path
     return @paths;
 }
 
-my $cassini = Cassandane::Cassini->instance();
+my $cassini = Cassandane::Cassini->singleton();
 
 my $cyrus_prefix = $cassini->val('cyrus default', 'prefix', '/usr/cyrus');
 my $cyrus_destdir = $cassini->val('cyrus default', 'destdir', '');

@@ -91,7 +91,7 @@ sub new
 
 # We don't just use Clone because we actually
 # want a shallow clone here.  We rely on the
-# c'tor taking parameters which are the same
+# constructor taking parameters which are the same
 # as the field names.
 sub clone
 {

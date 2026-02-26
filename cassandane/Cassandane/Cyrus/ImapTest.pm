@@ -55,7 +55,7 @@ my %suppressed;
 
 sub init
 {
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     $basedir = $cassini->val('imaptest', 'basedir');
     return unless defined $basedir;
     $basedir = abs_path($basedir);

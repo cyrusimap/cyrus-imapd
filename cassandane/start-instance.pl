@@ -98,7 +98,7 @@ while (my $a = shift)
     }
     elsif ($a eq '--valgrind')
     {
-        Cassandane::Cassini->instance()->override('valgrind', 'enabled', 'yes');
+        Cassandane::Cassini->singleton()->override('valgrind', 'enabled', 'yes');
     }
     elsif ($a eq '--service')
     {

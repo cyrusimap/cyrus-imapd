@@ -51,9 +51,17 @@ sub new
 {
     my ($class) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
+    my $rundir  = $cassini->val('cassandane', 'rundir', undef);
+
+    unless ($rundir)
+    {
+        Carp::confess("can't construct Cassandane::Unit::Runner without Cassini rundir");
+    }
+
+    my $basedir = join q{/}, $rootdir, $rundir;
+    my $failed_file = "$basedir/failed";
     # if we can't write there, we just won't record failed tests!
 
     return bless {
@@ -117,32 +125,53 @@ sub start_test { }
 
 sub end_test { }
 
-sub add_pass { }
-
-sub record_failed
+sub add_pass
 {
     my ($self, $test) = @_;
-    return if not $self->{failed_fh};
 
     my $suite = ref($test);
     $suite =~ s/^Cassandane:://;
 
     my $testname = $test->{"Test::Unit::TestCase_name"};
+
+    Cassandane::Cassini->singleton->manifest->record_completion(
+      $suite,
+      $testname,
+      'pass',
+    );
+}
+
+sub record_failed
+{
+    my ($self, $test, $type) = @_;
+
+    my $suite = ref($test);
+    $suite =~ s/^Cassandane:://;
+
+    my $testname = $test->{"Test::Unit::TestCase_name"};
+
+    Cassandane::Cassini->singleton->manifest->record_completion(
+      $suite,
+      $testname,
+      $type,
+    );
+
     $testname =~ s/^test_//;
 
+    return if not $self->{failed_fh};
     $self->{failed_fh}->print("$suite.$testname\n");
 }
 
 sub add_error
 {
     my ($self, $test) = @_;
-    $self->record_failed($test);
+    $self->record_failed($test, 'error');
 }
 
 sub add_failure
 {
     my ($self, $test) = @_;
-    $self->record_failed($test);
+    $self->record_failed($test, 'failure');
 }
 
 1;

@@ -484,6 +484,7 @@ use File::Find;
 use File::Temp qw(tempfile);
 use File::Path qw(mkpath);
 use Data::Dumper;
+use Cassandane::Cassini;
 use Cassandane::Util::Log;
 
 my @test_roots = (
@@ -610,7 +611,7 @@ sub _default_test_list
 {
     my ($self) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my @tosuppress = split /\s+/, $cassini->val('cassandane', 'suppress', '');
 
     my %default;
@@ -1034,7 +1035,7 @@ sub run
         # we want an error not a signal
         $SIG{PIPE} = 'IGNORE';
 
-        # Just In Case any code samples this in a TestCase c'tor
+        # Just In Case any code samples this in a TestCase constructor
         $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
 
         my $wlistener = Cassandane::Unit::WorkerListener->new();
@@ -1053,8 +1054,12 @@ sub run
         # first ^C stops spawning new work items
         while ($interrupted < 1 && ($witem = shift @workitems))
         {
-            $pool->assign($witem)
-                if ($self->{keep_going} || $result->was_successful());
+            if ($self->{keep_going} || $result->was_successful())
+            {
+                Cassandane::Cassini->singleton->manifest->record_start(
+                    $witem->{suite}, $witem->{testname});
+                $pool->assign($witem);
+            }
             while ($witem = $pool->retrieve(0))
             {
                 $self->_finish_workitem($witem, $result, $runner);
@@ -1072,6 +1077,8 @@ sub run
         # single threaded case: just run it all in-process
         foreach my $witem (@workitems)
         {
+            Cassandane::Cassini->singleton->manifest->record_start(
+                $witem->{suite}, $witem->{testname});
             $self->_run_workitem($witem, $result, $runner, 1);
             last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
         }

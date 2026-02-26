@@ -130,7 +130,7 @@ sub default
             smtp_backend => 'host',
             smtp_host => 'bogus:0',
         );
-        my $defs = Cassandane::Cassini->instance()->get_section('config');
+        my $defs = Cassandane::Cassini->singleton()->get_section('config');
         $default->set(%$defs);
     }
 

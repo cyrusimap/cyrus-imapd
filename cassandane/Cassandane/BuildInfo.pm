@@ -51,7 +51,7 @@ sub new {
 
     $installation ||= 'default';
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $destdir = $cassini->val("cyrus $installation", 'destdir', '');
     my $prefix = $cassini->val("cyrus $installation", 'prefix', '/usr/cyrus');

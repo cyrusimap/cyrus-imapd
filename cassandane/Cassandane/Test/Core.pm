@@ -95,7 +95,7 @@ sub _test_core_files_with_size
     # expect there's exactly one core
     $self->assert_num_equals(1, scalar @cores);
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $core_pattern = $cassini->get_core_pattern();
 
     my $core = shift @cores;
