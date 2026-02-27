@@ -289,17 +289,13 @@ dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 sbin_PROGRAMS += netnews/remotepurge
 endif # CMULOCAL
 
-if PERL
 SUBDIRS += perl/annotator perl/imap
 noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
-endif # PERL
 
 if SIEVE
 
-if PERL
 SUBDIRS += perl/sieve/managesieve
 noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
-endif # PERL
 
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
@@ -2068,14 +2064,12 @@ if CMULOCAL
 endif
 
 install-exec-hook:
-if PERL
 	for s in sieveshell; \
 	do \
 	  $(MKDIR_P) $(top_builddir)/perl/sieve/scripts ; \
 	  $(PERL_PREINSTALL) < $(top_srcdir)/perl/sieve/scripts/$$s.pl > $(top_builddir)/perl/sieve/scripts/$$s ;\
 	  $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
-endif
 
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(libexecdir)
@@ -2098,11 +2092,9 @@ endif
 	  $(LN_S) -f imtest synctest
 
 uninstall-hook: cyrus-makemaker-uninstall-workaround
-if PERL
 	for s in sieveshell; do \
 	    rm -f $(DESTDIR)$(bindir)/$$s; \
 	done
-endif
 
 .PHONY: cyrus-makemaker-uninstall-workaround
 
@@ -2113,13 +2105,11 @@ endif
 # We have another layer of workaround in each module's Makefile that
 # removes the packlist after MakeMaker uninstall has finished ignoring it.
 cyrus-makemaker-uninstall-workaround:
-if PERL
 	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
 	  echo "uninstalling files from packlists: $$packlists" && \
 	  rm -f `cat $$packlists` )
 	( podfiles=`find $(DESTDIR)$(libdir) -type f -name perllocal.pod` && \
 	  rm -f `echo $$podfiles` )
-endif
 
 install-binsymlinks:
 ## Let's symlink everything else
