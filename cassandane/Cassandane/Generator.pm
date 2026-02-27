@@ -79,11 +79,10 @@ our @surnames = (
     'White'
 );
 our @domains = (
-    # Pulled out of my hat.
-    'fastmail.fm',
-    'gmail.com',
-    'hotmail.com',
-    'yahoo.com'
+    'fast.example.com',
+    'rainbow.example.net',
+    'scorching.example.org',
+    'loud.example',
 );
 our @localpart_styles = (
     sub($$$)
