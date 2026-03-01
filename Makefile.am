@@ -691,7 +691,7 @@ CUNIT_INTERMEDIATES = $(patsubst %.testc,%.c,$(cunit_TESTS))
 # if something depending on them is being rebuilt.
 .SECONDARY: $(CUNIT_INTERMEDIATES)
 
-CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
+CUNIT_PL = $(PERL) $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
 .testc.c:
 	$(AM_V_GEN)$(CUNIT_PL) --generate-wrapper $@ $<
@@ -722,7 +722,7 @@ check-local:
 		$$vg ./unit $$f ; \
 		retval=$$? ; \
 		if [ "x$$CUFORMAT" = xjunit ] ; then \
-			$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl ; \
+			$(RM) -rf reports ; mkdir reports ; $(PERL) ./cunit-to-junit.pl ; \
 		fi ; \
 		exit $$retval
 
@@ -1453,16 +1453,16 @@ endif
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.c: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.h: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
 	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
@@ -1611,13 +1611,13 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t \
 	lib/charset/UnicodeData.txt lib/charset/aliases.txt
 	@echo "### Building chartables..."
-	$(AM_V_GEN)perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
 lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header \
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2header \
 	    CC="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $(top_builddir)/lib/imapopts.c \
 	    $(top_builddir)/lib/imapopts.h \
@@ -1907,19 +1907,19 @@ snapshot::
 
 docsrc/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
 docsrc/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
 
 doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
 
 docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
