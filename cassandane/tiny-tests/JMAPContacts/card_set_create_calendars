@@ -31,25 +31,25 @@ sub test_card_set_create_calendars
                     name => { full => 'Jane Doe' },
                     calendars => {
                         'CAL-1' => {
-                            '@type' => 'CalendarResource',
+                            '@type' => 'Calendar',
                             kind => 'calendar',
                             uri => 'https://cal.example.com/calA',
                             pref => 1
                         },
                         'CAL-2' => {
-                            '@type' => 'CalendarResource',
+                            '@type' => 'Calendar',
                             kind => 'calendar',
                             uri => 'https://ftp.example.com/calA.ics',
                             mediaType => 'text/calendar'
                         },
                         'FBURL-1' => {
-                            '@type' => 'CalendarResource',
+                            '@type' => 'Calendar',
                             kind => 'freeBusy',
                             uri => 'https://www.example.com/busy/janedoe',
                             pref => 1
                         },
                         'FBURL-2' => {
-                            '@type' => 'CalendarResource',
+                            '@type' => 'Calendar',
                             kind => 'freeBusy',
                             uri => 'https://example.com/busy/project-a.ifb',
                             mediaType => 'text/calendar'

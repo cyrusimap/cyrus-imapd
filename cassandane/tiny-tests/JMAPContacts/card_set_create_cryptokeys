@@ -32,11 +32,11 @@ sub test_card_set_create_cryptokeys
                     name => { full => 'Jane Doe' },
                     cryptoKeys => {
                         mykey1 => {
-                            '@type' => 'CryptoResource',
+                            '@type' => 'CryptoKey',
                             uri => 'https://www.example.com/keys/jdoe.cer'
                         },
                         mykey2 => {
-                            '@type' => 'CryptoResource',
+                            '@type' => 'CryptoKey',
                             uri => $key
                         }
                     }

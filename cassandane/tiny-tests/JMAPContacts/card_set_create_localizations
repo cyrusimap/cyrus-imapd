@@ -36,17 +36,17 @@ sub test_card_set_create_localizations
                         isOrdered => JSON::false,
                         components => [
                             {
-                                '@type' => 'Name',
+                                '@type' => 'NameComponent',
                                 kind => 'given',
                                 value => 'Gabriel'
                             },
                             {
-                                '@type' => 'Name',
+                                '@type' => 'NameComponent',
                                 kind => 'given2',
                                 value => 'García'
                             },
                             {
-                                '@type' => 'Name',
+                                '@type' => 'NameComponent',
                                 kind => 'surname',
                                 value => 'Márquez'
                             }

@@ -31,18 +31,18 @@ sub test_card_set_create_media
                     name => { full => 'Jane Doe' },
                     media => {
                         res45 => {
-                            '@type' => 'MediaResource',
+                            '@type' => 'Media',
                             kind => 'sound',
                             uri => 'CID:JOHNQ.part8.19960229T080000.xyzMail@example.com'
                         },
                         res47 => {
-                            '@type' => 'MediaResource',
+                            '@type' => 'Media',
                             kind => 'logo',
                             mediaType => 'image/jpeg',
                             uri => 'https://www.example.com/pub/logos/abccorp.jpg'
                         },
                         res1 => {
-                            '@type' => 'MediaResource',
+                            '@type' => 'Media',
                             kind => 'photo',
                             uri => 'data:image/jpeg;base64,c29tZSBwaG90bw=='
                         }

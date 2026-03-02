@@ -31,19 +31,19 @@ sub test_card_set_create_directories
                     name => { full => 'Jane Doe' },
                     directories => {
                         'DIRECTORY-1' => {
-                            '@type' => 'DirectoryResource',
+                            '@type' => 'Directory',
                             kind => 'directory',
                             uri => 'https://directory.mycompany.example.com',
                             listAs => 1
                         },
                         'DIRECTORY-2' => {
-                            '@type' => 'DirectoryResource',
+                            '@type' => 'Directory',
                             kind => 'directory',
                             uri => 'ldap://ldap.tech.example/o=Tech,ou=Engineering',
                             pref => 1
                         },
                         'ENTRY-1' => {
-                            '@type' => 'DirectoryResource',
+                            '@type' => 'Directory',
                             kind => 'entry',
                             uri => 'https://dir.example.com/addrbook/jdoe/Jean%20Dupont.vcf'
                         }

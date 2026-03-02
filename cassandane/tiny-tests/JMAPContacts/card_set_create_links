@@ -31,13 +31,13 @@ sub test_card_set_create_links
                     name => { full => 'Jane Doe' },
                     links => {
                         'CONTACT-1' => {
-                            '@type' => 'LinkResource',
+                            '@type' => 'Link',
                             kind => 'contact',
                             uri => 'mailto:contact@example.com',
                             pref => 1
                         },
                         'LINK-1' => {
-                            '@type' => 'LinkResource',
+                            '@type' => 'Link',
                             uri => 'https://example.org/restaurant.french/~chezchic.html'
                         }  
                     }
