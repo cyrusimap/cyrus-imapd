@@ -91,6 +91,7 @@ install_test(create_impp_uri_context_label => {
 install_test(create_xonlineservice_all => {
     onlineServices => {
         1 => {
+            '@type'  => 'OnlineService',
             uri      => 'https://uri.local',
             user     => 'user',
             service  => 'Service',
@@ -239,6 +240,7 @@ sub assert_card_set_create_onlineservices($self, $arg)
     $self->assert_not_null($id);
 
     xlog $self, "Assert Card object";
+    delete($arg->{onlineServices}{1}{'@type'});
     $self->assert_deep_equals( $arg->{onlineServices},
         $res->[1][1]{list}[0]{onlineServices} );
 

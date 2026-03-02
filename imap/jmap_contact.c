@@ -10380,7 +10380,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsname_to_vcard } };
     struct jscomps_args args = {
         &vcardproperty_vanew_n, VCARD_NUM_N_FIELDS,
-        "n1", "Name", n_comp_kinds, NULL
+        "n1", "NameComponent", n_comp_kinds, NULL
     };
     const char *myprops[] = {
         "@type", "full", "sortAs",
@@ -11180,7 +11180,7 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
 {
     struct jscomps_args args = {
         &vcardproperty_vanew_adr, VCARD_NUM_ADR_FIELDS,
-        id, "Address", adr_comp_kinds, NULL
+        id, "AddressComponent", adr_comp_kinds, NULL
     };
     json_t *comps = json_object_get(obj, "components");
 
@@ -12168,7 +12168,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
             struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "CalendarResource",
+                                                      mykey, "Calendar",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
@@ -12214,7 +12214,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
             struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "CryptoResource",
+                                                      mykey, "CryptoKey",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
@@ -12229,7 +12229,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
             struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "DirectoryResource",
+                                                      mykey, "Directory",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       directories_param_props,
@@ -12243,7 +12243,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
             struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "LinkResource",
+                                                      mykey, "Link",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
@@ -12259,7 +12259,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
             struct resource_rock rrock = { req, map, blobs, errors };
 
             record_is_dirty |= _jsmultiobject_to_card(&parser, jval,
-                                                      mykey, "MediaResource",
+                                                      mykey, "Media",
                                                       &_jsresource_to_vcard,
                                                       WANT_PROPID_FLAG,
                                                       resource_param_props,
