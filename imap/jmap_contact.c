@@ -4763,6 +4763,9 @@ static void _contact_copy(jmap_req_t *req,
             strlen(src_id) < JMAP_CONTACTID_SIZE) {
             r = carddav_lookup_jmapid(src_db, src_id+1, &cdata);  // strip prefix
         }
+        else {
+            r = CYRUSDB_NOTFOUND;
+        }
     }
     else {
         r = carddav_lookup_uid(src_db, NULL, src_id, &cdata);
@@ -12695,6 +12698,9 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     if (USER_COMPACT_EMAILIDS(req->cstate)) {
         if (id[0] == JMAP_CONTACTID_PREFIX && strlen(id) < JMAP_CONTACTID_SIZE) {
             r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
+        }
+        else {
+            r = CYRUSDB_NOTFOUND;
         }
     }
     else {

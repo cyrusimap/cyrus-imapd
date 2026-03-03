@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_no_compact_id
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $unknownId = "-no-compact-id-";
+
+    my $res = $user->jmap->request([[
+        "ContactCard/set" => {
+            accountId => 'cassandane',
+            update => {
+                $unknownId => {
+                    name => { full => "foo" },
+                },
+            },
+        },
+    ]])->single_sentence("ContactCard/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => { $unknownId => { type => "notFound" } }
+        }), $res
+    );
+
+    $res = $user->jmap->request([[
+        "ContactCard/set" => {
+            accountId => 'cassandane',
+            destroy => [ $unknownId ],
+        },
+    ]])->single_sentence("ContactCard/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            notDestroyed => { $unknownId => { type => "notFound" } }
+        }), $res
+    );
+}

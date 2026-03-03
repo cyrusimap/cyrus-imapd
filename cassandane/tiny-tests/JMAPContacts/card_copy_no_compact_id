@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_copy_no_compact_id
+    ($self)
+{
+    my $user = $self->default_user;
+    my $ouser = $self->{instance}->create_user('other');
+
+    my $shared_addrbook = $ouser->addressbooks->create;
+    $shared_addrbook->share_with($user => [ 'mayWrite', 'mayRead' ]);
+
+    my $unknownId = "-no-compact-id-";
+    my $res = $user->jmap->request([[
+        "ContactCard/copy" => {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            create => {
+              '1' => {
+                id => $unknownId,
+                addressBookIds => { $shared_addrbook->id => JSON::true },
+              }
+            }
+        },
+    ]])->single_sentence("ContactCard/copy")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            notCreated => {
+                '1' => { type => 'notFound' }
+            },
+        }),
+        $res
+    );
+}

@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_query_incardgroup_no_compact_id
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $no_compact_id = "-no-compact-id-";
+    my $res = $user->jmap->request([[
+        "ContactCard/query" => {
+            accountId => 'cassandane',
+            filter => {
+                inCardGroup => [ $no_compact_id ],
+            },
+        },
+    ]])->single_sentence("ContactCard/query")->arguments;
+
+    $self->assert_cmp_deeply(superhashof({ ids => [], }), $res);
+}
