@@ -27,6 +27,7 @@ WriteMakefile(
     'DEFINE'    => '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
     'INC'       => "-I$build->{top_srcdir} -I$build->{top_srcdir}/com_err/et $build->{SASLFLAGS} $build->{SSL_CFLAGS} $build->{GCOV_CFLAGS} -I$build->{top_srcdir}/perl/imap",
     'EXE_FILES' => [cyradm],
+    'MAN1PODS' => {}, # cyradm pod is generated elsewhere
 );
 
 package MY; # so that "SUPER" works right
