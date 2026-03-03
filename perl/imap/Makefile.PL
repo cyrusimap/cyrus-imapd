@@ -103,7 +103,7 @@ sub postamble
 
 VPATH=$build->{top_srcdir}/perl/imap
 
-cyradm: cyradm.sh
+cyradm: cyradm.pl
 \t$build->{PERL_PREINSTALL} < \$< > \$\@
 
 check:
