@@ -1,4 +1,4 @@
-/* memmove.c -- replacement memmove() routine that only handles overlapping
+/* memmove.c - replacement memmove() routine that only handles overlapping
  * strings when moving data upwards */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */

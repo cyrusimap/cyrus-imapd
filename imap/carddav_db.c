@@ -1,4 +1,4 @@
-/* carddav_db.c -- implementation of per-user CardDAV database */
+/* carddav_db.c - implementation of per-user CardDAV database */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* jmap_ical.c --Routines to convert calendar events between JMAP and iCalendar */
+/* jmap_ical.c - Routines to convert calendar events between JMAP and iCalendar */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

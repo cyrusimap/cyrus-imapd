@@ -1,4 +1,4 @@
-/* prot.h -- stdio-like module that handles buffering, SASL, and TLS */
+/* prot.h - stdio-like module that handles buffering, SASL, and TLS */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

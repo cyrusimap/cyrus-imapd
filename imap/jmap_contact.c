@@ -1,4 +1,4 @@
-/* jmap_contact.c -- Routines for handling JMAP contact messages */
+/* jmap_contact.c - Routines for handling JMAP contact messages */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

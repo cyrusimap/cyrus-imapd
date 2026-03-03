@@ -1,4 +1,4 @@
-/* mbpath.c -- help the sysadmin to find the path matching the mailbox */
+/* mbpath.c - help the sysadmin to find the path matching the mailbox */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

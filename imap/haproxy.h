@@ -1,4 +1,4 @@
-/* haproxy.h -- Header for HAProxy protocol functions. */
+/* haproxy.h - Header for HAProxy protocol functions. */
 
 #ifndef INCLUDED_HAPROXY_H
 #define INCLUDED_HAPROXY_H
