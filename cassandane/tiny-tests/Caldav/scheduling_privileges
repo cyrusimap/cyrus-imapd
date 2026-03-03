@@ -6,15 +6,7 @@ sub test_scheduling_privileges
     ($self)
 {
     my $service = $self->{instance}->get_service("http");
-    my $CalDAV = Net::CalDAVTalk->new(
-        user => "cassandane%example.com",
-        password => 'pass',
-        host => $service->host(),
-        port => $service->port(),
-        scheme => 'http',
-        url => '/',
-        expandurl => 1,
-    );
+    my $caldav  = $self->default_user->caldav;
 
     xlog $self, "Remove schedule-send privileges";
     my $admintalk = $self->{adminstore}->get_client();
@@ -47,7 +39,7 @@ EOF
     $self->{instance}->getnotify();
 
     xlog $self, "Create an event as organizer";
-    $CalDAV->Request('PUT', $org_href, $org_event,
+    $caldav->Request('PUT', $org_href, $org_event,
                      'Content-Type' => 'text/calendar');
 
     xlog $self, "Verify that no iMIP invite is sent";
@@ -66,7 +58,7 @@ EOF
 
     xlog $self, "Update the organizer event";
     $org_event =~ s/20160831T183000/20160831T193000/;
-    $CalDAV->Request('PUT', $org_href, $org_event,
+    $caldav->Request('PUT', $org_href, $org_event,
                      'Content-Type' => 'text/calendar');
 
     xlog $self, "Verify that an iMIP invite is sent";
@@ -102,7 +94,7 @@ EOF
     $self->{instance}->getnotify();
 
     xlog $self, "Create an attendee event";
-    $CalDAV->Request('PUT', $att_href, $att_event,
+    $caldav->Request('PUT', $att_href, $att_event,
                      'Content-Type' => 'text/calendar');
 
     # we don't say anything when we add a NEEDS-ACTION item
@@ -113,7 +105,7 @@ EOF
 
     xlog $self, "Update the attendee event";
     $att_event =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=TENTATIVE/;
-    $CalDAV->Request('PUT', $att_href, $att_event,
+    $caldav->Request('PUT', $att_href, $att_event,
                      'Content-Type' => 'text/calendar');
 
     xlog $self, "Verify that no iMIP invite is sent";
@@ -132,7 +124,7 @@ EOF
 
     xlog $self, "Update the attendee event again";
     $att_event =~ s/PARTSTAT=TENTATIVE/PARTSTAT=ACCEPTED/;
-    $CalDAV->Request('PUT', $att_href, $att_event,
+    $caldav->Request('PUT', $att_href, $att_event,
                      'Content-Type' => 'text/calendar');
 
     xlog $self, "Verify that an iMIP reply is sent";
