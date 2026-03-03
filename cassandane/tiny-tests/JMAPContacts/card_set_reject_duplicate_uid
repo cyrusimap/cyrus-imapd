@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_reject_duplicate_uid
+    :min_version_3_9
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "create second addressbook";
+    my $abook2_id = $user->addressbooks->create({ name => 'Second' })->id;
+
+    xlog $self, "create card with specific uid";
+    my $card1 = $user->contacts->create;
+
+    xlog $self, "attempt to create card with same uid in different addressbook";
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                cardB => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    addressBookIds => { $abook2_id => JSON::true },
+                    uid => $card1->uid,
+                    name => { full => 'Card B' },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    my $set = $res->single_sentence('ContactCard/set')->as_set;
+    $self->assert_str_equals('invalidProperties', $set->create_errors->{cardB}{type});
+    $self->assert_deep_equals(['uid'], $set->create_errors->{cardB}{properties});
+}
