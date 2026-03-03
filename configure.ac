@@ -2191,6 +2191,11 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
+AX_PYTHON_MODULE([breathe], [], [python3])
+AS_CASE([$HAVE_PYMOD_BREATHE],
+        [yes],  [],
+        [*],    [WARN_DOCDEPS([breathe])])
+
 AX_PYTHON_MODULE([git], [], [python3])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
@@ -2204,6 +2209,7 @@ AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" \
            -a x"$have_ppvr" = xyes \
+           -a x"$HAVE_PYMOD_BREATHE" = xyes \
            -a x"$HAVE_PYMOD_GIT" = xyes \
            -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 

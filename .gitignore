@@ -67,6 +67,7 @@ doc/legacy/murder.png
 doc/legacy/netnews.png
 doc/text/
 docsrc/.doctrees/
+docsrc/_doxygen/
 docsrc/build/
 docsrc/reference/manpages/configs/imapd.conf.rst
 docsrc/reference/manpages/systemcommands/cyradm.rst

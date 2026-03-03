@@ -39,6 +39,33 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
     "sphinx.ext.todo",
+    "breathe",
+]
+
+# -- Breathe configuration (Doxygen integration) ---------------------------
+# Breathe reads Doxygen XML output and makes it available to Sphinx.
+# Run 'doxygen' from the project root before building docs.
+
+breathe_projects = {
+    "cyrus": "_doxygen/xml"
+}
+breathe_default_project = "cyrus"
+
+# Default options for Breathe directives
+breathe_default_members = ('members', 'undoc-members')
+
+# Ignore missing reference targets from Breathe/Doxygen
+# Breathe generates cross-references that may not resolve when types are
+# defined in different translation units or are standard C types.
+# Using broad patterns here since C code has many typedef'd types.
+nitpick_ignore_regex = [
+    # Ignore all unresolved C/C++ identifiers from Breathe
+    # This is necessary because Doxygen XML doesn't always create resolvable
+    # cross-references for typedefs, callbacks, and standard library types
+    (r'c:identifier', r'.*'),
+    (r'cpp:identifier', r'.*'),
+    # Ignore Doxygen-generated anchor labels (e.g., partlist_8h, partlist_8c_1a5c83...)
+    (r'.*', r'.*_8[ch]($|_.*)'),
 ]
 
 extensions.append("sphinxlocal.roles.cyrusman")
