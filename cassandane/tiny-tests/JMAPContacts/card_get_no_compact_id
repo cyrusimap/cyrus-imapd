@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_no_compact_id
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $unknownId = "-no-compact-id-";
+    my $res = $user->jmap->request([[
+        "ContactCard/get" => {
+            accountId => 'cassandane',
+            ids => [$unknownId],
+        },
+    ]])->single_sentence("ContactCard/get")->arguments;
+
+    $self->assert_cmp_deeply(superhashof({ notFound => [$unknownId] }), $res);
+}
