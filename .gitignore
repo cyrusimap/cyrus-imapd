@@ -70,7 +70,7 @@ docsrc/.doctrees/
 docsrc/_doxygen/
 docsrc/build/
 docsrc/reference/manpages/configs/imapd.conf.rst
-docsrc/reference/manpages/systemcommands/cyradm.rst
+docsrc/reference/manpages/usercommands/cyradm.rst
 docsrc/reference/manpages/usercommands/sieveshell.rst
 imap/arbitron
 imap/backupcyrusd
