@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_media_blob_shared
+    :min_version_3_9
+    ($self)
+{
+    my $user      = $self->default_user;
+    my $jmap      = $user->jmap;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "create shared account and grant addressbook access";
+    $admintalk->create("user.manifold");
+    $admintalk->create("user.manifold.#jmap", ['TYPE', 'COLLECTION']);
+    $admintalk->setacl("user.manifold",       admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold.#jmap", admin => 'lrswipkxtecdn');
+
+    xlog $self, "connect via CardDAV to trigger Default addressbook creation";
+    my $service = $self->{instance}->get_service("http");
+    Net::CardDAVTalk->new(
+        user => "manifold", password => 'pass',
+        host => $service->host(), port => $service->port(),
+        scheme => 'http', url => '/', expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "upload photo into shared account";
+    my $res = $jmap->Upload("some photo", "image/jpeg", "manifold");
+    my $blobId = $res->{blobId};
+
+    xlog $self, "create card with photo in shared account";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'manifold',
+            create => {
+                1 => {
+                    '@type'   => 'Card',
+                    version   => '1.0',
+                    name      => { full => 'Shared Card' },
+                    media     => {
+                        photo => {
+                            '@type'   => 'Media',
+                            kind      => 'photo',
+                            mediaType => 'image/jpeg',
+                            blobId    => $blobId,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "delete the shared #jmap folder";
+    $admintalk->delete("user.manifold.#jmap") || die;
+
+    xlog $self, "upload new photo - #jmap folder should be recreated";
+    $res = $jmap->Upload("another photo", "image/jpeg", "manifold");
+    my $newBlobId = $res->{blobId};
+
+    xlog $self, "update card photo in shared account";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            accountId => 'manifold',
+            update => {
+                $id => {
+                    'media/photo/blobId' => $newBlobId,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+}
