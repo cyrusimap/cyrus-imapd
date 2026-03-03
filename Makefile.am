@@ -377,7 +377,7 @@ EXTRA_DIST = \
     perl/annotator/Message.pm \
     perl/annotator/README \
     perl/imap/Changes \
-    perl/imap/cyradm.sh \
+    perl/imap/cyradm.pl \
     perl/imap/cyrperl.h \
     perl/imap/examples/auditmbox.pl \
     perl/imap/examples/imapcollate.pl \

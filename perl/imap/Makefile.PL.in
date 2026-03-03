@@ -33,7 +33,7 @@ sub MY::postamble
 
 VPATH=@top_srcdir@/perl/imap
 
-cyradm: cyradm.sh
+cyradm: cyradm.pl
 	@PERL_PREINSTALL@ < $< > $@
 
 check:
