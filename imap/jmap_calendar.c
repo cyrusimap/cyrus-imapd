@@ -4079,6 +4079,16 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         free_hash_table(&eventids_by_uid, NULL);
     } else if (json_is_null(get.ids) || get.ids == NULL) {
         /* Return all visible events */
+        int count = 0;
+        caldav_count(db, &count);
+        if (count > req->settings->limits[MAX_OBJECTS_IN_GET]) {
+            err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                            "description",
+                            "number of ids exceeds maxObjectsInGet limit");
+            jmap_error(req, err);
+            goto done;
+        }
+
         enum caldav_sort sort[] = {
             CAL_SORT_MAILBOX, CAL_SORT_IMAP_UID
         };

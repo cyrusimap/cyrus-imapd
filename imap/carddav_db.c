@@ -1435,6 +1435,11 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
+EXPORTED int carddav_count(struct carddav_db *carddavdb, int *count)
+{
+    return dav_count_recs(carddavdb->db, "vcard_objs", count);
+}
+
 EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                                  struct carddav_data *cdata,
                                  vcardcomponent *vcard,
