@@ -1629,6 +1629,7 @@ imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
 @SET_MAKE@
 
 dist_man1_MANS = \
+    man/cyradm.1 \
     man/dav_reconstruct.1 \
     man/imtest.1 \
     man/httptest.1 \
@@ -1659,7 +1660,6 @@ dist_man8_MANS = \
     man/ctl_zoneinfo.8 \
     man/cvt_cyrusdb.8 \
     man/cvt_xlist_specialuse.8 \
-    man/cyradm.8 \
     man/cyr_buildinfo.8 \
     man/cyr_dbtool.8 \
     man/cyr_deny.8 \
@@ -1905,7 +1905,7 @@ snapshot::
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(PACKAGE_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(PACKAGE_VERSION).tar.gz
 	@rm -rf snapshot
 
-docsrc/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
+docsrc/reference/manpages/usercommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
@@ -1951,7 +1951,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS)
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/systemcommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
+docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@
