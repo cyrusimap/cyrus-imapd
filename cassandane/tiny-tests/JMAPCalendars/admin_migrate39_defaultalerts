@@ -27,7 +27,9 @@ sub test_admin_migrate39_defaultalerts
 
     xlog $self, "Make sure regular user can't call Admin method";
     my $res = $jmap->CallMethods([
-        ['Admin/migrateCalendarDefaultAlarms', {}, 'R1'],
+        ['Admin/migrateCalendarDefaultAlarms', {
+            accountId => \undef  # suppress auto-add by JMAPTester
+         }, 'R1'],
     ], \@using);
     $self->assert_str_equals('accountNotSupportedByMethod',
         $res->[0][1]{type});
@@ -42,7 +44,9 @@ sub test_admin_migrate39_defaultalerts
 
     xlog $self, "Migrate default alarms";
     $res = $adminJmap->CallMethods([
-        ['Admin/migrateCalendarDefaultAlarms', { }, 'R1'],
+        ['Admin/migrateCalendarDefaultAlarms', {
+            accountId => \undef  # suppress auto-add by JMAPTester
+         }, 'R1'],
     ]);
 
     $state->{did_migrate} = 1;

@@ -8,6 +8,7 @@ sub test_echo
     my $jmap = $self->{jmap};
 
     my $req = {
+        accountId => JSON::null,
         hello => JSON::true,
         max => 5,
         stuff => { foo => "bar", empty => JSON::null }
