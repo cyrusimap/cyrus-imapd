@@ -1,0 +1,20 @@
+
+Description:
+
+Adds support for the Sieve 'vnd.cyrus.redirect-multiple' extension
+which allows the 'redirect' action to accept a stringlist of email
+addresses, in addition to the standard single string.
+Cyrus will use a single SMTP transaction, providing each address
+as a RCPT TO and stop script processing when any response is an error.
+
+
+Config changes:
+
+The 'sieve_extensions' option now accepts the value
+'vnd.cyrus.redirect-multiple' to enable the extension in timsieved.
+
+
+Upgrade instructions:
+
+None, as the Cyrus Sieve engine will continue to process existing
+bytecode containing the 'redirect' action.

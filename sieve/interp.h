@@ -192,6 +192,9 @@ enum sieve_capa_flag {
 
     /* i;unicode-casemap - RFC 5051 */
     SIEVE_CAPA_COMP_UCASEMAP= 1LL<<52,
+
+    /* vnd.cyrus.redirect-multiple */
+    SIEVE_CAPA_REDIR_MULTI  = 1LL<<53,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -246,6 +249,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_PROCESSCAL   \
                         | SIEVE_CAPA_IKEEP_TARGET \
                         | SIEVE_CAPA_COMP_UCASEMAP \
+                        | SIEVE_CAPA_REDIR_MULTI  \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)

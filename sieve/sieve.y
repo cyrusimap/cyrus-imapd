@@ -63,7 +63,7 @@ static commandlist_t *build_keep(sieve_script_t*, commandlist_t *c);
 static commandlist_t *build_fileinto(sieve_script_t*,
                                      commandlist_t *c, char *folder);
 static commandlist_t *build_redirect(sieve_script_t*,
-                                     commandlist_t *c, char *addr);
+                                     commandlist_t *c, strarray_t *addrs);
 static commandlist_t *build_rej_err(sieve_script_t*, int t, char *message);
 static commandlist_t *build_vacation(sieve_script_t*, commandlist_t *t, char *s);
 static commandlist_t *build_flag(sieve_script_t*,
@@ -132,7 +132,7 @@ extern void sieverestart(FILE *f);
 %destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags caltags ikttags
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
-%destructor  { strarray_free($$); } optstringlist stringlist strings string1
+%destructor  { strarray_free($$); } optstringlist stringlist strings string1 recipients
 %destructor  { free($$);          } STRING string
 %destructor  { arrayu64_free($$); } timelist times time1
 
@@ -153,7 +153,7 @@ extern void sieverestart(FILE *f);
 %token <nval> NUMBER
 %token <sval> STRING
 %type <sval> string
-%type <sl> optstringlist stringlist strings string1
+%type <sl> optstringlist stringlist strings string1 recipients
 %type <cl> commands command action control
 %type <testl> testlist tests
 %type <test> test
@@ -466,7 +466,8 @@ location: PERSONAL               { $$ = B_PERSONAL; }
  */
 action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | FILEINTO ftags string  { $$ = build_fileinto(sscript, $2, $3); }
-        | REDIRECT rtags string  { $$ = build_redirect(sscript, $2, $3); }
+        | REDIRECT rtags recipients
+                                 { $$ = build_redirect(sscript, $2, $3); }
         | DISCARD                { $$ = new_command(B_DISCARD, sscript); }
         | SET stags string string
                                  { $$ = build_set(sscript, $2, $3, $4); }
@@ -761,6 +762,20 @@ dsntags:  DSNNOTIFY string       {
                                      }
 
                                      c->u.r.dsn_ret = $2;
+                                 }
+        ;
+
+
+/* REDIRECT recipient(s) */
+recipients: string1
+        | '[' strings ']'        {
+                                     $$ = $2;
+
+                                     if (!supported(SIEVE_CAPA_REDIR_MULTI)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      lookup_capability_string(SIEVE_CAPA_REDIR_MULTI));
+                                     }
                                  }
         ;
 
@@ -2494,12 +2509,12 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
 }
 
 static commandlist_t *build_redirect(sieve_script_t *sscript,
-                                     commandlist_t *c, char *address)
+                                     commandlist_t *c, strarray_t *addresses)
 {
     assert(c && c->type == B_REDIRECT);
 
-    if (c->u.r.list) verify_list(sscript, address);
-    else verify_address(sscript, address);
+    verify_stringlist(sscript, addresses,
+                      c->u.r.list ? verify_list : verify_address);
 
     /* Verify DELIVERBY values */
     if (c->u.r.bytime) {
@@ -2560,7 +2575,8 @@ static commandlist_t *build_redirect(sieve_script_t *sscript,
                      c->u.r.dsn_ret);
     }
 
-    c->u.r.address = address;
+    c->u.r.address = strarray_join(addresses, ",");
+    strarray_free(addresses);
 
     c->nargs = bc_precompile(c->args, "ssissiis",
                              c->u.r.bytime,

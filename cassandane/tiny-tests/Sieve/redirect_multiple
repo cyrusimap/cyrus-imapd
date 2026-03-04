@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_redirect_multiple
+    :want_smtpdaemon
+    ($self)
+{
+    xlog $self, "Install a Sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+# Test that multiple recipients work, and that variable substitution
+# still works as expected even though we concatenate multiple addresses
+# into a single comma-separated string in the compiled bytecode.
+
+require [ "vnd.cyrus.redirect-multiple", "variables" ];
+
+set "addr" "bar\@example.com" ;
+redirect [ "\\"Foo,lish\\" <foo\@example.com>", "Bar <\${addr}>" ];
+EOF
+    );
+
+    xlog $self, "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg);
+
+    my $telemetry_dir =
+        $self->{instance}->get_basedir() . '/conf/log/smtpclient.host';
+    opendir(my $dh, $telemetry_dir) or die "opendir $telemetry_dir: $!";
+
+    my @matching_lines = ();
+
+    while (readdir $dh) {
+        next if not m/^lmtp-/;
+
+        my $telemetry_file = "$telemetry_dir/$_";
+        open(my $fh, '<', $telemetry_file) or die "open $telemetry_file: $!";
+
+        my @lines = <$fh>;
+        close $fh;
+
+        @matching_lines = grep { m/RCPT TO:/ } @lines;
+        last;
+    }
+    closedir $dh;
+
+    $self->assert_num_equals(2, scalar @matching_lines);
+    $self->assert_matches(qr/foo\@example.com/, $matching_lines[0]);
+    $self->assert_matches(qr/bar\@example.com/, $matching_lines[1]);
+}

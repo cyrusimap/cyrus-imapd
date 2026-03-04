@@ -409,6 +409,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Sieve: A Mail Filtering Language
 
+    .. NOTE::
+
+        The redirect action can be extended to accept a 'string-list'
+        of email addresses, rather than just a single 'string',
+        by using the 'vnd.cyrus.redirect-multiple' capability.
+
 :rfc:`5229`
 
     Sieve Email Filtering: Variables Extension

@@ -253,6 +253,19 @@ Usage::
 
 The **log** action sends the string to syslog with INFO priority.
 
+.. _vnd.cyrus.redirect-multiple:
+
+redirect
+^^^^^^^^
+
+Usage::
+
+   require "vnd.cyrus.redirect-multiple";
+   redirect <addresses: string-list>;
+
+The **redirect** action can be extended to accept a <string-list> rather than
+just a single <string>.
+
 .. _processimip:
 
 processimip
