@@ -1571,18 +1571,14 @@ static void cmd_set(struct conn *C,
     }
 
     if ((!m || m->t != SET_ACTIVE) && t == SET_DEACTIVATE) {
-        /* Check if we run in a discrete murder topology */
-        if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) {
-            /* Replicated backends with the same server name issue
-             * deactivation twice. Suppress bailing out on the second one
-             * (the replica).
-             */
-            if (strcmp(m->location, location)) {
-                /* failed; mailbox not currently active */
-                msg = NOTACTIVE;
-                goto done;
-            }
+        if (!m) {
+            /* The mailbox must exist on deactivate */
+            msg = DOESNTEXIST;
+            goto done;
         }
+        /* Mailbox must be active on deactivate */
+        msg = NOTACTIVE;
+        goto done;
     } else if (t == SET_DEACTIVATE) {
         t = SET_RESERVE;
     }
