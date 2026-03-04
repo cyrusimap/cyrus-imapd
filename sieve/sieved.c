@@ -1419,6 +1419,7 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
         case B_REDIRECT_COPY:
         case B_REDIRECT_LIST:
         case B_REDIRECT:
+            generate_token("redirect", indent, buf);
             generate_switch_capa(":copy", cmd.u.r.copy,
                                  SIEVE_CAPA_COPY, requires, buf);
             generate_switch_capa(":list", cmd.u.r.list,

@@ -103,6 +103,8 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " processcalendar");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET)
             buf_appendcstr(&buf, " vnd.cyrus.implicit_keep_target");
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_REDIRECT_MULTIPLE)
+            buf_appendcstr(&buf, " vnd.cyrus.redirect-multiple");
 
         /* add tests */
         if (i->getenvelope &&
@@ -527,6 +529,9 @@ static const struct sieve_capa_t {
     /* i;unicode-casemap - RFC 5051 */
     { "comparator-i;unicode-casemap", SIEVE_CAPA_COMP_UCASEMAP },
 
+    /* vnd.cyrus.redirect-multiple */
+    { "vnd.cyrus.redirect-multiple", SIEVE_CAPA_REDIR_MULTI },
+
     { NULL, 0 }
 };
     
@@ -737,6 +742,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_IKEEP_TARGET:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_IMPLICIT_KEEP_TARGET))
+            capa = 0;
+        break;
+
+    case SIEVE_CAPA_REDIR_MULTI:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_VND_CYRUS_REDIRECT_MULTIPLE))
             capa = 0;
         break;
 

@@ -742,38 +742,48 @@ static int send_forward(sieve_redirect_context_t *rc,
 
     if (rc->is_ext_list) {
 #ifdef WITH_DAV
-        mbentry_t *mbentry = get_addrbook_mbentry(rc->addr, ctx->userid);
+        strarray_t *sa = strarray_split(rc->addr, ",", STRARRAY_TRIM);
 
-        if (mbentry && !ctx->carddavdb) {
-            /* open user's CardDAV DB */
-            ctx->carddavdb = carddav_open_userid(ctx->userid);
-        }
-        if (!(mbentry && ctx->carddavdb)) {
-            r = SIEVE_FAIL;
+        for (int i = 0; i < strarray_size(sa); i++) {
+            mbentry_t *mbentry =
+                get_addrbook_mbentry(strarray_nth(sa, i), ctx->userid);
+
+            if (mbentry && !ctx->carddavdb) {
+                /* open user's CardDAV DB */
+                ctx->carddavdb = carddav_open_userid(ctx->userid);
+            }
+            if (!(mbentry && ctx->carddavdb)) {
+                r = SIEVE_FAIL;
+                mboxlist_entry_free(&mbentry);
+                goto done;
+            }
+            carddav_foreach(ctx->carddavdb, mbentry, &list_addresses, &sm_env);
             mboxlist_entry_free(&mbentry);
-            goto done;
         }
-        carddav_foreach(ctx->carddavdb, mbentry, &list_addresses, &sm_env);
-        mboxlist_entry_free(&mbentry);
+        strarray_free(sa);
 #endif
     }
     else {
-        struct address *addr = NULL;
+        struct address_itr ai;
+        const struct address *addr;
         char *rcpt = NULL;
 
-        parseaddr_list(rc->addr, &addr);
-        if (addr) {
+        address_itr_init(&ai, rc->addr, 0);
+        while ((addr = address_itr_next(&ai))) {
             rcpt = address_get_all(addr, 1);
-            parseaddr_free(addr);
+
+            if (rcpt) {
+                smtp_envelope_add_rcpt(&sm_env, rcpt);
+                free(rcpt);
+            }
+            else {
+                r = SIEVE_FAIL;
+                break;
+            }
         }
-        if (rcpt) {
-            smtp_envelope_add_rcpt(&sm_env, rcpt);
-            free(rcpt);
-        }
-        else {
-            r = SIEVE_FAIL;
-            goto done;
-        }
+        address_itr_fini(&ai);
+
+        if (r) goto done;
     }
 
     if (srs_return_path) free(srs_return_path);
