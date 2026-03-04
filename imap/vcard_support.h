@@ -15,6 +15,9 @@
 #include "message_guid.h"
 #include "util.h"
 
+#define VCARD_NUM_BASE_N_FIELDS   5  // Number of fields defined in RFC 6350
+#define VCARD_NUM_BASE_ADR_FIELDS 7  // Number of fields defined in RFC 6350
+
 extern struct vparse_card *vcard_parse_string(const char *str);
 extern struct vparse_card *vcard_parse_buf(const struct buf *buf);
 extern struct buf *vcard_as_buf(struct vparse_card *vcard);

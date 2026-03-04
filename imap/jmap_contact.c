@@ -6457,24 +6457,34 @@ static const jmap_property_t card_props[] = {
  */
 
 struct comp_kind {
-    unsigned idx;
-    const char *name;
-    unsigned flags;
-    unsigned alt_idx; /* idx of alternate field dictated by flags */
+    unsigned idx;      /* index of vCard property field  */
+    const char *name;  /* name of JSContact component    */
+    unsigned flags;    /* flags dictating field handling */
+    unsigned alt_idx;  /* idx of related vCard field     */
 };
 
-#define FIELD_BWD  (1<<0)  /* Add value to backward-compatibility field    */
-#define FIELD_EXT  (1<<1)  /* Ignore value if it appears in extended field */
-#define FIELD_SKIP (1<<2)  /* Skip this field if extended field exists     */
+/* Flags governing conversion to/from vCard */
+#define FIELD_BWD  (1<<0)  /* To vCard:
+                              Add value to the legacy (backward-compat) field  */
+#define FIELD_NOEX (1<<1)  /* To vCard:
+                              Extended vCard fields aren't needed for this
+                              field alone since the same-named JS component
+                              maps to a legacy field                           */
+#define FIELD_SKIP (1<<2)  /* To vCard:
+                              Skip this field entirely
+                              From vCard:
+                              Skip this field if the extended field exists     */
+#define FIELD_VAL  (1<<3)  /* From vCard:
+                              Ignore value if it appears in the extended field */
 
 /* JSContact Name components - ordered per vcard_n_field */
 // clang-format off
 static const struct comp_kind n_comp_kinds[] = {
-    { VCARD_N_FAMILY,          "surname",       FIELD_EXT,  VCARD_N_SECONDARY  },
+    { VCARD_N_FAMILY,          "surname",       FIELD_VAL,  VCARD_N_SECONDARY  },
     { VCARD_N_GIVEN,           "given",         0,          0                  },
     { VCARD_N_ADDITIONAL,      "given2",        0,          0                  },
     { VCARD_N_PREFIX,          "title",         0,          0                  },
-    { VCARD_N_SUFFIX,          "credential",    FIELD_EXT,  VCARD_N_GENERATION },
+    { VCARD_N_SUFFIX,          "credential",    FIELD_VAL,  VCARD_N_GENERATION },
     /* Extended fields (RFC 9554) */
     { VCARD_N_SECONDARY,       "surname2",      FIELD_BWD,  VCARD_N_FAMILY     },
     { VCARD_N_GENERATION,      "generation",    FIELD_BWD,  VCARD_N_SUFFIX     },
@@ -6486,18 +6496,20 @@ static const struct comp_kind n_comp_kinds[] = {
 // clang-format off
 static const struct comp_kind adr_comp_kinds[] = {
     { VCARD_ADR_PO_BOX,        "postOfficeBox", 0,          0                  },
-    { VCARD_ADR_EXTENDED,      "apartment",     FIELD_SKIP, VCARD_ADR_ROOM     },
-    { VCARD_ADR_STREET,        "name",          FIELD_SKIP, VCARD_ADR_ROOM     },
+    { VCARD_ADR_EXTENDED,      "apartment",     FIELD_SKIP, VCARD_ADR_APARTMENT },
+    { VCARD_ADR_STREET,        "name",          FIELD_SKIP, VCARD_ADR_STREET_NUMBER },
     { VCARD_ADR_LOCALITY,      "locality",      0,          0                  },
     { VCARD_ADR_REGION,        "region",        0,          0                  },
     { VCARD_ADR_POSTAL_CODE,   "postcode",      0,          0                  },
     { VCARD_ADR_COUNTRY,       "country",       0,          0                  },
     /* Extended fields (RFC 9554) */
     { VCARD_ADR_ROOM,          "room",          FIELD_BWD,  VCARD_ADR_EXTENDED },
-    { VCARD_ADR_APARTMENT,     "apartment",     FIELD_BWD,  VCARD_ADR_EXTENDED },
+    { VCARD_ADR_APARTMENT,     "apartment",     FIELD_BWD |
+                                                FIELD_NOEX, VCARD_ADR_EXTENDED },
     { VCARD_ADR_FLOOR,         "floor",         FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_STREET_NUMBER, "number",        FIELD_BWD,  VCARD_ADR_STREET   },
-    { VCARD_ADR_STREET_NAME,   "name",          FIELD_BWD,  VCARD_ADR_STREET   },
+    { VCARD_ADR_STREET_NAME,   "name",          FIELD_BWD |
+                                                FIELD_NOEX, VCARD_ADR_STREET   },
     { VCARD_ADR_BUILDING,      "building",      FIELD_BWD,  VCARD_ADR_EXTENDED },
     { VCARD_ADR_BLOCK,         "block",         FIELD_BWD,  VCARD_ADR_STREET   },
     { VCARD_ADR_SUBDISTRICT,   "subdistrict",   FIELD_BWD,  VCARD_ADR_STREET   },
@@ -7084,16 +7096,18 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
     /* Iterate through all components and values */
     for (const struct comp_kind *ckind = comp_kinds;
          ckind->name && ckind->idx < vcardstructured_num_fields(st); ckind++) {
-        if ((ckind->flags & FIELD_SKIP) && vcardstructured_num_fields(st) > ckind->alt_idx)
+        if ((ckind->flags & FIELD_SKIP) &&
+            vcardstructured_num_fields(st) > ckind->alt_idx) {
             continue;
+        }
 
         sa = vcardstructured_field_at(st, ckind->idx);
         for (i = 0; sa && i < vcardstrarray_size(sa); i++) {
             val = vcardstrarray_element_at(sa, i);
 
             if (*val) {
-                /* Skip values that appear in other fields */
-                if (ckind->flags & FIELD_EXT) {
+                /* Skip legacy values that appear in extended fields */
+                if (ckind->flags & FIELD_VAL) {
                     vcardstrarray *alt_sa = vcardstructured_field_at(st, ckind->alt_idx);
                     if (alt_sa
                         && vcardstrarray_find(alt_sa, val)
@@ -10124,7 +10138,8 @@ static const struct comp_kind *_field_name_to_kind(const char *name,
 
 struct jscomps_args {
     vcardproperty *(*vanew_prop)(vcardstructuredtype*, ...);
-    unsigned num_comps;
+    unsigned min_num_comps;
+    unsigned max_num_comps;
     const char *id;
     const char *comp_type;
     const struct comp_kind *comp_kinds;
@@ -10138,15 +10153,15 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     json_t *comps = json_object_get(obj, "components");
 
     if (!comps) {
-        if (args->num_comps != VCARD_NUM_ADR_FIELDS) return NULL;
+        if (args->max_num_comps != VCARD_NUM_ADR_FIELDS) return NULL;
     }
     else if (!json_array_size(comps)) {
         jmap_parser_invalid(parser, "components");
         return 0;
     }
 
-    vcardstructuredtype *vals = vcardstructured_new(args->num_comps);
-    vcardstructuredtype *ph = vcardstructured_new(args->num_comps);
+    vcardstructuredtype *vals = vcardstructured_new(args->max_num_comps);
+    vcardstructuredtype *ph = vcardstructured_new(args->max_num_comps);
     size_t i, size = json_array_size(comps);
     vcardstructuredtype *jscomps = NULL;
     vcardproperty *prop = NULL;
@@ -10155,6 +10170,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     vcardstrarray *entry;
     json_t *jprop;
     int isordered = 0;
+    bool needs_extended = false;
 
     jprop = json_object_get(obj, "phoneticSystem");
     if (json_is_string(jprop)) {
@@ -10308,7 +10324,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                 sep = NULL;
             }
 
-            /* Also add values from ext fields to backward-compat fields */
+            /* Also add values from extended fields to legacy fields */
             if (ckind->flags & FIELD_BWD) {
                 field = vcardstructured_field_at(vals, ckind->alt_idx);
                 if (!field) {
@@ -10316,6 +10332,11 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                     vcardstructured_set_field_at(vals, ckind->alt_idx, field);
                 }
                 vcardstrarray_append(field, val);
+
+                /* We need extended fields unless this one
+                   maps to a legacy field with the same JS component name */
+                if (!(ckind->flags & FIELD_NOEX))
+                    needs_extended = true;
             }
         }
 
@@ -10325,6 +10346,11 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     if (i != size) {
         jmap_parser_pop(parser);
         goto fail;
+    }
+    if (!needs_extended) {
+        /* Shrink number of fields being used */
+        vcardstructured_set_num_fields(vals, args->min_num_comps);
+        vcardstructured_set_num_fields(ph, args->min_num_comps);
     }
 
     prop = args->vanew_prop(vals,
@@ -10382,7 +10408,7 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
 {
     struct l10n_rock lrock = { 0, NULL, { .prop_cb = &_jsname_to_vcard } };
     struct jscomps_args args = {
-        &vcardproperty_vanew_n, VCARD_NUM_N_FIELDS,
+        &vcardproperty_vanew_n, VCARD_NUM_BASE_N_FIELDS, VCARD_NUM_N_FIELDS,
         "n1", "NameComponent", n_comp_kinds, NULL
     };
     const char *myprops[] = {
@@ -11182,7 +11208,7 @@ static vcardproperty *_jsaddr_to_vcard(struct jmap_parser *parser, json_t *obj,
                                        void *rock __attribute__((unused)))
 {
     struct jscomps_args args = {
-        &vcardproperty_vanew_adr, VCARD_NUM_ADR_FIELDS,
+        &vcardproperty_vanew_adr, VCARD_NUM_BASE_ADR_FIELDS, VCARD_NUM_ADR_FIELDS,
         id, "AddressComponent", adr_comp_kinds, NULL
     };
     json_t *comps = json_object_get(obj, "components");
