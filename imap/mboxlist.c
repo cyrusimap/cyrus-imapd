@@ -4162,6 +4162,7 @@ static int mboxlist_racl_matches(struct db *db,
                                  strarray_t *matches)
 {
     struct buf raclprefix = BUF_INITIALIZER;
+    struct buf raclgroup = BUF_INITIALIZER;
     strarray_t *groups = NULL;
     struct raclrock raclrock = { 0, matches };
     int i;
@@ -4183,8 +4184,11 @@ static int mboxlist_racl_matches(struct db *db,
     if (auth_state)
         groups = auth_groups(auth_state);
     if (groups) {
+        buf_setcstr(&raclgroup, "group:");
         for (i = 0; i < strarray_size(groups); i++) {
-            mboxlist_racl_key(isuser, strarray_nth(groups, i), NULL, &raclprefix);
+            buf_truncate(&raclgroup, 6); // "group:" length
+            buf_appendcstr(&raclgroup, strarray_nth(groups, i));
+            mboxlist_racl_key(isuser, buf_cstring(&raclgroup), NULL, &raclprefix);
             raclrock.prefixlen = buf_len(&raclprefix);
             if (len) buf_appendmap(&raclprefix, mboxprefix, len);
 
@@ -4209,6 +4213,7 @@ static int mboxlist_racl_matches(struct db *db,
     strarray_sort(matches, cmpstringp_raw);
     strarray_uniq(matches);
 
+    buf_free(&raclgroup);
     buf_free(&raclprefix);
     return 0;
 }
