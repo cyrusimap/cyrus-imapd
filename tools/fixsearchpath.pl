@@ -78,6 +78,11 @@ $boilerplate .= "##\n\n";
 # Filter stdin to stdout
 while (<STDIN>)
 {
+    if ($. == 1 && m/^#!perl$/) {
+        # replace bare perl shebang with the running perl
+        $_ = "#!$Config{perlpath}\n";
+    }
+
     if (defined $boilerplate && m/^use\s+(?!strict|warnings)/) {
         print $boilerplate;
         $boilerplate = undef;
