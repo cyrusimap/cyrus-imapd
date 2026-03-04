@@ -78,9 +78,10 @@ $boilerplate .= "##\n\n";
 # Filter stdin to stdout
 while (<STDIN>)
 {
-    if (defined $boilerplate && m/^use\s/) {
+    if (defined $boilerplate && m/^use\s+(?!strict|warnings)/) {
         print $boilerplate;
         $boilerplate = undef;
     }
+
     print $_;
 }
