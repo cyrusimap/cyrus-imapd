@@ -55,6 +55,8 @@ use Encode qw(decode encode);
 use MIME::Base64 qw(encode_base64);
 use Data::Dumper;
 
+use experimental 'signatures';
+
 sub new
 {
     my $class = shift;
@@ -194,62 +196,44 @@ sub compile_sievec
     return ($result, join("\n", @errors));
 }
 
-sub compile_timsieved
+sub compile_timsieved ($self, $name, $script)
 {
-    my ($self, $name, $script) = @_;
+    my $client = $self->timsieved_client;
 
-    my $basedir = $self->{instance}->{basedir};
-    my $bindir = $self->{instance}->{cyrus_destdir} .
-                 $self->{instance}->{cyrus_prefix} . '/bin';
-    my $srv = $self->{instance}->get_service('sieve');
+    my $script_bytes = encode("utf-8", $script);
 
-    xlog $self, "Checking preconditions for compiling sieve script $name";
+    xlog $self, "Uploading sieve script $name via MANAGESIEVE";
+    timsieved_write(
+      $client,
+      sprintf qq[PUTSCRIPT "%s" {%d+}\r\n], $name, length $script_bytes
+    );
+    timsieved_write($client, $script_bytes);
+    timsieved_write($client, "\r\n");
 
-    $self->assert_not_file_test("$basedir/$name.script", '-f');
-    $self->assert_not_file_test("$basedir/$name.errors", '-f');
+    my $response = timsieved_read($client);
 
-    open(FH, '>', "$basedir/$name.script")
-        or die "Cannot open $basedir/$name.script for writing: $!";
-    print FH $script;
-    close(FH);
+    return ('success', '') if $response =~ m/^OK\b/;
 
-    if (! -f "$basedir/sieve.passwd" )
-    {
-        open(FH, '>', "$basedir/sieve.passwd")
-            or die "Cannot open $basedir/sieve.passwd for writing: $!";
-        print FH "\ntestpw\n";
-        close(FH);
+    # Parse the error text from the NO response.  The format is:
+    #   NO [({code}) ]<string>\r\n
+    # where <string> is a quoted string or a {N}\r\n non-synchronising literal.
+    my $errs = '';
+    if ($response =~ m/^NO\s+(.*)/s) {
+        my $rest = $1;
+        $rest =~ s/^\(\S+\)\s+//;  # strip optional (RESPONSE-CODE)
+        $rest =~ s/\r\n$//s;       # strip response terminator
+
+        if ($rest =~ m/^\{(\d+)\}\r\n(.*)$/s) {
+            # $1 is the length of a non-sync literal, content found in $2
+            $errs = substr($2, 0, $1);
+        } elsif ($rest =~ m/^"([^"]*)"$/s) {
+            $errs = $1;
+        } else {
+            $errs = $rest;
+        }
     }
 
-    xlog $self, "Running installsieve on script $name";
-    my $result = $self->{instance}->run_command({
-                redirects => {
-                    # No cyrus => 1 as installsieve is a Perl
-                    # script which doesn't need Valgrind and
-                    # doesn't understand the Cyrus -C option
-                    stdin => "$basedir/sieve.passwd",
-                    stderr => "$basedir/$name.errors"
-                },
-                handlers => {
-                    exited_normally => sub { return 'success'; },
-                    exited_abnormally => sub { return 'failure'; },
-                },
-            },
-            "$bindir/installsieve",
-            "-i", "$basedir/$name.script",
-            "-u", "cassandane",
-            $srv->host() . ":" . $srv->port());
-
-    # Read the errors file in @errors
-    my (@errors) = read_errors("$basedir/$name.errors");
-
-    if ($result eq 'success')
-    {
-        xlog $self, "Checking that installsieve didn't write anything to stderr";
-        $self->assert_equals(0, scalar(@errors));
-    }
-
-    return ($result, join("\n", @errors));
+    return ('failure', $errs);
 }
 
 sub compile_sieve_script

@@ -33,7 +33,7 @@ jobs:
           - compiler: "--gcc"
             desc: "gcc+asan w/cass"
             san: "--asan"
-            skip: "!Cyrus::Sieve.badscript_timsieved !Cyrus::LibCyrus"
+            skip: "!Cyrus::LibCyrus"
           - compiler: "--gcc"
             # -Og finds more errors at compile time
             desc: "gcc -Og cunit"
