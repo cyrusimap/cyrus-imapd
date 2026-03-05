@@ -120,7 +120,6 @@ DISTCLEANFILES = \
     imap/promdata.h \
     imap/tz_err.c \
     imap/tz_err.h \
-    perl/sieve/scripts/installsieve \
     perl/sieve/scripts/sieveshell \
     sieve/sieve_err.c \
     sieve/sieve_err.h
@@ -499,7 +498,6 @@ dist_noinst_SCRIPTS = \
     com_err/et/config_script \
     imap/promdatagen \
     lib/mkchartable.pl \
-    perl/sieve/scripts/installsieve.pl \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
     tools/compile_st.pl \
@@ -1637,7 +1635,6 @@ imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
 dist_man1_MANS = \
     man/dav_reconstruct.1 \
     man/imtest.1 \
-    man/installsieve.1 \
     man/httptest.1 \
     man/lmtptest.1 \
     man/mupdatetest.1 \
@@ -2072,7 +2069,7 @@ endif
 
 install-exec-hook:
 if PERL
-	for s in installsieve sieveshell; \
+	for s in sieveshell; \
 	do \
 	  $(MKDIR_P) $(top_builddir)/perl/sieve/scripts ; \
 	  $(PERL_PREINSTALL) < $(top_srcdir)/perl/sieve/scripts/$$s.pl > $(top_builddir)/perl/sieve/scripts/$$s ;\
@@ -2102,7 +2099,7 @@ endif
 
 uninstall-hook: cyrus-makemaker-uninstall-workaround
 if PERL
-	for s in installsieve sieveshell; do \
+	for s in sieveshell; do \
 	    rm -f $(DESTDIR)$(bindir)/$$s; \
 	done
 endif
