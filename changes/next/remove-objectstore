@@ -1,0 +1,38 @@
+Description:
+
+Support for the obscure "objectstore" feature has been removed.
+
+
+Documentation:
+
+n/a
+
+
+Config changes:
+
+The following options are now deprecated:
+
+* caringo_hostname
+* caringo_port
+* object_storage_dummy_spool
+* object_storage_enabled
+* openio_account
+* openio_autocreate
+* openio_namespace
+* openio_proxy_timeout
+* openio_rawx_timeout
+* openio_verbosity
+
+
+Upgrade instructions:
+
+In the very unlikely event that you're using objectstore, you'll need to stop.
+That probably means replicating to a new Cyrus install without objectstore
+configured.  Our view is that this is so unlikely that we are not preparing
+detailed instructions.  If you are in this situation, contact the Cyrus users
+mailing list.
+
+
+GitHub issue:
+
+n/a
