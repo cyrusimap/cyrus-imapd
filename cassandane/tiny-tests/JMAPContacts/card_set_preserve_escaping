@@ -162,7 +162,8 @@ sub test_card_set_preserve_escaping
     $res = $carddav->Request('GET', 'Default/test.vcf');
     $self->assert_cmp_deeply(
         superhashof({
-            N => $verbatim . ";;;", # N gets extended with RFC 9554 definitions
+            # N gets honorific prefix/suffix separator but no RFC 9554 fields
+            N => $verbatim . ";",
             FN => $encoded,
             'X-SOCIALPROFILE' => "xsp-$verbatim",
             'url0.URL' => "url-$verbatim",
