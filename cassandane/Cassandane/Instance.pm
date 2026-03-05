@@ -629,8 +629,8 @@ sub _find_binary
 
     if ($name =~ m/xapian-.*$/) {
         my $lib = `ldd $base/libexec/imapd` || die "can't ldd imapd";
-        $lib =~ m{(/\S+)/lib/libxapian-([0-9.]+)\.so};
-        return "$1/bin/$name-$2";
+        $lib =~ m{(/\S+)/lib/libxapian(-([0-9.]+))?\.so};
+        return "$1/bin/$name$2";
     }
 
     foreach (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
