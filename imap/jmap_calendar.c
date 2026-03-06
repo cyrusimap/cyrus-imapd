@@ -589,6 +589,9 @@ calendar_sharewith_to_rights_iter:
 }
 
 
+static const char sched_enabled_annot[] =
+    DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled";
+
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getcalendars_rock *rock = vrock;
@@ -721,6 +724,23 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             }
         }
         json_object_set_new(obj, "isVisible", json_boolean(is_visible));
+        buf_free(&attrib);
+    }
+
+    if (jmap_wantprop(rock->get->props, "schedulingEnabled")) {
+        json_t *is_enabled = json_true();
+        buf_reset(&attrib);
+        r = annotatemore_lookupmask_mbe(mbentry,
+                                        sched_enabled_annot, "", &attrib);
+        if (!r && attrib.len) {
+            const char *val = buf_cstring(&attrib);
+            if (!strcasecmp(val, "F") ||
+                // http_caldav.c: has been accepting "no" so we do here as well
+                !strcasecmp(val, "no")) {
+                is_enabled = json_false();
+            }
+        }
+        json_object_set_new(obj, "schedulingEnabled", is_enabled);
         buf_free(&attrib);
     }
 
@@ -1049,6 +1069,7 @@ struct setcalendar_props {
     int sortOrder;
     int isVisible;
     int isSubscribed;
+    int schedulingEnabled;
     int transp;
     bool has_ext_props; // request is setting externally-stored properties
     json_t *participant_identities;
@@ -1115,6 +1136,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
     if (is_create) {
         props->isVisible = 1;
         props->isSubscribed = 1;
+        props->schedulingEnabled = -1;
         props->transp = -1;
         props->share.overwrite_acl = 1;
         props->comp_types = config_types_to_caldav_types();
@@ -1123,6 +1145,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
         props->sortOrder = -1;
         props->isVisible = -1;
         props->isSubscribed = -1;
+        props->schedulingEnabled = -1;
         props->share.overwrite_acl = 1;
         props->transp = -1;
         props->comp_types = -1;
@@ -1184,6 +1207,15 @@ static void setcalendar_parseprops(jmap_req_t *req,
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "isSubscribed");
+    }
+
+    /* schedulingEnabled */
+    jprop = json_object_get(arg, "schedulingEnabled");
+    if (json_is_boolean(jprop)) {
+        props->schedulingEnabled = json_boolean_value(jprop);
+    }
+    else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "schedulingEnabled");
     }
 
     /* description */
@@ -1479,6 +1511,18 @@ static int setcalendar_writeprops(jmap_req_t *req,
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     visible_annot, error_message(r));
+        }
+        buf_reset(&val);
+        bump_modseq = false;
+    }
+    /* schedulingEnabled */
+    if (!r && props->schedulingEnabled >= 0) {
+        /* zero-length value will remove annotation */
+        buf_setcstr(&val, props->schedulingEnabled ? "" : "F");
+        r = annotate_state_writemask(astate, sched_enabled_annot, "", &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    sched_enabled_annot, error_message(r));
         }
         buf_reset(&val);
         bump_modseq = false;
@@ -3741,12 +3785,26 @@ done:
     return r;
 }
 
-static int setcalendarevents_schedule(const char *sched_userid,
+static int setcalendarevents_schedule(const struct mailbox *mailbox,
+                                      const char *sched_userid,
                                       const strarray_t *schedule_addresses,
                                       icalcomponent *oldical,
                                       icalcomponent *newical,
                                       int mode)
 {
+    struct buf buf = BUF_INITIALIZER;
+
+    annotatemore_lookupmask_mbox(mailbox, sched_enabled_annot, "", &buf);
+    if (!strcasecmp(buf_cstring(&buf), "F") ||
+        // http_caldav.c: has been accepting "no" so we do here as well
+        !strcasecmp(buf_cstring(&buf), "no")) {
+        syslog(LOG_DEBUG, "Scheduling disabled for user %s on mailbox %s"
+               " by CY:scheduling-enabled annotation",
+               httpd_userid, mailbox_name(mailbox));
+        buf_free(&buf);
+        return 0;
+    }
+
     int r = 0;
 
     /* Make local copies so we can rewrite attachments */
@@ -3797,6 +3855,7 @@ static int setcalendarevents_schedule(const char *sched_userid,
 done:
     if (oldical) icalcomponent_free(oldical);
     if (newical) icalcomponent_free(newical);
+    buf_free(&buf);
     return r;
 }
 
@@ -4264,7 +4323,7 @@ static int createevent_store(jmap_req_t *req,
     if (send_itip && !is_draft) {
         icalcomponent *sched_ical = create->ical_standalone ?
             create->ical_standalone : create->ical;
-        r = setcalendarevents_schedule(create->sched_userid,
+        r = setcalendarevents_schedule(mbox, create->sched_userid,
                 &create->schedule_addresses, NULL, sched_ical, JMAP_CREATE);
         if (r) goto done;
         remove_itip_properties(create->ical);
@@ -5396,7 +5455,7 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
+        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
                 update.oldical, update.newical, JMAP_UPDATE);
         if (r) goto done;
     }
@@ -5669,7 +5728,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
-        r = setcalendarevents_schedule(sched_userid, &schedule_addresses,
+        r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
                 oldical, newical, JMAP_DESTROY);
         if (r) goto done;
     }

@@ -2471,7 +2471,8 @@ void sched_request(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_INVITE)) {
         /* DAV:need-privileges */
-        syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
+        syslog(LOG_DEBUG,
+               "No schedule-send-invite privilege for user %s on Outbox %s",
                httpd_userid, organizer);
 
         update_attendee_status(newical, NULL, NULL, SCHEDSTAT_NOPRIVS);
@@ -2946,7 +2947,8 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 
     if (!(rights & DACL_REPLY)) {
         /* DAV:need-privileges */
-        syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
+        syslog(LOG_DEBUG,
+               "No schedule-send-reply privilege for user %s on Outbox %s",
                httpd_userid, sched_userid);
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
         return;

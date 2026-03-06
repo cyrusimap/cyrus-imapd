@@ -42,6 +42,7 @@ jmap_property_t;
 "myRights",                 NULL, JMAP_PROP_SERVER_SET
 #
 # FM extensions (do ALL of these get through to Cyrus?)
+"schedulingEnabled",JMAP_CALENDARS_EXTENSION, 0
 "syncedFrom",       JMAP_CALENDARS_EXTENSION, JMAP_PROP_EXTERNAL
 "isEventsPublic",   JMAP_CALENDARS_EXTENSION, JMAP_PROP_EXTERNAL
 "isFreeBusyPublic", JMAP_CALENDARS_EXTENSION, JMAP_PROP_EXTERNAL
