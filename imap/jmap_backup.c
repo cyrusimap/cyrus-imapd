@@ -704,7 +704,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             const mbentry_t mbentry = { .name = (char *)mailbox_name(mailbox),
                                         .uniqueid = (char *)mailbox_uniqueid(mailbox) };
             struct contact_rock *crock = (struct contact_rock *) rock;
-            vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
+            vcardcomponent *vcard = record_to_vcard(mailbox, record);
 
             if (!vcard) {
                 r = IMAP_INTERNAL;
@@ -772,9 +772,9 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
 
     if (!r && crock->group_vcard) {
         /* Store the group vCard of recreated contacts */
-        r = carddav_store_x(*mailboxp, crock->group_vcard, NULL, 0, NULL, 
-                            rrock->req->accountid, rrock->req->authstate,
-                            /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
+        r = carddav_store(*mailboxp, crock->group_vcard, NULL, 0, NULL, 
+                          rrock->req->accountid, rrock->req->authstate,
+                          /*ignorequota*/ 0, /*oldsize*/ UINT32_MAX);
     }
     vcardcomponent_free(crock->group_vcard);
     crock->group_vcard = NULL;

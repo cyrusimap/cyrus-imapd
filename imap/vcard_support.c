@@ -108,7 +108,7 @@ static size_t _prop_decode_value(const char *data,
     return size;
 }
 
-EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
+EXPORTED  vcardcomponent *vcard_parse_string(const char *str)
 {
     vcardcomponent *vcard = vcardcomponent_new_from_string(str);
 
@@ -118,12 +118,12 @@ EXPORTED  vcardcomponent *vcard_parse_string_x(const char *str)
     return vcard;
 }
 
-EXPORTED vcardcomponent *vcard_parse_buf_x(const struct buf *buf)
+EXPORTED vcardcomponent *vcard_parse_buf(const struct buf *buf)
 {
     return vcardparser_parse_string(buf_cstring(buf));
 }
 
-EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
+EXPORTED struct buf *vcard_as_buf(vcardcomponent *vcard)
 {
     char *str = vcardcomponent_as_vcard_string_r(vcard);
     struct buf *ret = buf_new();
@@ -133,25 +133,25 @@ EXPORTED struct buf *vcard_as_buf_x(vcardcomponent *vcard)
     return ret;
 }
 
-EXPORTED vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
-                                           const struct index_record *record)
+EXPORTED vcardcomponent *record_to_vcard(struct mailbox *mailbox,
+                                         const struct index_record *record)
 {
     struct buf buf = BUF_INITIALIZER;
     vcardcomponent *vcard = NULL;
 
     /* Load message containing the resource and parse vCard data */
     if (!mailbox_map_record(mailbox, record, &buf)) {
-        vcard = vcard_parse_string_x(buf_cstring(&buf) + record->header_size);
+        vcard = vcard_parse_string(buf_cstring(&buf) + record->header_size);
         buf_free(&buf);
     }
 
     return vcard;
 }
 
-EXPORTED size_t vcard_prop_decode_value_x(vcardproperty *prop,
-                                          struct buf *value,
-                                          char **content_type,
-                                          struct message_guid *guid)
+EXPORTED size_t vcard_prop_decode_value(vcardproperty *prop,
+                                        struct buf *value,
+                                        char **content_type,
+                                        struct message_guid *guid)
 {
     const char *data = NULL;
     const vcardvalue *val;
