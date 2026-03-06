@@ -22,14 +22,14 @@
 #define VCARD_NUM_BASE_N_FIELDS   5  // Number of fields defined in RFC 6350
 #define VCARD_NUM_BASE_ADR_FIELDS 7  // Number of fields defined in RFC 6350
 
-extern vcardcomponent *vcard_parse_string_x(const char *str);
-extern vcardcomponent *vcard_parse_buf_x(const struct buf *buf);
-extern struct buf *vcard_as_buf_x(vcardcomponent *vcard);
+extern vcardcomponent *vcard_parse_string(const char *str);
+extern vcardcomponent *vcard_parse_buf(const struct buf *buf);
+extern struct buf *vcard_as_buf(vcardcomponent *vcard);
 
-extern vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
+extern vcardcomponent *record_to_vcard(struct mailbox *mailbox,
                                          const struct index_record *record);
 
-extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
+extern size_t vcard_prop_decode_value(vcardproperty *prop,
                                         struct buf *value,
                                         char **content_type,
                                         struct message_guid *guid);
