@@ -991,7 +991,7 @@ static int deliver_merge_add(icalcomponent *ical,  // current iCalendar
 }
 
 
-HIDDEN void itip_strip_personal_data(icalcomponent *comp)
+HIDDEN void itip_strip_personal_data(icalcomponent *comp, bool remove_transp)
 {
     icalcomponent *alarm, *nextalarm;
     icalproperty *prop, *nextprop;
@@ -1004,7 +1004,7 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
         icalcomponent_free(alarm);
     }
 
-    /* Remove TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Remove TRANSP (if requested), COLOR, and CATEGORIES (if color) */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
          prop; prop = nextprop) {
         nextprop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY);
@@ -1015,9 +1015,15 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp)
             GCC_FALLTHROUGH
 
         case ICAL_COLOR_PROPERTY:
-        case ICAL_TRANSP_PROPERTY:
             icalcomponent_remove_property(comp, prop);
             icalproperty_free(prop);
+            break;
+
+        case ICAL_TRANSP_PROPERTY:
+            if (remove_transp) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
             break;
 
         case ICAL_X_PROPERTY:
@@ -1144,11 +1150,6 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     comp = icalcomponent_get_first_real_component(itip);
     kind = icalcomponent_isa(comp);
 
-    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
-    for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
-        itip_strip_personal_data(comp);
-    }
-
     /* Search for iCal UID in recipient's calendars */
     caldavdb = caldav_open_userid(sparam->userid);
     if (!caldavdb) {
@@ -1158,6 +1159,11 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
     const char *uid = icalcomponent_get_uid(itip);
     caldav_lookup_uid(caldavdb, uid, &cdata);
+
+    /* Strip VALARMs, TRANSP (unless new invite), COLOR, and CATEGORIES (if color) */
+    for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
+        itip_strip_personal_data(comp, !!cdata->dav.imap_uid);
+    }
 
     if (cdata->dav.mailbox) {
         if (cdata->dav.mailbox_byname)

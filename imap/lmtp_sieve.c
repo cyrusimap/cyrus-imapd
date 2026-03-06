@@ -1514,9 +1514,9 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
-    /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
+    /* Strip VALARMs, COLOR, and CATEGORIES (if color) */
     for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
-        itip_strip_personal_data(comp);
+        itip_strip_personal_data(comp, false);
     }
 
     cyrus_icalrestriction_check(itip);
