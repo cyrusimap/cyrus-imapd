@@ -43,7 +43,7 @@ BEGIN:VEVENT
 CREATED:20210923T034327Z
 UID:$uuid
 DTEND;TZID=America/New_York:20210923T183000
-TRANSP:OPAQUE
+TRANSP:TRANSPARENT
 COLOR:red
 SUMMARY:An Event
 DTSTART;TZID=America/New_York:20210923T153000
@@ -76,8 +76,11 @@ EOF
     my $ical = $response->{content};
     $self->assert_does_not_match(qr/\r\nBEGIN:VALARM/, $ical);
     $self->assert_does_not_match(qr/\r\nCOLOR:/, $ical);
-    $self->assert_does_not_match(qr/\r\nTRANSP:/, $ical);
     $self->assert_does_not_match(qr/\r\nCATEGORIES:#0000FF/, $ical);
     $self->assert_does_not_match(qr/\r\nCATEGORIES:blue/, $ical);
     $self->assert_matches(qr/\r\nCATEGORIES:foo/, $ical);
+
+    xlog $self, "Assert that sender-provided TRANSP is preserved";
+    $self->assert_matches(qr/\r\nTRANSP:TRANSPARENT/, $ical);
+
 }

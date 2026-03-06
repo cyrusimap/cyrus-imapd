@@ -1403,12 +1403,23 @@ done:
  *
  * Update DTSTAMP, remove VALARMs, remove SCHEDULE-* parameters
  */
-static void clean_component(icalcomponent *comp)
+static void clean_component(icalcomponent *comp, icalproperty_method method)
 {
     icalproperty *prop;
 
+    bool remove_transp;
+    switch (method) {
+        case ICAL_METHOD_REPLY:
+        case ICAL_METHOD_REFRESH:
+        case ICAL_METHOD_COUNTER:
+            remove_transp = true;
+            break;
+        default:
+            remove_transp = false;
+    }
+
     /* Strip VALARMs, TRANSP, COLOR, and CATEGORIES (if color) */
-    itip_strip_personal_data(comp);
+    itip_strip_personal_data(comp, remove_transp);
 
     /* Replace DTSTAMP on component */
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
@@ -1853,7 +1864,7 @@ static void schedule_full_cancel(const char *cal_ownerid, const char *sched_user
     icalcomponent *itip = make_itip(ICAL_METHOD_CANCEL, oldical);
 
     icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
-    clean_component(mastercopy);
+    clean_component(mastercopy, ICAL_METHOD_CANCEL);
     icalcomponent_set_status(mastercopy, ICAL_STATUS_CANCELLED);
     icalcomponent_add_component(itip, mastercopy);
 
@@ -1879,7 +1890,7 @@ static void schedule_full_cancel(const char *cal_ownerid, const char *sched_user
         if (newcomp) continue; /* will be scheduled separately */
 
         icalcomponent *copy = icalcomponent_clone(comp);
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_CANCEL);
         icalcomponent_set_status(copy, ICAL_STATUS_CANCELLED);
         icalcomponent_add_component(itip, copy);
 
@@ -1932,7 +1943,7 @@ static void schedule_sub_cancels(const char *cal_ownerid, const char *sched_user
             continue;
 
         icalcomponent *copy = icalcomponent_clone(comp);
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_CANCEL);
         icalcomponent_set_status(copy, ICAL_STATUS_CANCELLED);
         icalcomponent_add_component(itip, copy);
 
@@ -2017,7 +2028,7 @@ static void schedule_sub_updates(const char *cal_ownerid, const char *sched_user
         }
 
         icalcomponent *copy = icalcomponent_clone(comp);
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_REQUEST);
 
         if (find_attendee(oldcomp, attendee))
             flags |= SCHEDFLAG_IS_UPDATE;
@@ -2066,7 +2077,7 @@ static void schedule_full_update(const char *cal_ownerid, const char *sched_user
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
 
     icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
-    clean_component(mastercopy);
+    clean_component(mastercopy, ICAL_METHOD_REQUEST);
     icalcomponent_add_component(itip, mastercopy);
 
     int do_send = 0;
@@ -2129,7 +2140,7 @@ static void schedule_full_update(const char *cal_ownerid, const char *sched_user
          * side effect changes to RSVP */
         check_changes(oldcomp, copy, attendee);
 
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_REQUEST);
         icalcomponent_add_component(itip, copy);
     }
 
@@ -2711,7 +2722,7 @@ static void schedule_sub_declines(const char *attendee,
 #ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
 #endif
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_REPLY);
         reply_mark_declined(copy);
 
         icalcomponent_add_component(reply->itip, copy);
@@ -2789,7 +2800,7 @@ static void schedule_sub_replies(const char *attendee,
 #ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
 #endif
-        clean_component(copy);
+        clean_component(copy, ICAL_METHOD_REPLY);
 
         icalcomponent_add_component(reply->itip, copy);
 
@@ -2829,7 +2840,7 @@ static void schedule_full_decline(const char *attendee,
     if (icalcomponent_isa(mastercomp) == ICAL_VPOLL_COMPONENT)
         sched_vpoll_reply(mastercopy);
 #endif
-    clean_component(mastercopy);
+    clean_component(mastercopy, ICAL_METHOD_REPLY);
     reply_mark_declined(mastercopy);
 
     icalcomponent_add_component(reply->itip, mastercopy);
@@ -2907,7 +2918,7 @@ static void schedule_full_reply(const char *attendee,
 #ifdef HAVE_VPOLL_SUPPORT
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
 #endif
-        clean_component(mastercopy);
+        clean_component(mastercopy, ICAL_METHOD_REPLY);
         icalcomponent_add_component(reply->itip, mastercopy);
 
         /* force ALL sub parts to be added */
