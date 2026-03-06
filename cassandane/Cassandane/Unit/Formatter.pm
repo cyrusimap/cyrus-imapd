@@ -73,6 +73,11 @@ sub start_suite
     my ($self, $suite) = @_;
 }
 
+sub end_suite
+{
+    my ($self, $suite) = @_;
+}
+
 sub start_test
 {
     my ($self, $test) = @_;
