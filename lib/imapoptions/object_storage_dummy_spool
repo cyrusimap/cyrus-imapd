@@ -1,0 +1,8 @@
+Name: object_storage_dummy_spool
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+Dummy object storage spool; this is for test only.
+Spool where user directory (container) will be created to store all emails
+in a flat structure. 

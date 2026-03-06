@@ -492,6 +492,16 @@ EXTRA_DIST = \
     sieve/tests/actionExtensions/serverm/ueamail-vacation \
     timsieved/TODO
 
+IMAPOPTIONS_LIBS = \
+    tools/lib/Cyrus/IMAPOptions/AllowedValues.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/csource.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/cheader.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/manrst.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/sample.pm \
+    tools/lib/Cyrus/IMAPOptions/App.pm \
+    tools/lib/Cyrus/IMAPOptions/Option.pm \
+    tools/lib/Cyrus/IMAPOptions.pm
+
 TEXINFO_TEX = com_err/et/texinfo.tex
 dist_noinst_SCRIPTS = \
     com_err/et/compile_et.sh \
@@ -501,11 +511,10 @@ dist_noinst_SCRIPTS = \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
     tools/compile_st.pl \
-    tools/config2header \
-    tools/config2rst \
-    tools/config2sample \
     tools/fixsearchpath.pl \
     tools/git-version.sh \
+    tools/imapoptions.pl \
+    $(IMAPOPTIONS_LIBS) \
     tools/masssievec \
     tools/mkimap \
     tools/mknewsgroups \
@@ -1618,14 +1627,15 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(AM_V_GEN)perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
-lib/imapopts.h: lib/imapopts.c
+lib/imapopts.h: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_GEN)$(top_srcdir)/tools/imapoptions.pl cheader \
+	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
+	    $< > $@.NEW && mv $@.NEW $@
 
-lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header \
-	    CC="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
-	    $(top_builddir)/lib/imapopts.c \
-	    $(top_builddir)/lib/imapopts.h \
-	    < $(top_srcdir)/lib/imapoptions
+lib/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_GEN)$(top_srcdir)/tools/imapoptions.pl csource \
+	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
+	    $< > $@.NEW && mv $@.NEW $@
 
 imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
 imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
@@ -1913,13 +1923,15 @@ docsrc/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMA
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
-docsrc/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
+docsrc/reference/manpages/configs/imapd.conf.rst: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(top_srcdir)/tools/imapoptions.pl manrst \
+	    $< > $@.NEW && mv $@.NEW $@
 
-doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions
+doc/examples/imapd_conf/imapd.conf.sample: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(top_srcdir)/tools/imapoptions.pl sample \
+	    $< > $@.NEW && mv $@.NEW $@
 
 docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)

@@ -1,0 +1,7 @@
+Name: readonly
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.3.0
+
+If enabled, all IMAP, POP and JMAP connections are read-only,
+\* no writes allowed. 

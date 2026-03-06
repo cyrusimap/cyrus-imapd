@@ -1,0 +1,8 @@
+Name: srs_domain
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.1.2
+
+The domain to use in rewritten addresses. This must point only to machines
+which know the encoding secret used by this system. When present, SRS is
+enabled. 

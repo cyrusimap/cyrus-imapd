@@ -1929,6 +1929,10 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
     AC_SUBST(PERL_PREINSTALL)
 fi
 
+dnl perl module dependencies
+AX_PROG_PERL_MODULES([Moo], [], [AC_MSG_ERROR([Need perl module Moo])])
+AX_PROG_PERL_MODULES([App::Cmd], [], [AC_MSG_ERROR([Need perl module App::Cmd])])
+
 CMU_LIBWRAP
 
 # Figure out what directories we're linking against.

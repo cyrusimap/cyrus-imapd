@@ -1,0 +1,5 @@
+Name: xbackup_enabled
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0

@@ -1,0 +1,9 @@
+Name: caringo_hostname
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+The Caringo hostname used to store archived email messages. A hostname
+identifies the physical platform cyrus must contact. This directive is used
+by the Caringo's SDK (CastorSDK: Caringo Simple Content Storage Protocol (SCSP)
+on HTTP 1.1 using a RESTful architecture. 

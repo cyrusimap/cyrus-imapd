@@ -1,0 +1,20 @@
+Name: sieve_extensions
+Type: BITFIELD
+Allowed-Values: fileinto reject vacation vacation-seconds notify include
+ envelope environment body relational regex subaddress copy date index
+ imap4flags=imapflags mailbox mboxmetadata servermetadata variables editheader
+ extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby
+ mailboxid vnd.cyrus.log=x-cyrus-log vnd.cyrus.jmapquery=x-cyrus-jmapquery
+ processcalendar=vnd.cyrus.imip snooze=vnd.cyrus.snooze=x-cyrus-snooze
+ vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple
+Default-Value: fileinto reject vacation vacation-seconds notify include
+ envelope environment body relational regex subaddress copy date index
+ imap4flags mailbox mboxmetadata servermetadata variables editheader extlists
+ duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid
+ vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze
+ vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple
+Last-Modified: UNRELEASED
+
+Space-separated list of Sieve extensions allowed to be used in
+sieve scripts. This option has no effect on options that are
+disabled at compile time (e.g., "regex"). 

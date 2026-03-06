@@ -1,0 +1,15 @@
+Name: admins
+Type: STRING
+Default-Value: 
+Last-Modified: 2.3.17
+
+The list of userids with administrative rights.  Separate each userid
+with a space.  Sites using Kerberos authentication may use
+separate "admin" instances.
+
+Note that accounts used by users should not be administrators.
+Administrative accounts should not receive mail.  That is, if user
+"jbRo" is a user reading mail, he should not also be in the admins line.
+Some problems may occur otherwise, most notably the ability of
+administrators to create top-level mailboxes visible to users,
+but not writable by users. 

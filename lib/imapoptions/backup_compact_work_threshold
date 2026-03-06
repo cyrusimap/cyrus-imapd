@@ -1,0 +1,5 @@
+Name: backup_compact_work_threshold
+Type: INT
+Default-Value: 1
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0

@@ -1,0 +1,9 @@
+Name: unixhierarchysep
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.0.0
+
+Use the UNIX separator character '/' for delimiting levels of
+mailbox hierarchy.  Turn off to use the netnews separator
+character '.'. Note that with the newnews separator, no dots may
+occur in mailbox names.  The default switched in 3.0 from off to on. 

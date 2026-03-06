@@ -1,0 +1,13 @@
+Name: openio_verbosity
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+Sets the logging verbosity of the OpenIO's internal behavior. Admissible
+values are: "warning", "notice", "info", "debug", "trace", "quiet".
+The default verbosity is "warning". Set to "notice" for a few lines on a
+per-client basis. Set to "info" for a few lines on a per-request basis. Set
+to "debug" Set to "trace" to activate the underlying libcurl debug
+output. Enabling a verbosity higher to equal than "debug" requires
+the cyrus to be set in debug mode. The special "quiet" value disables all
+kinds of logging at the GLib level. 

@@ -1,0 +1,7 @@
+Name: openio_rawx_timeout
+Type: DURATION
+Default-Value: 30s
+Last-Modified: 3.1.8
+
+The OpenIO timeout to query to the RAWX services (default 30 sec). 
+

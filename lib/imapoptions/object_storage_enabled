@@ -1,0 +1,9 @@
+Name: object_storage_enabled
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+Is Object storage enabled for this server.  You also need to have
+archiving enabled and archivepartition for the mailbox.
+Only email files will be stored on object Storage archive partition will be
+used to store any other files. 

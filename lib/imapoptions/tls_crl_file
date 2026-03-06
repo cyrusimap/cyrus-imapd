@@ -1,0 +1,7 @@
+Name: tls_crl_file
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.1.2
+
+Path to a file containing the Certificate Revocation List. 
+

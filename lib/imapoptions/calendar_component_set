@@ -1,0 +1,11 @@
+Name: calendar_component_set
+Type: BITFIELD
+Allowed-Values: VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL
+Default-Value: VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL
+Last-Modified: 3.1.7
+
+Space-separated list of iCalendar component types that calendar
+object resources may contain in a calendar collection.
+This restriction is only set at calendar creation time and only
+if the CalDAV client hasn't specified a restriction in the creation
+request. 
