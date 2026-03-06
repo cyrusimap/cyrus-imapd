@@ -2981,7 +2981,7 @@ static char *_value_to_uri_blobid(vcardproperty *prop,
     }
 
     struct message_guid guid;
-    size_t size = vcard_prop_decode_value_x(prop, NULL, type, &guid);
+    size_t size = vcard_prop_decode_value(prop, NULL, type, &guid);
 
     if (size) {
         vcardparameter *param =
@@ -4982,7 +4982,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Load message containing the resource and parse vcard data */
-    vcardcomponent *vcard = record_to_vcard_x(crock->mailbox, &record);
+    vcardcomponent *vcard = record_to_vcard(crock->mailbox, &record);
     if (!vcard) {
         syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
                 cdata->dav.imap_uid, mailbox_name(crock->mailbox));
@@ -9030,8 +9030,8 @@ static int _card_set_create(jmap_req_t *req,
 
     modseq_t cmodseq =
         mboxname_nextmodseq(mbentry->name, 0, MBTYPE_ADDRESSBOOK, 0);
-    r = carddav_store_x(*mailbox, card, resourcename, cmodseq, &annots,
-                        req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
+    r = carddav_store(*mailbox, card, resourcename, cmodseq, &annots,
+                      req->userid, req->authstate, ignorequota, /*oldsize*/ 0);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
                req->userid, error_message(r));
@@ -9236,7 +9236,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     }
 
     /* Load message containing the resource and parse vcard data */
-    vcard = record_to_vcard_x(*mailbox, &record);
+    vcard = record_to_vcard(*mailbox, &record);
     if (!vcard) {
         syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
                cdata->dav.imap_uid, mailbox_name(*mailbox));
@@ -9361,10 +9361,10 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
         syslog(LOG_NOTICE, "jmap: update %s %s/%s",
                kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, resource);
-        r = carddav_store_x(this_mailbox, vcard, resource,
-                            record.createdmodseq, &annots, req->userid,
-                            req->authstate, ignorequota,
-                            (record.size - record.header_size));
+        r = carddav_store(this_mailbox, vcard, resource,
+                          record.createdmodseq, &annots, req->userid,
+                          req->authstate, ignorequota,
+                          (record.size - record.header_size));
         if (!r) {
             struct index_record record;
 
@@ -9444,7 +9444,7 @@ static json_t *_card_from_record(jmap_req_t *req,
                                  struct mailbox *mailbox,
                                  struct index_record *record)
 {
-    vcardcomponent *vcard = record_to_vcard_x(mailbox, record);
+    vcardcomponent *vcard = record_to_vcard(mailbox, record);
 
     if (!vcard) return NULL;
 
@@ -9625,7 +9625,7 @@ static int jmap_card_parse(jmap_req_t *req)
             continue;
         }
 
-        vcard = vcard_parse_buf_x(&blob_ctx.blob);
+        vcard = vcard_parse_buf(&blob_ctx.blob);
         if (vcard) {
             int from_vcard_flags = IGNORE_DERIVED_PROPS;
             if (args.disable_uri_as_blobid)
@@ -9729,7 +9729,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         /* Fetching a particular property as a blob */
 
         /* Load vCard data */
-        vcard = record_to_vcard_x(mailbox, &record);
+        vcard = record_to_vcard(mailbox, &record);
         if (!vcard) {
             ctx->errstr = "failed to parse vCard";
             res = HTTP_SERVER_ERROR;
@@ -9741,7 +9741,7 @@ static int jmap_contact_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx)
         struct message_guid prop_guid = MESSAGE_GUID_INITIALIZER;
 
         if (!prop ||
-            !vcard_prop_decode_value_x(prop, &ctx->blob, &mediatype, &prop_guid) ||
+            !vcard_prop_decode_value(prop, &ctx->blob, &mediatype, &prop_guid) ||
             message_guid_cmp(&guid, &prop_guid)) {
             res = HTTP_NOT_FOUND;
             goto done;
