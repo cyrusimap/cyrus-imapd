@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 package Cyrus::IMAPOptions::Option;
+use v5.28.0;
 use Moo;
-use feature 'state';
 
 use Cyrus::IMAPOptions::AllowedValues;
 use File::Basename;
@@ -16,43 +16,51 @@ has name => (
     is => 'ro',
     required => 1,
 );
+
 has type => (
     isa => Enum[@option_types],
     is => 'ro',
     required => 1,
 );
+
 has allowed_values => (
-    isa => Maybe[InstanceOf['Cyrus::IMAPOptions::AllowedValues']],
+    isa => InstanceOf['Cyrus::IMAPOptions::AllowedValues'],
     is => 'ro',
     predicate => 1,
 );
+
 has default_value => (
     isa => Maybe[Str] | ArrayRef[Str],
     is => 'ro',
     required => 1,
 );
+
 has last_modified => (
     isa => Str,
     is => 'ro',
     required => 1,
 );
+
 has deprecated_since => (
-    isa => Maybe[Str],
+    isa => Str,
     is => 'ro',
     predicate => 1,
 );
+
 has replaced_by => (
-    isa => Maybe[Str],
+    isa => Str,
     is => 'ro',
     predicate => 1,
 );
+
 has for_documentation_only => (
     isa => Bool,
     is => 'ro',
     default => undef,
 );
+
 has documentation => (
-    isa => Maybe[ArrayRef[Str]],
+    isa => ArrayRef[Str],
     is => 'ro',
     predicate => 1,
 );

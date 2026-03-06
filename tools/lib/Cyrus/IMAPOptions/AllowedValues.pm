@@ -10,13 +10,15 @@ has _order => (
     is => 'ro',
     required => 1,
 );
+
 has _values => (
     isa => HashRef[Maybe[ArrayRef[Str]]],
     is => 'ro',
     required => 1,
 );
+
 has _aliases => (
-    isa => Maybe[HashRef[Undef]],
+    isa => HashRef[Undef],
     is => 'ro',
     predicate => 'has_aliases',
 );
