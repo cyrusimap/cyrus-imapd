@@ -39,6 +39,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_sieve_props.h"
 
 static int jmap_sieve_get(jmap_req_t *req);
 static int jmap_sieve_set(jmap_req_t *req);
@@ -198,32 +199,6 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
-// clang-format off
-static const jmap_property_t sieve_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "isActive",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "blobId",
-        NULL,
-        0
-    },
-    { NULL, NULL, 0 }
-};
-// clang-format on
-
 static int getscript(void *rock, struct sieve_data *sdata)
 {
     struct jmap_get *get = (struct jmap_get *) rock;
@@ -261,7 +236,7 @@ static int jmap_sieve_get(jmap_req_t *req)
     int r = 0;
 
     /* Parse request */
-    jmap_get_parse(req, &parser, sieve_props, /*allow_null_ids*/1,
+    jmap_get_parse(req, &parser, &sieve_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -772,7 +747,7 @@ static int jmap_sieve_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, sieve_props,
+    jmap_set_parse(req, &parser, &sieve_props,
                    &_sieve_setargs_parse, &sub_args, &set, &jerr);
     if (jerr) goto done;
 
