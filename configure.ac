@@ -1861,73 +1861,80 @@ AC_ARG_ENABLE(oldsievename,
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
-AC_ARG_WITH(perl,
-        [AS_HELP_STRING([--with-perl=PERL], [use PERL for perl])],
-        with_perl="$withval", with_perl="perl")
+# find perl
+AC_ARG_VAR(PERL, [Location of perl])
+AC_ARG_WITH([perl],
+            [AS_HELP_STRING([--with-perl=PATH], [look for perl in PATH])],
+            [],
+            [with_perl=yes])
+AS_CASE([$with_perl],
+        [yes], [AC_PATH_PROG(PERL, perl)],
+        [no],  [AC_MSG_ERROR([perl is required])],
+        [*],   [AC_PATH_PROG(PERL, perl, [], [$with_perl])])
+AC_SUBST(PERL)
 
-if test "${with_perl}" = yes; then
-    with_perl="perl"
-fi
-if test "${with_perl}" != no; then
-    if test ${using_static_sasl} = "staticonly"; then
-        AC_MSG_WARN([Cannot compile perl utilities using static libsasl])
-        with_perl="no"
-    else
-        AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=notfound)
-    fi
-fi
-AM_CONDITIONAL([PERL], [test "$with_perl" != "no" -a "$with_perl" != "notfound"])
-srctoolsdir=`cd ${srcdir};pwd`/tools
-if test "$with_perl" = "notfound"; then
-    AC_MSG_WARN(Perl not found: Administrative tools will not be available)
-elif test "${with_perl}" != "no"; then
-dnl compile perl stuff and perl/cyradm
-    PERL="${with_perl}"
+# check perl is present and valid
+AS_IF([test -z "${PERL}"], AC_MSG_ERROR([perl is required]))
+AC_MSG_CHECKING([whether ${PERL} is really perl])
+have_real_perl=`${PERL} -e0 1>/dev/null 2>&1 && echo yes || echo no`
+AC_MSG_RESULT([${have_real_perl}])
+AS_IF([test "x${have_real_perl}" != "xyes"],
+      [AC_MSG_ERROR([${PERL} does not appear to be perl])])
+AC_MSG_CHECKING([for supported perl version])
+min_perl_version='v5.28.0'
+have_supported_perl=`${PERL} -e "use ${min_perl_version}; 0" && echo yes || echo no`
+AC_MSG_RESULT([${have_supported_perl}])
+AS_IF([test "x${have_supported_perl}" != "xyes" ],
+      [AC_MSG_ERROR([${PERL} ${min_perl_version} or later is required])])
+AS_IF([test "x${using_static_sasl}" = "xstaticonly"],
+      [AC_MSG_ERROR([Cannot compile perl utilities using static libsasl])])
 
 dnl Make sure perl modules are in the build directory (which isn't necessarily
 dnl the source directory)
-    AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
-    AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/AccountSync.pm:perl/imap/lib/Cyrus/AccountSync.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup.pm:perl/imap/lib/Cyrus/Backup.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/State.pm:perl/imap/lib/Cyrus/Backup/State.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/Restore.pm:perl/imap/lib/Cyrus/Backup/Restore.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/Tar.pm:perl/imap/lib/Cyrus/Backup/Tar.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/CacheFile.pm:perl/imap/lib/Cyrus/CacheFile.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/DList.pm:perl/imap/lib/Cyrus/DList.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/HeaderFile.pm:perl/imap/lib/Cyrus/HeaderFile.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/ImapClone.pm:perl/imap/lib/Cyrus/ImapClone.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/IndexFile.pm:perl/imap/lib/Cyrus/IndexFile.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Mbentry.pm:perl/imap/lib/Cyrus/Mbentry.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Mbname.pm:perl/imap/lib/Cyrus/Mbname.pm])
-    AC_CONFIG_LINKS([perl/imap/lib/Cyrus/SyncProto.pm:perl/imap/lib/Cyrus/SyncProto.pm])
-    AC_CONFIG_LINKS([perl/imap/IMAP/Shell.pm:perl/imap/IMAP/Shell.pm])
-    AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
-    AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
-    AC_CONFIG_FILES([perl/imap/MANIFEST])
-    AC_CONFIG_LINKS([perl/annotator/Message.pm:perl/annotator/Message.pm])
-    AC_CONFIG_LINKS([perl/annotator/AnnotateInlinedCIDs.pm:perl/annotator/AnnotateInlinedCIDs.pm])
-    AC_CONFIG_LINKS([perl/annotator/Daemon.pm:perl/annotator/Daemon.pm])
-    AC_CONFIG_FILES([perl/annotator/MANIFEST])
+AC_CONFIG_LINKS([perl/sieve/managesieve/managesieve.pm:perl/sieve/managesieve/managesieve.pm])
+AC_CONFIG_FILES([perl/sieve/managesieve/MANIFEST])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/AccountSync.pm:perl/imap/lib/Cyrus/AccountSync.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup.pm:perl/imap/lib/Cyrus/Backup.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/State.pm:perl/imap/lib/Cyrus/Backup/State.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/Restore.pm:perl/imap/lib/Cyrus/Backup/Restore.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Backup/Tar.pm:perl/imap/lib/Cyrus/Backup/Tar.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/CacheFile.pm:perl/imap/lib/Cyrus/CacheFile.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/DList.pm:perl/imap/lib/Cyrus/DList.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/HeaderFile.pm:perl/imap/lib/Cyrus/HeaderFile.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/ImapClone.pm:perl/imap/lib/Cyrus/ImapClone.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/IndexFile.pm:perl/imap/lib/Cyrus/IndexFile.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Mbentry.pm:perl/imap/lib/Cyrus/Mbentry.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/Mbname.pm:perl/imap/lib/Cyrus/Mbname.pm])
+AC_CONFIG_LINKS([perl/imap/lib/Cyrus/SyncProto.pm:perl/imap/lib/Cyrus/SyncProto.pm])
+AC_CONFIG_LINKS([perl/imap/IMAP/Shell.pm:perl/imap/IMAP/Shell.pm])
+AC_CONFIG_LINKS([perl/imap/IMAP/Admin.pm:perl/imap/IMAP/Admin.pm])
+AC_CONFIG_LINKS([perl/imap/IMAP.pm:perl/imap/IMAP.pm])
+AC_CONFIG_FILES([perl/imap/MANIFEST])
+AC_CONFIG_LINKS([perl/annotator/Message.pm:perl/annotator/Message.pm])
+AC_CONFIG_LINKS([perl/annotator/AnnotateInlinedCIDs.pm:perl/annotator/AnnotateInlinedCIDs.pm])
+AC_CONFIG_LINKS([perl/annotator/Daemon.pm:perl/annotator/Daemon.pm])
+AC_CONFIG_FILES([perl/annotator/MANIFEST])
 
-dnl add perl cccdlflags when building libraries -- this ensures that the
-dnl libraries will be compiled as PIC if perl requires PIC objects
-dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris --
-    case "${target_os}" in
-        linux*|netbsd*|freebsd*|dragonfly*|openbsd*)
-            AC_MSG_CHECKING(for perl cccdlflags needed on "${target_os}")
-            eval `${PERL} -V:cccdlflags`
-            PERL_CCCDLFLAGS="$cccdlflags"
-            AC_SUBST(PERL_CCCDLFLAGS)
-            AC_MSG_RESULT($PERL_CCCDLFLAGS)
-            ;;
-        *)
-            AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
-    esac
+dnl Add perl cccdlflags when building libraries -- this ensures that the
+dnl libraries will be compiled as PIC if perl requires PIC objects.
+dnl This is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris
+case "${target_os}" in
+    linux*|netbsd*|freebsd*|dragonfly*|openbsd*)
+        AC_MSG_CHECKING(for perl cccdlflags needed on "${target_os}")
+        eval `${PERL} -V:cccdlflags`
+        PERL_CCCDLFLAGS="$cccdlflags"
+        AC_SUBST(PERL_CCCDLFLAGS)
+        AC_MSG_RESULT($PERL_CCCDLFLAGS)
+        ;;
+    *)
+        AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
+esac
 
-    PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${prefix} ${bindir}"
-    AC_SUBST(PERL_PREINSTALL)
-fi
+# XXX srctoolsdir here ought to just be top_srcdir, but for now this specific
+# XXX implementation is loadbearing in weird ways
+srctoolsdir=`cd ${srcdir};pwd`/tools
+PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${prefix} ${bindir}"
+AC_SUBST(PERL_PREINSTALL)
 
 CMU_LIBWRAP
 
@@ -1963,7 +1970,6 @@ done
 
 AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_UUID)
-AC_SUBST(PERL)
 
 dnl
 dnl Enable/disable unit tests.  These are disabled by default, as
@@ -2419,11 +2425,9 @@ AC_CONFIG_FILES([
     Makefile
 ])
 
-if test "$with_perl" != "no" -a "$with_perl" != "notfound" ; then
 CMU_PERL_MAKEMAKER(perl/annotator)
 CMU_PERL_MAKEMAKER(perl/imap)
 CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
-fi
 
 AC_OUTPUT
 echo "
@@ -2496,6 +2500,7 @@ Build info:
    ldflags:            $LDFLAGS
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
+   perl:               $PERL
    xxd:                $XXD
    release checks:     $enable_release_checks
    zoneinfo_dir:       $with_zoneinfo_dir

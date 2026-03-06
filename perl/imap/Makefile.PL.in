@@ -33,7 +33,7 @@ sub MY::postamble
 
 VPATH=@top_srcdir@/perl/imap
 
-cyradm: cyradm.sh
+cyradm: cyradm.pl
 	@PERL_PREINSTALL@ < $< > $@
 
 check:
@@ -60,6 +60,7 @@ WriteMakefile(
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
     'INC'	=> "-I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CFLAGS@ @GCOV_CFLAGS@ -I@top_srcdir@/perl/imap",
     'EXE_FILES' => [cyradm],
+    'MAN1PODS' => {}, # cyradm pod is generated elsewhere
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.
