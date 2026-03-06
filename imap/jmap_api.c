@@ -1504,17 +1504,54 @@ HIDDEN int jmap_parse_strings(json_t *arg,
 }
 
 
+static bool wildcard_match(const char *str, const char *pat)
+{
+    for (; *pat; pat++, str++) {
+        if (*pat == '*') {
+            /* skip to next non-wildcard pattern char */
+            do {
+                pat++;
+            } while (*pat == '*');
+
+            if (!*str || *str == *pat) {
+                /* wildcard needs to match at least one string char */
+                return false;
+            }
+
+            if (!*pat) {
+                /* end of pattern - wildcard matches remainder of string */
+                return true;
+            }
+
+            /* wildcard matches string chars up to next pattern char */
+            while (*str && *str != *pat) str++;
+        }
+
+        if (*str != *pat) {
+            /* characters don't match */
+            return false;
+        }
+    }
+
+    /* have we matched the entire string? */
+    return (!*str);
+}
+
 HIDDEN const jmap_property_t *jmap_property_find(const char *name,
-                                                 const jmap_property_t props[])
+                                                 const jmap_property_set_t *prop_set)
 {
     const jmap_property_t *prop;
+    const char *wild;
+    int i;
 
-    for (prop = props; prop && prop->name; prop++) {
-        if (!strcmp(name, prop->name)) return prop;
-        else {
-            size_t len = strlen(prop->name);
-            if ((prop->name[len-1] == '*') && !strncmp(name, prop->name, len-1))
-                return prop;
+    if (!prop_set) return NULL;
+
+    prop = prop_set->map->lookup(name, strlen(name));
+    if (prop) return prop;
+
+    strarray_foreach(&prop_set->wildcards, i, wild) {
+        if (wildcard_match(name, wild)) {
+            return prop_set->map->lookup(wild, strlen(wild));
         }
     }
 
@@ -1526,7 +1563,7 @@ HIDDEN const jmap_property_t *jmap_property_find(const char *name,
 
 HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
                                            struct jmap_parser *parser,
-                                           const jmap_property_t *valid_props,
+                                           const jmap_property_set_t *valid_props,
                                            const char *key,
                                            json_t *jprops)
 {
@@ -1559,7 +1596,7 @@ HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
                            
 HIDDEN void jmap_get_parse(jmap_req_t *req,
                            struct jmap_parser *parser,
-                           const jmap_property_t valid_props[],
+                           const jmap_property_set_t *valid_props,
                            int allow_null_ids,
                            jmap_args_parse_cb args_parse,
                            void *args_rock,
@@ -1661,18 +1698,22 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
         return;
     }
 
-    if (*err) return;
+    if (*err || !valid_props) return;
 
     if (get->props == NULL) {
         /* Initialize default properties */
-        int nvalid = 0;
-        const jmap_property_t *prop;
-        for (prop = valid_props; prop && prop->name; prop++) {
-            nvalid++;
-        }
+        unsigned nvalid = valid_props->map->num_props;
+
         get->props = xzmalloc(sizeof(hash_table));
         construct_hash_table(get->props, nvalid + 1, 0);
-        for (prop = valid_props; prop && prop->name; prop++) {
+        for (unsigned i = valid_props->map->min_hash;
+             i <= valid_props->map->max_hash;
+             i++) {
+            const jmap_property_t *prop = &valid_props->map->array[i];
+
+            if (!prop->name) {
+                continue;
+            }
             if (prop->flags & JMAP_PROP_SKIP_GET) {
                 continue;
             }
@@ -1682,13 +1723,11 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
         }
     }
     else {
-        const jmap_property_t *prop;
-        for (prop = valid_props; prop && prop->name; prop++) {
-            if (prop->flags & JMAP_PROP_ALWAYS_GET) {
-                if (!hash_lookup(prop->name, get->props)) {
-                    hash_insert(prop->name, (void*)1, get->props);
-                }
-            }
+        const char *prop_name;
+        int i;
+
+        strarray_foreach(&valid_props->always_get, i, prop_name) {
+            hash_insert(prop_name, (void*)1, get->props);
         }
     }
 }
@@ -1715,13 +1754,15 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
-                                    const jmap_property_t valid_props[],
+static bool jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *jobj,
+                                    const jmap_property_set_t *valid_props,
                                     json_t **err)
 {
     json_t *invalid = json_array();
     const char *path;
     json_t *jval;
+    bool update_external = false;
+    int mandatory_count = 0;
 
     json_object_foreach(jobj, path, jval) {
         /* Determine property name */
@@ -1755,6 +1796,9 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
                 /* can NEVER change id */
                 json_array_append_new(invalid, json_string(path));
             }
+            else if (prop->flags & JMAP_PROP_EXTERNAL) {
+                update_external = true;
+            }
             /* XXX could check IMMUTABLE and SERVER_SET here, but we can't
              * reject such properties if they match the current value */
         }
@@ -1763,17 +1807,21 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
             if (prop->flags & JMAP_PROP_SERVER_SET) {
                 json_array_append_new(invalid, json_string(path));
             }
+            else if (prop->flags & JMAP_PROP_MANDATORY) {
+                mandatory_count++;
+            }
         }
         if (tmp) free(tmp);
     }
-    if (!id) {
-        /* create */
-        const jmap_property_t *prop;
+    if (!id && valid_props &&
+        (mandatory_count != strarray_size(&valid_props->mandatory))) {
+        /* create - report missing mandatory properties */
+        const char *prop_name;
+        int i;
 
-        for (prop = valid_props; prop && prop->name; prop++) {
-            if ((prop->flags & JMAP_PROP_MANDATORY) &&
-                !json_object_get(jobj, prop->name)) {
-                json_array_append_new(invalid, json_string(prop->name));
+        strarray_foreach(&valid_props->mandatory, i, prop_name) {
+            if (!json_object_get(jobj, prop_name)) {
+                json_array_append_new(invalid, json_string(prop_name));
             }
         }
     }
@@ -1785,10 +1833,12 @@ static void jmap_set_validate_props(jmap_req_t *req, const char *id, json_t *job
     else {
         json_decref(invalid);
     }
+
+    return update_external;
 }
 
 HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
-                           const jmap_property_t valid_props[],
+                           const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err)
 {
@@ -1798,6 +1848,7 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     set->create = json_object();
     set->update = json_object();
     set->destroy = json_array();
+    set->update_external = json_object();
     set->created = json_object();
     set->updated = json_object();
     set->destroyed = json_array();
@@ -1908,6 +1959,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     if (update) {
         json_object_foreach(update, id, val) {
             json_t *err = NULL;
+            bool update_external = false;
+
             if (!json_is_object(val)) {
                 jmap_parser_push(parser, "update");
                 jmap_parser_invalid(parser, id);
@@ -1920,7 +1973,8 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
             else if (valid_props) {
                 /* Make sure no property is set without its capability */
-                jmap_set_validate_props(req, id, val, valid_props, &err);
+                update_external =
+                    jmap_set_validate_props(req, id, val, valid_props, &err);
             }
 
             // TODO We could report the following set errors here:
@@ -1928,8 +1982,13 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
             if (err)
                 json_object_set_new(set->not_updated, id, err);
-            else
+            else {
                 json_object_set(set->update, id, val);
+
+                /* Record whether this update has externally-stored props */
+                json_object_set(set->update_external, id,
+                                json_boolean(update_external));
+            }
         }
     }
 
@@ -1972,6 +2031,7 @@ HIDDEN void jmap_set_fini(struct jmap_set *set)
     json_decref(set->create);
     json_decref(set->update);
     json_decref(set->destroy);
+    json_decref(set->update_external);
     json_decref(set->created);
     json_decref(set->updated);
     json_decref(set->destroyed);

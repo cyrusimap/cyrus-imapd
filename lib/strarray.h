@@ -86,4 +86,10 @@ int strarray_size(const strarray_t *sa);
 
 int strarray_cmp(const strarray_t *a, const strarray_t *b);
 
+// const strarray_t *pa, int idx, void *ptr
+#define strarray_foreach(sa, idx, str)                                \
+    for (idx = 0;                                                     \
+         idx < strarray_size(sa) && (str = strarray_nth(sa, idx));    \
+         idx++)
+
 #endif /* __CYRUS_STRARRAY_H__ */

@@ -48,4 +48,10 @@ void ptrarray_sort(ptrarray_t *pa, int (*compare)(const void **, const void **))
 
 int ptrarray_size(const ptrarray_t *pa);
 
+// const ptrarray_t *pa, int idx, void *ptr
+#define ptrarray_foreach(pa, idx, ptr)                                \
+    for (idx = 0;                                                     \
+         idx < ptrarray_size(pa) && (ptr = ptrarray_nth(pa, idx));    \
+         idx++)
+
 #endif /* __CYRUS_PTRARRAY_H__ */
