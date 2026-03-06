@@ -154,6 +154,10 @@ int carddav_update(struct carddav_db *carddavdb,
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
+/* write an entry form a vcard */
+int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
+                      vcardcomponent *vcard, int ispinned);
+
 /* delete an entry from 'carddavdb' */
 int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);
 
@@ -169,6 +173,13 @@ int carddav_commit(struct carddav_db *carddavdb);
 /* abort transaction */
 int carddav_abort(struct carddav_db *carddavdb);
 
+/* store a vcard to mailbox/resource */
+int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
+                    const char *resource, modseq_t createdmodseq,
+                    struct entryattlist **annots,
+                    const char *userid, struct auth_state *authstate,
+                    int ignorequota, uint32_t oldsize);
+
 /* delete a carddav entry */
 int carddav_remove(struct mailbox *mailbox,
                    uint32_t olduid, int isreplace,
@@ -176,15 +187,5 @@ int carddav_remove(struct mailbox *mailbox,
 
 /* calculate a mailbox name */
 char *carddav_mboxname(const char *userid, const char *name);
-
-int carddav_writecard_x(struct carddav_db *carddavdb, struct carddav_data *cdata,
-                        vcardcomponent *vcard, int ispinned);
-
-int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
-                    const char *resource, modseq_t createdmodseq,
-                    struct entryattlist **annots,
-                    const char *userid, struct auth_state *authstate,
-                    int ignorequota, uint32_t oldsize);
-
 
 #endif /* CARDDAV_DB_H */
