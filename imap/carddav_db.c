@@ -1115,12 +1115,11 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     return r;
 }
 
-static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
-                          const char *uid, const char *fullname,
-                          const char *resource, modseq_t createdmodseq,
-                          strarray_t *flags, struct entryattlist **annots,
-                          const char *userid, struct auth_state *authstate,
-                          int ignorequota, uint32_t oldsize)
+EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
+                           const char *resource, modseq_t createdmodseq,
+                           struct entryattlist **annots,
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1133,6 +1132,13 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     char datestr[80];
     static int64_t vcard_max_size = -1;
     char *mbuserid = NULL;
+
+    /* get important properties */
+    const char *uid = vcardcomponent_get_uid(vcard);
+    const char *fullname = vcardcomponent_get_fn(vcard);
+
+    /* serialize the card */
+    struct buf *buf = vcard_as_buf(vcard);
 
     if (vcard_max_size < 0) {
         vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
@@ -1154,7 +1160,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     if (oldsize > max_size) {
         max_size += CARDDAV_UPDATE_OVERAGE;
     }
-    if (buf_len(vcard) > max_size) {
+    if (buf_len(buf) > max_size) {
         fclose(f);
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
@@ -1185,7 +1191,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(vcard));
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(buf));
 
     /* Since we use the vCard UID in the resource name,
        this param may be long and needs to get properly split per RFC 2231 */
@@ -1206,7 +1212,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     fprintf(f, "\r\n");
 
     /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(vcard));
+    fprintf(f, "%s", buf_cstring(buf));
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
@@ -1231,7 +1237,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, &now, createdmodseq, flags, 0, annots);
+    r = append_fromstage(&as, &body, stage, &now, createdmodseq, NULL, 0, annots);
     if (body) {
         message_free_body(body);
         free(body);
@@ -1252,6 +1258,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
 done:
     append_removestage(stage);
+    buf_destroy(buf);
     free(freeme);
     free(mbuserid);
     return r;
@@ -1488,28 +1495,6 @@ done:
     strarray_fini(&emails);
     strarray_fini(&member_uids);
     free(propval);
-
-    return r;
-}
-
-EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
-                           const char *resource, modseq_t createdmodseq,
-                           struct entryattlist **annots,
-                           const char *userid, struct auth_state *authstate,
-                           int ignorequota, uint32_t oldsize)
-{
-    /* get important properties */
-    const char *uid = vcardcomponent_get_uid(vcard);
-    const char *fullname = vcardcomponent_get_fn(vcard);
-
-    /* serialize the card */
-    struct buf *buf = vcard_as_buf(vcard);
-
-    int r = _carddav_store(mailbox, buf, uid, fullname,
-                           resource, createdmodseq, NULL, annots,
-                           userid, authstate, ignorequota, oldsize);
-
-    buf_destroy(buf);
 
     return r;
 }

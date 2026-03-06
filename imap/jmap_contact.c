@@ -286,8 +286,9 @@ static int has_addressbooks(jmap_req_t *req)
     return r == CYRUSDB_DONE;
 }
 
-static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
-                         const jmap_property_set_t *props)
+static int getcards_cb(void *rock, struct carddav_data *cdata);
+
+static int jmap_card_get(struct jmap_req *req)
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -312,7 +313,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
     /* Parse request */
-    jmap_get_parse(req, &parser, props, /* allow_null_ids */ 1,
+    jmap_get_parse(req, &parser, &card_props, /* allow_null_ids */ 1,
                    NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
@@ -335,21 +336,20 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
             rock.rows = 0;
             const char *id = json_string_value(jval);
 
-            if (kind == CARDDAV_KIND_ANY &&
-                USER_COMPACT_EMAILIDS(req->cstate)) {
+            if (USER_COMPACT_EMAILIDS(req->cstate)) {
                 if (id[0] == JMAP_CONTACTID_PREFIX &&
                     strlen(id) < JMAP_CONTACTID_SIZE) {
                     struct carddav_data *cdata = NULL;
 
                     r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
                     if (!r && cdata) {
-                        r = cb(&rock, cdata);
+                        r = getcards_cb(&rock, cdata);
                     }
                 }
             }
             else {
                 r = carddav_get_cards(db, mbentry, req->userid,
-                                      id, kind, cb, &rock);
+                                      id, CARDDAV_KIND_ANY, &getcards_cb, &rock);
             }
             if (r || !rock.rows) {
                 json_array_append(get.not_found, jval);
@@ -359,7 +359,8 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
     }
     else {
         rock.rows = 0;
-        r = carddav_get_cards(db, mbentry, req->userid, NULL, kind, cb, &rock);
+        r = carddav_get_cards(db, mbentry, req->userid,
+                              NULL, CARDDAV_KIND_ANY, &getcards_cb, &rock);
         if (r) goto done;
     }
 
@@ -440,7 +441,7 @@ static int getchanges_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
-static int _contacts_changes(struct jmap_req *req, int kind)
+static int jmap_card_changes(struct jmap_req *req)
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -471,9 +472,8 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     }
     struct buf cid = BUF_INITIALIZER;
     struct changes_rock rock = { req, &changes, 0 /*seen_records*/,
-                                 0 /*highestmodseq*/,
-                                 kind == CARDDAV_KIND_ANY ? &cid : NULL };
-    r = carddav_get_updates(db, changes.since_modseq, NULL, kind,
+                                 0 /*highestmodseq*/, &cid };
+    r = carddav_get_updates(db, changes.since_modseq, NULL, CARDDAV_KIND_ANY,
                             -1 /*max_records*/, &getchanges_cb, &rock);
     buf_free(&cid);
     if (r) goto done;
@@ -597,23 +597,16 @@ static void reject_convprops(json_t *jpatch, json_t *invalid) {
     jmap_parser_fini(&parser);
 }
 
-static void _contacts_set(struct jmap_req *req, unsigned kind,
-                          const jmap_property_set_t *props,
-                          int (*_set_create)(jmap_req_t *req,
-                                             unsigned kind,
-                                             json_t *jcard,
-                                             struct mailbox **mailbox,
-                                             json_t *item,
-                                             jmap_contact_errors_t *errors),
-                          int (*_set_update)(jmap_req_t *req,
-                                             bool apply_empty_updtes,
-                                             unsigned kind,
-                                             const char *uid,
-                                             json_t *jcard,
-                                             struct carddav_db *db,
-                                             struct mailbox **mailbox,
-                                             json_t **item,
-                                             jmap_contact_errors_t *errors))
+static int _card_set_create(jmap_req_t *req,
+                            json_t *jcard, struct mailbox **mailbox,
+                            json_t *item, jmap_contact_errors_t *errors);
+
+static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
+                            const char *id, json_t *jcard,
+                            struct carddav_db *db, struct mailbox **mailbox,
+                            json_t **item, jmap_contact_errors_t *errors);
+
+static int jmap_card_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
@@ -632,7 +625,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
     }
 
     /* Parse arguments */
-    jmap_set_parse(req, &parser, props, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, &card_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -662,7 +655,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = json_object();
         reject_convprops(arg, invalid);
-        r = _set_create(req, kind, arg, &mailbox, item, &errors);
+        r = _card_set_create(req, arg, &mailbox, item, &errors);
         if (r) {
             json_t *err;
             switch (r) {
@@ -719,8 +712,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
         reject_convprops(arg, invalid);
-        r = _set_update(req, set.apply_empty_updates,
-                        kind, uid, arg, db, &mailbox, &item, &errors);
+        r = _card_set_update(req, set.apply_empty_updates,
+                             uid, arg, db, &mailbox, &item, &errors);
         if (r) {
             json_t *err;
             switch (r) {
@@ -793,7 +786,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         mbentry_t *mbentry = NULL;
         struct carddav_data *cdata = NULL;
         uint32_t olduid;
-        if (kind == CARDDAV_KIND_ANY && USER_COMPACT_EMAILIDS(req->cstate)) {
+        if (USER_COMPACT_EMAILIDS(req->cstate)) {
             if (id[0] == JMAP_CONTACTID_PREFIX &&
                 strlen(id) < JMAP_CONTACTID_SIZE) {
                 r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
@@ -804,8 +797,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         }
 
         /* is it a valid contact? */
-        if (r || !cdata || !cdata->dav.imap_uid ||
-            (cdata->kind != kind && kind != CARDDAV_KIND_ANY)) {
+        if (r || !cdata || !cdata->dav.imap_uid) {
             r = 0;
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, id, err);
@@ -834,13 +826,13 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
 
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
-               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+               cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                req->accountid, id);
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
         if (r) {
             xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
                              "kind=<%s> mailbox=<%s> olduid=<%u>",
-                             kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+                             cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                              mailbox_name(mailbox), olduid);
             goto done;
         }
@@ -864,6 +856,8 @@ done:
     mailbox_close(&mailbox);
 
     carddav_close(db);
+
+    return 0;
 }
 
 struct contact_textfilter {
@@ -1155,25 +1149,25 @@ struct filter_parse_rock {
     struct carddav_db *db;
 };
 
-static int _contactsquery(struct jmap_req *req, unsigned kind,
-                          void *(*_filter_parse)(json_t *arg, void *rock),
-                          void (*_filter_free)(void *vf),
-                          void (*_filter_validate)(jmap_req_t *req,
-                                                   struct jmap_parser *parser,
-                                                   json_t *filter,
-                                                   json_t *unsupported,
-                                                   void *rock,
-                                                   json_t **err),
-                          int (*_comparator_validate)(jmap_req_t *req,
-                                                      struct jmap_comparator *comp,
-                                                      void *rock,
-                                                      json_t **err),
-                          int (*_query_cb)(void *rock,
-                                           struct carddav_data *cdata),
-                          enum contactsquery_sort *(*_buildsort)(json_t *jsort),
-                          int (*_sort_cmp) QSORT_R_COMPAR_ARGS(const void *va,
-                                                               const void *vb,
-                                                               void *rock))
+static void *card_filter_parse(json_t *arg, void *rock);
+static void card_filter_free(void *vf);
+static void card_filter_validate(jmap_req_t *req __attribute__((unused)),
+                                 struct jmap_parser *parser,
+                                 json_t *filter,
+                                 json_t *unsupported __attribute__((unused)),
+                                 void *rock,
+                                 json_t **err __attribute__((unused)));
+static int card_comparator_validate(jmap_req_t *req __attribute__((unused)),
+                                    struct jmap_comparator *comp,
+                                    void *rock __attribute__((unused)),
+                                    json_t **err __attribute__((unused)));
+static int _cardquery_cb(void *rock, struct carddav_data *cdata);
+static enum contactsquery_sort *cardquery_buildsort(json_t *jsort);
+static int cardquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
+                                             const void *vb,
+                                             void *rock);
+
+static int jmap_card_query(struct jmap_req *req)
 {
     if (!has_addressbooks(req)) {
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
@@ -1182,6 +1176,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
 
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query = JMAP_QUERY_INITIALIZER;
+    unsigned kind = CARDDAV_KIND_ANY;
     struct carddav_db *db;
     jmap_filter *parsed_filter = NULL;
     int r = 0;
@@ -1197,8 +1192,8 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser, NULL, NULL,
-                     _filter_validate, &kind,
-                     _comparator_validate, NULL,
+                     &card_filter_validate, &kind,
+                     &card_comparator_validate, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -1216,7 +1211,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
     const char *wantuid = NULL;
     if (JNOTNULL(filter)) {
         struct filter_parse_rock frock = { req, db };
-        parsed_filter = jmap_buildfilter(filter, _filter_parse, &frock);
+        parsed_filter = jmap_buildfilter(filter, &card_filter_parse, &frock);
         wantuid = json_string_value(json_object_get(filter, "uid"));
     }
 
@@ -1245,7 +1240,7 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
         /* Fast-path single filter condition by UID */
         struct carddav_data *cdata = NULL;
         r = carddav_lookup_uid(db, NULL, wantuid, &cdata);
-        if (!r) _query_cb(&rock, cdata);
+        if (!r) _cardquery_cb(&rock, cdata);
         if (r == CYRUSDB_NOTFOUND) r = 0;
     }
     else if (!is_complexsort && query.position >= 0 && !query.anchor) {
@@ -1259,17 +1254,17 @@ static int _contactsquery(struct jmap_req *req, unsigned kind,
             }
             nsort = 1;
         }
-        r = carddav_foreach_sort(db, NULL, &sort, nsort, _query_cb, &rock);
+        r = carddav_foreach_sort(db, NULL, &sort, nsort, &_cardquery_cb, &rock);
     }
     else {
         /* Run carddav db query and apply custom sort */
         rock.build_response = 0;
-        r = carddav_foreach(db, NULL, _query_cb, &rock);
+        r = carddav_foreach(db, NULL, &_cardquery_cb, &rock);
         if (!r) {
             /* Sort entries */
-            enum contactsquery_sort *sort = _buildsort(query.sort);
+            enum contactsquery_sort *sort = cardquery_buildsort(query.sort);
             cyr_qsort_r(rock.entries.data, rock.entries.count, sizeof(void*),
-                        _sort_cmp, sort);
+                        &cardquery_cmp, sort);
             free(sort);
             /* Build result ids */
             int i;
@@ -1349,7 +1344,7 @@ done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
     if (parsed_filter) {
-        jmap_filter_free(parsed_filter, _filter_free);
+        jmap_filter_free(parsed_filter, &card_filter_free);
     }
     if (db) carddav_close(db);
     return 0;
@@ -1394,20 +1389,15 @@ static int required_set_rights(json_t *props)
     return needrights;
 }
 
+static json_t *_card_from_record(jmap_req_t *req,
+                                 struct carddav_db *db,
+                                 struct mailbox *mailbox,
+                                 struct index_record *record);
+
 static void _contact_copy(jmap_req_t *req,
                           json_t *jcard,
                           struct conversations_state *src_cstate,
                           struct carddav_db *src_db,
-                          json_t *(*_from_record)(jmap_req_t *req,
-                                                  struct carddav_db *db,
-                                                  struct mailbox *mailbox,
-                                                  struct index_record *record),
-                          int (*_set_create)(jmap_req_t *req,
-                                             unsigned kind,
-                                             json_t *jcard,
-                                             struct mailbox **mailbox,
-                                             json_t *item,
-                                             jmap_contact_errors_t *errors),
                           json_t **new_card,
                           json_t **set_err)
 {
@@ -1466,7 +1456,7 @@ static void _contact_copy(jmap_req_t *req,
 
     struct index_record record;
     r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &record);
-    if (!r) src_card = _from_record(req, src_db, src_mbox, &record);
+    if (!r) src_card = _card_from_record(req, src_db, src_mbox, &record);
     if (!src_card) {
         syslog(LOG_ERR, "contact_copy: can't convert %s to JMAP", src_id);
         r = IMAP_INTERNAL;
@@ -1483,8 +1473,7 @@ static void _contact_copy(jmap_req_t *req,
     /* Create vcard */
     jmap_contact_errors_t errors = { invalid, NULL };
     json_t *item = json_object();
-    r = _set_create(req, CARDDAV_KIND_CONTACT, dst_card,
-                    &dst_mbox, item, &errors);
+    r = _card_set_create(req, dst_card, &dst_mbox, item, &errors);
     if (r || json_array_size(invalid) || errors.blobNotFound) {
         if (json_array_size(invalid)) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -1521,18 +1510,7 @@ done:
     jmap_parser_fini(&myparser);
 }
 
-static int _contacts_copy(struct jmap_req *req,
-                          int is_std,
-                          json_t *(*_from_record)(jmap_req_t *req,
-                                                  struct carddav_db *db,
-                                                  struct mailbox *mailbox,
-                                                  struct index_record *record),
-                          int (*_set_create)(jmap_req_t *req,
-                                             unsigned kind,
-                                             json_t *jcard,
-                                             struct mailbox **mailbox,
-                                             json_t *item,
-                                             jmap_contact_errors_t *errors))
+static int jmap_card_copy(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_copy copy = JMAP_COPY_INITIALIZER;
@@ -1571,10 +1549,7 @@ static int _contacts_copy(struct jmap_req *req,
     }
 
     int r = 0;
-    if (is_std) {
-        r =conversations_open_user(copy.from_account_id,
-                                   1/*shared*/, &src_cstate);
-    }
+    r = conversations_open_user(copy.from_account_id, 1/*shared*/, &src_cstate);
     if (!r) src_db = carddav_open_userid(copy.from_account_id);
     if (!src_db) {
         jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
@@ -1589,8 +1564,7 @@ static int _contacts_copy(struct jmap_req *req,
         json_t *set_err = NULL;
         json_t *new_card = NULL;
 
-        _contact_copy(req, jcard, src_cstate, src_db,
-                      _from_record, _set_create, &new_card, &set_err);
+        _contact_copy(req, jcard, src_cstate, src_db, &new_card, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
@@ -1611,7 +1585,6 @@ static int _contacts_copy(struct jmap_req *req,
 
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_cards)) {
-        const char *submethod = is_std ? "ContactCard/set" : "Contact/set";
         json_t *subargs = json_object();
         json_object_set(subargs, "destroy", destroy_cards);
         json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
@@ -1619,7 +1592,7 @@ static int _contacts_copy(struct jmap_req *req,
             json_object_set_new(subargs, "ifInState",
                                 json_string(copy.destroy_from_if_in_state));
         }
-        jmap_add_subreq(req, submethod, subargs, NULL);
+        jmap_add_subreq(req, "ContactCard/set", subargs, NULL);
     }
 
 done:
@@ -5631,11 +5604,6 @@ static int card_filter_match(void *vf, void *rock)
     return 1;
 }
 
-static json_t *_card_from_record(jmap_req_t *req,
-                                 struct carddav_db *db,
-                                 struct mailbox *mailbox,
-                                 struct index_record *record);
-
 static int _cardquery_cb(void *rock, struct carddav_data *cdata)
 {
     struct contactsquery_rock *crock = (struct contactsquery_rock*) rock;
@@ -8764,7 +8732,6 @@ static int _jscard_to_vcard(struct jmap_req *req,
 }
 
 static int _card_set_create(jmap_req_t *req,
-                            unsigned kind __attribute__((unused)),
                             json_t *jcard, struct mailbox **mailbox,
                             json_t *item, jmap_contact_errors_t *errors)
 {
@@ -9054,7 +9021,7 @@ done:
 }
 
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
-                            unsigned kind, const char *id, json_t *jcard,
+                            const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors)
 {
@@ -9074,6 +9041,7 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
     int r = 0;
     size_t num_props = json_object_size(jcard);
     json_t *new_obj = NULL;
+    unsigned kind = CARDDAV_KIND_ANY;
 
     /* is it a valid contact? */
     if (USER_COMPACT_EMAILIDS(req->cstate)) {
@@ -9410,25 +9378,6 @@ static json_t *_card_from_record(jmap_req_t *req,
     return jcard;
 }
 
-static int jmap_card_get(struct jmap_req *req)
-{
-    return _contacts_get(req, &getcards_cb, CARDDAV_KIND_ANY, &card_props);
-}
-
-static int jmap_card_changes(struct jmap_req *req)
-{
-    return _contacts_changes(req, CARDDAV_KIND_ANY);
-}
-
-static int jmap_card_query(struct jmap_req *req)
-{
-    return _contactsquery(req, CARDDAV_KIND_ANY,
-                          &card_filter_parse, &card_filter_free,
-                          &card_filter_validate,
-                          &card_comparator_validate, &_cardquery_cb,
-                          &cardquery_buildsort, &cardquery_cmp);
-}
-
 static int jmap_card_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -9449,20 +9398,6 @@ done:
     jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
-}
-
-static int jmap_card_set(struct jmap_req *req)
-{
-    _contacts_set(req, CARDDAV_KIND_ANY, &card_props,
-                  &_card_set_create, &_card_set_update);
-
-    return 0;
-}
-
-static int jmap_card_copy(struct jmap_req *req)
-{
-    return _contacts_copy(req, 1/*is_std*/,
-                          &_card_from_record, &_card_set_create);
 }
 
 struct card_parseargs {
