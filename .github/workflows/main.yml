@@ -13,6 +13,10 @@ on:
       - main
       - 'cyrus-imapd-*'
 
+defaults:
+  run:
+    shell: bash
+
 env:
   CYRUS_CLONE_ROOT: ${{ github.workspace }}
 
@@ -57,14 +61,11 @@ jobs:
       with:
         fetch-depth: 0
     - name: setup git safe directory
-      shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
     - name: override kernel core pattern
-      shell: bash
       run: sudo sysctl -w kernel.core_pattern=core.%p
     - name: fetch upstream release tags
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
-      shell: bash
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
         # n.b. --no-tags does not mean "no tags", it means "no automatic tag
@@ -73,13 +74,10 @@ jobs:
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: Run pre-test code if any
       if: ${{ matrix.pretest }}
-      shell: bash
       run: ${{ matrix.pretest }}
     - name: configure and build
-      shell: bash
       run: cyd build "${{ matrix.compiler }}" "${{ matrix.san }}" --cflags "${{ matrix.cflags }}" --cxxflags "${{ matrix.cxxflags }}"
     - name: report version information
-      shell: bash
       run: |
         echo "debian" $(cat /etc/debian_version)
         echo "Mail::IMAPTalk" $(cpanm --info Mail::IMAPTalk)
@@ -106,11 +104,9 @@ jobs:
       with:
         fetch-depth: 0
     - name: setup git safe directory
-      shell: bash
       run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
     - name: fetch upstream release tags
       if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
-      shell: bash
       run: |
         git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
         # n.b. --no-tags does not mean "no tags", it means "no automatic tag
@@ -118,16 +114,13 @@ jobs:
         # need every other tag that's reachable from them
         git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
     - name: configure and build
-      shell: bash
       run: |
         echo "building cyrus version" $(./tools/git-version.sh)
         cyd build
     - name: make check with valgrind
-      shell: bash
       run: |
         make VG=1 check-discrete
     - name: report version information
-      shell: bash
       run: |
         echo "debian" $(cat /etc/debian_version)
         /usr/cyrus/libexec/master -V
