@@ -29,7 +29,7 @@ sub execute
 
     my $imapoptions = Cyrus::IMAPOptions->new(
         from_path => $args->[0],
-        forbid_unreleased => $opt->{forbid_unreleased},
+        forbid_unreleased => $opt->forbid_unreleased,
     );
 
     $imapoptions->check_unreleased($self->app->arg0);
@@ -114,7 +114,7 @@ sub _print_option
     # which libconfig uses to see when val has been changed from the default.
     my ($ctype, $default_value) = $option->c_default_value;
     for (1..2) {
-        if ($opt->{cc} eq 'gcc') {
+        if ($opt->cc eq 'gcc') {
             print "    U_CFG_V(($ctype) $default_value),\n";
         }
         else {

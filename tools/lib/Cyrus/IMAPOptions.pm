@@ -10,6 +10,7 @@ has options => (
     isa => HashRef[InstanceOf['Cyrus::IMAPOptions::Option']],
     is => 'ro',
 );
+
 has forbid_unreleased => (
     isa => Bool,
     is => 'ro',
@@ -55,7 +56,9 @@ sub BUILD
 {
     my ($self, $args) = @_;
 
-    while (my ($opt_name, $option) = each %{$self->options}) {
+    foreach my $opt_name (keys %{$self->options}) {
+        my $option = $self->options->{$opt_name};
+
         if ($option->has_replaced_by) {
             # replaced-by option must exist
             my $replaced_by = $option->replaced_by;
