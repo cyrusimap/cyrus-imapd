@@ -13,14 +13,17 @@ sub test_email_bimi_blob_as_contact_avatar
     my @using = @{ $jmap->DefaultUsing() };
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
     push @using, 'https://cyrusimap.org/ns/jmap/contacts';
+    push @using, 'urn:ietf:params:jmap:contacts';
     $jmap->DefaultUsing(\@using);
 
     my $binary = slurp_file(abs_path('data/FM_BIMI.svg'));
+    my $b64 = encode_base64($binary, '');
+    my $mtype = "image/svg+xml";
 
     $self->make_message("foo",
         mime_type => 'text/plain',
         extra_headers => [
-            ['BIMI-Indicator', encode_base64($binary, '')],
+            ['BIMI-Indicator', $b64]
         ],
         body => 'foo',
     ) || die;
@@ -39,29 +42,28 @@ sub test_email_bimi_blob_as_contact_avatar
     my $blobid = $msg->{bimiBlobId};
     $self->assert_not_null($blobid);
 
-    my $blob = $jmap->Download({ accept => 'image/svg+xml' },
+    my $blob = $jmap->Download({ accept => $mtype },
                                'cassandane', $blobid);
-    $self->assert_str_equals('image/svg+xml',
-                             $blob->{headers}->{'content-type'});
+    $self->assert_str_equals($mtype, $blob->{headers}->{'content-type'});
     $self->assert_num_not_equals(0, $blob->{headers}->{'content-length'});
     $self->assert_equals($binary, $blob->{content});
 
     my $contact = {
-        firstName => "first",
-        lastName => "last",
-        avatar => {
-            blobId => $blobid,
-            size => $blob->{headers}->{'content-length'},
-            type => 'image/svg+xml',
-            name => JSON::null
+        '@type' => 'Card',
+        version => '1.0',
+        name => { full => "foo" },
+        media => {
+            avatar => {
+                kind => 'photo',
+                uri => "data:" . $mtype . ";base64," . $b64
+            }
         }
     };
 
-    $res = $jmap->CallMethods([['Contact/set',
+    $res = $jmap->CallMethods([['ContactCard/set',
                                 {create => {"1" => $contact }}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
-    $self->assert_not_null($res->[0][1]{created}{"1"}{avatar}{blobId});
+    $self->assert_not_null($res->[0][1]{created}{"1"}{media}{avatar}{blobId});
+    $self->assert_str_equals($mtype,
+                             $res->[0][1]{created}{"1"}{media}{avatar}{mediaType});
 }

@@ -11,25 +11,24 @@ sub test_email_attach_contact_by_blobid
     my @using = @{ $jmap->DefaultUsing() };
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
     push @using, 'https://cyrusimap.org/ns/jmap/contacts';
+    push @using, 'urn:ietf:params:jmap:contacts';
     $jmap->DefaultUsing(\@using);
 
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};
 
     my $contact = {
-        firstName => "first",
-        lastName => "last"
+        '@type' => 'Card',
+        version => '1.0',
+        name => { full => "foo" }
     };
 
-    $res = $jmap->CallMethods([['Contact/set',
+    $res = $jmap->CallMethods([['ContactCard/set',
                                 {create => {"1" => $contact }}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
 
-    my $blobid = $res->[0][1]{created}{"1"}{blobId};
-    my $size = $res->[0][1]{created}{"1"}{size};
+    my $blobid = $res->[0][1]{created}{"1"}{"cyrusimap.org:blobId"};
+    my $size = $res->[0][1]{created}{"1"}{"cyrusimap.org:size"};
 
     $res = $jmap->CallMethods([['Email/set', {
         create => {

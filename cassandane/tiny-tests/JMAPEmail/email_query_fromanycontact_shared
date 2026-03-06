@@ -22,20 +22,34 @@ sub test_email_query_fromanycontact_shared
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/contacts',
     ];
 
-    xlog "Create contact in shared addressbook";
+    xlog "Get shared addressbook Id";
     my $res = $otherJmap->CallMethods([
-        ['Contact/set', {
+        ['AddressBook/get', {
+            properties => [ 'name' ]
+        }, 'R1'],
+    ], $using);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $otherSharedAbookId = $m{"Shared"}{id};
+
+    xlog "Create contact in shared addressbook";
+    $res = $otherJmap->CallMethods([
+        ['ContactCard/set', {
             create => {
                 sharedContact => {
-                    emails => [{
-                        type => 'personal',
-                        value => 'sharedcontact@local',
-                    }],
-                    addressbookId => 'Shared',
+                    '@type' => 'Card',
+                    version => '1.0',
+                    emails => {
+                        personal => {
+                            contexts => { private => JSON::true },
+                            address => 'sharedcontact@local'
+                        }
+                    },
+                    addressBookIds => { $otherSharedAbookId => JSON::true }
                 },
             },
         }, 'R1'],
@@ -44,13 +58,17 @@ sub test_email_query_fromanycontact_shared
 
     xlog "Create contact in own addressbook";
     $res = $jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 ownContact => {
-                    emails => [{
-                        type => 'personal',
-                        value => 'ownContact@local',
-                    }],
+                    '@type' => 'Card',
+                    version => '1.0',
+                    emails => {
+                        personal => {
+                            contexts => { private => JSON::true },
+                            address => 'ownContact@local'
+                        }
+                    },
                 },
             },
         }, 'R1'],

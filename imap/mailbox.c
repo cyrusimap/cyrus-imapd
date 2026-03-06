@@ -3453,17 +3453,17 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
             cdata->dav.creationdate = new->internaldate.tv_sec;
 
         /* Load message containing the resource and parse vcard data */
-        vcardcomponent *vcard = record_to_vcard_x(mailbox, new);
+        vcardcomponent *vcard = record_to_vcard(mailbox, new);
 
         if (!vcard) {
-            xsyslog(LOG_ERR, "record_to_vcard_x() failed",
+            xsyslog(LOG_ERR, "record_to_vcard() failed",
                     "record=<%u> mailbox=<%s>",
                     cdata->dav.imap_uid, mailbox_name(mailbox));
             r = IMAP_MAILBOX_BADFORMAT; // XXX better error?
             goto done;
         }
 
-        r = carddav_writecard_x(carddavdb, cdata, vcard, ispinned);
+        r = carddav_writecard(carddavdb, cdata, vcard, ispinned);
 
         vcardcomponent_free(vcard);
     }
