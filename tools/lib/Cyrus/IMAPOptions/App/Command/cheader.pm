@@ -18,8 +18,8 @@ sub validate_args
 {
     my ($self, $opt, $args) = @_;
 
-    $self->usage_error("need imapoptions path") if @{$args} < 1;
-    $self->usage_error("too many arguments") if @{$args} > 1;
+    $self->usage_error("need imapoptions path") if @$args < 1;
+    $self->usage_error("too many arguments") if @$args > 1;
 
     $self->usage_error("imapoptions must be a directory")
         if ! -d $args->[0];

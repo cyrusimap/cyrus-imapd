@@ -75,7 +75,7 @@ sub _from_string
 
 sub values
 {
-    return @{shift->_order};
+    return shift->_order->@*;
 }
 
 sub values_and_aliases
@@ -84,7 +84,7 @@ sub values_and_aliases
 
     my @tuples;
 
-    foreach my $value (@{$self->_order}) {
+    foreach my $value ($self->_order->@*) {
         push @tuples, [ $value, $self->_values->{$value} ];
     }
 
@@ -97,7 +97,8 @@ sub value_alias_strings
 
     my @strings;
 
-    foreach my $value (@{$self->_order}) {
+    foreach my $value ($self->_order->@*) {
+        # XXX postfix deref?
         my @aliases = @{$self->_values->{$value} || []};
 
         push @strings, join '=', $value, @aliases;
@@ -110,8 +111,8 @@ sub count
 {
     my ($self) = @_;
 
-    my $count = keys %{$self->_values};
-    $count += keys %{$self->_aliases} if $self->has_aliases;
+    my $count = keys $self->_values->%*;
+    $count += keys $self->_aliases->%* if $self->has_aliases;
 
     return $count;
 }
