@@ -513,9 +513,6 @@ dist_noinst_SCRIPTS = \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
     tools/compile_st.pl \
-    tools/config2header \
-    tools/config2rst \
-    tools/config2sample \
     tools/fixsearchpath.pl \
     tools/git-version.sh \
     tools/gperf-build-prop-set.pl \
