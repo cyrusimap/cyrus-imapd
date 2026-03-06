@@ -18,8 +18,8 @@ sub validate_args
 {
     my ($self, $opt, $args) = @_;
 
-    $self->usage_error("need imapoptions path") if @{$args} < 1;
-    $self->usage_error("too many arguments") if @{$args} > 1;
+    $self->usage_error("need imapoptions path") if @$args < 1;
+    $self->usage_error("too many arguments") if @$args > 1;
 
     $self->usage_error("imapoptions must be a directory")
         if ! -d $args->[0];
@@ -31,7 +31,7 @@ sub execute
 
     my $imapoptions = Cyrus::IMAPOptions->new(
         from_path => $args->[0],
-        forbid_unreleased => $opt->{forbid_unreleased},
+        forbid_unreleased => $opt->forbid_unreleased,
     );
 
     $imapoptions->check_unreleased($self->app->arg0);
@@ -61,7 +61,7 @@ sub _print_option
     print '#  ' . ucfirst($name) . "\n#  $underline\n";
 
     if ($option->has_documentation) {
-        foreach my $line (@{$option->documentation}) {
+        foreach my $line ($option->documentation->@*) {
             chomp $line;
 
             print $line
