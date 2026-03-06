@@ -154,6 +154,9 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
                             struct propstat propstat[], void *rock);
+static int proppatch_scheduling_enabled(xmlNodePtr, unsigned,
+                                        struct proppatch_ctx*,
+                                        struct propstat[], void*);
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -441,6 +444,9 @@ static const struct prop_entry caldav_props[] = {
     { "schedule-user-address", NS_CYRUS,
       PROP_RESOURCE,
       propfind_scheduser, NULL, NULL },
+    { "scheduling-enabled", NS_CYRUS,
+      PROP_COLLECTION,
+      propfind_fromdb, proppatch_scheduling_enabled, NULL },
     { "calendar-description", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER,
       propfind_fromdb, proppatch_todb, NULL },
@@ -5518,6 +5524,36 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
 
     return rc;
 }
+
+/* Callback to write CYRUS_NS:scheduling-enabled */
+static int proppatch_scheduling_enabled(xmlNodePtr prop, unsigned set,
+                                        struct proppatch_ctx *pctx,
+                                        struct propstat propstat[],
+                                        void *rock __attribute__((unused)))
+{
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource
+        && !(pctx->txn->req_tgt.flags & (TGT_MANAGED_ATTACH | TGT_SCHED_INBOX | TGT_SCHED_OUTBOX))) {
+        if (set) {
+            if (!prop->children || prop->children->next || prop->children->type != XML_TEXT_NODE
+                || (xmlStrcasecmp(prop->children->content, BAD_CAST "F") && xmlStrcasecmp(prop->children->content, BAD_CAST "no"))) {
+                    xml_add_prop(HTTP_CONFLICT, pctx->ns[NS_DAV],
+                                 &propstat[PROPSTAT_CONFLICT],
+                                 prop->name, prop->ns, NULL, 0);
+                    xmlNewTextChild(propstat[PROPSTAT_CONFLICT].root, NULL, BAD_CAST "responsedescription",
+                                    BAD_CAST "Only F as value is allowed");
+                    *pctx->ret = HTTP_CONFLICT;
+
+                    return 0;
+            }
+        }
+        return proppatch_todb_nomask(prop, set, pctx, propstat, (char*) "F");
+    }
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+    *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
 
 /* Callback to prescreen/fetch CALDAV:calendar-data */
 static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
