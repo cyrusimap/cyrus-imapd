@@ -11,7 +11,7 @@
 #include "libcyr_cfg.h"
 #include "libconfig.h"
 
-#define DBDIR                   "test-mb-dbdir"
+#define DBDIR                   "test-duplicate-dbdir"
 
 struct result
 {

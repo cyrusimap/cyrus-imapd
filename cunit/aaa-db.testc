@@ -8,8 +8,6 @@
 #include "util.h"
 #include "hash.h"
 
-#define DBDIR       "test-mb-dbdir"
-
 struct binary_result
 {
     struct binary_result *next;

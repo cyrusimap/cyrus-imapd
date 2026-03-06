@@ -10,7 +10,7 @@
 #include "imap/mailbox.h"
 #include "imap/global.h"
 
-#define DBDIR           "test-dbdir"
+#define DBDIR           "test-mboxname-dbdir"
 
 static void test_dir_hash_c(void)
 {

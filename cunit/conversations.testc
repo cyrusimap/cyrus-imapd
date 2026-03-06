@@ -13,7 +13,7 @@
 #include "xmalloc.h"
 #include "xunlink.h"
 
-#define DBDIR   "test-dbdir"
+#define DBDIR   "test-conversations-dbdir"
 #define DBNAME  DBDIR "/conversations.db"
 #define DBNAME2 DBDIR "/conversations2.db"
 #define DBNAME3 DBDIR "/conversations.db"

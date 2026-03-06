@@ -1,0 +1,128 @@
+#!/usr/bin/perl
+
+# Run cunit jobs in parallel. By default, 8 at a time. To specify a different
+# amount do, for example:
+#
+#   ./pcunit 3
+#
+# This streams all output to temp files and then reads those so output is
+# not interleaved between tests.
+#
+# If any suite doesn't exit 0, this will report failures then exit non-zero.
+
+use strict;
+use warnings;
+
+use Time::HiRes qw(gettimeofday);
+use POSIX ":sys_wait_h";
+use File::Temp qw(tempfile);
+
+my $jobs = shift;
+if (defined $jobs) {
+    chomp($jobs);
+
+    die "-=- Expected a positive integer, got '$jobs' -=-\n"
+        unless $jobs =~ /^[1-9][0-9]*$/;
+} else {
+    $jobs = 8;
+}
+
+chdir "cunit";
+
+# Convert a list of tests into a list of just the suites that contain them
+# so we can run each suite in its own process.
+#
+# For example:
+#
+#     xsha1:wiki
+#     xsha1:4097
+#     xsyslog_ev:lf_c
+#     xsyslog_ev:lf_d
+#
+# becomes a list of:
+#
+#     ('xsha1', 'xsyslog_ev')
+
+my $tests = `./unit -l`;
+$tests =~ s/:.*//g;
+
+my %suites = map { $_ => 1 } split(/\n/, $tests);
+my @suites = sort keys %suites;
+
+my @failed_suites;
+my %children;
+
+my $start = gettimeofday;
+
+while (@suites) {
+    while (%children >= $jobs) {
+        wait_for_child();
+    }
+
+    my $next = shift @suites;
+    my (undef, $outfile) = tempfile(UNLINK => 0);
+
+    my $pid = fork;
+    unless ($pid) {
+        exit system("./unit $next -v > $outfile 2>&1") >> 8;
+    }
+
+    $children{$pid} = {
+        suite   => $next,
+        outfile => $outfile,
+        start   => 0+gettimeofday,
+    };
+}
+
+while (%children) {
+    wait_for_child();
+}
+
+my $end = gettimeofday;
+
+printf "\n\n-=- Total time: %.02fs -=-\n", $end - $start;
+
+if (@failed_suites) {
+    die "\n-=- The following suites failed: -=-\n  " . join("\n  ", @failed_suites) . "\n";
+}
+
+exit 0;
+
+my $printed_header;
+
+sub wait_for_child {
+    my $child = waitpid(-1, 0);
+    my $status = $?;
+    my $info = delete $children{$child};
+
+    my $suite = $info->{suite};
+    my $outfile = $info->{outfile};
+    my $time_taken = gettimeofday - $info->{start};
+
+    printf "\n\n-=- Suite $suite (%.02fs) -=-\n\n", $time_taken;
+
+    open(my $fh, '<', $outfile)
+        or warn "-=- Failed to open suite '$suite' results file '$outfile': $! -=-\n";
+
+    if ($fh) {
+        local $/;
+        my $all = <$fh>;
+        close $fh;
+        unlink($outfile);
+
+        # Hide the cunit version info in every test run, just noise...
+        if ($printed_header++) {
+            $all =~ s/^\n+\s*CUnit[^\n]+\n\s*http[^\n]+\n+//;
+        }
+
+        $all =~ s/^/    /gm;
+
+        print $all;
+    }
+
+    if ($status) {
+        warn "\n-=- Suite $suite failed; exited: " . ($? >> 8) . " -=-\n";
+
+        push @failed_suites, $suite;
+    }
+}

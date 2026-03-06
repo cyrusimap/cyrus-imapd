@@ -19,7 +19,7 @@
 #include "lib/util.h"
 #include "lib/xstrlcpy.h"
 
-#define DBDIR   "test-dbdir"
+#define DBDIR   "test-backend-dbdir"
 #define MAX_ALPN_MAP (4)
 
 struct server_config {

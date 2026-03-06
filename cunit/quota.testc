@@ -12,7 +12,7 @@
 #include "libconfig.h"
 #include "hash.h"
 
-#define DBDIR                   "test-mb-dbdir"
+#define DBDIR                   "test-quota-dbdir"
 #define QUOTAROOT               "user.smurf"
 #define QUOTAROOT_NONEXISTENT   "no-such-quotaroot"
 

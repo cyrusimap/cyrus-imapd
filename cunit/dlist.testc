@@ -6,7 +6,7 @@
 #include "imap/dlist.h"
 #include "util.h"
 
-#define DBDIR           "test-dbdir"
+#define DBDIR           "test-dlist-dbdir"
 
 static int set_up(void)
 {
