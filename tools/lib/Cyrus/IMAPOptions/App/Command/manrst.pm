@@ -18,8 +18,8 @@ sub validate_args
 {
     my ($self, $opt, $args) = @_;
 
-    $self->usage_error("need imapoptions path") if @{$args} < 1;
-    $self->usage_error("too many arguments") if @{$args} > 1;
+    $self->usage_error("need imapoptions path") if @$args < 1;
+    $self->usage_error("too many arguments") if @$args > 1;
 
     $self->usage_error("imapoptions must be a directory")
         if ! -d $args->[0];
@@ -154,14 +154,14 @@ sub _print_option
     print "``$name:`` $dv\n\n";
 
     if ($option->has_documentation) {
-        foreach my $line (@{$option->documentation}) {
+        foreach my $line ($option->documentation->@*) {
             chomp $line;
 
             # no indent on blank lines
             print $line ? "    $line\n" : "\n";
         }
 
-        if (scalar @{$option->documentation} == 1) {
+        if (scalar $option->documentation->@* == 1) {
             # XXX perverse newline behaviour
             print "\n";
         }

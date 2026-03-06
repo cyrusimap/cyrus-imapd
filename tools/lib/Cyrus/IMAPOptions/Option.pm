@@ -331,7 +331,7 @@ sub c_default_value
     if ($type eq 'BITFIELD') {
         my $dv = join("\n\t\t\t | ",
                       (map { _c_enum_name($self->name, $_) }
-                          @{$self->default_value}
+                          $self->default_value->@*
                       ), 0);
 
         return ('uint64_t', $dv);
@@ -376,7 +376,7 @@ sub c_allowed_values
             push @allowed_values, [ $v, $e ];
 
             if ($type eq 'BITFIELD' and $self->allowed_values->has_aliases) {
-                foreach my $a (@{$tuple->[1]}) {
+                foreach my $a ($tuple->[1]->@*) {
                     push @allowed_values, [ $a, $e ];
                 }
             }
