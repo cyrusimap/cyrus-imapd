@@ -10,6 +10,7 @@ has options => (
     isa => HashRef[InstanceOf['Cyrus::IMAPOptions::Option']],
     is => 'ro',
 );
+
 has forbid_unreleased => (
     isa => Bool,
     is => 'ro',
@@ -55,7 +56,9 @@ sub BUILD
 {
     my ($self, $args) = @_;
 
-    while (my ($opt_name, $option) = each %{$self->options}) {
+    foreach my $opt_name (keys $self->options->%*) {
+        my $option = $self->options->{$opt_name};
+
         if ($option->has_replaced_by) {
             # replaced-by option must exist
             my $replaced_by = $option->replaced_by;
@@ -75,7 +78,7 @@ sub check_unreleased
 
     my $warned_unreleased;
 
-    foreach my $option (values %{$self->options}) {
+    foreach my $option (values $self->options->%*) {
         if (!$warned_unreleased && $option->is_unreleased) {
             # This warning is to remind the release manager to replace
             # "UNRELEASED" strings in lib/imapoptions with the version
@@ -107,7 +110,7 @@ sub iterate
 {
     my ($self, $callback, @rock) = @_;
 
-    foreach my $key (sort keys %{$self->options}) {
+    foreach my $key (sort keys $self->options->%*) {
         $callback->($key, $self->options->{$key}, @rock);
     }
 }
