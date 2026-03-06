@@ -24,12 +24,17 @@ sub test_issue_LP52545479
     $self->assert_not_null($calendarId);
 
     $res = $jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 contact1 => {
-                    firstName => "firstName",
-                    lastName => "lastName",
-                    notes => "x" x 1024
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => "Name" },
+                    notes => {
+                        n1 => {
+                            note => "x" x 1024
+                        }
+                    }
                 }
             }
         }, 'R1'],
@@ -72,10 +77,10 @@ sub test_issue_LP52545479
                             $res_annot_storage => 1); # that's 1024 bytes
 
     $res = $jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
               update => {
                   $contactId1 => {
-                      lastName => "updatedLastName",
+                      'name/full' => "updatedName",
                   }
               }
         }, 'R1'],

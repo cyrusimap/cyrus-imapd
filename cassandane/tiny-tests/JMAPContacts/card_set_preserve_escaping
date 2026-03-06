@@ -120,32 +120,6 @@ sub test_card_set_preserve_escaping
         $res->[0][1]{list}[0]
     );
 
-    # This asserts that old JMAP Contact values are displayed
-    # the same as before the libicalvcard change. This does not
-    # mean that they were displayed correctly, it just demonstrates
-    # that the libicalvcard change does not impact the old JMAP API.
-    xlog $self, "Assert old JMAP API property values";
-    $res = $jmap->CallMethods([
-        ['Contact/get', { }, 'R1']
-    ]);
-    my $contactId = $res->[0][1]{list}[0]{id};
-    $self->assert_not_null($contactId);
-    $self->assert_cmp_deeply(
-        superhashof({
-            lastName => "a,b",
-            firstName => "c,d e;f",
-            prefix => "g:h'\\j",
-            online => [
-              {
-                type => "uri",
-                label => $decoded,
-                value => "url-$decoded",
-              }
-            ],
-        }),
-        $res->[0][1]{list}[0]
-    );
-
     xlog $self, "Update JSContact Card to rewrite vCard";
     $res = $jmap->CallMethods([
         ['ContactCard/set', {
@@ -209,26 +183,6 @@ sub test_card_set_preserve_escaping
                 label => $decoded,
               }
             },
-        }),
-        $res->[0][1]{list}[0]
-    );
-
-    xlog $self, "Assert old JMAP API property values";
-    $res = $jmap->CallMethods([
-        ['Contact/get', { }, 'R1']
-    ]);
-    $self->assert_cmp_deeply(
-        superhashof({
-            lastName => "a,b",
-            firstName => "c,d e;f",
-            prefix => "g:h'\\j",
-            online => [
-              {
-                type => "uri",
-                label => $decoded,
-                value => "url-$decoded",
-              }
-            ],
         }),
         $res->[0][1]{list}[0]
     );
