@@ -120,18 +120,18 @@ static jmap_method_t jmap_contact_methods_standard[] = {
         &jmap_card_copy,
         JMAP_NEED_CSTATE | JMAP_READ_WRITE
     },
-    {
-        "ContactCard/parse",
-        JMAP_CONTACTS_EXTENSION,
-        &jmap_card_parse,
-        JMAP_NEED_CSTATE
-    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
 
 // clang-format off
 static jmap_method_t jmap_contact_methods_nonstandard[] = {
+    {
+        "ContactCard/parse",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_card_parse,
+        JMAP_NEED_CSTATE
+    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -244,33 +244,6 @@ static json_t *jmap_utf8string(const char *s)
  * JMAP Contacts API
  ****************************************************************************/
 
-struct contact_getargs {
-    const char *addressbook_id;
-    int disable_uri_as_blobid;
-};
-
-static int _contact_getargs_parse(jmap_req_t *req __attribute__((unused)),
-                                  struct jmap_parser *parser __attribute__((unused)),
-                                  const char *key,
-                                  json_t *arg,
-                                  void *rock)
-{
-    struct contact_getargs *args = rock;
-    int r = 0;
-
-    /* Non-JMAP spec addressbookId argument */
-    if (!strcmp(key, "addressbookId") && json_is_string(arg)) {
-        args->addressbook_id = json_string_value(arg);
-        r = 1;
-    }
-    else if (!strcmp(key, "disableUriAsBlobId") && json_is_boolean(arg)) {
-        args->disable_uri_as_blobid = json_boolean_value(arg);
-        r = 1;
-    }
-
-    return r;
-}
-
 struct cards_rock {
     struct carddav_db *db;
     struct jmap_req *req;
@@ -280,7 +253,6 @@ struct cards_rock {
     hashu64_table jmapcache;
     struct buf cid;          // buffer for constructing ContactCard ids
     int rows;
-    struct contact_getargs args;
 };
 
 static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
@@ -341,7 +313,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
 
     /* Parse request */
     jmap_get_parse(req, &parser, props, /* allow_null_ids */ 1,
-                   &_contact_getargs_parse, &rock.args, &get, &err);
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -354,21 +326,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind,
                "carddav_open_mailbox failed for user %s", req->accountid);
         r = IMAP_INTERNAL;
         goto done;
-    }
-
-    if (rock.args.addressbook_id) {
-        if (kind == CARDDAV_KIND_ANY) {
-            jmap_parser_invalid(&parser, "addressbookId");
-            err = json_pack("{s:s}", "type", "invalidArguments");
-            json_object_set(err, "arguments", parser.invalid);
-            jmap_error(req, err);
-            goto done;
-        }
-
-        char *mboxname = carddav_mboxname(req->accountid, rock.args.addressbook_id);
-        mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        free(mboxname);
-        /* XXX  invalidArgument? */
     }
 
     if (JNOTNULL(get.ids)) {
@@ -494,23 +451,14 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
     json_t *err = NULL;
     struct carddav_db *db = NULL;
-    mbentry_t *mbentry = NULL;
     int r = 0;
 
     /* Parse request */
-    struct contact_getargs args = {0};
     jmap_changes_parse(req, &parser, req->counters.carddavdeletedmodseq,
-                       &_contact_getargs_parse, &args, &changes, &err);
+                       NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
-    }
-
-    if (args.addressbook_id) {
-        char *mboxname = carddav_mboxname(req->accountid, args.addressbook_id);
-        mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        free(mboxname);
-        /* XXX  invalidArgument? */
     }
 
     /* Lookup updates. */
@@ -525,7 +473,7 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     struct changes_rock rock = { req, &changes, 0 /*seen_records*/,
                                  0 /*highestmodseq*/,
                                  kind == CARDDAV_KIND_ANY ? &cid : NULL };
-    r = carddav_get_updates(db, changes.since_modseq, mbentry, kind,
+    r = carddav_get_updates(db, changes.since_modseq, NULL, kind,
                             -1 /*max_records*/, &getchanges_cb, &rock);
     buf_free(&cid);
     if (r) goto done;
@@ -544,7 +492,6 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     carddav_close(db);
-    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
@@ -3386,8 +3333,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
 #define IGNORE_VCARD_VERSION  (1<<0)
 #define IGNORE_DERIVED_PROPS  (1<<1)
-#define DISABLE_URI_AS_BLOBID (1<<2)
-#define SET_VCARD_CONVPROPS   (1<<3)
+#define SET_VCARD_CONVPROPS   (1<<2)
 
 struct card_rock {
     json_t *card;
@@ -4107,7 +4053,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
             uri = _value_to_uri_blobid(prop,
                     crock->mailbox, crock->record, crock->version,
-                    &type, crock->flags & DISABLE_URI_AS_BLOBID ? NULL : &blobid);
+                                       &type, &blobid);
 
             jprop = json_pack("{s:s s:s* s:s* s:s*}",
                               "kind", kind, "mediaType", type,
@@ -4444,7 +4390,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         uri = _value_to_uri_blobid(prop,
                 crock->mailbox, crock->record, crock->version,
-                &type, crock->flags & DISABLE_URI_AS_BLOBID ? NULL : &blobid);
+                &type, &blobid);
 
         jprop = json_pack("{s:s* s:s* s:s*}",
                           "mediaType", type, "uri", uri, "blobId", blobid);
@@ -4971,8 +4917,7 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
         href = jmap_xhref(mbentry->name, cdata->dav.resource);
     }
 
-    if (!crock->args.disable_uri_as_blobid &&
-        cdata->jmapversion == JMAPCACHE_CARDVERSION) {
+    if (cdata->jmapversion == JMAPCACHE_CARDVERSION) {
         /* We only cache contacts with media as blobids */
         json_error_t jerr;
         obj = json_loads(cdata->jmapdata, 0, &jerr);
@@ -4994,18 +4939,12 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     }
 
     /* Convert the vCard to a JSContact Card. */
-    int from_vcard_flags = IGNORE_DERIVED_PROPS;
-    if (crock->args.disable_uri_as_blobid)
-        from_vcard_flags |= DISABLE_URI_AS_BLOBID;
-
     obj = jmap_card_from_vcard(req->userid, vcard, crock->db,
-                               crock->mailbox, &record, from_vcard_flags);
+                               crock->mailbox, &record, IGNORE_DERIVED_PROPS);
     vcardcomponent_free(vcard);
 
-    if (!crock->args.disable_uri_as_blobid) {
-        /* Only cache contacts with media as blobids */
-        hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
-    }
+    /* Cache contact */
+    hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
 
   gotvalue:
 
@@ -9528,7 +9467,6 @@ static int jmap_card_copy(struct jmap_req *req)
 
 struct card_parseargs {
     hash_table *props;
-    int disable_uri_as_blobid;
 };
 
 static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
@@ -9556,10 +9494,6 @@ static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
             }
             hash_insert(s, (void*)1, args->props);
         }
-        r = 1;
-    }
-    else if (!strcmp(key, "disableUriAsBlobId") && json_is_boolean(arg)) {
-        args->disable_uri_as_blobid = json_boolean_value(arg);
         r = 1;
     }
 
@@ -9625,12 +9559,8 @@ static int jmap_card_parse(jmap_req_t *req)
 
         vcard = vcard_parse_buf(&blob_ctx.blob);
         if (vcard) {
-            int from_vcard_flags = IGNORE_DERIVED_PROPS;
-            if (args.disable_uri_as_blobid)
-                from_vcard_flags |= DISABLE_URI_AS_BLOBID;
-
             jcard = jmap_card_from_vcard(req->userid, vcard, db,
-                                         mailbox, &record, from_vcard_flags);
+                                         mailbox, &record, IGNORE_DERIVED_PROPS);
             vcardcomponent_free(vcard);
         }
 
