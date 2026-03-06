@@ -1312,10 +1312,10 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
-EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
-                                 struct carddav_data *cdata,
-                                 vcardcomponent *vcard,
-                                 int ispinned)
+EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
+                               struct carddav_data *cdata,
+                               vcardcomponent *vcard,
+                               int ispinned)
 {
     struct buf nicknames = BUF_INITIALIZER;
     strarray_t values = STRARRAY_INITIALIZER;
@@ -1492,18 +1492,18 @@ done:
     return r;
 }
 
-EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
-                             const char *resource, modseq_t createdmodseq,
-                             struct entryattlist **annots,
-                             const char *userid, struct auth_state *authstate,
-                             int ignorequota, uint32_t oldsize)
+EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
+                           const char *resource, modseq_t createdmodseq,
+                           struct entryattlist **annots,
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota, uint32_t oldsize)
 {
     /* get important properties */
     const char *uid = vcardcomponent_get_uid(vcard);
     const char *fullname = vcardcomponent_get_fn(vcard);
 
     /* serialize the card */
-    struct buf *buf = vcard_as_buf_x(vcard);
+    struct buf *buf = vcard_as_buf(vcard);
 
     int r = _carddav_store(mailbox, buf, uid, fullname,
                            resource, createdmodseq, NULL, annots,
