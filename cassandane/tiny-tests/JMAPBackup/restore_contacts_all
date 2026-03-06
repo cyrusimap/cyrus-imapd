@@ -11,57 +11,68 @@ sub test_restore_contacts_all
     sleep 2;
 
     xlog "create contacts";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {
-                        "a" => {firstName => "a", lastName => "a"},
-                        "b" => {firstName => "b", lastName => "b"},
-                        "c" => {firstName => "c", lastName => "c"},
-                        "d" => {firstName => "d", lastName => "d"}
-                    }}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
-    $self->assert_str_equals('R1', $res->[0][2]);
+    my $res = $jmap->CallMethods([['ContactCard/set', {
+        create => {
+            "a" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "a" }
+            },
+            "b" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "b" }
+            },
+            "c" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "c" }
+            },
+            "d" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "d" }
+            }
+        }
+    }, "R1"]]);
     my $contactA = $res->[0][1]{created}{"a"}{id};
     my $contactB = $res->[0][1]{created}{"b"}{id};
     my $contactC = $res->[0][1]{created}{"c"}{id};
+    my $contactCuid = $res->[0][1]{created}{"c"}{uid};
     my $contactD = $res->[0][1]{created}{"d"}{id};
 
     xlog "destroy contact A, update contact B";
-    $res = $jmap->CallMethods([['Contact/set', {
-                    destroy => [$contactA],
-                    update => {$contactB => {firstName => "B"}}
-                }, "R2"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
-    $self->assert_str_equals('R2', $res->[0][2]);
-
-    xlog "get contacts";
-    $res = $jmap->CallMethods([
-        ['Contact/get', {
-            properties => ['firstName', 'lastName'],
-         }, "R3"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/get', $res->[0][0]);
-    $self->assert_str_equals('R3', $res->[0][2]);
-
-    my @expect = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
+    $res = $jmap->CallMethods([['ContactCard/set', {
+        destroy => [$contactA],
+        update => {
+            $contactB => {
+                'name/full' => "B"
+            }
+        }
+    }, "R2"]]);
 
     my $mark = time();
     sleep 2;
 
     xlog "destroy contact C, update contacts B and D, create contact E";
-    $res = $jmap->CallMethods([['Contact/set', {
-                    destroy => [$contactC],
-                    update => {
-                        $contactB => {lastName => "B"},
-                        $contactD => {lastName => "D"},
-                    },
-                    create => {
-                        "e" => {firstName => "e", lastName => "e"}
-                    }
-                }, "R4"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
-    $self->assert_str_equals('R4', $res->[0][2]);
+    $res = $jmap->CallMethods([['ContactCard/set', {
+        destroy => [$contactC],
+        update => {
+            $contactB => {
+                'name/full' => "b"
+            },
+            $contactD => {
+                'name/full' => "D"
+            }
+        },
+        create => {
+            "e" => {
+                '@type' => 'Card',
+                version => '1.0',
+                name => { full => "e" }
+            }
+        }
+    }, "R4"]]);
     my $contactE = $res->[0][1]{created}{"e"}{id};
     my $state = $res->[0][1]{newState};
 
@@ -82,53 +93,69 @@ sub test_restore_contacts_all
 
     xlog "get restored contacts";
     $res = $jmap->CallMethods([
-        ['Contact/get', {
-            properties => ['firstName', 'lastName'],
+        ['ContactCard/query', {
+            filter => { kind => 'individual'}
+         }, "R1"],
+        ['ContactCard/get', {
+            '#ids' => { resultOf => 'R1', name => 'ContactCard/query', path => '/ids' },
+            properties => [ 'id', 'name' ],
          }, "R6"],
-        ['ContactGroup/get', {}, "R6.1"]
+        ['ContactCard/query', {
+            filter => { kind => 'group'}
+         }, "R2"],
+        ['ContactCard/get', {
+            '#ids' => { resultOf => 'R2', name => 'ContactCard/query', path => '/ids' },
+            properties => [ 'id', 'name', 'members' ],
+         }, "R7"]
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/get', $res->[0][0]);
-    $self->assert_str_equals('R6', $res->[0][2]);
 
-    my @got = sort { $a->{firstName} cmp $b->{firstName} } @{$res->[0][1]{list}};
-    $self->assert_num_equals(scalar @expect, scalar @got);
-    $self->assert_deep_equals(\@expect, \@got);
+    my @got = sort { $a->{name}{full} cmp $b->{name}{full} } @{$res->[1][1]{list}};
 
-    $self->assert_str_equals('ContactGroup/get', $res->[1][0]);
-    $self->assert_str_equals('R6.1', $res->[1][2]);
-    $self->assert_str_equals($contactC, $res->[1][1]{list}[0]{contactIds}[0]);
+    $self->assert_num_equals(3, scalar @got);
+    $self->assert_str_equals('B', $got[0]{name}{full});
+    $self->assert_str_equals('c', $got[1]{name}{full});
+    $self->assert_str_equals('d', $got[2]{name}{full});
+
+    # Ids of contacts will changes when recreated
+    $contactB = $got[0]{id};
+    $contactC = $got[1]{id};
+    $contactD = $got[2]{id};
+
+    $self->assert_matches(qr/^Restored /, $res->[3][1]{list}[0]{name}{full});
+    $self->assert_cmp_deeply(
+        superhashof({
+            $contactCuid => JSON::true,
+        }),
+        $res->[3][1]{list}[0]{members}
+    );
+    my $groupId = $res->[3][1]{list}[0]{id};
 
     xlog "get contact updates";
     $res = $jmap->CallMethods([
-        ['Contact/changes', {
+        ['ContactCard/changes', {
             sinceState => $state
          }, "R6.5"],
-        ['ContactGroup/changes', {
-            sinceState => $state
-         }, "R6.6"]
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/changes', $res->[0][0]);
-    $self->assert_str_equals('R6.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
-    $self->assert_str_equals($contactC, $res->[0][1]{created}[0]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_str_equals($contactE, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]{newState};
 
-    $self->assert_str_equals('ContactGroup/changes', $res->[1][0]);
-    $self->assert_str_equals('R6.6', $res->[1][2]);
-    $self->assert_str_equals($state, $res->[1][1]{oldState});
-    $self->assert_str_not_equals($state, $res->[1][1]{newState});
-    $self->assert_equals(JSON::false, $res->[1][1]{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{created}});
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
-    $state = $res->[1][1]{newState};
+    $self->assert_cmp_deeply(
+        bag($contactC, $groupId),
+        $res->[0][1]{created}
+    );
+    $self->assert_cmp_deeply(
+        bag($contactB, $contactD),
+        $res->[0][1]{updated}
+    );
+    $self->assert_cmp_deeply(
+        bag($contactE),
+        $res->[0][1]{destroyed}
+    );
 
     $diff = time() - $start;
     $period = "PT" . $diff . "S";
@@ -147,46 +174,26 @@ sub test_restore_contacts_all
 
     xlog "get restored contacts";
     $res = $jmap->CallMethods([
-        ['Contact/get', {
-            properties => ['firstName', 'lastName'],
+        ['ContactCard/get', {
+            properties => [ 'name' ],
          }, "R8"],
-        ['ContactGroup/get', {}, "R8.1"]
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/get', $res->[0][0]);
-    $self->assert_str_equals('R8', $res->[0][2]);
     $self->assert_deep_equals([], $res->[0][1]{list});
-
-    $self->assert_str_equals('ContactGroup/get', $res->[1][0]);
-    $self->assert_str_equals('R8.1', $res->[1][2]);
-    $self->assert_deep_equals([], $res->[1][1]{list});
 
     xlog "get contact updates";
     $res = $jmap->CallMethods([
-        ['Contact/changes', {
+        ['ContactCard/changes', {
             sinceState => $state
          }, "R8.5"],
-        ['ContactGroup/changes', {
-            sinceState => $state
-         }, "R8.6"]
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/changes', $res->[0][0]);
-    $self->assert_str_equals('R8.5', $res->[0][2]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
-
-    $self->assert_str_equals('ContactGroup/changes', $res->[1][0]);
-    $self->assert_str_equals('R8.6', $res->[1][2]);
-    $self->assert_str_equals($state, $res->[1][1]{oldState});
-    $self->assert_str_not_equals($state, $res->[1][1]{newState});
-    $self->assert_equals(JSON::false, $res->[1][1]{hasMoreChanges});
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{created}});
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{destroyed}});
-    $state = $res->[1][1]{newState};
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_cmp_deeply(
+        bag($contactB, $contactC, $contactD, $groupId),
+        $res->[0][1]{destroyed}
+    );
 }

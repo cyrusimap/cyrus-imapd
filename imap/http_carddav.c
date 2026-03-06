@@ -43,7 +43,6 @@
 #include "util.h"
 #include "vcard_support.h"
 #include "version.h"
-#include "vparse.h"
 #include "xmalloc.h"
 #include "xml_support.h"
 #include "xstrlcat.h"
