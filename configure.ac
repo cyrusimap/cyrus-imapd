@@ -1880,6 +1880,12 @@ have_real_perl=`${PERL} -e0 1>/dev/null 2>&1 && echo yes || echo no`
 AC_MSG_RESULT([${have_real_perl}])
 AS_IF([test "x${have_real_perl}" != "xyes"],
       [AC_MSG_ERROR([${PERL} does not appear to be perl])])
+AC_MSG_CHECKING([for supported perl version])
+min_perl_version='v5.28.0'
+have_supported_perl=`${PERL} -e "use ${min_perl_version}; 0" && echo yes || echo no`
+AC_MSG_RESULT([${have_supported_perl}])
+AS_IF([test "x${have_supported_perl}" != "xyes" ],
+      [AC_MSG_ERROR([${PERL} ${min_perl_version} or later is required])])
 AS_IF([test "x${using_static_sasl}" = "xstaticonly"],
       [AC_MSG_ERROR([Cannot compile perl utilities using static libsasl])])
 
