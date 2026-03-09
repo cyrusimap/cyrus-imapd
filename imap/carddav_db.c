@@ -1101,27 +1101,36 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
 {
     struct vparse_entry *ventry;
 
+    strarray_t values = STRARRAY_INITIALIZER;
     strarray_t emails = STRARRAY_INITIALIZER;
     strarray_t member_uids = STRARRAY_INITIALIZER;
 
     for (ventry = vcard->properties; ventry; ventry = ventry->next) {
         const char *name = ventry->name;
-        const char *propval = ventry->v.value;
-
         if (!name) continue;
+
+        char *propval = vparse_get_value(ventry);
         if (!propval) continue;
 
         if (!strcasecmp(name, "uid")) {
             cdata->vcard_uid = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "n")) {
             cdata->name = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "fn")) {
             cdata->fullname = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "nickname")) {
             cdata->nickname = propval;
+            strarray_appendm(&values, propval);
+            propval = NULL;
         }
         else if (!strcasecmp(name, "email")) {
             /* XXX - insert if primary */
@@ -1132,8 +1141,9 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
                     !strcasecmp(param->value, "pref"))
                     ispref = 1;
             }
-            strarray_append(&emails, propval);
+            strarray_appendm(&emails, propval);
             strarray_append(&emails, ispref ? "1" : "");
+            propval = NULL;
         }
         else if (!strcasecmp(name, "member") ||
                  !strcasecmp(name, "x-addressbookserver-member")) {
@@ -1157,12 +1167,15 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
         else if (!strcasecmp(name, "version")) {
             cdata->version = propval[0] - '0';
         }
+
+        free(propval);
     }
 
     int r = carddav_write(carddavdb, cdata);
     if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
+    strarray_fini(&values);
     strarray_fini(&emails);
     strarray_fini(&member_uids);
 
