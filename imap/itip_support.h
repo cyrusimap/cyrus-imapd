@@ -129,7 +129,7 @@ extern int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp);
 extern icalcomponent *master_to_recurrence(icalcomponent *master,
                                            icalproperty *recurid);
 
-extern void itip_strip_personal_data(icalcomponent *comp);
+extern void itip_strip_personal_data(icalcomponent *comp, bool remove_transp);
 
 extern enum sched_deliver_outcome sched_deliver_local(const char *userid,
                                                       const char *sender,
