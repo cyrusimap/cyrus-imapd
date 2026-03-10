@@ -1,4 +1,4 @@
-/* master.c -- IMAP master process to handle recovery, checkpointing, spawning */
+/* master.c - IMAP master process to handle recovery, checkpointing, spawning */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

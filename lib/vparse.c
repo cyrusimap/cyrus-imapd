@@ -1,4 +1,4 @@
-/* vparse.c : fast vcard parser */
+/* vparse.c - fast vcard parser */
 
 #include <ctype.h>
 #include <string.h>

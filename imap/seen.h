@@ -1,4 +1,4 @@
-/* seen.h -- abstract interface for /Recent and /Seen information */
+/* seen.h - abstract interface for /Recent and /Seen information */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

@@ -1,4 +1,4 @@
-/* mboxevent.h -- interface for message store event notifications */
+/* mboxevent.h - interface for message store event notifications */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

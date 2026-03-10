@@ -1,4 +1,4 @@
-/* jmap_notes.c -- Routines for handling JMAP notes */
+/* jmap_notes.c - Routines for handling JMAP notes */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

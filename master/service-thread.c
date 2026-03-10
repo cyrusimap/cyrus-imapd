@@ -1,4 +1,4 @@
-/* service-thread.c -- skeleton for Cyrus service; calls the real main */
+/* service-thread.c - skeleton for Cyrus service; calls the real main */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

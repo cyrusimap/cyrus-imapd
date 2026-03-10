@@ -1,4 +1,4 @@
-/* seen_db.c -- implementation of seen database using per-user db */
+/* seen_db.c - implementation of seen database using per-user db */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

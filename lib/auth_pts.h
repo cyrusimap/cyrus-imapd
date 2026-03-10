@@ -1,4 +1,4 @@
-/* auth_pts.h -- PTLOADER authorization module. */
+/* auth_pts.h - PTLOADER authorization module. */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 

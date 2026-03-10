@@ -1,4 +1,4 @@
-/* haproxy.c -- HAProxy protocol functions.
+/* haproxy.c - HAProxy protocol functions.
  *
  * XXX  This code is mostly lifted directly from:
  *
