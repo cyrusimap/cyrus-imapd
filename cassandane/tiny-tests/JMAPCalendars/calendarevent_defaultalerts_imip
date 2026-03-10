@@ -60,7 +60,7 @@ EOF
             }
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400

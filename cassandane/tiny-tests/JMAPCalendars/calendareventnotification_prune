@@ -38,7 +38,7 @@ sub test_calendareventnotification_prune
             },
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     xlog $self, "Create event notification";
     $res = $jmap->CallMethods([

@@ -67,7 +67,7 @@ sub test_calendarevent_set_defaultalerts
             },
         }, 'R2'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
     my $event1Href = $res->[1][1]{created}{1}{'x-href'};
     $self->assert_not_null($event1Href);
     my $event2Href = $res->[1][1]{created}{2}{'x-href'};

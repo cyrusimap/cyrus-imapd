@@ -53,7 +53,7 @@ sub test_calendareventnotification_get
         ['CalendarEventNotification/get', {
         }, 'R3'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
     my $eventId = $res->[1][1]{created}{event1}{id};
     $self->assert_not_null($eventId);
     # Event creator is not notified.

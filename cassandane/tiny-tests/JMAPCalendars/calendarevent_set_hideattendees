@@ -103,7 +103,7 @@ sub test_calendarevent_set_hideattendees
     ]);
     my $eventId = $res->[0][1]{created}{event1}{id};
     $self->assert_not_null($eventId);
-    $self->assert(exists $res->[1][1]{updated}{Default});
+    $self->assert(exists $res->[1][1]{updated}{$default_cal_id});
     $self->assert_equals(JSON::true, $res->[2][1]{list}[0]{hideAttendees});
 
     xlog "get event as sharee";

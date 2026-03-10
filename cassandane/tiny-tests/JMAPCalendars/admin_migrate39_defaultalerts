@@ -98,8 +98,8 @@ EOF
     ]);
     my %calendars = map { $_->{id} => $_ } @{$res->[0][1]{list}};
 
-    $self->assert_null($calendars{Default}{defaultAlertsWithTime});
-    $self->assert_null($calendars{Default}{defaultAlertsWithoutTime});
+    $self->assert_null($calendars{$default_cal_id}{defaultAlertsWithTime});
+    $self->assert_null($calendars{$default_cal_id}{defaultAlertsWithoutTime});
 
     my $calendarADefaultAlerts = $calendars{$state->{calendarA}{id}}
                                            {defaultAlertsWithTime};
