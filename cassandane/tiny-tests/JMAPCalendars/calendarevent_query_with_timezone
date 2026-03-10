@@ -5,7 +5,8 @@ sub test_calendarevent_query_with_timezone
     :min_version_3_5
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog "Create event";
     my $res = $jmap->CallMethods([
@@ -13,7 +14,7 @@ sub test_calendarevent_query_with_timezone
             create => {
                 event => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => 'event',
                     start => '2021-08-24T14:30:00',

@@ -6,6 +6,8 @@ sub test_calendarprincipal_query
     ($self)
 {
     my $jmap = $self->{jmap};
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $admintalk = $self->{adminstore}->get_client();
 
     $self->{instance}->create_user("manifold");

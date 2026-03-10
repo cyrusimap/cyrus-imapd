@@ -5,7 +5,8 @@ sub test_session_capability_isrfc
     :min_version_3_5
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);

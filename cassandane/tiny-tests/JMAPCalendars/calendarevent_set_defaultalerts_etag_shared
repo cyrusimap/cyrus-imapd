@@ -5,14 +5,16 @@ sub test_calendarevent_set_defaultalerts_etag_shared
     :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $CalDAV = $self->{caldav};
 
     xlog "Set default alerts on calendar";
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     defaultAlertsWithTime => {
                         alert1 => {
                             '@type' => 'Alert',
@@ -28,7 +30,7 @@ sub test_calendarevent_set_defaultalerts_etag_shared
             }
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     xlog "Create other user and share owner calendar";
     my $admintalk = $self->{adminstore}->get_client();
@@ -44,7 +46,7 @@ sub test_calendarevent_set_defaultalerts_etag_shared
                 1 => {
                     uid => 'eventuid1local',
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "eventCass",
                     start => "2020-01-19T11:00:00",
@@ -121,7 +123,7 @@ sub test_calendarevent_set_defaultalerts_etag_shared
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     defaultAlertsWithTime => {
                         alert2 => {
                             '@type' => 'Alert',
@@ -137,7 +139,7 @@ sub test_calendarevent_set_defaultalerts_etag_shared
             }
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     xlog "Refetch ETags of events";
     %Headers = ();

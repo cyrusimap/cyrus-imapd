@@ -12,7 +12,7 @@ sub test_imip_cancel_delete
 
     xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
+    my $CalendarId = $self->default_user->calendars->default->id;
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
     xlog $self, "Install a sieve script to process iMIP";

@@ -5,7 +5,9 @@ sub test_calendarevent_multiget_defaultalerts_per_calendar
     :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog "Create two calendars with default alerts";
@@ -116,7 +118,6 @@ EOF
     my %icaldataPerHref = map {
         $_->{'{DAV:}href'}{content} => $_->{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content}
     } @{$res->{'{DAV:}response'}};
-
 
     $self->assert_matches(qr/TRIGGER:-PT1H/, $icaldataPerHref{$eventA1Href});
     $self->assert_matches(qr/TRIGGER:-PT1H/, $icaldataPerHref{$eventA2Href});

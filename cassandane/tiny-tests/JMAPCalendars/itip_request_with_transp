@@ -6,7 +6,8 @@ use Text::VCardFast qw(vcard2hash);
 sub test_itip_request_with_transp
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     $self->{instance}->getnotify();
 
@@ -16,7 +17,7 @@ sub test_itip_request_with_transp
             create => {
                 event => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     '@type' => 'Event',
                     duration => 'P1D',

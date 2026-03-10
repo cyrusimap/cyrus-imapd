@@ -5,7 +5,9 @@ sub test_calendarevent_set_preserve_icalxprops
     :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog $self, "Create event with unknown x-properties";
@@ -75,7 +77,6 @@ EOF
     $self->assert_str_equals('x-recurevent-prop',
         $res->[0][1]{list}[0]{recurrenceOverrides}{'2023-03-10T16:00:00'
             }{'cyrusimap.org:iCalProps'}[0][0]);
-
 
     xlog $self, "Update some event property via JMAP";
     $res = $jmap->CallMethods([
@@ -161,7 +162,7 @@ EOF
             create => {
                 event2 => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => 'event2',
                     start => '2023-08-03T17:45:00',

@@ -5,7 +5,9 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
     :min_version_3_5 :JMAPExtensions :NoAltNameSpace
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog "create event with mayInviteSelf and mayInviteOthers set";
@@ -14,7 +16,7 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
             create => {
                 event => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     '@type' => 'Event',
                     uid => 'eventuid',

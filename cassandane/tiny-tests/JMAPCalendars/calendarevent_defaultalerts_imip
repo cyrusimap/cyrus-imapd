@@ -5,7 +5,9 @@ sub test_calendarevent_defaultalerts_imip
     :needs_component_sieve :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my ($maj, $min) = Cassandane::Instance->get_version();
     my $uuid = new Data::UUID;
 
@@ -47,7 +49,7 @@ EOF
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     defaultAlertsWithTime => {
                         $alertWithTimeId => $alertWithTime,
                     },
@@ -58,7 +60,7 @@ EOF
             }
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     my $imip = <<'EOF';
 Date: Thu, 23 Sep 2021 09:06:18 -0400

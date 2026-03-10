@@ -5,7 +5,9 @@ sub test_calendarevent_utcstart_customtz
     :min_version_3_1
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $CalDAV = $self->{caldav};
 
     # Set custom calendar timezone. DST starts on December 1 at 2am.
@@ -54,7 +56,7 @@ EOF
                 1 => {
                     uid => 'eventuid1local',
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event1",
                     start => "2019-11-30T23:30:00",

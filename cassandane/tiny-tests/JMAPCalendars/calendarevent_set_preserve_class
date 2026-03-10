@@ -5,7 +5,9 @@ sub test_calendarevent_set_preserve_class
     :min_version_3_7
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     my $ical = <<EOF;
@@ -39,7 +41,6 @@ EOF
     ]);
     my $eventId = $res->[0][1]{ids}[0];
     $self->assert_not_null($eventId);
-
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {

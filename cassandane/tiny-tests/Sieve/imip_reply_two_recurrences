@@ -12,7 +12,7 @@ sub test_imip_reply_two_recurrences
 
     xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = 'Default';
+    my $CalendarId = $self->default_user->calendars->default->id;
     my $uuid = "09b59913-30b2-4f90-982a-7ce6e2a56655";
     my $href = "$CalendarId/$uuid.ics";
 

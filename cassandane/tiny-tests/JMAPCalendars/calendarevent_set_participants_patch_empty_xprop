@@ -16,7 +16,7 @@ sub test_calendarevent_set_participants_patch_empty_xprop
         expandurl => 1,
     );
 
-    my $CalendarId = "Default";
+    my $CalendarId = $self->default_user->calendars->default->id;
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
     my $href = "$CalendarId/$uuid.ics";
     my $event = <<EOF;
@@ -43,7 +43,8 @@ EOF
 
     $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
 
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['CalendarEvent/query', {

@@ -3,7 +3,9 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_copy_state ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");

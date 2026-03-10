@@ -5,9 +5,11 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     :min_version_3_1
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
-    my $calid = 'Default';
+    my $calid = $self->default_user->calendars->default->id;
 
     xlog $self, "create event with RDATE";
     my $res = $jmap->CallMethods([

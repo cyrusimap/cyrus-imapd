@@ -5,7 +5,9 @@ sub test_calendar_copy_defaultalerts_mkcalendar
     :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog $self, "No default alerts are set on default calendar";
@@ -107,13 +109,13 @@ sub test_calendar_copy_defaultalerts_mkcalendar
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     defaultAlertsWithTime => $defaultAlertsWithTime2,
                 },
             },
         }, 'R1'],
     ]);
-    $self->assert(exists $res->[0][1]{updated}{Default});
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
 
     xlog $self, "Create calendar test3 over CalDAV";
     $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test3");
