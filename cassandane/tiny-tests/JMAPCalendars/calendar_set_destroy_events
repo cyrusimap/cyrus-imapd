@@ -5,7 +5,9 @@ sub test_calendar_set_destroy_events
     :min_version_3_1
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $CalDAV = $self->{caldav};
 
     xlog "Create calendar and event";

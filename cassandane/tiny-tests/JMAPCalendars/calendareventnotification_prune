@@ -5,10 +5,11 @@ sub test_calendareventnotification_prune
     :min_version_3_9 :JmapMaxCalendarEventNotifs
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $jmap_max_calendareventnotifs = $self->{instance}->{config}
-                                         ->get('jmap_max_calendareventnotifs');
+                                            ->get('jmap_max_calendareventnotifs');
     $self->assert_not_null($jmap_max_calendareventnotifs);
 
     my ($manJmap) = $self->create_user('manifold');
@@ -23,7 +24,7 @@ sub test_calendareventnotification_prune
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         manifold => {
                             mayReadFreeBusy => JSON::true,
@@ -46,7 +47,7 @@ sub test_calendareventnotification_prune
                 event1 => {
                     title => 'event1',
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     start => '2011-01-01T04:05:06',
                     duration => 'PT1H',
@@ -74,7 +75,7 @@ sub test_calendareventnotification_prune
                     "event$i" => {
                         title => "event$i",
                         calendarIds => {
-                            Default => JSON::true,
+                            $default_cal_id => JSON::true,
                         },
                         start => '2011-01-01T04:05:06',
                         duration => 'PT1H',
@@ -104,7 +105,7 @@ sub test_calendareventnotification_prune
                 eventX => {
                     title => 'eventX',
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     start => '2011-01-01T04:05:06',
                     duration => 'PT1H',

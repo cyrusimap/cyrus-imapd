@@ -5,7 +5,9 @@ sub test_calendarevent_set_utcstart_recur
     :min_version_3_1
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $proplist = [
         'start',
         'utcStart',
@@ -23,7 +25,7 @@ sub test_calendarevent_set_utcstart_recur
                 1 => {
                     uid => 'eventuid1local',
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event1",
                     utcStart => "2019-12-10T23:30:00Z",

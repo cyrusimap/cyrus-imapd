@@ -5,7 +5,9 @@ sub test_calendarevent_set_privacy
     :min_version_3_7
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog "share calendar with cassandane user";
@@ -13,7 +15,7 @@ sub test_calendarevent_set_privacy
     my $res = $sharerJmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         cassandane => {
                             mayReadItems => JSON::true,
@@ -38,7 +40,7 @@ sub test_calendarevent_set_privacy
             create => {
                 eventShared1 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => 'eventShared1',
                     start => '2022-01-24T09:00:00',
@@ -47,7 +49,7 @@ sub test_calendarevent_set_privacy
                 },
                 eventShared2 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => 'eventShared2',
                     start => '2022-01-24T10:00:00',
@@ -60,7 +62,7 @@ sub test_calendarevent_set_privacy
             create => {
                 eventOwned1 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => 'eventOwned1',
                     start => '2022-01-24T11:00:00',

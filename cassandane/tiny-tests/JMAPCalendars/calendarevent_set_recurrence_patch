@@ -5,7 +5,8 @@ sub test_calendarevent_set_recurrence_patch
     :min_version_3_1
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog $self, "Create a recurring event with alert";
     my $res = $jmap->CallMethods([
@@ -13,7 +14,7 @@ sub test_calendarevent_set_recurrence_patch
             create =>  {
                 1 => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     "title"=> "title",
                     "description"=> "description",

@@ -6,6 +6,7 @@ sub test_calendarevent_set_alerts_owner
     ($self)
 {
     my $ownerJmap = $self->{jmap};
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog $self, "create sharee and share calendar";
     my ($shareeJmap) = $self->create_user('sharee');
@@ -43,7 +44,7 @@ sub test_calendarevent_set_alerts_owner
             create => {
                 event => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     start => $start,
                     timeZone => 'Etc/UTC',

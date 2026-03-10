@@ -5,7 +5,8 @@ sub test_calendarevent_set_mayinviteself
     :JMAPExtensions :NoAltNameSpace :min_version_0_0 :max_version_0_0
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my ($shareeJmap, $shareeCalDAV) = $self->create_user('sharee');
 
@@ -15,7 +16,7 @@ sub test_calendarevent_set_mayinviteself
             create => {
                 event => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     '@type' => 'Event',
                     uid => 'eventuid',
@@ -77,7 +78,7 @@ sub test_calendarevent_set_mayinviteself
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         'sharee' => {
                             mayReadItems => JSON::true,
@@ -155,7 +156,7 @@ sub test_calendarevent_set_mayinviteself
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         'sharee' => {
                             mayReadItems => JSON::true,

@@ -5,7 +5,9 @@ sub test_calendarevent_defaultalerts_calalarmd
     :min_version_3_9 :needs_component_calalarmd
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Sydney');
@@ -236,7 +238,6 @@ sub _can_match_a ($event, $want)
 
     return 1;
 }
-
 
 sub assert_alarms ($self, @want)
 {

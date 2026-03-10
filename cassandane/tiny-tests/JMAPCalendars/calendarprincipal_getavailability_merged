@@ -6,6 +6,7 @@ sub test_calendarprincipal_getavailability_merged
     ($self)
 {
     my $jmap = $self->{jmap};
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -13,7 +14,7 @@ sub test_calendarprincipal_getavailability_merged
                 # 09:00 to 10:30: Two events adjacent to each other.
                 'event-0900-1000' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-0900-1000",
                     start => "2020-08-01T09:00:00",
@@ -22,7 +23,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 'event-1000-1030' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-1000-1030",
                     start => "2020-08-01T10:00:00",
@@ -32,7 +33,7 @@ sub test_calendarprincipal_getavailability_merged
                 # 05:00 to 08:00: One event completely overlapping the other.
                 'event-0500-0800' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-0500-0800",
                     start => "2020-08-01T05:00:00",
@@ -41,7 +42,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 'event-0600-0700' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-06:00-07:00",
                     start => "2020-08-01T06:00:00",
@@ -51,7 +52,7 @@ sub test_calendarprincipal_getavailability_merged
                 # 01:00 to 03:00: One event partially overlapping the other.
                 'event-0100-0200' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-0100-0200",
                     start => "2020-08-01T01:00:00",
@@ -60,7 +61,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 'event-0130-0300' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-0130-0300",
                     start => "2020-08-01T01:30:00",
@@ -70,7 +71,7 @@ sub test_calendarprincipal_getavailability_merged
                 # 12:00 to 13:30: Overlapping events with differing busyStatus.
                 'event-1200-1300-tentative' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-1200-1300-tentative",
                     start => "2020-08-01T12:00:00",
@@ -80,7 +81,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 'event-1200-1330-confirmed' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-1200-1330-confirmed",
                     start => "2020-08-01T12:00:00",
@@ -90,7 +91,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 'event-1200-1230-unavailable' => {
                     calendarIds => {
-                        Default => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     title => "event-1200-1330-unavailable",
                     start => "2020-08-01T12:00:00",
@@ -106,6 +107,9 @@ sub test_calendarprincipal_getavailability_merged
         }, 'R2'],
     ]);
     $self->assert_num_equals(9, scalar keys %{$res->[0][1]{created}});
+
+    use Data::Printer;
+    p $res;
 
     $self->assert_deep_equals([{
         utcStart => "2020-08-01T01:00:00Z",

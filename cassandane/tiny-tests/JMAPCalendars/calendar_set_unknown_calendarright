@@ -5,14 +5,15 @@ sub test_calendar_set_unknown_calendarright
     :min_version_3_5
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     $self->create_user('sharee');
 
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         sharee => {
                             unknownCalendarRight => JSON::true,

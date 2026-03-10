@@ -5,7 +5,9 @@ sub test_calendarevent_get_baseeventid
     :min_version_3_9
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $event1Uid = '1cf5da26-38e9-47ac-8449-04354ae3772d';
     my $event2Uid = '3e1356b8-5e55-4413-98c9-27da12271b99';
 
@@ -14,7 +16,7 @@ sub test_calendarevent_get_baseeventid
             create => {
                 event1 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     uid => $event1Uid,
                     title => "event1",
@@ -33,7 +35,7 @@ sub test_calendarevent_get_baseeventid
                 },
                 event2 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     uid => $event2Uid,
                     title => "event2",

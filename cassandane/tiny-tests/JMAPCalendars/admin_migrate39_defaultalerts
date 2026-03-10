@@ -7,7 +7,9 @@ sub test_admin_migrate39_defaultalerts
     :min_version_3_9 :ReverseACLs :MagicPlus
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $imap = $self->{store}->get_client();
 
     my @using = qw(
@@ -57,7 +59,8 @@ sub assert_calendars ($self, $state)
 {
     my $caldav = $self->{caldav};
     my $imap = $self->{store}->get_client();
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     if (not $state->{did_migrate}) {
         xlog $self, "Create calendars with legacy CalDAV alarms";
@@ -119,7 +122,7 @@ EOF
         $self->assert_deep_equals({
             $state->{calendarA}{id} => undef,
             $state->{calendarB}{id} => undef,
-            Default => undef,
+            $default_cal_id => undef,
         }, $state->{migrateResponse}{migrated}{cassandane});
 
         # Migration rewrites default alert UID, if none was set
@@ -148,7 +151,8 @@ EOF
 sub assert_events ($self, $state)
 {
     my $caldav = $self->{caldav};
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     if (not $state->{did_migrate}) {
         # First, create events
@@ -240,6 +244,8 @@ sub assert_shared_calendars ($self, $state)
     my $eventUidA2 = '00a90af9-8398-4074-94bf-6251a1ab9e70';
     my $eventUidB1 = '93c7831d-e246-4dda-ab3f-52acba6b9e3b';
     my $eventUidB2 = '379e7061-d20f-45e4-8366-52d45836a7fd';
+
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     if (not $state->{did_migrate}) {
         xlog $self, "Create sharee";
@@ -387,7 +393,7 @@ EOF
     }
     else {
         $self->assert_deep_equals({
-            Default => undef,
+            $default_cal_id => undef,
         }, $state->{migrateResponse}{migrated}{sharee});
 
         $self->assert_equals(JSON::false, $eventA1->{useDefaultAlerts});
@@ -446,7 +452,6 @@ sub get_caldav_datetime_annotation ($self, $calendarId)
     return $res->{$mboxname}{
         '/shared/vendor/cmu/cyrus-httpd/<urn:ietf:params:xml:ns:caldav>default-alarm-vevent-datetime'};
 }
-
 
 sub create_legacy_calendar ($self, $name)
 {

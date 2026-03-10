@@ -43,7 +43,8 @@ EOF
 
     $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
 
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['CalendarEvent/query', {

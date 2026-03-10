@@ -5,7 +5,8 @@ sub test_calendarsharenotification_set
     :min_version_3_3
     ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     # Create sharee
     my $admin = $self->{adminstore}->get_client();
@@ -23,7 +24,7 @@ sub test_calendarsharenotification_set
     my $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     name => 'myname',
                     "shareWith/manifold" => {
                         mayReadFreeBusy => JSON::true,

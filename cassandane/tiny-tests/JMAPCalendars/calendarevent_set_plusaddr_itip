@@ -3,7 +3,9 @@ use Cassandane::Tiny;
 
 sub test_calendarevent_set_plusaddr_itip ($self)
 {
-    my $jmap = $self->{jmap};
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
     my $caldav = $self->{caldav};
 
     xlog "Set scheduling addresses via CalDAV";
@@ -34,7 +36,7 @@ EOF
             create => {
                 1 => {
                     calendarIds => {
-                        'Default' => JSON::true,
+                        $default_cal_id => JSON::true,
                     },
                     '@type' => 'Event',
                     uid => $uid,
