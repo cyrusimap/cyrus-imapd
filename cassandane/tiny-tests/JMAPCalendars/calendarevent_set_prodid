@@ -6,7 +6,7 @@ sub test_calendarevent_set_prodid
     ($self)
 {
     my $jmap = $self->{jmap};
-    my $calid = "Default";
+    my $calid = $self->default_user->calendars->default->id;
     my $event =  {
         calendarIds => {
             $calid => JSON::true,

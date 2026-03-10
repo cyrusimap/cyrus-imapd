@@ -6,7 +6,7 @@ sub test_calendarevent_set_recurrence_bymonthday
     ($self)
 {
     my $jmap = $self->{jmap};
-    my $calid = "Default";
+    my $calid = $self->default_user->calendars->default->id;
 
     my $event =  {
         "uid" => "90c2697e-acbc-4508-9e72-6b8828e8d9f3",

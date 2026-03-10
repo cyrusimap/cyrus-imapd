@@ -7,7 +7,7 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
 {
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
-    my $calid = 'Default';
+    my $calid = $self->default_user->calendars->default->id;
 
     xlog $self, "create events";
     my $res = $jmap->CallMethods([

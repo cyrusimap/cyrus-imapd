@@ -7,7 +7,7 @@ sub test_calendarevent_query_sort
 {
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
-    my $calid = 'Default';
+    my $calid = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {

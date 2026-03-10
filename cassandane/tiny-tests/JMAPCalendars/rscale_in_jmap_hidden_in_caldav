@@ -9,7 +9,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
     my $caldav = $self->{caldav};
     my $admin = $self->{adminstore}->get_client();
 
-    my $calid = "Default";
+    my $calid = $self->default_user->calendars->default->id;
     my $event =  {
         calendarIds => {
             $calid => JSON::true,
