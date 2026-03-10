@@ -168,6 +168,10 @@ The following methods return factories for the relevant datatypes:
 
 returns a L<Cassandane::TestEntity::DataType::AddressBook> factory
 
+=item calendars
+
+returns a L<Cassandane::TestEntity::DataType::Calendar> factory
+
 =item contacts
 
 returns a L<Cassandane::TestEntity::DataType::ContactCard> factory
@@ -195,6 +199,7 @@ datatype.  Mailboxes are just used as an example.
 
 for my $pair (
     [ addressbooks => 'AddressBook' ],
+    [ calendars    => 'Calendar' ],
     [ contacts     => 'ContactCard' ],
     [ emails       => 'Email' ],
     [ mailboxes    => 'Mailbox' ],

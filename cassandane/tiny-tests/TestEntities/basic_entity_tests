@@ -94,4 +94,7 @@ sub test_basic_entity_tests
         # "other" in it, assert we find nothing.
         { $imap->getacl('INBOX')->@* }->{other}
     );
+
+    my $cal = $user->calendars->default;
+    $self->assert_not_null($cal);
 }
