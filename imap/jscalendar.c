@@ -19,17 +19,231 @@
 
 // ---------------
 
+#define myicalcomponent_foreach_component(comp, comp_kind, subcomp, iter)      \
+    for (iter = icalcomponent_begin_component(comp, comp_kind);                \
+         (subcomp = icalcompiter_deref(&iter));                                \
+         icalcompiter_next(&iter))
+
+#define myicalcomponent_foreach_property(comp, prop_kind, prop, iter)          \
+    for (iter = icalcomponent_begin_property(comp, prop_kind);                 \
+         (prop = icalpropiter_deref(&iter));                                   \
+         icalpropiter_next(&iter))
+
+#define myicalproperty_foreach_parameter(prop, param_kind, param, iter)        \
+    for (iter = icalproperty_begin_parameter(prop, param_kind);                \
+         (param = icalparamiter_deref(&iter));                                 \
+         icalparamiter_next(&iter))
+
+static bool myicalproperty_has_name(icalproperty *prop, const char *name)
+{
+    icalproperty_kind kind = icalproperty_isa(prop);
+    const char *prop_name = NULL;
+
+    if (kind == ICAL_X_PROPERTY)
+        prop_name = icalproperty_get_x_name(prop);
+    else if (kind == ICAL_IANA_PROPERTY)
+        prop_name = icalproperty_get_iana_name(prop);
+    else
+        prop_name = icalproperty_kind_to_string(kind);
+
+     return !strcasecmpsafe(name, prop_name);
+}
+
+static bool myicalparameter_has_name(icalparameter *param, const char *name)
+{
+    icalparameter_kind param_kind = icalparameter_isa(param);
+    const char *param_name = NULL;
+
+    if (param_kind == ICAL_X_PARAMETER)
+        param_name = icalparameter_get_xname(param);
+    else if (param_kind == ICAL_IANA_PARAMETER)
+        param_name = icalparameter_get_iana_name(param);
+    else
+        param_name = icalparameter_kind_to_string(param_kind);
+
+     return !strcasecmpsafe(name, param_name);
+}
+
+static icalparameter *myicalparameter_new_jsid(const char *key)
+{
+    icalparameter *param = icalparameter_new_iana(key);
+    icalparameter_set_iana_name(param, "JSID");
+    return param;
+}
+
+static const char *myicalparameter_get_jsid(icalparameter *param)
+{
+    if (!myicalparameter_has_name(param, "JSID")) return NULL;
+    return icalparameter_get_value_as_string(param);
+}
+
+
+static icalparameter *myicalparameter_new_jsptr(const char *ptr)
+{
+    icalparameter *param = icalparameter_new_iana(ptr);
+    icalparameter_set_iana_name(param, "JSPTR");
+    return param;
+}
+
+static const char *myicalparameter_get_jsptr(icalparameter *param)
+{
+    if (!myicalparameter_has_name(param, "JSPTR")) return NULL;
+    return icalparameter_get_value_as_string(param);
+}
+
+static icalproperty *myicalproperty_new_jsid(const char *key)
+{
+    icalproperty *prop = icalproperty_new_iana(key);
+    icalproperty_set_iana_name(prop, "JSID");
+    return prop;
+}
+
+static const char *myicalproperty_get_jsid(icalproperty *prop)
+{
+    if (!myicalproperty_has_name(prop, "JSID")) return NULL;
+    return icalproperty_get_value_as_string(prop);
+}
+
+static icalproperty *myicalproperty_new_jsprop(const char *val)
+{
+    icalproperty *prop = icalproperty_new_iana(val);
+    icalproperty_set_iana_name(prop, "JSPROP");
+    return prop;
+}
+
+static const char *myicalproperty_get_jsprop(icalproperty *prop)
+{
+    if (!myicalproperty_has_name(prop, "JSPROP")) return NULL;
+    icalvalue *value = icalproperty_get_value(prop);
+    if (icalvalue_isa(value) != ICAL_TEXT_VALUE) return NULL;
+    return icalvalue_get_text(value);
+}
+
+static icalproperty *myicalproperty_new_coordinates(const char *uri)
+{
+    icalproperty *prop = icalproperty_new(ICAL_IANA_PROPERTY);
+    icalproperty_set_iana_name(prop, "COORDINATES");
+    icalproperty_set_value(prop, icalvalue_new_uri(uri));
+    return prop;
+}
+
+static const char *myicalproperty_get_coordinates(icalproperty *prop)
+{
+    if (!myicalproperty_has_name(prop, "COORDINATES")) return NULL;
+    icalvalue *value = icalproperty_get_value(prop);
+    if (icalvalue_isa(value) != ICAL_URI_VALUE) return NULL;
+    return icalvalue_get_uri(value);
+}
+
+static icalproperty *myicalproperty_new_showwithouttime(bool val)
+{
+    icalproperty *prop = icalproperty_new(ICAL_IANA_PROPERTY);
+    icalproperty_set_iana_name(prop, "SHOW-WITHOUT-TIME");
+    icalproperty_set_value(prop, icalvalue_new_boolean(val));
+    return prop;
+}
+
+static bool myicalproperty_get_showwithouttime(icalproperty *prop)
+{
+    if (!myicalproperty_has_name(prop, "SHOW-WITHOUT-TIME")) return false;
+    icalvalue *value = icalproperty_get_value(prop);
+    switch (icalvalue_isa(value)) {
+        case ICAL_BOOLEAN_VALUE:
+            return icalvalue_get_boolean(value);
+        case ICAL_TEXT_VALUE:
+            return !strcasecmpsafe("TRUE", icalvalue_get_text(value));
+        default:
+            return false;
+    }
+}
+
+static bool myicaltime_has_zero_time(icaltimetype t)
+{
+    return t.hour == 0 && t.minute == 0 && t.second == 0;
+}
+
+static bool myicalduration_has_zero_time(struct icaldurationtype d)
+{
+    return d.hours == 0 && d.minutes == 0 && d.seconds == 0;
+}
+
+static icalproperty *myicalcomponent_get_property(icalcomponent *comp,
+                                                  icalproperty_kind kind)
+{
+    icalpropiter iter = icalcomponent_begin_property(comp, kind);
+    return icalpropiter_deref(&iter);
+}
+
+static icalparameter *myicalproperty_get_parameter(icalproperty *prop,
+                                                   icalparameter_kind kind)
+{
+    icalparamiter paramiter = icalproperty_begin_parameter(prop, kind);
+    return icalparamiter_deref(&paramiter);
+}
+
+static bool myicalproperty_is_derived(icalproperty *prop)
+{
+    icalparameter *param =
+        myicalproperty_get_parameter(prop, ICAL_DERIVED_PARAMETER);
+    return param && icalparameter_get_derived(param) == ICAL_DERIVED_TRUE;
+}
+
+static icalproperty *myicalcomponent_get_nonderived_property(
+    icalcomponent *comp, icalproperty_kind kind)
+{
+    icalproperty *prop;
+    icalpropiter it;
+    myicalcomponent_foreach_property(comp, kind, prop, it)
+    {
+        if (!myicalproperty_is_derived(prop)) return prop;
+    }
+    return NULL;
+}
+
+static icalparameter *myicalproperty_get_parameter_by_name(icalproperty *prop, const char *name)
+{
+    icalparamiter it;
+    icalparameter *param;
+
+    myicalproperty_foreach_parameter(prop, ICAL_ANY_PARAMETER, param, it) {
+        if (myicalparameter_has_name(param, name)) {
+            return param;
+        }
+    }
+
+    return NULL;
+}
+
+static icalproperty *myicalcomponent_get_property_by_name(icalcomponent *comp, const char *name)
+{
+    icalpropiter it;
+    icalproperty *prop;
+
+    myicalcomponent_foreach_property(comp, ICAL_ANY_PROPERTY, prop, it) {
+        if (myicalproperty_has_name(prop, name)) {
+            return prop;
+        }
+    }
+
+    return NULL;
+}
+
+// ---------------
+
 static bool is_known_param(icalproperty *prop, icalparameter *param)
 {
     icalproperty_kind prop_kind = icalproperty_isa(prop);
     icalparameter_kind param_kind = icalparameter_isa(param);
 
     switch (param_kind) {
-    case ICAL_JSID_PARAMETER:
     case ICAL_TZID_PARAMETER:
     case ICAL_VALUE_PARAMETER:
         return true;
-    default:;
+    default:
+        if (myicalparameter_has_name(param, "JSID")) {
+            return true;
+        }
+        // fallthrough
     }
 
     switch (prop_kind) {
@@ -98,12 +312,11 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
     icalcomponent_kind comp_kind = icalcomponent_isa(comp);
     icalproperty_kind prop_kind = icalproperty_isa(prop);
 
-    switch (prop_kind) {
-    case ICAL_JSID_PROPERTY:
-    case ICAL_JSPROP_PROPERTY:
+    if (myicalproperty_has_name(prop, "JSID"))
         return true;
-    default:;
-    }
+
+    if (myicalproperty_has_name(prop, "JSPROP"))
+        return true;
 
     switch (comp_kind) {
     case ICAL_VALARM_COMPONENT:
@@ -162,7 +375,6 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_COMPLETED_PROPERTY:
         case ICAL_CONCEPT_PROPERTY:
         case ICAL_CONFERENCE_PROPERTY:
-        case ICAL_COORDINATES_PROPERTY:
         case ICAL_CREATED_PROPERTY:
         case ICAL_DESCRIPTION_PROPERTY:
         case ICAL_DTEND_PROPERTY:
@@ -185,7 +397,6 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_RELATEDTO_PROPERTY:
         case ICAL_RRULE_PROPERTY:
         case ICAL_SEQUENCE_PROPERTY:
-        case ICAL_SHOWWITHOUTTIME_PROPERTY:
         case ICAL_STATUS_PROPERTY:
         case ICAL_STYLEDDESCRIPTION_PROPERTY:
         case ICAL_SUMMARY_PROPERTY:
@@ -195,13 +406,16 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_VERSION_PROPERTY:
             return true;
         default:
+            if (myicalproperty_has_name(prop, "COORDINATES") ||
+                myicalproperty_has_name(prop, "SHOW-WITHOUT-TIME")) {
+                return true;
+            }
             return false;
         }
 
     case ICAL_VLOCATION_COMPONENT:
         switch (prop_kind) {
         case ICAL_ATTACH_PROPERTY:
-        case ICAL_COORDINATES_PROPERTY:
         case ICAL_DESCRIPTION_PROPERTY:
         case ICAL_GEO_PROPERTY:
         case ICAL_IMAGE_PROPERTY:
@@ -211,6 +425,9 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_STYLEDDESCRIPTION_PROPERTY:
             return true;
         default:
+            if (myicalproperty_has_name(prop, "COORDINATES")) {
+                return true;
+            }
             return false;
         }
 
@@ -316,66 +533,6 @@ static bool is_usable_uid(const char *str)
 
     // Looks reasonable enough.
     return true;
-}
-
-// ---------------
-
-#define myicalcomponent_foreach_component(comp, comp_kind, subcomp, iter)      \
-    for (iter = icalcomponent_begin_component(comp, comp_kind);                \
-         (subcomp = icalcompiter_deref(&iter));                                \
-         icalcompiter_next(&iter))
-
-#define myicalcomponent_foreach_property(comp, prop_kind, prop, iter)          \
-    for (iter = icalcomponent_begin_property(comp, prop_kind);                 \
-         (prop = icalpropiter_deref(&iter));                                   \
-         icalpropiter_next(&iter))
-
-#define myicalproperty_foreach_parameter(prop, param_kind, param, iter)        \
-    for (iter = icalproperty_begin_parameter(prop, param_kind);                \
-         (param = icalparamiter_deref(&iter));                                 \
-         icalparamiter_next(&iter))
-
-static bool myicaltime_has_zero_time(icaltimetype t)
-{
-    return t.hour == 0 && t.minute == 0 && t.second == 0;
-}
-
-static bool myicalduration_has_zero_time(struct icaldurationtype d)
-{
-    return d.hours == 0 && d.minutes == 0 && d.seconds == 0;
-}
-
-static icalproperty *myicalcomponent_get_property(icalcomponent *comp,
-                                                  icalproperty_kind kind)
-{
-    icalpropiter iter = icalcomponent_begin_property(comp, kind);
-    return icalpropiter_deref(&iter);
-}
-
-static icalparameter *myicalproperty_get_parameter(icalproperty *prop,
-                                                   icalparameter_kind kind)
-{
-    icalparamiter paramiter = icalproperty_begin_parameter(prop, kind);
-    return icalparamiter_deref(&paramiter);
-}
-
-static bool myicalproperty_is_derived(icalproperty *prop)
-{
-    icalparameter *param =
-        myicalproperty_get_parameter(prop, ICAL_DERIVED_PARAMETER);
-    return param && icalparameter_get_derived(param) == ICAL_DERIVED_TRUE;
-}
-
-static icalproperty *myicalcomponent_get_nonderived_property(
-    icalcomponent *comp, icalproperty_kind kind)
-{
-    icalproperty *prop;
-    icalpropiter it;
-    myicalcomponent_foreach_property(comp, kind, prop, it)
-    {
-        if (!myicalproperty_is_derived(prop)) return prop;
-    }
-    return NULL;
 }
 
 // ---------------
@@ -493,7 +650,7 @@ static icalproperty *jicalproperty_to_icalproperty(json_t *jprop)
 
     const char *vtype = json_string_value(json_object_get(jprop, "valueType"));
     if (vtype) {
-        icalvalue_kind vkind = icalenum_string_to_value_kind(vtype);
+        icalvalue_kind vkind = icalvalue_string_to_kind(vtype);
         if (vkind) icalproperty_set_value(prop, icalvalue_new(vkind));
     }
 
@@ -1009,7 +1166,7 @@ static void myicalproperty_make_uuid5(icalproperty *prop, struct buf *buf)
 static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
 {
     if (force) {
-        icalproperty_add_parameter(prop, icalparameter_new_jsid(key));
+        icalproperty_add_parameter(prop, myicalparameter_new_jsid(key));
         return;
     }
 
@@ -1018,7 +1175,7 @@ static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
     bool is_derived = !strcmp(key, buf_cstring(&buf));
     buf_free(&buf);
     if (!is_derived) {
-        icalproperty_add_parameter(prop, icalparameter_new_jsid(key));
+        icalproperty_add_parameter(prop, myicalparameter_new_jsid(key));
     }
 }
 
@@ -1027,10 +1184,9 @@ static const char *jsid_from_prop(icalproperty *prop,
                                   struct buf *buf)
 {
     // Use JSID parameter value, if set.
-    icalparameter *param =
-        myicalproperty_get_parameter(prop, ICAL_JSID_PARAMETER);
+    icalparameter *param = myicalproperty_get_parameter_by_name(prop, "JSID");
     if (param) {
-        const char *jsid = icalparameter_get_jsid(param);
+        const char *jsid = icalparameter_get_iana(param);
         if (jsid && !json_object_get(jobj, jsid)) {
             buf_setcstr(buf, jsid);
             return buf_cstring(buf);
@@ -1082,7 +1238,7 @@ static void jsid_to_comp(icalcomponent *comp, const char *jsid)
         goto done;
     }
 
-    icalcomponent_add_property(comp, icalproperty_new_jsid(jsid));
+    icalcomponent_add_property(comp, myicalproperty_new_jsid(jsid));
 
 done:
     buf_free(&buf);
@@ -1095,9 +1251,9 @@ static const char *jsid_from_comp(icalcomponent *comp,
     buf_reset(buf);
 
     // Use JSID property value, if set.
-    icalproperty *prop = myicalcomponent_get_property(comp, ICAL_JSID_PROPERTY);
+    icalproperty *prop = myicalcomponent_get_property_by_name(comp, "JSID");
     if (prop) {
-        const char *jsid = icalproperty_get_jsid(prop);
+        const char *jsid = icalproperty_get_value_as_string(prop);
         if (jsid && !json_object_get(jobj, jsid)) {
             buf_setcstr(buf, jsid);
             return buf_cstring(buf);
@@ -1216,9 +1372,9 @@ static bool vendorexts_to_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
         if (!strchr(name, ':')) continue;
 
         char *val = json_dumps(jval, JSON_ENCODE_ANY | JSON_COMPACT);
-        icalproperty *prop = icalproperty_new_jsprop(val);
+        icalproperty *prop = myicalproperty_new_jsprop(val);
         icalproperty_add_parameter(
-            prop, icalparameter_new_jsptr(jmap_parser_path_at(parser, name)));
+            prop, myicalparameter_new_jsptr(jmap_parser_path_at(parser, name)));
         icalcomponent_add_property(comp, prop);
         free(val);
 
@@ -1648,16 +1804,14 @@ static void locations_to_ical(jscalendar_cfg_t *cfg,
                 if (!vloc) vloc = icalcomponent_new_vlocation();
                 icalcomponent_add_property(vloc, prop);
             }
-            else if (prop
-                     && icalproperty_isa(prop) != ICAL_COORDINATES_PROPERTY) {
+            else if (prop && !myicalproperty_has_name(prop, "COORDINATES")) {
                 icalproperty_free(prop);
                 prop = NULL;
             }
 
             // Set COORDINATES property in VLOCATION.
             if ((!prop && !maingeo_prop) || icalgeo_is_lossy) {
-                if (!prop) prop = icalproperty_new(ICAL_COORDINATES_PROPERTY);
-                icalproperty_set_value(prop, icalvalue_new_uri(coords));
+                if (!prop) prop = myicalproperty_new_coordinates(coords);
                 if (!vloc) vloc = icalcomponent_new_vlocation();
                 icalcomponent_add_property(vloc, prop);
             }
@@ -1893,7 +2047,7 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
                 {
                     const char *s = json_object_iter_key(iter);
                     if (!strcmp("owner", s) && !is_organizer) {
-                        role = ICAL_ROLE_OWNER;
+                        role = ICAL_ROLE_X; // will become OWNER
                     }
                     else if (!strcmp("chair", s)) {
                         role = ICAL_ROLE_CHAIR;
@@ -1914,8 +2068,11 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
                 if (role != ICAL_ROLE_NONE) {
                     if (!attendee)
                         attendee = icalproperty_new(ICAL_ATTENDEE_PROPERTY);
-                    icalproperty_add_parameter(attendee,
-                                               icalparameter_new_role(role));
+                    icalparameter *param = icalparameter_new_role(role);
+                    if (role == ICAL_ROLE_X) {
+                        icalparameter_set_xvalue(param, "OWNER");
+                    }
+                    icalproperty_add_parameter(attendee, param);
                 }
             }
 
@@ -2302,7 +2459,7 @@ static void timeprops_to_ical(jscalendar_cfg_t *cfg,
                 icaltimezone_get_cyrus_timezone_from_tzid(end_tzid);
 
             icaltimetype t_start_utc = icaltime_convert_to_zone(start, utc);
-            icaltimetype t_end_utc = icaltime_add(t_start_utc, duration);
+            icaltimetype t_end_utc = icalduration_extend(t_start_utc, duration);
             icaltimetype end = icaltime_convert_to_zone(t_end_utc, tz_end);
 
             timeprop_set_value(dtend, value_kind, end_tzid, &end);
@@ -2323,7 +2480,7 @@ static void timeprops_to_ical(jscalendar_cfg_t *cfg,
 
     // Set SHOW-WITHOUT-TIME property.
     if (show_without_time && value_kind != ICAL_DATE_VALUE) {
-        icalcomponent_add_property(comp, icalproperty_new_showwithouttime(1));
+        icalcomponent_add_property(comp, myicalproperty_new_showwithouttime(true));
     }
 
     // Set RRULE property.
@@ -2478,7 +2635,7 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     jval = json_object_get(jentry, "method");
     if (JNOTNULL(jval) && !have_method) {
         icalproperty_method m =
-            icalenum_string_to_method(json_string_value(jval));
+            icalproperty_string_to_method(json_string_value(jval));
         if (m != ICAL_METHOD_NONE) {
             icalcomponent_add_property(ical, icalproperty_new_method(m));
         }
@@ -4087,16 +4244,19 @@ static void vendorexts_from_ical(icalcomponent *comp, json_t *jobj)
 
     icalproperty *prop;
     icalpropiter iter;
-    myicalcomponent_foreach_property(comp, ICAL_JSPROP_PROPERTY, prop, iter)
+    myicalcomponent_foreach_property(comp, ICAL_IANA_PROPERTY, prop, iter)
     {
-        icalparameter *param =
-            myicalproperty_get_parameter(prop, ICAL_JSPTR_PARAMETER);
+        if (!myicalproperty_has_name(prop, "JSPROP")) {
+            continue;
+        }
+
+        icalparameter *param = myicalproperty_get_parameter_by_name(prop, "JSPTR");
         if (!param) continue;
 
-        const char *ptr = icalparameter_get_jsptr(param);
+        const char *ptr = myicalparameter_get_jsptr(param);
         if (!ptr || ptr[0] == '/') continue;
 
-        const char *val = icalproperty_get_jsprop(prop);
+        const char *val = myicalproperty_get_jsprop(prop);
         if (!val) continue;
 
         json_t *jval = json_loads(val, JSON_DECODE_ANY, NULL);
@@ -4631,7 +4791,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
                 json_object_set_new(jroles, "optional", json_true());
             else if (role == ICAL_ROLE_REQPARTICIPANT)
                 json_object_set_new(jroles, "required", json_true());
-            else if (role == ICAL_ROLE_OWNER)
+            else if (!strcasecmpsafe("OWNER", icalparameter_get_value_as_string(param)))
                 json_object_set_new(jroles, "owner", json_true());
             if (!json_object_size(jroles)) json_object_del(jpart, "roles");
         }
@@ -4657,8 +4817,8 @@ static void locations_from_ical(jscalendar_cfg_t *cfg,
         myicalcomponent_get_property(comp, ICAL_LOCATION_PROPERTY);
     if (mainloc_prop) {
         icalparameter *param =
-            myicalproperty_get_parameter(mainloc_prop, ICAL_JSID_PARAMETER);
-        if (param) mainloc_id = xstrdupnull(icalparameter_get_jsid(param));
+            myicalproperty_get_parameter_by_name(mainloc_prop, "JSID");
+        if (param) mainloc_id = xstrdupnull(myicalparameter_get_jsid(param));
 
         if (!myicalproperty_is_derived(mainloc_prop)) {
             json_t *jloc = json_pack("{s:s}", "@type", "Location");
@@ -4704,8 +4864,8 @@ static void locations_from_ical(jscalendar_cfg_t *cfg,
         comp, ICAL_VLOCATION_COMPONENT, vloc, comp_iter)
     {
         // Match VLOCATION by Location id.
-        prop = myicalcomponent_get_property(vloc, ICAL_JSID_PROPERTY);
-        if (prop && !strcmpsafe(mainloc_id, icalproperty_get_jsid(prop))) {
+        prop = myicalcomponent_get_property_by_name(vloc, "JSID");
+        if (prop && !strcmpsafe(mainloc_id, myicalproperty_get_jsid(prop))) {
             mainloc_vloc = vloc;
             break;
         }
@@ -4739,9 +4899,9 @@ static void locations_from_ical(jscalendar_cfg_t *cfg,
 
         links_from_ical(cfg, vloc, jloc);
 
-        prop = myicalcomponent_get_property(vloc, ICAL_COORDINATES_PROPERTY);
+        prop = myicalcomponent_get_property_by_name(vloc, "COORDINATES");
         if (prop) {
-            json_t *jval = json_string(icalproperty_get_coordinates(prop));
+            json_t *jval = json_string(myicalproperty_get_coordinates(prop));
             jobj_set_icalprop(cfg, jloc, "coordinates", jval, prop);
         }
 
@@ -4821,7 +4981,8 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
 
             icalparameter *param =
                 myicalproperty_get_parameter(attendee, ICAL_ROLE_PARAMETER);
-            if (param && icalparameter_get_role(param) == ICAL_ROLE_OWNER)
+            if (param &&
+                    !strcasecmpsafe("OWNER", icalparameter_get_value_as_string(param)))
                 owner_role_is_set = true;
         }
 
@@ -4979,7 +5140,8 @@ static void timeprops_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
                 dtstart, icaltimezone_get_utc_timezone());
             icaltimetype utc_end = icaltime_convert_to_zone(
                 dtend, icaltimezone_get_utc_timezone());
-            duration = icaltime_subtract(utc_end, utc_start);
+            duration = icalduration_from_times(utc_end, utc_start);
+            duration = icaldurationtype_normalize(duration);
 
             if (dtstart.zone == dtend.zone) {
                 // Keep track that duration got converted from DTEND.
@@ -5063,10 +5225,9 @@ static void timeprops_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
         json_object_set_new(jobj, "recurrenceRule", jrrule);
     }
 
-    if ((prop =
-             myicalcomponent_get_property(comp, ICAL_SHOWWITHOUTTIME_PROPERTY)))
+    if ((prop = myicalcomponent_get_property_by_name(comp, "SHOW-WITHOUT-TIME")))
     {
-        if (icalproperty_get_showwithouttime(prop)) {
+        if (myicalproperty_get_showwithouttime(prop)) {
             json_object_set_new(jobj, "showWithoutTime", json_true());
         }
     }
