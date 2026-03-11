@@ -6,13 +6,13 @@ sub test_calendar_get_default
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     # XXX - A previous CalDAV test might have created the default
     # calendar already. To make this test self-sufficient, we need
     # to create a test user just for this test. How?
     xlog $self, "get default calendar";
-    my $res = $jmap->CallMethods([['Calendar/get', {ids => ["Default"]}, "R1"]]);
-    $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
+    my $res = $jmap->CallMethods([['Calendar/get', { }, "R1"]]);
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isDefault});
+    $self->assert_str_equals("/dav/calendars/user/cassandane/Default",
+                             $res->[0][1]{list}[0]{'x-href'});
 }

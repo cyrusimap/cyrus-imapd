@@ -397,11 +397,10 @@ sub putandget_vevent
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog $self, "get default calendar id";
-    my $res = $jmap->CallMethods([['Calendar/get', {ids => ["Default"]}, "R1"]]);
-    $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
-    my $calid = $res->[0][1]{list}[0]{id};
-    my $xhref = $res->[0][1]{list}[0]{"x-href"};
+    xlog $self, "get default calendar id and href";
+    my $default_calendar = $self->default_user->calendars->default;
+    my $calid = $default_calendar->id;
+    my $xhref = $default_calendar->properties->{'x-href'};
 
     # Create event via CalDAV to test CalDAV/JMAP interop.
     xlog $self, "create event (via CalDAV)";
@@ -410,7 +409,7 @@ sub putandget_vevent
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
     xlog $self, "get event $id";
-    $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id], properties => $props}, "R1"]]);
+    my $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id], properties => $props}, "R1"]]);
 
     my $event = $res->[0][1]{list}[0];
     $self->assert_not_null($event);
