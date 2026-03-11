@@ -8,7 +8,6 @@ sub test_admin_migrate39_defaultalerts
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $imap = $self->{store}->get_client();
 
@@ -60,15 +59,18 @@ sub assert_calendars ($self, $state)
     my $caldav = $self->{caldav};
     my $imap = $self->{store}->get_client();
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     if (not $state->{did_migrate}) {
         xlog $self, "Create calendars with legacy CalDAV alarms";
         $state->{calendarA} = {
-            id => $self->create_legacy_calendar('A'),
+            name => 'A',
+            id => undef,
+            mbox => $self->create_legacy_calendar('A'),
         };
         $state->{calendarB} = {
-            id => $self->create_legacy_calendar('B'),
+            name => 'B',
+            id => undef,
+            mbox => $self->create_legacy_calendar('B'),
         };
 
         xlog $self, "Set CalDAV alarms on calendar A and calendar home";
@@ -81,7 +83,7 @@ ACTION:AUDIO\r
 X-APPLE-DEFAULT-ALARM:TRUE\r
 END:VALARM\r
 EOF
-        $self->set_caldav_datetime_alarms($state->{calendarA}{id}, $valarms);
+        $self->set_caldav_datetime_alarms($state->{calendarA}{mbox}, $valarms);
         $self->set_caldav_datetime_alarms(undef, $valarms);
         $state->{calendarA}{caldavAlarms} = $valarms;
     }
@@ -91,57 +93,61 @@ EOF
     my $res = $jmap->CallMethods([
         ['Calendar/get', {
             properties => [
+                'name',
                 'defaultAlertsWithTime',
                 'defaultAlertsWithoutTime',
             ],
         }, 'R1'],
     ]);
-    my %calendars = map { $_->{id} => $_ } @{$res->[0][1]{list}};
+    my %calendars = map { $_->{name} => $_ } @{$res->[0][1]{list}};
 
-    $self->assert_null($calendars{$default_cal_id}{defaultAlertsWithTime});
-    $self->assert_null($calendars{$default_cal_id}{defaultAlertsWithoutTime});
+    $self->assert_null($calendars{'personal'}{defaultAlertsWithTime});
+    $self->assert_null($calendars{'personal'}{defaultAlertsWithoutTime});
 
-    my $calendarADefaultAlerts = $calendars{$state->{calendarA}{id}}
+    my $calendarADefaultAlerts = $calendars{$state->{calendarA}{name}}
                                            {defaultAlertsWithTime};
     $self->assert_num_equals(1, scalar keys %$calendarADefaultAlerts);
     $self->assert_null(
-      $calendars{$state->{calendarA}{id}}{defaultAlertsWithoutTime}
+      $calendars{$state->{calendarA}{name}}{defaultAlertsWithoutTime}
     );
 
     $self->assert_null(
-      $calendars{$state->{calendarB}{id}}{defaultAlertsWithTime}
+      $calendars{$state->{calendarB}{name}}{defaultAlertsWithTime}
     );
     $self->assert_null(
-      $calendars{$state->{calendarB}{id}}{defaultAlertsWithoutTime}
+      $calendars{$state->{calendarB}{name}}{defaultAlertsWithoutTime}
     );
 
     if (not $state->{did_migrate}) {
+        $state->{calendarA}{id} = $calendars{$state->{calendarA}{name}}{id};
+        $state->{calendarB}{id} = $calendars{$state->{calendarB}{name}}{id};
+
         $state->{calendarA}{defaultAlert} = (values %$calendarADefaultAlerts)[0];
     } else {
         # Did migrate calendars
         $self->assert_deep_equals({
-            $state->{calendarA}{id} => undef,
-            $state->{calendarB}{id} => undef,
-            $default_cal_id => undef,
+            $state->{calendarA}{mbox} => undef,
+            $state->{calendarB}{mbox} => undef,
+            'Default' => undef,
         }, $state->{migrateResponse}{migrated}{cassandane});
 
         # Migration rewrites default alert UID, if none was set
         $self->assert_matches(qr/UID:[0-9A-Za-z-]+/,
-            $self->get_jmap_defaultalerts_annotation($state->{calendarA}{id}));
+            $self->get_jmap_defaultalerts_annotation($state->{calendarA}{mbox}));
 
         # JMAP annotation is set on both calendars
         $self->assert_not_null($self->get_jmap_defaultalerts_annotation(
-                $state->{calendarA}{id}));
+                $state->{calendarA}{mbox}));
 
         $self->assert_not_null($self->get_jmap_defaultalerts_annotation(
-                $state->{calendarB}{id}));
+                $state->{calendarB}{mbox}));
 
         # CalDAV default alarms annotation got removed
         $self->assert_null($self->get_caldav_datetime_annotation(
-                $state->{calendarA}{id}));
+                $state->{calendarA}{mbox}));
 
         $self->assert_null($self->get_caldav_datetime_annotation(
-                $state->{calendarB}{id}));
+                $state->{calendarB}{mbox}));
 
         # CalDAV default alarms annotation is kept on calendar home
         $self->assert_not_null($self->get_caldav_datetime_annotation(undef));
@@ -152,7 +158,6 @@ sub assert_events ($self, $state)
 {
     my $caldav = $self->{caldav};
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     if (not $state->{did_migrate}) {
         # First, create events
@@ -245,17 +250,15 @@ sub assert_shared_calendars ($self, $state)
     my $eventUidB1 = '93c7831d-e246-4dda-ab3f-52acba6b9e3b';
     my $eventUidB2 = '379e7061-d20f-45e4-8366-52d45836a7fd';
 
-    my $default_cal_id = $self->default_user->calendars->default->id;
-
     if (not $state->{did_migrate}) {
         xlog $self, "Create sharee";
         ($self->{shareeJmap}, $self->{shareeCaldav}) = $self->create_user('sharee');
 
         xlog $self, "Share calendars";
         my $admintalk = $self->{adminstore}->get_client();
-        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarA}{id}",
+        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarA}{mbox}",
             sharee => 'lrswipkxtecdn') or die;
-        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarB}{id}",
+        $admintalk->setacl("user.cassandane.#calendars.$state->{calendarB}{mbox}",
             sharee => 'lrswipkxtecdn') or die;
 
         xlog $self, "Create sharee useDefaultAlerts=true in calendar A";
@@ -277,7 +280,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
-            "cassandane.$state->{calendarA}{id}/$eventUidA1.ics",
+            "cassandane.$state->{calendarA}{mbox}/$eventUidA1.ics",
             $ical,
             'Content-Type' => 'text/calendar',
             'X-Cyrus-rewrite-usedefaultalerts' => 'false',
@@ -301,7 +304,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
-            "cassandane.$state->{calendarA}{id}/$eventUidA2.ics",
+            "cassandane.$state->{calendarA}{mbox}/$eventUidA2.ics",
             $ical,
             'Content-Type' => 'text/calendar',
             'X-Cyrus-rewrite-usedefaultalerts' => 'false',
@@ -325,7 +328,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
-            "cassandane.$state->{calendarB}{id}/$eventUidB1.ics",
+            "cassandane.$state->{calendarB}{mbox}/$eventUidB1.ics",
             $ical,
             'Content-Type' => 'text/calendar',
             'X-Cyrus-rewrite-usedefaultalerts' => 'false',
@@ -349,7 +352,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
         $self->{shareeCaldav}->Request('PUT',
-            "cassandane.$state->{calendarB}{id}/$eventUidB2.ics",
+            "cassandane.$state->{calendarB}{mbox}/$eventUidB2.ics",
             $ical,
             'Content-Type' => 'text/calendar',
             'X-Cyrus-rewrite-usedefaultalerts' => 'false',
@@ -392,6 +395,9 @@ EOF
         $self->assert_null($eventB1->{alerts});
     }
     else {
+        my $sharee = $self->{instance}->create_user_without_setup('sharee');
+        my $default_cal_id = $sharee->calendars->default->id;
+
         $self->assert_deep_equals({
             $default_cal_id => undef,
         }, $state->{migrateResponse}{migrated}{sharee});

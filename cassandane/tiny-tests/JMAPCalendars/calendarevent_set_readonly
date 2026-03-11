@@ -6,7 +6,6 @@ sub test_calendarevent_set_readonly
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $admintalk = $self->{adminstore}->get_client();
@@ -26,15 +25,16 @@ sub test_calendarevent_set_readonly
         }, "R1"],
         ['Calendar/get', {
             ids => ['#1'],
-            properties => ['name'],
+            properties => ['x-href'],
         }, "R2"],
     ]);
     my $calendarId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($calendarId);
-    my $name = $res->[1][1]{list}[0]{'name'};
-    $self->assert_not_null($name);
+    my $href = $res->[1][1]{list}[0]{'x-href'};
+    $self->assert_not_null($href);
 
-    $admintalk->setacl("user.cassandane.#calendars." . $name, "cassandane" => 'lrskxcan9') or die;
+    $admintalk->setacl("user.cassandane.#calendars." . basename($href),
+                       "cassandane" => 'lrskxcan9') or die;
 
     $res = $jmap->CallMethods([
             ['Calendar/get',{

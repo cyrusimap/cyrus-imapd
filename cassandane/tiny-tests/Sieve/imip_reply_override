@@ -12,9 +12,10 @@ sub test_imip_reply_override
 
     xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = $self->default_user->calendars->default->id;
+    my $CalendarHref =
+        $self->default_user->calendars->default->properties->{'x-href'};
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
-    my $href = "$CalendarId/$uuid.ics";
+    my $href = "$CalendarHref/$uuid.ics";
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF
@@ -54,7 +55,7 @@ EOF
     $CalDAV->Request('PUT', $href, $event, 'Content-Type' => 'text/calendar');
 
     xlog $self, "Check that the event made it to calendar";
-    my $events = $CalDAV->GetEvents($CalendarId);
+    my $events = $CalDAV->GetEvents($CalendarHref);
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('',
@@ -103,7 +104,7 @@ EOF
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
     xlog $self, "Check that the reply made it to calendar";
-    $events = $CalDAV->GetEvents($CalendarId);
+    $events = $CalDAV->GetEvents($CalendarHref);
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('Test User',

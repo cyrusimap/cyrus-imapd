@@ -19,12 +19,13 @@ sub test_calendar_set_color
          "R1"],
         ['Calendar/get', {
             ids => [ '#1' ],
-            properties => [ 'color' ]
+            properties => [ 'color', 'x-href' ]
          },
          "R2"],
     ]);
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
+    my $href = $res->[0][1]{created}{"1"}{'x-href'};
     $self->assert_str_equals('SteelBlue', $res->[1][1]{list}[0]{color});
 
     xlog $self, "assert color is visible via CalDAV";
@@ -38,7 +39,7 @@ sub test_calendar_set_color
 EOF
 
     my $CalDAV = $self->{caldav};
-    $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $id,
+    $res = $CalDAV->Request('PROPFIND', $href,
                             $propfindXml, 'Content-Type' => 'text/xml');
     my $propstat = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
     $self->assert_str_equals('SteelBlue',

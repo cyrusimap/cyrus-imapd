@@ -7,7 +7,6 @@ sub test_calendar_set_inherit_defaultalerts
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
 
