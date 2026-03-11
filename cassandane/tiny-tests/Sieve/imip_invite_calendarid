@@ -17,7 +17,7 @@ sub test_imip_invite_calendarid
 
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
-    xlog $self, "Install a sieve script to process iMIP";
+    xlog $self, "Install a sieve script to process iMIP using legacy calendar id";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body", "variables", "imap4flags", "processcalendar"];
 if body :content "text/calendar" :contains "\nMETHOD:" {
@@ -70,4 +70,49 @@ EOF
     my $events = $CalDAV->GetEvents($CalendarId);
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
+
+    my $jmap = $self->{jmap};
+    my $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+
+    my %calendars = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $jmapid = $calendars{'foo'}{id};
+    $self->assert_not_null($jmapid);
+
+    xlog $self, "Install a sieve script to process iMIP using JMAP calendar id";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body", "variables", "imap4flags", "processcalendar"];
+if body :content "text/calendar" :contains "\nMETHOD:" {
+    processcalendar :calendarid "$jmapid" :outcome "outcome";
+    if string "\${outcome}" "added" {
+        setflag "\\\\Flagged";
+    }
+}
+EOF
+    );
+
+    # Change Message-ID
+    $imip =~ s/f8201\@/f8201-1\@/;
+
+    # Update Event
+    $imip =~ s/An Event/An Updated Event/;
+    $imip =~ s/T1830/T1930/;
+    $imip =~ s/SEQUENCE:0/SEQUENCE:1/;
+
+    xlog $self, "Deliver iMIP invite";
+    my $msg2 = Cassandane::Message->new(raw => $imip);
+    $msg2->set_attribute(uid => 2, flags => [ '\\Recent' ]);
+    $self->{instance}->deliver($msg2);
+
+    xlog $self, "Check that the message made it to INBOX";
+    $self->check_messages({ 1 => $msg, 2 => $msg2 },
+                          keyed_on => 'uid', check_guid => 0);
+
+    xlog $self, "Check that the event made it to calendar";
+    $events = $CalDAV->GetEvents($CalendarId);
+
+    $self->assert_equals(1, scalar @$events);
+    $self->assert_str_equals($uuid, $events->[0]{uid});
+    $self->assert_str_equals('PT4H', $events->[0]{duration});
+    $self->assert_str_equals('An Updated Event', $events->[0]{title});
+    $self->assert_num_equals(1, $events->[0]{sequence});
 }

@@ -6,7 +6,6 @@ sub test_misc_creationids
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog $self, "create and get calendar and event";
     my $res = $jmap->CallMethods([

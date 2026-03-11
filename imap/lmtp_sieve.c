@@ -1679,9 +1679,30 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
         goto done;
     }
 
+    const char *calendarid = cal->calendarid;
+    char *freeme = NULL;
+    if (calendarid && USER_COMPACT_EMAILIDS(ctx->cstate) &&
+        (calendarid[0] == JMAP_CALENDARID_PREFIX)) {
+        char jmapid[JMAP_CALENDARID_SIZE];
+        mbentry_t *mbentry = NULL;
+
+        // swap mailbox prefix for calendar prefix
+        strlcpy(jmapid, calendarid, JMAP_CALENDARID_SIZE);
+        jmapid[0] = JMAP_MAILBOXID_PREFIX;
+
+        mboxlist_lookup_by_jmapid(ctx->userid, jmapid, &mbentry, NULL);
+        if (mbentry) {
+            mbname_t *mbname = mbname_from_intname(mbentry->name);
+            calendarid = freeme =
+                xstrdup(strarray_nth(mbname_boxes(mbname), -1));
+            mbname_free(&mbname);
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
     struct sched_data sched_data =
         { SCHED_MECH_SIEVE, sched_flags, itip, NULL, NULL,
-          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, cal->calendarid, NULL };
+          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, calendarid, NULL };
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL
     };
@@ -1691,6 +1712,8 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
                                 &sched_param, &sched_data,
                                 (struct auth_state *) sd->authstate,
                                 NULL, NULL);
+    free(freeme);
+
     switch (r) {
     case SCHED_DELIVER_ERROR:
         buf_setcstr(&cal->outcome, "error");
