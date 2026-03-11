@@ -253,7 +253,7 @@ EXPORTED void icalparameter_to_jcal_parameter(icalparameter *param,
 EXPORTED json_t *icalproperty_as_jcal_array(icalproperty *prop)
 {
     icalproperty_kind prop_kind;
-    const char *x_name, *property_name = NULL;
+    const char *property_name = NULL;
     icalparameter *param;
     const char *type = NULL;
     const icalvalue *value;
@@ -262,10 +262,11 @@ EXPORTED json_t *icalproperty_as_jcal_array(icalproperty *prop)
     if (!prop) return NULL;
 
     prop_kind = icalproperty_isa(prop);
-    x_name = icalproperty_get_x_name(prop);
 
-    if (prop_kind == ICAL_X_PROPERTY && x_name)
-        property_name = x_name;
+    if (prop_kind == ICAL_X_PROPERTY)
+        property_name = icalproperty_get_x_name(prop);
+    else if (prop_kind == ICAL_IANA_PROPERTY)
+        property_name = icalproperty_get_iana_name(prop);
     else
         property_name = icalproperty_kind_to_string(prop_kind);
 
