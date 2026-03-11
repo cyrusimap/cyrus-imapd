@@ -6,12 +6,12 @@ sub test_rscale_in_jmap_hidden_in_caldav
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $admin = $self->{adminstore}->get_client();
 
     my $calid = $self->default_user->calendars->default->id;
+    my $href = $self->default_user->calendars->default->properties->{'x-href'};
     my $event =  {
         calendarIds => {
             $calid => JSON::true,
@@ -78,7 +78,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
     # XXX Net-CalDAV talk needs to update
     # Make sure we have no rscale through caldav, most clients can't
     # handle it
-    my $events = $caldav->GetEvents("$calid");
+    my $events = $caldav->GetEvents($href);
     $self->assert_deep_equals(
         {
             count => 12,
