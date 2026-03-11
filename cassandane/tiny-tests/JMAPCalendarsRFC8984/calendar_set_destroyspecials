@@ -5,24 +5,39 @@ sub test_calendar_set_destroyspecials
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
-    my @specialIds = ["Inbox", "Outbox", "Default", "Attachments"];
+    xlog $self, "Get calendar Ids of specials";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->list('', 'user.cassandane.#calendars.*',
+                     'RETURN', [ 'STATUS', [ 'MAILBOXID' ] ]);
+    my $res = $admintalk->get_response_code('status') || {};
+
+    # Replace mailbox prefix with calendar prefix
+    my $inId  = 'C' .
+        substr($res->{'user.cassandane.#calendars.Inbox'}{mailboxid}[0], 1);
+    my $outId = 'C' .
+        substr($res->{'user.cassandane.#calendars.Outbox'}{mailboxid}[0], 1);
+    my $defId = 'C' .
+        substr($res->{'user.cassandane.#calendars.Default'}{mailboxid}[0], 1);
+    my $attId = 'C' .
+        substr($res->{'user.cassandane.#calendars.Attachments'}{mailboxid}[0], 1);
+
+    my @specialIds = [ $inId, $outId, $defId, $attId];
 
     xlog $self, "destroy special calendars";
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
             ['Calendar/set', { destroy => @specialIds }, "R1"]
     ]);
     $self->assert_not_null($res);
 
     my $errType;
 
-    $errType = $res->[0][1]{notDestroyed}{"Inbox"}{type};
+    $errType = $res->[0][1]{notDestroyed}{$inId}{type};
     $self->assert_str_equals("notFound", $errType);
-    $errType = $res->[0][1]{notDestroyed}{"Outbox"}{type};
+    $errType = $res->[0][1]{notDestroyed}{$outId}{type};
     $self->assert_str_equals("notFound", $errType);
-    $errType = $res->[0][1]{notDestroyed}{"Default"}{type};
+    $errType = $res->[0][1]{notDestroyed}{$defId}{type};
     $self->assert_str_equals("forbidden", $errType);
-    $errType = $res->[0][1]{notDestroyed}{"Attachments"}{type};
+    $errType = $res->[0][1]{notDestroyed}{$attId}{type};
     $self->assert_str_equals("notFound", $errType);
 }
