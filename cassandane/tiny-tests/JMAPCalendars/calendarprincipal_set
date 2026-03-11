@@ -6,7 +6,6 @@ sub test_calendarprincipal_set
     ($self)
 {
     my $jmap = $self->{jmap};
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['Principal/set', {
