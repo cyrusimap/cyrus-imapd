@@ -61,6 +61,11 @@ AM_CPPFLAGS = \
     $(SASLFLAGS) \
     $(ICU_CFLAGS)
 
+# ensure recursive make install inherits DESTDIR, otherwise perl modules get
+# installed to the bare prefix, yikes!
+# XXX surprising that this isn't automatic??
+AM_MAKEFLAGS = "DESTDIR=$(DESTDIR)"
+
 if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
