@@ -100,12 +100,16 @@ sub xs_o
 
 sub postamble
 {
+    my $FIXSEARCHPATH = join(' ',
+                             $main::Config{perlpath},
+                             "$build->{top_srcdir}/tools/fixsearchpath.pl",
+                             $build->{prefix});
     return <<"EOT";
 
 VPATH=$build->{top_srcdir}/perl/imap
 
 cyradm: cyradm.pl
-\t$build->{PERL_PREINSTALL} < \$< > \$\@
+\t$FIXSEARCHPATH < \$< > \$\@
 
 check:
 
