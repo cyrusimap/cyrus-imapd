@@ -22,12 +22,17 @@ sub usage {
 }
 
 my $configure_prefix = normalise(shift || usage);
-my $configure_bindir = normalise(shift || usage);
 my $perl_prefix = normalise($Config{prefix});
 
 # These directories are listed in the reverse of the order that we want
 # them searched, assuming that we will emit multiple "use lib"
 # directives each of which *prepends* its argument to @INC.
+# XXX This set of mappings works when Cyrus was configured with
+# XXX --prefix=/usr/local, but on my system it fails for --prefix=/usr.
+# XXX It still looks for some things in /usr/local, but doesn't find them
+# XXX because they were installed to /usr.  Might just need more mappings.
+# XXX In practice I don't think anyone configures Cyrus with either of
+# XXX these prefixes.
 my @dirvars = (
     { dir => 'installvendorlib', prefix => 'vendorprefix' },
     { dir => 'installvendorarch', prefix => 'vendorprefix' },
@@ -35,33 +40,28 @@ my @dirvars = (
     { dir => 'installsitearch', prefix => 'siteprefix' },
 );
 
-my $boilerplate = << 'EOT'
+my $boilerplate = << 'EOT';
 ## Boilerplate added by Cyrus fixsearchpath.pl
-## XXX This might all be for naught because the top-level Cyrus build does
-## XXX not pass DESTDIR down to the perl modules anyway.
+use Cwd qw(abs_path);
+use FindBin;
+
 my $__cyrus_destdir;
 BEGIN {
     $__cyrus_destdir = '';
-    if ($0 =~ m/\//) {
-        my $d = $0;
+    my $real_prefix = abs_path("$FindBin::Bin/..");
 EOT
-;
-$boilerplate .= "        my \$bindir = "
-                . quote($configure_prefix . $configure_bindir)
-                . ";\n";
-$boilerplate .= << 'EOT'
-        # remove the filename, $d is now the installed bindir
-        $d =~ s/\/[^\/]+$//;
-        # check if the path ends in the configured bindir
-        my $len = length($d)-length($bindir);
-        if (substr($d, $len) eq $bindir) {
-            # if so then the installed destdir is what remains
-            $__cyrus_destdir = substr($d, 0, $len);
-        }
+
+$boilerplate .= "    my \$configure_prefix = '$configure_prefix';\n";
+
+$boilerplate .= << 'EOT';
+    my $len = length($real_prefix) - length($configure_prefix);
+    # check if the real prefix ends in the configured prefix
+    if (substr($real_prefix, $len) eq $configure_prefix) {
+        # if so then the installed destdir is what remains
+        $__cyrus_destdir = substr($real_prefix, 0, $len);
     }
-};
+}
 EOT
-;
 
 foreach my $dv (@dirvars) {
     my $dir = $Config{$dv->{dir}};
