@@ -1100,23 +1100,6 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/sieve_db.h
 endif # SIEVE
 
-if OBJECTSTORE
-imap_libcyrus_imap_la_SOURCES += \
-    imap/objectstore_db.c \
-    imap/objectstore_db.h \
-    imap/objectstore.h
-if WITH_OPENIO
-imap_libcyrus_imap_la_SOURCES += imap/objectstore_openio.c
-else
-if WITH_CARINGO
-imap_libcyrus_imap_la_SOURCES += imap/objectstore_caringo.c
-else
-if WITH_OBJSTR_DUMMY
-imap_libcyrus_imap_la_SOURCES += imap/objectstore_dummy.c
-endif
-endif
-endif
-endif
 
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
