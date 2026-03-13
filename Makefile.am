@@ -2159,9 +2159,12 @@ endif
 install-exec-hook:
 	for s in sieveshell; \
 	do \
-	  $(MKDIR_P) $(top_builddir)/perl/sieve/scripts ; \
-	  $(PERL_PREINSTALL) < $(top_srcdir)/perl/sieve/scripts/$$s.pl > $(top_builddir)/perl/sieve/scripts/$$s ;\
-	  $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
+	    $(MKDIR_P) $(top_builddir)/perl/sieve/scripts \
+	    && $(PERL) $(top_srcdir)/tools/fixsearchpath.pl $(prefix) \
+	        < $(top_srcdir)/perl/sieve/scripts/$$s.pl \
+	        > $(top_builddir)/perl/sieve/scripts/$$s \
+	    && $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s \
+	        $(DESTDIR)$(bindir)/$$s ; \
 	done
 
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.

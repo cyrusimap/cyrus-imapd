@@ -1869,16 +1869,6 @@ case "${target_os}" in
         AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
 esac
 
-# XXX This PERL_PREINSTALL stuff is actually broken and has been for a while.
-# XXX ${bindir} isn't fully resolved and can't be used like this.  It works by
-# XXX accident for the MakeMaker stuff, but doesn't work properly for the
-# XXX non-MakeMaker stuff.
-# XXX Probably needs to be broken up into individual pieces that are then used
-# XXX correctly in context, instead of this one-size-fits-none setup
-srctoolsdir=`cd ${srcdir};pwd`/tools
-PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${prefix} ${bindir}"
-AC_SUBST(PERL_PREINSTALL)
-
 CMU_LIBWRAP
 
 # Figure out what directories we're linking against.
