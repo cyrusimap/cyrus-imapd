@@ -16,7 +16,6 @@ on:
 defaults:
   run:
     shell: bash
-
 env:
   CYRUS_CLONE_ROOT: ${{ github.workspace }}
 
@@ -57,7 +56,7 @@ jobs:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
         options: --init --privileged
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: setup git safe directory
@@ -100,7 +99,7 @@ jobs:
         image: ghcr.io/cyrusimap/cyrus-docker:bookworm
         options: --init
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: setup git safe directory
