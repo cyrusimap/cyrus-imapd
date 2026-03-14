@@ -26,6 +26,7 @@
   GENERATE_HTML          = NO
   GENERATE_LATEX         = NO
   GENERATE_XML           = YES
+  XML_PROGRAMLISTING     = NO
 
   # Emit warnings when a documented function has undocmented parameters, but we
   # do not (yet) consider these warnings a makedoc failure.
