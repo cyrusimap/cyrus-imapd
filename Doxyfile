@@ -7,7 +7,7 @@
 ### What files do we include?
 
   INPUT                  = imap lib sieve
-  FILE_PATTERNS          = *.c *.h
+  FILE_PATTERNS          = *.h
   RECURSIVE              = YES
   # EXCLUDE_PATTERNS       = */test/* *_test.c
 
