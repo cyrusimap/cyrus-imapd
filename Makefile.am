@@ -2032,7 +2032,7 @@ if HAVE_SPHINX_BUILD
 docsrc/_doxygen: Doxyfile
 	$(AM_V_GEN)(cd $(top_srcdir) && doxygen Doxyfile)
 
-SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS)
+SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
