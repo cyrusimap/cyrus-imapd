@@ -1,1 +1,5 @@
-/* This file is empty, but maybe someday it will not be empty. */
+/* We'd like this file to be as empty as possible, but all that red text for
+ * code was a bit too much. */
+.rst-content code.literal, code.literal {
+  color: rgb(9, 104, 227);
+}
