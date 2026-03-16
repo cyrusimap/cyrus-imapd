@@ -1,0 +1,113 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_deterministic_boundaries
+    :min_version_3_1 :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create a multipart email with text and html bodies";
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => {
+            "a" => {
+                mailboxIds => { '$inbox' => JSON::true },
+                from => [{ name => "Test", email => 'test@example.com' }],
+                to => [{ name => "Dest", email => 'dest@example.com' }],
+                subject => "Deterministic boundary test",
+                "header:Message-Id" => '<test1234@example.com>',
+                "header:Date" => 'Mon, 01 Jan 2024 00:00:00 +0000',
+                bodyStructure => {
+                    type => 'multipart/alternative',
+                    subParts => [{
+                        type => 'text/plain',
+                        partId => 'text',
+                    }, {
+                        type => 'text/html',
+                        partId => 'html',
+                    }],
+                },
+                bodyValues => {
+                    text => { value => "Hello world" },
+                    html => { value => "<p>Hello world</p>" },
+                },
+            },
+        }}, "R1"],
+    ]);
+    my $emailId1 = $res->[0][1]{created}{a}{id};
+    my $blobId1 = $res->[0][1]{created}{a}{blobId};
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($blobId1);
+
+    xlog $self, "Delete the email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { destroy => [$emailId1] }, "R2"],
+    ]);
+    $self->assert_str_equals($emailId1, $res->[0][1]{destroyed}[0]);
+
+    xlog $self, "Create the exact same email again - must produce same blobId";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => {
+            "b" => {
+                mailboxIds => { '$inbox' => JSON::true },
+                from => [{ name => "Test", email => 'test@example.com' }],
+                to => [{ name => "Dest", email => 'dest@example.com' }],
+                subject => "Deterministic boundary test",
+                "header:Message-Id" => '<test1234@example.com>',
+                "header:Date" => 'Mon, 01 Jan 2024 00:00:00 +0000',
+                bodyStructure => {
+                    type => 'multipart/alternative',
+                    subParts => [{
+                        type => 'text/plain',
+                        partId => 'text',
+                    }, {
+                        type => 'text/html',
+                        partId => 'html',
+                    }],
+                },
+                bodyValues => {
+                    text => { value => "Hello world" },
+                    html => { value => "<p>Hello world</p>" },
+                },
+            },
+        }}, "R3"],
+    ]);
+    my $blobId2 = $res->[0][1]{created}{b}{blobId};
+    $self->assert_not_null($blobId2);
+
+    xlog $self, "Same input must produce same blobId (identical RFC822 output)";
+    $self->assert_str_equals($blobId1, $blobId2);
+
+    xlog $self, "Create email with different body content";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => {
+            "c" => {
+                mailboxIds => { '$inbox' => JSON::true },
+                from => [{ name => "Test", email => 'test@example.com' }],
+                to => [{ name => "Dest", email => 'dest@example.com' }],
+                subject => "Deterministic boundary test",
+                "header:Message-Id" => '<test1234@example.com>',
+                "header:Date" => 'Mon, 01 Jan 2024 00:00:00 +0000',
+                bodyStructure => {
+                    type => 'multipart/alternative',
+                    subParts => [{
+                        type => 'text/plain',
+                        partId => 'text',
+                    }, {
+                        type => 'text/html',
+                        partId => 'html',
+                    }],
+                },
+                bodyValues => {
+                    text => { value => "Hello different world" },
+                    html => { value => "<p>Hello different world</p>" },
+                },
+            },
+        }}, "R4"],
+    ]);
+    my $blobId3 = $res->[0][1]{created}{c}{blobId};
+    $self->assert_not_null($blobId3);
+
+    xlog $self, "Different content must produce different blobId";
+    $self->assert_str_not_equals($blobId1, $blobId3);
+}
