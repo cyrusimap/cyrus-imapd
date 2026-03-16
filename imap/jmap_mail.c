@@ -8736,8 +8736,9 @@ done:
 }
 
 struct boundary_gen {
-    const char *base;  /* hash of Email/set properties, or NULL for random */
-    int counter;       /* incremented for each boundary */
+    char *base;            /* hash of Email/set properties, or NULL for random */
+    unsigned counter;      /* incremented for each boundary */
+    struct buf buf;        /* reusable buffer for boundary generation */
 };
 
 static char *_mime_make_boundary(struct boundary_gen *gen)
@@ -8745,10 +8746,9 @@ static char *_mime_make_boundary(struct boundary_gen *gen)
     if (gen && gen->base) {
         /* deterministic boundary from hash of Email/set properties */
         struct message_guid guid;
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s-%d", gen->base, gen->counter++);
-        message_guid_generate(&guid, buf_base(&buf), buf_len(&buf));
-        buf_free(&buf);
+        buf_reset(&gen->buf);
+        buf_printf(&gen->buf, "%s-%u", gen->base, gen->counter++);
+        message_guid_generate(&guid, buf_base(&gen->buf), buf_len(&gen->buf));
         return xstrdup(message_guid_encode(&guid));
     }
 
@@ -9284,6 +9284,8 @@ static void _email_fini(struct email *email)
     json_decref(email->jemail);
     _emailpart_fini(email->body);
     free(email->body);
+    free(email->boundary_gen.base);
+    buf_free(&email->boundary_gen.buf);
 }
 
 static json_t *_header_make(const char *header_name,
@@ -11284,9 +11286,9 @@ static void _email_create(jmap_req_t *req,
 
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    char *boundary_base = xstrdup(message_guid_encode(&boundary_guid));
     struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL,
-                           { boundary_base, 0 } };
+                           { xstrdup(message_guid_encode(&boundary_guid)),
+                             0, BUF_INITIALIZER } };
     _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */
@@ -11349,7 +11351,6 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
-    free(boundary_base);
 }
 
 static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
