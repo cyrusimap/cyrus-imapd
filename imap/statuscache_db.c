@@ -398,6 +398,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     assert(sdata);
     static char static_uniqueid[UUID_STR_LEN];
     static char static_mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+    static char static_accountid[UUID_STR_LEN];
 
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
@@ -415,10 +416,23 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
         strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
+    // ACCOUNTID_NEEDS_FIXING
+    char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    if (userid) {
+        strncpy(static_accountid, userid, UUID_STR_LEN-1);
+        static_accountid[UUID_STR_LEN-1] = '\0';
+        sdata->accountid = static_accountid;
+        free(userid);
 
-    // need the cstate to get the right mailboxid
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), static_mailboxid);
+        // use compact mailboxid when we have a user
+        struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+        jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), static_mailboxid);
+    }
+    else {
+        // shared mailbox - no ACCOUNTID, use uniqueid for MAILBOXID
+        sdata->accountid = NULL;
+        strlcpy(static_mailboxid, mailbox_uniqueid(mailbox), JMAP_MAX_MAILBOXID_SIZE);
+    }
     sdata->mailboxid = static_mailboxid;
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
