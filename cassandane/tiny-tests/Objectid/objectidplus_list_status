@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test LIST-STATUS with OBJECTID
+#
+sub test_objectidplus_list_status
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # create a shared mailbox from another user
+    $self->{instance}->create_user("other",
+                                   subdirs => [ 'sub', ['sub', 'folder'] ]);
+    $admintalk->setacl("user.other.sub.folder", "cassandane", "lrswipkxtecdan");
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+
+    # LIST with STATUS OBJECTID should activate and return compound responses
+    my $res = $talk->list('', '*', 'return',
+                          [ "status", [ "objectid" ] ]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
