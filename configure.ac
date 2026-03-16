@@ -2161,6 +2161,8 @@ AM_CONDITIONAL([HAVE_SPHINX_BUILD],
            -a x"$HAVE_PYMOD_MYST_PARSER" = xyes \
            -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
 
+AC_CONFIG_LINKS([Doxyfile:Doxyfile])
+
 AH_TOP([
 /*
  * Copyright (c) 1994-2025 Carnegie Mellon University.  All rights reserved.
