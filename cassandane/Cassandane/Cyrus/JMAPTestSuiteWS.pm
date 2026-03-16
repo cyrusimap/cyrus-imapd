@@ -66,7 +66,7 @@ sub have_jmap_tester_websocket
 
 sub init
 {
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     $basedir = $cassini->val('jmaptestsuite', 'basedir');
     return unless defined $basedir;
     $basedir = abs_path($basedir);

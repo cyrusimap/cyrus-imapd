@@ -6,6 +6,7 @@ use strict;
 use warnings;
 use File::Slurp;
 use List::Util qw(uniq);
+use POSIX qw(strftime);
 
 use lib '.';
 use Cassandane::Util::Setup;
@@ -164,9 +165,28 @@ sub usage
     exit(1);
 }
 
+sub _find_latest_run
+{
+    my ($rootdir) = @_;
+
+    return undef unless -d $rootdir;
+
+    opendir my $dh, $rootdir or return undef;
+    my @runs = sort grep { /^\d{8}T\d{6}$/ } readdir($dh);
+    closedir $dh;
+
+    # We just created a rundir.  It should not be considered the latest run,
+    # because it hasn't run yet!
+    my $rundir  = Cassandane::Cassini->singleton->val('cassandane', 'rundir', undef);
+    @runs = grep {; $_ ne $rundir } @runs;
+
+    return $runs[-1];
+}
+
 my $cassini_filename;
 my @cassini_overrides;
 my $want_rerun;
+my $rerun_from;
 
 while (defined(my $a = shift))
 {
@@ -264,6 +284,11 @@ while (defined(my $a = shift))
     {
         $want_rerun = 2;
     }
+    elsif ($a =~ m/^--rerun-from=(.+)$/)
+    {
+        $rerun_from = $1;
+        $want_rerun = 1 unless $want_rerun;
+    }
     elsif ($a eq '--no-ok')
     {
         # suppress success reports in formatters that support that
@@ -283,16 +308,34 @@ while (defined(my $a = shift))
 my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
 
+# Create per-run directory for organizing test output
+my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+my $rundir_name = strftime('%Y%m%dT%H%M%S', gmtime());
+my $rundir_path = "$rootdir/$rundir_name";
+mkdir($rundir_path) or die "Cannot create run directory $rundir_path: $!";
+$cassini->override('cassandane', 'rundir', $rundir_name);
+
 Cassandane::Instance::cleanup_leftovers()
     if ($cassini->bool_val('cassandane', 'cleanup'));
 
 if ($want_rerun) {
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
-    my $failed_file = "$rootdir/failed";
+
+    my $run_to_rerun = $rerun_from // _find_latest_run($rootdir);
+
+    unless ($run_to_rerun) {
+        print STDERR "Cannot --rerun without an existing failed file.\n";
+        exit 1;
+    }
+
+    my $failed_file = "$rootdir/$run_to_rerun/failed";
 
     my @failed = eval { read_file($failed_file, { chomp => 1 }) };
     if ($@) {
         print STDERR "Cannot --rerun without an existing failed file.\n";
+        if (defined $run_to_rerun) {
+            print STDERR "Tried to read from: $failed_file\n";
+        }
         exit 1;
     }
 

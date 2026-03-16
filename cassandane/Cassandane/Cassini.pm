@@ -6,12 +6,15 @@
 package Cassandane::Cassini;
 use strict;
 use warnings;
+use experimental 'signatures';
+
 use Cwd qw(abs_path);
 use Config::IniFiles;
 
+use Cassandane::Manifest;
 use Cassandane::Util::Log;
 
-my $instance;
+my $SINGLETON;
 
 sub homedir {
     my ($uid) = @_;
@@ -97,22 +100,22 @@ sub new
     my $core_pattern = $self->val('cassandane', 'core_pattern');
     $core_pattern = qr{$core_pattern} if $core_pattern;
 
-    $instance = $self
-        unless defined $instance;
+    $SINGLETON = $self
+        unless defined $SINGLETON;
     return $self;
 }
 
-sub instance
+sub singleton
 {
     my ($class) = @_;
 
-    if (!defined $instance)
+    if (!defined $SINGLETON)
     {
-        $instance = Cassandane::Cassini->new();
-        die "Singleton broken in Cassini ctor!"
-            unless defined $instance;
+        $SINGLETON = Cassandane::Cassini->new();
+        die "Singleton broken in Cassini constructor!"
+            unless defined $SINGLETON;
     }
-    return $instance;
+    return $SINGLETON;
 }
 
 sub val
@@ -213,6 +216,21 @@ sub get_core_pattern
     my $core_pattern = $self->val('cassandane', 'core_pattern',
                                   '^core.*?(?:\.(\d+))?$');
     return qr{$core_pattern};
+}
+
+sub manifest ($self)
+{
+    $self->{_manifest} //= do {
+        my $rootdir = $self->val('cassandane', 'rootdir', '/var/tmp/cass');
+        my $rundir  = $self->val('cassandane', 'rundir', undef);
+
+        unless (defined $rundir) {
+            Carp::confess("can't create a manifest without a rundir!");
+        }
+
+        my $dbpath = "$rootdir/$rundir/manifest.sqlite";
+        Cassandane::Manifest->_new($dbpath);
+    };
 }
 
 1;

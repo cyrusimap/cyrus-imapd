@@ -2,7 +2,7 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cassandane::Instance;
-use strict;
+use v5.28.0;
 use warnings;
 
 use experimental 'signatures';
@@ -59,7 +59,7 @@ sub new
     my $class = shift;
     my %params = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $self = bless({
         name => undef,
@@ -184,6 +184,20 @@ sub id
     return $self->{name}; # XXX something cleverer?
 }
 
+sub name
+{
+    my ($self) = @_;
+    $self->_init_basedir_and_name;
+    return $self->{name};
+}
+
+sub basedir
+{
+    my ($self) = @_;
+    $self->_init_basedir_and_name;
+    return $self->{basedir};
+}
+
 sub default_mailbox_version
 {
     my ($self) = @_;
@@ -232,7 +246,7 @@ sub get_version
         return $cached_sversion{$installation};
     }
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     # Need to check the named-installation directory AND the
     # default installation directory, before falling back to the
@@ -325,11 +339,26 @@ sub _rootdir
 {
     if (!defined $__cached_rootdir)
     {
-        my $cassini = Cassandane::Cassini->instance();
+        my $cassini = Cassandane::Cassini->singleton();
         $__cached_rootdir =
             $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     }
     return $__cached_rootdir;
+}
+
+sub _rundir
+{
+    state $rundir //= do {
+        my $cassini = Cassandane::Cassini->singleton();
+        my $rundir  = $cassini->val('cassandane', 'rundir', undef);
+
+        unless ($rundir)
+        {
+            Carp::confess("can't construct Cassandane::Instance without Cassini rundir");
+        }
+
+        $rundir;
+    };
 }
 
 sub _make_instance_info
@@ -366,7 +395,7 @@ sub _make_unique_instance_info
         $stamp .= sprintf("%02X", $workerid) if defined $workerid;
     }
 
-    my $rootdir = _rootdir();
+    my $rootdir = join q{/}, _rootdir(), _rundir();
 
     my $name;
     my $basedir;
@@ -442,22 +471,20 @@ sub get_basedir
 sub cleanup_leftovers
 {
     my $rootdir = _rootdir();
+    my $rundir  = _rundir();
 
     return if (!-d $rootdir);
     opendir ROOT, $rootdir
         or die "Cannot open directory $rootdir for reading: $!";
-    my @dirs;
+    my @to_rmtree;
     while (my $e = readdir(ROOT))
     {
-        # This must be kept in sync with _make_unique_instance_info,
-        # which is what names and creates these directories.
-        my $basedirpat = qr{
-            \d{6}               # UTC timestamp as HHMMSS
-            (?:[0-9A-F]{2,})?   # optional worker ID as 2+ hex digits
-            [0-9A-F]{2,}        # unique number as 2+ hex digits
-        }ax;
-
-        push(@dirs, $e) if $e =~ m/$basedirpat/;
+        # This must be kept in sync with testrunner.pl, which is what names and
+        # creates the rundirs
+        if ($e =~ /\A[0-9]{8}T[0-9]{6}\z/ && $e ne $rundir)
+        {
+            push @to_rmtree, $e;
+        }
     }
     closedir ROOT;
 
@@ -467,7 +494,7 @@ sub cleanup_leftovers
             xlog "Cleaning up old basedir $rootdir/$_";
         }
         rmtree "$rootdir/$_";
-    } @dirs;
+    } @to_rmtree;
 }
 
 sub add_service
@@ -583,7 +610,7 @@ sub _find_binary
 {
     my ($self, $name) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $name_override = $cassini->val("cyrus $self->{installation}", $name);
     $name = $name_override if defined $name_override;
 
@@ -625,7 +652,7 @@ sub _valgrind_setup
 
     my @cmd;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
@@ -651,7 +678,7 @@ sub _binary
     my @cmd;
     my $valground = 0;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     if ($cassini->bool_val('valgrind', 'enabled') &&
         !($name =~ m/xapian.*$/) &&
@@ -1520,7 +1547,7 @@ sub _check_valgrind_logs
 {
     my ($self) = @_;
 
-    return unless Cassandane::Cassini->instance()->bool_val('valgrind', 'enabled');
+    return unless Cassandane::Cassini->singleton()->bool_val('valgrind', 'enabled');
 
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
 
@@ -1722,7 +1749,7 @@ sub find_cores
     my ($self) = @_;
     my $coredir = $self->{basedir} . '/conf/cores';
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $core_pattern = $cassini->get_core_pattern();
 
     my @cores;
@@ -2454,7 +2481,7 @@ sub _fork_command
         or die "Cannot cd to $cd: $!";
 
     # ulimit -c ...
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $coresizelimit = 0 + $cassini->val("cyrus $self->{installation}",
                                           'coresizelimit', '100');
     if ($coresizelimit <= 0) {

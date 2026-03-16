@@ -24,7 +24,7 @@ sub new
 
     my $self = $class->SUPER::new({}, @_);
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     my $findmnt = $cassini->val('paths', 'findmnt', '/usr/bin/findmnt');
     my $rootdir_mount_opts = qx{$findmnt -n -o OPTIONS --target $rootdir};
@@ -57,7 +57,7 @@ sub run_pkgconfig
     my $outfname = $self->{instance}->{basedir} . "/pkg-config$counter.out";
     my $errfname = $self->{instance}->{basedir} . "/pkg-config$counter.err";
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     my $pkgconfig = $cassini->val('paths', 'pkg-config', '/usr/bin/pkg-config');
 
     $self->{instance}->run_command({
@@ -132,7 +132,7 @@ sub run_test
 {
     my ($self) = @_;
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
 
     my $name = $self->name();
     $name =~ s/^test_//;

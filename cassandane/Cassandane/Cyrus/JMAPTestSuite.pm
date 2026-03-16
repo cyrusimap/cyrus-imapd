@@ -56,7 +56,7 @@ sub cyrus_version_supports_jmap
 
 sub init
 {
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = Cassandane::Cassini->singleton();
     $basedir = $cassini->val('jmaptestsuite', 'basedir');
     return unless defined $basedir;
     $basedir = abs_path($basedir);
