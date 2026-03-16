@@ -85,7 +85,7 @@ sub xs_c
 {
     return <<"EOT";
 
-.xs.c: .xs
+.xs.c:
 \t\$(XSUBPPRUN) \$(XSPROTOARG) \$(XSUBPPARGS) \$(XSUBPP_EXTRA_ARGS) \$< > \$*.xsc && \$(MV) \$*.xsc \$@
 
 EOT

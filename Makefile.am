@@ -1523,7 +1523,7 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 .gperf.c:
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
-.gperf.h: $(top_srcdir)/tools/gperf-build-prop-set.pl
+.gperf.h:
 	$(AM_V_GEN)$(top_srcdir)/tools/gperf-build-prop-set.pl $< > $@.NEW && mv $@.NEW $@
 
 if HAVE_XXD
