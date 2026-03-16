@@ -1,11 +1,17 @@
 #!/usr/bin/perl
 
+# Test environment prerequisites:
+# - A local user named "cassandane" must exist.
+# - At least two unix groups must include "cassandane" as a member.
+# - At least one unix group must NOT include "cassandane".
+#
+# These tests derive dynamic group names from the host system at runtime.
+
 package Cassandane::Cyrus::UnixGroups;
 use strict;
 use warnings;
 
 use base qw(Cassandane::Cyrus::TestCase);
-use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
 
 sub new
@@ -22,7 +28,6 @@ sub new
         config => $config,
         adminstore => 1,
         services => [qw( imap )],
-        start_instances => 0,
     }, @args);
 
     return $self;
@@ -33,8 +38,6 @@ sub set_up
     my ($self) = @_;
 
     $self->SUPER::set_up();
-
-    $self->_start_instances();
     $self->{instance}->create_user("otheruser");
 
     my $userid = 'cassandane';
@@ -110,18 +113,18 @@ sub do_test_list_order
     $self->assert_str_equals('ok',
         $imaptalk->get_last_completion_response());
 
-    my $group_c = 'group:' . $self->{unix_member_groups}[0];
-    my $group_co = 'group:' . $self->{unix_member_groups}[1];
-    my $group_o = 'group:' . $self->{unix_nonmember_group};
+    my $group_member_a = 'group:' . $self->{unix_member_groups}[0];
+    my $group_member_b = 'group:' . $self->{unix_member_groups}[1];
+    my $group_nonmember = 'group:' . $self->{unix_nonmember_group};
 
     my %adminfolders = (
         'user.otheruser.order-user' => 'cassandane',
-        'user.otheruser.order-co' => $group_co,
-        'user.otheruser.order-c' => $group_c,
-        'user.otheruser.order-o' => $group_o,
-        'shared.order-co' => $group_co,
-        'shared.order-c' => $group_c,
-        'shared.order-o' => $group_o,
+        'user.otheruser.order-member-a' => $group_member_a,
+        'user.otheruser.order-member-b' => $group_member_b,
+        'user.otheruser.order-nonmember' => $group_nonmember,
+        'shared.order-member-a' => $group_member_a,
+        'shared.order-member-b' => $group_member_b,
+        'shared.order-nonmember' => $group_nonmember,
     );
 
     while (my ($folder, $identifier) = each %adminfolders) {
@@ -161,15 +164,15 @@ sub do_test_list_order
         INBOX
         INBOX.aaa
         INBOX.zzz
-        user.otheruser.order-c
-        user.otheruser.order-co
+        user.otheruser.order-member-a
+        user.otheruser.order-member-b
         user.otheruser.order-user
     );
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj > 3 || ($maj == 3 && $min > 4)) {
         push @expect, qw(shared);
     }
-    push @expect, qw(shared.order-c shared.order-co);
+    push @expect, qw(shared.order-member-a shared.order-member-b);
     $self->assert_deep_equals(\@boxes, \@expect);
 }
 
