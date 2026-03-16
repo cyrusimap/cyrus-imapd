@@ -43,9 +43,11 @@ sub test_email_set_create_duplicate_retry
     ]);
 
     xlog $self, "Must get alreadyExists with the existing id";
-    $self->assert_null($res->[0][1]{created}{b});
-    my $err = $res->[0][1]{notCreated}{b};
-    $self->assert_not_null($err);
-    $self->assert_str_equals("alreadyExists", $err->{type});
-    $self->assert_str_equals($emailId, $err->{existingId});
+    $self->assert_cmp_deeply(
+        superhashof({
+            type => "alreadyExists",
+            existingId => $emailId,
+        }),
+        $res->[0][1]{notCreated}{b},
+    );
 }
