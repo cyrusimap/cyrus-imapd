@@ -4712,29 +4712,13 @@ static void prot_print_client_capa(struct protstream *pout, unsigned capa)
     }
 }
 
-/*
- * Perform a SELECT/EXAMINE/BBOARD command
- */
-static void cmd_select(char *tag, char *cmd, char *name)
+static int parse_select_params(char *tag, char *cmd, int allowdeleted,
+                               struct index_init *init)
 {
-    int c;
-    int r = 0;
-    int doclose = 0;
-    mbentry_t *mbentry = NULL;
-    struct backend *backend_next = NULL;
-    struct index_init init;
-    int wasopen = 0;
-    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
-    struct vanished_params *v = &init.vanished;
-    const char *origname = name;
-    struct listargs listargs = {
-        LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
-        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
-    };
+    struct vanished_params *v = &init->vanished;
+    int r = IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    memset(&init, 0, sizeof(struct index_init));
-
-    c = prot_getc(imapd_in);
+    int c = prot_getc(imapd_in);
     if (c == ' ') {
         static struct buf arg, parm1, parm2;
 
@@ -4801,14 +4785,15 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  */
                 client_behavior_mask |= CB_ANNOTATE;
             }
-            else if (allowdeleted && !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
-                init.want_expunged = 1;
+            else if (allowdeleted &&
+                     !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
+                init->want_expunged = 1;
             }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
                             tag, cmd, arg.s);
                 eatline(imapd_in, c);
-                return;
+                return r;
             }
 
             if (c == ' ') c = getword(imapd_in, &arg);
@@ -4819,7 +4804,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
             prot_printf(imapd_out,
                         "%s BAD Missing close parenthesis in %s\r\n", tag, cmd);
             eatline(imapd_in, c);
-            return;
+            return r;
         }
 
         c = prot_getc(imapd_in);
@@ -4828,8 +4813,46 @@ static void cmd_select(char *tag, char *cmd, char *name)
         prot_printf(imapd_out,
                     "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
         eatline(imapd_in, c);
-        return;
+        return r;
     }
+
+    return 0;
+
+ badlist:
+    prot_printf(imapd_out, "%s BAD Invalid modifier list in %s\r\n", tag, cmd);
+    eatline(imapd_in, c);
+    return r;
+
+ badqresync:
+    prot_printf(imapd_out, "%s BAD Invalid QRESYNC parameter list in %s\r\n",
+                tag, cmd);
+    eatline(imapd_in, c);
+    return r;
+}
+
+/*
+ * Perform a SELECT/EXAMINE/BBOARD command
+ */
+static void cmd_select(char *tag, char *cmd, char *name)
+{
+    int r = 0;
+    int doclose = 0;
+    mbentry_t *mbentry = NULL;
+    struct backend *backend_next = NULL;
+    struct index_init init;
+    int wasopen = 0;
+    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
+    struct vanished_params *v = &init.vanished;
+    const char *origname = name;
+    struct listargs listargs = {
+        LIST_CMD_EXTENDED, 0, LIST_RET_CHILDREN | LIST_RET_SPECIALUSE,
+        "", STRARRAY_INITIALIZER, 0, {0}, STRARRAY_INITIALIZER, NULL
+    };
+
+    memset(&init, 0, sizeof(struct index_init));
+
+    r = parse_select_params(tag, cmd, allowdeleted, &init);
+    if (r) return;
 
     if (imapd_index) {
         maybe_autoexpunge();
@@ -5017,18 +5040,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
      * Simple.toggleable_debug_logging looks for it
      */
     syslog(LOG_DEBUG, "open: user %s opened %s", imapd_userid, name);
-    goto done;
-
- badlist:
-    prot_printf(imapd_out, "%s BAD Invalid modifier list in %s\r\n", tag, cmd);
-    eatline(imapd_in, c);
-    return;
-
- badqresync:
-    prot_printf(imapd_out, "%s BAD Invalid QRESYNC parameter list in %s\r\n",
-                tag, cmd);
-    eatline(imapd_in, c);
-    return;
 
  done:
     mboxlist_entry_free(&mbentry);
