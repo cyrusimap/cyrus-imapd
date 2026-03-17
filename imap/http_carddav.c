@@ -43,7 +43,6 @@
 #include "util.h"
 #include "vcard_support.h"
 #include "version.h"
-#include "vparse.h"
 #include "xmalloc.h"
 #include "xml_support.h"
 #include "xstrlcat.h"
@@ -114,18 +113,18 @@ static int report_card_query(struct transaction_t *txn,
 static struct mime_type_t carddav_mime_types[] = {
     /* First item MUST be the default type and storage format */
     { "text/vcard; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf_x,
-      (void * (*)(const struct buf*)) &vcard_parse_buf_x,
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vcardcomponent_free, NULL, NULL
     },
     { "text/directory; charset=utf-8", "3.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf_x,
-      (void * (*)(const struct buf*)) &vcard_parse_buf_x,
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vcardcomponent_free, NULL, NULL
     },
     { "text/vcard", "4.0", "vcf",
-      (struct buf* (*)(void *)) &vcard_as_buf_x,
-      (void * (*)(const struct buf*)) &vcard_parse_buf_x,
+      (struct buf* (*)(void *)) &vcard_as_buf,
+      (void * (*)(const struct buf*)) &vcard_parse_buf,
       (void (*)(void *)) &vcardcomponent_free, NULL, NULL
     },
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
@@ -633,7 +632,7 @@ static int carddav_store_resource(struct transaction_t *txn,
     }
 
     /* Check size of vCard (allow existing oversized cards to be updated) */
-    struct buf *buf = vcard_as_buf_x(vcard);
+    struct buf *buf = vcard_as_buf(vcard);
     size_t max_size = vcard_max_size;
     if (oldrecord && (oldrecord->size - oldrecord->header_size) > max_size) {
         max_size += CARDDAV_UPDATE_OVERAGE;
@@ -932,7 +931,7 @@ static int export_addressbook(struct transaction_t *txn,
         vcardcomponent *vcard;
 
         /* Map and parse existing vCard resource */
-        vcard = record_to_vcard_x(mailbox, record);
+        vcard = record_to_vcard(mailbox, record);
 
         if (vcard) {
             unsigned version =
@@ -1335,7 +1334,7 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
         if (cdata->version != want_ver || want_ver == 4) {
             /* Translate between vCard versions */
-            *obj = record_to_vcard_x(mailbox, record);
+            *obj = record_to_vcard(mailbox, record);
             cyr_vcardcomponent_transform(*obj,
                                          want_ver == 4 ? VCARD_VERSION_40 :
                                          VCARD_VERSION_30,
@@ -1672,7 +1671,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 
             if ((flags & PREFER_REP) && myuid /* we added a UID */) {
                 /* Add CARDDAV:addressbook-data property */
-                struct buf *vcardbuf = vcard_as_buf_x(vcard);
+                struct buf *vcardbuf = vcard_as_buf(vcard);
                 xmlNodePtr cdata = xmlNewChild(node, ns[NS_CARDDAV],
                                                BAD_CAST "addressbook-data", NULL);
 
@@ -1857,7 +1856,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Translate between vCard versions */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
 
             cyr_vcardcomponent_transform(vcard,
                                          want_ver == 4 ? VCARD_VERSION_40 :
@@ -1870,7 +1869,7 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             /* Limit returned properties */
             vcard = fctx->obj;
 
-            if (!vcard) vcard = fctx->obj = vcard_parse_string_x(data);
+            if (!vcard) vcard = fctx->obj = vcard_parse_string(data);
             prune_properties(vcard, partial);
         }
 
@@ -2102,8 +2101,8 @@ static int apply_propfilter(struct prop_filter *propfilter,
             }
             if (fctx->msg_buf.len) {
                 vcard = fctx->obj =
-                    vcard_parse_string_x(buf_cstring(&fctx->msg_buf) +
-                                         fctx->record->header_size);
+                    vcard_parse_string(buf_cstring(&fctx->msg_buf) +
+                                       fctx->record->header_size);
             }
             if (!vcard) return 0;
         }
