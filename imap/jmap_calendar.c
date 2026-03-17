@@ -2105,19 +2105,31 @@ done:
     free(mboxname);
 }
 
+struct calendar_set_args {
+    bool on_destroy_remove_events;
+    const char *on_success_set_is_default;
+};
+
 static int setcalendars_parse_args(jmap_req_t *req __attribute__((unused)),
                                    struct jmap_parser *parser __attribute__((unused)),
                                    const char *arg, json_t *val, void *rock)
 {
-    int *on_destroy_remove_events = rock;
-    *on_destroy_remove_events = 0;
+    struct calendar_set_args *setargs = (struct calendar_set_args *) rock;
 
     if (!strcmp(arg, "onDestroyRemoveEvents")) {
         if (json_is_boolean(val)) {
-            *on_destroy_remove_events = json_boolean_value(val);
+            setargs->on_destroy_remove_events = json_boolean_value(val);
             return 1;
         }
     }
+
+    else if (!strcmp(arg, "onSuccessSetIsDefault")) {
+        if (json_is_string(val)) {
+            setargs->on_success_set_is_default = json_string_value(val);
+            return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -2125,13 +2137,14 @@ static int jmap_calendar_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
-    int on_destroy_remove_events = 0;
+    struct calendar_set_args setargs = { 0 };
+    char *default_calname = NULL;
     json_t *err = NULL;
     int r = 0;
 
     /* Parse arguments */
     jmap_set_parse(req, &argparser, &calendar_props, setcalendars_parse_args,
-                   &on_destroy_remove_events, &set, &err);
+                   &setargs, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2161,6 +2174,8 @@ static int jmap_calendar_set(struct jmap_req *req)
     if (r) {
         goto done;
     }
+
+    default_calname = caldav_scheddefault(req->accountid, 1);
 
     /* create */
     const char *key;
@@ -2235,11 +2250,65 @@ static int jmap_calendar_set(struct jmap_req *req)
             calid = newcalid;
         }
         json_t *err = NULL;
-        setcalendars_destroy(req, calid, on_destroy_remove_events, &err);
+        setcalendars_destroy(req, calid, setargs.on_destroy_remove_events, &err);
         if (!err) {
             json_array_append_new(set.destroyed, json_string(id));
         }
         else json_object_set_new(set.not_destroyed, id, err);
+    }
+
+    if (setargs.on_success_set_is_default &&
+        /* No failures */
+        !json_object_size(set.not_created) &&
+        !json_object_size(set.not_updated) &&
+        !json_object_size(set.not_destroyed)) {
+
+        /* resolve new default addressbook id */
+        const char *newid = setargs.on_success_set_is_default;
+        if (*newid == '#') {
+            json_t *jobj = json_object_get(set.created, newid+1);
+            if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
+        }
+
+        char *calhome_name = caldav_mboxname(req->accountid, NULL);
+        annotate_state_t *calhome_astate = NULL;
+        struct mailbox *calhome_mbox = NULL;
+
+        int r2 = mailbox_open_iwl(calhome_name, &calhome_mbox);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not open calendar home mailbox",
+                    "err=<%s>", error_message(r2));
+        }
+        else {
+            r = mailbox_get_annotate_state(calhome_mbox, 0, &calhome_astate);
+            if (r2) {
+                xsyslog(LOG_ERR, "can not get calendar home annotation state",
+                        "err=<%s>", error_message(r2));
+            }
+            else {
+                r2 = set_scheddefault(req, calhome_astate, newid);
+                if (r2) {
+                    xsyslog(LOG_ERR, "can not set new default calendar",
+                            "name=<%s> err=<%s>", newid, error_message(r2));
+                }
+                else {
+                    /* report that isDefault has been moved to new addressbook */
+                    char *mboxname = caldav_mboxname(req->accountid, newid);
+                    jmap_report_isdefault(&set, mboxname,
+                                          setargs.on_success_set_is_default,
+                                          true);
+                    free(mboxname);
+
+                    /* report that isDefault has been removed from old default */
+                    mboxname = caldav_mboxname(req->accountid, default_calname);
+                    jmap_report_isdefault(&set, mboxname, default_calname, false);
+                    free(mboxname);
+                }
+            }
+        }
+
+        mailbox_close(&calhome_mbox);
+        free(calhome_name);
     }
 
     set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
@@ -2249,6 +2318,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
+    free(default_calname);
     return r;
 }
 
