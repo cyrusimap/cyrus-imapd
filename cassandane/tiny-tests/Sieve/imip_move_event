@@ -29,23 +29,15 @@ EOF
                     name => 'Y',
                 },
             },
+            onSuccessSetIsDefault => '#calendarX'
         }, 'R1'],
     ]);
     my $calendarX = $res->[0][1]{created}{calendarX}{id};
     $self->assert_not_null($calendarX);
+    $self->assert_equals(JSON::true,
+                         $res->[0][1]{created}{calendarX}{isDefault});
     my $calendarY = $res->[0][1]{created}{calendarY}{id};
     $self->assert_not_null($calendarY);
-
-    $res = $jmap->CallMethods([
-        ['CalendarPreferences/set', {
-            update => {
-                singleton => {
-                    defaultCalendarId => $calendarX,
-                },
-            },
-        }, 'R1'],
-    ]);
-    $self->assert(exists $res->[0][1]{updated}{singleton});
 
     xlog "Get CalendarEvent state";
     $res = $jmap->CallMethods([
