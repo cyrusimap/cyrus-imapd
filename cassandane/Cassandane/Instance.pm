@@ -3310,6 +3310,7 @@ sub _new_jmaptester_for_user($self, $tester_class, $tester_arg, $user, $new_arg 
     my $jtest = $tester_class->new({
         fallback_account_id => $user->username,
         default_using => [ @DEFAULT_USING ],
+        json_pretty => 1,
         %$tester_arg,
         %overrides,
     });
