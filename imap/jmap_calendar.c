@@ -456,6 +456,7 @@ static int jmap_calendar_isspecial(mbname_t *mbname) {
 struct getcalendars_rock {
     struct jmap_req *req;
     struct jmap_get *get;
+    const char *default_cal_mboxname;
     int skip_hidden;
 };
 
@@ -757,6 +758,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
+    if (jmap_wantprop(rock->get->props, "isDefault")) {
+        bool is_default = !strcmp(mbentry->name, rock->default_cal_mboxname);
+        json_object_set_new(obj, "isDefault", json_boolean(is_default));
+    }
+
     if (jmap_wantprop(rock->get->props, "includeInAvailability")) {
         buf_reset(&attrib);
         static const char *transp_annot =
@@ -875,6 +881,8 @@ static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get = JMAP_GET_INITIALIZER;
+    char *default_calname = NULL;
+    char *default_cal_mboxname = NULL;
     json_t *err = NULL;
     int r = 0;
 
@@ -894,7 +902,11 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     /* Build callback data */
-    struct getcalendars_rock rock = { req, &get, 1 /*skiphidden*/ };
+    default_calname = caldav_scheddefault(req->accountid, 1);
+    default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
+    xzfree(default_calname);
+    struct getcalendars_rock rock =
+        { req, &get, default_cal_mboxname, 1 /*skiphidden*/ };
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
@@ -938,6 +950,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
+    free(default_cal_mboxname);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     return r;
