@@ -7,8 +7,6 @@
 
 #define DEFAULT_ADDRBOOK "Default"
 
-#define MEMBER_URI_PREFIX     "urn:uuid:"
-#define MEMBER_URI_PREFIX_LEN 9
 #define DAVX5_UA_STR          "DAVx5/"
 #define DAVX5_UA_STR_LEN      6
 

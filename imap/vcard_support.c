@@ -332,9 +332,10 @@ EXPORTED void vcard_to_v3(struct vparse_card *vcard)
                 /* text -> text (default) */
                 vparse_delete_params(ventry, "value");
             }
-            else if (!strncmp(propval, "urn:uuid:", 9)) {
+            else if (!strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                              VCARD_MEMBER_URI_PREFIX_LEN)) {
                 /* uuid URN -> text */
-                buf_setcstr(&buf, propval+9);
+                buf_setcstr(&buf, propval + VCARD_MEMBER_URI_PREFIX_LEN);
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
             else {
@@ -521,9 +522,11 @@ EXPORTED void vcard_to_v4(struct vparse_card *vcard)
                 /* uri -> uri (default) */
                 vparse_delete_params(ventry, "value");
             }
-            else if (!is_v4 && strncmp(propval, "urn:uuid:", 9)) {
+            else if (!is_v4 &&
+                     strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                             VCARD_MEMBER_URI_PREFIX_LEN)) {
                 /* text (default) -> uuid URN */
-                buf_setcstr(&buf, "urn:uuid:");
+                buf_setcstr(&buf, VCARD_MEMBER_URI_PREFIX);
                 buf_appendcstr(&buf, propval);
                 vparse_set_value(ventry, buf_cstring(&buf));
             }
