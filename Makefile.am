@@ -1308,8 +1308,6 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_calendar_event_props.h \
     imap/jmap_calendar_participant_identity_props.c \
     imap/jmap_calendar_participant_identity_props.h \
-    imap/jmap_calendar_preferences_props.c \
-    imap/jmap_calendar_preferences_props.h \
     imap/jmap_calendar_principal_props.c \
     imap/jmap_calendar_principal_props.h \
     imap/jmap_calendar_props.c \
@@ -1396,7 +1394,6 @@ imap_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_calendar_event_notification_props.gperf \
     imap/jmap_calendar_event_props.gperf \
     imap/jmap_calendar_participant_identity_props.gperf \
-    imap/jmap_calendar_preferences_props.gperf \
     imap/jmap_calendar_principal_props.gperf \
     imap/jmap_calendar_props.gperf \
     imap/jmap_calendar_share_notification_props.gperf \
