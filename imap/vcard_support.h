@@ -15,6 +15,9 @@
 #include "message_guid.h"
 #include "util.h"
 
+#define VCARD_MEMBER_URI_PREFIX     "urn:uuid:"
+#define VCARD_MEMBER_URI_PREFIX_LEN 9
+
 #define VCARD_NUM_BASE_N_FIELDS   5  // Number of fields defined in RFC 6350
 #define VCARD_NUM_BASE_ADR_FIELDS 7  // Number of fields defined in RFC 6350
 

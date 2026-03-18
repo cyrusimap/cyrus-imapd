@@ -389,12 +389,18 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
         }
 
         else if (!strcasecmp(name, "x-addressbookserver-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            if (strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                        VCARD_MEMBER_URI_PREFIX_LEN)) {
+                continue;
+            }
             json_object_set_new(contactids_set, propval+9, json_true());
         }
 
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (strncmp(propval, "urn:uuid:", 9)) continue;
+            if (strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                        VCARD_MEMBER_URI_PREFIX_LEN)) {
+                continue;
+            }
             struct vparse_param *param = vparse_get_param(ventry, "userid");
             if (!param) continue;
             json_t *object = json_object_get(otherids_sets, param->value);
@@ -807,8 +813,10 @@ static int _add_group_entries(struct jmap_req *req,
         }
 
         buf_reset(&buf);
-        if (!is_v4 && strncmpsafe("urn:uuid:", uid, 9)) {
-            buf_setcstr(&buf, "urn:uuid:");
+        if (!is_v4 &&
+            strncmpsafe(uid, VCARD_MEMBER_URI_PREFIX,
+                        VCARD_MEMBER_URI_PREFIX_LEN)) {
+            buf_setcstr(&buf, VCARD_MEMBER_URI_PREFIX);
         }
 
         buf_appendcstr(&buf, uid);
@@ -842,8 +850,9 @@ static int _add_othergroup_entries(struct jmap_req *req,
             }
 
             buf_reset(&buf);
-            if (strncmpsafe("urn:uuid:", uid, 9)) {
-                buf_setcstr(&buf, "urn:uuid:");
+            if (strncmpsafe(uid, VCARD_MEMBER_URI_PREFIX,
+                            VCARD_MEMBER_URI_PREFIX_LEN)) {
+                buf_setcstr(&buf, VCARD_MEMBER_URI_PREFIX);
             }
 
             buf_appendcstr(&buf, uid);
@@ -6995,8 +7004,9 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             goto member;
         }
         else if (!strcmp(prop_name, "X-FM-OTHERACCOUNT-MEMBER")) {
-            if (!strncmp(prop_value, "urn:uuid:", 9))
-                prop_value += 9;
+            if (!strncmp(prop_value, VCARD_MEMBER_URI_PREFIX,
+                         VCARD_MEMBER_URI_PREFIX_LEN))
+                prop_value += VCARD_MEMBER_URI_PREFIX_LEN;
             goto member;
         }
         else if (!strcasecmp(prop_name, "X-CYRUS-ONLINESERVICE")) {

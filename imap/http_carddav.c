@@ -715,10 +715,12 @@ static unsigned check_uid_conflict(struct transaction_t *txn,
 
             if (txn->meth == METH_PUT && uid && cdata->vcard_uid &&
                 cdata->version == 3 && version == VCARD_VERSION_40 &&
-                ((!strncasecmp(uid, "urn:uuid:", 9) &&
-                  !strcmp(uid + 9, cdata->vcard_uid)) ||
-                 (!strncasecmp(cdata->vcard_uid, "urn:uuid:", 9) &&
-                  !strcmp(cdata->vcard_uid + 9, uid)))) {
+                ((!strncasecmp(uid, VCARD_MEMBER_URI_PREFIX,
+                               VCARD_MEMBER_URI_PREFIX_LEN) &&
+                  !strcmp(uid + VCARD_MEMBER_URI_PREFIX_LEN, cdata->vcard_uid)) ||
+                 (!strncasecmp(cdata->vcard_uid, VCARD_MEMBER_URI_PREFIX,
+                               VCARD_MEMBER_URI_PREFIX_LEN) &&
+                  !strcmp(cdata->vcard_uid + VCARD_MEMBER_URI_PREFIX_LEN, uid)))) {
                 // XXX quirk
                 // This is a PUT on the same resource which rewrites a version 3
                 // vCard to version 4 and adds or strips the "urn:uuid" prefix
@@ -829,8 +831,9 @@ static void cyr_vcardcomponent_transform(vcardcomponent *vcard,
              prop = vcardcomponent_get_next_property(vcard, VCARD_MEMBER_PROPERTY)) {
             const char *member = vcardproperty_get_member(prop);
 
-            if (strncmp(member, MEMBER_URI_PREFIX, MEMBER_URI_PREFIX_LEN)) {
-                buf_setcstr(&buf, MEMBER_URI_PREFIX);
+            if (strncmp(member, VCARD_MEMBER_URI_PREFIX,
+                        VCARD_MEMBER_URI_PREFIX_LEN)) {
+                buf_setcstr(&buf, VCARD_MEMBER_URI_PREFIX);
                 buf_appendcstr(&buf, member);
                 vcardproperty_set_member(prop, buf_cstring(&buf));
             }
@@ -1544,8 +1547,10 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 
         case VCARD_MEMBER_PROPERTY:
             if (strip_member_prefix &&
-                !strncmp(propval, MEMBER_URI_PREFIX, MEMBER_URI_PREFIX_LEN)) {
-                vcardproperty_set_member(prop, propval + MEMBER_URI_PREFIX_LEN);
+                !strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                         VCARD_MEMBER_URI_PREFIX_LEN)) {
+                vcardproperty_set_member(prop,
+                                         propval + VCARD_MEMBER_URI_PREFIX_LEN);
             }
             break;
 

@@ -1169,16 +1169,20 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
         }
         else if (!strcasecmp(name, "member") ||
                  !strcasecmp(name, "x-addressbookserver-member")) {
-            if (!strncmp(propval, "urn:uuid:", 9)) {
-                strarray_append(&member_uids, propval+9);
+            if (!strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                         VCARD_MEMBER_URI_PREFIX_LEN)) {
+                strarray_append(&member_uids,
+                                propval + VCARD_MEMBER_URI_PREFIX_LEN);
                 strarray_append(&member_uids, "");
             }
         }
         else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (!strncmp(propval, "urn:uuid:", 9)) {
+            if (!strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                         VCARD_MEMBER_URI_PREFIX_LEN)) {
                 struct vparse_param *param = vparse_get_param(ventry, "userid");
                 if (param) {
-                    strarray_append(&member_uids, propval+9);
+                    strarray_append(&member_uids,
+                                    propval + VCARD_MEMBER_URI_PREFIX_LEN);
                     strarray_append(&member_uids, param->value);
                 }
             }
@@ -1556,8 +1560,11 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                 goto kind;
             else if (!strcasecmp(name, "x-addressbookserver-member")) {
                 /* strip urn:uuid: prefix and RFC6868-decode string */
-                if (strncmp(propval, "urn:uuid:", 9)) continue;
-                member = propval + 9;
+                if (strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                            VCARD_MEMBER_URI_PREFIX_LEN)) {
+                    continue;
+                }
+                member = propval + VCARD_MEMBER_URI_PREFIX_LEN;
                 buf_size = strlen(member) + 1;
                 buf_ptr = buf = icalmemory_new_buffer(buf_size);
                 icalmemory_append_decoded_string(&buf, &buf_ptr, &buf_size,
@@ -1569,8 +1576,11 @@ EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
                 /* strip urn:uuid: prefix */
                 userid = vcardproperty_get_xparam_value(prop, "userid");
                 if (!userid) continue;
-                if (strncmp(propval, "urn:uuid:", 9)) continue;
-                member = propval + 9;
+                if (strncmp(propval, VCARD_MEMBER_URI_PREFIX,
+                            VCARD_MEMBER_URI_PREFIX_LEN)) {
+                    continue;
+                }
+                member = propval + VCARD_MEMBER_URI_PREFIX_LEN;
                 goto member;
             }
             break;
