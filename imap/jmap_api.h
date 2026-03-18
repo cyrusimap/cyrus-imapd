@@ -623,4 +623,7 @@ extern int jmap_findmbox_role(jmap_req_t *req, const char *role,
 
 extern void jmap_add_methods(jmap_method_t methods[], jmap_settings_t *settings);
 
+extern void jmap_report_isdefault(struct jmap_set *set, const char *name,
+                                  const char *id, bool isdef);
+
 #endif /* JMAP_API_H */

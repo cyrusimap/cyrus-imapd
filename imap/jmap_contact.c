@@ -5788,35 +5788,6 @@ static int setaddressbooks_parse_args(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
-static void report_isdefault(struct jmap_set *set, const char *name,
-                             const char *id, bool isdef)
-{
-    json_t *obj;
-
-    if (*id == '#')
-        obj = json_object_get(set->created, id+1);
-    else
-        obj = json_object_get(set->updated, id);
-
-    if (obj) {
-        json_object_set_new(obj, "isDefault", json_boolean(isdef));
-    }
-    else {
-        /* Bump modseq so the mailbox shows up in /changes */
-        struct mailbox *mailbox = NULL;
-
-        mailbox_open_iwl(name, &mailbox);
-        if (mailbox) {
-            mboxlist_update_foldermodseq(name,
-                                         mailbox_modseq_dirty(mailbox));
-            mailbox_close(&mailbox);
-        }
-
-        json_object_set_new(set->updated, id,
-                            json_pack("{s:b}", "isDefault", isdef));
-    }
-}
-
 static int jmap_addressbook_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
@@ -5958,8 +5929,8 @@ static int jmap_addressbook_set(struct jmap_req *req)
 
             if (!r) {
                 /* report that isDefault has been moved to new addressbook */
-                report_isdefault(&set, mbentry->name,
-                                 setargs.on_success_set_is_default, true);
+                jmap_report_isdefault(&set, mbentry->name,
+                                      setargs.on_success_set_is_default, true);
 
                 /* report that isDefault has been removed from old default */
                 mboxlist_entry_free(&mbentry);
@@ -5968,7 +5939,7 @@ static int jmap_addressbook_set(struct jmap_req *req)
                     char oldid[JMAP_MAX_ADDRBOOKID_SIZE];
 
                     jmap_set_addrbookid(req->cstate, mbentry, oldid);
-                    report_isdefault(&set, mbentry->name, oldid, false);
+                    jmap_report_isdefault(&set, mbentry->name, oldid, false);
                 }
             }
         }
