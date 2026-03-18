@@ -64,7 +64,7 @@ my sub append_and_add_memos ($self, $first_to_append) {
                     name         => 'Email/query',
                     path         => '/ids'
                 },
-                properties => ['threadId', 'subject', ],
+                properties => ['threadId', 'subject', 'messageId', 'inReplyTo' ],
             },
         ],
     ]);
