@@ -8736,30 +8736,39 @@ done:
 }
 
 struct boundary_gen {
-    char *base;            /* hash of Email/set properties, or NULL for random */
+    char *base;            /* hash of Email/set properties */
     unsigned counter;      /* incremented for each boundary */
     struct buf buf;        /* reusable buffer for boundary generation */
 };
 
+/* Compute deterministic MIME boundary base from a hash of the
+ * input JSON properties.  This ensures identical Email/set creates
+ * produce identical RFC 822 output (same blobId), enabling
+ * duplicate detection on network retry. */
+static void _boundary_gen_init(struct boundary_gen *gen, json_t *jemail)
+{
+    memset(gen, 0, sizeof(struct boundary_gen));
+
+    char *json = json_dumps(jemail, JSON_COMPACT|JSON_SORT_KEYS);
+    struct message_guid guid;
+    message_guid_generate(&guid, json, strlen(json));
+    gen->base = xstrdup(message_guid_encode(&guid));
+    free(json);
+}
+
+static void _boundary_gen_fini(struct boundary_gen *gen)
+{
+    free(gen->base);
+    buf_free(&gen->buf);
+}
+
 static char *_mime_make_boundary(struct boundary_gen *gen)
 {
-    if (gen && gen->base) {
-        /* deterministic boundary from hash of Email/set properties */
-        struct message_guid guid;
-        buf_reset(&gen->buf);
-        buf_printf(&gen->buf, "%s-%u", gen->base, gen->counter++);
-        message_guid_generate(&guid, buf_base(&gen->buf), buf_len(&gen->buf));
-        return xstrdup(message_guid_encode(&guid));
-    }
-
-    /* fallback: random boundary */
-    char *boundary, *p, *q;
-    boundary = xstrdup(makeuuid());
-    for (p = boundary, q = boundary; *p; p++) {
-        if (*p != '-') *q++ = *p;
-    }
-    *q = 0;
-    return boundary;
+    struct message_guid guid;
+    buf_reset(&gen->buf);
+    buf_printf(&gen->buf, "%s-%u", gen->base, gen->counter++);
+    message_guid_generate(&guid, buf_base(&gen->buf), buf_len(&gen->buf));
+    return xstrdup(message_guid_encode(&guid));
 }
 
 static int _copy_msgrecords(struct auth_state *authstate,
@@ -9284,8 +9293,7 @@ static void _email_fini(struct email *email)
     json_decref(email->jemail);
     _emailpart_fini(email->body);
     free(email->body);
-    free(email->boundary_gen.base);
-    buf_free(&email->boundary_gen.buf);
+    _boundary_gen_fini(&email->boundary_gen);
 }
 
 static json_t *_header_make(const char *header_name,
@@ -11275,20 +11283,12 @@ static void _email_create(jmap_req_t *req,
     struct email_append_detail detail;
     memset(&detail, 0, sizeof(struct email_append_detail));
 
-    /* Compute deterministic MIME boundary base from a hash of the
-     * input JSON properties.  This ensures identical Email/set creates
-     * produce identical RFC 822 output (same blobId), enabling
-     * duplicate detection on network retry. */
-    char *json = json_dumps(jemail, JSON_COMPACT|JSON_SORT_KEYS);
-    struct message_guid boundary_guid;
-    message_guid_generate(&boundary_guid, json, strlen(json));
-    free(json);
-
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL,
-                           { xstrdup(message_guid_encode(&boundary_guid)),
-                             0, BUF_INITIALIZER } };
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL, {0} };
+
+    _boundary_gen_init(&email.boundary_gen, jemail);
+
     _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */

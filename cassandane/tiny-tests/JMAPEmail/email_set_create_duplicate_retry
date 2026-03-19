@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_set_create_duplicate_retry
-    :min_version_3_1 :needs_component_sieve
+    :needs_component_sieve
     ($self)
 {
     my $jmap = $self->{jmap};
@@ -12,8 +12,8 @@ sub test_email_set_create_duplicate_retry
         from => [{ name => "Test", email => 'test@example.com' }],
         to => [{ name => "Dest", email => 'dest@example.com' }],
         subject => "Duplicate retry test",
-        "header:Message-Id" => '<retry-test@example.com>',
-        "header:Date" => 'Mon, 01 Jan 2024 00:00:00 +0000',
+        messageId => ['retry-test@example.com'],
+        sentAt => '2024-01-01T00:00:00Z',
         bodyStructure => {
             type => 'multipart/alternative',
             subParts => [{
