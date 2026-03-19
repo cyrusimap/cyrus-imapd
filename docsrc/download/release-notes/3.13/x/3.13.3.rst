@@ -1,7 +1,7 @@
 :tocdepth: 3
 
 ===========================
-Cyrus IMAP 3.13.2 Tag Notes
+Cyrus IMAP 3.13.3 Tag Notes
 ===========================
 
 Unavailable for download as this is a development branch only.
@@ -16,7 +16,7 @@ Access is via git.
     generally be **large breaking changes** occurring between releases in this
     series.
 
-.. _relnotes-3.13.2-changes:
+.. _relnotes-3.13.3-changes:
 
 Major changes since the 3.12 series
 ===================================
@@ -51,6 +51,13 @@ Major changes since the 3.12 series
 * The new ``sieve_mdn_private`` :cyrusman:`imapd.conf(5)` option helps prevent
   leaking usernames.
 * A new database backend called ``twom`` has been added.
+* Adds support for the Sieve 'vnd.cyrus.redirect-multiple' extension
+  which allows the 'redirect' action to accept a stringlist of email
+  addresses, in addition to the standard single string.
+  Cyrus will use a single SMTP transaction, providing each address
+  as a RCPT TO and stop script processing when any response is an error.
+* The 'sieve_extensions' option now accepts the value
+  'vnd.cyrus.redirect-multiple' to enable the extension in timsieved.
 
 Updates to default configuration
 ================================
@@ -66,6 +73,19 @@ Removed features
 * lipcap support has been removed.
 * The ``tls_server_dhparam`` option has been deprecated.
 * The experimental zeroskip database backend has been removed.
+* Support for the obscure "objectstore" feature has been removed.
+* The following options are now deprecated:
+
+ * caringo_hostname
+ * caringo_port
+ * object_storage_dummy_spool
+ * object_storage_enabled
+ * openio_account
+ * openio_autocreate
+ * openio_namespace
+ * openio_proxy_timeout
+ * openio_rawx_timeout
+ * openio_verbosity
 
 Security fixes
 ==============
