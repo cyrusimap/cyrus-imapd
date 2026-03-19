@@ -140,6 +140,6 @@ my sub append_and_add_memos ($self, $first_to_append) {
 for my $first_append (qw(sent reply)) {
     Sub::Install::install_sub({
       code => sub ($self) { append_and_add_memos($self, $first_append); },
-      as   => "test_memo_splitconv_append_${first_append}_first",
+      as   => "test_email_set_create_memo_splitconv_append_${first_append}_first",
     });
 }
