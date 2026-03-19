@@ -1958,6 +1958,9 @@ if test "$enable_unit_tests" = "yes" ; then
     AC_CONFIG_LINKS([cunit/cert.pem:cunit/cert.pem])
     AC_CONFIG_LINKS([cunit/key.pem:cunit/key.pem])
 
+    dnl We also need cunit/pcunit for faster tests under VPATH builds
+    AC_CONFIG_LINKS([cunit/pcunit:cunit/pcunit])
+
     USE_MAINTAINER_MODE=yes
 fi
 

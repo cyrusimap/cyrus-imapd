@@ -343,6 +343,7 @@ EXTRA_DIST = \
     cunit/cunit.pl \
     cunit/cunit-to-junit.pl \
     cunit/key.pem \
+    cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
     doc/legacy/netnews.png \
