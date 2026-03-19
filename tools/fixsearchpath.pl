@@ -1,6 +1,28 @@
 #!/usr/bin/perl
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
+#
+# This script massages our perl scripts during `make install`  to ensure
+# they're able to run correctly from their installed location.
+#
+# The first, and simplest, task is to replace the bare '#!perl' shebang with an
+# explicit call to the perl that was chosen by `configure`.  We expect all our
+# installed perl scripts to contain a bare '#!perl' shebang line, so they can
+# be fixed up by this script during install.
+#
+# The second, and more complex, task is to inject boilerplate library path
+# handling code at the top of each script.
+#
+# The injected code contains `use lib [path]` lines for each of the paths
+# Cyrus perl modules may have been installed to, so that the installed scripts
+# can find the modules they depend on when they're run.  We expect that Cyrus
+# is usually installed to some application-specific prefix like "/usr/cyrus",
+# and perl won't look for modules in there without being told to.
+#
+# It also contains runtime detection of DESTDIR having been set during install,
+# so that the modules can be found in this scenario too.
+#
+# At least, that's my understanding at the time of writing! -- ellie <3
 
 use strict;
 use warnings;
