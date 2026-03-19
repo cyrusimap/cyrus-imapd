@@ -981,6 +981,11 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
     struct get_alarm_rock rock =
         { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
     struct icalperiodtype range = icalperiodtype_null_period();
+    /* Limit our recurrence expansion to a decade from today.
+       This will end up missing events that occur less frequent than
+       decennially, but what are the chances? */
+    range.end = icaltime_today();
+    icaltime_adjust(&range.end, 10*365, 0, 0, 0);
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
 
     if (myical) icalcomponent_free(myical);
