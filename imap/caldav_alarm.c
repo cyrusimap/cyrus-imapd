@@ -514,6 +514,17 @@ static int process_alarm_cb(icalcomponent *comp,
     }
     strarray_fini(&sched_addrs);
 
+    /* alarms can't be more than a week either side of the event start,
+     * so if we're past 2 months, then just check again in a month */
+    if (icaltime_to_timet(start, data->floatingtz) > data->now + 86400*60) {
+        syslog(LOG_DEBUG, "XXX  pushing off nextcheck");
+        time_t next = data->now + 86400*30;
+        if (!data->nextcheck || next < data->nextcheck)
+            data->nextcheck = next;
+        keep_processing_recurrences = 0;
+        goto done;
+    }
+
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
@@ -610,17 +621,6 @@ static int process_alarm_cb(icalcomponent *comp,
 
         else if (!data->nextcheck || check < data->nextcheck) {
             data->nextcheck = check;
-        }
-
-        /* alarms can't be more than a week either side of the event start,
-         * so if we're past 2 months, then just check again in a month */
-        if (check > data->now + 86400*60) {
-            syslog(LOG_DEBUG, "XXX  pushing off nextcheck");
-            time_t next = data->now + 86400*30;
-            if (!data->nextcheck || next < data->nextcheck)
-                data->nextcheck = next;
-            keep_processing_recurrences = 0;
-            goto done;
         }
     }
 
