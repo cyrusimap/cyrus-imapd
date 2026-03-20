@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
-        options: --init --privileged
+        options: --init --privileged --shm-size 4GB
     steps:
     - uses: actions/checkout@v6
       with:
