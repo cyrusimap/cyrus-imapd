@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_query_negate ($self)
+{
+    my $carddav = $self->{carddav};
+    my $bookId  = "Default";
+    my $homeset = "/dav/addressbooks/user/cassandane";
+
+    my $uid1 = guid_string();
+    my $uid2 = guid_string();
+
+    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid1
+        FN:Bob Jones
+        N:Jones;Bob;;;
+        ORG:Other Corp
+        END:VCARD
+        EOF
+
+    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid2
+        FN:Alice Smith
+        N:Smith;Alice;;;
+        ORG:Cyrus Inc
+        END:VCARD
+        EOF
+
+    my $href1 = $carddav->NewContact($bookId, $vcard1);
+    my $href2 = $carddav->NewContact($bookId, $vcard2);
+
+    # Match contacts whose ORG does NOT contain "Cyrus"
+    my $xml = <<~"EOF";
+        <C:addressbook-query xmlns:D="DAV:"
+                             xmlns:C="urn:ietf:params:xml:ns:carddav">
+          <D:prop><D:getetag/></D:prop>
+          <C:filter>
+            <C:prop-filter name="ORG">
+              <C:text-match collation="i;unicode-casemap"
+                            negate-condition="yes"
+                            match-type="contains">Cyrus</C:text-match>
+            </C:prop-filter>
+          </C:filter>
+        </C:addressbook-query>
+        EOF
+
+    my $res = $carddav->Request('REPORT', "$homeset/$bookId",
+                                $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_num_equals(1, scalar $res->{"{DAV:}response"}->@*);
+    $self->assert_str_equals("$homeset/$href1",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+}

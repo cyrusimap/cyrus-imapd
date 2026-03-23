@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_query_address_data ($self)
+{
+    my $carddav = $self->{carddav};
+    my $bookId  = "Default";
+    my $homeset = "/dav/addressbooks/user/cassandane";
+
+    my $uid = guid_string();
+
+    my $vcard = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid
+        FN:Alice Smith
+        N:Smith;Alice;;;
+        ORG:Cyrus Inc
+        EMAIL:alice\@example.com
+        END:VCARD
+        EOF
+
+    my $href = $carddav->NewContact($bookId, $vcard);
+
+    # Request only VERSION, UID, and FN in the returned address-data
+    my $xml = <<~"EOF";
+        <C:addressbook-query xmlns:D="DAV:"
+                             xmlns:C="urn:ietf:params:xml:ns:carddav">
+          <D:prop>
+            <D:getetag/>
+            <C:address-data>
+              <C:prop name="VERSION"/>
+              <C:prop name="UID"/>
+              <C:prop name="FN"/>
+            </C:address-data>
+          </D:prop>
+          <C:filter>
+            <C:prop-filter name="FN">
+              <C:text-match collation="i;unicode-casemap"
+                            match-type="contains">Alice</C:text-match>
+            </C:prop-filter>
+          </C:filter>
+        </C:addressbook-query>
+        EOF
+
+    my $res = $carddav->Request('REPORT', "$homeset/$bookId",
+                                $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_num_equals(1, scalar $res->{"{DAV:}response"}->@*);
+    $self->assert_str_equals("$homeset/$href",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+
+    my $data = $res->{"{DAV:}response"}[0]
+                     {"{DAV:}propstat"}[0]
+                     {"{DAV:}prop"}
+                     {"{urn:ietf:params:xml:ns:carddav}address-data"}
+                     {content};
+
+    $self->assert_not_null($data);
+    $self->assert_matches(qr/\bFN\b/, $data);
+    $self->assert($data !~ /\bORG\b/, "ORG should not appear in restricted address-data");
+    $self->assert($data !~ /\bEMAIL\b/, "EMAIL should not appear in restricted address-data");
+}
