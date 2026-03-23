@@ -88,6 +88,17 @@ so that it ignores the partial installation.
 Please note that on Debian-based systems, PCRE (the old one, no longer
 maintained) is called "pcre3".  Yes, this is confusing.
 
+.. _objectstore_removal:
+
+Objectstore removal
+###################
+
+In the very unlikely event that you're using objectstore, you'll need to stop.
+That probably means replicating to a new Cyrus install without objectstore
+configured.  Our view is that this is so unlikely that we are not preparing
+detailed instructions.  If you are in this situation, contact us on the
+:ref:`mailing list <feedback-mailing-lists>`.
+
 How are you planning on upgrading?
 ##################################
 

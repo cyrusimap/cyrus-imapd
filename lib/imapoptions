@@ -2710,7 +2710,7 @@ product version in the capabilities
    assumed. */
 */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target", "vnd.cyrus.redirect-multiple"), "UNRELEASED" }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log vnd.cyrus.jmapquery processcalendar snooze vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags=imapflags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "vnd.cyrus.log=x-cyrus-log", "vnd.cyrus.jmapquery=x-cyrus-jmapquery", "processcalendar=vnd.cyrus.imip", "snooze=vnd.cyrus.snooze=x-cyrus-snooze", "vnd.cyrus.implicit_keep_target", "vnd.cyrus.redirect-multiple"), "3.13.3" }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts. This option has no effect on options that are
    disabled at compile time (e.g., "regex"). */
@@ -3374,34 +3374,34 @@ of the incoming network interface, or if no record is found, the
    "tzdist" listed in \fIhttpmodules\fR), then this configuration option
    or a compile time value MUST be specified. */
 
-{ "object_storage_enabled", 0, SWITCH, "3.0.0", "UNRELEASED" }
+{ "object_storage_enabled", 0, SWITCH, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "object_storage_dummy_spool", NULL, STRING, "3.0.0", "UNRELEASED" }
+{ "object_storage_dummy_spool", NULL, STRING, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_namespace", NULL, STRING, "3.0.0", "UNRELEASED" }
+{ "openio_namespace", NULL, STRING, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_account", NULL, STRING, "3.0.0", "UNRELEASED" }
+{ "openio_account", NULL, STRING, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_rawx_timeout", "30s", DURATION, "3.1.8", "UNRELEASED" }
+{ "openio_rawx_timeout", "30s", DURATION, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_proxy_timeout", "5s", DURATION, "3.1.8", "UNRELEASED" }
+{ "openio_proxy_timeout", "5s", DURATION, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_autocreate", 0, SWITCH, "3.0.0", "UNRELEASED" }
+{ "openio_autocreate", 0, SWITCH, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "openio_verbosity", NULL, STRING, "3.0.0", "UNRELEASED" }
+{ "openio_verbosity", NULL, STRING, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "caringo_hostname", NULL, STRING, "3.0.0", "UNRELEASED" }
+{ "caringo_hostname", NULL, STRING, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
-{ "caringo_port", 80, INT, "3.0.0", "UNRELEASED" }
+{ "caringo_port", 80, INT, "3.13.3", "3.13.3" }
 /* Deprecated. No longer used. Once part of the removed "objectstore" sytem. */
 
 { "fastmailsharing", 0, SWITCH, "3.0.0" }
