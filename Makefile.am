@@ -2030,7 +2030,7 @@ clean-sphinx-cache:
 if HAVE_SPHINX_BUILD
 
 docsrc/_doxygen: Doxyfile
-	$(AM_V_GEN)doxygen Doxyfile
+	$(AM_V_GEN)$(DOXYGEN) Doxyfile
 
 SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
