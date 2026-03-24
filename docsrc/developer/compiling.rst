@@ -90,6 +90,7 @@ and included in the release, and do not normally need to be re-built.
     :header: "Package", "Debian", "RedHat", "Required", "Notes"
     :widths: 20,15,15,5,45
 
+    `doxygen`_, doxygen,, "no", "Needed for building the documentation."
     `perl-devel`_, perl-dev, perl-devel, "no", "Needed for building binary perl
     libraries, version 5+."
     `perl(ExtUtils::MakeMaker)`_,,, "no", "Needed for building extensions to
@@ -101,6 +102,7 @@ and included in the release, and do not normally need to be re-built.
     `python(myst_parser)`_,python3-myst-parser,, "no", "Needed for building the documentation."
     `python(sphinx_rtd_theme)`_,python3-sphinx-rtd-theme,, "no", "Needed for building the documentation."
     `python(Sphinx)`_,python3-sphinx,, "no", "Needed for building the documentation."
+    `python(breathe)`_,python3-breathe,,"no", "Needed for building the documentation."
     `transfig`_, transfig, transfig, "no", "Also known as fig2dev, transfig is
     an artifact from the old days, and is only used for generation of a couple
     of png files in the legacy documentation (doc/legacy/murder.png and
@@ -208,6 +210,7 @@ Other
 .. _CUnit: http://cunit.sourceforge.net/
 .. _Cyrus SASL Plain: :cyrus-sasl:`Cyrus SASL </>`
 .. _Cyrus SASL MD5: :cyrus-sasl:`Cyrus SASL </>`
+.. _doxygen: https://www.doxygen.nl/
 .. _sasl binaries: :cyrus-sasl:`Cyrus SASL </>`
 .. _Kerberos: http://web.mit.edu/kerberos/www/
 .. _libbrotli: https://github.com/google/brotli
@@ -225,6 +228,7 @@ Other
 .. _perl(Pod::POM::View::Restructured): https://metacpan.org/pod/Pod::POM::View::Restructured
 .. _perl-devel: http://www.perl.org/
 .. _postgresql: http://www.postgresql.org/
+.. _python(breathe): https://github.com/breathe-doc/breathe
 .. _python(GitPython): https://github.com/gitpython-developers/GitPython
 .. _python(myst_parser): https://github.com/executablebooks/MyST-Parser
 .. _python(sphinx_rtd_theme): https://github.com/readthedocs/sphinx_rtd_theme
