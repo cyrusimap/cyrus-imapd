@@ -2445,10 +2445,12 @@ Search engine:
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
+   doxygen:            $DOXYGEN
    sphinx_rtd_theme:   $HAVE_PYMOD_SPHINX_RTD_THEME
    Pod::POM::View::Restructured:  $have_ppvr
    GitPython:          $HAVE_PYMOD_GIT
    myst_parser:        $HAVE_PYMOD_MYST_PARSER
+   breathe:            $HAVE_PYMOD_BREATHE
 
 Installation directories:
    prefix:             $prefix
