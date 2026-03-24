@@ -8735,17 +8735,40 @@ done:
     return 0;
 }
 
-static char *_mime_make_boundary()
+struct boundary_gen {
+    char *base;            /* hash of Email/set properties */
+    unsigned counter;      /* incremented for each boundary */
+    struct buf buf;        /* reusable buffer for boundary generation */
+};
+
+/* Compute deterministic MIME boundary base from a hash of the
+ * input JSON properties.  This ensures identical Email/set creates
+ * produce identical RFC 822 output (same blobId), enabling
+ * duplicate detection on network retry. */
+static void _boundary_gen_init(struct boundary_gen *gen, json_t *jemail)
 {
-    char *boundary, *p, *q;
+    memset(gen, 0, sizeof(struct boundary_gen));
 
-    boundary = xstrdup(makeuuid());
-    for (p = boundary, q = boundary; *p; p++) {
-        if (*p != '-') *q++ = *p;
-    }
-    *q = 0;
+    char *json = json_dumps(jemail, JSON_COMPACT|JSON_SORT_KEYS);
+    struct message_guid guid;
+    message_guid_generate(&guid, json, strlen(json));
+    gen->base = xstrdup(message_guid_encode(&guid));
+    free(json);
+}
 
-    return boundary;
+static void _boundary_gen_fini(struct boundary_gen *gen)
+{
+    free(gen->base);
+    buf_free(&gen->buf);
+}
+
+static char *_mime_make_boundary(struct boundary_gen *gen)
+{
+    struct message_guid guid;
+    buf_reset(&gen->buf);
+    buf_printf(&gen->buf, "%s-%u", gen->base, gen->counter++);
+    message_guid_generate(&guid, buf_base(&gen->buf), buf_len(&gen->buf));
+    return xstrdup(message_guid_encode(&guid));
 }
 
 static int _copy_msgrecords(struct auth_state *authstate,
@@ -9260,6 +9283,7 @@ struct email {
     struct timespec internaldate; /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
     json_t *snoozed;              /* set snoozed annotation */
+    struct boundary_gen boundary_gen; /* deterministic MIME boundary generator */
 };
 
 static void _email_fini(struct email *email)
@@ -9269,6 +9293,7 @@ static void _email_fini(struct email *email)
     json_decref(email->jemail);
     _emailpart_fini(email->body);
     free(email->body);
+    _boundary_gen_fini(&email->boundary_gen);
 }
 
 static json_t *_header_make(const char *header_name,
@@ -10032,14 +10057,15 @@ static struct emailpart *_emailpart_parse(jmap_req_t *req,
 }
 
 static struct emailpart *_emailpart_new_multi(const char *subtype,
-                                               ptrarray_t *subparts)
+                                               ptrarray_t *subparts,
+                                               struct boundary_gen *gen)
 {
     struct emailpart *part = xzmalloc(sizeof(struct emailpart));
     int i;
 
     part->type = xstrdup("multipart");
     part->subtype = xstrdup(subtype);
-    part->boundary = _mime_make_boundary();
+    part->boundary = _mime_make_boundary(gen);
     struct buf val = BUF_INITIALIZER;
     buf_printf(&val, "%s/%s;boundary=%s",
             part->type, part->subtype, part->boundary);
@@ -10053,7 +10079,8 @@ static struct emailpart *_emailpart_new_multi(const char *subtype,
 
 static struct emailpart *_email_buildbody(struct emailpart *text_body,
                                           struct emailpart *html_body,
-                                          ptrarray_t *attachments)
+                                          ptrarray_t *attachments,
+                                          struct boundary_gen *gen)
 {
     struct emailpart *root = NULL;
 
@@ -10079,7 +10106,7 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
     /* Make MIME part for embedded emails. */
     struct emailpart *emails = NULL;
     if (attached_emails.count >= 2)
-        emails = _emailpart_new_multi("digest", &attached_emails);
+        emails = _emailpart_new_multi("digest", &attached_emails, gen);
     else if (attached_emails.count == 1)
         emails = ptrarray_nth(&attached_emails, 0);
 
@@ -10089,7 +10116,7 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
         ptrarray_t alternatives = PTRARRAY_INITIALIZER;
         ptrarray_append(&alternatives, text_body);
         ptrarray_append(&alternatives, html_body);
-        text = _emailpart_new_multi("alternative", &alternatives);
+        text = _emailpart_new_multi("alternative", &alternatives, gen);
         ptrarray_fini(&alternatives);
     }
     else if (text_body)
@@ -10099,14 +10126,14 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
 
     /* Make MIME part for inlined attachments, if any. */
     if (text && inlined_files.count) {
-        struct emailpart *related = _emailpart_new_multi("related", &inlined_files);
+        struct emailpart *related = _emailpart_new_multi("related", &inlined_files, gen);
         ptrarray_insert(&related->subparts, 0, text);
         text = related;
     }
 
     /* Choose top-level MIME part. */
     if (attached_files.count) {
-        struct emailpart *mixed = _emailpart_new_multi("mixed", &attached_files);
+        struct emailpart *mixed = _emailpart_new_multi("mixed", &attached_files, gen);
         if (emails) ptrarray_insert(&mixed->subparts, 0, emails);
         if (text) ptrarray_insert(&mixed->subparts, 0, text);
         root = mixed;
@@ -10115,7 +10142,7 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
         ptrarray_t wrapped = PTRARRAY_INITIALIZER;
         ptrarray_append(&wrapped, text);
         ptrarray_append(&wrapped, emails);
-        root = _emailpart_new_multi("mixed", &wrapped);
+        root = _emailpart_new_multi("mixed", &wrapped, gen);
         ptrarray_fini(&wrapped);
     }
     else if (text)
@@ -10307,7 +10334,8 @@ static void _email_parse_bodies(jmap_req_t *req,
 
     if (!email->body) {
         /* Build email body from convenience body properties */
-        email->body = _email_buildbody(text_body, html_body, &attachments);
+        email->body = _email_buildbody(text_body, html_body, &attachments,
+                                       &email->boundary_gen);
     }
 
     ptrarray_fini(&attachments);
@@ -10687,7 +10715,8 @@ static void expand_bare_cr_lf(const char **bodyp, size_t *body_lenp,
     *bodyp = new_body;
 }
 
-static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
+static void _emailpart_write_headers(struct emailpart *part, FILE *fp,
+                                     struct boundary_gen *gen)
 {
     _headers_write_mime(&part->headers, fp);
 
@@ -10740,7 +10769,7 @@ static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
     if (part->type && part->subtype &&
         !_headers_have(&part->headers, "Content-Type")) {
         if (!strcasecmpsafe(part->type, "MULTIPART") && !part->boundary)
-            part->boundary = _mime_make_boundary();
+            part->boundary = _mime_make_boundary(gen);
 
         buf_setcstr(&buf, "Content-Type: ");
         buf_appendcstr(&buf, lcase(part->type));
@@ -10790,7 +10819,8 @@ static void _emailpart_write_headers(struct emailpart *part, FILE *fp)
 static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
                                     FILE *fp, struct emailpart *part,
                                     struct emailpart *parent_part,
-                                    json_t *missing_blobs)
+                                    json_t *missing_blobs,
+                                    struct boundary_gen *gen)
 {
     jmap_getblob_context_t blob = {0};
     const char *src_body = NULL;
@@ -11045,7 +11075,7 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
     }
 
     // Write MIME headers and content
-    _emailpart_write_headers(part, fp);
+    _emailpart_write_headers(part, fp, gen);
     fputs("Content-Transfer-Encoding: ", fp);
     fputs(content_transfer_encoding, fp);
     fputs("\r\n", fp);
@@ -11062,7 +11092,8 @@ done:
 static void _emailpart_to_mime(jmap_req_t *req, struct jmap_parser *parser,
                                FILE *fp, struct emailpart *part,
                                struct emailpart *parent_part,
-                               json_t *missing_blobs)
+                               json_t *missing_blobs,
+                               struct boundary_gen *gen)
 {
     if (ptrarray_size(&part->subparts)) {
         if (!part->type) {
@@ -11070,23 +11101,24 @@ static void _emailpart_to_mime(jmap_req_t *req, struct jmap_parser *parser,
             part->subtype = xstrdup("mixed");
 
             if (!part->boundary)
-                part->boundary = _mime_make_boundary();
+                part->boundary = _mime_make_boundary(gen);
         }
 
-        _emailpart_write_headers(part, fp);
+        _emailpart_write_headers(part, fp, gen);
 
         for (int i = 0; i < ptrarray_size(&part->subparts); i++) {
             struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
             fprintf(fp, "\r\n--%s\r\n", part->boundary);
             jmap_parser_push_index(parser, "subParts", i, NULL);
-            _emailpart_to_mime(req, parser, fp, subpart, part, missing_blobs);
+            _emailpart_to_mime(req, parser, fp, subpart, part,
+                               missing_blobs, gen);
             jmap_parser_pop(parser);
         }
         fprintf(fp, "\r\n--%s--\r\n", part->boundary);
     }
     else {
         _emailpart_body_to_mime(req, parser, fp, part, parent_part,
-                                missing_blobs);
+                                missing_blobs, gen);
     }
 }
 
@@ -11136,7 +11168,8 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         json_t *missing_blobs = json_array();
         jmap_parser_push(&parser, "bodyStructure");
-        _emailpart_to_mime(req, &parser, fp, email->body, NULL, missing_blobs);
+        _emailpart_to_mime(req, &parser, fp, email->body, NULL, missing_blobs,
+                           &email->boundary_gen);
         jmap_parser_pop(&parser);
         if (json_array_size(missing_blobs)) {
             *err = json_pack(
@@ -11252,7 +11285,10 @@ static void _email_create(jmap_req_t *req,
 
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL };
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL, {0} };
+
+    _boundary_gen_init(&email.boundary_gen, jemail);
+
     _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */

@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_duplicate_retry
+    :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my %emailProps = (
+        mailboxIds => { '$inbox' => JSON::true },
+        from => [{ name => "Test", email => 'test@example.com' }],
+        to => [{ name => "Dest", email => 'dest@example.com' }],
+        subject => "Duplicate retry test",
+        messageId => ['retry-test@example.com'],
+        sentAt => '2024-01-01T00:00:00Z',
+        bodyStructure => {
+            type => 'multipart/alternative',
+            subParts => [{
+                type => 'text/plain',
+                partId => 'text',
+            }, {
+                type => 'text/html',
+                partId => 'html',
+            }],
+        },
+        bodyValues => {
+            text => { value => "Hello world" },
+            html => { value => "<p>Hello world</p>" },
+        },
+    );
+
+    xlog $self, "Create the email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { "a" => {%emailProps} } }, "R1"],
+    ]);
+    my $emailId = $res->[0][1]{created}{a}{id};
+    $self->assert_not_null($emailId);
+
+    xlog $self, "Retry the same create (simulating network retry)";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "b" => {%emailProps} } }, "R2"],
+    ]);
+
+    xlog $self, "Must get alreadyExists with the existing id";
+    $self->assert_cmp_deeply(
+        superhashof({
+            type => "alreadyExists",
+            existingId => $emailId,
+        }),
+        $res->[0][1]{notCreated}{b},
+    );
+}
