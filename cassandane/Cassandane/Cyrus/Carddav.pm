@@ -10,6 +10,7 @@ use Net::DAVTalk 0.14;
 use Net::CardDAVTalk 0.05;
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
+use Data::GUID qw(guid_string);
 use XML::Spice;
 use XML::Simple;
 

@@ -2123,9 +2123,18 @@ static int apply_propfilter(struct prop_filter *propfilter,
         }
     }
 
-    if (!prop) return propfilter->not_defined;
-    if (propfilter->not_defined) return 0;
-    if (!(propfilter->match || propfilter->param)) return 1;
+    if (!prop) {
+        pass = propfilter->not_defined;
+        goto done;
+    }
+    if (propfilter->not_defined) {
+        pass = 0;
+        goto done;
+    }
+    if (!(propfilter->match || propfilter->param)) {
+        pass = 1;
+        goto done;
+    }
 
     /* Test each instance of this property (logical OR) */
     do {
@@ -2177,6 +2186,7 @@ static int apply_propfilter(struct prop_filter *propfilter,
     } while (!pass && !myprop &&
              (prop = vcardcomponent_get_next_property(vcard, propfilter->kind)));
 
+ done:
     if (myprop) vcardproperty_free(myprop);
 
     return pass;

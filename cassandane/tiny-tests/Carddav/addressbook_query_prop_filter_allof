@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_query_prop_filter_allof ($self)
+{
+    my $carddav = $self->{carddav};
+    my $bookId  = "Default";
+    my $homeset = "/dav/addressbooks/user/cassandane";
+
+    my $uid1 = guid_string();
+    my $uid2 = guid_string();
+    my $uid3 = guid_string();
+
+    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid1
+        FN:Alice Smith
+        N:Smith;Alice;;;
+        EMAIL:alice\@example.com
+        END:VCARD
+        EOF
+
+    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid2
+        FN:Alice Jones
+        N:Jones;Alice;;;
+        EMAIL:alice\@other.org
+        END:VCARD
+        EOF
+
+    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid3
+        FN:Bob Smith
+        N:Smith;Bob;;;
+        EMAIL:bob\@example.com
+        END:VCARD
+        EOF
+
+    my $href1 = $carddav->NewContact($bookId, $vcard1);
+    my $href2 = $carddav->NewContact($bookId, $vcard2);
+    my $href3 = $carddav->NewContact($bookId, $vcard3);
+
+    # prop-filter test="allof": EMAIL contains "alice" AND EMAIL contains "example"
+    # vcard1 (alice@example.com): both conditions true -> match
+    # vcard2 (alice@other.org): "alice" true, "example" false -> no match
+    # vcard3 (bob@example.com): "alice" false -> no match
+    my $xml = <<~"EOF";
+        <C:addressbook-query xmlns:D="DAV:"
+                             xmlns:C="urn:ietf:params:xml:ns:carddav">
+          <D:prop><D:getetag/></D:prop>
+          <C:filter>
+            <C:prop-filter name="EMAIL" test="allof">
+              <C:text-match collation="i;unicode-casemap"
+                            match-type="contains">alice</C:text-match>
+              <C:text-match collation="i;unicode-casemap"
+                            match-type="contains">example</C:text-match>
+            </C:prop-filter>
+          </C:filter>
+        </C:addressbook-query>
+        EOF
+
+    my $res = $carddav->Request('REPORT', "$homeset/$bookId",
+                                $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_num_equals(1, scalar $res->{"{DAV:}response"}->@*);
+    $self->assert_str_equals("$homeset/$href1",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+}

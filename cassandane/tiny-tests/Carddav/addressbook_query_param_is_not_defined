@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_query_param_is_not_defined ($self)
+{
+    my $carddav = $self->{carddav};
+    my $bookId  = "Default";
+    my $homeset = "/dav/addressbooks/user/cassandane";
+
+    my $uid1 = guid_string();
+    my $uid2 = guid_string();
+    my $uid3 = guid_string();
+
+    # EMAIL without TYPE param
+    my $vcard1 = <<~"EOF";
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid1
+        FN:Bob Jones
+        N:Jones;Bob;;;
+        EMAIL:bob\@example.com
+        END:VCARD
+        EOF
+
+    # EMAIL with TYPE param
+    my $vcard2 = <<~"EOF";
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid2
+        FN:Alice Smith
+        N:Smith;Alice;;;
+        EMAIL;TYPE=work:alice\@example.com
+        END:VCARD
+        EOF
+
+    # No EMAIL at all
+    my $vcard3 = <<~"EOF";
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid3
+        FN:Carol Danvers
+        N:Danvers;Carol;;;
+        END:VCARD
+        EOF
+
+    my $href1 = "$bookId/$uid1.vcf";
+    my $href2 = "$bookId/$uid2.vcf";
+    my $href3 = "$bookId/$uid3.vcf";
+
+    $carddav->Request('PUT', $href1, $vcard1, 'Content-Type' => 'text/vcard');
+    $carddav->Request('PUT', $href2, $vcard2, 'Content-Type' => 'text/vcard');
+    $carddav->Request('PUT', $href3, $vcard3, 'Content-Type' => 'text/vcard');
+
+    # Match contacts with EMAIL where the TYPE parameter is absent
+    # vcard1: EMAIL has TYPE=work -> TYPE is defined -> no match
+    # vcard2: EMAIL has no TYPE -> TYPE is-not-defined -> match
+    # vcard3: no EMAIL -> prop-filter has no instances to evaluate -> no match
+    my $xml = <<~"EOF";
+        <C:addressbook-query xmlns:D="DAV:"
+                             xmlns:C="urn:ietf:params:xml:ns:carddav">
+          <D:prop><D:getetag/></D:prop>
+          <C:filter>
+            <C:prop-filter name="EMAIL">
+              <C:param-filter name="TYPE">
+                <C:is-not-defined/>
+              </C:param-filter>
+            </C:prop-filter>
+          </C:filter>
+        </C:addressbook-query>
+        EOF
+
+    my $res = $carddav->Request('REPORT', "$homeset/$bookId",
+                                $xml, Depth => 0, 'Content-Type' => 'text/xml');
+
+    $self->assert_num_equals(1, scalar $res->{"{DAV:}response"}->@*);
+    $self->assert_str_equals("$homeset/$href1",
+                             $res->{"{DAV:}response"}[0]{"{DAV:}href"}{content});
+}

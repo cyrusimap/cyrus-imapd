@@ -8968,23 +8968,29 @@ void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
     }
 }
 
+static void dav_free_text_match(struct text_match_t *match)
+{
+    struct text_match_t *next;
+
+    for (; match; match = next) {
+        next = match->next;
+
+        xmlFree(match->text);
+        free(match);
+    }
+}
+
 void dav_free_propfilter(struct prop_filter *prop)
 {
     struct param_filter *param, *next;
 
     xmlFree(prop->name);
-    if (prop->match) {
-        xmlFree(prop->match->text);
-        free(prop->match);
-    }
+    dav_free_text_match(prop->match);
     for (param = prop->param; param; param = next) {
         next = param->next;
 
         xmlFree(param->name);
-        if (param->match) {
-            xmlFree(param->match->text);
-            free(param->match);
-        }
+        dav_free_text_match(param->match);
         free(param);
     }
     free(prop);
