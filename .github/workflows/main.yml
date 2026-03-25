@@ -92,7 +92,7 @@ jobs:
       run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
       if: ${{ ! matrix.skip-cass }}
-      run: cat /tmp/cass/*/conf/log/syslog
+      run: cat /dev/shm/cass/*/conf/log/syslog
   valgrind-make-check:
     runs-on: ubuntu-latest
     container:
