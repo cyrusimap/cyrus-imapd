@@ -2,7 +2,7 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    = -n
+SPHINXOPTS    = -n -j auto
 SPHINXBUILD   = sphinx-build
 PAPER         =
 SOURCEDIR     = .
@@ -26,7 +26,7 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(S
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SOURCEDIR)
 
-.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext
+.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext doxygen
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -55,13 +55,19 @@ help:
 
 clean:
 	rm -rf $(BUILDDIR)/*
-    
-init: ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
-	@echo "creating reference/manpages/systemcommands/cyradm.rst"
+	rm -rf _doxygen
+
+doxygen:
+	@echo "Running Doxygen to generate XML for Breathe..."
+	cd .. && doxygen Doxyfile
+	@echo "Doxygen XML generated in _doxygen/xml/"
+
+init: doxygen ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
+	@echo "Creating reference/manpages/systemcommands/cyradm.rst"
 	$(PERL2RST) cyradm < ../perl/imap/IMAP/Shell.pm > $(SOURCEDIR)/reference/manpages/systemcommands/cyradm.rst
-	@echo "creating reference/manpages/usercommands/sieveshell.rst"
+	@echo "Creating reference/manpages/usercommands/sieveshell.rst"
 	$(PERL2RST) sieveshell < ../perl/sieve/scripts/sieveshell.pl > $(SOURCEDIR)/reference/manpages/usercommands/sieveshell.rst
-	@echo "creating reference/manpages/configs/imapd.conf.rst"
+	@echo "Creating reference/manpages/configs/imapd.conf.rst"
 	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/reference/manpages/configs/imapd.conf.rst
 
 html: init

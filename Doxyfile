@@ -1,0 +1,33 @@
+# Doxygen configuration, used by breathe, the Doxygen-to-Sphinx bridge
+
+  PROJECT_NAME           = "Cyrus IMAP"
+  PROJECT_BRIEF          = "the best email, contact, and calendar server around"
+  OUTPUT_DIRECTORY       = docsrc/_doxygen
+
+### What files do we include?
+
+  INPUT                  = imap lib sieve
+  FILE_PATTERNS          = *.h
+  RECURSIVE              = YES
+  # EXCLUDE_PATTERNS       = */test/* *_test.c
+
+### What structures do we include?
+
+  # Do include static members from processed files
+  EXTRACT_STATIC         = YES
+
+  # Expand all the macros
+  MACRO_EXPANSION        = YES
+  EXPAND_ONLY_PREDEF     = NO
+
+### What do we emit?
+
+  # Only generate XML, it's all breathe needs
+  GENERATE_HTML          = NO
+  GENERATE_LATEX         = NO
+  GENERATE_XML           = YES
+  XML_PROGRAMLISTING     = NO
+
+  # Emit warnings when a documented function has undocmented parameters, but we
+  # do not (yet) consider these warnings a makedoc failure.
+  WARN_NO_PARAMDOC       = YES

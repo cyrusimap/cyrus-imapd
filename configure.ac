@@ -2133,6 +2133,11 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                        have_ppvr=no
                      ])
 
+AX_PYTHON_MODULE([breathe], [], [python3])
+AS_CASE([$HAVE_PYMOD_BREATHE],
+        [yes],  [],
+        [*],    [WARN_DOCDEPS([breathe])])
+
 AX_PYTHON_MODULE([git], [], [python3])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
@@ -2148,12 +2153,29 @@ AS_CASE([$HAVE_PYMOD_SPHINX_RTD_THEME],
         [yes],  [],
         [*],    [WARN_DOCDEPS([sphinx_rtd_theme])])
 
+AC_ARG_VAR(DOXYGEN, [Location of doxygen])
+AC_ARG_WITH([doxygen],
+            AS_HELP_STRING([--with-doxygen=(yes|no|PATH)], [Look for doxygen in PATH]),
+            [with_doxygen=$withval],
+            [with_doxygen=yes])
+AS_CASE([$with_doxygen],
+        [yes],  [AC_PATH_PROG(DOXYGEN, doxygen)],
+        [no],   [DOXYGEN=''],
+        [*],    [AC_PATH_PROG(DOXYGEN, doxygen, [], [$with_doxygen])])
+AS_IF([test -z "$DOXYGEN"],
+      [WARN_DOCDEPS([doxygen])])
+AC_SUBST([DOXYGEN])
+
 AM_CONDITIONAL([HAVE_SPHINX_BUILD],
     [ test -n "$SPHINX_BUILD" \
+           -a -n "$DOXYGEN" \
            -a x"$have_ppvr" = xyes \
+           -a x"$HAVE_PYMOD_BREATHE" = xyes \
            -a x"$HAVE_PYMOD_GIT" = xyes \
            -a x"$HAVE_PYMOD_MYST_PARSER" = xyes \
            -a x"$HAVE_PYMOD_SPHINX_RTD_THEME" = xyes])
+
+AC_CONFIG_LINKS([Doxyfile:Doxyfile])
 
 AH_TOP([
 /*
@@ -2423,10 +2445,12 @@ Search engine:
 
 Documentation dependencies:
    sphinx-build:       $SPHINX_BUILD
+   doxygen:            $DOXYGEN
    sphinx_rtd_theme:   $HAVE_PYMOD_SPHINX_RTD_THEME
    Pod::POM::View::Restructured:  $have_ppvr
    GitPython:          $HAVE_PYMOD_GIT
    myst_parser:        $HAVE_PYMOD_MYST_PARSER
+   breathe:            $HAVE_PYMOD_BREATHE
 
 Installation directories:
    prefix:             $prefix

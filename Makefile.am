@@ -315,6 +315,7 @@ endif # SIEVE
 
 EXTRA_DIST = \
     COPYING \
+    Doxyfile \
     README.md \
     VERSION \
     cassandane \
@@ -2028,7 +2029,10 @@ clean-sphinx-cache:
 
 if HAVE_SPHINX_BUILD
 
-SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS)
+docsrc/_doxygen: Doxyfile
+	$(AM_V_GEN)$(DOXYGEN) Doxyfile
+
+SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
@@ -2043,7 +2047,7 @@ clean-docsrc:
 		$(RM) -r $(top_builddir)/docsrc $(top_builddir)/doc/examples
 
 ## XXX doesn't detect if other rst sources are updated...
-man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
+man/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b man $(top_builddir)/docsrc $(top_builddir)/man
 	@touch $@
 
@@ -2051,15 +2055,20 @@ clean-man:
 	@$(RM) -r man
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
+doc/html/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b html $(top_builddir)/docsrc $(top_builddir)/doc/html
 	@touch $@
 
 ## XXX doesn't detect if other rst sources are updated...
-doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp
+doc/text/.sphinx-build.stamp: docsrc/.sphinx-build.stamp docsrc/_doxygen
 	$(AM_V_GEN)DOCSRC=$(top_builddir)/docsrc $(SPHINX_BUILD) $(SPHINX_OPTS) -b text $(top_builddir)/docsrc $(top_builddir)/doc/text
 	@touch $@
-else
+
+else # (! HAVE_SPHINX_BUILD)
+
+docsrc/_doxygen:
+	@echo "warning: missing documentation dependencies. can not run doxygen" 1>&2
+
 clean-docsrc:
 
 man/.sphinx-build.stamp:
@@ -2090,7 +2099,7 @@ man: man-force $(dist_man1_MANS) $(dist_man3_MANS) $(dist_man5_MANS) $(dist_man8
 # clean-man is conditionally defined above. We do not want to remove
 # man pages if the user is unable to rebuild them.
 
-.PHONY: doc-html doc-html-force clean-doc-html
+.PHONY: doc-html doc-html-force clean-doc-html clean-doc-doxygen
 doc-html-force:
 	@$(RM) docsrc/.sphinx-build.stamp doc/html/.sphinx-build.stamp
 
@@ -2110,7 +2119,7 @@ clean-doc-text:
 
 GENERATED_EXAMPLES = doc/examples/imapd_conf/imapd.conf.sample
 
-.PHONY: doc-examples doc-examples-force clean-doc-examples
+.PHONY: doc-examples doc-examples-force clean-doc-examples clean-doc-doxygen
 doc-examples-force:
 
 doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
@@ -2118,10 +2127,13 @@ doc-examples: doc-examples-force $(GENERATED_EXAMPLES)
 clean-doc-examples:
 	@$(RM) $(GENERATED_EXAMPLES)
 
+clean-doc-doxygen:
+	@$($RM) -r docsrc/_doxygen
+
 .PHONY: doc clean-doc
 doc: man doc-html doc-text doc-examples
 
-clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples
+clean-doc: clean-man clean-doc-html clean-doc-text clean-doc-examples clean-doc-doxygen
 
 .PHONY: clean-local
 clean-local: clean-doc clean-sphinx-cache clean-docsrc
