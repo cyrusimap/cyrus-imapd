@@ -890,7 +890,7 @@ AC_CACHE_VAL(cyrus_cv_func_mmap_shared,AC_TRY_RUN([
 int main() {
     char *base;
     int mmapflags = MAP_SHARED;
-    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0660);
     if (fd == -1) return 2;
     if (write(fd, "test", 4) != 4) return 3;
     fsync(fd);
@@ -923,7 +923,7 @@ AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
 #include <unistd.h>
 int main() {
     char *base;
-    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0660);
     int mmapflags = MAP_SHARED;
     if (fd == -1) return 2;
     if (write(fd, "test", 4) != 4) return 3;
