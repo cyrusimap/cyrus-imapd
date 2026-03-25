@@ -286,8 +286,13 @@ map { $cassini->override(@$_); } @cassini_overrides;
 Cassandane::Instance::cleanup_leftovers()
     if ($cassini->bool_val('cassandane', 'cleanup'));
 
+my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+unless (-e $rootdir) {
+    mkdir($rootdir)
+        or die "Cannot make output directory \"$rootdir\": $!\n";
+}
+
 if ($want_rerun) {
-    my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     my $failed_file = "$rootdir/failed";
 
     my @failed = eval { read_file($failed_file, { chomp => 1 }) };
