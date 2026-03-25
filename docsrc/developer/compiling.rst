@@ -209,7 +209,6 @@ Other
 .. _ClamAV: https://www.clamav.net/
 .. _CUnit: http://cunit.sourceforge.net/
 .. _Cyrus SASL Plain: :cyrus-sasl:`Cyrus SASL </>`
-.. _Cyrus SASL MD5: :cyrus-sasl:`Cyrus SASL </>`
 .. _doxygen: https://www.doxygen.nl/
 .. _sasl binaries: :cyrus-sasl:`Cyrus SASL </>`
 .. _Kerberos: http://web.mit.edu/kerberos/www/
