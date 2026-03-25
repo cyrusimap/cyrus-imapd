@@ -1,0 +1,310 @@
+#!/usr/bin/env perl
+use v5.28.0;
+use warnings;
+
+use experimental 'signatures';
+
+# coverage-report -- summarise an lcov .info file for coverage review
+#
+# See --help for usage.
+
+use Getopt::Long::Descriptive;
+
+my ($opt, $usage) = describe_options(
+    '%c %o coverage.info',
+    [ 'subsystem=s'  => 'only show files under this directory (e.g. "imap")' ],
+    [ 'threshold=f'  => 'only show files with line coverage below N% (default: 100)',
+                        { default => 100 } ],
+    [ 'sort=s'       => 'sort by: line (default), func, branch, name',
+                        { default => 'line' } ],
+    [ 'functions'    => 'list uncovered functions for each reported file' ],
+    [ 'include-gperf' => 'include .gperf files (excluded by default)' ],
+    [ 'strip=s'      => 'strip this prefix from source paths (auto-detected if omitted)' ],
+    [ 'help'         => 'show this help message', { shortcircuit => 1 } ],
+);
+
+sub usage_text {
+    return $usage->text . <<'END';
+
+Examples:
+  # All files below 50% line coverage, sorted by coverage
+  coverage-report --threshold 50 coverage.info
+
+  # imap/ subsystem only, show uncovered functions
+  coverage-report --subsystem imap --threshold 30 --functions coverage.info
+
+  # Full list sorted by function coverage
+  coverage-report --sort func coverage.info
+END
+}
+
+if ($opt->help) {
+    print usage_text();
+    exit;
+}
+
+my $info_file = shift @ARGV
+    or die "error: no .info file specified\n\n" . usage_text();
+die "error: file not found: $info_file\n" unless -f $info_file;
+
+die "error: --sort must be one of: line, func, branch, name\n"
+    unless $opt->sort =~ /^(line|func|branch|name)$/;
+
+# ---------------------------------------------------------------------------
+# Parse .info file
+# ---------------------------------------------------------------------------
+
+my %files;  # path => { lf, lh, fnf, fnh, brf, brh, uncovered_fns => [] }
+
+{
+    # The format is documented in geninfo, for example here:
+    #     https://manpages.debian.org/unstable/lcov/geninfo.1.en.html
+    open my $fh, '<', $info_file or die "error: cannot open $info_file: $!\n";
+
+    my ($sf, %fn_names, %fn_hits);
+
+    while (<$fh>) {
+        chomp;
+
+        if (/^SF:(.+)/) {
+            $sf = $1;
+            %fn_names = ();
+            %fn_hits  = ();
+            $files{$sf} //= {
+                lf  => 0,
+                lh  => 0,
+                fnf => 0,
+                fnh => 0,
+                brf => 0,
+                brh => 0,
+                uncovered_fns => []
+            };
+
+        } elsif (/^FNL:(\d+),\d+,\d+/) {
+            # FNL:id,start_line,end_line  (extended format)
+            # name comes later via FNA
+            # nothing to record yet
+
+        } elsif (/^FNA:(\d+),(\d+),(.+)/) {
+            # FNA:id,hit_count,name
+            my ($id, $count, $name) = ($1, $2, $3);
+            $fn_names{$id} = $name;
+            $fn_hits{$id}  = $count;
+
+        } elsif (/^FN:(\d+),(.+)/) {
+            # FN:line_number,name  (traditional format)
+            my ($line, $name) = ($1, $2);
+            $fn_names{$line} = $name;
+
+        } elsif (/^FNDA:(\d+),(.+)/) {
+            # FNDA:hit_count,name  (traditional format)
+            my ($count, $name) = ($1, $2);
+            # find the id/line for this name
+            for my $key (keys %fn_names) {
+                if ($fn_names{$key} eq $name) {
+                    $fn_hits{$key} = $count;
+                    last;
+                }
+            }
+
+        } elsif (/^FNF:(\d+)/) {
+            $files{$sf}{fnf} = $1;
+
+        } elsif (/^FNH:(\d+)/) {
+            $files{$sf}{fnh} = $1;
+
+        } elsif (/^BRF:(\d+)/) {
+            $files{$sf}{brf} = $1;
+
+        } elsif (/^BRH:(\d+)/) {
+            $files{$sf}{brh} = $1;
+
+        } elsif (/^LF:(\d+)/) {
+            $files{$sf}{lf} = $1;
+
+        } elsif (/^LH:(\d+)/) {
+            $files{$sf}{lh} = $1;
+
+        } elsif (/^end_of_record/) {
+            # record uncovered functions for this file
+            for my $id (sort { $a <=> $b } keys %fn_names) {
+                if (($fn_hits{$id} // 0) == 0) {
+                    push $files{$sf}{uncovered_fns}->@*, $fn_names{$id};
+                }
+            }
+            $sf = undef;
+            %fn_names = ();
+            %fn_hits  = ();
+        }
+    }
+
+    close $fh;
+}
+
+# ---------------------------------------------------------------------------
+# Detect common path prefix to strip
+# ---------------------------------------------------------------------------
+
+my $strip = $opt->strip;
+unless (defined $strip) {
+    my @paths = keys %files;
+    if (@paths) {
+        # find the longest common leading path component
+        my $candidate = $paths[0];
+        $candidate =~ s{/[^/]+$}{};   # trim to directory
+        for my $p (@paths[1..$#paths]) {
+            while ($candidate && index($p, $candidate) != 0) {
+                $candidate =~ s{/[^/]+$}{};
+            }
+        }
+        $strip = $candidate . '/' if $candidate;
+    }
+    $strip //= '';
+}
+
+# ---------------------------------------------------------------------------
+# Build display list
+# ---------------------------------------------------------------------------
+
+sub pct ($num, $denom) { $denom ? 100 * $num / $denom : 0 }
+
+my @rows;
+
+my $subsystem     = $opt->subsystem;
+my $threshold     = $opt->threshold;
+my $include_gperf = $opt->include_gperf;
+
+for my $path (sort keys %files) {
+    my $display = $path;
+    $display =~ s/^\Q$strip\E// if $strip;
+
+    # subsystem filter
+    if ($subsystem) {
+        next unless $display =~ m{^\Q$subsystem\E(/|$)};
+    }
+
+    next if !$include_gperf && $display =~ /\.gperf$/;
+
+    my $f = $files{$path};
+    my $line_pct   = pct($f->{lh},  $f->{lf});
+    my $func_pct   = pct($f->{fnh}, $f->{fnf});
+    my $branch_pct = pct($f->{brh}, $f->{brf});
+
+    # threshold filter (on line coverage)
+    next if $line_pct >= $threshold;
+
+    push @rows, {
+        path       => $display,
+        line_pct   => $line_pct,
+        lh         => $f->{lh},
+        lf         => $f->{lf},
+        func_pct   => $func_pct,
+        fnh        => $f->{fnh},
+        fnf        => $f->{fnf},
+        branch_pct => $branch_pct,
+        brh        => $f->{brh},
+        brf        => $f->{brf},
+        uncovered_fns => $f->{uncovered_fns},
+    };
+}
+
+# ---------------------------------------------------------------------------
+# Sort
+# ---------------------------------------------------------------------------
+
+my %sorters = (
+    line   => sub { $b->{line_pct}   <=> $a->{line_pct}   || $a->{path} cmp $b->{path} },
+    func   => sub { $b->{func_pct}   <=> $a->{func_pct}   || $a->{path} cmp $b->{path} },
+    branch => sub { $b->{branch_pct} <=> $a->{branch_pct} || $a->{path} cmp $b->{path} },
+    name   => sub {                                          $a->{path} cmp $b->{path} },
+);
+
+@rows = sort { $sorters{$opt->sort}->() } @rows;
+
+# ---------------------------------------------------------------------------
+# Compute per-subsystem totals for the summary
+# ---------------------------------------------------------------------------
+
+my %totals;   # subsystem => { lf, lh, fnf, fnh, brf, brh }
+
+for my $path (keys %files) {
+    my $display = $path;
+    $display =~ s/^\Q$strip\E// if $strip;
+
+    if ($subsystem) {
+        next unless $display =~ m{^\Q$subsystem\E(/|$)};
+    }
+
+    next if !$include_gperf && $display =~ /\.gperf$/;
+
+    my ($sub) = $display =~ m{^([^/]+)};
+    $sub //= '(root)';
+
+    my $f = $files{$path};
+    $totals{$sub}{lf}  += $f->{lf};
+    $totals{$sub}{lh}  += $f->{lh};
+    $totals{$sub}{fnf} += $f->{fnf};
+    $totals{$sub}{fnh} += $f->{fnh};
+    $totals{$sub}{brf} += $f->{brf};
+    $totals{$sub}{brh} += $f->{brh};
+}
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+
+# Width of the path column is the longest label we'll actually print.
+my $path_width = length 'File';
+unless ($subsystem) {
+    for my $sub (keys %totals) {
+        my $len = length "[$sub]";
+        $path_width = $len if $len > $path_width;
+    }
+}
+for my $r (@rows) {
+    my $len = length $r->{path};
+    $path_width = $len if $len > $path_width;
+}
+
+# Three data columns of 23 chars, each preceded by a 2-space gap.
+my $line_width = $path_width + 3 * (2 + 23);
+
+# Header
+printf "%-*s  %23s  %23s  %23s\n",
+    $path_width, 'File', 'Lines', 'Functions', 'Branches';
+print '-' x $line_width, "\n";
+
+# Per-subsystem summary (only when not filtered to one subsystem)
+unless ($subsystem) {
+    for my $sub (sort keys %totals) {
+        my $t = $totals{$sub};
+        printf "%-*s  %s  %s  %s\n",
+            $path_width, "[$sub]",
+            sprintf('%5.1f%%  (%6d/%6d)', pct($t->{lh},$t->{lf}),   $t->{lh},  $t->{lf}),
+            sprintf('%5.1f%%  (%6d/%6d)', pct($t->{fnh},$t->{fnf}),  $t->{fnh}, $t->{fnf}),
+            sprintf('%5.1f%%  (%6d/%6d)', pct($t->{brh},$t->{brf}),  $t->{brh}, $t->{brf});
+    }
+    print "\n";
+}
+
+# Per-file rows
+if (@rows) {
+    for my $r (@rows) {
+        printf "%-*s  %s  %s  %s\n",
+            $path_width, $r->{path},
+            sprintf('%5.1f%%  (%6d/%6d)', $r->{line_pct},   $r->{lh},  $r->{lf}),
+            sprintf('%5.1f%%  (%6d/%6d)', $r->{func_pct},   $r->{fnh}, $r->{fnf}),
+            sprintf('%5.1f%%  (%6d/%6d)', $r->{branch_pct}, $r->{brh}, $r->{brf});
+
+        if ($opt->functions && @{ $r->{uncovered_fns} }) {
+            print "  uncovered functions:\n";
+            printf "    %s\n", $_ for @{ $r->{uncovered_fns} };
+        }
+    }
+} else {
+    print "(no files match the given filters)\n";
+}
+
+print "\n" . @rows . " file(s) listed";
+print " (below $threshold% line coverage)" if $threshold < 100;
+print "\n";
