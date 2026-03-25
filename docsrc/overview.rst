@@ -10,3 +10,4 @@ Overview
     concepts/features
     concepts/overview_and_concepts
     rfc-support
+    reference/extensions

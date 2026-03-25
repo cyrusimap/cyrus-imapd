@@ -1,0 +1,27 @@
+Description:
+
+Content for the documentation site (cyrusimap.org) can now be written in
+Markdown.  Building the documentation, therefore, will now require myst_parser,
+which is what makes this possible.
+
+
+Documentation:
+
+None needed, really: put a file where you'd put a .rst file, but name it .md,
+and it will be processed.  This uses myst:
+https://github.com/executablebooks/MyST-Parser
+
+
+Config changes:
+
+n/a
+
+
+Upgrade instructions:
+
+n/a
+
+
+GitHub issue:
+
+n/a
