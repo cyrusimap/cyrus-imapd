@@ -792,7 +792,11 @@ static void cyr_vcardcomponent_transform(vcardcomponent *vcard,
     if (want_ver == VCARD_VERSION_30) {
         // N property is mandatory in vCard version 3.
         // XXX this should be covered by libical 4.0
-        if (!vcardcomponent_get_first_property(vcard, VCARD_N_PROPERTY)) {
+        vcardproperty *n, *adr;
+        vcardstructuredtype *st;
+
+        n = vcardcomponent_get_first_property(vcard, VCARD_N_PROPERTY);
+        if (!n) {
             const char *fullname = ";;;;";  // 5 empty components
 
             if (fn && (ckind == VCARD_KIND_GROUP)) {
@@ -800,9 +804,23 @@ static void cyr_vcardcomponent_transform(vcardcomponent *vcard,
                 fullname = vcardproperty_get_value_as_string(fn);
             }
 
-            vcardstructuredtype *st = vcardstructured_new_from_string(fullname);
+            st = vcardstructured_new_from_string(fullname);
             vcardcomponent_add_property(vcard, vcardproperty_new_n(st));
             vcardstructured_unref(st);
+        }
+        else {
+            /* Trim extended fields */
+            st = vcardproperty_get_n(n);
+            if (vcardstructured_num_fields(st) > 5)
+                vcardstructured_set_num_fields(st, 5);
+        }
+
+        adr = vcardcomponent_get_first_property(vcard, VCARD_ADR_PROPERTY);
+        if (adr) {
+            /* Trim extended fields */
+            st = vcardproperty_get_adr(adr);
+            if (vcardstructured_num_fields(st) > 7)
+                vcardstructured_set_num_fields(st, 7);
         }
     }
 
@@ -1378,6 +1396,45 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
+static void merge_extended_fields(vcardcomponent *v3card,
+                                  vcardcomponent *v4card,
+                                  vcardproperty_kind pkind,
+                                  unsigned num_fields)
+{
+    /* Do both cards have the property? */
+    vcardproperty *v3prop = vcardcomponent_get_first_property(v3card, pkind);
+    vcardproperty *v4prop = vcardcomponent_get_first_property(v4card, pkind);
+    if (!v3prop || !v4prop) return;
+
+    /* Does the v3 card already have extended fields? */
+    vcardvalue *v3val = vcardproperty_get_value(v3prop);
+    vcardstructuredtype *v3st = vcardvalue_get_structured(v3val);
+    if (vcardstructured_num_fields(v3st) > num_fields) return;
+
+    /* Does the v4 card have extended fields? */
+    vcardvalue *v4val = vcardproperty_get_value(v4prop);
+    vcardstructuredtype *v4st = vcardvalue_get_structured(v4val);
+    if (vcardstructured_num_fields(v4st) > num_fields) {
+        /* Normalize the v3 property to have all 'base' fields */
+        if (vcardstructured_num_fields(v3st) < num_fields) 
+           vcardstructured_set_num_fields(v3st, num_fields);
+
+        /* Compare 'base' fields */
+        char *v4str = vcardstructured_as_vcard_string_r(v4st, 0);
+        char *v3str = vcardstructured_as_vcard_string_r(v3st, 0);
+
+        if (!strncmp(v4str, v3str, strlen(v3str))) {
+            /* Client hasn't changed the base fields,
+               so we can add the extended fields back in and convert to v4 */
+            vcardvalue_set_structured(v3val, v4st);
+            vcardcomponent_transform(v3card, VCARD_VERSION_40);
+            vcardstructured_unref(v3st);
+        }
+        free(v4str);
+        free(v3str);
+    }
+}
+
 /* Perform a COPY/MOVE/PUT request
  *
  * preconditions:
@@ -1391,6 +1448,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
 {
     struct carddav_db *db = (struct carddav_db *)destdb;
     vcardcomponent *vcard = (vcardcomponent *)obj;
+    vcardproperty_version version = VCARD_VERSION_NONE;
     char *uid = NULL, *fullname = NULL;
     char *type = NULL, *subtype = NULL;
     struct param *params = NULL;
@@ -1470,7 +1528,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     }
 
     /* If we are missing N or FN, add an empty one */
-    vcardproperty_version version = vcardcomponent_get_version(vcard);
+    version = vcardcomponent_get_version(vcard);
     vcardproperty *n =
         vcardcomponent_get_first_property(vcard, VCARD_N_PROPERTY);
     vcardproperty *fn =
@@ -1571,8 +1629,8 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Check for UID conflict */
-    txn->error.precond = check_uid_conflict(txn, mailbox, resource, uid,
-            vcardcomponent_get_version(vcard), db);
+    txn->error.precond =
+        check_uid_conflict(txn, mailbox, resource, uid, version, db);
 
   done:
     param_free(&params);
@@ -1583,6 +1641,29 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     free(card_ver);
 
     if (txn->error.precond) return HTTP_FORBIDDEN;
+
+    /* If we are given a v3 card, and we have a v4 card on disk,
+       check if we should merge N/ADR properties with extended fields */
+    if (version < VCARD_VERSION_40) {
+        /* Lookup existing card, if any */
+        struct carddav_data *cdata;
+
+        carddav_lookup_resource(db,
+                                mailbox_mbentry(mailbox), resource, &cdata, 0);
+        if (cdata->dav.imap_uid && cdata->version == 4) {
+            struct index_record record;
+
+            /* Fetch existing v4 card */
+            if (!mailbox_find_index_record(mailbox,
+                                           cdata->dav.imap_uid, &record)) {
+                vcardcomponent *v4card = record_to_vcard_x(mailbox, &record);
+
+                merge_extended_fields(vcard, v4card, VCARD_N_PROPERTY, 5);
+                merge_extended_fields(vcard, v4card, VCARD_ADR_PROPERTY, 7);
+                vcardcomponent_free(v4card);
+            }
+        }
+    }
 
     int ret = carddav_store_resource(txn, vcard, mailbox, resource, db);
 
