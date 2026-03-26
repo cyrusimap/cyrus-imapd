@@ -96,7 +96,6 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       unsigned val = strhash_seeded(table->seed, key) % table->size;
       bucket *ptr, *newptr;
-      bucket **prev;
 
       /*
       ** NULL means this bucket hasn't been used yet.  We'll simply
@@ -124,9 +123,9 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       ** This spot in the table is already in use.  See if the current string
       ** has already been inserted, and if so, replace its data
       */
-      for (prev = &((table->table)[val]), ptr=(table->table)[val];
+      for (ptr=(table->table)[val];
            ptr;
-           prev=&(ptr->next),ptr=ptr->next) {
+           ptr=ptr->next) {
           int cmpresult = strcmp(key,ptr->key);
           if (!cmpresult) {
               /* Match! Replace this value and return the old */
@@ -139,7 +138,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       }
 
       /*
-      ** Add it to the end of the list (*prev should be correct)
+      ** Add new keys to the start of the list
       */
       if(table->pool) {
           newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
@@ -149,8 +148,8 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
           newptr->key = xstrdup(key);
       }
       newptr->data = data;
-      newptr->next = NULL;
-      *prev = newptr;
+      newptr->next = (table->table)[val];
+      (table->table)[val] = newptr;
       table->count++;
       check_load_factor(table);
       return data;
