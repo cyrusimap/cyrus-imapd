@@ -118,13 +118,28 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       /*
       ** Add new keys to the start of the list (which might be empty)
       */
+
+      /*
+      ** sizeof(bucket) is 24 on 64 bit systems, as it has to allow for padding.
+      ** whereas offsetof(...) is 20. So using it saves 4 bytes on average
+      */
+      size_t key_len = strlen(key) + 1; /* including the trailing NUL byte */
+      size_t wanted = offsetof(bucket, key) + key_len;
+
+      /* Code reviewers observed that for short keys the above calculation
+         might result in an allocation smaller than the (fully padded) struct.
+         We believe that this is all fine by the C standard, but compilers are
+         software too, and this sort of thing might trigger bugs (or false
+         positive warnings from UBSAN etc). So we play it safe: */
+      if(wanted < sizeof(bucket))
+          wanted = sizeof(bucket);
+
       if(table->pool) {
-          newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
-          newptr->key = mpool_strdup(table->pool,key);
+          newptr=(bucket *)mpool_malloc(table->pool,wanted);
       } else {
-          newptr=(bucket *)xmalloc(sizeof(bucket));
-          newptr->key = xstrdup(key);
+          newptr=(bucket *)xmalloc(wanted);
       }
+      memcpy(newptr->key,key,key_len);
       newptr->hash = hash;
       newptr->data = data;
       newptr->next = (table->table)[val];
@@ -208,7 +223,6 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
                   (table->table)[val] = ptr->next;
               }
               if(!table->pool) {
-                  free(ptr->key);
                   free(ptr);
               }
               table->count--;
@@ -252,7 +266,6 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
                   if (func)
                       func(temp->data);
                   if(!table->pool) {
-                      free(temp->key);
                       free(temp);
                   }
               }
