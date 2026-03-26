@@ -94,7 +94,8 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 */
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
       bucket *ptr, *newptr;
 
       /*
@@ -104,8 +105,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       for (ptr=(table->table)[val];
            ptr;
            ptr=ptr->next) {
-          int cmpresult = strcmp(key,ptr->key);
-          if (!cmpresult) {
+          if (hash == ptr->hash && !strcmp(key, ptr->key)) {
               /* Match! Replace this value and return the old */
               void *old_data;
 
@@ -125,6 +125,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
           newptr=(bucket *)xmalloc(sizeof(bucket));
           newptr->key = xstrdup(key);
       }
+      newptr->hash = hash;
       newptr->data = data;
       newptr->next = (table->table)[val];
       (table->table)[val] = newptr;
@@ -140,21 +141,20 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 
 EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
-      unsigned val;
       bucket *ptr;
 
       if (!table->size)
           return NULL;
 
-      val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
 
       if (!(table->table)[val])
             return NULL;
 
       for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
       {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
+          if (hash == ptr->hash && !strcmp(key, ptr->key))
               return ptr->data;
       }
       return NULL;
@@ -168,7 +168,8 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -186,8 +187,7 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
             NULL != ptr;
             last = ptr, ptr = ptr->next)
       {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
+          if (hash == ptr->hash && !strcmp(key, ptr->key))
           {
               void *data = ptr->data;
               if (last != NULL )
