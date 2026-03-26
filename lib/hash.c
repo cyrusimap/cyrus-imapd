@@ -135,28 +135,11 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               old_data = ptr->data;
               ptr -> data = data;
               return old_data;
-          } else if (cmpresult < 0) {
-              /* The new key is smaller than the current key--
-               * insert a node and return this data */
-              if(table->pool) {
-                  newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-                  newptr->key = mpool_strdup(table->pool, key);
-              } else {
-                  newptr = (bucket *)xmalloc(sizeof(bucket));
-                  newptr->key = xstrdup(key);
-              }
-              newptr->data = data;
-              newptr->next = ptr;
-              *prev = newptr;
-              table->count++;
-              check_load_factor(table);
-              return data;
           }
       }
 
       /*
-      ** This key is the largest one so far.  Add it to the end
-      ** of the list (*prev should be correct)
+      ** Add it to the end of the list (*prev should be correct)
       */
       if(table->pool) {
           newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
@@ -196,8 +179,6 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
           int cmpresult = strcmp(key, ptr->key);
           if (!cmpresult)
               return ptr->data;
-          else if(cmpresult < 0) /* key < ptr->key -- we passed it */
-              return NULL;
       }
       return NULL;
 }
@@ -255,10 +236,6 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
               }
               table->count--;
               return data;
-          }
-          if (cmpresult < 0) {
-              /* its not here! */
-              return NULL;
           }
       }
 
