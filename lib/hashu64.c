@@ -75,28 +75,8 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       bucketu64 *ptr, *newptr;
 
       /*
-      ** NULL means this bucket hasn't been used yet.  We'll simply
-      ** allocate space for our new bucket and put our data there, with
-      ** the table pointing at it.
-      */
-      if (!((table->table)[val]))
-      {
-          if(table->pool) {
-              (table->table)[val] =
-                  (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
-              (table->table)[val] -> key = key;
-          } else {
-              (table->table)[val] = (bucketu64 *)xmalloc(sizeof(bucketu64));
-              (table->table)[val] -> key = key;
-          }
-          (table->table)[val] -> next = NULL;
-          (table->table)[val] -> data = data;
-          return (table->table)[val] -> data;
-      }
-
-      /*
-      ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, increment its count.
+      ** See if the current string has already been inserted, and if so,
+      ** increment its count.
       */
       for (ptr=(table->table)[val];
            ptr;
@@ -112,7 +92,7 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       }
 
       /*
-      ** Add new keys to the start of the list
+      ** Add new keys to the start of the list (which might be empty)
       */
       if(table->pool) {
           newptr=(bucketu64 *)mpool_malloc(table->pool,sizeof(bucketu64));

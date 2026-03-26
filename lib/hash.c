@@ -98,30 +98,8 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       bucket *ptr, *newptr;
 
       /*
-      ** NULL means this bucket hasn't been used yet.  We'll simply
-      ** allocate space for our new bucket and put our data there, with
-      ** the table pointing at it.
-      */
-      if (!((table->table)[val]))
-      {
-          if(table->pool) {
-              (table->table)[val] =
-                  (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-              (table->table)[val] -> key = mpool_strdup(table->pool, key);
-          } else {
-              (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
-              (table->table)[val] -> key = xstrdup(key);
-          }
-          (table->table)[val] -> next = NULL;
-          (table->table)[val] -> data = data;
-          table->count++;
-          check_load_factor(table);
-          return (table->table)[val] -> data;
-      }
-
-      /*
-      ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, replace its data
+      ** See if the current string has already been inserted, and if so,
+      ** replace its data
       */
       for (ptr=(table->table)[val];
            ptr;
@@ -138,7 +116,7 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       }
 
       /*
-      ** Add new keys to the start of the list
+      ** Add new keys to the start of the list (which might be empty)
       */
       if(table->pool) {
           newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
