@@ -67,7 +67,14 @@ sub assert_cmd_bye_toobig
     $talk->enable('qresync'); # IMAPTalk requires lower-case
     $talk->select('INBOX');
 
-    $talk->_send_cmd($cmd, @_);
+    # We need to eval wrap these since Mail::IMAPTalk might be sending data
+    # in chunks, and as soon as too much data is received, imapd might kill
+    # the connection, causing our writes to fail
+    eval {
+        $talk->_send_cmd($cmd, @_);
+    };
+    xlog $self, "_send_cmd failed (This is normal): $@" if $@;
+
     $self->assert_bye_toobig();
 }
 
@@ -89,6 +96,7 @@ sub assert_no_toobig
     eval {
         $talk->_parse_response($handlers);
     };
+    xlog $self, "_parse_response failed: $@" if $@;
 
     $self->assert_num_equals(1, $got_toobig);
 }
@@ -100,7 +108,12 @@ sub assert_cmd_no_toobig
     my $talk = shift;
     my $cmd = shift;
 
-    $talk->_send_cmd($cmd, @_);
+    # See note in assert_cmd_bye_toobig()
+    eval {
+        $talk->_send_cmd($cmd, @_);
+    };
+    xlog $self, "_send_cmd failed (This is normal): $@" if $@;
+
     $self->assert_no_toobig($talk);
 }
 

@@ -41,7 +41,7 @@
 #
 
 [cassandane]
-rootdir = /tmp/cass
+rootdir = /dev/shm/cass
 cleanup = no
 
 # If we need do, we can put a list of (space-delimited) tests in this setting,

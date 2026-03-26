@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
         image: ${{ matrix.image || 'ghcr.io/cyrusimap/cyrus-docker:bookworm' }}
-        options: --init --privileged
+        options: --init --privileged --shm-size 4GB
     steps:
     - uses: actions/checkout@v6
       with:
@@ -92,7 +92,7 @@ jobs:
       run: cyd test --no-slow --format pretty --rerun
     - name: collect logs
       if: ${{ ! matrix.skip-cass }}
-      run: cat /tmp/cass/*/conf/log/syslog
+      run: cat /dev/shm/cass/*/conf/log/syslog
   valgrind-make-check:
     runs-on: ubuntu-latest
     container:
