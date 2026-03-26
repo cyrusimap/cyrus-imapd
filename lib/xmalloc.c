@@ -60,9 +60,9 @@ EXPORTED void *xzrealloc(void *ptr, size_t orig_size, size_t new_size)
 
 EXPORTED char *xstrdup(const char* str)
 {
-    char *p = xmalloc(strlen(str)+1);
-    strcpy(p, str);
-    return p;
+    size_t wanted = strlen(str)+1;
+    char *p = xmalloc(wanted);
+    return memcpy(p, str, wanted);
 }
 
 /* return a malloced "" if NULL is passed */
