@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that EMAILID is preserved when moving messages within
+# the same account (same ACCOUNTID)
+#
+sub test_objectidplus_emailid_preserved_on_move
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('target');
+
+    $self->make_message("Test message A");
+
+    $talk->select('INBOX');
+
+    # get EMAILID before move
+    my $fetch_before = $talk->fetch('1', '(emailid)');
+    my $emailid = $fetch_before->{1}{emailid}[0];
+    $self->assert_not_null($emailid);
+
+    # move message to target
+    $talk->move('1', 'target');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # check EMAILID is preserved in the destination
+    $talk->select('target');
+    my $fetch_after = $talk->fetch('1', '(emailid)');
+    $self->assert_str_equals($emailid, $fetch_after->{1}{emailid}[0]);
+}
