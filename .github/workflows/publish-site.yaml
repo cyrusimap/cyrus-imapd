@@ -57,7 +57,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cyrusimap/cyrus-docker:trixie
+      image: ghcr.io/cyrusimap/cyrus-docker:bookworm
       options: --init --privileged
     # This must have fetch-depth 0 because the script we run clones it further
     steps:
