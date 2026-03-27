@@ -21,25 +21,11 @@ EOF
     $vcard =~ s/\r?\n/\r\n/gs;
 
     my $method = 'PUT';
-    my $url = $carddav->request_url($args->{resource});
-    my $res = $carddav->ua->request($method, $url,
-        {
-            content => $vcard,
-            headers => {
-                'Content-Type' => "text/vcard; version=3.0",
-                Authorization => $carddav->auth_header(),
-            }
-        }
+    my $result = $carddav->SafeRequest($method, $args->{resource}, $vcard,
+        'Content-Type' => "text/vcard; version=3.0",
     );
 
-    if ($ENV{DEBUGDAV}) {
-        warn "<<<<<<<< $method $url HTTP/1.1\n$vcard\n" .
-            ">>>>>>>> $res->{protocol} $res->{status} $res->{reason}\n" .
-            "$res->{content}\n" .
-            "========\n\n";
-    }
-
-    return $res;
+    return $result->{http_response};
 }
 
 my sub move_resource($carddav, $method, $args)
@@ -47,26 +33,12 @@ my sub move_resource($carddav, $method, $args)
     Carp::croak("method must be 'MOVE' or 'COPY'")
         unless $method eq 'MOVE' || $method eq 'COPY';
 
-    my $url = $carddav->request_url($args->{from});
     my $dest = $carddav->request_url($args->{to});
-    my $res = $carddav->ua->request($method, $url,
-        {
-            content => undef,
-            headers => {
-                Authorization => $carddav->auth_header(),
-                Destination => $dest
-            }
-        }
+    my $result = $carddav->SafeRequest($method, $args->{from}, undef,
+        Destination => $dest
     );
 
-    if ($ENV{DEBUGDAV}) {
-        warn "<<<<<<<< $method $url HTTP/1.1\nDestination: $dest\n" .
-            ">>>>>>>> $res->{protocol} $res->{status} $res->{reason}\n" .
-            "$res->{content}\n" .
-            "========\n\n";
-    }
-
-    return $res;
+    return $result->{http_response};
 }
 
 sub test_uid_conflict
