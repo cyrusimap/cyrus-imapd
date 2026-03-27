@@ -6,7 +6,6 @@ sub test_calendarevent_changes_recreate_uid
     my ($self) = @_;
 
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $res = $jmap->CallMethods([
         ['Calendar/get', {}, 'R1'],

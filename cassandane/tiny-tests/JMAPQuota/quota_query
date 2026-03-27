@@ -30,6 +30,7 @@ EOF
     $self->assert_str_equals('Calendar/get', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    my $calid = $res->[0][1]{list}[0]{id};
 
     # Right - let's set ourselves some basic usage quota
     $self->set_quotaroot('user.cassandane');
@@ -51,7 +52,7 @@ EOF
         create => {
             "1" => {
                 calendarIds => {
-                    Default => JSON::true,
+                    $calid => JSON::true,
                 },
                 "title" => "foo",
                 "description" => "",
