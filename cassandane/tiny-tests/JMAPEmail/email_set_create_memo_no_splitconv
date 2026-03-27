@@ -25,7 +25,7 @@ sub test_email_set_create_memo_no_splitconv
     $lastUid = $nextUid;
   }
 
-  xlog $self, "Create new reply with 'memo' keyword'";
+  xlog $self, "Create memo for latest reply";
   my $nextUid = $lastUid + 1;
   my $res     = $jmap->CallMethods([
     [
@@ -86,5 +86,79 @@ sub test_email_set_create_memo_no_splitconv
     $res->[2][1]{created}{$nextUid}{threadId}
   );
 
+  my $state = $res->[2][1]{newState};
+  $self->assert_not_null($state);
+
+  xlog $self, "Create new reply to split the thread";
   $lastUid = $nextUid;
+  $nextUid = $lastUid + 1;
+  $self->make_message(
+    "Re: Email A",
+    messageid     => "msg$nextUid\@example.com",
+    extra_headers => [
+      [ "in-reply-to", "<msg$lastUid\@example.com>" ],
+    ],
+  );
+
+   $res = $jmap->CallMethods([
+    [
+      'Email/changes',
+      {
+          sinceState => $state,
+      },
+      'R1'
+    ],
+    [
+      'Email/get',
+      {
+        '#ids' => {
+          resultOf => 'R1',
+          name     => 'Email/changes',
+          path     => '/created'
+        },
+        properties => ['threadId'],
+      },
+      'R2'
+    ],
+  ]);
+
+  xlog $self, "Assert that thread got split";
+  $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+  my $splitThreadId = $res->[1][1]{list}[0]{threadId};
+  $self->assert_str_not_equals($baseThreadId, $splitThreadId);
+
+  xlog $self, "Create memo for latest reply";
+  $res     = $jmap->CallMethods([
+    [
+      'Email/set',
+      {
+        create => {
+          "$nextUid" => {
+            mailboxIds    => { '$inbox' => JSON::true },
+            from          => [ { email => 'from@local' } ],
+            to            => [ { email => 'to@local' } ],
+            subject       => "Re: Email A",
+            messageId     => ["msg$nextUid\@example.com"],
+            inReplyTo     => ["msg$lastUid\@example.com"],
+            bodyStructure => {
+              type   => 'text/plain',
+              partId => 'part1',
+            },
+            bodyValues => {
+              part1 => {
+                value => "body$nextUid XXX",
+              },
+            },
+            keywords => {
+              '$memo' => JSON::true,
+            },
+          },
+        },
+      },
+      'R3'
+    ],
+  ]);
+
+  xlog $self, "Assert memo got assigned to split thread";
+  $self->assert_str_equals($splitThreadId, $res->[0][1]{created}{$nextUid}{threadId});
 }
