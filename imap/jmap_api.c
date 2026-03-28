@@ -3607,32 +3607,3 @@ EXPORTED void jmap_add_methods(jmap_method_t methods[],
         ptrarray_append(pa, mp);
     }
 }
-
-EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
-                                    const char *id, bool isdef)
-{
-    json_t *obj;
-
-    if (*id == '#')
-        obj = json_object_get(set->created, id+1);
-    else
-        obj = json_object_get(set->updated, id);
-
-    if (obj) {
-        json_object_set_new(obj, "isDefault", json_boolean(isdef));
-    }
-    else {
-        /* Bump modseq so the mailbox shows up in /changes */
-        struct mailbox *mailbox = NULL;
-
-        mailbox_open_iwl(name, &mailbox);
-        if (mailbox) {
-            mboxlist_update_foldermodseq(name,
-                                         mailbox_modseq_dirty(mailbox));
-            mailbox_close(&mailbox);
-        }
-
-        json_object_set_new(set->updated, id,
-                            json_pack("{s:b}", "isDefault", isdef));
-    }
-}

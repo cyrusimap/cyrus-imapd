@@ -14,5 +14,4 @@ sub test_calendar_get_default
     xlog $self, "get default calendar";
     my $res = $jmap->CallMethods([['Calendar/get', {ids => ["Default"]}, "R1"]]);
     $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
-    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isDefault});
 }

@@ -56,6 +56,7 @@
 #include "imap/jmap_calendar_event_notification_props.h"
 #include "imap/jmap_calendar_event_props.h"
 #include "imap/jmap_calendar_participant_identity_props.h"
+#include "imap/jmap_calendar_preferences_props.h"
 #include "imap/jmap_calendar_principal_props.h"
 #include "imap/jmap_calendar_props.h"
 #include "imap/jmap_calendar_share_notification_props.h"
@@ -89,6 +90,8 @@ static int jmap_sharenotification_set(struct jmap_req *req);
 static int jmap_sharenotification_changes(struct jmap_req *req);
 static int jmap_sharenotification_query(struct jmap_req *req);
 static int jmap_sharenotification_querychanges(struct jmap_req *req);
+static int jmap_calendarpreferences_get(struct jmap_req *req);
+static int jmap_calendarpreferences_set(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, jmap_getblob_context_t *ctx);
 
@@ -270,6 +273,18 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         &jmap_sharenotification_querychanges,
         JMAP_NEED_CSTATE
     },
+    {
+        "CalendarPreferences/get",
+        JMAP_URN_CALENDAR_PREFERENCES,
+        &jmap_calendarpreferences_get,
+        0
+    },
+    {
+        "CalendarPreferences/set",
+        JMAP_URN_CALENDAR_PREFERENCES,
+        &jmap_calendarpreferences_set,
+        JMAP_READ_WRITE
+    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -441,7 +456,6 @@ static int jmap_calendar_isspecial(mbname_t *mbname) {
 struct getcalendars_rock {
     struct jmap_req *req;
     struct jmap_get *get;
-    const char *default_cal_mboxname;
     int skip_hidden;
 };
 
@@ -743,11 +757,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
-    if (jmap_wantprop(rock->get->props, "isDefault")) {
-        bool is_default = !strcmp(mbentry->name, rock->default_cal_mboxname);
-        json_object_set_new(obj, "isDefault", json_boolean(is_default));
-    }
-
     if (jmap_wantprop(rock->get->props, "includeInAvailability")) {
         buf_reset(&attrib);
         static const char *transp_annot =
@@ -818,10 +827,6 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "myRights")) {
-        if (!strcmp(rock->default_cal_mboxname, mbentry->name)) {
-            /* We don't allow deleting the default calendar */
-            rights &= ~JACL_DELETE;
-        }
         json_object_set_new(obj, "myRights",
                 calendarrights_to_jmap(rights,
                     !strcmp(rock->req->userid, rock->req->accountid)));
@@ -870,8 +875,6 @@ static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get = JMAP_GET_INITIALIZER;
-    char *default_calname = NULL;
-    char *default_cal_mboxname = NULL;
     json_t *err = NULL;
     int r = 0;
 
@@ -891,11 +894,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
 
     /* Build callback data */
-    default_calname = caldav_scheddefault(req->accountid, 1);
-    default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
-    xzfree(default_calname);
-    struct getcalendars_rock rock =
-        { req, &get, default_cal_mboxname, 1 /*skiphidden*/ };
+    struct getcalendars_rock rock = { req, &get, 1 /*skiphidden*/ };
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
@@ -939,7 +938,6 @@ static int jmap_calendar_get(struct jmap_req *req)
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    free(default_cal_mboxname);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     return r;
@@ -1713,14 +1711,17 @@ static int _calendar_hasevents_cb(void *rock __attribute__((unused)),
 
 /* Delete the calendar mailbox named mboxname for the userid in req. */
 static void setcalendars_destroy(jmap_req_t *req, const char *calid,
-                                 const char *default_cal_mboxname,
                                  int destroy_events, json_t **err)
 {
     char *mboxname = caldav_mboxname(req->accountid, calid);
+    char *defaultname = caldav_scheddefault(req->accountid, 0);
     mbname_t *mbname = mbname_from_intname(mboxname);
     mbentry_t *mbentry = NULL;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_db *db = NULL;
+    char *calhome_name = caldav_mboxname(req->accountid, NULL);
+    annotate_state_t *calhome_astate = NULL;
+    struct mailbox *calhome_mbox = NULL;
     int r = 0;
 
     /* Make sure we don't delete special calendars */
@@ -1738,12 +1739,6 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
     }
     else if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE)) {
         *err = json_pack("{s:s}", "type", "accountReadOnly");
-        goto done;
-    }
-
-    /* Don't delete default calendar */
-    if (!strcmp(mboxname, default_cal_mboxname)) {
-        *err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
 
@@ -1798,6 +1793,41 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     if (!r) r = caldav_update_shareacls(req->accountid);
 
+    /* Update default calendar - must go last */
+    if (!strcmpsafe(defaultname, calid)) {
+        int r2 = mailbox_open_iwl(calhome_name, &calhome_mbox);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not open calendar home mailbox",
+                    "err=<%s>", error_message(r));
+            goto done;
+        }
+        r2 = mailbox_get_annotate_state(calhome_mbox, 0, &calhome_astate);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not get calendar home annotation state",
+                    "err=<%s>", error_message(r2));
+            goto done;
+        }
+
+        // Set default calendar to null
+        r2 = set_scheddefault(req, calhome_astate, NULL);
+        if (r2) {
+            xsyslog(LOG_ERR, "can not set default calendar to null",
+                    "err=<%s>", error_message(r2));
+            goto done;
+        }
+
+        // Pick new default calendar
+        char *newdefaultname = caldav_scheddefault(req->accountid, 1);
+        if (newdefaultname) {
+            r2 = set_scheddefault(req, calhome_astate, newdefaultname);
+            if (r2) {
+                xsyslog(LOG_ERR, "can not set new default calendar",
+                        "name=<%s> err=<%s>", newdefaultname, error_message(r2));
+            }
+            free(newdefaultname);
+        }
+    }
+
 done:
     if (db) {
         int rr = caldav_close(db);
@@ -1811,7 +1841,10 @@ done:
             *err = jmap_server_error(r);
         }
     }
+    mailbox_close(&calhome_mbox);
+    free(calhome_name);
     free(mboxname);
+    free(defaultname);
     mbname_free(&mbname);
     mboxlist_entry_free(&mbentry);
     buf_free(&buf);
@@ -2059,31 +2092,19 @@ done:
     free(mboxname);
 }
 
-struct calendar_set_args {
-    bool on_destroy_remove_events;
-    const char *on_success_set_is_default;
-};
-
 static int setcalendars_parse_args(jmap_req_t *req __attribute__((unused)),
                                    struct jmap_parser *parser __attribute__((unused)),
                                    const char *arg, json_t *val, void *rock)
 {
-    struct calendar_set_args *setargs = (struct calendar_set_args *) rock;
+    int *on_destroy_remove_events = rock;
+    *on_destroy_remove_events = 0;
 
     if (!strcmp(arg, "onDestroyRemoveEvents")) {
         if (json_is_boolean(val)) {
-            setargs->on_destroy_remove_events = json_boolean_value(val);
+            *on_destroy_remove_events = json_boolean_value(val);
             return 1;
         }
     }
-
-    else if (!strcmp(arg, "onSuccessSetIsDefault")) {
-        if (json_is_string(val)) {
-            setargs->on_success_set_is_default = json_string_value(val);
-            return 1;
-        }
-    }
-
     return 0;
 }
 
@@ -2091,15 +2112,13 @@ static int jmap_calendar_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
-    struct calendar_set_args setargs = { 0 };
-    char *default_calname = NULL;
-    char *default_cal_mboxname = NULL;
+    int on_destroy_remove_events = 0;
     json_t *err = NULL;
     int r = 0;
 
     /* Parse arguments */
     jmap_set_parse(req, &argparser, &calendar_props, setcalendars_parse_args,
-                   &setargs, &set, &err);
+                   &on_destroy_remove_events, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2129,9 +2148,6 @@ static int jmap_calendar_set(struct jmap_req *req)
     if (r) {
         goto done;
     }
-
-    default_calname = caldav_scheddefault(req->accountid, 1);
-    default_cal_mboxname = caldav_mboxname(req->accountid, default_calname);
 
     /* create */
     const char *key;
@@ -2206,65 +2222,11 @@ static int jmap_calendar_set(struct jmap_req *req)
             calid = newcalid;
         }
         json_t *err = NULL;
-        setcalendars_destroy(req, calid, default_cal_mboxname,
-                             setargs.on_destroy_remove_events, &err);
+        setcalendars_destroy(req, calid, on_destroy_remove_events, &err);
         if (!err) {
             json_array_append_new(set.destroyed, json_string(id));
         }
         else json_object_set_new(set.not_destroyed, id, err);
-    }
-
-    if (setargs.on_success_set_is_default &&
-        /* No failures */
-        !json_object_size(set.not_created) &&
-        !json_object_size(set.not_updated) &&
-        !json_object_size(set.not_destroyed)) {
-
-        /* resolve new default calendar id */
-        const char *newid = setargs.on_success_set_is_default;
-        if (*newid == '#') {
-            json_t *jobj = json_object_get(set.created, newid+1);
-            if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
-        }
-
-        char *calhome_name = caldav_mboxname(req->accountid, NULL);
-        annotate_state_t *calhome_astate = NULL;
-        struct mailbox *calhome_mbox = NULL;
-
-        int r2 = mailbox_open_iwl(calhome_name, &calhome_mbox);
-        if (r2) {
-            xsyslog(LOG_ERR, "can not open calendar home mailbox",
-                    "err=<%s>", error_message(r2));
-        }
-        else {
-            r = mailbox_get_annotate_state(calhome_mbox, 0, &calhome_astate);
-            if (r2) {
-                xsyslog(LOG_ERR, "can not get calendar home annotation state",
-                        "err=<%s>", error_message(r2));
-            }
-            else {
-                r2 = set_scheddefault(req, calhome_astate, newid);
-                if (r2) {
-                    xsyslog(LOG_ERR, "can not set new default calendar",
-                            "name=<%s> err=<%s>", newid, error_message(r2));
-                }
-                else {
-                    /* report that isDefault has been moved to new calendar */
-                    char *mboxname = caldav_mboxname(req->accountid, newid);
-                    jmap_report_isdefault(&set, mboxname,
-                                          setargs.on_success_set_is_default,
-                                          true);
-                    free(mboxname);
-
-                    /* report that isDefault has been removed from old default */
-                    jmap_report_isdefault(&set, default_cal_mboxname,
-                                          default_calname, false);
-                }
-            }
-        }
-
-        mailbox_close(&calhome_mbox);
-        free(calhome_name);
     }
 
     set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));
@@ -2274,8 +2236,6 @@ static int jmap_calendar_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&argparser);
     jmap_set_fini(&set);
-    free(default_calname);
-    free(default_cal_mboxname);
     return r;
 }
 
@@ -11333,4 +11293,360 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         buf_free(&rewritebufs[j]);
     buf_free(&buf);
     return jsevents_by_partid;
+}
+
+static int jmap_calendarpreferences_get(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
+    json_t *err = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    char *calhomename = NULL;
+    mbentry_t *mbcalhome = NULL;
+    int r = 0;
+
+    if (!has_calendars(req)) {
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
+        return 0;
+    }
+
+    /* Parse request */
+    jmap_get_parse(req, &parser, &calendarpreferences_props, 1,
+                   NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Check ACL */
+    calhomename = caldav_mboxname(req->accountid, NULL);
+    r = mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        xsyslog(LOG_INFO, "cannot lookup calendar home",
+                "calname=<%s> err=<%s>", calhomename, error_message(r));
+        r = 0;
+        goto done;
+    }
+    if (!jmap_hasrights_mbentry(req, mbcalhome, JACL_LOOKUP)) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    int want_singleton = 1;
+    if (json_array_size(get.ids)) {
+        want_singleton = 0;
+        size_t i;
+        for (i = 0; i < json_array_size(get.ids); i++) {
+            const char *id = json_string_value(json_array_get(get.ids, i));
+            if (strcmp(id, "singleton")) {
+                json_array_append_new(get.not_found, json_string(id));
+            }
+            else want_singleton = 1;
+        }
+    }
+
+    if (want_singleton) {
+        json_t *jprefs = json_object();
+        json_object_set_new(jprefs, "id", json_string("singleton"));
+
+        if (jmap_wantprop(get.props, "defaultCalendarId")) {
+            json_t *jid = json_null();
+            char *scheddefault = caldav_scheddefault(req->accountid, 0);
+            if (scheddefault) {
+                jid = json_string(scheddefault);
+            }
+            json_object_set_new(jprefs, "defaultCalendarId", jid);
+            free(scheddefault);
+        }
+
+        if (jmap_wantprop(get.props, "defaultParticipantIdentityId")) {
+            json_t *jpartid = json_null();
+
+            strarray_t caluseraddr = STRARRAY_INITIALIZER;
+            if (!caldav_caluseraddr_read(mbcalhome->name, req->accountid, &caluseraddr)) {
+                const char *addr = strarray_nth(&caluseraddr, 0);
+                if (addr) {
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    jpartid = json_string(buf_cstring(&buf));
+                    buf_reset(&buf);
+                }
+            }
+            strarray_fini(&caluseraddr);
+
+            json_object_set_new(jprefs, "defaultParticipantIdentityId", jpartid);
+        }
+
+        json_array_append_new(get.list, jprefs);
+    }
+
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    get.state = buf_release(&buf);
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    mboxlist_entry_free(&mbcalhome);
+    free(calhomename);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    buf_free(&buf);
+    return r;
+}
+
+static void calendarpreferences_set(struct jmap_req *req,
+                                    struct jmap_parser *parser,
+                                    json_t *jprefs,
+                                    mbentry_t *mbcalhome,
+                                    json_t *server_set,
+                                    json_t **err)
+{
+    json_t *jcalid = NULL;
+    json_t *jpartid = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
+
+    struct mailbox *calhomembox = NULL;
+    annotate_state_t *astate = NULL;
+    json_t *jalertsprefs = NULL;
+
+    /* Validate properties */
+
+    const char *prop;
+    json_t *jval;
+    json_object_foreach(jprefs, prop, jval) {
+        if (!strcmp(prop, "id")) {
+            const char *id = json_string_value(jval);
+            if ((id && strcmp(id, "singleton")) || !id) {
+                jmap_parser_invalid(parser, "id");
+            }
+        }
+        else if (!strcmp(prop, "defaultCalendarId")) {
+            if (json_is_string(jval) || json_is_null(jval)) {
+                jcalid = jval;
+            }
+            else {
+                jmap_parser_invalid(parser, "defaultCalendarId");
+            }
+        }
+        else if (!strcmp(prop, "defaultParticipantIdentityId")) {
+            if (json_is_string(jval) || json_is_null(jval)) {
+                jpartid = jval;
+            }
+            else {
+                jmap_parser_invalid(parser, "defaultParticipantIdentityId");
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, prop);
+        }
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s, s:O}",
+                    "type", "invalidProperties",
+                    "properties", parser->invalid);
+        goto done;
+    }
+
+    r = mailbox_open_iwl(mbcalhome->name, &calhomembox);
+    if (r) {
+        xsyslog(LOG_ERR, "can not open calendar home mailbox",
+                "err=<%s>", error_message(r));
+        goto done;
+    }
+    r = mailbox_get_annotate_state(calhomembox, 0, &astate);
+    if (r) {
+        xsyslog(LOG_ERR, "can not open get annotation state",
+                "err=<%s>", error_message(r));
+        goto done;
+    }
+
+    /* Set default calendar */
+    if (jcalid) {
+        char *server_set_default_calid = NULL;
+        if (json_is_null(jcalid)) {
+            server_set_default_calid = caldav_scheddefault(req->accountid, 1);
+            r = set_scheddefault(req, astate, server_set_default_calid);
+        }
+        else {
+            r = set_scheddefault(req, astate, json_string_value(jcalid));
+        }
+        if (r) {
+            if (r == IMAP_MAILBOX_NONEXISTENT || r == IMAP_PERMISSION_DENIED) {
+                *err = json_pack("{s:s, s:[s]}",
+                        "type", "invalidProperties",
+                        "properties", "defaultCalendarId");
+                r = 0;
+                goto done;
+            }
+            else {
+                xsyslog(LOG_ERR, "can not write schedule default calendar",
+                        "err=<%s>", error_message(r));
+                goto done;
+            }
+        }
+        if (server_set_default_calid) {
+            json_object_set_new(server_set, "defaultCalendarId",
+                    json_string(server_set_default_calid));
+        }
+        xzfree(server_set_default_calid);
+    }
+
+    /* Set default participant identity */
+    if (jpartid) {
+        const char *partid = json_string_value(jpartid);
+
+        strarray_t caluseraddr = STRARRAY_INITIALIZER;
+        r = caldav_caluseraddr_read(mbcalhome->name, req->userid, &caluseraddr);
+        if (!r) {
+            if (partid) {
+                int i;
+                for (i = 0; i < strarray_size(&caluseraddr); i++) {
+                    const char *addr = strarray_nth(&caluseraddr, i);
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    if (!strcmp(partid, buf_cstring(&buf))) {
+                        break;
+                    }
+                }
+                if (i < strarray_size(&caluseraddr)) {
+                    // move preferred address to first position, as Apple
+                    // and Mozilla CalDAV clients expect it there
+                    if (i > 0) {
+                        char *val = strarray_remove(&caluseraddr, i);
+                        strarray_unshiftm(&caluseraddr, val);
+                    }
+                    r = caldav_caluseraddr_write(calhomembox, req->userid, &caluseraddr);
+                }
+                else {
+                    jmap_parser_invalid(parser, "defaultParticipantIdentityId");
+                }
+            }
+            else {
+                // The defaultParticipantIdentity setting can't be removed,
+                // there always needs to be one set. Just tell the client
+                // we set a new one which matches the one we already had.
+                const char *addr = strarray_nth(&caluseraddr, 0);
+                if (addr) {
+                    if (!strncasecmp(addr, "mailto:", 7)) addr += 7;
+                    encode_participantidentity_id(&buf, addr);
+                    json_t *jpartid = json_string(buf_cstring(&buf));
+                    buf_reset(&buf);
+                    json_object_set_new(
+                        server_set, "defaultParticipantIdentityId", jpartid);
+                }
+            }
+        }
+        strarray_fini(&caluseraddr);
+
+        if (r) {
+            xsyslog(LOG_ERR, "can not set schedule addresses",
+                    "err=<%s>", error_message(r));
+            goto done;
+        }
+    }
+
+done:
+    if (r && *err == NULL) {
+        *err = jmap_server_error(r);
+    }
+    mailbox_close(&calhomembox);
+    json_decref(jalertsprefs);
+    buf_free(&buf);
+}
+
+static int jmap_calendarpreferences_set(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
+    json_t *err = NULL;
+    int r = 0;
+
+    struct buf buf = BUF_INITIALIZER;
+    char *calhomename = caldav_mboxname(req->accountid, NULL);
+    mbentry_t *mbcalhome = NULL;
+
+    jmap_set_parse(req, &parser, &calendarpreferences_props,
+                   NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Check ACL */
+    r = mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+        xsyslog(LOG_INFO, "cannot lookup calendar home",
+                "calname=<%s> err=<%s>", calhomename, error_message(r));
+        r = 0;
+        goto done;
+    }
+    if (!jmap_hasrights_mbentry(req, mbcalhome, JACL_LOOKUP|JACL_SETKEYWORDS)) {
+        jmap_error(req, json_pack("{s:s}", "type", "forbidden"));
+        goto done;
+    }
+
+    /* Check state */
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    if (set.if_in_state && strcmp(set.if_in_state, buf_cstring(&buf))) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+    set.old_state = buf_release(&buf);
+
+    /* Reject invalid operations */
+    const char *key;
+    json_t *jarg;
+    json_object_foreach(set.create, key, jarg) {
+        json_object_set_new(set.not_created, key,
+                json_pack("{s:s}", "type", "forbidden"));
+    }
+    json_object_foreach(set.update, key, jarg) {
+        if (strcmp(key, "singleton")) {
+            json_object_set_new(set.not_updated, key,
+                    json_pack("{s:s}", "type", "notFound"));
+        }
+    }
+    size_t i;
+    json_array_foreach(set.destroy, i, jarg) {
+        json_object_set_new(set.not_destroyed,
+                json_string_value(jarg),
+                json_pack("{s:s}", "type",
+                    strcmp(key, "singleton") ? "notFound" : "forbidden"));
+    }
+
+    json_t *jprefs = json_object_get(set.update, "singleton");
+    if (JNOTNULL(jprefs)) {
+        json_t *server_set = json_object();
+        json_t *err = NULL;
+        calendarpreferences_set(req, &parser, jprefs, mbcalhome, server_set, &err);
+        if (!json_object_size(server_set)) {
+            json_decref(server_set);
+            server_set = json_null();
+        }
+        if (err) {
+            json_object_set_new(set.not_updated, "singleton", err);
+        }
+        else {
+            json_object_set(set.updated, "singleton", server_set);
+        }
+        json_decref(server_set);
+    }
+
+    // Reload foldermodseq
+    mboxlist_entry_free(&mbcalhome);
+    mboxlist_lookup(calhomename, &mbcalhome, NULL);
+    buf_printf(&buf, MODSEQ_FMT, mbcalhome->foldermodseq);
+    set.new_state = buf_release(&buf);
+
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    mboxlist_entry_free(&mbcalhome);
+    free(calhomename);
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
+    return r;
 }
