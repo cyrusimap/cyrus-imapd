@@ -39,6 +39,7 @@ struct mappedfile {
 extern int mappedfile_open(struct mappedfile **mfp,
                            const char *fname, int flags);
 extern int mappedfile_close(struct mappedfile **mfp);
+extern void mappedfile_abort(struct mappedfile **mfp);
 
 extern int mappedfile_readlock(struct mappedfile *mf);
 extern int mappedfile_writelock(struct mappedfile *mf);
