@@ -94,6 +94,7 @@ EOF
     $newcard =~ s/:$email2/;PREF=1:$email2/;
     $newcard =~ s/-0500/-05/;
     $newcard =~ s/TZ;VALUE=TEXT:/TZ:/;
+    $newcard =~ s/;Mr\.\r\n/;Mr.;;;III\r\n/;
 
     $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
         content => $newcard,
@@ -126,4 +127,23 @@ EOF
                           $newcard);
     $self->assert_matches(qr/X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:"$member2"/,
                           $newcard);
+
+    xlog $self, "Extended name fields should be stripped";
+    $self->assert_matches(qr/\r\nN:Gump;Forrest;;Mr.;\r\n/, $newcard);
+
+    xlog $self, "PUT back vCard v3 unchanged";
+    $Response = $CardDAV->{ua}->request('PUT', $CardDAV->request_url($href), {
+        content => $newcard,
+        headers => \%Headers,
+    });
+    $self->assert_num_equals(204, $Response->{status});
+
+    xlog $self, "GET as vCard v4";
+    $response = $CardDAV->Request('GET', $href, '',
+                                  'Accept' => 'text/vcard; version=4.0');
+    $newcard = $response->{content};
+    $newcard =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    xlog $self, "Extended name fields should be preserved";
+    $self->assert_matches(qr/\r\nN:Gump;Forrest;;Mr.;;;III\r\n/, $newcard);
 }
