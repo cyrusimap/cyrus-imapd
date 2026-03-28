@@ -61,6 +61,11 @@ AM_CPPFLAGS = \
     $(SASLFLAGS) \
     $(ICU_CFLAGS)
 
+# ensure recursive make install inherits DESTDIR, otherwise perl modules get
+# installed to the bare prefix, yikes!
+# XXX surprising that this isn't automatic??
+AM_MAKEFLAGS = "DESTDIR=$(DESTDIR)"
+
 if HAVE_LDAP
 AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
@@ -133,7 +138,7 @@ MAINTAINERCLEANFILES = \
     sieve/addr.h \
     sieve/sieve.h
 
-SUBDIRS = .
+SUBDIRS = . perl/annotator perl/imap
 DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
 dist_sbin_SCRIPTS =
 dist_sysconf_DATA =
@@ -142,7 +147,7 @@ check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
 noinst_HEADERS =
-noinst_LTLIBRARIES =
+noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
 noinst_PROGRAMS =
 
 if COM_ERR
@@ -289,17 +294,10 @@ dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 sbin_PROGRAMS += netnews/remotepurge
 endif # CMULOCAL
 
-if PERL
-SUBDIRS += perl/annotator perl/imap
-noinst_LTLIBRARIES += perl/libcyrus.la perl/libcyrus_min.la
-endif # PERL
-
 if SIEVE
 
-if PERL
 SUBDIRS += perl/sieve/managesieve
 noinst_LTLIBRARIES += perl/sieve/lib/libisieve.la
-endif # PERL
 
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
@@ -382,7 +380,7 @@ EXTRA_DIST = \
     perl/annotator/Message.pm \
     perl/annotator/README \
     perl/imap/Changes \
-    perl/imap/cyradm.sh \
+    perl/imap/cyradm.pl \
     perl/imap/cyrperl.h \
     perl/imap/examples/auditmbox.pl \
     perl/imap/examples/imapcollate.pl \
@@ -695,7 +693,7 @@ CUNIT_INTERMEDIATES = $(patsubst %.testc,%.c,$(cunit_TESTS))
 # if something depending on them is being rebuilt.
 .SECONDARY: $(CUNIT_INTERMEDIATES)
 
-CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
+CUNIT_PL = $(PERL) $(top_srcdir)/cunit/cunit.pl --srcdir $(abs_srcdir)
 
 .testc.c:
 	$(AM_V_GEN)$(CUNIT_PL) --generate-wrapper $@ $<
@@ -726,7 +724,7 @@ check-local:
 		$$vg ./unit $$f ; \
 		retval=$$? ; \
 		if [ "x$$CUFORMAT" = xjunit ] ; then \
-			$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl ; \
+			$(RM) -rf reports ; mkdir reports ; $(PERL) ./cunit-to-junit.pl ; \
 		fi ; \
 		exit $$retval
 
@@ -760,7 +758,7 @@ check-discrete: cunit/unit
 # Fast perl runner for cunit in parallel
 check-fast: cunit/unit
 	@echo "Running unit tests in parallel"
-	./cunit/pcunit $$JOBS
+	$(PERL) ./cunit/pcunit $$JOBS
 
 check-%: cunit/unit
 	@echo "Running unit tests for $*"
@@ -1463,10 +1461,10 @@ imap_backupcyrusd_LDADD = $(LD_SERVER_ADD)
 PROMDATAGEN = $(abs_top_srcdir)/imap/promdatagen
 
 imap/promdata.c: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(PROMDATAGEN) -c $@.NEW $< && mv $@.NEW $@
 
 imap/promdata.h: imap/promdata.p $(PROMDATAGEN)
-	$(AM_V_GEN)$(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(PROMDATAGEN) -h $@.NEW $< && mv $@.NEW $@
 
 imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
@@ -1523,7 +1521,8 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
 .gperf.h:
-	$(AM_V_GEN)$(top_srcdir)/tools/gperf-build-prop-set.pl $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/gperf-build-prop-set.pl $< > $@.NEW \
+	    && mv $@.NEW $@
 
 if HAVE_XXD
 # xxd cannot have path details in its input filename, otherwise it junks up
@@ -1536,16 +1535,16 @@ endif
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.c: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 lib/htmlchar.h: lib/htmlchar.st
-	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
 	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
@@ -1694,13 +1693,13 @@ lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t \
 	lib/charset/UnicodeData.txt lib/charset/aliases.txt
 	@echo "### Building chartables..."
-	$(AM_V_GEN)perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t || (rm -f $@ && exit 1)
 	@echo "### Done building chartables."
 
 lib/imapopts.h: lib/imapopts.c
 
 lib/imapopts.c: lib/imapoptions tools/config2header
-	$(AM_V_GEN)$(top_srcdir)/tools/config2header \
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2header \
 	    CC="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
 	    $(top_builddir)/lib/imapopts.c \
 	    $(top_builddir)/lib/imapopts.h \
@@ -1712,6 +1711,7 @@ imap_cvt_xlist_specialuse_LDADD = $(LD_UTILITY_ADD)
 @SET_MAKE@
 
 dist_man1_MANS = \
+    man/cyradm.1 \
     man/dav_reconstruct.1 \
     man/imtest.1 \
     man/httptest.1 \
@@ -1742,7 +1742,6 @@ dist_man8_MANS = \
     man/ctl_zoneinfo.8 \
     man/cvt_cyrusdb.8 \
     man/cvt_xlist_specialuse.8 \
-    man/cyradm.8 \
     man/cyr_buildinfo.8 \
     man/cyr_dbtool.8 \
     man/cyr_deny.8 \
@@ -1988,21 +1987,21 @@ snapshot::
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(PACKAGE_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(PACKAGE_VERSION).tar.gz
 	@rm -rf snapshot
 
-docsrc/reference/manpages/systemcommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
+docsrc/reference/manpages/usercommands/cyradm.rst: $(top_srcdir)/perl/imap/IMAP/Shell.pm
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst cyradm < $< > $@.NEW && mv $@.NEW $@
 
 docsrc/reference/manpages/configs/imapd.conf.rst: $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2rst $(top_srcdir)/lib/imapoptions > $@
 
 doc/examples/imapd_conf/imapd.conf.sample: $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/config2sample $(top_srcdir)/lib/imapoptions > $@
 
 docsrc/reference/manpages/usercommands/sieveshell.rst: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/perl2rst sieveshell < $< > $@.NEW && mv $@.NEW $@
 
 %.1: man/.sphinx-build.stamp
 	@$(MKDIR_P) $(@D)
@@ -2037,7 +2036,7 @@ SPHINX_OPTS = -d $(SPHINX_CACHE) -n -q $(SPHINX_FAIL_ON_WARNINGS) -j auto
 ## detect when source directory is not build directory (i.e. VPATH
 ## build), and clone the docsrc tree into the build directory, so
 ## that we have a single "source directory" for sphinx-build to use.
-docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/systemcommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
+docsrc/.sphinx-build.stamp: docsrc/reference/manpages/configs/imapd.conf.rst docsrc/reference/manpages/usercommands/cyradm.rst docsrc/reference/manpages/usercommands/sieveshell.rst
 	$(AM_V_GEN)test x"$(top_srcdir)" = x"$(top_builddir)" || \
         (cd $(top_srcdir) && tar cf - --mode=gu+w docsrc doc/examples) | tar xf -
 	@touch $@
@@ -2158,14 +2157,15 @@ if CMULOCAL
 endif
 
 install-exec-hook:
-if PERL
 	for s in sieveshell; \
 	do \
-	  $(MKDIR_P) $(top_builddir)/perl/sieve/scripts ; \
-	  $(PERL_PREINSTALL) < $(top_srcdir)/perl/sieve/scripts/$$s.pl > $(top_builddir)/perl/sieve/scripts/$$s ;\
-	  $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
+	    $(MKDIR_P) $(top_builddir)/perl/sieve/scripts \
+	    && $(PERL) $(top_srcdir)/tools/fixsearchpath.pl $(prefix) \
+	        < $(top_srcdir)/perl/sieve/scripts/$$s.pl \
+	        > $(top_builddir)/perl/sieve/scripts/$$s \
+	    && $(INSTALL) -m 755 $(top_builddir)/perl/sieve/scripts/$$s \
+	        $(DESTDIR)$(bindir)/$$s ; \
 	done
-endif
 
 ## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(libexecdir)
@@ -2188,11 +2188,9 @@ endif
 	  $(LN_S) -f imtest synctest
 
 uninstall-hook: cyrus-makemaker-uninstall-workaround
-if PERL
 	for s in sieveshell; do \
 	    rm -f $(DESTDIR)$(bindir)/$$s; \
 	done
-endif
 
 .PHONY: cyrus-makemaker-uninstall-workaround
 
@@ -2203,13 +2201,11 @@ endif
 # We have another layer of workaround in each module's Makefile that
 # removes the packlist after MakeMaker uninstall has finished ignoring it.
 cyrus-makemaker-uninstall-workaround:
-if PERL
 	( packlists=`find $(DESTDIR)$(libdir) -type f -name .packlist` && \
 	  echo "uninstalling files from packlists: $$packlists" && \
 	  rm -f `cat $$packlists` )
 	( podfiles=`find $(DESTDIR)$(libdir) -type f -name perllocal.pod` && \
 	  rm -f `echo $$podfiles` )
-endif
 
 install-binsymlinks:
 ## Let's symlink everything else

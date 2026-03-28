@@ -27,6 +27,7 @@ WriteMakefile(
     'DEFINE'    => '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING'
     'INC'       => "-I$build->{top_srcdir} -I$build->{top_srcdir}/com_err/et $build->{SASLFLAGS} $build->{SSL_CFLAGS} $build->{GCOV_CFLAGS} -I$build->{top_srcdir}/perl/imap",
     'EXE_FILES' => [cyradm],
+    'MAN1PODS' => {}, # cyradm pod is generated elsewhere
 );
 
 package MY; # so that "SUPER" works right
@@ -99,12 +100,16 @@ sub xs_o
 
 sub postamble
 {
+    my $FIXSEARCHPATH = join(' ',
+                             $main::Config{perlpath},
+                             "$build->{top_srcdir}/tools/fixsearchpath.pl",
+                             $build->{prefix});
     return <<"EOT";
 
 VPATH=$build->{top_srcdir}/perl/imap
 
-cyradm: cyradm.sh
-\t$build->{PERL_PREINSTALL} < \$< > \$\@
+cyradm: cyradm.pl
+\t$FIXSEARCHPATH < \$< > \$\@
 
 check:
 
