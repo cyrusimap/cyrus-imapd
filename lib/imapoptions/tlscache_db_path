@@ -1,0 +1,6 @@
+Name: tlscache_db_path
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+Deprecated-Since: 2.5.0
+Replaced-By: tls_sessions_db_path

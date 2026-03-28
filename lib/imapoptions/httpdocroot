@@ -1,0 +1,8 @@
+Name: httpdocroot
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+If set, http will serve the static content (html/text/jpeg/gif
+files, etc) rooted at this directory.  Otherwise, httpd will not
+serve any static content. 

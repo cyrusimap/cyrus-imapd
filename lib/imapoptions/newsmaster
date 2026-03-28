@@ -1,0 +1,12 @@
+Name: newsmaster
+Type: STRING
+Default-Value: news
+Last-Modified: 2.3.17
+
+Userid that is used for checking access controls when executing
+Usenet control messages.  For instance, to allow articles to be
+automatically deleted by cancel messages, give the "news" user
+the 'd' right on the desired mailboxes.  To allow newsgroups to be
+automatically created, deleted and renamed by the corresponding
+control messages, give the "news" user the 'c' right on the desired
+mailbox hierarchies. 

@@ -1,0 +1,7 @@
+Name: tcp_keepalive
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.4.0
+
+Enable keepalive on TCP connections. 
+

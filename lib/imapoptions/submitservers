@@ -1,0 +1,9 @@
+Name: submitservers
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+A list of users and groups that are allowed to resolve "urlauth=submit+"
+IMAP URLs, separated by spaces.  Any user listed in this will be
+allowed to fetch the contents of any valid "urlauth=submit+" IMAP URL:
+use with caution. 

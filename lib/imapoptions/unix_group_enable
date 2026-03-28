@@ -1,0 +1,9 @@
+Name: unix_group_enable
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+Should we look up groups when using auth_unix (disable this if you are
+not using groups in ACLs for your IMAP server, and you are using auth_unix
+with a backend (such as LDAP) that can make getgrent() calls very
+slow). 

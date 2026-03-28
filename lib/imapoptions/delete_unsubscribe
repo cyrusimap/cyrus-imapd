@@ -1,0 +1,8 @@
+Name: delete_unsubscribe
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+Whether to also unsubscribe from mailboxes when they are deleted.
+Note that this behaviour contravenes :rfc:`3501` section 6.3.9, but
+may be useful for avoiding user/client software confusion. 

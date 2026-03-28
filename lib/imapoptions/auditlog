@@ -1,0 +1,8 @@
+Name: auditlog
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.4.0
+
+Should cyrus output log entries for every action taken on a message
+file or mailboxes list entry?  It's noisy so disabled by default, but
+can be very useful for tracking down what happened if things look strange. 

@@ -1,0 +1,12 @@
+Name: caldav_maxdatetime
+Type: STRING
+Default-Value: 20380119T031407Z
+Last-Modified: 2.5.0
+
+The latest date and time accepted by the server (ISO format).  This
+value is also used for expanding non-terminating recurrence rules.
+
+Note that increasing this value will require the DAV databases for
+calendars to be reconstructed with the **dav_reconstruct**
+utility in order to see its effect on serer-side time-based
+queries. 

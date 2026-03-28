@@ -1,0 +1,9 @@
+Name: autocreate_sieve_script_compile
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+If set to yes and no compiled sieve script file exists, the sieve script which is
+compiled on the fly will be saved in the file name that autocreate_sieve_compiledscript
+option points to. In order a compiled script to be generated, autocreate_sieve_script and
+autocreate_sieve_compiledscript must have valid values. 

@@ -1,0 +1,9 @@
+Name: disconnect_on_vanished_mailbox
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+If enabled, IMAP/POP3/NNTP clients will be disconnected by the
+server if the currently selected mailbox is (re)moved by another
+session.  Otherwise, the missing mailbox is treated as empty while
+in use by the client.

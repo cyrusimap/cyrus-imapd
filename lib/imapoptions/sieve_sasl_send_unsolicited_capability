@@ -1,0 +1,5 @@
+Name: sieve_sasl_send_unsolicited_capability
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.12.0
+Deprecated-Since: 3.12.0

@@ -1,0 +1,7 @@
+Name: ignorereference
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+For backwards compatibility with Cyrus 1.5.10 and earlier -- ignore
+the reference argument in LIST or LSUB commands. 
