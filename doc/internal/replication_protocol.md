@@ -44,7 +44,12 @@ When syncing an entire user (the typical case for one-shot
 replication, and a fallback in rolling replication after error
 promotion), the flow is:
 
-1. **Lock** — acquire an exclusive sync lock for the user (prevents concurrent sync of the same user).
+1. **Lock** — acquire an exclusive sync lock for the user.  The lock
+   is keyed on (userid, destination IP address), so whether the
+   target is specified by IP or by channel name, it locks against
+   the same client/server pair.  This prevents concurrent sync of
+   the same user to the same replica, while allowing parallel sync
+   of the same user to different replicas.
 2. **GET USER** — fetch the replica's view of the user: all mailbox metadata, quota, sieve scripts, seen state, and subscriptions.
 3. **Compare mailboxes** — enumerate the master's mailboxes for this user (including DELETED namespace and tombstones) and compare with the replica's list.
    - Detect new mailboxes (on master but not replica).
@@ -119,8 +124,27 @@ values.  The XOR construction has two important properties:
    per-message CRC is XOR-ed out and the new one XOR-ed in, without
    re-scanning the entire mailbox.
 
-Expunged messages contribute 0 to both CRCs and are effectively
-invisible.
+#### Incremental Maintenance
+
+CRCs are stored in the mailbox index header and kept up-to-date
+incrementally as the mailbox is modified:
+
+* **Append** — the new record's per-message CRC is calculated and
+  XOR-ed into the running total.
+* **Update** — the old CRC for the record is calculated from the
+  pre-update state and XOR-ed out, the update is applied, then
+  the new CRC is calculated and XOR-ed in.  Because both the
+  removal and addition happen atomically with the update, the
+  stored CRC is always consistent with the on-disk state.
+* **Expunge** — an expunged record always has a CRC of 0, so
+  XOR-ing out the old CRC effectively removes the record's
+  contribution.  Since expunged records contribute 0, it does
+  not matter whether a record has been removed by cyr\_expire
+  on one side but not the other — the CRC is the same either
+  way.
+
+This means the CRCs are always available in the index header
+without a full scan — reading them is an O(1) operation.
 
 #### SYNC\_CRC (basic)
 
@@ -163,22 +187,22 @@ Covers everything *not* in the basic CRC.  This includes:
   | 20+ | `internaldate.nsec` | Nanosecond portion of INTERNALDATE |
   | 20+ | `basethrid` | Base conversation ID |
 
+  These virtual annotations are sent over the wire as real
+  annotations in the replication protocol.  On the receiving side,
+  if the mailbox index version is new enough to have the
+  corresponding field, the annotation is unpacked directly into
+  the cyrus.index record.  If the mailbox version is too old, the
+  value is stored as an actual annotation in the annotation
+  database.
+
+  When a mailbox is upgraded to a newer index version, any
+  existing DB annotations for these fields are folded into the
+  index record.  Conversely, when a mailbox is downgraded, the
+  values are moved back out to DB annotations.
+
 SYNC\_CRC\_ANNOT is initialised to 12345678 (rather than 0) so that
 a mailbox with no annotations is visually distinguishable from an
 uninitialised CRC in protocol traces.
-
-#### Incremental Maintenance
-
-CRCs are stored in the mailbox index header and kept up-to-date
-incrementally as the mailbox is modified:
-
-* **Append** — XOR the new message's CRC into the running total.
-* **Flag change / annotation change** — XOR out the old CRC for
-  that message, compute the new CRC, and XOR it in.
-* **Expunge** — XOR out the message's CRC (it now contributes 0).
-
-This means the CRCs are always available in the index header
-without a full scan — reading them is an O(1) operation.
 
 #### Forced Recalculation
 
