@@ -1865,7 +1865,7 @@ static int _calendar_hasevents_cb(void *rock __attribute__((unused)),
 
 /* Delete the calendar mailbox named mboxname for the userid in req. */
 static void setcalendars_destroy(jmap_req_t *req, const char *calid,
-                                 const char *default_cal_mboxname,
+                                 const char *default_cal_mboxname __attribute__((unused)),
                                  int destroy_events, json_t **err)
 {
     mbname_t *mbname = NULL;
@@ -1888,11 +1888,13 @@ static void setcalendars_destroy(jmap_req_t *req, const char *calid,
 
     const char *mboxname = mbentry->name;
 
+#if 0  // allow deleting the default until middleware catches up
     /* Don't delete default calendar */
     if (!strcmp(mboxname, default_cal_mboxname)) {
         *err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
+#endif
 
     /* Make sure we don't delete special calendars */
     mbname = mbname_from_intname(mboxname);

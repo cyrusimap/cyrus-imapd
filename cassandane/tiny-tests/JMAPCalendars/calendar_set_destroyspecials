@@ -36,8 +36,9 @@ sub test_calendar_set_destroyspecials
     $self->assert_str_equals("notFound", $errType);
     $errType = $res->[0][1]{notDestroyed}{$outId}{type};
     $self->assert_str_equals("notFound", $errType);
-    $errType = $res->[0][1]{notDestroyed}{$defId}{type};
-    $self->assert_str_equals("forbidden", $errType);
+#    $errType = $res->[0][1]{notDestroyed}{$defId}{type};
+#    $self->assert_str_equals("forbidden", $errType);
+    $self->assert_deep_equals([$defId], $res->[0][1]{destroyed});
     $errType = $res->[0][1]{notDestroyed}{$attId}{type};
     $self->assert_str_equals("notFound", $errType);
 }
