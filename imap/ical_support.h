@@ -16,6 +16,7 @@
 #define icalerror_warn(message) \
 {syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
 
+#include "css3_color.h"
 #include "dav_util.h"
 #include "mailbox.h"
 
@@ -41,6 +42,15 @@ extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
 #define icalvalue_set_recurrence(val, rt)    icalvalue_set_recur(val, rt)
 #define icalrecur_byrule_size(rt, rule)      (rt->by[rule].size)
 #define icalrecur_byrule_data(rt, rule)      (rt->by[rule].data)
+
+#define ical_is_valid_color(val)                                        \
+    (val &&                                                             \
+     (is_css3_color(val) ||                                             \
+      /* 6-digit hex */                                                 \
+      (val[0] == '#' &&                                                 \
+       strspn(val+1, "0123456789abcdefABCDEF") == 6 &&                  \
+       val[7] == '\0')))
+
 
 #ifdef HAVE_PARTTYPE_VOTER
 #define HAVE_VPOLL_SUPPORT

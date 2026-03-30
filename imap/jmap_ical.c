@@ -3909,8 +3909,11 @@ calendarevent_from_ical(icalcomponent *comp,
     if (jmap_wantprop(props, "color")) {
         prop = icalcomponent_get_first_property(comp, ICAL_COLOR_PROPERTY);
         if (prop) {
-            json_object_set_new(event, "color",
-                    json_string(icalproperty_get_color(prop)));
+            /* Verify we have a valid color name or 6-digit hex value */
+            const char *color = icalproperty_get_color(prop);
+            if (ical_is_valid_color(color)) {
+                json_object_set_new(event, "color", json_string(color));
+            }
         }
         else {
             for (prop = icalcomponent_get_first_property(comp,
@@ -7967,7 +7970,11 @@ static void calendarevent_to_ical(icalcomponent *comp,
     jprop = json_object_get(event, "color");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        if (strlen(val)) {
+        /* Verify we have a valid color name or 6-digit hex value */
+        if (!ical_is_valid_color(val)) {
+            jmap_parser_invalid(parser, "color");
+        }
+        else {
             icalproperty *prop = icalproperty_new_color(val);
             icalcomponent_add_property(comp, prop);
 

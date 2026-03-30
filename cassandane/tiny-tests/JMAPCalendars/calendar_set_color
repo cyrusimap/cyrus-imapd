@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_color
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $cal =  {
+        name=> "foo",
+        color => "SteelBlue"
+    };
+
+    xlog $self, "create calendar with named color";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {"1" => $cal}
+         },
+         "R1"],
+        ['Calendar/get', {
+            ids => [ '#1' ],
+            properties => [ 'color' ]
+         },
+         "R2"],
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_str_equals('SteelBlue', $res->[1][1]{list}[0]{color});
+
+    xlog $self, "update event with hex color value";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $id => {
+                    color => "#01aafF"
+                }
+            }
+         }, "R1"],
+        ['Calendar/get', {
+            ids => [ $id ],
+            properties => [ 'color' ]
+         },
+         "R2"],
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('#01aafF', $res->[1][1]{list}[0]{color});
+
+    xlog $self, "attempt to change color to unknown name";
+    $res = $jmap->CallMethods([['Calendar/set', {
+        update => {
+            $id => {
+                color => "foo"
+            }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "attempt to change color to bad hex value";
+    $res = $jmap->CallMethods([['Calendar/set', {
+        update => {
+            $id => {
+                color => "#foofoo"
+            }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "attempt to change color to 3 digit hex value";
+    $res = $jmap->CallMethods([['Calendar/set', {
+        update => {
+            $id => {
+                color => "#01a"
+            }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "attempt change color to 8 digit hex value";
+    $res = $jmap->CallMethods([['Calendar/set', {
+        update => {
+            $id => {
+                color => "#01aAfFF"
+            }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    xlog $self, "attempt to change color via an array";
+    $res = $jmap->CallMethods([['Calendar/set', {
+        update => {
+            $id => {
+                color => [ "steelblue" ]
+            }
+        }
+    }, "R1"]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+}
