@@ -27,6 +27,23 @@ sub test_calendar_set_color
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_str_equals('SteelBlue', $res->[1][1]{list}[0]{color});
 
+    xlog $self, "assert color is visible via CalDAV";
+    my $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<propfind xmlns="DAV:">
+  <prop>
+    <calendar-color xmlns="http://apple.com/ns/ical/"/>
+  </prop>
+</propfind>
+EOF
+
+    my $CalDAV = $self->{caldav};
+    $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $id,
+                            $propfindXml, 'Content-Type' => 'text/xml');
+    my $propstat = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('SteelBlue',
+                             $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'}{content});
+
     xlog $self, "update event with hex color value";
     $res = $jmap->CallMethods([
         ['Calendar/set', {

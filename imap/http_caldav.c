@@ -221,6 +221,9 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_tzid(xmlNodePtr prop, unsigned set,
                           struct proppatch_ctx *pctx,
                           struct propstat propstat[], void *rock);
+static int proppatch_color(xmlNodePtr prop, unsigned set,
+                           struct proppatch_ctx *pctx,
+                           struct propstat propstat[], void *rock);
 static int propfind_rscaleset(const xmlChar *name, xmlNsPtr ns,
                               struct propfind_ctx *fctx,
                               xmlNodePtr prop, xmlNodePtr resp,
@@ -512,6 +515,11 @@ static const struct prop_entry caldav_props[] = {
     { "supported-calendar-component-sets", NS_CALDAV,
       PROP_COLLECTION,
       propfind_calcompset, NULL, NULL },
+
+    /* Apple properties */
+    { "calendar-color", NS_APPLE,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_PERUSER,
+      propfind_fromdb, proppatch_color, NULL },
 
     /* Apple Calendar Server properties */
     { "getctag", NS_CS,
@@ -6854,6 +6862,44 @@ static int proppatch_tzid(xmlNodePtr prop, unsigned set,
         if (freeme) xmlFree(freeme);
 
         return 0;
+    }
+
+    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                 &propstat[PROPSTAT_FORBID], prop->name, prop->ns, NULL, 0);
+
+    *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
+
+/* Callback to write APPLE:calendar-color property */
+static int proppatch_color(xmlNodePtr prop, unsigned set,
+                          struct proppatch_ctx *pctx,
+                          struct propstat propstat[],
+                          void *rock __attribute__((unused)))
+{
+    if (pctx->txn->req_tgt.collection && !pctx->txn->req_tgt.resource) {
+        xmlChar *freeme = NULL;
+        const char *color = NULL;
+        bool valid = true;
+
+        if (set) {
+            freeme = xmlNodeGetContent(prop);
+            color = (const char *) freeme;
+
+            /* Verify we have a valid color name or 6-digit hex value */
+            if (!color || !ical_is_valid_color(color)) {
+                xmlFree(freeme);
+                valid = false;
+            }
+        }
+
+        if (valid) {
+            proppatch_todb(prop, set, pctx, propstat, (void *) color);
+            xmlFree(freeme);
+            return 0;
+        }
     }
 
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
