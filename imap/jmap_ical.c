@@ -8433,3 +8433,15 @@ HIDDEN void jmapical_remove_peruserprops(json_t *jevent)
         }
     }
 }
+
+HIDDEN json_t *jmapical_vcalendar_to_jsgroup(icalcomponent *ical)
+{
+    if (!ical || icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)
+        return NULL;
+
+    json_t *jgroup = json_pack("{s:s}", "@type", "Group");
+    json_object_set_new(jgroup, "entries",
+            jmapical_tojmap_all(ical, NULL, NULL));
+
+    return jgroup;
+}

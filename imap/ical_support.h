@@ -193,6 +193,8 @@ extern const char *icaltime_get_location_tzid(icaltimetype t);
 
 extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
 
+extern bool icaltimezone_is_builtin_timezone_tzid(const char *tzid);
+
 struct observance {
     const char *name;
     icaltimetype onset;

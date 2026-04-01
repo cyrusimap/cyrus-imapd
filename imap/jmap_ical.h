@@ -173,6 +173,9 @@ extern void jstimezones_free(jstimezones_t **jstzonesptr);
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
 icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
 
+/* for HTTP convert module */
+json_t *jmapical_vcalendar_to_jsgroup(icalcomponent *ical);
+
 /* Base type for JSCalendar LocalDateTime and UTCDateTime */
 
 struct jmapical_datetime {

@@ -19,6 +19,7 @@
 #include "charset.h"
 #include "global.h"
 #include "httpd.h"
+#include "jscalendar.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -126,6 +127,100 @@ static int convert_parse_path(const char *path, struct request_target_t *tgt,
     return 0;
 }
 
+static int convert_to_jscal(struct transaction_t *txn)
+{
+    icalcomponent *ical = NULL;
+    json_t *jsgroup = NULL;
+    char *resp_payload = NULL;
+    jscalendar_cfg_t jscal_cfg = {
+        .emailalert_default_uri = httpd_userid,
+    };
+    int ret = 0;
+
+    /* Parse the request body */
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body.payload));
+    if (!ical) {
+        txn->error.desc = "Could not parse iCalendar data";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    /* Convert to JSCalendar */
+    jsgroup = jscalendar_from_ical(&jscal_cfg, ical);
+    if (!jsgroup) {
+        txn->error.desc = "Failed to convert to JSCalendar";
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Write the response */
+    resp_payload = json_dumps(
+        jsgroup,
+        JSON_PRESERVE_ORDER |
+            (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT));
+    if (!resp_payload) {
+        txn->error.desc = "Error dumping JSON object";
+        ret = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    txn->resp_body.type = "application/jscalendar+json;type=group";
+    write_body(HTTP_OK, txn, resp_payload, strlen(resp_payload));
+
+done:
+    if (ical)
+        icalcomponent_free(ical);
+    json_decref(jsgroup);
+    free(resp_payload);
+    return ret;
+}
+
+static int convert_to_ical(struct transaction_t *txn)
+{
+    json_t *jobj = NULL;
+    icalcomponent *ical = NULL;
+    jscalendar_cfg_t jscal_cfg = {
+        .emailalert_default_uri = httpd_userid,
+    };
+    int ret = 0;
+
+    /* Parse the request body */
+    json_error_t jerr;
+    jobj = json_loads(buf_cstring(&txn->req_body.payload), 0, &jerr);
+    if (!jobj) {
+        txn->error.desc = "Could not parse JSON data";
+        ret = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    /* Validate JSCalendar data */
+    json_t *invalid = NULL;
+    jscalendar_validate(jobj, &invalid);
+    if (invalid) {
+        json_t *jerr = json_pack("{s:o}", "invalidProperties", invalid);
+        char *err = json_dumps(jerr, JSON_INDENT(2) | JSON_ENCODE_ANY);
+        write_body(HTTP_BAD_REQUEST, txn, err, strlen(err));
+        json_decref(jerr);
+        goto done;
+    }
+
+    /* Convert to iCalendar */
+    ical = jscalendar_to_ical(jobj, &jscal_cfg);
+    if (ical) {
+        const char *resp_payload = icalcomponent_as_ical_string(ical);
+        write_body(HTTP_OK, txn, resp_payload, strlen(resp_payload));
+    }
+    else {
+        txn->error.desc = "Failed to convert to iCalendar";
+        ret = HTTP_SERVER_ERROR;
+    }
+    json_decref(invalid);
+
+done:
+    if (ical) icalcomponent_free(ical);
+    json_decref(jobj);
+    return ret;
+}
+
 /* Perform a POST request */
 static int meth_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
@@ -138,6 +233,24 @@ static int meth_post(struct transaction_t *txn,
     if (!(txn->req_tgt.allow & ALLOW_POST))
         return HTTP_NOT_ALLOWED;
 
-    txn->error.desc = "This media type is not supported";
-    return HTTP_BAD_MEDIATYPE;
+    /* Read body */
+    ret = http_read_req_body(txn);
+    if (ret) {
+        txn->flags.conn = CONN_CLOSE;
+        return ret;
+    }
+
+    /* Parse the request body */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    if (hdr && is_mediatype("text/calendar", hdr[0])) {
+        return convert_to_jscal(txn);
+    }
+    else if (hdr && is_mediatype("application/jscalendar+json", hdr[0])) {
+        return convert_to_ical(txn);
+    }
+    else {
+        txn->error.desc = "This method requires a "
+                          "text/calendar or application/jscalendar+json body";
+        return HTTP_BAD_MEDIATYPE;
+    }
 }
