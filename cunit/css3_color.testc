@@ -1,21 +1,21 @@
 #include "cunit/unit.h"
 #include "imap/css3_color.h"
 
-extern const struct css3_color_t *css3_color_table(void);
+static int discover_cb(const css3_color_t *c, void *rock __attribute__((unused)))
+{
+    bool found = is_css3_color(c->name);
+
+    CU_ASSERT_EQUAL(found, true);
+
+    return 1;
+}
 
 static void test_all_colors_discoverable(void)
 {
-    const struct css3_color_t *table = css3_color_table();
-    const struct css3_color_t *c;
-
     /* Ensure every name defined in the table is recognised.  If this test
      * fails, the table might not be sorted correctly.
      */
-    for (c = table; c->name[0]; c++) {
-        bool found = is_css3_color(c->name);
-
-        CU_ASSERT_EQUAL(found, true);
-    }
+    css3_color_foreach(&discover_cb, NULL);
 }
 
 static void test_non_colors_arent(void)
@@ -59,6 +59,26 @@ static void test_case_insensitivity(void)
         bool actual = is_css3_color(tests[i].name);
 
         CU_ASSERT_EQUAL(actual, tests[i].expect);
+    }
+}
+
+static void test_closest_color(void)
+{
+    static const struct {
+        const char *hex;
+        const char *name;
+    } tests[] = {
+        { "#A0A0A0", "darkgrey" },
+        { "#663399", "rebeccapurple" }, // exact match
+        { "#D00000", "red" },
+    };
+    const unsigned n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        const char *name = css3_color_hex_to_name(tests[i].hex);
+
+        CU_ASSERT_STRING_EQUAL(name, tests[i].name);
     }
 }
 

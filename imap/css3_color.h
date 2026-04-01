@@ -10,7 +10,7 @@
 
 /* unit tests need to know this struct */
 #define CSS3_COLOR_T_NAME_LEN (29)
-struct css3_color_t {
+typedef struct {
     /* The longest current color name is "lightgoldenrodyellow" at 20 chars, so
      * name[] must be at least 21 bytes.  Rounding up to 29 makes this struct
      * 32 bytes wide, which gives us a neat 2 records per 64 byte cache line.
@@ -24,10 +24,12 @@ struct css3_color_t {
     uint8_t r;
     uint8_t g;
     uint8_t b;
-};
+} css3_color_t;
 
 extern const char *css3_color_hex_to_name(const char *hexstr);
 
 extern bool is_css3_color(const char *s);
+
+void css3_color_foreach(int (*cb)(const css3_color_t *c, void *rock), void *rock);
 
 #endif /* CSS3_COLOR_H */
