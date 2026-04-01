@@ -7,14 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "css3_color.h"
 #include "util.h"
-
-struct css3_color_t {
-    const char *name;
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-};
 
 static const struct css3_color_t css3_colors[] = {
     { "aliceblue",            240, 248, 255 },
@@ -220,11 +214,17 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
     return name;
 }
 
-EXPORTED int is_css3_color(const char *s)
+EXPORTED bool is_css3_color(const char *s)
 {
     const struct css3_color_t *c;
 
     for (c = css3_colors; c->name && strcasecmp(s, c->name); c++);
 
     return (c->name != NULL);
+}
+
+/* unit tests need to be able to see the table */
+HIDDEN const struct css3_color_t *css3_color_table(void)
+{
+    return css3_colors;
 }

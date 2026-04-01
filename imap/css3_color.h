@@ -5,8 +5,18 @@
 #ifndef CSS3_COLOR_H
 #define CSS3_COLOR_H
 
-const char *css3_color_hex_to_name(const char *hexstr);
+#include <stdbool.h>
 
-int is_css3_color(const char *s);
+/* unit tests need to know this struct */
+struct css3_color_t {
+    const char *name;
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
+};
+
+extern const char *css3_color_hex_to_name(const char *hexstr);
+
+extern bool is_css3_color(const char *s);
 
 #endif /* CSS3_COLOR_H */
