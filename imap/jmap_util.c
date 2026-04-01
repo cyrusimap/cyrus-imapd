@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -131,6 +132,11 @@ EXPORTED void jmap_patchobject_applym(json_t *dst,
 {
     const char *path;
     json_t *newval;
+
+    // TODO RFC 8620, Section 5.3 states:
+    // There MUST NOT be two patches in the PatchObject where the
+    // pointer of one is the prefix of the pointer of the other, e.g.,
+    // "alerts/1/offset" and "alerts".
 
     json_object_foreach(patch, path, newval) {
         /* Start traversal at root object */
@@ -495,7 +501,7 @@ HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
     bv_clear(&parser->is_encoded, strarray_size(&parser->path));
 }
 
-EXPORTED const char* jmap_parser_path(struct jmap_parser *parser)
+HIDDEN const char* jmap_parser_path(struct jmap_parser *parser)
 {
     int i;
     buf_reset(&parser->buf);
@@ -512,6 +518,21 @@ EXPORTED const char* jmap_parser_path(struct jmap_parser *parser)
         if ((i + 1) < parser->path.count) {
             buf_appendcstr(&parser->buf, "/");
         }
+    }
+
+    return buf_cstring(&parser->buf);
+}
+
+HIDDEN const char* jmap_parser_path_at(struct jmap_parser *parser, const char *subpath)
+{
+    // Build base path.
+    const char *base = jmap_parser_path(parser);
+    size_t base_len = buf_len(&parser->buf);
+
+    if (subpath) {
+        if (*subpath != '/' && base_len && base[base_len-1] != '/')
+            buf_putc(&parser->buf, '/');
+        buf_appendcstr(&parser->buf, subpath);
     }
 
     return buf_cstring(&parser->buf);
@@ -1537,4 +1558,3 @@ EXPORTED int jmap_is_valid_id(const char *id)
     }
     return 1;
 }
-

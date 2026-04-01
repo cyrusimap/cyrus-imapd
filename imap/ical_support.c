@@ -202,6 +202,12 @@ icalproperty_get_datetimeperiod(icalproperty *prop)
     return ret;
 }
 
+EXPORTED bool icaltimezone_is_builtin_timezone_tzid(const char *tzid)
+{
+    return icaltimezone_get_builtin_timezone(tzid) != NULL
+           || icaltimezone_get_builtin_timezone_from_tzid(tzid) != NULL;
+}
+
 EXPORTED icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid)
 {
     if (!tzid)
