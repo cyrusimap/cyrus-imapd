@@ -1,6 +1,6 @@
 Name: httpmodules
 Type: BITFIELD
-Allowed-Values: admin caldav carddav cgi domainkey freebusy ischedule
+Allowed-Values: admin caldav carddav convert cgi domainkey freebusy ischedule
  jmap prometheus rss tzdist webdav
 Default-Value:
 Last-Modified: 3.1.7
