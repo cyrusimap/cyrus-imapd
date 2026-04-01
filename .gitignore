@@ -76,6 +76,7 @@ imap/arbitron
 imap/backupcyrusd
 imap/calalarmd
 imap/chk_cyrus
+imap/css3_color_array.h
 imap/ctl_conversationsdb
 imap/ctl_cyrusdb
 imap/ctl_deliver
