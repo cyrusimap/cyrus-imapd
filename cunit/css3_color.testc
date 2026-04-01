@@ -8,8 +8,10 @@ static void test_all_colors_discoverable(void)
     const struct css3_color_t *table = css3_color_table();
     const struct css3_color_t *c;
 
-    /* Ensure every name defined in the table is recognised. */
-    for (c = table; c->name; c++) {
+    /* Ensure every name defined in the table is recognised.  If this test
+     * fails, the table might not be sorted correctly.
+     */
+    for (c = table; c->name[0]; c++) {
         bool found = is_css3_color(c->name);
 
         CU_ASSERT_EQUAL(found, true);
