@@ -1256,6 +1256,7 @@ imap_httpd_SOURCES = \
     imap/http_carddav.c \
     imap/http_carddav.h \
     imap/http_cgi.c \
+    imap/http_convert.c \
     imap/http_dav.c \
     imap/http_dav.h \
     imap/http_dav_sharing.c \

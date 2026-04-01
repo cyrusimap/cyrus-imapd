@@ -1127,7 +1127,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Space-separated list of HTTP header fields that will be included
    in the requests logged by httpd(8). */
 
-{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "cgi", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav"), "3.1.7" }
+{ "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "cgi", "convert", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav"), "3.1.7" }
 /* Space-separated list of HTTP modules that will be enabled in
    httpd(8).  This option has no effect on modules that are disabled
    at compile time due to missing dependencies (e.g. libical).

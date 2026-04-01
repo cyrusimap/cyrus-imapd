@@ -548,6 +548,7 @@ static struct namespace_t namespace_default = {
 struct namespace_t *http_namespaces[] = {
 #ifdef WITH_JMAP
     &namespace_jmap,
+    &namespace_convert,
 #endif
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
 #ifdef WITH_DAV
