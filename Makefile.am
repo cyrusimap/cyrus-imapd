@@ -1175,7 +1175,7 @@ imap_lmtpd_SOURCES = \
 
 nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
 
-imap_lmtpd_CFLAGS = -DBUILD_LMTPD $(CFLAGS)
+imap_lmtpd_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) -DBUILD_LMTPD
 
 if AUTOCREATE
 imap_lmtpd_SOURCES += \
