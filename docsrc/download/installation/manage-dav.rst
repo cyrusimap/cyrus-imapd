@@ -87,6 +87,7 @@ Module-specific information
     http/webdav
     http/jmap
     http/rss
+    http/convert
 
 For end users
 =============

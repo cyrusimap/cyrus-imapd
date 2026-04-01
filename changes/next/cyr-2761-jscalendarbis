@@ -1,0 +1,23 @@
+Description:
+
+Added a new experimental httpd module "convert" that converts between
+media types for selected content types. Initially it only converts between
+iCalendar and JSCalendar, according to the definition of the IETF draft
+draft-ietf-calext-jscalendar-icalendar. This module is not meant for
+production use and is not enabled by default.
+
+Documentation:
+
+docsrc/download/installation/http/convert.rst
+
+Config changes:
+
+New value "convert" for the httpmodules option.
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None

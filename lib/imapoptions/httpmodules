@@ -1,6 +1,6 @@
 Name: httpmodules
 Type: BITFIELD
-Allowed-Values: admin caldav carddav cgi domainkey freebusy ischedule
+Allowed-Values: admin caldav carddav convert cgi domainkey freebusy ischedule
  jmap prometheus rss tzdist webdav
 Default-Value:
 Last-Modified: 3.1.7
@@ -11,3 +11,5 @@ disabled at compile time due to missing dependencies (e.g. libical).
 
 Note that "domainkey" depends on "ischedule" being enabled, and that both
 "freebusy" and "ischedule" depend on "caldav" being enabled.
+
+The "convert" module is experimental and is not meant for production use.
