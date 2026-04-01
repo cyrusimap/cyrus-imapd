@@ -11,6 +11,7 @@
 #include "util.h"
 
 static const struct css3_color_t css3_colors[] = {
+    /* must be sorted by name */
     { "aliceblue",            240, 248, 255 },
     { "antiquewhite",         250, 235, 215 },
     { "aqua",                   0, 255, 255 },
@@ -159,7 +160,7 @@ static const struct css3_color_t css3_colors[] = {
     { "whitesmoke",           245, 245, 245 },
     { "yellow",               255, 255,   0 },
     { "yellowgreen",          154, 205,  50 },
-    { NULL,                     0,   0,   0 }
+    { "",                       0,   0,   0 }
 };
 
 /* Take a hex value for a color and find best matching css3 color name using:
@@ -190,7 +191,7 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
     unsigned long best = ULONG_MAX;
     const char *name = NULL;
 
-    for (css = css3_colors; css->name; css++) {
+    for (css = css3_colors; css->name[0]; css++) {
         int dR = css->r - C.r;
         int dG = css->g - C.g;
         int dB = css->b - C.b;
@@ -218,9 +219,15 @@ EXPORTED bool is_css3_color(const char *s)
 {
     const struct css3_color_t *c;
 
-    for (c = css3_colors; c->name && strcasecmp(s, c->name); c++);
+    for (c = css3_colors;
+         c->name[0] && c->name[0] <= s[0];
+         c++)
+    {
+        if (0 == strcasecmp(s, c->name))
+            return true;
+    }
 
-    return (c->name != NULL);
+    return false;
 }
 
 /* unit tests need to be able to see the table */
