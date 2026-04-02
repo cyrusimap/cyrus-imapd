@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+# When a vCard property is stored with an Apple-style group prefix
+# (e.g. ITEM1.ORG:Company), updating that property via ContactCard/set
+# should preserve the group prefix in the underlying vCard rather than
+# rewriting it as a bare ORG property and losing the label association.
+sub test_card_set_update_grouped_property
+    :min_version_3_9
+    ($self)
+{
+    my $user    = $self->default_user;
+    my $jmap    = $user->jmap;
+    my $carddav = $user->carddav;
+
+    my $id   = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$id.vcf";
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:$id
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+ITEM1.ORG:Bubba Gump Shrimp Co.
+ITEM1.X-ABLABEL:
+TITLE:Shrimp Man
+REV:2008-04-24T19:52:43Z
+END:VCARD
+EOF
+
+    $card =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', $href, $card, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "read card and find the org property id assigned by server";
+    my $res = $jmap->request([
+        ['ContactCard/get', {
+            properties => ['organizations'],
+        }, 'R1'],
+    ]);
+    my $jmap_card = $res->single_sentence->arguments->{list}[0];
+    my $orgs = $jmap_card->{organizations};
+    my ($org_id) = keys %$orgs;
+    $self->assert_not_null($org_id);
+    $self->assert_str_equals('Bubba Gump Shrimp Co.', $orgs->{$org_id}{name});
+    my $card_id = $jmap_card->{id};
+
+    xlog $self, "update org name via ContactCard/set";
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            update => {
+                $card_id => {
+                    "organizations/$org_id/name" => 'BGSCO',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null(
+        $res->assert_single_successful_set('ContactCard/set')->updated->{$card_id}
+    );
+
+    xlog $self, "fetch raw vCard and verify group prefix is preserved";
+    my $got     = $carddav->Request('GET', $href);
+    my $newcard = $got->{content};
+    $newcard =~ s/\r?\n[ \t]+//gs;    # unfold long properties
+
+    $self->assert_matches(qr/\n\w+\.ORG[^:]*:BGSCO/, $newcard);
+    $self->assert_does_not_match(qr/\nORG[;:]/, $newcard);
+}

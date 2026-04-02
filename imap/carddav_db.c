@@ -1115,109 +1115,11 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     return r;
 }
 
-EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
-                               struct carddav_data *cdata,
-                               struct vparse_card *vcard,
-                               int ispinned)
-{
-    struct vparse_entry *ventry;
-
-    struct buf nicknames = BUF_INITIALIZER;
-    strarray_t values = STRARRAY_INITIALIZER;
-    strarray_t emails = STRARRAY_INITIALIZER;
-    strarray_t member_uids = STRARRAY_INITIALIZER;
-
-    for (ventry = vcard->properties; ventry; ventry = ventry->next) {
-        const char *name = ventry->name;
-        if (!name) continue;
-
-        char *propval = vparse_get_value(ventry);
-        if (!propval) continue;
-
-        if (!strcasecmp(name, "uid")) {
-            cdata->vcard_uid = propval;
-            strarray_appendm(&values, propval);
-            propval = NULL;
-        }
-        else if (!strcasecmp(name, "n")) {
-            cdata->name = propval;
-            strarray_appendm(&values, propval);
-            propval = NULL;
-        }
-        else if (!strcasecmp(name, "fn")) {
-            cdata->fullname = propval;
-            strarray_appendm(&values, propval);
-            propval = NULL;
-        }
-        else if (!strcasecmp(name, "nickname")) {
-            if (buf_len(&nicknames)) buf_putc(&nicknames, ',');
-            buf_appendcstr(&nicknames, propval);
-            cdata->nickname = buf_cstring(&nicknames);
-        }
-        else if (!strcasecmp(name, "email")) {
-            /* XXX - insert if primary */
-            int ispref = 0;
-            struct vparse_param *param;
-            for (param = ventry->params; param; param = param->next) {
-                if (!strcasecmp(param->name, "type") &&
-                    !strcasecmp(param->value, "pref"))
-                    ispref = 1;
-            }
-            strarray_appendm(&emails, propval);
-            strarray_append(&emails, ispref ? "1" : "");
-            propval = NULL;
-        }
-        else if (!strcasecmp(name, "member") ||
-                 !strcasecmp(name, "x-addressbookserver-member")) {
-            if (!strncmp(propval, VCARD_MEMBER_URI_PREFIX,
-                         VCARD_MEMBER_URI_PREFIX_LEN)) {
-                strarray_append(&member_uids,
-                                propval + VCARD_MEMBER_URI_PREFIX_LEN);
-                strarray_append(&member_uids, "");
-            }
-        }
-        else if (!strcasecmp(name, "x-fm-otheraccount-member")) {
-            if (!strncmp(propval, VCARD_MEMBER_URI_PREFIX,
-                         VCARD_MEMBER_URI_PREFIX_LEN)) {
-                struct vparse_param *param = vparse_get_param(ventry, "userid");
-                if (param) {
-                    strarray_append(&member_uids,
-                                    propval + VCARD_MEMBER_URI_PREFIX_LEN);
-                    strarray_append(&member_uids, param->value);
-                }
-            }
-        }
-        else if (!strcasecmp(name, "kind") ||
-                 !strcasecmp(name, "x-addressbookserver-kind")) {
-            if (!strcasecmp(propval, "group"))
-                cdata->kind = CARDDAV_KIND_GROUP;
-            /* default case is CARDDAV_KIND_CONTACT */
-        }
-        else if (!strcasecmp(name, "version")) {
-            cdata->version = propval[0] - '0';
-        }
-
-        free(propval);
-    }
-
-    int r = carddav_write(carddavdb, cdata);
-    if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails, ispinned);
-    if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
-
-    buf_free(&nicknames);
-    strarray_fini(&values);
-    strarray_fini(&emails);
-    strarray_fini(&member_uids);
-
-    return r;
-}
-
-static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
-                          const char *uid, const char *fullname,
-                          const char *resource, modseq_t createdmodseq,
-                          strarray_t *flags, struct entryattlist **annots,
-                          const char *userid, struct auth_state *authstate,
-                          int ignorequota, uint32_t oldsize)
+EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
+                           const char *resource, modseq_t createdmodseq,
+                           struct entryattlist **annots,
+                           const char *userid, struct auth_state *authstate,
+                           int ignorequota, uint32_t oldsize)
 {
     int r = 0;
     FILE *f = NULL;
@@ -1230,6 +1132,13 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     char datestr[80];
     static int64_t vcard_max_size = -1;
     char *mbuserid = NULL;
+
+    /* get important properties */
+    const char *uid = vcardcomponent_get_uid(vcard);
+    const char *fullname = vcardcomponent_get_fn(vcard);
+
+    /* serialize the card */
+    struct buf *buf = vcard_as_buf(vcard);
 
     if (vcard_max_size < 0) {
         vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
@@ -1251,7 +1160,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     if (oldsize > max_size) {
         max_size += CARDDAV_UPDATE_OVERAGE;
     }
-    if (buf_len(vcard) > max_size) {
+    if (buf_len(buf) > max_size) {
         fclose(f);
         r = IMAP_MESSAGE_TOO_LARGE;
         goto done;
@@ -1282,7 +1191,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     fprintf(f, "Content-Type: text/vcard; charset=utf-8\r\n");
 
-    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(vcard));
+    fprintf(f, "Content-Length: %u\r\n", (unsigned)buf_len(buf));
 
     /* Since we use the vCard UID in the resource name,
        this param may be long and needs to get properly split per RFC 2231 */
@@ -1303,7 +1212,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
     fprintf(f, "\r\n");
 
     /* Write the vCard data to the file */
-    fprintf(f, "%s", buf_cstring(vcard));
+    fprintf(f, "%s", buf_cstring(buf));
 
     if (fflush(f) || ferror(f) || fdatasync(fileno(f))) {
         syslog(LOG_ERR, "IOERROR: append_setup(%s) failed: %s",
@@ -1328,7 +1237,7 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, &now, createdmodseq, flags, 0, annots);
+    r = append_fromstage(&as, &body, stage, &now, createdmodseq, NULL, 0, annots);
     if (body) {
         message_free_body(body);
         free(body);
@@ -1349,38 +1258,9 @@ static int _carddav_store(struct mailbox *mailbox, struct buf *vcard,
 
 done:
     append_removestage(stage);
+    buf_destroy(buf);
     free(freeme);
     free(mbuserid);
-    return r;
-}
-
-EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                           const char *resource, modseq_t createdmodseq,
-                           strarray_t *flags, struct entryattlist **annots,
-                           const char *userid, struct auth_state *authstate,
-                           int ignorequota, uint32_t oldsize)
-{
-    time_t now = time(0);
-    char datestr[80];
-
-    /* set the REVision time */
-    time_to_iso8601(now, datestr, sizeof(datestr), 0);
-    vparse_replace_entry(vcard, NULL, "REV", datestr);
-
-    /* get important properties */
-    const char *uid = vparse_stringval(vcard, "uid");
-    const char *fullname = vparse_stringval(vcard, "fn");
-
-    /* serialize the card */
-    struct buf buf = BUF_INITIALIZER;
-    vparse_tobuf(vcard, &buf);
-
-    int r = _carddav_store(mailbox, &buf, uid, fullname,
-                           resource, createdmodseq, flags, annots,
-                           userid, authstate, ignorequota, oldsize);
-
-    buf_free(&buf);
-
     return r;
 }
 
@@ -1439,10 +1319,10 @@ EXPORTED char *carddav_mboxname(const char *userid, const char *name)
     return res;
 }
 
-EXPORTED int carddav_writecard_x(struct carddav_db *carddavdb,
-                                 struct carddav_data *cdata,
-                                 vcardcomponent *vcard,
-                                 int ispinned)
+EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
+                               struct carddav_data *cdata,
+                               vcardcomponent *vcard,
+                               int ispinned)
 {
     struct buf nicknames = BUF_INITIALIZER;
     strarray_t values = STRARRAY_INITIALIZER;
@@ -1621,28 +1501,6 @@ done:
     strarray_fini(&emails);
     strarray_fini(&member_uids);
     free(propval);
-
-    return r;
-}
-
-EXPORTED int carddav_store_x(struct mailbox *mailbox, vcardcomponent *vcard,
-                             const char *resource, modseq_t createdmodseq,
-                             struct entryattlist **annots,
-                             const char *userid, struct auth_state *authstate,
-                             int ignorequota, uint32_t oldsize)
-{
-    /* get important properties */
-    const char *uid = vcardcomponent_get_uid(vcard);
-    const char *fullname = vcardcomponent_get_fn(vcard);
-
-    /* serialize the card */
-    struct buf *buf = vcard_as_buf_x(vcard);
-
-    int r = _carddav_store(mailbox, buf, uid, fullname,
-                           resource, createdmodseq, NULL, annots,
-                           userid, authstate, ignorequota, oldsize);
-
-    buf_destroy(buf);
 
     return r;
 }

@@ -670,7 +670,6 @@ cunit_TESTS += \
     cunit/stristr.testc \
     cunit/times.testc \
     cunit/tok.testc \
-    cunit/vparse.testc \
     cunit/dynarray.testc \
     cunit/xsha1.testc
 
@@ -850,7 +849,6 @@ noinst_HEADERS += \
     lib/sessionid.h \
     lib/slowio.h \
     lib/util.h \
-    lib/vparse.h \
     lib/xstrlcat.h \
     lib/xstrlcpy.h \
     lib/xstrnchr.h
@@ -1320,10 +1318,6 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_contact_addressbook_props.h \
     imap/jmap_contact_card_props.c \
     imap/jmap_contact_card_props.h \
-    imap/jmap_contact_group_props.c \
-    imap/jmap_contact_group_props.h \
-    imap/jmap_contact_props.c \
-    imap/jmap_contact_props.h \
     imap/jmap_core_usercounters_props.c \
     imap/jmap_core_usercounters_props.h \
     imap/jmap_mailbox_props.c \
@@ -1401,8 +1395,6 @@ imap_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_calendar_share_notification_props.gperf \
     imap/jmap_contact_addressbook_props.gperf \
     imap/jmap_contact_card_props.gperf \
-    imap/jmap_contact_group_props.gperf \
-    imap/jmap_contact_props.gperf \
     imap/jmap_core_usercounters_props.gperf \
     imap/jmap_mail_props.gperf \
     imap/jmap_mail_submission_identity_props.gperf \
@@ -1658,7 +1650,6 @@ lib_libcyrus_min_la_SOURCES = \
     lib/strhash.c \
     lib/tok.c \
     lib/util.c \
-    lib/vparse.c \
     lib/xmalloc.c \
     lib/xstrlcat.c \
     lib/xstrlcpy.c \

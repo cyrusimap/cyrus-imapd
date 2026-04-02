@@ -4680,7 +4680,7 @@ static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
         vcardbuf = raw;
     }
 
-    vcard = vcard_parse_string_x(buf_cstring(vcardbuf));
+    vcard = vcard_parse_string(buf_cstring(vcardbuf));
     if (!vcard) {
         r = IMAP_INTERNAL;
         goto done;
