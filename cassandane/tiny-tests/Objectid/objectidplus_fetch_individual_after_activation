@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that individual EMAILID/THREADID FETCH items still work
+# in RFC 8474 format after OBJECTID+ has been activated
+#
+sub test_objectidplus_fetch_individual_after_activation
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    my $msgA = $self->make_message("Test message A");
+    $self->make_message("Re: Test message A",
+                        references => [ $msgA ]);
+
+    $talk->select('INBOX');
+
+    # activate OBJECTID+
+    $talk->enable('objectid+');
+
+    # individual EMAILID should still return parenthesized format
+    my $fetch1 = $talk->fetch('1', '(emailid)');
+    $self->assert_not_null($fetch1->{1}{emailid});
+
+    # individual THREADID should still return parenthesized format
+    my $fetch2 = $talk->fetch('1', '(threadid)');
+    $self->assert_not_null($fetch2->{1}{threadid});
+
+    # compound OBJECTID should also work
+    my $fetch3 = $talk->fetch('1', '(objectid)');
+    $self->assert_not_null($fetch3->{1}{objectid});
+
+    # both individual and compound in same request
+    my $fetch4 = $talk->fetch('1', '(emailid threadid objectid)');
+    $self->assert_not_null($fetch4->{1}{emailid});
+    $self->assert_not_null($fetch4->{1}{threadid});
+    $self->assert_not_null($fetch4->{1}{objectid});
+}

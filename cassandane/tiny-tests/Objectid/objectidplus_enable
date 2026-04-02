@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test OBJECTID+ activation via ENABLE
+#
+sub test_objectidplus_enable
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+
+    # explicit ENABLE
+    $talk->enable('objectid+');
+
+    # now STATUS OBJECTID should work
+    my $status = $talk->status('foo', "(objectid)");
+    $self->assert_not_null($status->{objectid});
+}
