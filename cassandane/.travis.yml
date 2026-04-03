@@ -45,7 +45,6 @@ install:
 - cpanm --notest Test::Unit
 - cpanm --notest Text::LevenshteinXS
 - cpanm --notest Text::VCardFast
-- cpanm --notest Tie::DataUUID
 - cpanm --notest Unix::Syslog
 - cpanm --notest XML::DOM
 - cpanm --notest XML::Fast

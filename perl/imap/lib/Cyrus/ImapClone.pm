@@ -10,7 +10,7 @@ use Cyrus::SyncProto;
 use Mail::IMAPTalk;
 use Data::Dumper;
 use Digest::SHA qw(sha1_hex);
-use Tie::DataUUID qw($uuid);
+use Data::UUID;
 use IO::Socket::SSL;
 use JSON::XS;
 use IO::File;
@@ -198,7 +198,7 @@ sub syncmailbox {
       SYNC_CRC => 0,
       SYNC_ANNOT_CRC => 0,
       UIDVALIDITY => $idata{UIDVALIDITY},
-      UNIQUEID => $uuid,
+      UNIQUEID => Data::UUID->new->create_str(),
     );
 
     push @{$Self->{userdata}{MAILBOX}}, \%mb;
