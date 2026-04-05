@@ -75,7 +75,7 @@ EOF
             event => {
                 participants => {
                     'othercas@example.com' => {
-                        'scheduleStatus' => 'accepted',
+                        'participationStatus' => 'accepted',
                         'email' => 'othercas@example.com',
                     },
                 },

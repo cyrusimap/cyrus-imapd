@@ -116,6 +116,6 @@ EOF
 
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_equals(JSON::null,
-                         $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'});
+    $self->assert_equals(JSON::true,
+                         $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'}{excluded});
 }

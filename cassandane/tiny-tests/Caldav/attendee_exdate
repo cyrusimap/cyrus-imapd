@@ -34,7 +34,7 @@ EOF
                 event => {
                     uid => $uuid,
                     replyTo => { imip => "mailto:test1\@example.com" },
-                    recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
+                    recurrenceOverrides => { '2016-06-08T15:30:00' => { excluded => JSON::true } },
                 },
             },
         );

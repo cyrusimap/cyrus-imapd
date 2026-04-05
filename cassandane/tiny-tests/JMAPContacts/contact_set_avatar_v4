@@ -54,10 +54,10 @@ EOF
     xlog $self, "Get vCard over CardDAV as version 4.0";
     $res = $carddav->Request('GET', $href, undef,
         "Accept" => "text/vcard; version=4.0");
-    my $vcard = Net::CardDAVTalk::VCard->new_fromstring($res->{content});
-    my $photo = $vcard->{properties}->{photo}->[0] // undef;
-    $self->assert(not $photo->{binary});
-    $self->assert_equals("data:image/gif;base64,", substr($photo->{value}, 0, 22));
+    my $jscard = vcard_to_jscontact($res->{content});
+    my ($photo) = grep { ($_->{kind} // '') eq 'photo' } values %{$jscard->{media} // {}};
+    $self->assert_not_null($photo);
+    $self->assert_equals("data:image/gif;base64,", substr($photo->{uri}, 0, 22));
 
     xlog $self, "Assert avatar blob contents";
     $data = $jmap->Download('cassandane', $avatarBlobId);

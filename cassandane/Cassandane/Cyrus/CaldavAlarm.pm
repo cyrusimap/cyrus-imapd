@@ -7,7 +7,7 @@ use warnings;
 use DateTime;
 use DateTime::Format::ISO8601;
 use JSON::XS;
-use Net::CalDAVTalk 0.05;
+use Net::CalDAVTalk 0.14;
 use Data::Dumper;
 use POSIX;
 use Carp;

@@ -9,7 +9,7 @@ sub test_addressbook_query_address_data ($self)
 
     my $uid = guid_string();
 
-    my $vcard = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid

@@ -95,9 +95,9 @@ EOF
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('accepted',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
 
 
     my $imip = <<'EOF';
@@ -192,21 +192,21 @@ EOF
     $self->assert_str_equals($uuid, $events->[0]{uid});
     # top level is not updated
     $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('accepted',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
     # particular recurrence is
     my $recur = '2023-06-29T09:00:00';
 
     $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{$recur}{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('tentative',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{$recur}{participants}, 'foo@example.net')->{participationStatus});
     # particular recurrence is
     $recur = '2023-06-30T09:00:00';
 
     $self->assert_str_equals('Emerson Leaf',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{$recur}{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('tentative',
-                             $events->[0]{recurrenceOverrides}{$recur}{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{recurrenceOverrides}{$recur}{participants}, 'foo@example.net')->{participationStatus});
 }

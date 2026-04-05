@@ -56,9 +56,9 @@ EOF
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('',
-                             $events->[0]{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('needs-action',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
 
 
     my $imip = <<EOF;
@@ -97,7 +97,7 @@ EOF
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
     $self->assert_str_equals('Test User',
-                             $events->[0]{participants}{'foo@example.net'}{name});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{name});
     $self->assert_str_equals('accepted',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+                             Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'foo@example.net')->{participationStatus});
 }

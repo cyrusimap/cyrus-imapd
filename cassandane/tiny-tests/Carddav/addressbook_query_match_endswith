@@ -10,7 +10,7 @@ sub test_addressbook_query_match_endswith ($self)
     my $uid1 = guid_string();
     my $uid2 = guid_string();
 
-    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard1 = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid1
@@ -19,7 +19,7 @@ sub test_addressbook_query_match_endswith ($self)
         END:VCARD
         EOF
 
-    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard2 = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid2

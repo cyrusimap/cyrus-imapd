@@ -6,7 +6,7 @@ use v5.28.0; # strict, indented here-docs, stable sig/attr ordering
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CalDAVTalk 0.12;
+use Net::CalDAVTalk 0.14;
 use Net::DAVTalk::XMLParser;
 use File::Basename;
 use Data::Dumper;
@@ -156,12 +156,24 @@ sub _all_keys_match
 
     if ($ref eq 'HASH') {
         foreach my $key (keys %$a) {
-            unless (exists $b->{$key}) {
-                push @$errors, "no key $key";
-                return 0;
+            my $bval;
+            if (exists $b->{$key}) {
+                $bval = $b->{$key};
+            }
+            else {
+                # participant keys are opaque IDs in new JSCalendar;
+                # look up by email field when the key isn't found directly
+                my ($found) = grep {
+                    ref $_ eq 'HASH' && ($_ ->{email} // '') eq $key
+                } values %$b;
+                unless ($found) {
+                    push @$errors, "no key $key";
+                    return 0;
+                }
+                $bval = $found;
             }
             my @err;
-            unless (_all_keys_match($a->{$key}, $b->{$key}, \@err)) {
+            unless (_all_keys_match($a->{$key}, $bval, \@err)) {
                 push @$errors, "mismatch for $key: @err";
                 return 0;
             }

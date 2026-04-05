@@ -23,6 +23,17 @@ Cassandane needs the following software to work:
     Similar idea to Mail::IMAPTalk, but for JMAP/DAV/CalDAV/CardDAV
     respectively.  These are all available on CPAN.
 
+ * Text::JSCalendar
+    Bidirectional iCalendar <=> JSCalendar conversion.
+    Used by Net::CalDAVTalk for format conversion.
+    Available on CPAN.
+
+ * Text::JSContact
+    Bidirectional vCard <=> JSContact conversion.
+    Used by Net::CardDAVTalk for format conversion, and
+    directly by some Cassandane tests.
+    Available on CPAN.
+
  * Encode::IMAPUTF7
     Needed by Mail::IMAPTalk
     CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
@@ -171,6 +182,7 @@ Debian/Ubuntu copypasta:
        libemail-mime-perl
 
   sudo cpan Math::Int64 Mail::IMAPTalk \
+       Text::JSCalendar Text::JSContact \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32 \
        IO::File::Lockable Archive::Tar::Stream Test::Unit
 
@@ -184,7 +196,7 @@ Fedora copypasta:
         perl-NNTPClient perl-IO-Socket-INET6 perl-Net-Server \
         perl-Unix-Syslog perl-File-chdir perl-Math-Int64 \
         perl-Mail-IMAPTalk perl-String-CRC32 perl-File-chdir \
-        perl-Unix-Syslog perl-Net-Server perl-Net-CalDAVTalk \
-        perl-Net-CardDAVTalk perl-AnyEvent \
+        perl-Unix-Syslog perl-Net-Server \
+        perl-Net-CalDAVTalk perl-Net-CardDAVTalk perl-AnyEvent \
         perl-File-Slurp perl-Pod-POM perl-experimental
 

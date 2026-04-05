@@ -32,7 +32,7 @@ sub test_sharing_contactpaths
     );
 
     $talk2->NewAddressBook("Shared", name => "Shared Address Book");
-    my $VCard = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $VCard = vcard_to_jscontact(<<EOF);
 BEGIN:VCARD
 VERSION:3.0
 N:Gump;Forrest;;Mr.

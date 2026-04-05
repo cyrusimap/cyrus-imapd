@@ -12,7 +12,7 @@ sub test_addressbook_query_filter_allof ($self)
     my $uid3 = guid_string();
 
     # FN contains "Alice", no NICKNAME -> matches both prop-filters
-    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard1 = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid1
@@ -22,7 +22,7 @@ sub test_addressbook_query_filter_allof ($self)
         EOF
 
     # FN contains "Alice", has NICKNAME -> matches first prop-filter only
-    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard2 = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid2
@@ -33,7 +33,7 @@ sub test_addressbook_query_filter_allof ($self)
         EOF
 
     # FN does not contain "Alice", no NICKNAME -> matches second prop-filter only
-    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<~"EOF");
+    my $vcard3 = vcard_to_jscontact(<<~"EOF");
         BEGIN:VCARD
         VERSION:3.0
         UID:$uid3
