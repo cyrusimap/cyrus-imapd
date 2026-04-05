@@ -51,11 +51,11 @@ my $acapserver = $ARGV[0];
 my $filehandle;
 my $interactive;
 
-if (! $exfile eq "") {
+if ($exfile ne "") {
     open(FILEH,"<$exfile") || die "unable to open file: $?";
     $filehandle = *FILEH;
     $interactive = 0;
-} elsif (! $ex eq "") {
+} elsif ($ex ne "") {
     $filehandle = tempfile();
 
     if (!$filehandle) { die "unable to open tmp file: $?"; }
