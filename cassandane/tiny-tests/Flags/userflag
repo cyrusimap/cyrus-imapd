@@ -11,10 +11,8 @@ use Cassandane::Tiny;
 # This is basically the same test as for \Flagged but with a user flag,
 # which is an entirely different code path in the server.
 #
-sub test_userflag
+sub test_userflag ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

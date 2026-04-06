@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_move_to_backend_nonexistent
+sub test_move_to_backend_nonexistent ($self)
 {
-    my ($self) = @_;
-
     my $dest_folder = 'INBOX.dest';
 
     # put some messages into the INBOX

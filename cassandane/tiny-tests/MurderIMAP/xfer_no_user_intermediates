@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_xfer_no_user_intermediates
     :AllowMoves :AltNamespace :UnixHierarchySep
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
-
     # set up some data for cassandane on backend1
     my $expected = $self->populate_user(
         $self->{instance},

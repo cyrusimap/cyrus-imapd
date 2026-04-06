@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #
 # Test a single program in SERVICES which fails during startup
 #
-sub test_service_exit_during_start
+sub test_service_exit_during_start ($self)
 {
-    my ($self) = @_;
     my $lemm;
 
     xlog $self, "single service will exit during startup";

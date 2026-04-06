@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_autocreate_specialuse
      :min_version_3_0 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $svc = $self->{instance}->get_service('imap');
     my $store = $svc->create_store(username => 'foo');
     my $talk = $store->get_client();

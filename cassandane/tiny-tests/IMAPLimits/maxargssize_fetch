@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxargssize_fetch
+sub test_maxargssize_fetch ($self)
 {
-    my ($self) = @_;
-
     $self->assert_cmd_bye_toobig('FETCH', '1',
                                  [ 'BODY', 'ENVELOPE', 'FLAGS',
                                    'INTERNALDATE', 'RFC822.SIZE' ]);

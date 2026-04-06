@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_autocreate_sieve_script_generation
     :min_version_3_0 :needs_component_sieve
+    ($self)
 {
-    my ($self) = @_;
-
     my $basedir = $self->{instance}->get_basedir();
     my $sieve_script_path = $basedir . "/conf/foo_sieve.script";
     my $hitfolder = "INBOX.NewFolder";

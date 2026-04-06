@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxargssize_status
+sub test_maxargssize_status ($self)
 {
-    my ($self) = @_;
-
     $self->assert_cmd_bye_toobig('STATUS', 'INBOX',
                                  [ 'MESSAGES', 'UIDNEXT',
                                    'UIDVALIDITY', 'UNSEEN', 'SIZE' ] );

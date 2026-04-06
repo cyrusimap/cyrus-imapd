@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_admin_inbox_imm
     :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
     :needs_component_httpd
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing that an admin can delete the INBOX of a user";
     xlog $self, "and it will delete the whole user, immediate delete version";
 

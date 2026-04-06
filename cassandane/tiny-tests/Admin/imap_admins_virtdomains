@@ -2,10 +2,9 @@
 use Cassandane::Tiny;
 
 #Magic word virtdomains in name sets config virtdomains = userid
-sub test_imap_admins_virtdomains
+sub test_imap_admins_virtdomains ($self)
 {
     # test whether the imap_admins setting works correctly under virtdomains
-    my ($self) = @_;
 
     my $domainadmin = 'admin@uhoh.org';
     my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')

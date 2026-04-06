@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_rename_user_sieve
     :AllowMoves :Replication :SyncLog :needs_component_sieve
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test user rename with Sieve script";
 
     my $user = 'cassandane';

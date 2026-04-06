@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_flags_before_exists
+sub test_fetch_flags_before_exists ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 

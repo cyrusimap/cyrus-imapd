@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_preview_args
     :min_version_3_5 :Conversations
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     # make a message

@@ -5,8 +5,8 @@ use Cassandane::Tiny;
 # XXX backport the fix we should change or remove the gate...
 sub test_simple
     :SearchEngineSquat :min_version_3_4
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
 
     $self->make_message("term2", body => "term1") || die;

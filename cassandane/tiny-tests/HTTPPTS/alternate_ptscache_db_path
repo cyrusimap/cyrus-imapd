@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_alternate_ptscache_db_path
     :min_version_3_7 :AltPTSDBPath
+    ($self)
 {
-    my ($self) = @_;
-
     # just interact with the store, and it should work
     my $admintalk = $self->{adminstore}->get_client();
 

@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_append_binary
+sub test_append_binary ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
 
     my $mime = <<'EOF' =~ s/\n/\r\n/gr;

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_http_disabled
     :TLS :needs_dependency_openssl
+    ($self)
 {
-    my ($self) = @_;
-
     my $ca_file = abs_path("data/certs/cacert.pem");
     my $http = HTTP::Tiny->new(
         max_redirect => 0,

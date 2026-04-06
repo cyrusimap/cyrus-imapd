@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_daemon_exits
+sub test_daemon_exits ($self)
 {
-    my ($self) = @_;
-
     my $lemming_delay = 500; #ms
     my $test_delay = 10; #s
 

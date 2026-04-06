@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_proc_scheduled_events
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $sleeper_time = 10;
 
     # schedule an event to fire at the next minute boundary that is at

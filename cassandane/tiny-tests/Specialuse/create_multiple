@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_create_multiple
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.Rubbish", "(USE (\\Junk \\Trash \\Sent))");

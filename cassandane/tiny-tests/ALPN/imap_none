@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imap_none
+sub test_imap_none ($self)
 {
-    my ($self) = @_;
-
     # get a pristine connection
     $self->{store}->disconnect();
     my $talk = $self->{store}->get_client(NoLogin => 1);

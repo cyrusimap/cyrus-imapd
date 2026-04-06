@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_traceid
+sub test_traceid ($self)
 {
-    my ($self) = @_;
-
     my $good_traceid = "01234567890abcdefghijklmnopqrstuvwxyz";
     my $bad_traceid = "spaces and quotes aren't valid";
 

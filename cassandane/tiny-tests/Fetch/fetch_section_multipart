@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_section_multipart
+sub test_fetch_section_multipart ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     # Start body

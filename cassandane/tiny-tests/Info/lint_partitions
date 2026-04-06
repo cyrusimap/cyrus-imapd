@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lint_partitions
     :min_version_3_0 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->config_set(
         # metapartition-, archivepartition- and searchpartition- must
         # correspond with an extant partition-

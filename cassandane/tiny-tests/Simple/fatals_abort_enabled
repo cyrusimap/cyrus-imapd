@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_fatals_abort_enabled
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set(
         'fatals_abort' => 'yes',
         'prometheus_enabled' => 'no',

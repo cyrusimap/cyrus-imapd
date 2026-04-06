@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_mboxlistdb_skiplist
+sub test_mboxlistdb_skiplist ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set(mboxlist_db => 'skiplist');
     $self->{instance}->start();
 

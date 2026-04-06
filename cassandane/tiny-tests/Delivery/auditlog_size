@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_auditlog_size
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing whether appended message size is auditlogged";
 
     # discard syslogs from setup

@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test COPY behaviour with a very long sequence set
 #
-sub test_fetch_header
+sub test_fetch_header ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.dest");

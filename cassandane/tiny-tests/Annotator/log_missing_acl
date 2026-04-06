@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_log_missing_acl
+sub test_log_missing_acl ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
 
     my $imap = $self->{store}->get_client();

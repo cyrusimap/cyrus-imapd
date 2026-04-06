@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_relocate_legacy_nosearchdb
     :DelayedDelete :min_version_3_6 :MailboxLegacyDirs
     :Admin :SearchEngineSquat :NoAltNamespace :VirtDomains
+    ($self)
 {
-    my ($self) = @_;
-
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 

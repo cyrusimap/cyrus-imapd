@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_plus_address_underscore
     :FuzzyMatch :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.- minusland";

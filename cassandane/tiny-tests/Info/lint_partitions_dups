@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lint_partitions_dups
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->config_set(
         # each has its own disk path: good
         'partition-good' => '/tmp/pgood',

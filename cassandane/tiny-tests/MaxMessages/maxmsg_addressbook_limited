@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_maxmsg_addressbook_limited
     :JMAPExtensions :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $mailbox_maxmessages_addressbook = $self->LIMITED;
     $self->{instance}->{config}->set(
         mailbox_maxmessages_addressbook => $mailbox_maxmessages_addressbook,

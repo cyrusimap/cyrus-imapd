@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test multiple connections to a single running program in SERVICES
 #
-sub test_multi_connections
+sub test_multi_connections ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "multiple connections to a single successful service";
     my $srv = $self->lemming_service();
     $self->start();

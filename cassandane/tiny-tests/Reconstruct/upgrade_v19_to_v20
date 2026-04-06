@@ -5,9 +5,8 @@ sub test_upgrade_v19_to_v20
     :MailboxLegacyDirs :NoAltNameSpace :Conversations :Replication
     :NoStartInstances
     :min_version_3_13 :min_other_version_3_13
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set(mboxlist_db => 'twoskip');
     $self->{replica}->{config}->set(mboxlist_db => 'twoskip');
     $self->_start_instances();

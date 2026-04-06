@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_message
     :needs_component_idled :Conversations
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Message test of the NOTIFY command (idled required)";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

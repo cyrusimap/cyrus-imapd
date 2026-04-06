@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_conf
+sub test_conf ($self)
 {
-    my ($self) = @_;
-
     my %imapd_conf;
     my $filename = $self->{instance}->_imapd_conf();
     open my $fh, '<', $filename

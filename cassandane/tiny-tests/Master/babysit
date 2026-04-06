@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_babysit
     :NoCheckSyslog
+    ($self)
 {
-    my ($self) = @_;
-
     my $srv = $self->lemming_service(prefork => 1, babysit => 1);
     $self->start();
     $self->lemming_wait(A => { live => 1 });

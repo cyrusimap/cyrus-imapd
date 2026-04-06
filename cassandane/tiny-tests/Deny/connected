@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_connected
+sub test_connected ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test that cyr_deny shuts down any connected sessions";
 
     xlog $self, "Create a user";

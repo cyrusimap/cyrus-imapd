@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_basic
     :NoAltNameSpace :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Make some messages";
     my $uid = 1;
     my %msgs;

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lint_services
     :want_service_http :needs_component_httpd :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->config_set(
         'http_sasl_mech_list' => 'PLAIN',
         'http_sasl_trust_fund' => 'street art',

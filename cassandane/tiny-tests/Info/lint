@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_lint
+sub test_lint ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
     my @output = $self->{instance}->run_cyr_info('conf-lint');

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_conf_default
+sub test_conf_default ($self)
 {
-    my ($self) = @_;
-
     # conf-default spits out all the defaults.  can't do much to
     # check the actual contents, short of duplicating lib/imapoptions
     # in here, but we can at least make sure it runs without crashing

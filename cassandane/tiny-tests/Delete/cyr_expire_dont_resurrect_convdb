@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # https://github.com/cyrusimap/cyrus-imapd/issues/2413
 sub test_cyr_expire_dont_resurrect_convdb
     :Conversations :DelayedDelete :min_version_3_0 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $store = $self->{store};
     my $adminstore = $self->{adminstore};
     my $talk = $store->get_client();

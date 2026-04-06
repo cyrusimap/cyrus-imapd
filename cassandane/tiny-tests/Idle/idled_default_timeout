@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_idled_default_timeout
     :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     # The default timeout if `imapidlepoll` isn't set in imapd.conf
     # is set to 60 seconds. If idled is not broken, then we should
     # return immediately(pretty much), instead of having to wait all

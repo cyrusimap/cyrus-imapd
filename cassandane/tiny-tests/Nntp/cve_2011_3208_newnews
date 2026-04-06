@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_cve_2011_3208_newnews
     :AllowNewNews
+    ($self)
 {
-    my ($self) = @_;
-
     my $client = $self->{client};
     my $wildmat = '';
     my $since = time() - 3600;

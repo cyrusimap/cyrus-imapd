@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_alternate_quotadb_path
+sub test_alternate_quotadb_path ($self)
 {
-    my ($self) = @_;
-
     my $quota_db_path = $self->{instance}->get_basedir()
                         . '/conf/non-default-quotas.db';
 

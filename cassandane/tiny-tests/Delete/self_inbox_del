@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_self_inbox_del
     :DelayedDelete :SemidelayedExpunge :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing that a non-admin can delete an a subfolder";
     xlog $self, "but cannot delete their own INBOX, delayed delete version";
 

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_cmdtimer_sessionid
     :min_version_3_5 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     # log the timing for anything that takes longer than zero seconds
     $self->{instance}->{config}->set('commandmintimer', '0');
     $self->_start_instances();

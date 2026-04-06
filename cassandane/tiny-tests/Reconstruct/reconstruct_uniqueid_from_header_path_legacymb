@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_reconstruct_uniqueid_from_header_path_legacymb
     :min_version_3_7 :MailboxLegacyDirs :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
     # first start will set up cassandane user

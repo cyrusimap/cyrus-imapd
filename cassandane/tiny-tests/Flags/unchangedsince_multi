@@ -23,10 +23,8 @@ use Cassandane::Tiny;
 # TODO the untagged FETCH response is returned even when
 #   .SILENT is used
 #
-sub test_unchangedsince_multi
+sub test_unchangedsince_multi ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

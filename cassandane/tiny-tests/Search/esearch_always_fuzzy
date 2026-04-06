@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_esearch_always_fuzzy
     :NoAltNameSpace :needs_search_xapian :Conversations :SearchFuzzyAlways
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Create shared folder, writeable by cassandane user";
     my $admintalk = $self->{adminstore}->get_client();
 

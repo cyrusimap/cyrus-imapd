@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_select
+sub test_select ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     xlog $self, "SELECTing INBOX";

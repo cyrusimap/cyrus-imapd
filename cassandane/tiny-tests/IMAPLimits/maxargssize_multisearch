@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxargssize_multisearch
+sub test_maxargssize_multisearch ($self)
 {
-    my ($self) = @_;
-
     $self->assert_cmd_bye_toobig('ESEARCH',
                                  'IN', [ 'MAILBOXES', [ "X" x 25, "X" x 25 ] ]);
 }

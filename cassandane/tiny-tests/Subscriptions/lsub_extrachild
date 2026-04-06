@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_lsub_extrachild
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.Test") || die;

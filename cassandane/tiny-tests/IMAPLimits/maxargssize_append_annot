@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxargssize_append_annot
+sub test_maxargssize_append_annot ($self)
 {
-    my ($self) = @_;
-
     my $email = $self->email;
 
     # Use MULTIAPPEND, fail the second

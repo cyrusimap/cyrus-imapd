@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rename
     :SlowIO :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my @resp;
     my %handlers =
     (

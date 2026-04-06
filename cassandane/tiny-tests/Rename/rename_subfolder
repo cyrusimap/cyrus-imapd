@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test Bug #3586 - rename subfolders
 #
-sub test_rename_subfolder
+sub test_rename_subfolder ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.user-src.subdir") || die;

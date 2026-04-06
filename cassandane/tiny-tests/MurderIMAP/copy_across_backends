@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_copy_across_backends
     :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $shared = 'shared';
 
     my $admintalk = $self->{backend2_adminstore}->get_client();

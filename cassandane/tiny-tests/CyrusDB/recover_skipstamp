@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_recover_skipstamp
+sub test_recover_skipstamp ($self)
 {
-    my ($self) = @_;
-
     my $dbdir = $self->{instance}->get_basedir() . "/conf/db";
 
     # no 'ctl_cyrusdb -r' on startup

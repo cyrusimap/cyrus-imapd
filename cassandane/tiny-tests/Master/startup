@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_startup
+sub test_startup ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test a program in the START section";
     $self->lemming_start(tag => 'A', delay => 100, mode => 'success');
     $self->lemming_start(tag => 'B', delay => 200, mode => 'success');

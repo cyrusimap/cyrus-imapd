@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxargssize_notify_events
+sub test_maxargssize_notify_events ($self)
 {
-    my ($self) = @_;
-
     $self->assert_cmd_bye_toobig('NOTIFY', 'SET',
                                  [ 'SELECTED',
                                    [ 'MessageNew', 'MessageExpunge', 'FlagChange' ] ] );

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sigterm_many
     :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test that the Cyrus instance can be cleanly shut";
     xlog $self, "down with SIGTERM while many imapds execute an";
     xlog $self, "IDLE command";

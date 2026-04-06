@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imap_http_methods_ok
+sub test_imap_http_methods_ok ($self)
 {
-    my ($self) = @_;
-
     # get a normal, already logged in IMAP connection
     my $talk = $self->{store}->get_client();
 

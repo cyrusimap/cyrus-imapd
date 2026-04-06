@@ -3,10 +3,8 @@ use Cassandane::Tiny;
 
 # check that seen flags are set correctly on body fetch
 # even if the flag was removed in the same session
-sub test_setseen_after_store
+sub test_setseen_after_store ($self)
 {
-    my ($self) = @_;
-
     # need to version-gate IMAP features that aren't in 3.9...
     my ($maj, $min) = Cassandane::Instance->get_version();
 

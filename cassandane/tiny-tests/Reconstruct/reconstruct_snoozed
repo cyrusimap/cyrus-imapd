@@ -7,9 +7,8 @@ use Cassandane::Tiny;
 # XXX need to downgrade min version if this is backported to 3.2
 sub test_reconstruct_snoozed
     :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     for (1..10) {

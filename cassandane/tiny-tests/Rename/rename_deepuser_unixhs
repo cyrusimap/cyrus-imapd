@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_rename_deepuser_unixhs
     :AllowMoves :Replication :SyncLog :UnixHierarchySep
     :needs_component_replication
+    ($self)
 {
-    my ($self) = @_;
-
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
     my $admintalk = $self->{adminstore}->get_client();

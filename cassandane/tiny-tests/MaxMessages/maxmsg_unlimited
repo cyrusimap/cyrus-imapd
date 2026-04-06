@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_maxmsg_unlimited
     :JMAPExtensions
+    ($self)
 {
-    my ($self) = @_;
-
     # should be able to upload lots of contacts
     my $carddav = $self->{carddav};
     my $addrbookid = $carddav->NewAddressBook('foo');

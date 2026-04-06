@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_card_set_addressbookids
+sub test_card_set_addressbookids ($self)
 {
-    my ($self) = @_;
     my $jmap = $self->{jmap};
 
     xlog $self, "get default addressbook";

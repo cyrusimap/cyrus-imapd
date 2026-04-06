@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_aaasetup
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     # does everything set up and tear down cleanly?
     $self->assert(1);
 }

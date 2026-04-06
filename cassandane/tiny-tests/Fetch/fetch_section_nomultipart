@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_section_nomultipart
+sub test_fetch_section_nomultipart ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->make_message(

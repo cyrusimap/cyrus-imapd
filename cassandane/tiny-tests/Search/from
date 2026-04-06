@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_from
+sub test_from ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test SEARCH with the FROM predicate";
     my $talk = $self->{store}->get_client();
 

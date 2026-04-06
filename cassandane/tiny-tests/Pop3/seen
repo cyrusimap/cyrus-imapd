@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_seen
     :PopUseImapFlags
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing whether the RETR command marks messages as sent";
 
     xlog $self, "Ensure a messages exist, before logging in to POP";

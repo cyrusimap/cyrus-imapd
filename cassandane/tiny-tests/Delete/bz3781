@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_bz3781
     :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing that a folder can be deleted when there is";
     xlog $self, "unexpected files in the proc directory (Bug 3781)";
 

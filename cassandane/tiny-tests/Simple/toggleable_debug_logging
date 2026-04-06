@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_toggleable_debug_logging
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
-
     my $config_debug = $self->{instance}->{config}->get_bool('debug', 'no');
     my $imaptalk = $self->{store}->get_client();
 

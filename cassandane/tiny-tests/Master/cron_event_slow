@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_cron_event_slow
+sub test_cron_event_slow ($self)
 {
-    my ($self) = @_;
-
     my $srv = $self->lemming_service(tag => 'A');
 
     # schedule an event to run a few times a little after the current time,

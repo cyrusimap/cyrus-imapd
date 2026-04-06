@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_annotator_callout_disabled
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
     $self->{instance}->{config}->set(annotation_callout_disable_append => 'yes');
 
     $self->start_my_instances();

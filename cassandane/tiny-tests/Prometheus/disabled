@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_disabled
     :min_version_3_1 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $instance = $self->{instance};
     $instance->{starts} = [ grep { $_->{name} ne 'promstatsd' } @{$instance->{starts}} ];
     $instance->{config}->set(prometheus_enabled => 'no');

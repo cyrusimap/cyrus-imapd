@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_references_loop
+sub test_references_loop ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test THREAD with a loop configuration of inter-message references";
     xlog $self, "and a missing common parent (Bug 3784)";
     my $talk = $self->{store}->get_client();

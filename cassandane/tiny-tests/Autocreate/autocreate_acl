@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_autocreate_acl
     :min_version_3_1 :needs_component_sieve :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my %folder_acls = (
         'INBOX'         => [qw( foo lrswipkxtecdan )],
         'INBOX.Drafts'  => [qw( foo lrswipkxtecdan )],

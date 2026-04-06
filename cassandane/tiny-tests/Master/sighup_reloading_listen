@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_sighup_reloading_listen
+sub test_sighup_reloading_listen ($self)
 {
-    my ($self) = @_;
-
     my $host = 'localhost';
 
     # Note: we need to wait for SIGHUP to be processed; prefork can do the trick

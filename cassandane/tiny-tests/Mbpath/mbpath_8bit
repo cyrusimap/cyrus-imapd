@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_mbpath_8bit
+sub test_mbpath_8bit ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test mbpath 8 bit name parsing";
 
     # create and prepare the user

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxliteral_sync
+sub test_maxliteral_sync ($self)
 {
-    my ($self) = @_;
-
     # Unlike oversized non-sync literals which fatal() in one central location,
     # oversized sync literals fail with a NO response in multiple places,
     # so we test as many of those places as possible.

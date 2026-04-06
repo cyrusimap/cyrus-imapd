@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_move_to_nonexistent
+sub test_move_to_nonexistent ($self)
 {
-    my ($self) = @_;
-
     my $dest_folder = 'INBOX.nonexistent';
 
     # put some messages into the INBOX

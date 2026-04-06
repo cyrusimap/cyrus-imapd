@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 #Magic word virtdomains in name sets config virtdomains = userid
 sub test_virtdomains_noinherit1
     :NoAltNamespace :CrossDomains
+    ($self)
 {
-    my ($self) = @_;
-
     my $defaultdomain = $self->{instance}->{config}->get('defaultdomain')
                         // 'internal';
     my $cass_defdom = "cassandane\@$defaultdomain";

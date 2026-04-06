@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_backend2_commands
     :min_version_3_5
+    ($self)
 {
-    my ($self) = @_;
     my $result;
 
     my $backend2_svc = $self->{backend2}->get_service("http");

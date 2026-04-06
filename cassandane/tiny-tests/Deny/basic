@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_basic
+sub test_basic ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test the cyr_deny utility with the imap service";
 
     # Data thanks to hipsteripsum.me

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_proc_starts
     :NoStartInstances :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     # we used to recommend starting idled from START, and it will
     # still work like that, so using it here saves me mocking something
     $self->{instance}->add_start(name => 'idled',

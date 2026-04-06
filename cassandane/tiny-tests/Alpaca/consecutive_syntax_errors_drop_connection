@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_consecutive_syntax_errors_drop_connection
+sub test_consecutive_syntax_errors_drop_connection ($self)
 {
-    my ($self) = @_;
-
     $self->{store}->disconnect();
     my $sock = create_client_socket($self->{store}->{address_family},
                                     $self->{store}->{host},

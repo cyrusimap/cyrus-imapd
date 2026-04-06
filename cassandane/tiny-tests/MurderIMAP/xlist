@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_xlist
+sub test_xlist ($self)
 {
-    my ($self) = @_;
-
     my $frontend = $self->{frontend_store}->get_client();
     my $backend = $self->{backend1_store}->get_client();
 

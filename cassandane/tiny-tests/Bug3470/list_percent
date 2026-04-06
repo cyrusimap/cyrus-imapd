@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test LSUB behaviour
 #
-sub test_list_percent
+sub test_list_percent ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my @inbox_flags = qw( \\HasNoChildren );

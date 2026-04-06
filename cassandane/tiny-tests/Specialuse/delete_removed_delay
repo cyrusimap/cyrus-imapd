@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_delete_removed_delay
     :DelayedDelete :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.Trash", "(USE (\\Trash))");

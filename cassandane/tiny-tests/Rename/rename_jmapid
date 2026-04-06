@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rename_jmapid
     :AllowMoves :Conversations :min_version_3_12
+    ($self)
 {
-    my ($self) = @_;
-
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
 
     my $admintalk = $self->{adminstore}->get_client();

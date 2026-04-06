@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test APPEND of messages to IMAP
 #
-sub test_append
+sub test_append ($self)
 {
-    my ($self) = @_;
-
     my %exp;
 
     xlog $self, "generating message A";

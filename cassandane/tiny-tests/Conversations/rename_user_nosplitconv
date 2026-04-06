@@ -6,9 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_rename_user_nosplitconv
     :AllowMoves :Replication :needs_component_replication :Conversations
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test user rename without splitting conversations";
 
     my %exp;

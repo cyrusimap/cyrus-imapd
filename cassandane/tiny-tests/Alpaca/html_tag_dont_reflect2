@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_html_tag_dont_reflect2
+sub test_html_tag_dont_reflect2 ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
 
     # as above, but with no command!

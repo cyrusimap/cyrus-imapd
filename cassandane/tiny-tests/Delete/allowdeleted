@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_allowdeleted
     :AllowDeleted :DelayedDelete :min_version_3_1 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $store = $self->{store};
     my $adminstore = $self->{adminstore};
     my $talk = $store->get_client();

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_pidfile_symlink
+sub test_pidfile_symlink ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->_init_basedir_and_name();
 
     # XXX it would be nice to put the symlink in the basedir, but anything

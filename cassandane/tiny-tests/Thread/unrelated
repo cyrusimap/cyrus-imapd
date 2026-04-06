@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_unrelated
+sub test_unrelated ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test THREAD with no inter-message references";
     xlog $self, "and all different subjects";
     my $talk = $self->{store}->get_client();

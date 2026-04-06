@@ -5,9 +5,8 @@ use Cassandane::Tiny;
 # RFC 8970
 sub test_preview_args_legacy
     :min_version_3_1 :max_version_3_4 :Conversations
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     # make a message

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_bad
     :needs_component_idled :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Message test of the NOTIFY command (idled required)";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

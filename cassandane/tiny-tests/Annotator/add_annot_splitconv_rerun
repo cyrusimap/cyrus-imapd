@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_add_annot_splitconv_rerun
     :min_version_3_1 :Conversations
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     $self->{instance}->{config}->set(conversations_max_thread => 5);

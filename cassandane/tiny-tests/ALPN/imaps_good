@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_imaps_good
+sub test_imaps_good ($self)
 {
-    my ($self) = @_;
-
     my $imaps = $self->{instance}->get_service('imaps');
     my $store = $imaps->create_store(username => 'cassandane');
     my $talk = $store->get_client(); # correct ALPN map is the default

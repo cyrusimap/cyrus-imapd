@@ -6,9 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_rename_withsub
     :VirtDomains
+    ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
 
     $self->{instance}->create_user("renameuser\@example.com");

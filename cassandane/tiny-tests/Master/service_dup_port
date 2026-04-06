@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_dup_port
+sub test_service_dup_port ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "successful two services with listen= ";
     xlog $self, "parameters which reference the same IPv4 port";
     my $srvA = $self->lemming_service(tag => 'A');

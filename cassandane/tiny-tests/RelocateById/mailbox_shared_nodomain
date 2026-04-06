@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailbox_shared_nodomain
     :min_version_3_6
+    ($self)
 {
-    my ($self) = @_;
-
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 

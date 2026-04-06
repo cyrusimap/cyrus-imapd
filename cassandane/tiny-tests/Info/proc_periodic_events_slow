@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_proc_periodic_events_slow
     :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $sleeper_time = 10; # seconds
 
     # periodic events first fire immediately at startup, and then every

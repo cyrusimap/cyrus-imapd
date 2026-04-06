@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test multiple running programs in SERVICES, some preforked.
 #
-sub test_multi_prefork
+sub test_multi_prefork ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "multiple successful service some preforked";
     my $srvA = $self->lemming_service(tag => 'A', prefork => 2);
     my $srvB = $self->lemming_service(tag => 'B'); # no preforking

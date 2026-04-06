@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_header_multiple
+sub test_header_multiple ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
 
     my $extra_headers = [

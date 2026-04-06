@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_admin_getusergroup
+sub test_admin_getusergroup ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
 
     # should have the xusergroups capability

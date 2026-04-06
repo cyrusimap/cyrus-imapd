@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxword
+sub test_maxword ($self)
 {
-    my ($self) = @_;
-
     # Oversized command name
     $self->assert_cmd_bye_toobig("X" x 26);
 }

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_http_enabled
     :TLS :needs_dependency_openssl :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     $self->config_set(allowstarttls => 'on');
 
     $self->_start_instances();

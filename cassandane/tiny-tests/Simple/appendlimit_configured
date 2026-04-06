@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_appendlimit_configured
     :min_version_3_6 :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $desired_limit = "52428800"; # based on known failure
 
     $self->{instance}->{config}->set('maxmessagesize' => $desired_limit);

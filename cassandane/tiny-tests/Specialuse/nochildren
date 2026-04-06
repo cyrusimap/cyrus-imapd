@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_nochildren
     :min_version_3_7 :NoStartInstances :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     $self->{instance}->{config}->set('specialuse_nochildren' => '\\Trash');
     $self->_start_instances();
 

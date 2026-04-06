@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_subfolder_login
     :PopSubFolders :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing whether + address login gets subfolder";
 
     my $imapclient = $self->{store}->get_client();

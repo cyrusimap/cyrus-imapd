@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_qresync_saved_search
+sub test_qresync_saved_search ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Make some messages";
     my $uid = 1;
     my %msgs;

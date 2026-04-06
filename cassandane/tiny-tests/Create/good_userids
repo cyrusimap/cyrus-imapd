@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_good_userids
+sub test_good_userids ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
 
     my @good_userids = (

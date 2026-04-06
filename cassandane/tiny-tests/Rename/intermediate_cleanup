@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_intermediate_cleanup
     :min_version_3_1 :max_version_3_4 :NoAltNameSpace :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.a.b.c.subdir") || die;

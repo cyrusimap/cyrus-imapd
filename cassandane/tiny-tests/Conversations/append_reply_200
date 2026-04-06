@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_append_reply_200
     :min_version_3_1 :Conversations
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     xlog $self, "generating message A";

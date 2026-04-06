@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_add_annot_deliver
+sub test_add_annot_deliver ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
 
     my $entry = '/comment';

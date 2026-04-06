@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_proxy_search
+sub test_proxy_search ($self)
 {
-    my ($self) = @_;
     my $result;
 
     xlog $self, "append some messages";

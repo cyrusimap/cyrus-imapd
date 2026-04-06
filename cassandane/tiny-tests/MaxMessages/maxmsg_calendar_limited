@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_maxmsg_calendar_limited
     :JMAPExtensions :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $mailbox_maxmessages_calendar = $self->LIMITED;
     $self->{instance}->{config}->set(
         mailbox_maxmessages_calendar => $mailbox_maxmessages_calendar,

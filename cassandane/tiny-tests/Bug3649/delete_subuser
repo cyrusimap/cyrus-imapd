@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_delete_subuser
+sub test_delete_subuser ($self)
 {
-    my ($self) = @_;
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 

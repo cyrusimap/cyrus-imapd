@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_at_event_bad
+sub test_at_event_bad ($self)
 {
-    my ($self) = @_;
-
     my $srv = $self->lemming_service(tag => 'A');
 
     # schedule an event with a bad at=hhmm specification

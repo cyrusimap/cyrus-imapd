@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_cyr_expire_delete_noexpire
     :DelayedDelete :min_version_3_9 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
     my $store = $self->{store};
     my $adminstore = $self->{adminstore};
     my $talk = $store->get_client();
