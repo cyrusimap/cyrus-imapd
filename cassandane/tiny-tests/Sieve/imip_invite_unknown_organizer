@@ -29,7 +29,7 @@ END:VCARD
 EOF
 
     $CardDAV->NewContact('Default',
-                         Net::CardDAVTalk::VCard->new_fromstring($card));
+                         vcard_to_jscontact($card));
 
     xlog $self, "Install a sieve script to process iMIP";
     $self->{instance}->install_sieve_script(<<EOF

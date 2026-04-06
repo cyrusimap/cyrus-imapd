@@ -2,7 +2,8 @@
 # See COPYING file at the root of the distribution for more details.
 
 package Cassandane::Cyrus::Sieve;
-use Net::CalDAVTalk 0.12;
+use Net::CalDAVTalk 0.14;
+use Text::JSContact 0.01 qw(vcard_to_jscontact);
 use strict;
 use warnings;
 use IO::File;
@@ -87,6 +88,11 @@ sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
+}
+
+sub _participant ($participants, $email)
+{
+    return (grep { ($_->{email} // '') eq $email } values %$participants)[0];
 }
 
 sub read_errors

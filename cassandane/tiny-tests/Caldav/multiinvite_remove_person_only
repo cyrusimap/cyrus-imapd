@@ -91,7 +91,7 @@ EOF
             uid => $uuid,
             replyTo => { imip => "mailto:cassandane\@example.com" },
             recurrenceOverrides => {
-                '2016-06-08T15:30:00' => undef,
+                '2016-06-08T15:30:00' => { excluded => JSON::true },
             },
           },
         },

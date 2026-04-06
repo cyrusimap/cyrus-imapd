@@ -28,7 +28,7 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
+    my $VCard = vcard_to_jscontact($card);
     $carddav->NewContact($abookPath, $VCard);
 
     xlog "Destroy addressbook (with and without onDestroyRemoveContents)";

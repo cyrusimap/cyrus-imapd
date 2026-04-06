@@ -70,7 +70,7 @@ EOF
                 is_update => JSON::true,
                 event => {
                     start => '2016-06-01T15:30:00',
-                    recurrenceOverrides => { '2016-06-08T15:30:00' => undef },
+                    recurrenceOverrides => { '2016-06-08T15:30:00' => { excluded => JSON::true } },
                     participants => {
                         "cassandane\@example.com" => { email => "cassandane\@example.com" },
                         "test1\@example.com" => { email => "test1\@example.com" },

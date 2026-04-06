@@ -142,9 +142,9 @@ EOF
     $self->assert_str_equals('location2', $events->[0]{recurrenceOverrides}{'2021-09-23T15:30:00'}{locations}{location}{name});
 
     xlog $self, "Make sure that per-user data remains";
-    $self->assert_equals(JSON::true, $events->[0]{showAsFree});
+    $self->assert_str_equals('free', $events->[0]{freeBusyStatus});
     $self->assert_not_null($events->[0]{alerts}{myalarm});
-    $self->assert_str_equals('accepted', $events->[0]{participants}{'cassandane@example.com'}{scheduleStatus});    
+    $self->assert_str_equals('accepted', Cassandane::Cyrus::Sieve::_participant($events->[0]{participants}, 'cassandane@example.com')->{participationStatus});    
 
     $response = $CalDAV->Request('GET', $href);
     $ical = Data::ICal->new(data => $response->{content});

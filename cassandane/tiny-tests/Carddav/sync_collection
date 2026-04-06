@@ -12,7 +12,7 @@ sub test_sync_collection ($self)
     my $uid2 = "addr1\@example.com";
     my $uid3 = "addr2\@example.com";
 
-    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $vcard1 = vcard_to_jscontact(<<EOF);
 BEGIN:VCARD
 VERSION:3.0
 UID:$uid1
@@ -24,7 +24,7 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $vcard2 = vcard_to_jscontact(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:me
@@ -34,7 +34,7 @@ EMAIL:cdaboo\@example.com
 END:VCARD
 EOF
 
-    my $vcard3 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $vcard3 = vcard_to_jscontact(<<EOF);
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:eric

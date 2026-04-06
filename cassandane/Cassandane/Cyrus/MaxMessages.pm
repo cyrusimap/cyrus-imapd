@@ -5,9 +5,9 @@ package Cassandane::Cyrus::MaxMessages;
 use v5.28.0;
 use warnings;
 use Data::Dumper;
-use Net::DAVTalk 0.14;
-use Net::CardDAVTalk 0.05;
-use Net::CardDAVTalk::VCard;
+use Net::DAVTalk 0.24;
+use Net::CardDAVTalk 0.11;
+use Text::JSContact 0.01 qw(vcard_to_jscontact);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Generator;
@@ -120,9 +120,9 @@ sub put_vcard
 {
     my ($self, $addrbookid) = @_;
 
-    my $vcard = Net::CardDAVTalk::VCard->new_fromstring(_random_vcard());
+    my $card = vcard_to_jscontact(_random_vcard());
 
-    $self->{carddav}->NewContact($addrbookid, $vcard);
+    $self->{carddav}->NewContact($addrbookid, $card);
 }
 
 sub put_script

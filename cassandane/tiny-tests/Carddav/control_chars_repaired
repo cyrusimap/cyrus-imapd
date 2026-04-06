@@ -45,8 +45,8 @@ END:VCARD
 EOF
 
     # the \b should be repaired out
-    my $VCard = Net::CardDAVTalk::VCard->new_fromstring($card);
-    my $path = $CardDAV->NewContact($Id, $VCard);
+    my $path = "$Id/bar.vcf";
+    $CardDAV->Request('PUT', $path, $card, 'Content-Type' => 'text/vcard');
     my $res = $CardDAV->GetContact($path);
-    $self->assert_str_equals($res->{properties}{fn}[0]{value}, 'Forrest Gump');
+    $self->assert_str_equals('Forrest Gump', $res->{name}{full});
 }

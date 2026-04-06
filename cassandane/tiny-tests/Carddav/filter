@@ -48,7 +48,7 @@ EOF
     my $uid2 = "addr1\@example.com";
     my $uid3 = "addr2\@example.com";
 
-    my $vcard1 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $vcard1 = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
 UID:$uid1
@@ -60,7 +60,7 @@ REV:2008-04-24T19:52:43Z
 END:VCARD
 EOF
 
-    my $vcard2 = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
+    my $vcard2 = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
 NICKNAME:me
@@ -70,7 +70,6 @@ EMAIL:cdaboo\@example.com
 END:VCARD
 EOF
 
-    # VCard->new_fromstring() doesn't split multi-valued properties
     my $vcard3 = <<EOF;
 BEGIN:VCARD
 VERSION:4.0
@@ -81,11 +80,12 @@ FN:Eric York
 END:VCARD
 EOF
 
-    my $href1 = $CardDAV->NewContact($bookId, $vcard1);
-    my $href2 = $CardDAV->NewContact($bookId, $vcard2);
-
+    my $href1 = "$bookId/$uid1.vcf";
+    $CardDAV->Request('PUT', $href1, $vcard1, 'Content-Type' => 'text/vcard');
+    my $href2 = "$bookId/$uid2.vcf";
+    $CardDAV->Request('PUT', $href2, $vcard2, 'Content-Type' => 'text/vcard');
     my $href3 = "$bookId/$uid3.vcf";
-    eval { $CardDAV->Request('PUT', $href3, $vcard3, 'Content-Type' => 'text/vcard') };
+    $CardDAV->Request('PUT', $href3, $vcard3, 'Content-Type' => 'text/vcard');
 
     # test multi-valued property using CardDAV record
     my $res = $CardDAV->Request('REPORT', "$homeset/$bookId",

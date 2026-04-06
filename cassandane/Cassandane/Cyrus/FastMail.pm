@@ -6,9 +6,9 @@ use strict;
 use warnings;
 use DateTime;
 use JSON::XS;
-use Net::CalDAVTalk 0.09;
-use Net::CardDAVTalk 0.05;
-use Net::CardDAVTalk::VCard;
+use Net::CalDAVTalk 0.14;
+use Net::CardDAVTalk 0.11;
+use Text::JSContact 0.01 qw(vcard_to_jscontact);
 use Data::Dumper;
 use Storable 'dclone';
 
