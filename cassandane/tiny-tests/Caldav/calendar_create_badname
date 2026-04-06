@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_create_badname ($self)
+{
+    my $CalDAV = $self->{caldav};
+
+    # Starts with 'C' and <= 12 chars long
+    my $res = $CalDAV->SafeRequest('MKCALENDAR', 'C0123456789A');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    # Starts with 'c' and <= 12 chars long
+    $res = $CalDAV->SafeRequest('MKCOL', 'c01234567890A');
+    $self->assert_num_equals(201, $res->{http_response}{status});
+
+    # Starts with 'C' and >= 12 chars long
+    $res = $CalDAV->SafeRequest('MKCALENDAR', 'C01234567890AB');
+    $self->assert_num_equals(201, $res->{http_response}{status});
+}
