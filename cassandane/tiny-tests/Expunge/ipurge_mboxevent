@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # XXX this isn't really the right place for this test
 sub test_ipurge_mboxevent
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $shared_folder = 'shared.folder';
 
     # set up a shared folder that's easy to write to

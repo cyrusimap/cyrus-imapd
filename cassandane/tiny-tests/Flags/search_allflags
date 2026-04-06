@@ -6,10 +6,8 @@ use Cassandane::Tiny;
 #  - more than 32 flags can be searched for
 #  - no more can be used
 #
-sub test_search_allflags
+sub test_search_allflags ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

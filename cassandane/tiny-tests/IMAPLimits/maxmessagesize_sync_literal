@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxmessagesize_sync_literal
+sub test_maxmessagesize_sync_literal ($self)
 {
-    my ($self) = @_;
-
     # Synchronizing literals are the default in IMAPTalk v4.05 (and earlier)
     my $talk = $self->{store}->get_client(NoLiteralPlus => 1);
 

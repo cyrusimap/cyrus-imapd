@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_unix
+sub test_service_unix ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single successful service on UNIX domain socket";
     my $srv = $self->lemming_service(
                         host => undef,

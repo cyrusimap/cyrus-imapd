@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_sasl_ir
+sub test_sasl_ir ($self)
 {
-    my ($self) = @_;
-
     my $svc = $self->{instance}->get_service('imap');
     my $host = $svc->host();
     my $port = $svc->port();

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_setseen_notify
     :Conversations :FastMailEvent :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

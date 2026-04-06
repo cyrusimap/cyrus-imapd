@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_ipv6
+sub test_service_ipv6 ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single successful service on IPv6";
     my $srv = $self->lemming_service(host => '::1');
     $self->start();

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_dele
+sub test_dele ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing whether the DELE command removes messages";
 
     xlog $self, "Ensure a messages exist, before logging in to POP";

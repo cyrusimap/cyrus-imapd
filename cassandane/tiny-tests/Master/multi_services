@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test multiple running programs in SERVICES
 #
-sub test_multi_services
+sub test_multi_services ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "multiple successful services";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->lemming_service(tag => 'B');

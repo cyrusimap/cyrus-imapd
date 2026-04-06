@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_cmd_id_nil_cant_unget
+sub test_cmd_id_nil_cant_unget ($self)
 {
-    my ($self) = @_;
-
     # Purge any syslog lines before this test runs.
     $self->{instance}->getsyslog();
 

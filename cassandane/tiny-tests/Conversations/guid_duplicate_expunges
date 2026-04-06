@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_guid_duplicate_expunges
     :min_version_3_3 :LowEmailLimits :DelayedExpunge
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     xlog $self, "generating message A";

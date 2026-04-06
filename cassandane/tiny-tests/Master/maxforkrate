@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxforkrate
+sub test_maxforkrate ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing enforcement of the maxforkrate= parameter";
 
     # A very loose error factor.  We don't care too much if the

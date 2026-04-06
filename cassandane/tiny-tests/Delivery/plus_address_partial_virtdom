@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_plus_address_partial_virtdom
     :FuzzyMatch :VirtDomains :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing behaviour of plus addressing with virtdomains";
 
     my $admintalk = $self->{adminstore}->get_client();

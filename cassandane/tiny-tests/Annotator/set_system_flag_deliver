@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_set_system_flag_deliver
+sub test_set_system_flag_deliver ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
 
     my $flag = '\\Flagged';

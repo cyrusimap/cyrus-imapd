@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_plus_address_inbox_inbox
     :FuzzyMatch :NoAltNameSpace :MailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing behaviour of plus addressing where INBOX.INBOX* is targetted";
 
     xlog $self, "Create folders";

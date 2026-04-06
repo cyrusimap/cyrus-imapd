@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_legacymb_already_exists
     :NoStartInstances :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     # want a separate IMAP service with separate config containing
     # the defaults (no autocreate!) plus mailbox_legacy_dirs: yes
     my $leg_conf = Cassandane::Config->default()->clone();

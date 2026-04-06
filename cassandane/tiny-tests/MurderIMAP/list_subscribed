@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_list_subscribed
+sub test_list_subscribed ($self)
 {
-    my ($self) = @_;
-
     my $frontend = $self->{frontend_store}->get_client();
     my $backend = $self->{backend1_store}->get_client();
 

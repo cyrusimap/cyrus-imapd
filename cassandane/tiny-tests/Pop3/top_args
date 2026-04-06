@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_top_args
+sub test_top_args ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing whether the TOP command checks its arguments [Bug 3641]";
     # Note, the POP client checks its arguments before sending
     # them so we have to reach around it to do bad things.

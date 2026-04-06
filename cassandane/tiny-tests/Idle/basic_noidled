@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_basic_noidled
+sub test_basic_noidled ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Basic test of the IDLE command, no idled started";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

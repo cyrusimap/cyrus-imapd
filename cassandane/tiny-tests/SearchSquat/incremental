@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_incremental
     :SearchEngineSquat
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
     my $err;
 

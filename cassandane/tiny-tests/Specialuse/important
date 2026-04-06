@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_important
     :min_version_3_1 :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.Important", "(USE (\\Important))");

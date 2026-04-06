@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rename_inbox_unselected
     :Conversations :min_version_3_7
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $self->{store}->set_folder("INBOX");

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fork_noexec
+sub test_fork_noexec ($self)
 {
-    my ($self) = @_;
-
     # need some not-executable file to test with, crash.c will do
     my $noexec_file = realpath('utils/crash.c');
     # it had better exist, and not be executable

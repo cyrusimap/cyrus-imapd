@@ -14,10 +14,8 @@ use Cassandane::Tiny;
 # TODO: test that \Seen gets set as a side effect of
 # doing body fetches.
 #
-sub test_seen
+sub test_seen ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

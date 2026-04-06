@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test LSUB behaviour
 #
-sub test_list_2011
+sub test_list_2011 ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my @inter_flags = qw( \\HasChildren );

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_sigterm
     :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test that an imapd can be killed with SIGTERM";
     xlog $self, "while executing an IDLE command";
 

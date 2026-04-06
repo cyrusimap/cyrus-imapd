@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_sighup_recycling
+sub test_sighup_recycling ($self)
 {
-    my ($self) = @_;
-
     my $host = 'localhost';
 
     my $srv = $self->lemming_service(tag => 'foo', prefork => 1);

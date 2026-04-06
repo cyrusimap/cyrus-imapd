@@ -1,9 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_frontend_commands
+sub test_frontend_commands ($self)
 {
-    my ($self) = @_;
     my $result;
 
     my $frontend = $self->{frontend_store}->get_client();

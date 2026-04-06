@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test zeroed out data across the UID
 #
-sub test_reconstruct_zerouid
+sub test_reconstruct_zerouid ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     for (1..10) {

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_proc_crashed_services
+sub test_proc_crashed_services ($self)
 {
-    my ($self) = @_;
-
     # no clients => no service daemons => no processes
     my @output = $self->{instance}->run_cyr_info('proc');
     $self->assert_num_equals(0, scalar @output);

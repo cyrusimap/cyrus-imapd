@@ -5,9 +5,8 @@ sub test_userflags_crash
     :Conversations
     :LowEmailLimits
     :min_version_3_6
+    ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     my $folder = 'foo';
 

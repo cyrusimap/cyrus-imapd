@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_rename_with_location
     :AllowMoves
+    ($self)
 {
-    my ($self) = @_;
-
     my $frontend_adminstore = $self->{frontend_adminstore}->get_client();
 
     my $backend2_servername = $self->{backend2}->get_servername();

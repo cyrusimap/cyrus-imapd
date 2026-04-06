@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_sort_thread
+sub test_sort_thread ($self)
 {
-    my ($self) = @_;
-
     $self->make_message('fwd subject', body => 'a schenectady body');
 
     $self->{instance}->run_command({cyrus => 1}, 'squatter');

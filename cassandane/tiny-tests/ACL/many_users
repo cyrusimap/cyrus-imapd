@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_many_users
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{adminstore}->get_client();
     my $talk = $self->{store}->get_client();
     $self->make_message("Message A");

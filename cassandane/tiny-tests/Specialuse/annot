@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_annot
+sub test_annot ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.Trash");

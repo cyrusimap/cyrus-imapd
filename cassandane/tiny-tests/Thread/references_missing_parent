@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_references_missing_parent
+sub test_references_missing_parent ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "test THREAD with two messages which share a common parent";
     xlog $self, "which is not seen on the server";
     my $talk = $self->{store}->get_client();

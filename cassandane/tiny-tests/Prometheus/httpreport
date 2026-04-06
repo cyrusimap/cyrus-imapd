@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_httpreport
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     # do something that'll get counted
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->select("INBOX");

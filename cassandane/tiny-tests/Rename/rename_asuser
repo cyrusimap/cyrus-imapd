@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test LSUB behaviour
 #
-sub test_rename_asuser
+sub test_rename_asuser ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.user-src") || die;

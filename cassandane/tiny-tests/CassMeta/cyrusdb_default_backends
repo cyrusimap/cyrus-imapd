@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_cyrusdb_default_backends
+sub test_cyrusdb_default_backends ($self)
 {
-    my ($self) = @_;
-
     my @regular_databases = qw(
         annotation_db
         conversations_db

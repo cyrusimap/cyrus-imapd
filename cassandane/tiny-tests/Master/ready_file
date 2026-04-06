@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_ready_file
+sub test_ready_file ($self)
 {
-    my ($self) = @_;
-
     # config isn't fully initialised until start() is called, so we can't
     # just read these the sensible way. instead, predict the defaults.
     my $ready_file = $self->{instance}->get_basedir() . '/master.ready';

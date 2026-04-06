@@ -6,9 +6,8 @@ use Cassandane::Tiny;
 # very old libical
 sub test_admin_inbox_imm_legacy
     :ImmediateDelete :SemidelayedExpunge :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing that an admin can delete the INBOX of a user";
     xlog $self, "and it will delete the whole user, immediate delete version";
 

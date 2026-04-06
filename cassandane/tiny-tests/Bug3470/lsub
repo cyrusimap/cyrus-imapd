@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_lsub
+sub test_lsub ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my $alldata = $imaptalk->lsub("", "2001");

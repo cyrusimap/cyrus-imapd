@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_bad_name
+sub test_service_bad_name ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "services with bad names (Bug 3654)";
     $self->lemming_service(tag => 'foo');
     $self->lemming_service(tag => 'foo_bar');

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_subscribe_vd
     :VirtDomains :CrossDomains
+    ($self)
 {
-    my ($self) = @_;
-
     $self->shared_subscribe_common('firstuser@example.com',
                                    'seconduser@example.com');
 }

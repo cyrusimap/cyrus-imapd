@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test a single running programs in SERVICES
 #
-sub test_service
+sub test_service ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single successful service";
     my $srv = $self->lemming_service();
     $self->start();

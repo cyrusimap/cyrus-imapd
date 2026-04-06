@@ -6,9 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_lsub_toplevel
     :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my $alldata = $imaptalk->lsub("", "*");

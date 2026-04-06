@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_no_delete_with_children
     :DelayedDelete :min_version_3_3
+    ($self)
 {
-    my ($self) = @_;
-
     my $store = $self->{store};
     my $talk = $store->get_client();
 

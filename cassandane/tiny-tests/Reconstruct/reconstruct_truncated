@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test truncated file
 #
-sub test_reconstruct_truncated
+sub test_reconstruct_truncated ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     for (1..10) {
@@ -59,10 +57,8 @@ sub test_reconstruct_truncated
 #
 # Test removed file
 #
-sub test_reconstruct_removedfile
+sub test_reconstruct_removedfile ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     for (1..10) {

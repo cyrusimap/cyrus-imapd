@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_periodic_event_slow
+sub test_periodic_event_slow ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing regular events";
 
     my $srv = $self->lemming_service(tag => 'A');

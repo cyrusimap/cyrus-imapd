@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # https://github.com/cyrusimap/cyrus-imapd/issues/4611
 sub test_seen_sharedmb_sharedseen
     :UnixHierarchySep :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $folder = 'shared';
 
     # shared mailbox with sharedseen=false

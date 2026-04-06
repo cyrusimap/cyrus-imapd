@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_uidbatches
+sub test_uidbatches ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my @results;

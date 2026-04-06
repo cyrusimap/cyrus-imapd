@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_noexe
+sub test_service_noexe ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single service with a non-existant executable";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->{instance}->add_service(

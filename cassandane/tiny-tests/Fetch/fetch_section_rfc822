@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_section_rfc822
+sub test_fetch_section_rfc822 ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my $body = ""

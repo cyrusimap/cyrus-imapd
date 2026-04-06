@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # This test uses the AV engine, which can be very slow to initialise.
 sub test_remove_infected_slow
     :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     # set up a shared folder that's easy to write to
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create('shared.folder');

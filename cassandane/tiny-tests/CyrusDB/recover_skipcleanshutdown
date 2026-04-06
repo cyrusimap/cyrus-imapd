@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_recover_skipcleanshutdown
+sub test_recover_skipcleanshutdown ($self)
 {
-    my ($self) = @_;
-
     my $dbdir = $self->{instance}->get_basedir() . "/conf/db";
 
     # need to start up once to create a reusable basedir

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxliteral_nosync
+sub test_maxliteral_nosync ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     # Do this by brute force until we have IMAPTalk v4.06+
     $talk->_imap_socket_out($talk->{CmdId}++ . " SELECT {26+}\015\012");

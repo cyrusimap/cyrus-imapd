@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_http_post_drop_connection1
+sub test_http_post_drop_connection1 ($self)
 {
-    my ($self) = @_;
-
     # get a pristine connection
     $self->{store}->disconnect();
     my $talk = $self->{store}->get_client(NoLogin => 1);

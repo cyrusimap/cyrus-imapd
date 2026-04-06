@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_uidsearch_empty
     :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
     my $imap = $self->{store}->get_client();
 
     $imap->create('INBOX.test');

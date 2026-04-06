@@ -1,10 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_after_annotate
+sub test_fetch_after_annotate ($self)
 {
     # This is a test for https://github.com/cyrusimap/cyrus-imapd/issues/2071
-    my ($self) = @_;
 
     $self->start_my_instances();
 

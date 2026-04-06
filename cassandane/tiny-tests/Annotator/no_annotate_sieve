@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_no_annotate_sieve
     :min_version_3_3 :JMAPExtensions :MagicPlus
+    ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
     $self->_setup_http_service_objects();
 

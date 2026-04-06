@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_dump_undump
     :needs_component_sieve :AltNamespace :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
-
     # set up some mailboxes for the cassandane user
     my $expected = $self->populate_user(
         $self->{instance},

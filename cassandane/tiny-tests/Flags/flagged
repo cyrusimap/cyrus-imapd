@@ -8,10 +8,8 @@ use Cassandane::Tiny;
 #  - other messages don't get the \Flagged flag
 #  - once set, it's persistent across sessions
 #
-sub test_flagged
+sub test_flagged ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     $self->{store}->_select();
     $self->assert_num_equals(1, $talk->uid());

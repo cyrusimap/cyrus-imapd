@@ -6,8 +6,8 @@ use Cassandane::Tiny;
 #
 sub test_replication_reconstruct
     :min_version_3_1 :needs_component_replication :Conversations :NoReplicaOnly
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     my $master_store = $self->{master_store};

@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test a preforked single running program in SERVICES
 #
-sub test_prefork
+sub test_prefork ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single successful service";
     my $srv = $self->lemming_service(prefork => 1);
     $self->start();

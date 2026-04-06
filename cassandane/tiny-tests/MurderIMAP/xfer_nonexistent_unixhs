@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_xfer_nonexistent_unixhs
     :UnixHierarchySep
+    ($self)
 {
-    my ($self) = @_;
-
     my $admintalk = $self->{backend1_adminstore}->get_client();
     my $backend2_servername = $self->{backend2}->get_servername();
 

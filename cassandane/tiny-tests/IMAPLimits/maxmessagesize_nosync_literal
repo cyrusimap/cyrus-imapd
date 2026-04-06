@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_maxmessagesize_nosync_literal
+sub test_maxmessagesize_nosync_literal ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
     # Do this by brute force until we have IMAPTalk v4.06+
     $talk->_imap_socket_out($talk->{CmdId}++ . " APPEND INBOX {101+}\015\012");

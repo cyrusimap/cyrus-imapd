@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_duplicate_suppression_on_badmbox
     :DuplicateSuppressionOn :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing behaviour with duplicate suppression on";
     xlog $self, "interaction with attempted delivery to a";
     xlog $self, "non-existant mailbox";

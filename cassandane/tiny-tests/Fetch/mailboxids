@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_mailboxids
     :min_version_3_1 :Conversations
+    ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my $res = $imaptalk->status('INBOX', ['mailboxid']);

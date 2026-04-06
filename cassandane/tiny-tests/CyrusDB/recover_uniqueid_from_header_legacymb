@@ -3,8 +3,8 @@ use Cassandane::Tiny;
 
 sub test_recover_uniqueid_from_header_legacymb
     :min_version_3_6 :MailboxLegacyDirs
+    ($self)
 {
-    my ($self) = @_;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
     # first start will set up cassandane user

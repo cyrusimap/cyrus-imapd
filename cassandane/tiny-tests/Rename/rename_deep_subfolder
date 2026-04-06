@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test Deep rename (intermediates)
 #
-sub test_rename_deep_subfolder
+sub test_rename_deep_subfolder ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.user-src.a.b.c.subdir") || die;

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_change_selected
     :needs_component_idled :min_version_3_9
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test of NOTIFY events following SELECTED mailbox";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

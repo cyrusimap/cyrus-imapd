@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_https_h2
     :want_service_https :needs_component_httpd :needs_dependency_nghttp2
+    ($self)
 {
-    my ($self) = @_;
-
     # skip past setup logs
     $self->{instance}->getsyslog();
 

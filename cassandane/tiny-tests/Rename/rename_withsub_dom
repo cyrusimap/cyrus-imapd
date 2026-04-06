@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test rename a folder with subfolders
 #
-sub test_rename_withsub_dom
+sub test_rename_withsub_dom ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.a");

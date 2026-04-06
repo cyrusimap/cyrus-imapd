@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_email2uids
     :needs_component_httpd
+    ($self)
 {
-    my ($self) = @_;
-
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
     $self->assert_not_null($Id);

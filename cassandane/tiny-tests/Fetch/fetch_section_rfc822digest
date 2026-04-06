@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_fetch_section_rfc822digest
+sub test_fetch_section_rfc822digest ($self)
 {
-    my ($self) = @_;
-
     my $imaptalk = $self->{store}->get_client();
 
     my $ct = "multipart/digest; boundary=\"foo\"";

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_startup_exits
+sub test_startup_exits ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test a program in the START section which fails";
     $self->lemming_start(tag => 'A', delay => 100, mode => 'exit');
     $self->lemming_start(tag => 'B', delay => 200, mode => 'exit');

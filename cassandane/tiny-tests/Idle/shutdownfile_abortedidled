@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_shutdownfile_abortedidled
     :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test the IDLE command vs the shutdownfile, idled started but aborted";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

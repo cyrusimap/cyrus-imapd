@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_disabled
+sub test_disabled ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Test that the IDLE command can be disabled in";
     xlog $self, "imapd.conf by setting imapidlepoll = 0";
 

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_plus_address_partial_case
     :FuzzyMatch :NoAltNameSpace
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Testing behaviour of plus addressing where subfolder doesn't exist";
 
     my $folder = "INBOX.Twists";

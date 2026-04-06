@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_syncproto_dump_restore
+sub test_syncproto_dump_restore ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create("subfolder");

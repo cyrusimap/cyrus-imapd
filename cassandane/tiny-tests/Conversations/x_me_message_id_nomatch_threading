@@ -7,8 +7,8 @@ use Cassandane::Tiny;
 #
 sub test_x_me_message_id_nomatch_threading
     :min_version_3_0
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     xlog $self, "generating message A";

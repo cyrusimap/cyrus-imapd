@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_basic_abortedidled
     :needs_component_idled
+    ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "Basic test of the IDLE command, idled started but aborted";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');

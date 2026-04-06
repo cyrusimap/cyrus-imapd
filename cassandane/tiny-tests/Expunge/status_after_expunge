@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_status_after_expunge
+sub test_status_after_expunge ($self)
 {
-    my ($self, $folder, %params) = @_;
-
     my $store = $self->{store};
     my $talk = $store->get_client();
 

@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_set_user_flag_deliver
+sub test_set_user_flag_deliver ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
 
     # Data thanks to http://hipsteripsum.me

@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 sub test_xfer_mailbox_altns_unixhs
     :AllowMoves :AltNamespace :UnixHierarchySep
     :min_version_3_2 :max_version_3_4
+    ($self)
 {
-    my ($self) = @_;
-
     # what we expect from this test will depend on the cyrus version being
     # run on backend2
     my $backend2_permits_single_mailbox = 1;

@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_add_annot_deliver_tomailbox
     :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     $self->start_my_instances();
 
     xlog $self, "Testing adding an annotation from the Annotator";

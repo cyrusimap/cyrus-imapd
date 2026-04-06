@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_maxmsg_email_limited
     :JMAPExtensions :NoStartInstances
+    ($self)
 {
-    my ($self) = @_;
-
     my $mailbox_maxmessages_email = $self->LIMITED;
     $self->{instance}->{config}->set(
         mailbox_maxmessages_email => $mailbox_maxmessages_email,

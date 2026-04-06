@@ -9,9 +9,8 @@ use Cassandane::Tiny;
 sub test_custom_notify_deleted
     :NoStartInstances
     :min_version_3_1
+    ($self)
 {
-    my ($self) = @_;
-
     # set up a custom notification template
     $self->{instance}->{config}->set(
         virusscan_notification_subject => 'custom ½ subject',

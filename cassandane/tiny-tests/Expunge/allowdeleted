@@ -3,9 +3,8 @@ use Cassandane::Tiny;
 
 sub test_allowdeleted
     :AllowDeleted :DelayedExpunge :Conversations
+    ($self)
 {
-    my ($self, $folder, %params) = @_;
-
     my $store = $self->{store};
     my $talk = $store->get_client();
 

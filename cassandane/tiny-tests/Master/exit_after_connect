@@ -4,10 +4,8 @@ use Cassandane::Tiny;
 #
 # Test a single program in SERVICES which fails after connect
 #
-sub test_exit_after_connect
+sub test_exit_after_connect ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single service will exit after connect";
     my $srv = $self->lemming_service();
     $self->start();

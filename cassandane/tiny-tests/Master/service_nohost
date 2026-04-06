@@ -1,10 +1,8 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_service_nohost
+sub test_service_nohost ($self)
 {
-    my ($self) = @_;
-
     xlog $self, "single successful service with a port-only listen=";
     my $srv = $self->lemming_service(host => undef);
     $self->start();

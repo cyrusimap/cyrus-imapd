@@ -4,9 +4,8 @@ use Cassandane::Tiny;
 # Tests userid with dots and unix hierarchy separator
 sub test_dots_unix
     :UnixHierarchySep NoAutocreate PopUseACL
+    ($self)
 {
-    my ($self) = @_;
-
     my $user = 'userid.with.dots';
     # We will also play a bit with the internal form of this userid
     (my $user_internal = $user) =~ s/\./^/g;

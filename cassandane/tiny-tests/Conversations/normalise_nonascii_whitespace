@@ -13,8 +13,8 @@ use Cassandane::Tiny;
 #
 sub test_normalise_nonascii_whitespace
     :min_version_3_0 :Conversations
+    ($self)
 {
-    my ($self) = @_;
     my %exp;
 
     xlog $self, "generating message A";

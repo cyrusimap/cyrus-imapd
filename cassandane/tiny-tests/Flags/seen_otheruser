@@ -16,9 +16,8 @@ use Cassandane::Tiny;
 #
 sub test_seen_otheruser
     :NoAltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     # no particular reason to use an admin rather than just another user,
     # but it's easy
     $self->{instance}->create_user("otheruser");
