@@ -1,0 +1,284 @@
+name: Merge on demand
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  merge-on-demand:
+    # This is a pre-filter.  This would match "Do not !!merge-this", or
+    # ">"-prefixed quoted form, both of which would be foolish to trigger on.
+    # But it lets us not run an action at all when it can't possibly match.
+    # The more careful checking is down in the steps below.
+    if: >-
+      github.event.issue.pull_request.url != '' &&
+      contains(github.event.comment.body, '!!merge-this')
+    runs-on: ubuntu-latest
+
+    # Serialize merges repo-wide: two commands racing to push the base
+    # branch would leave the loser with a non-fast-forward rejection. The
+    # base branch isn't in the issue_comment payload, so we can't key on
+    # it; merges are rare and fast, so serializing the whole workflow is
+    # cheap. Never cancel an in-flight merge mid-push.
+    concurrency:
+      group: merge-on-demand-${{ github.repository }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check permission and get PR details
+        id: info
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const body = context.payload.comment.body || '';
+            const isCommand = body
+              .split(/\r?\n/)
+              .some(line => line.trim() === '!!merge-this');
+
+            if (!isCommand) {
+              core.info('no !!merge-this command line found; skipping');
+              return;
+            }
+
+            const login = context.payload.comment.user.login;
+
+            const { data: collab } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: login,
+            });
+
+            if (!['admin', 'write'].includes(collab.permission)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `@${login} does not have push access to this repository.`,
+              });
+              core.setFailed('insufficient permission');
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
+            const headRepo = pr.head.repo ? pr.head.repo.full_name : null;
+
+            if (headRepo === null) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: 'Cannot merge: the head repository no longer exists (deleted fork?).',
+              });
+              core.setFailed('head repo is gone');
+              return;
+            }
+
+            // We push the rebased commits back to the PR branch so GitHub
+            // recognizes the PR as merged. That needs push access to the
+            // head repo: always true for a same-repo PR, and for a fork only
+            // if the contributor enabled "Allow edits from maintainers".
+            // When we can't, we still land the merge on base and close the
+            // PR with a comment (see "Comment on success"), rather than
+            // bouncing it back to the maintainer.
+            const canPushHead = headRepo === baseRepo || pr.maintainer_can_modify;
+
+            // GITHUB_TOKEN is a GitHub App token, which GitHub forbids from
+            // pushing changes under .github/workflows/ (the "workflows"
+            // permission can't be granted to it).  We're not going to be able to
+            // merge-on-demand this PR, so just refuse up front.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const touchesWorkflows = files.some(f =>
+              f.filename.startsWith('.github/workflows/') ||
+              (f.previous_filename || '').startsWith('.github/workflows/')
+            );
+
+            if (touchesWorkflows) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: 'Cannot merge: this PR changes files under `.github/workflows/`, which the merge bot\'s token is not permitted to push. Please merge it by hand.',
+              });
+              core.setFailed('PR modifies workflow files');
+              return;
+            }
+
+            core.setOutput('head_ref',      pr.head.ref);
+            core.setOutput('head_sha',      pr.head.sha);
+            core.setOutput('head_repo',     headRepo);
+            core.setOutput('base_ref',      pr.base.ref);
+            core.setOutput('can_push_head', canPushHead ? 'true' : 'false');
+            core.setOutput('proceed',       'true');
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.info.outputs.proceed == 'true'
+        with:
+          ref: ${{ steps.info.outputs.base_ref }}
+          fetch-depth: 0
+
+      - name: Configure git
+        if: steps.info.outputs.proceed == 'true'
+        run: |
+          git config user.email "noreply@cyrusimap.org"
+          git config user.name "Cyrus Merge Bot"
+
+          # Authenticate github.com pushes with a credential helper that
+          # reads the token from the environment when git asks, so the token
+          # never appears in a remote URL, in git config, or in process
+          # arguments. The empty value first resets any inherited helper.
+          git config --global credential.helper ''
+          git config --global --add credential.helper \
+            '!f() { test "$1" = get && printf "username=x-access-token\npassword=%s\n" "$GITHUB_TOKEN"; }; f'
+
+      - name: Rebase and merge
+        id: merge
+        if: steps.info.outputs.proceed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF:  ${{ steps.info.outputs.head_ref }}
+          HEAD_SHA:  ${{ steps.info.outputs.head_sha }}
+          HEAD_REPO: ${{ steps.info.outputs.head_repo }}
+          BASE_REF:  ${{ steps.info.outputs.base_ref }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          CAN_PUSH_HEAD: ${{ steps.info.outputs.can_push_head }}
+        run: |
+          FORK_URL="https://github.com/${HEAD_REPO}.git"
+
+          git fetch origin "${BASE_REF}"
+          git fetch "${FORK_URL}" "${HEAD_REF}"
+
+          # Refuse if the branch tip moved between the permission check and
+          # now: we wanted to merge what the maintainer reviewed, not whatever
+          # has since been pushed to the fork.
+          FETCHED_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "${FETCHED_SHA}" != "${HEAD_SHA}" ]; then
+            echo "PR head moved from ${HEAD_SHA} to ${FETCHED_SHA} since the command was issued; refusing to merge." >&2
+            exit 1
+          fi
+
+          git checkout -b pr-branch FETCH_HEAD
+
+          if ! git rebase "origin/${BASE_REF}"; then
+            git rebase --abort
+            exit 1
+          fi
+
+          NEW_SHA=$(git rev-parse HEAD)
+
+          # Reset base to the current remote tip first so the merge commit's
+          # first parent is up to date and --first-parent history stays clean.
+          git checkout -B "${BASE_REF}" "origin/${BASE_REF}"
+          git merge --no-ff -m "Merge pull request #${PR_NUMBER}" pr-branch
+          MERGE_SHA=$(git rev-parse HEAD)
+
+          # We push the rebased head back to the PR branch *before* base so
+          # GitHub auto-detects the merge.  If we can't update the head, we
+          # still land the merge on base and let "Comment on success" close
+          # the PR with a note.
+          #
+          # The head push can be rejected even when CAN_PUSH_HEAD is true and
+          # the PR touches no workflow files: rebasing onto base pulls in
+          # base's own changes under .github/workflows/, and GITHUB_TOKEN may
+          # not push those to the fork. The base push is unaffected (base
+          # already has them), so for that one expected rejection we fall
+          # through to merge-and-close. Any other push failure is a genuine
+          # error and aborts before base is touched, rather than silently
+          # downgrading to a non-merged PR closure.
+          PUSHED_HEAD=false
+          if [ "${CAN_PUSH_HEAD}" = "true" ]; then
+            if push_err=$(git push --force "${FORK_URL}" "pr-branch:${HEAD_REF}" 2>&1); then
+              PUSHED_HEAD=true
+            elif printf '%s\n' "$push_err" | grep -qE 'without .workflows. permission'; then
+              printf '%s\n' "$push_err" >&2
+              echo "Head push rejected because it would update workflow files on the fork; landing on base and closing the PR instead." >&2
+            else
+              printf '%s\n' "$push_err" >&2
+              echo "Head push failed for an unexpected reason; aborting before touching base." >&2
+              exit 1
+            fi
+          fi
+
+          git push origin "${BASE_REF}"
+
+          echo "auto_merged=${PUSHED_HEAD}"  >> "$GITHUB_OUTPUT"
+
+          echo "old_sha=${HEAD_SHA:0:12}"     >> "$GITHUB_OUTPUT"
+          echo "new_sha=${NEW_SHA:0:12}"      >> "$GITHUB_OUTPUT"
+          echo "merge_sha=${MERGE_SHA:0:12}"  >> "$GITHUB_OUTPUT"
+
+      - name: Comment on success
+        if: success() && steps.info.outputs.proceed == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            // These interpolations are all our own values (12-hex SHAs and
+            // the literal "true"/"false"), never user input, so embedding
+            // them in the script source is safe.
+            const autoMerged  = '${{ steps.merge.outputs.auto_merged }}' === 'true';
+            const canPushHead = '${{ steps.info.outputs.can_push_head }}' === 'true';
+            const oldSha   = '${{ steps.merge.outputs.old_sha }}';
+            const newSha   = '${{ steps.merge.outputs.new_sha }}';
+            const mergeSha = '${{ steps.merge.outputs.merge_sha }}';
+
+            const how = oldSha === newSha
+              ? `merged as ${mergeSha}`
+              : `rebased from ${oldSha} to ${newSha} and merged as ${mergeSha}`;
+
+            let body = `This PR was ${how}.`;
+            if (!autoMerged) {
+              body += '\n\nGitHub will not mark this merged on its own, so I am'
+                + ' closing it manually; the change is on the base branch as'
+                + ' noted above.';
+              body += canPushHead
+                ? ' (The rebased commits could not be pushed back to the PR'
+                  + ' branch: the rebase pulled in changes under'
+                  + ' `.github/workflows/` that this bot is not permitted to'
+                  + ' push.)'
+                : ' (Enabling "Allow edits from maintainers" on future PRs'
+                  + ' lets the bot update the branch so GitHub records them as'
+                  + ' merged.)';
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+            if (!autoMerged) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                state: 'closed',
+              });
+            }
+
+      - name: Comment on failure
+        if: failure() && steps.info.outcome == 'success'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Merge failed. See the [action log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`,
+            });
