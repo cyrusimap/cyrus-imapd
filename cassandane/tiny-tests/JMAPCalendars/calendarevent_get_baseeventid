@@ -87,9 +87,9 @@ sub test_calendarevent_get_baseeventid
     ]);
 
     $self->assert_deep_equals([
-        encode_eventid($event1Uid, '20230101T090000'),
-        encode_eventid($event2Uid, '20230102T010000'),
-        encode_eventid($event1Uid, '20230102T090000'),
+        encode_eventid($event1Id, '20230101T090000'),
+        encode_eventid($event2Id, '20230102T010000'),
+        encode_eventid($event1Id, '20230102T090000'),
     ], $res->[0][1]{ids});
 
     my @events = sort {

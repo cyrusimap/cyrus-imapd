@@ -92,24 +92,12 @@ sub encode_eventid
 {
     # This function hard-codes the event id format.
     # It might break if we change the id scheme.
-    my ($uid, $recurid) = @_;
-    my $eid = 'E';
+    my ($id, $recurid) = @_;
+    my $eid = '';
     if ($recurid) {
-        $eid .= 'R'
+        $eid .= 'ER' . $recurid . '-';
     }
-    if ($uid =~ /[^0-9A-Za-z\-_]/) {
-        $eid .= 'B';
-    }
-    $eid .= '-';
-    if ($recurid) {
-        $eid .= $recurid . '-';
-    }
-    if ($uid =~ /[^0-9A-Za-z\-_]/) {
-        $eid .= encode_base64url($uid);
-    }
-    else {
-        $eid .= $uid;
-    }
+    $eid .= $id;
     return $eid;
 }
 

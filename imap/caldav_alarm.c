@@ -59,6 +59,7 @@ struct get_alarm_rock {
     const char *userid;
     const char *mboxname;
     uint32_t imap_uid;  // for logging
+    modseq_t createdmodseq; // for CalendarEvent ID
     icaltimezone *floatingtz;
     time_t last;
     time_t now;
@@ -354,7 +355,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_COLOR, buf_release(&calcolor));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_OWNER, xstrdup(ownerid));
 
-    struct jmap_caleventid eid = { 0 };
+    struct jmap_caleventid eid = { .createdmodseq = rock->createdmodseq };
 
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     if (prop) eid.ical_uid = icalproperty_get_value_as_string(prop);
@@ -947,6 +948,7 @@ static int has_alarms(void *data, struct mailbox *mailbox,
 }
 
 static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
+                             modseq_t createdmodseq,
                              const char *userid, icaltimezone *floatingtz,
                              icalcomponent *ical, time_t lastrun,
                              time_t runtime, int dryrun)
@@ -978,8 +980,10 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
     }
 
     /* Process alarms */
-    struct get_alarm_rock rock =
-        { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
+    struct get_alarm_rock rock = {
+        userid, mboxname, imap_uid, createdmodseq,
+        floatingtz, lastrun, runtime, 0, dryrun
+    };
     struct icalperiodtype range = icalperiodtype_null_period();
     /* Limit our recurrence expansion to a decade from today.
        This will end up missing events that occur less frequent than
@@ -1208,6 +1212,7 @@ static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 
 struct process_alarms_rock {
     uint32_t mbox_options;
+    modseq_t createdmodseq; // for CalendarEvent ID
     icalcomponent *ical;
     struct lastalarm_data *alarm;
     time_t runtime;
@@ -1250,7 +1255,8 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     floatingtz = caldav_get_calendar_tz(mailbox, userid);
 
     /* Process any VALARMs in the patched iCalendar resource */
-    check = process_alarms(mailbox, uid, userid, floatingtz, myical,
+    check = process_alarms(mailbox, uid, prock->createdmodseq,
+                           userid, floatingtz, myical,
                            prock->alarm->lastrun, prock->runtime, prock->dryrun);
     if (!prock->alarm->nextcheck || (check && check < prock->alarm->nextcheck)) {
         prock->alarm->nextcheck = check;
@@ -1320,7 +1326,8 @@ static int process_valarms(struct mailbox *mailbox,
 
     syslog(LOG_DEBUG, "processing alarms in resource");
 
-    data.nextcheck = process_alarms(mboxname, record->uid, userid,
+    data.nextcheck = process_alarms(mboxname, record->uid,
+                                    record->createdmodseq, userid,
                                     floatingtz, ical, data.lastrun, runtime, dryrun);
     free(userid);
 
@@ -1342,8 +1349,10 @@ static int process_valarms(struct mailbox *mailbox,
     mbname_free(&mbname);
 
     /* Process VALARMs in per-user-cal-data */
-    struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime, dryrun, is_secretarymode };
+    struct process_alarms_rock prock = {
+        mailbox->i.options, record->createdmodseq,
+        ical, &data, runtime, dryrun, is_secretarymode
+    };
 
     syslog(LOG_DEBUG, "processing per-user alarms");
 
@@ -2260,7 +2269,9 @@ EXPORTED int caldav_alarm_upgrade()
             if (ical) {
                 if (has_alarms(ical, mailbox, record->uid, NULL)) {
                     char *userid = mboxname_to_userid(mailbox_name(mailbox));
-                    time_t nextcheck = process_alarms(mailbox_name(mailbox), record->uid,
+                    time_t nextcheck = process_alarms(mailbox_name(mailbox),
+                                                      record->uid,
+                                                      record->createdmodseq,
                                                       userid, floatingtz, ical,
                                                       runtime, runtime, /*dryrun*/1);
                     free(userid);

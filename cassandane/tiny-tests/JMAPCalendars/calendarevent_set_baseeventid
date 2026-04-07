@@ -73,8 +73,8 @@ sub test_calendarevent_set_baseeventid
         }, 'R2'],
     ]);
 
-    my $eventInstance1Id = encode_eventid($event1Uid, '20230101T090000');
-    my $eventInstance2Id = encode_eventid($event1Uid, '20230102T090000');
+    my $eventInstance1Id = encode_eventid($event1Id, '20230101T090000');
+    my $eventInstance2Id = encode_eventid($event1Id, '20230102T090000');
 
     $self->assert_deep_equals([
         $eventInstance1Id, $eventInstance2Id

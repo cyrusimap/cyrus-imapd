@@ -48,14 +48,16 @@ sub test_calendarevent_get_recurrenceinstances
             }
         }, 'R1']
     ]);
+    my $event1Id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($event1Id);
 
     my @ids = (
-        encode_eventid('event1uid','20190108T090000'),
-        encode_eventid('event1uid','20190115T090000'),
-        encode_eventid('event1uid','20190110T120000'),
-        encode_eventid('event1uid','20190122T090000'), # is excluded
-        encode_eventid('event1uid','20191201T090000'), # does not exist
-        encode_eventid('event1uid','20190102T090000'), # from second rrule
+        encode_eventid($event1Id,'20190108T090000'),
+        encode_eventid($event1Id,'20190115T090000'),
+        encode_eventid($event1Id,'20190110T120000'),
+        encode_eventid($event1Id,'20190122T090000'), # is excluded
+        encode_eventid($event1Id,'20191201T090000'), # does not exist
+        encode_eventid($event1Id,'20190102T090000'), # from second rrule
     );
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {

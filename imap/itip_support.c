@@ -1367,8 +1367,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 if (!r) {
                     comp = icalcomponent_get_first_real_component(ical);
                     if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                        struct jmap_caleventid eid = {
+                            .createdmodseq = record.createdmodseq,
+                            .ical_uid = uid
+                        };
                         int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                                mailbox_name(mailbox), uid,
+                                mailbox_name(mailbox), &eid,
                                 &recipient_addresses, 0, oldical, NULL);
                         if (r2) {
                             xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -1478,8 +1482,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         comp = icalcomponent_get_first_real_component(ical);
         if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+            struct jmap_caleventid eid = {
+                .createdmodseq = cdata->dav.createdmodseq,
+                .ical_uid = uid
+            };
+            if (!eid.createdmodseq) {
+                /* Fetch new index record for createdmodseq */
+                struct index_record record;
+                mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
+                eid.createdmodseq = record.createdmodseq;
+            }
             int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                    mailbox_name(mailbox), uid,
+                    mailbox_name(mailbox), &eid,
                     &recipient_addresses, 0, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",

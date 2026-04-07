@@ -41,7 +41,7 @@ sub test_calendarevent_set_recurrenceinstances
     # This might break if we change the id scheme.
 
     xlog $self, "Override a regular recurrence instance";
-    my $overrideId1 = encode_eventid('event1uid','20190115T090000');
+    my $overrideId1 = encode_eventid($eventId1,'20190115T090000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -103,7 +103,7 @@ sub test_calendarevent_set_recurrenceinstances
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog $self, "Set regular recurrence excluded";
-    my $overrideId2 = encode_eventid('event1uid','20190108T090000');
+    my $overrideId2 = encode_eventid($eventId1,'20190108T090000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
