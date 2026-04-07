@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # but our results don't have the correct total or list of messages, which
 # messes up further positional Email/query responses
 
-sub test_email_querychanges_snoozed_mail
+sub test_email_querychanges_squatter_ordering
     :needs_component_sieve
     ($self)
 {
