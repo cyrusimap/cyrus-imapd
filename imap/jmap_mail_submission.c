@@ -2063,6 +2063,8 @@ static int sub_sort_compare(const void **vp1, const void **vp2)
             }
             ret = strcmpsafe(m1->threadId, m2->threadId);
             break;
+        default:
+            ;
         }
     }
 

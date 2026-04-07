@@ -5947,6 +5947,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(UINT64_MAX - TIMESPEC_TO_NANOSEC(&md1->internaldate),
                          UINT64_MAX - TIMESPEC_TO_NANOSEC(&md2->internaldate));
             break;
+        case SORT_THREADID:
+            ret = numcmp(md1->cid, md2->cid);
+            break;
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
@@ -7445,13 +7448,11 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
         else
             buf_printf(&b, "UNKNOWN%u", sortcrit->key);
 
-        switch (sortcrit->key) {
-        case SORT_ANNOTATION:
+        if (sortcrit->key == SORT_ANNOTATION) {
             buf_printf(&b, " \"%s\" \"%s\"",
                        sortcrit->args.annot.entry,
                        *sortcrit->args.annot.userid ?
                             "value.priv" : "value.shared");
-            break;
         }
         sortcrit++;
     } while (sortcrit->key);
@@ -7481,6 +7482,8 @@ EXPORTED void freesortcrit(struct sortcrit *s)
         case SORT_SNOOZEDUNTIL:
             free(s[i].args.mailbox.id);
             break;
+        default:
+            ;
         }
         i++;
     } while (s[i].key != SORT_SEQUENCE);
