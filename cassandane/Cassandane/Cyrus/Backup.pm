@@ -48,8 +48,6 @@ sub _backup_setup ($self)
 # Helper: run BackupUser and return ($version, $size)
 sub _do_backup ($self, $meta, $data, $service, $servername)
 {
-    local $ENV{DEBUGIO} = 1 if $self->{store}->{verbose};
-
     return Cyrus::Backup::BackupUser(
         $service->host, $service->port,
         $meta, $data, $servername, 'cassandane',
