@@ -58,7 +58,7 @@ sub GetFile {
     return 'SKIP' unless $wanted{$header->{name}};
     return 'SKIP' if -f $wanted{$header->{name}};
     return 'EDIT' unless $fh;
-    my $check = ME::CyrusBackup::GetSHA1($fh);
+    my $check = Cyrus::Backup::GetSHA1($fh);
     if ("files/$check" eq $header->{name}) {
       my ($login, $pass, $uid, $gid) = getpwnam('cyrus');
       seek($fh, 0, 0);

@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+
+sub test_folder_delete
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    # Create two folders with messages
+    $talk->create("INBOX.Keep");
+    $talk->create("INBOX.Disposable");
+
+    $self->{store}->set_folder("INBOX.Keep");
+    $self->make_message("Keep msg 1") or die;
+
+    $self->{store}->set_folder("INBOX.Disposable");
+    $self->make_message("Disposable msg 1") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+
+    # First backup
+    my ($version, $size) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt(0, $size);
+
+    # Verify both folders in backup state
+    my $dbh = $self->_open_backup_db($meta);
+    my $rows = $dbh->selectall_hashref('SELECT * FROM imap', 'name');
+    $self->assert(exists $rows->{'INBOX.Keep'}, 'Keep folder in backup');
+    $self->assert(exists $rows->{'INBOX.Disposable'}, 'Disposable folder in backup');
+    $self->assert_num_equals(0, $rows->{'INBOX.Keep'}{deleted});
+    $self->assert_num_equals(0, $rows->{'INBOX.Disposable'}{deleted});
+    $dbh->disconnect;
+
+    # Delete the Disposable folder and expire it
+    $talk->delete("INBOX.Disposable");
+    $self->{instance}->run_command({ cyrus => 1 },
+        'cyr_expire', '-X' => '0', '-D' => '0');
+
+    # Second backup - should mark Disposable as deleted
+    my ($version2, $size2) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt($size, $size2);
+
+    $dbh = $self->_open_backup_db($meta);
+    $rows = $dbh->selectall_hashref('SELECT * FROM imap WHERE deleted = 0', 'name');
+    $self->assert(exists $rows->{'INBOX.Keep'}, 'Keep folder still active');
+    $self->assert(!exists $rows->{'INBOX.Disposable'},
+        'Disposable no longer active after deletion');
+
+    my ($deleted_ts) = $dbh->selectrow_array(
+        "SELECT deleted FROM imap WHERE name = 'INBOX.Disposable' AND deleted != 0",
+    );
+    $self->assert($deleted_ts, 'Disposable has a deletion timestamp');
+    $dbh->disconnect;
+}

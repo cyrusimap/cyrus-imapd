@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+# Test that Cyrus::Backup::Restore::GetTar can stream through a backup
+# and that the tar contains the expected entry types.
+sub test_restore_tar_contents
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.Alpha");
+    $talk->subscribe("INBOX");
+
+    $self->{store}->set_folder("INBOX.Alpha");
+    $self->make_message("Alpha msg") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+
+    my ($version, $size) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt(0, $size);
+
+    # Stream through the tar and catalogue what's in it
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    my $ts = $restore->GetTar();
+
+    my %entries;
+    $ts->StreamCopy(sub {
+        my $header = shift;
+        my $outpos = shift;
+        my $fh = shift;
+
+        my $name = $header->{name};
+        return 'SKIP' unless $name;
+
+        # Categorise by prefix
+        if ($name =~ m{^files/}) {
+            push @{$entries{files}}, $name;
+        }
+        elsif ($name =~ m{^folders/}) {
+            push @{$entries{folders}}, $name;
+        }
+        elsif ($name =~ m{^imap/}) {
+            push @{$entries{imap}}, $name;
+        }
+        elsif ($name =~ m{^meta/}) {
+            push @{$entries{meta}}, $name;
+        }
+        else {
+            push @{$entries{other}}, $name;
+        }
+
+        return 'SKIP';
+    });
+
+    # We should have at least one file (the message)
+    $self->assert(exists $entries{files}, 'tar contains file entries');
+    $self->assert(@{$entries{files}} >= 1,
+        'at least one message file');
+
+    # We should have folder metadata (cyrus.index, cyrus.header at minimum)
+    $self->assert(exists $entries{folders}, 'tar contains folder entries');
+    my @index = grep { m/cyrus\.index$/ } @{$entries{folders}};
+    my @header = grep { m/cyrus\.header$/ } @{$entries{folders}};
+    $self->assert(@index >= 1, 'at least one cyrus.index');
+    $self->assert(@header >= 1, 'at least one cyrus.header');
+
+    # We should have imap links (folder name -> uniqueid mappings)
+    $self->assert(exists $entries{imap}, 'tar contains imap entries');
+
+    # We should have meta entries (subscriptions at minimum since we subscribed)
+    $self->assert(exists $entries{meta}, 'tar contains meta entries');
+    my @subs = grep { m{^meta/sub} } @{$entries{meta}};
+    $self->assert(@subs >= 1, 'at least one subscription meta entry');
+}

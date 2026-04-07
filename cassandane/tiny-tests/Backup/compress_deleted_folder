@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+
+# Regression test: deleted folders must stay deleted after compression.
+#
+# Before the fix, the imap row's offset was not updated when a folder was
+# deleted, so CompressBackup's StreamCopy matched the creation entry (keeping
+# it with deleted=0) and dropped the deletion entry.  After compression the
+# folder silently reappeared.
+sub test_compress_deleted_folder
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    # Create two folders with messages
+    $talk->create("INBOX.Keep");
+    $talk->create("INBOX.Disposable");
+
+    $self->{store}->set_folder("INBOX.Keep");
+    $self->make_message("Keep msg 1") or die;
+    $self->make_message("Keep msg 2") or die;
+
+    $self->{store}->set_folder("INBOX.Disposable");
+    $self->make_message("Disposable msg 1") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+
+    # First backup
+    my ($version, $size) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt(0, $size);
+
+    # Delete Disposable and expire
+    $talk->delete("INBOX.Disposable");
+    $self->{instance}->run_command({ cyrus => 1 },
+        'cyr_expire', '-X' => '0', '-D' => '0');
+
+    # Add another message to Keep
+    $self->{store}->set_folder("INBOX.Keep");
+    $self->make_message("Keep msg 3") or die;
+
+    # Second backup - marks Disposable as deleted
+    my ($version2, $size2) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt($size, $size2);
+
+    my $dbh = $self->_open_backup_db($meta);
+    my ($disp_deleted) = $dbh->selectrow_array(
+        "SELECT deleted FROM imap WHERE name = 'INBOX.Disposable' AND deleted != 0",
+    );
+    $self->assert($disp_deleted, 'Disposable marked as deleted before compress');
+
+    my ($tar_before) = $dbh->selectrow_array('SELECT filename FROM status');
+    my ($size_before) = $dbh->selectrow_array('SELECT size FROM status');
+    $dbh->disconnect;
+
+    # Ensure the new tar gets a different timestamp-based filename
+    sleep 1;
+
+    # Compress with -p 101 to force compression regardless of stale percentage
+    my ($cver, $csize, $cpct) = Cyrus::Backup::CompressBackup(
+        $meta, $data, 'cassandane', undef, 101,
+    );
+    $self->assert_num_gt(0, $csize);
+
+    # Verify compression actually ran (new tar file)
+    $dbh = $self->_open_backup_db($meta);
+    my ($tar_after) = $dbh->selectrow_array('SELECT filename FROM status');
+    my ($size_after) = $dbh->selectrow_array('SELECT size FROM status');
+
+    $self->assert_str_not_equals($tar_before, $tar_after,
+        'compression created a new tar file');
+    $self->assert_num_lt($size_before, $size_after,
+        'compressed tar is smaller');
+
+    # THE KEY ASSERTION: Disposable must not reappear after compression
+    my ($disp_after) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM imap WHERE name = 'INBOX.Disposable'",
+    );
+    $self->assert_num_equals(0, $disp_after,
+        'Disposable folder removed from imap after compress');
+
+    # Keep folder should still be present with all its messages
+    my ($keep_count) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM indexed i "
+        . "JOIN imap im ON (i.folderid = im.folderid) "
+        . "WHERE im.name = 'INBOX.Keep'",
+    );
+    $self->assert_num_equals(3, $keep_count,
+        'Keep folder has all 3 messages after compress');
+
+    $dbh->disconnect;
+}

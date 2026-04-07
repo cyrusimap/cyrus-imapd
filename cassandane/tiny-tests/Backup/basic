@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+sub test_basic
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    $self->make_message("Email 1") or die;
+    $self->make_message("Email 2") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+
+    my @users = Cyrus::Backup::GetUsers($service->host, $service->port, $servername);
+    $self->assert_str_equals('cassandane', join(',', @users));
+
+    my ($version, $size) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt(0, $size);
+
+    # add a subscription and another message
+    my $talk = $self->{store}->get_client();
+    $talk->subscribe("INBOX");
+    $self->make_message("Email 3") or die;
+
+    my ($newversion, $newsize) = $self->_do_backup($meta, $data, $service, $servername);
+
+    $self->assert_num_equals($version, $newversion);
+    $self->assert_num_gt($size, $newsize);
+
+    $self->assert(-f "$meta/backupstate.sqlite3");
+
+    my $restore = Cyrus::Backup::Restore->new($meta);
+    my $file = $restore->TarFileName();
+
+    $self->assert(-f "$data/$file");
+}
