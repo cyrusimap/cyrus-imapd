@@ -12,6 +12,7 @@
 #include "acl.h"
 #include "parseaddr.h"
 #include "strarray.h"
+#include "util.h"
 
 
 #define SCHED_INBOX     "Inbox/"
@@ -49,6 +50,7 @@ struct sched_data {
     const strarray_t *schedule_addresses;
     const char *calendarid;
     const char *status;
+    modseq_t createdmodseq; // for CalendarEvent ID
 };
 
 #define SCHEDFLAG_ISCHEDULE        (1<<0)

@@ -57,6 +57,8 @@ EOF
             properties => ['participants'],
         }, 'R2'],
     ]);
+    my $eventId = $res->[0][1]{created}{event1}{id};
+    $self->assert_not_null($eventId);
 
     xlog "Assert the Participant uri is encoded";
     $self->assert_str_equals('mailto:plus%2Buri@example.com',
@@ -73,7 +75,7 @@ EOF
     my ($imipnotif) = grep { $_->{METHOD} eq 'imip' } @$data;
     my $payload = decode_json($imipnotif->{MESSAGE});
     $self->assert_str_equals('plus+uri@example.com', $payload->{recipient});
-    my $expect_id = encode_eventid($uid);
+    my $expect_id = $eventId;
     $self->assert_str_equals($expect_id, $payload->{id});
     $self->assert_str_equals('REQUEST', $payload->{method});
 
