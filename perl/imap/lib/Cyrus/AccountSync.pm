@@ -10,7 +10,7 @@ use Digest::SHA qw(sha1_hex);
 use JSON;
 use Cyrus::Mbname;
 use Data::Dumper;
-use Tie::DataUUID qw{$uuid};
+use Data::UUID;
 
 =pod
 =head1 NAME
@@ -159,7 +159,7 @@ sub undump_user {
     my $highestmodseq = $mailbox->{highestModificationSequenceValue} || 1;
     my $uidvalidity = $mailbox->{uidValidity} || $time;
     my $last_uid = $mailbox->{nextUid} ? $mailbox->{nextUid} - 1 : 0;
-    my $uniqueid = $mailbox->{mailboxId} || "$uuid";
+    my $uniqueid = $mailbox->{mailboxId} || Data::UUID->new->create_str();
     my @annotations;
     if ($mailbox->{specialUse}) {
       push @annotations, {

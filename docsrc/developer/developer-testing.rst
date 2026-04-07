@@ -47,7 +47,6 @@ Install and configure Cassandane
    .. code-block:: bash
 
         sudo cpan -i AnyEvent Config::IniFiles Data::GUID Digest::CRC File::Slurp IO::File::fcntl IO::Socket::INET6 Net::Server::PreForkSimple News::NNTPClient Plack::Loader Types::Standard Unix::Syslog XML::Generator XML::Simple
-        sudo cpan -i Tie::DataUUID
         sudo cpan -i XML::Spice
         sudo cpan -i XML::Fast
         sudo cpan -i Data::ICal::TimeZone
