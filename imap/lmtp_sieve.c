@@ -1681,7 +1681,8 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
 
     struct sched_data sched_data =
         { SCHED_MECH_SIEVE, sched_flags, itip, NULL, NULL,
-          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, cal->calendarid, NULL };
+          ICAL_SCHEDULEFORCESEND_NONE, &sched_addresses, cal->calendarid,
+          NULL, 0 };
     struct caldav_sched_param sched_param = {
         (char *) ctx->userid, NULL, 0, 0, 1, NULL
     };

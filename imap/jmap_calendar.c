@@ -2899,7 +2899,10 @@ static int getcalendarevents_getinstances(json_t *jsevent,
         format_icaltimestr_to_datetimestr(eid->ical_recurid, &rock->buf);
         const char *jscalrecurid = buf_cstring(&rock->buf);
 
-        struct jmap_caleventid base_eid = { .ical_uid = eid->ical_uid };
+        struct jmap_caleventid base_eid = {
+            .createdmodseq = eid->createdmodseq,
+            .ical_uid = eid->ical_uid
+        };
         jmap_caleventid_encode(&base_eid, &baseidbuf);
 
         /* Client requested event recurrence instance */
@@ -3570,6 +3573,7 @@ gotevent:
         /* Client requested all events */
         jmap_filterprops(jsevent, props);
         struct jmap_caleventid eid = {
+            .createdmodseq = cdata->dav.createdmodseq,
             .ical_uid = cdata->ical_uid,
             .ical_recurid = jscal->ical_recurid,
         };
@@ -3588,6 +3592,7 @@ gotevent:
                 json_t *myevent = json_deep_copy(jsevent);
                 jmap_filterprops(myevent, props);
                 struct jmap_caleventid eid = {
+                    .createdmodseq = cdata->dav.createdmodseq,
                     .ical_uid = cdata->ical_uid,
                     .ical_recurid = jscal->ical_recurid,
                 };
@@ -3729,7 +3734,15 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         /* Split into single-valued uids and event recurrence instance ids */
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
-            struct jmap_caleventid *eid = jmap_caleventid_decode(id);
+            struct jmap_caleventid *eid = jmap_caleventid_lookup(id, db, NULL);
+
+            if (!eid->ical_uid) {
+                json_array_append_new(rock.get->not_found,
+                                      json_string(eid->raw));
+                jmap_caleventid_free(&eid);
+                continue;
+            }
+
             ptrarray_t *eventids = hash_lookup(eid->ical_uid, &eventids_by_uid);
             if (!eventids) {
                 eventids = ptrarray_new();
@@ -3835,6 +3848,7 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
                                       const strarray_t *schedule_addresses,
                                       icalcomponent *oldical,
                                       icalcomponent *newical,
+                                      modseq_t createdmodseq,
                                       int mode)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -3873,7 +3887,7 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
         if (strarray_contains_case(schedule_addresses, organizer)) {
             /* Organizer scheduling object resource */
             sched_request(sched_userid, sched_userid, schedule_addresses, organizer,
-                          oldical, newical, SCHED_MECH_JMAP_SET);
+                          oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
         } else {
             /* Attendee scheduling object resource */
             int omit_reply = 0;
@@ -3893,7 +3907,7 @@ static int setcalendarevents_schedule(const struct mailbox *mailbox,
             }
             if (!omit_reply && strarray_size(schedule_addresses))
                 sched_reply(sched_userid, sched_userid, schedule_addresses,
-                            oldical, newical, SCHED_MECH_JMAP_SET);
+                            oldical, newical, createdmodseq, SCHED_MECH_JMAP_SET);
         }
     }
 
@@ -4067,6 +4081,7 @@ struct createevent {
     strarray_t schedule_addresses;
     icalcomponent *ical_standalone;
     modseq_t deletedmodseq;
+    modseq_t createdmodseq;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -4196,6 +4211,7 @@ struct createevent_load_ical_rock {
     char *uniqueid;
     char *resourcename;
     modseq_t deletedmodseq;
+    modseq_t createdmodseq;
 };
 
 int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
@@ -4207,14 +4223,15 @@ int createevent_load_ical_cb(void *vrock, struct caldav_jscal *jscal)
             mbentry_t *mbentry = NULL;
             if (!mboxlist_lookup(jscal->cdata.dav.mailbox, &mbentry, NULL)) {
                 rock->uniqueid = xstrdup(mbentry->uniqueid);
-                rock->imap_uid = jscal->cdata.dav.imap_uid;
             }
             mboxlist_entry_free(&mbentry);
         }
         else {
             rock->uniqueid = xstrdup(jscal->cdata.dav.mailbox);
-            rock->imap_uid = jscal->cdata.dav.imap_uid;
         }
+
+        rock->imap_uid = jscal->cdata.dav.imap_uid;
+        rock->createdmodseq = jscal->cdata.dav.createdmodseq;
 
         if (!jscal->cdata.dav.alive) {
             rock->deletedmodseq = jscal->cdata.dav.modseq;
@@ -4261,6 +4278,8 @@ static int createevent_load_ical(jmap_req_t *req,
         }
 
         if (rock.deletedmodseq) goto done;
+
+        create->createdmodseq = rock.createdmodseq;
 
         if (create->ical_recurid) {
             // Merge new recurrence instance with existing iCalendar data.
@@ -4363,17 +4382,6 @@ static int createevent_store(jmap_req_t *req,
         goto done;
     }
 
-    // Handle scheduling
-    int is_draft = json_boolean_value(json_object_get(create->jsevent, "isDraft"));
-    if (send_itip && !is_draft) {
-        icalcomponent *sched_ical = create->ical_standalone ?
-            create->ical_standalone : create->ical;
-        r = setcalendarevents_schedule(mbox, create->sched_userid,
-                &create->schedule_addresses, NULL, sched_ical, JMAP_CREATE);
-        if (r) goto done;
-        remove_itip_properties(create->ical);
-    }
-
     // Use UID as DAV resource name, or generate name.
     if (!create->resourcename) {
         const char *p;
@@ -4397,10 +4405,12 @@ static int createevent_store(jmap_req_t *req,
     }
 
     // Write to database
+    int is_draft =
+        json_boolean_value(json_object_get(create->jsevent, "isDraft"));
     strarray_t add_imapflags = STRARRAY_INITIALIZER;
     if (is_draft) strarray_append(&add_imapflags, "\\draft");
     r = caldav_store_resource(&txn, create->ical, mbox,
-            create->resourcename, 0, create->db, PERMS_NOKEEP,
+            create->resourcename, create->createdmodseq, create->db, PERMS_NOKEEP,
             req->userid, &add_imapflags, NULL, &create->schedule_addresses);
     strarray_fini(&add_imapflags);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -4418,12 +4428,39 @@ static int createevent_store(jmap_req_t *req,
                            MBTYPE_CALENDAR, MBOXMODSEQ_ISDELETE);
     }
 
+    if (!create->createdmodseq) {
+        /* Fetch new index record to get createdmodseq */
+        struct index_record record;
+        mailbox_find_index_record(mbox, mbox->i.last_uid, &record);
+        create->createdmodseq = record.createdmodseq;
+    }
+
+    struct jmap_caleventid eid = {
+        .createdmodseq = create->createdmodseq,
+        .ical_uid = create->ical_uid,
+        .ical_recurid = create->ical_recurid,
+    };
+
+    // Handle scheduling
+    if (send_itip && !is_draft) {
+        icalcomponent *sched_ical = create->ical_standalone ?
+            create->ical_standalone : create->ical;
+        r2 = setcalendarevents_schedule(mbox, create->sched_userid,
+                                        &create->schedule_addresses, NULL,
+                                        sched_ical, eid.createdmodseq,
+                                        JMAP_CREATE);
+        if (r2) {
+            xsyslog(LOG_WARNING, "could not send scheduling messages",
+                    "uid=%s error=%s", create->ical_uid, error_message(r2));
+        }
+    }
+
     if (calendar_has_sharees(mbox->mbentry)) {
         // Create notification
         json_t *myevent = json_deep_copy(create->jsevent);
         jmapical_remove_peruserprops(myevent);
         r2 = jmap_create_caleventnotif(notifmbox, req->userid, req->authstate,
-                mailbox_name(mbox), "created", create->ical_uid,
+                mailbox_name(mbox), "created", &eid,
                 &create->schedule_addresses, NULL,
                 is_draft, myevent, NULL);
         if (r2) {
@@ -4434,10 +4471,6 @@ static int createevent_store(jmap_req_t *req,
     }
 
     // Set server-set properties
-    struct jmap_caleventid eid = {
-        .ical_uid = create->ical_uid,
-        .ical_recurid = create->ical_recurid,
-    };
     json_object_set_new(create->serverset, "id",
             json_string(jmap_caleventid_encode(&eid, &buf)));
 
@@ -4621,7 +4654,10 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     icaltimetype icalrecuriddt = icaltime_from_string(eid->ical_recurid);
     struct jmapical_datetime recuriddt = JMAPICAL_DATETIME_INITIALIZER;
     jmapical_datetime_from_icaltime(icalrecuriddt, &recuriddt);
-    struct jmap_caleventid base_eid = { .ical_uid = eid->ical_uid };
+    struct jmap_caleventid base_eid = {
+        .createdmodseq = eid->createdmodseq,
+        .ical_uid = eid->ical_uid
+    };
     struct buf buf = BUF_INITIALIZER;
 
     jmapical_localdatetime_as_string(&recuriddt, &buf);
@@ -5210,6 +5246,7 @@ static void setcalendarevents_update(jmap_req_t *req,
                                      struct mailbox *schedinbox,
                                      json_t *event_patch,
                                      struct jmap_caleventid *eid,
+                                     struct caldav_data *cdata,
                                      struct caldav_db *db,
                                      int send_scheduling_messages,
                                      json_t *serverset,
@@ -5219,7 +5256,6 @@ static void setcalendarevents_update(jmap_req_t *req,
     int r = 0;
 
     mbentry_t *mbentry = NULL;
-    struct caldav_data *cdata = NULL;
     struct mailbox *mbox = NULL;
     struct mailbox *dstmbox = NULL;
     mbentry_t *dstmbentry = NULL;
@@ -5247,20 +5283,6 @@ static void setcalendarevents_update(jmap_req_t *req,
     if (eid->ical_recurid) {
         r = check_eventid_exists(eid, db, &update.is_standalone);
         if (r) goto done;
-    }
-
-    /* Determine mailbox and resource name of calendar event. */
-    r = caldav_lookup_uid(db, eid->ical_uid, &cdata);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR,
-               "caldav_lookup_uid(%s) failed: %s", eid->ical_uid, error_message(r));
-        goto done;
-    }
-    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
-            !cdata->dav.rowid || !cdata->dav.imap_uid ||
-            cdata->comp_type != CAL_COMP_VEVENT) {
-        r = IMAP_NOTFOUND;
-        goto done;
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -5474,7 +5496,7 @@ static void setcalendarevents_update(jmap_req_t *req,
                 if (json_object_size(patch_copy)) {
                     int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                             req->authstate, mailbox_name(mbox), "updated",
-                            eid->ical_uid, &schedule_addresses, NULL,
+                            eid, &schedule_addresses, NULL,
                             record.system_flags & FLAG_DRAFT,
                             update.old_event, patch_copy);
                     if (r2) {
@@ -5501,7 +5523,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
         r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                update.oldical, update.newical, JMAP_UPDATE);
+                update.oldical, update.newical, eid->createdmodseq, JMAP_UPDATE);
         if (r) goto done;
     }
 
@@ -5607,12 +5629,12 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct mailbox *notifmbox,
                                      struct mailbox *schedinbox,
                                      struct jmap_caleventid *eid,
+                                     struct caldav_data *cdata,
                                      struct caldav_db *db,
                                      int send_scheduling_messages)
 {
     int r = 0;
 
-    struct caldav_data *cdata = NULL;
     struct mailbox *mbox = NULL;
     char *mboxname = NULL;
     struct mboxevent *mboxevent = NULL;
@@ -5657,8 +5679,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *event_patch = json_pack("{s:b}", "excluded", 1);
         json_t *update = NULL;
         json_t *err = NULL;
-        setcalendarevents_update(req, notifmbox, schedinbox, event_patch, eid, db,
-                send_scheduling_messages, update, &err);
+        setcalendarevents_update(req, notifmbox, schedinbox, event_patch,
+                                 eid, cdata, db,
+                                 send_scheduling_messages, update, &err);
         json_decref(event_patch);
         json_decref(update);
         if (err) {
@@ -5666,15 +5689,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
             json_decref(err);
         }
         return r;
-    }
-
-    /* Determine mailbox and resource name of calendar event. */
-    r = caldav_lookup_uid(db, eid->ical_uid, &cdata);
-    if (r) {
-        syslog(LOG_ERR,
-               "caldav_lookup_uid(%s) failed: %s", eid->ical_uid, cyrusdb_strerror(r));
-        r = CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_INTERNAL;
-        goto done;
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -5774,7 +5788,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     /* Handle scheduling. */
     if (!(record.system_flags & FLAG_DRAFT) && send_scheduling_messages) {
         r = setcalendarevents_schedule(mbox, sched_userid, &schedule_addresses,
-                oldical, newical, JMAP_DESTROY);
+                oldical, newical, eid->createdmodseq, JMAP_DESTROY);
         if (r) goto done;
     }
 
@@ -5822,7 +5836,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         jmapical_remove_peruserprops(old_event);
         int r2 = jmap_create_caleventnotif(notifmbox, req->userid,
                 req->authstate, mailbox_name(mbox), "destroyed",
-                eid->ical_uid, &schedule_addresses, NULL,
+                eid, &schedule_addresses, NULL,
                 record.system_flags & FLAG_DRAFT, old_event, NULL);
         if (r2) {
             xsyslog(LOG_WARNING, "could not create notification",
@@ -5855,14 +5869,27 @@ done:
     return r;
 }
 
-static struct jmap_caleventid *setcalendarevents_parse_id(jmap_req_t *req, const char *id)
+static struct jmap_caleventid *setcalendarevents_lookup_id(jmap_req_t *req,
+                                                           const char *id,
+                                                           struct caldav_db *db,
+                                                           struct caldav_data **cdatap)
 {
     if (id && id[0] == '#') {
         const char *newid = jmap_lookup_id(req, id + 1);
         if (!newid) return NULL;
         id = newid;
     }
-    return jmap_caleventid_decode(id);
+
+    struct jmap_caleventid *eid = jmap_caleventid_lookup(id, db, cdatap);
+
+    if (cdatap && *cdatap && (*cdatap)->comp_type != CAL_COMP_VEVENT) {
+        /* Failed to find an active record for a VEVENT.
+           We currently don't support VTODO, VJOURNAL, etc. */
+        xzfree(eid->_alloced[0]);
+        eid->ical_uid = NULL;
+    }
+
+    return eid;
 }
 
 static int setcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
@@ -5962,15 +5989,17 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         const char *id = json_string_value(juid);
         if (!id) continue;
 
-        eid = setcalendarevents_parse_id(req, id);
-        if (!eid) {
+        struct caldav_data *cdata = NULL;
+        eid = setcalendarevents_lookup_id(req, id, db, &cdata);
+        if (!eid->ical_uid) {
             json_object_set_new(set.not_destroyed, id,
                     json_pack("{s:s}", "type", "notFound"));
             continue;
         }
 
         /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, notifmbox, schedinbox, eid, db, send_itip);
+        r = setcalendarevents_destroy(req, notifmbox, schedinbox,
+                                      eid, cdata, db, send_itip);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, eid->raw, err);
@@ -6021,8 +6050,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     json_object_foreach(set.update, id, arg) {
         jmap_caleventid_free(&eid);
 
-        eid = setcalendarevents_parse_id(req, id);
-        if (!eid) {
+        struct caldav_data *cdata = NULL;
+        eid = setcalendarevents_lookup_id(req, id, db, &cdata);
+        if (!eid->ical_uid) {
             json_object_set_new(set.not_updated, id,
                     json_pack("{s:s}", "type", "notFound"));
             continue;
@@ -6044,8 +6074,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Update the calendar event. */
         json_t *update = json_object();
         json_t *err = NULL;
-        setcalendarevents_update(req, notifmbox, schedinbox, arg, eid, db,
-                send_itip, update, &err);
+        setcalendarevents_update(req, notifmbox, schedinbox, arg,
+                                 eid, cdata, db, send_itip, update, &err);
         if (err) {
             json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(update);
@@ -6159,6 +6189,7 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     struct jmap_caleventid eid = {
+        .createdmodseq = jscal->cdata.dav.createdmodseq,
         .ical_uid = jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid
     };
@@ -6334,6 +6365,7 @@ static void eventquery_read_timerange(json_t *filter,
 }
 
 struct eventquery_match {
+    modseq_t createdmodseq;
     char *ical_uid;
     char *utcstart;
     icalcomponent *ical;
@@ -6420,6 +6452,7 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
     if (!rights) goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
+    match->createdmodseq = jscal->createdmodseq;
     match->ical_uid = xstrdup(jscal->cdata.ical_uid);
     match->utcstart = xstrdup(jscal->dtstart);
     if (jscal->ical_recurid[0]) {
@@ -6562,6 +6595,7 @@ static int eventquery_textsearch_cb(void *vrock, struct caldav_jscal *jscal)
         return 0;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
+    match->createdmodseq = jscal->createdmodseq;
     match->ical_uid = xstrdup(jscal->cdata.ical_uid);
     match->utcstart = xstrdup(jscal->dtstart);
     if (jscal->ical_recurid[0]) {
@@ -6768,7 +6802,8 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
         goto done;
 
     struct jmap_caleventid eid = {
-        .ical_uid =jscal->cdata.ical_uid,
+        .createdmodseq = jscal->createdmodseq,
+        .ical_uid = jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid,
     };
     const char *id = jmap_caleventid_encode(&eid, buf);
@@ -6784,6 +6819,7 @@ struct eventquery_recur_rock {
     struct buf *buf;
     icaltimetype lastseen;
     icaltimezone *utc;
+    modseq_t createdmodseq;
 };
 
 static int eventquery_recur_cb(icalcomponent *comp,
@@ -6804,6 +6840,7 @@ static int eventquery_recur_cb(icalcomponent *comp,
             icalproperty_get_recurrenceid(prop) : start;
 
         struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
+        match->createdmodseq = rock->createdmodseq;
         match->ical_uid = xstrdup(icalcomponent_get_uid(comp));
         match->utcstart = xstrdup(icaltime_as_ical_string(utcstart));
         match->ical_recurid = xstrdup(icaltime_as_ical_string(recurid));
@@ -7067,7 +7104,7 @@ static int eventquery_run(jmap_req_t *req,
                 /* XXX - need tooManyRecurrenceInstances error ? */
                 struct eventquery_recur_rock rock = {
                     &mymatches, &buf, icaltime_null_time(),
-                    icaltimezone_get_utc_timezone(),
+                    icaltimezone_get_utc_timezone(), match->createdmodseq
                 };
                 icalcomponent_myforeach(match->ical, timerange, utc,
                                         eventquery_recur_cb, &rock);
@@ -7093,6 +7130,7 @@ static int eventquery_run(jmap_req_t *req,
         for (j = 0; j < (size_t) ptrarray_size(&matches); j++) {
             struct eventquery_match *m = ptrarray_nth(&matches, j);
             struct jmap_caleventid eid = {
+                .createdmodseq = m->createdmodseq,
                 .ical_uid = m->ical_uid,
                 .ical_recurid = m->ical_recurid
             };
@@ -7126,6 +7164,7 @@ static int eventquery_run(jmap_req_t *req,
         }
         struct eventquery_match *match = ptrarray_nth(&matches, i);
         struct jmap_caleventid eid = {
+            .createdmodseq = match->createdmodseq,
             .ical_uid = match->ical_uid,
             .ical_recurid = match->ical_recurid,
         };
@@ -7321,19 +7360,15 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Lookup event */
-    struct jmap_caleventid *eid = jmap_caleventid_decode(src_id);
     struct caldav_data *cdata = NULL;
-    r = caldav_lookup_uid(src_db, eid->ical_uid, &cdata);
-    jmap_caleventid_free(&eid);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
-        goto done;
-    }
-    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid ||
-            !cdata->dav.imap_uid || cdata->comp_type != CAL_COMP_VEVENT) {
+    struct jmap_caleventid *eid = jmap_caleventid_lookup(src_id, src_db, &cdata);
+    if (!eid->ical_uid) {
+        syslog(LOG_ERR, "caldav_lookup(%s) failed: %s",
+               src_id, error_message(r));
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
+    jmap_caleventid_free(&eid);
 
     /* Check privacy */
     if (cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
@@ -7677,10 +7712,22 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     json_t *err = NULL;
     int r = 0;
 
+    db = caldav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "caldav_open_mailbox failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
     /* Parse arguments */
     json_t *jprop = json_object_get(req->args, "eventId");
-    if (!json_is_string(jprop) ||
-        !(update.eid = jmap_caleventid_decode(json_string_value(jprop)))) {
+    if (json_is_string(jprop)) {
+        /* Determine mailbox and IMAP UID of calendar event. */
+        update.eid = jmap_caleventid_lookup(json_string_value(jprop),
+                                            db, &cdata);
+    }
+    if (!update.eid->ical_uid) {
         jmap_parser_invalid(&parser, "eventId");
     }
     jprop = json_object_get(req->args, "participantEmail");
@@ -7726,11 +7773,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
         goto done;
     }
 
-    db = caldav_open_userid(req->accountid);
-    if (!db) {
-        syslog(LOG_ERR,
-               "caldav_open_mailbox failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
+    if (!cdata || !cdata->dav.alive ||
+        !cdata->dav.rowid || !cdata->dav.imap_uid ||
+        cdata->comp_type != CAL_COMP_VEVENT) {
+        syslog(LOG_NOTICE, "can't find DAV event record for ID: %s",
+               update.eid->raw);
+        r = IMAP_NOTFOUND;
         goto done;
     }
 
@@ -7743,22 +7791,6 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
                    update.eid->ical_recurid ? update.eid->ical_recurid : "");
             goto done;
         }
-    }
-
-    /* Determine mailbox and IMAP UID of calendar event. */
-    r = caldav_lookup_uid(db, update.eid->ical_uid, &cdata);
-    if (r && r != CYRUSDB_NOTFOUND) {
-        syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
-               update.eid->ical_uid, error_message(r));
-        goto done;
-    }
-    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
-            !cdata->dav.rowid || !cdata->dav.imap_uid ||
-            cdata->comp_type != CAL_COMP_VEVENT) {
-        syslog(LOG_NOTICE, "can't find DAV event record for UID: %s",
-               update.eid->ical_uid);
-        r = IMAP_NOTFOUND;
-        goto done;
     }
 
     mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
@@ -7904,7 +7936,8 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
 
     /* Create and send the reply */
     sched_reply(req->accountid, req->accountid, &schedule_addr,
-                update.oldical, update.newical, SCHED_MECH_JMAP_PARTREPLY);
+                update.oldical, update.newical,
+                cdata->dav.createdmodseq, SCHED_MECH_JMAP_PARTREPLY);
 
     /* Get SCHEDULE-STATUS */
     const char *organizer = NULL;
@@ -7944,6 +7977,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     schedule_one_attendee(req->accountid, req->accountid, NULL, organizer,
                           part_email, caldav_get_historical_cutoff(),
                           update.oldical, update.newical,
+                          cdata->dav.createdmodseq,
                           SCHED_MECH_JMAP_PARTREPLY);
 
 no_op:

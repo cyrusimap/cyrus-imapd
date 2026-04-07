@@ -46,6 +46,8 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
             }
         }, 'R1']
     ]);
+    my $event1Id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($event1Id);
 
     xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
@@ -64,10 +66,10 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
     ]);
     $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-         encode_eventid('event1uid','20210119T090000'),
-         encode_eventid('event1uid','20210101T090000'),
-         encode_eventid('event1uid','20201124T090000'),
-         encode_eventid('event1uid','20201027T090000'),
-         encode_eventid('event1uid','20200929T090000'),
+         encode_eventid($event1Id,'20210119T090000'),
+         encode_eventid($event1Id,'20210101T090000'),
+         encode_eventid($event1Id,'20201124T090000'),
+         encode_eventid($event1Id,'20201027T090000'),
+         encode_eventid($event1Id,'20200929T090000'),
     ], $res->[0][1]{ids});
 }
