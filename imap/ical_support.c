@@ -3117,15 +3117,7 @@ EXPORTED int ical_categories_is_color(icalproperty *cprop)
 
     if (!categories) return 0;
 
-    if (categories[0] == '#') {
-        /* Is this #RRGGBB */
-        int i;
-        for (i = 1; i <= 6 && isxdigit(categories[i]); i++);
-
-        return (i == 7 && categories[7] == '\0');
-    }
-
-    return is_css3_color(categories);
+    return ical_is_valid_color(categories);
 }
 
 EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)

@@ -66,6 +66,7 @@ static const struct dav_namespace_t {
     { XML_NS_CALDAV, "C" },
     { XML_NS_CARDDAV, "C" },
     { XML_NS_ISCHED, NULL },
+    { XML_NS_APPLE, "A" },
     { XML_NS_CS, "CS" },
     { XML_NS_MECOM, "MC" },
     { XML_NS_MOBME, "MM" },
@@ -1291,6 +1292,10 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
                     ensure_ns(respNs, NS_CS, root,
+                              (const char *) nsDef->href,
+                              (const char *) nsDef->prefix);
+                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_APPLE))
+                    ensure_ns(respNs, NS_APPLE, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
                 else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MECOM))

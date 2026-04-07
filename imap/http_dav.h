@@ -42,6 +42,7 @@ enum {
     NS_CALDAV,
     NS_CARDDAV,
     NS_ISCHED,
+    NS_APPLE,
     NS_CS,
     NS_MECOM,
     NS_MOBME,
@@ -50,7 +51,7 @@ enum {
     NS_USERFLAG,
     NS_SYSFLAG
 };
-#define NUM_NAMESPACE 9
+#define NUM_NAMESPACE 10
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */

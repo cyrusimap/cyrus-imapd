@@ -35,7 +35,7 @@ EOF
     $self->assert_str_equals('HTTP/1.1 404 Not Found', $propstat->{'{DAV:}status'}{content});
     $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
 
-    # Set color.
+    # Set color to hex value.
     $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
                                     $proppatchXml, 'Content-Type' => 'text/xml');
 
@@ -46,4 +46,59 @@ EOF
     $self->assert_str_equals('HTTP/1.1 200 OK', $propstat->{'{DAV:}status'}{content});
     $self->assert_str_equals('#2952A3', $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'}{content});
 
+    # Change to named color.
+    $proppatchXml =~ s/#2952A3/SteelBlue/;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Assert color is set.
+    $response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $CalendarId,
+                                 $propfindXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 200 OK', $propstat->{'{DAV:}status'}{content});
+    $self->assert_str_equals('SteelBlue', $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'}{content});
+
+    # Attempt to change color to unknown name.
+    $proppatchXml =~ s/SteelBlue/foo/;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
+
+    # Attempt to change color to bad hex value.
+    $proppatchXml =~ s/foo/#foofoo/;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
+
+    # Attempt to change color to 3-digit hex value.
+    $proppatchXml =~ s/#foofoo/#01a/;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
+
+    # Attempt to change color to 8-digit hex value.
+    $proppatchXml =~ s/#01a/#01aAfFFa/;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 403 Forbidden', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
+
+    # Remove color.
+    $proppatchXml =~ s/set/remove/g;
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Assert that color isn't set.
+    $response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $CalendarId,
+                                 $propfindXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 404 Not Found', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
 }
