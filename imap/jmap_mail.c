@@ -5155,6 +5155,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t expunged_modseq = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -5249,6 +5250,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
+
+        if (is_expunged && md->modseq > expunged_modseq)
+            expunged_modseq = md->modseq;
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -5350,9 +5354,15 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
     free_hashu64_table(&touched_cids, NULL);
 
-    modseq_t modseq = emailsearch_has_fuzzymatch(&search) ?
-        search_get_indexed_modseq(req->accountid) : 0;
+    modseq_t modseq = 0;
+    if (emailsearch_has_fuzzymatch(&search)) {
+        modseq = search_get_indexed_modseq(req->accountid);
+        if (modseq && expunged_modseq > modseq) {
+            modseq = expunged_modseq;
+        }
+    }
     if (!modseq) modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:
@@ -5375,6 +5385,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t expunged_modseq = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -5449,6 +5460,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
+        if (is_expunged && md->modseq > expunged_modseq)
+            expunged_modseq = md->modseq;
+
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
 
@@ -5517,9 +5531,15 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     free_hash_table(&touched_ids, NULL);
 
-    modseq_t modseq = emailsearch_has_fuzzymatch(&search) ?
-        search_get_indexed_modseq(req->accountid) : 0;
+    modseq_t modseq = 0;
+    if (emailsearch_has_fuzzymatch(&search)) {
+        modseq = search_get_indexed_modseq(req->accountid);
+        if (modseq && expunged_modseq > modseq) {
+            modseq = expunged_modseq;
+        }
+    }
     if (!modseq) modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:
