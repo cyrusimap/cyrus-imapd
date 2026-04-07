@@ -30,6 +30,7 @@
 #include "imap/mboxname.h"
 #include "imap/message.h"
 #include "imap/spool.h"
+#include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -578,6 +579,257 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 }
 #endif
 
+#ifdef WITH_DAV
+static int processcal(void *ac, void *ic __attribute__((unused)), void *sc,
+                      void *mc, const char **errmsg __attribute__((unused)))
+{
+    sieve_cal_context_t *cal = (sieve_cal_context_t *) ac;
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *m = (message_data_t *) mc;
+    const char *content_types[] = { "text/calendar", NULL };
+    sieve_bodypart_t **parts = NULL;
+    icalcomponent *itip = NULL, *comp, *first;
+    icalproperty_method meth = 0;
+    icalcomponent_kind kind = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL;
+    const char *originator = NULL;
+    strarray_t sched_addresses = STRARRAY_INITIALIZER;
+    const char *errstr;
+    int r;
+
+    buf_reset(&cal->outcome);
+    buf_reset(&cal->reason);
+
+    printf("processing message '%s' as iCalendar => ", m->name);
+
+    r = getbody(mc, content_types, &parts);
+    if (r) {
+        buf_setcstr(&cal->reason, "unable to parse iMIP message");
+        goto done;
+    }
+    /* XXX currently struct bodypart as defined in message.h is the same as
+       sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
+    if (parts && parts[0]) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, parts[0]->decoded_body);
+        itip = ical_string_as_icalcomponent(&buf);
+        buf_free(&buf);
+    }
+
+    if (!itip) {
+        buf_setcstr(&cal->reason, "unable to find & parse text/calendar part");
+        goto done;
+    }
+
+    if (icalcomponent_isa(itip) != ICAL_VCALENDAR_COMPONENT) {
+        buf_setcstr(&cal->outcome, "error");
+        buf_setcstr(&cal->reason,
+                    "MUST have exactly one VCALENDAR component");
+        goto done;
+    }
+
+    meth = icalcomponent_get_method(itip);
+    if (meth == ICAL_METHOD_NONE) {
+        if (cal->allow_public) meth = ICAL_METHOD_PUBLISH;
+        else {
+            buf_setcstr(&cal->outcome, "error");
+            buf_setcstr(&cal->reason, "missing METHOD property");
+            goto done;
+        }
+    }
+
+    comp = first = icalcomponent_get_first_real_component(itip);
+    if (!comp) {
+        buf_setcstr(&cal->outcome, "error");
+        buf_setcstr(&cal->reason, "no component to schedule");
+        goto done;
+    }
+
+    kind = icalcomponent_isa(comp);
+    uid = icalcomponent_get_uid(comp);
+    if (!uid) {
+        buf_setcstr(&cal->outcome, "error");
+        buf_setcstr(&cal->reason, "missing UID property");
+        goto done;
+    }
+
+    cyrus_icalrestriction_check(itip);
+    if ((errstr = get_icalcomponent_errstr(itip,
+                    ICAL_SUPPORT_ALLOW_INVALID_IANA_TIMEZONE)) &&
+        ((meth != ICAL_METHOD_REPLY && meth != ICAL_METHOD_PUBLISH) ||
+         (!strstr(errstr, "Failed iTIP restrictions for ORGANIZER property") &&
+          !strstr(errstr, "No value for ORGANIZER property")))) {
+        /* XXX  Outlook sends METHOD:REPLY with no ORGANIZER,
+           but libical doesn't allow them in its restrictions checks */
+        buf_setcstr(&cal->outcome, "error");
+        buf_printf(&cal->reason, "invalid iCalendar data: %s", errstr);
+        goto done;
+    }
+
+    comp = first;
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+        organizer = icalproperty_get_decoded_calendaraddress(prop);
+    }
+
+    if (sd->userid) {
+        if (strchr(sd->userid, '@')) {
+            strarray_add(&sched_addresses, sd->userid);
+        }
+        else {
+            const char *domains;
+            char *domain;
+            tok_t tok;
+
+            domains = config_getstring(IMAPOPT_CALENDAR_USER_ADDRESS_SET);
+            if (!domains) domains = config_defdomain;
+
+            tok_init(&tok, domains, " \t", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+            while ((domain = tok_next(&tok))) {
+                strarray_appendm(&sched_addresses,
+                                 strconcat(sd->userid, "@", domain, NULL));
+            }
+            tok_fini(&tok);
+        }
+    }
+
+    if (cal->addresses) {
+        strarray_cat(&sched_addresses, cal->addresses);
+    }
+
+    originator = organizer;
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT:
+    case ICAL_VTODO_COMPONENT:
+    case ICAL_VPOLL_COMPONENT:
+        switch (meth) {
+        case ICAL_METHOD_POLLSTATUS:
+        case ICAL_METHOD_ADD:
+            if (kind == ICAL_VPOLL_COMPONENT) {
+                if (meth == ICAL_METHOD_ADD) goto unsupported_method;
+            }
+            else if (meth == ICAL_METHOD_POLLSTATUS) goto unsupported_method;
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_CANCEL:
+            if (cal->invites_only) {
+                buf_setcstr(&cal->reason, "configured to NOT process updates");
+                goto done;
+            }
+
+            if (cal->delete_cancelled)
+                buf_setcstr(&cal->outcome, "delete");
+            else
+                buf_setcstr(&cal->outcome, "update");
+
+            buf_printf(&cal->reason, "cancel by %s", originator);
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_REQUEST:
+            if (!organizer) {
+                buf_setcstr(&cal->outcome, "error");
+                buf_setcstr(&cal->reason, "missing ORGANIZER property");
+                goto done;
+            }
+
+            GCC_FALLTHROUGH
+
+        case ICAL_METHOD_PUBLISH:
+            if (meth == ICAL_METHOD_PUBLISH && !cal->allow_public) {
+                buf_setcstr(&cal->reason,
+                            "configured to NOT process public events");
+                goto done;
+            }
+
+            if (!buf_len(&cal->outcome)) {
+                if (!icalcomponent_get_sequence(comp)) {
+                    if (cal->updates_only) {
+                        buf_setcstr(&cal->reason,
+                                    "configured to process updates ONLY");
+                    }
+                    else {
+                        buf_printf(&cal->outcome, "add to calendar '%s'",
+                                   cal->calendarid ? cal->calendarid : "Default");
+                        buf_printf(&cal->reason,
+                                   "new invite sent by %s", originator);
+                    }
+                }
+                else {
+                    if (cal->invites_only) {
+                        buf_setcstr(&cal->reason,
+                                    "configured to process new invites ONLY");
+                    }
+                    else {
+                        buf_setcstr(&cal->outcome, "update");
+                        buf_printf(&cal->reason,
+                                   "invite sent by %s", originator);
+                    }
+                }
+            }
+            break;
+
+        case ICAL_METHOD_REPLY:
+            if (cal->invites_only) {
+                buf_setcstr(&cal->reason, "configured to NOT process replies");
+                goto done;
+            }
+
+            prop = icalcomponent_get_first_invitee(comp);
+            if (!prop) {
+                buf_setcstr(&cal->outcome, "error");
+                buf_setcstr(&cal->reason, "missing ATTENDEE property");
+                goto done;
+            }
+            originator = icalproperty_get_decoded_calendaraddress(prop);
+
+            buf_setcstr(&cal->outcome, "update");
+            buf_printf(&cal->reason, "reply sent by %s", originator);
+            break;
+
+        unsupported_method:
+        default:
+            /* Unsupported method */
+            buf_setcstr(&cal->outcome, "error");
+            buf_printf(&cal->reason, "unsupported method: '%s'",
+                       icalproperty_method_to_string(meth));
+            goto done;
+        }
+        break;
+
+    default:
+        /* Unsupported component */
+        buf_setcstr(&cal->outcome, "error");
+        buf_printf(&cal->reason, "unsupported component: '%s'",
+                   icalcomponent_kind_to_string(kind));
+        goto done;
+    }
+
+ done:
+    if (parts) {
+        sieve_bodypart_t **part;
+
+        for (part = parts; *part; part++) {
+            free(*part);
+        }
+        free(parts);
+
+        if (itip) icalcomponent_free(itip);
+    }
+
+    if (!buf_len(&cal->outcome))
+        buf_setcstr(&cal->outcome, "no_action");
+
+    printf("%s (%s)\n", buf_cstring(&cal->outcome), buf_cstring(&cal->reason));
+
+    return SIEVE_OK;
+}
+#endif
+
 static sieve_vacation_t vacation = {
     0,                          /* min response */
     0,                          /* max response */
@@ -774,6 +1026,9 @@ int main(int argc, char *argv[])
 
 #ifdef WITH_JMAP
     sieve_register_jmapquery(i, &jmapquery);
+#endif
+#ifdef WITH_DAV
+    sieve_register_processcal(i, &processcal);
 #endif
 
     res = sieve_script_load(script, &exe);
