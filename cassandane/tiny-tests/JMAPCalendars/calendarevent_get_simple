@@ -10,7 +10,7 @@ sub test_calendarevent_get_simple
     my $event = $self->putandget_vevent($uid, $ical);
     $self->assert_not_null($event);
     $self->assert_str_equals('Event', $event->{q{@type}});
-    $self->assert_str_equals(encode_eventid($uid), $event->{id});
+    $self->assert_str_equals("EM", substr($event->{id}, 0, 2));
     $self->assert_str_equals($uid, $event->{uid});
     $self->assert_null($event->{relatedTo});
     $self->assert_str_equals("yo", $event->{title});

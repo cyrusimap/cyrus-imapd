@@ -40,18 +40,26 @@ EOF
         $caldav->Request('PUT', "/dav/calendars/user/cassandane/Default/event$partstat.ics",
             $ical, 'Content-Type' => 'text/calendar');
 
-        my $eventId = encode_eventid($uid);
-
         xlog "Clean notifications";
         $self->{instance}->getnotify();
 
         xlog "Destroy event";
         my $res = $jmap->CallMethods([
+            ['CalendarEvent/query', {
+                "filter" => {
+                    "uid" => $uid,
+                }
+             }, "R0"],
             ['CalendarEvent/set', {
-                destroy => [ $eventId ],
+                '#destroy' => {
+                    resultOf => 'R0',
+                    name => 'CalendarEvent/query',
+                    path => '/ids'
+                }
             }, 'R1'],
         ]);
-        $self->assert_deep_equals([ $eventId ], $res->[0][1]{destroyed});
+        my $eventId = $res->[0][1]{ids}[0];
+        $self->assert_deep_equals([ $eventId ], $res->[1][1]{destroyed});
 
         my $data = $self->{instance}->getnotify();
         my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
@@ -59,7 +67,7 @@ EOF
             xlog "Assert iTIP notification is sent";
             $self->assert_not_null($notif);
 
-            my $expect_id = encode_eventid($uid);
+            my $expect_id = $eventId;
             my $notif_payload = decode_json($notif->{MESSAGE});
             $self->assert_str_equals($expect_id, $notif_payload->{id});
             $self->assert_str_equals($wantNotif, $notif_payload->{method});

@@ -383,9 +383,9 @@ static void test_decode_to_utf8(void)
 static void test_caleventid(void)
 {
 
-#define TESTCASE(s, want_uid, want_recurid, want_eid) \
+#define TESTCASE(s, want_uid, want_recurid, want_cmodseq) \
     { \
-        struct jmap_caleventid *eid = jmap_caleventid_decode(s); \
+        struct jmap_caleventid *eid = jmap_caleventid_lookup(s, NULL, NULL); \
         CU_ASSERT_PTR_NOT_NULL_FATAL(eid); \
         if (want_uid) \
             CU_ASSERT_STRING_EQUAL(want_uid, eid->ical_uid); \
@@ -397,33 +397,42 @@ static void test_caleventid(void)
         else \
             CU_ASSERT_PTR_NULL(eid->ical_recurid); \
         CU_ASSERT_PTR_EQUAL(eid->ical_recurid, eid->_alloced[1]); \
-        struct buf buf = BUF_INITIALIZER; \
-        CU_ASSERT_PTR_NOT_NULL(jmap_caleventid_encode(eid, &buf)); \
-        if (want_eid) \
-            CU_ASSERT_STRING_EQUAL(want_eid, buf_cstring(&buf)); \
-        else \
-            CU_ASSERT_STRING_EQUAL(s, buf_cstring(&buf)); \
-        buf_free(&buf); \
+        if (want_cmodseq) {                                             \
+            CU_ASSERT_EQUAL(want_cmodseq, eid->createdmodseq);          \
+                                                                        \
+            struct buf buf = BUF_INITIALIZER;                           \
+            CU_ASSERT_PTR_NOT_NULL(jmap_caleventid_encode(eid, &buf));  \
+            CU_ASSERT_STRING_EQUAL(s, buf_cstring(&buf));               \
+            buf_free(&buf);                                             \
+        }                                                               \
         jmap_caleventid_free(&eid); \
         CU_ASSERT_PTR_NULL(eid); \
     }
 
+    /* Legacy encodings */
     TESTCASE("61928725-A80F-4B2B-9704-ECC71E58F9E1",
-        "61928725-A80F-4B2B-9704-ECC71E58F9E1", NULL,
-        "E-61928725-A80F-4B2B-9704-ECC71E58F9E1");
+        "61928725-A80F-4B2B-9704-ECC71E58F9E1", NULL, 0);
 
     TESTCASE("E-61928725-A80F-4B2B-9704-ECC71E58F9E1",
-        "61928725-A80F-4B2B-9704-ECC71E58F9E1", NULL, NULL);
+        "61928725-A80F-4B2B-9704-ECC71E58F9E1", NULL, 0);
 
     TESTCASE("ER-20211207-61928725-A80F-4B2B-9704-ECC71E58F9E1",
-        "61928725-A80F-4B2B-9704-ECC71E58F9E1", "20211207", NULL);
+        "61928725-A80F-4B2B-9704-ECC71E58F9E1", "20211207", 0);
 
     TESTCASE("EB-NjE5Mjg3MjVAZXhhbXBsZS5jb20",
-        "61928725@example.com", NULL, NULL);
+        "61928725@example.com", NULL, 0);
 
     TESTCASE("ERB-20211207T233000-NjE5Mjg3MjVAZXhhbXBsZS5jb20",
-        "61928725@example.com", "20211207T233000", NULL);
+        "61928725@example.com", "20211207T233000", 0);
 
+    /* Compact encodings */
+    TESTCASE("EM-F", NULL, NULL, 1);
+
+    TESTCASE("EMzk", NULL, NULL, 255);
+
+    TESTCASE("EMzzzzzzzzzzw", NULL, NULL, 18446744073709551615ULL);
+
+    TESTCASE("ER20211207-EM-yV", NULL, "20211207", 1000);
 }
 
 /* vim: set ft=c: */
