@@ -533,6 +533,7 @@ static int caleventid_cb(void *vrock, struct caldav_jscal *jscal)
     struct caleventid_rock *rock = vrock;
 
     struct jmap_caleventid eid = {
+        .createdmodseq = jscal->createdmodseq,
         .ical_uid = jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid,
     };

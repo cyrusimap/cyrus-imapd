@@ -247,7 +247,7 @@ static json_t *build_eventnotif(const char *type,
                                 const char *byprincipal,
                                 const char *byname,
                                 const char *byemail,
-                                const char *ical_uid,
+                                struct jmap_caleventid *eid,
                                 const char *comment,
                                 int is_draft,
                                 json_t *jevent,
@@ -259,10 +259,7 @@ static json_t *build_eventnotif(const char *type,
     json_object_set_new(jn, "type", json_string(type));
     json_object_set_new(jn, "isDraft", json_boolean(is_draft));
 
-    struct jmap_caleventid eid = {
-        .ical_uid = ical_uid
-    };
-    const char *id = jmap_caleventid_encode(&eid, &buf);
+    const char *id = jmap_caleventid_encode(eid, &buf);
     json_object_set_new(jn, "calendarEventId", json_string(id));
 
     char date3339[RFC3339_DATETIME_MAX+1];
@@ -307,7 +304,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
                                      const struct auth_state *authstate,
                                      const char *calmboxname,
                                      const char *type,
-                                     const char *ical_uid,
+                                     struct jmap_caleventid *eid,
                                      const strarray_t *schedule_addresses,
                                      const char *comment,
                                      int is_draft,
@@ -316,7 +313,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
 {
     if (!notifmbox) {
         xsyslog(LOG_ERR, "can not create event notification (null notifmbox)",
-                "calendar=%s ical_uid=%s", calmboxname, ical_uid);
+                "calendar=%s ical_uid=%s", calmboxname, eid->ical_uid);
         return 0;
     }
 
@@ -333,7 +330,7 @@ HIDDEN int jmap_create_caleventnotif(struct mailbox *notifmbox,
     free(calhomename);
 
     json_t *jnotif = build_eventnotif(type, now.tv_sec, userid,
-            buf_cstring(&byname), byemail, ical_uid, comment,
+            buf_cstring(&byname), byemail, eid, comment,
             is_draft, jevent, jpatch);
 
     char *from = jmap_caleventnotif_format_fromheader(userid);
@@ -350,7 +347,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
                                         const char *userid,
                                         const struct auth_state *authstate,
                                         const char *calmboxname,
-                                        const char *ical_uid,
+                                        struct jmap_caleventid *eid,
                                         const strarray_t *schedule_addresses,
                                         int is_draft,
                                         icalcomponent *oldical,
@@ -440,7 +437,7 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     cyrus_gettime(CLOCK_REALTIME, &now);
     json_t *jnotif = build_eventnotif(type, now.tv_sec,
             byprincipal, buf_cstring(&byname), byemail,
-            ical_uid, NULL, is_draft, jevent, jpatch);
+            eid, NULL, is_draft, jevent, jpatch);
 
     r = append_eventnotif(from, userid, authstate, notifmbox,
                           calmboxname, &now, jnotif);
