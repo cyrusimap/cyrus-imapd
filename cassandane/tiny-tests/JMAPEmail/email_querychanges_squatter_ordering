@@ -1,0 +1,156 @@
+#!perl
+use Cassandane::Tiny;
+
+# If an email query happens before squatter runs, we get the new query state
+# but our results don't have the correct total or list of messages, which
+# messes up further positional Email/query responses
+
+sub test_email_querychanges_squatter_ordering
+    :needs_component_sieve
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $inbox = $user->mailboxes->inbox;
+
+    my %common_query = (
+        sort => [
+            {
+                isAscending => JSON::false,
+                mailboxId   => $inbox->id,
+                property    => 'snoozedUntil',
+            }, {
+                isAscending => JSON::false,
+                property    => 'receivedAt'
+            },
+        ],
+        filter => {
+            conditions => [
+                { inMailbox => $inbox->id },
+                { text      => 'Garnet'   },
+            ],
+            operator => 'AND',
+        },
+    );
+
+    xlog $self, "Install script to flag messages in inbox";
+    $self->{instance}->install_sieve_script(<<~EOF
+        require ["imap4flags"];
+        addflag "\\Seen";
+        EOF
+    );
+
+    xlog $self, "Make a bunch of messages that match our query";
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "Garnet");
+        $self->{instance}->deliver($msg);
+    }
+
+    xlog $self, "Run squatter to index them";  
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Get email ids";
+    my $res = $jmap->request([[
+        "Email/query" => {
+            %common_query,
+            calculateTotal => JSON::true,
+        },
+    ]]);
+
+    my $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            ids                 => [ (jstr()) x 10 ],
+            position            => 0,
+            total               => 10,
+        }),
+        $qres,
+    );
+    my $base_email_ids = $qres->{ids};
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    xlog $self, "Deliver a matching message but don't run squatter";
+    my $msg1 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Get our query state";
+    $res = $jmap->request([[
+        "Email/query" => {
+            %common_query,
+            limit => 5,
+            calculateTotal => JSON::true,
+        },
+    ]]);
+
+    $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            canCalculateChanges => JSON::true,
+            ids                 => [ (jstr()) x 5 ],
+            position            => 0,
+            total               => 10,
+            queryState          => jstr,
+        }),
+        $qres,
+    );
+
+    xlog $self, "Assert newly delivered but unindexed message is not in result";
+    $self->assert_cmp_deeply([ @{$base_email_ids}[0..4] ], $qres->{ids});
+
+    my $qstate = $qres->{queryState};
+    $self->assert_not_null($qstate);
+
+    xlog $self, "Query state: $qstate";
+
+    my $upto = $qres->{ids}->[-1];
+    $self->assert_not_null($upto);
+
+    xlog $self, "Our query state is $qstate";
+
+    xlog $self, "Now squatter runs...";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    xlog $self, "Deliver a new matching message";
+    my $msg2 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg2);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Check Email/queryChanges";
+    $res = $jmap->request([[
+        "Email/queryChanges" => {
+            %common_query,
+            sinceQueryState => $qstate,
+            upToId => $upto,
+        },
+    ]]);
+
+    my $qcres = $res->sentence_named("Email/queryChanges")->arguments;
+    my $newqstate = $qcres->{newQueryState};
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            added               => [ { id => jstr, index => 0 }, { id => jstr, index => 1 } ],
+            removed             => [ jstr, jstr ],
+        }),
+        $qcres,
+    );
+
+    xlog $self, "Check email/query with position 5. Should start one before $upto since two new messages were delivered from the given query state";
+    $res = $jmap->request([[
+        "Email/query" => {
+          %common_query,
+          position => 5,
+        },
+    ]]);
+
+    $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_str_equals($upto, $qres->{ids}[1]);
+    $self->assert_cmp_deeply([ @{$base_email_ids}[3..$#{$base_email_ids}] ], $qres->{ids});
+}
