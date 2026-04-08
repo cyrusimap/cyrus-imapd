@@ -39,11 +39,13 @@ sub test_email_query_collapse
         $exp{C} = $self->make_message("Re: Email A", %params);
         $exp{C}->set_attributes(uid => 3, cid => $exp{A}->get_attribute('cid'));
 
+        my %account_args = $account ? (accountId => $account) : ();
+
         xlog $self, "list uncollapsed threads";
-        $res = $jmap->CallMethods([['Email/query', { accountId => $account }, "R1"]]);
+        $res = $jmap->CallMethods([['Email/query', { %account_args }, "R1"]]);
         $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
 
-        $res = $jmap->CallMethods([['Email/query', { accountId => $account, collapseThreads => JSON::true }, "R1"]]);
+        $res = $jmap->CallMethods([['Email/query', { %account_args, collapseThreads => JSON::true }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
     }
 }
