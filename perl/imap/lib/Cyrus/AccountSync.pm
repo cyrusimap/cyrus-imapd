@@ -154,7 +154,7 @@ sub undump_user {
       push @records, \%record;
     }
     $self->{sync}->dlwrite("APPLY", "MESSAGE", \@upload) if @upload;
-    my $mbname = Cyrus::Mbname->new_extuserfolder($opts{username}, $mailbox->{name});
+    my $mbname = Cyrus::Mbname->new_userfolder($opts{username}, $mailbox->{name});
     my $intname = $mbname->intname;
     my $highestmodseq = $mailbox->{highestModificationSequenceValue} || 1;
     my $uidvalidity = $mailbox->{uidValidity} || $time;
@@ -204,7 +204,7 @@ sub _mkname {
   my $mboxname = shift;
 
   my $mbname = Cyrus::Mbname->new_intname($mboxname);
-  return $mbname->extuserfolder;
+  return $mbname->userfolder;
 
 }
 

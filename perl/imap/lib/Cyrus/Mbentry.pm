@@ -1,5 +1,6 @@
 package Cyrus::Mbentry;
 use Moo;
+
 use Cyrus::DList;
 use Cyrus::Mbname;
 
@@ -25,126 +26,135 @@ has jmapid => (isa => Value, is => 'rw');
 has uidvalidity => (isa => Int, is => 'rw');
 
 sub _parse_dlist {
-  my ($self, $name, $details) = @_;
-  my $dlist = Cyrus::DList->parse_string($details, 0);
-  if ($name =~ m/^N/) {
-    $name = Cyrus::Mbname->new_dbname($name)->intname();
-    $self->{is_uuid} = 1;
-  }
-  if ($name =~ m/^I/) {
-    $self->{uniqueid} = substr($name, 1);
-    $self->{is_uuid} = 1;
-  }
-  if ($name =~ m/^J/) {
-    (undef, $self->{jmapid}) = split /\x1e/, $name;
-    $self->{is_uuid} = 1;
-  }
-  $self->{intname} = $name;
-  $self->{type} = 'e';
-  foreach my $item (@{$dlist->{data}}) {
-    if ($item->{key} eq 'A') {
-      my %acls;
-      foreach my $sub (@{$item->{data}}) {
-        $acls{$sub->{key}} = $sub->{data};
-      }
-      $self->{acls} = \%acls;
+    my ($self, $name, $details) = @_;
+    my $userid;
+    if ($name =~ m/^N/) {
+        my $mbname = eval { Cyrus::Mbname->new_dbname($name) };
+        die "Not a valid mbname $name = $details" unless $mbname;
+        $name = $mbname->intname;
+        $self->{is_uuid} = 1;
     }
-    if ($item->{key} eq 'C') {
-      $self->{createdmodseq} = $item->{data};
+    if ($name =~ m/^I/) {
+        $self->{uniqueid} = substr($name, 1); # can't die!
+        $self->{is_uuid} = 1;
     }
-    if ($item->{key} eq 'F') {
-      $self->{foldermodseq} = $item->{data};
+    if ($name =~ m/^J/) {
+        my $val = substr($name, 1);
+        ($userid, $self->{jmapid}) = split /\x1e/, $val;
+        die "No jmapid in $name = $details" unless $self->{jmapid};
+        $self->{is_uuid} = 1;
     }
-    if ($item->{key} eq 'H') {
-      for my $histitem (@{$item->{data}}) {
-        my %hist;
-        for my $field (@{$histitem->{data}}) {
-          if ($field->{key} eq 'F') {
-            $hist{foldermodseq} = $field->{data};
-          }
-          if ($field->{key} eq 'M') {
-            $hist{mtime} = $field->{data};
-          }
-          if ($field->{key} eq 'N') {
-            $hist{name} = Cyrus::Mbname->new_dbname("N$field->{data}")->intname();
-          }
+    $self->{intname} = $name;
+    $self->{type} = 'e';
+    my $dlist = Cyrus::DList->parse_string($details, 0);
+    die "Not a valid dlist $details" unless @{$dlist->{data}};
+    foreach my $item (@{$dlist->{data}}) {
+        if ($item->{key} eq 'A') {
+            my %acls;
+            foreach my $sub (@{$item->{data}}) {
+                $acls{$sub->{key}} = $sub->{data};
+            }
+            $self->{acls} = \%acls;
         }
-        push @{$item->{name_history}}, \%hist;
-      }
+        if ($item->{key} eq 'C') {
+            $self->{createdmodseq} = $item->{data};
+        }
+        if ($item->{key} eq 'F') {
+            $self->{foldermodseq} = $item->{data};
+        }
+        if ($item->{key} eq 'H') {
+            for my $histitem (@{$item->{data}}) {
+                my %hist;
+                for my $field (@{$histitem->{data}}) {
+                    if ($field->{key} eq 'F') {
+                        $hist{foldermodseq} = $field->{data};
+                    }
+                    if ($field->{key} eq 'M') {
+                        $hist{mtime} = $field->{data};
+                    }
+                    if ($field->{key} eq 'N') {
+                        $hist{name} = Cyrus::Mbname->new_dbname("N$field->{data}")->intname();
+                    }
+                }
+                push @{$item->{name_history}}, \%hist;
+            }
+        }
+        if ($item->{key} eq 'M') {
+            $self->{mtime} = $item->{data};
+        }
+        if ($item->{key} eq 'N') {
+            $self->{intname} = Cyrus::Mbname->new_dbname("N$item->{data}")->intname();
+        }
+        if ($item->{key} eq 'P') {
+            $self->{partition} = $item->{data};
+        }
+        if ($item->{key} eq 'I') {
+            $self->{uniqueid} = $item->{data};
+        }
+        if ($item->{key} eq 'J') {
+            $self->{jmapid} = $item->{data};
+        }
+        if ($item->{key} eq 'V') {
+            $self->{uidvalidity} = $item->{data};
+        }
+        if ($item->{key} eq 'T') {
+            $self->{type} = $item->{data};
+        }
     }
-    if ($item->{key} eq 'M') {
-      $self->{mtime} = $item->{data};
-    }
-    if ($item->{key} eq 'N') {
-      $self->{intname} = Cyrus::Mbname->new_dbname("N$item->{data}")->intname();
-    }
-    if ($item->{key} eq 'P') {
-      $self->{partition} = $item->{data};
-    }
-    if ($item->{key} eq 'I') {
-      $self->{uniqueid} = $item->{data};
-    }
-    if ($item->{key} eq 'J') {
-      $self->{jmapid} = $item->{data};
-    }
-    if ($item->{key} eq 'V') {
-      $self->{uidvalidity} = $item->{data};
-    }
-    if ($item->{key} eq 'T') {
-      $self->{type} = $item->{data};
-    }
-  }
-  return $self;
+
+    die "bad username for $name $details" if ($userid and $userid ne $self->username);
+
+    return $self;
 }
 
 sub parse {
-  my $Proto = shift;
-  my $Class = ref($Proto) || $Proto;
-  my $Self = {};
-  bless($Self, $Class);
+    my $Proto = shift;
+    my $Class = ref($Proto) || $Proto;
+    my $Self = {};
+    bless($Self, $Class);
 
-  my ($MailboxName, $MailboxDetails) = @_;
+    my ($MailboxName, $MailboxDetails) = @_;
 
-  if ($MailboxDetails =~ m/^\%/) {
-    return $Self->_parse_dlist($MailboxName, $MailboxDetails);
-  }
+    if ($MailboxDetails =~ m/^\%/) {
+        return $Self->_parse_dlist($MailboxName, $MailboxDetails);
+    }
 
-  # old formats
-  if ($MailboxDetails =~ s/^\((.*?)\) //) {
-    my $named = $1;
-    my %named = split / /, $named;
-    $Self->{uniqueid} = $named{uniqueid} if exists $named{uniqueid};
-    $Self->{specialuse} = $named{specialuse} if exists $named{specialuse};
-    # XXX - the rest
-  }
-  # XXX - it's mbtype, not "flag" - though it's also always 0...
-  my ($Flag, $Partition, $ACLs) = ($MailboxDetails =~ /^(\d) (\w+) (.*)/);
-  $Flag == 0 || die "Unexpected flag: $Flag";
-  my %ACLs = split("\t",$ACLs);
-  $Self->{type} = 'e';
-  $Self->{partition} = $Partition;
-  $Self->{acls} = \%ACLs;
-  $Self->{name} = $MailboxName;
+    # old formats
+    if ($MailboxDetails =~ s/^\((.*?)\) //) {
+        my $named = $1;
+        my %named = split / /, $named;
+        $Self->{uniqueid} = $named{uniqueid} if exists $named{uniqueid};
+        $Self->{specialuse} = $named{specialuse} if exists $named{specialuse};
+        # XXX - the rest
+    }
+    # XXX - it's mbtype, not "flag" - though it's also always 0...
+    my ($Flag, $Partition, $ACLs) = ($MailboxDetails =~ /^(\d) (\w+) (.*)/);
+    $Flag == 0 || die "Unexpected flag: $Flag";
+    my %ACLs = split("\t",$ACLs);
+    $Self->{type} = 'e';
+    $Self->{partition} = $Partition;
+    $Self->{acls} = \%ACLs;
+    $Self->{name} = $MailboxName;
 
-  return $Self;
+    return $Self;
 }
 
 sub FormatDBOld {
-  my $Self = shift;
-  my %named;
-  $named{uniqueid} = $Self->{uniqueid} if exists $Self->{uniqueid};
-  $named{specialuse} = $Self->{specialuse} if exists $Self->{specialuse};
-  my $str = '';
-  if (%named) {
-    $str = '(' . join(" ", map { "$_ $named{$_}" } sort keys %named) . ') ';
-  }
-  return $str . "0 " . $Self->{partition} . " " . join("\t", %{$Self->{acls}}) . "\t";
+    my $Self = shift;
+    my %named;
+    $named{uniqueid} = $Self->{uniqueid} if exists $Self->{uniqueid};
+    $named{specialuse} = $Self->{specialuse} if exists $Self->{specialuse};
+    my $str = '';
+    if (%named) {
+        $str = '(' . join(" ", map { "$_ $named{$_}" } sort keys %named) . ') ';
+    }
+    return $str . "0 " . $Self->{partition} . " " . join("\t", %{$Self->{acls}}) . "\t";
 }
 
 sub has_type {
-  my $self = shift;
-  my $arg = shift;
-  return $self->type =~ m/$arg/;
+    my $self = shift;
+    my $arg = shift;
+    return $self->type =~ m/$arg/;
 }
 
 # convenience functions
@@ -156,5 +166,6 @@ sub is_intermediate { shift->has_type('i') }
 sub username { shift->name->username }
 sub userfolder { shift->name->userfolder }
 sub adminfolder { shift->name->adminfolder }
+sub is_inbox { shift->name->is_inbox }
 
 1;
