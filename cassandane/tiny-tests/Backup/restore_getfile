@@ -1,0 +1,79 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use Cyrus::Backup::Restore;
+
+# Test that Cyrus::Backup::Restore can extract message files from a backup
+# by their SHA1 guid, both before and after compression.
+sub test_restore_getfile
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.TestFolder");
+    $self->{store}->set_folder("INBOX.TestFolder");
+    $self->make_message("Test message 1") or die;
+    $self->make_message("Test message 2") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+
+    # Back up
+    my ($version, $size) = $self->_do_backup($meta, $data, $service, $servername);
+    $self->assert_num_gt(0, $size);
+
+    # Get the SHA1 guids of backed-up files from the state DB
+    my $dbh = $self->_open_backup_db($meta);
+    my $guids = $dbh->selectcol_arrayref("SELECT guid FROM files");
+    $dbh->disconnect;
+
+    $self->assert(@$guids >= 2, 'at least 2 message files in backup');
+
+    # Use Restore to extract them
+    my $restore = Cyrus::Backup::Restore->new($meta);
+
+    # Verify TarFileName works
+    my $tarfile = $restore->TarFileName();
+    $self->assert($tarfile, 'TarFileName returns a value');
+    $self->assert(-f "$data/$tarfile", 'tar file exists on disk');
+
+    # Extract files
+    my @extracted = $restore->GetFile(@$guids);
+    $self->assert_num_equals(scalar @$guids, scalar @extracted,
+        'all requested files were extracted');
+
+    # Verify extracted files exist and are non-empty
+    for my $path (@extracted) {
+        $self->assert(-f $path, "extracted file exists: $path");
+        $self->assert(-s $path, "extracted file is non-empty: $path");
+    }
+
+    # Clean up before compression test — must release DB lock first
+    undef $restore;
+    unlink @extracted;
+    rmdir "$meta/files";
+
+    # Now compress and verify restore still works
+    sleep 1;
+    my ($cver, $csize, $cpct) = Cyrus::Backup::CompressBackup(
+        $meta, $data, 'cassandane', undef, 101,
+    );
+    $self->assert_num_gt(0, $csize);
+
+    # Re-open restore against compressed backup
+    my $restore2 = Cyrus::Backup::Restore->new($meta);
+    my $tarfile2 = $restore2->TarFileName();
+    $self->assert_str_not_equals($tarfile, $tarfile2,
+        'compressed backup has a new tar file');
+
+    # Extract again from compressed backup
+    my @extracted2 = $restore2->GetFile(@$guids);
+    $self->assert_num_equals(scalar @$guids, scalar @extracted2,
+        'all files extracted from compressed backup');
+
+    for my $path (@extracted2) {
+        $self->assert(-f $path, "extracted file exists after compress: $path");
+        $self->assert(-s $path, "extracted file is non-empty after compress: $path");
+    }
+}

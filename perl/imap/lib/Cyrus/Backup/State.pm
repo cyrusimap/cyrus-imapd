@@ -226,7 +226,7 @@ sub addheader {
     my $name = $1;
     my $item = $Self->get($filename);
     if ($item and not $item->{deleted}) {
-      $dbh->do("UPDATE imap SET deleted = ? WHERE name = ? AND deleted = 0", {}, $mtime, $name);
+      $dbh->do("UPDATE imap SET deleted = ?, offset = ? WHERE name = ? AND deleted = 0", {}, $mtime, $offset, $name);
     }
     my $folderid = $Self->folderid($target);
     # if no folderid (symlink to nowhere) we just have the deleted record left

@@ -20,6 +20,17 @@ use Cyrus::IndexFile;
 use Digest::SHA;
 use Date::Format;
 
+package Cyrus::NullLogger {
+  sub log {}
+  sub log_debug {}
+  sub log_event {}
+  sub log_debug_event {}
+}
+
+our $LOGGER_CB = sub { 'Cyrus::NullLogger' };
+
+sub logger { $LOGGER_CB->() }
+
 our $BackupVersion = 5;
 # UPDATE THIS WHENEVER A NEW CYRUS INDEX MINOR_VERSION IS CREATED
 our $MAX_INDEXVERSION = 20;
@@ -245,7 +256,7 @@ sub BackupUser {
       next if $item eq $NewName;
       next if $item eq '..';
       next if $item eq '.';
-      warn "REMOVING STALE FILE $DataDir/$item\n";
+      logger->log("REMOVING STALE FILE $DataDir/$item");
       unlink("$DataDir/$item");
     }
     closedir(DH);
@@ -262,7 +273,7 @@ sub BackupUser {
       next if $item eq '.lock';
       next if $item eq '..';
       next if $item eq '.';
-      warn "REMOVING STALE FILE $MetaDir/$item\n";
+      logger->log("REMOVING STALE FILE $MetaDir/$item");
       unlink("$MetaDir/$item");
     }
     closedir(DH);
@@ -719,12 +730,12 @@ sub iocmd {
 
   my $old = alarm(12000);
 
-  warn "IOCMD: $cmd\n" if $ENV{DEBUGIO};
+  logger->log_debug("IOCMD: $cmd");
 
   $IO->print("$cmd\n");
   my $res = $IO->getline();
   chomp($res);
-  warn "    => $res\n" if $ENV{DEBUGIO};
+  logger->log_debug("    => $res");
   unless ($res =~ m/^OK/) {
     die "IO $cmd failed $res\n";
   }
@@ -742,9 +753,9 @@ sub iolist {
     chomp($line);
     push @res, [map { deuri($_) } split / /, $line];
     last if $line =~ m/^DONE/;
-    warn " * $line\n" if $ENV{DEBUGIO};
+    logger->log_debug(" * $line");
   }
-  warn "DONE\n" if $ENV{DEBUGIO};
+  logger->log_debug("DONE");
 
   return @res;
 }
@@ -789,14 +800,14 @@ sub iofiles {
 
     # check sha1 locally
     my $sha1 = $1;
-    warn " * $sha1 $file $size $mtime $inode\n" if $ENV{DEBUGIO};
+    logger->log_debug(" * $sha1 $file $size $mtime $inode");
     unless ($checksha eq $sha1) {
       die "SHA1 mismatch for fetched file $file: $sha1 => $checksha\n";
     }
 
     $callback->($file, $tempfile, $size, $mtime, $inode, $sha1);
   }
-  warn "DONE\n" if $ENV{DEBUGIO};
+  logger->log_debug("DONE");
 
   return [map { deuri($_) } split / /, $res]; # split the DONE line
 }
