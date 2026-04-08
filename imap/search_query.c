@@ -1191,9 +1191,28 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
             case SORT_CONVEXISTS:
             case SORT_CONVSIZE:
             case SORT_HASCONVFLAG:
+            case SORT_SNOOZEDUNTIL:
                 return 1;
-            default:
-                break;
+            case SORT_SEQUENCE:
+            case SORT_ARRIVAL:
+            case SORT_CC:
+            case SORT_DATE:
+            case SORT_DISPLAYFROM:
+            case SORT_DISPLAYTO:
+            case SORT_FROM:
+            case SORT_SIZE:
+            case SORT_SUBJECT:
+            case SORT_TO:
+            case SORT_UID:
+            case SORT_FOLDER:
+            case SORT_RELEVANCY:
+            case SORT_SPAMSCORE:
+            case SORT_GUID:
+            case SORT_EMAILID:
+            case SORT_THREADID:
+            case SORT_SAVEDATE:
+            case SORT_CREATEDMODSEQ:
+                return 0;
         }
     }
 

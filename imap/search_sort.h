@@ -5,26 +5,8 @@
 #ifndef __CYRUS_SEARCH_SORT_H__
 #define __CYRUS_SEARCH_SORT_H__
 
-/* Sort criterion */
-struct sortcrit {
-    unsigned key;               /* sort key */
-    int flags;                  /* key modifiers as defined below */
-    union {                     /* argument(s) to the sort key */
-        struct {
-            char *entry;
-            char *userid;
-        } annot;
-        struct {
-            char *name;
-        } flag;
-        struct {
-            char *id;
-        } mailbox;
-    } args;
-};
-
 /* Values for sort keys */
-enum {
+enum sortkey {
     SORT_SEQUENCE = 0,
     SORT_ARRIVAL,       /* RFC 5256 */
     SORT_CC,            /* RFC 5256 */
@@ -52,7 +34,24 @@ enum {
     SORT_SAVEDATE,      /* nonstandard */
     SORT_SNOOZEDUNTIL,  /* nonstandard */
     SORT_CREATEDMODSEQ, /* nonstandard */
-    /* values > 255 are reserved for internal use */
+};
+
+/* Sort criterion */
+struct sortcrit {
+    enum sortkey key;           /* sort key */
+    int flags;                  /* key modifiers as defined below */
+    union {                     /* argument(s) to the sort key */
+        struct {
+            char *entry;
+            char *userid;
+        } annot;
+        struct {
+            char *name;
+        } flag;
+        struct {
+            char *id;
+        } mailbox;
+    } args;
 };
 
 /* Sort key modifier flag bits */
