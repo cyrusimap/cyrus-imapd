@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_querychanges
+    :min_version_3_3
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEventNotification/queryChanges', {
+            sinceQueryState => 'whatever',
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}
