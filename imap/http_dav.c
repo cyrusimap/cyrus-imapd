@@ -5702,9 +5702,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
 
-    /* Parse the path (use our own entry to suppress lookup) */
-    txn->req_tgt.mbentry = mboxlist_entry_create();
-    r = mparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    if (!txn->req_tgt.mbentry) {
+        /* Parse the path (use our own entry to suppress lookup) */
+        txn->req_tgt.mbentry = mboxlist_entry_create();
+        r = mparams->parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+    }
 
     /* Make sure method is allowed (only allowed on child of home-set) */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
