@@ -27,6 +27,7 @@ static void test_non_colors_arent(void)
         { "giraffe" },
         { "cowabunga" },
         { "isotope" },
+        { "this is much too long to be a colour name at present" },
     };
     const unsigned n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
@@ -35,6 +36,29 @@ static void test_non_colors_arent(void)
         bool found = is_css3_color(tests[i].name);
 
         CU_ASSERT_EQUAL(found, false);
+    }
+}
+
+static void test_case_insensitivity(void)
+{
+    static const struct {
+        const char *name;
+        bool expect;
+    } tests[] = {
+        { "blue",   true  },
+        { "Blue",   true  },
+        { "bLue",   true  },
+        { "beluga", false },
+        { "Beluga", false },
+        { "beLuga", false },
+    };
+    const unsigned n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        bool actual = is_css3_color(tests[i].name);
+
+        CU_ASSERT_EQUAL(actual, tests[i].expect);
     }
 }
 
