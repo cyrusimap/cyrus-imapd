@@ -11,7 +11,7 @@
 #include "util.h"
 
 static const struct css3_color_t css3_colors[] = {
-    /* must be sorted by name */
+    /* must be all lowercase, sorted by name */
     { "aliceblue",            240, 248, 255 },
     { "antiquewhite",         250, 235, 215 },
     { "aqua",                   0, 255, 255 },
@@ -217,13 +217,20 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
 
 EXPORTED bool is_css3_color(const char *s)
 {
+    char needle[CSS3_COLOR_T_NAME_LEN] = {0};
     const struct css3_color_t *c;
 
+    if (strlen(s) >= CSS3_COLOR_T_NAME_LEN)
+        return false; /* too long, can't possibly match */
+
+    strncpy(needle, s, CSS3_COLOR_T_NAME_LEN - 1);
+    lcase(needle);
+
     for (c = css3_colors;
-         c->name[0] && c->name[0] <= s[0];
+         c->name[0] && c->name[0] <= needle[0];
          c++)
     {
-        if (0 == strcasecmp(s, c->name))
+        if (0 == strcmp(needle, c->name))
             return true;
     }
 

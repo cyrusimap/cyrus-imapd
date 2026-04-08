@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 /* unit tests need to know this struct */
+#define CSS3_COLOR_T_NAME_LEN (29)
 struct css3_color_t {
     /* The longest current color name is "lightgoldenrodyellow" at 20 chars, so
      * name[] must be at least 21 bytes.  Rounding up to 29 makes this struct
@@ -19,7 +20,7 @@ struct css3_color_t {
      * longer evenly subdivide cache lines.  That shouldn't cause problems, but
      * I'm being cautious.
      */
-    char name[29];
+    char name[CSS3_COLOR_T_NAME_LEN];
     uint8_t r;
     uint8_t g;
     uint8_t b;
