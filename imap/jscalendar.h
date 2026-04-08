@@ -11,6 +11,8 @@
 extern "C" {
 #endif
 
+#include "jmap_util.h"
+
 #include <jansson.h>
 #include <libical/ical.h>
 
@@ -39,8 +41,8 @@ typedef struct {
     bool ignore_icalendar_convprops;
 } jscalendar_cfg_t;
 
-extern bool jscalendar_validate(json_t *jgroup, json_t **invalid);
-extern icalcomponent *jscalendar_to_ical(json_t *jgroup, jscalendar_cfg_t *);
+extern icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *, json_t *jgroup,
+                                         struct jmap_parser *parser);
 extern json_t *jscalendar_from_ical(jscalendar_cfg_t *, icalcomponent *vcal);
 
 #ifdef __cplusplus
