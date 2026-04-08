@@ -5325,6 +5325,11 @@ static void overrides_from_ical(jscalendar_cfg_t *cfg,
         json_object_del(jpatch, "recurrenceOverrides");
         json_object_del(jpatch, "recurrenceRule");
         const char *recurid = localtime_from_icaltime(icalrecurid, &buf);
+
+        const char *ovr_start = json_string_value(json_object_get(jpatch, "start"));
+        if (!strcmpsafe(recurid, ovr_start)) {
+            json_object_del(jpatch, "start");
+        }
         json_object_set_new(jovrs, recurid, jpatch);
     }
 
