@@ -1,0 +1,23 @@
+Description:
+
+Perl is now mandatory, at least version 5.28.0
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required
+
+
+GitHub issue:
+
+None

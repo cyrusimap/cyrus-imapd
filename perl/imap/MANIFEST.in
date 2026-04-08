@@ -9,7 +9,7 @@ Makefile.PL             Build Makefile for Cyrus::IMAP
 cyrperl.h               Declarations shared between Cyrus.xs and xsutil.c
 xsutil.c                Callback and utility functions for Cyrus interface
 typemap                 Typemap defining IMAP_Cyrus Perl "class"
-cyradm.sh               Shell script wrapper for Cyrus::IMAP::Shell
+cyradm.pl               Wrapper for Cyrus::IMAP::Shell
 examples/auditmbox.pl   (lame) Example of Cyrus::IMAP::Admin
 lib/Cyrus/AccountSync.pm    Tool to manage cyrus users via repliation protocol mapping to Apple's test data format
 lib/Cyrus/CacheFile.pm      Interface to the cyrus.cache data format

@@ -4,6 +4,7 @@
 {
     top_builddir => '@top_builddir@',
     top_srcdir => '@top_srcdir@',
+    prefix => '@prefix@',
 
     GCOV_CFLAGS => '@GCOV_CFLAGS@',
     GCOV_LDFLAGS => '@GCOV_LDFLAGS@',
@@ -13,7 +14,6 @@
     LIB_SASL => '@LIB_SASL@',
     LIB_UUID => '@LIB_UUID@',
     MYSQL_LIBADD => '@MYSQL_LIBADD@',
-    PERL_PREINSTALL => '@PERL_PREINSTALL@',
     PGSQL_LIBADD => '@PGSQL_LIBADD@',
     SASLFLAGS => '@SASLFLAGS@',
     SQLITE_LIBADD => '@SQLITE_LIBADD@',
