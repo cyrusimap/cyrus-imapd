@@ -3982,24 +3982,18 @@ static void validate_group(struct jmap_parser *parser, json_t *jgroup)
         jmap_parser_invalid(parser, "entries");
 }
 
-EXPORTED bool jscalendar_validate(json_t *jgroup, json_t **invalid)
+EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
+                                           json_t *jgroup,
+                                           struct jmap_parser *parser)
 {
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    validate_group(&parser, jgroup);
-    bool is_valid = !json_array_size(parser.invalid);
-
-    if (json_array_size(parser.invalid) && invalid) {
-        *invalid = json_incref(parser.invalid);
-    }
-
-    jmap_parser_fini(&parser);
-    return is_valid;
-}
-
-EXPORTED icalcomponent *jscalendar_to_ical(json_t *jgroup,
-                                           jscalendar_cfg_t *cfg)
-{
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
     icalcomponent *vcal = NULL;
+
+    if (!parser) parser = &myparser;
+
+    validate_group(parser, jgroup);
+    if (json_array_size(parser->invalid))
+        goto done;
 
     vcal = jobj_get_icalcomp(
         cfg, jgroup, ICAL_VCALENDAR_COMPONENT, GET_ICAL_CREATE);
@@ -4075,6 +4069,8 @@ EXPORTED icalcomponent *jscalendar_to_ical(json_t *jgroup,
 
     vendorexts_to_ical(cfg, jgroup, NULL, vcal);
 
+done:
+    jmap_parser_fini(&myparser);
     return vcal;
 }
 

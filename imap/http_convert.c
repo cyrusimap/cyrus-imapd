@@ -181,6 +181,7 @@ static int convert_to_ical(struct transaction_t *txn)
     jscalendar_cfg_t jscal_cfg = {
         .emailalert_default_uri = httpd_userid,
     };
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     int ret = 0;
 
     /* Parse the request body */
@@ -192,28 +193,23 @@ static int convert_to_ical(struct transaction_t *txn)
         goto done;
     }
 
-    /* Validate JSCalendar data */
-    json_t *invalid = NULL;
-    jscalendar_validate(jobj, &invalid);
-    if (invalid) {
-        json_t *jerr = json_pack("{s:o}", "invalidProperties", invalid);
+    /* Convert to iCalendar */
+    ical = jscalendar_to_ical(&jscal_cfg, jobj, &parser);
+    if (ical) {
+        const char *resp_payload = icalcomponent_as_ical_string(ical);
+        write_body(HTTP_OK, txn, resp_payload, strlen(resp_payload));
+    }
+    else if (json_array_size(parser.invalid)) {
+        json_t *jerr = json_pack("{s:O}", "invalidProperties", parser.invalid);
         char *err = json_dumps(jerr, JSON_INDENT(2) | JSON_ENCODE_ANY);
         write_body(HTTP_BAD_REQUEST, txn, err, strlen(err));
         json_decref(jerr);
         goto done;
     }
-
-    /* Convert to iCalendar */
-    ical = jscalendar_to_ical(jobj, &jscal_cfg);
-    if (ical) {
-        const char *resp_payload = icalcomponent_as_ical_string(ical);
-        write_body(HTTP_OK, txn, resp_payload, strlen(resp_payload));
-    }
     else {
         txn->error.desc = "Failed to convert to iCalendar";
         ret = HTTP_SERVER_ERROR;
     }
-    json_decref(invalid);
 
 done:
     if (ical) icalcomponent_free(ical);
