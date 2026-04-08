@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_scheduling_enabled
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $caldav = $self->{caldav};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            properties => [ 'id', 'schedulingEnabled' ]
+         }, "R1"]]);
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{schedulingEnabled});
+    my $calId = $res->[0][1]{list}[0]{id};
+
+    my $participants = {
+        org => {
+            name => "Cassandane",
+            roles => {
+                attendee => JSON::true,
+                owner => JSON::true,
+            },
+            sendTo => {
+                imip => 'cassandane@example.com',
+            },
+        },
+        att => {
+            name => "Bugs Bunny",
+            roles => {
+                attendee => JSON::true,
+            },
+            sendTo => {
+                imip => 'bugs@looneytunes.com',
+            },
+        },
+    };
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog $self, "send invitation as organizer to attendee";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            calendarIds => {
+                                $default_cal_id => JSON::true,
+                            },
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "timeZone" => "Australia/Melbourne",
+                            "duration" => "PT1H",
+                            "replyTo" => { imip => "mailto:cassandane\@example.com"},
+                            "participants" => $participants,
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@looneytunes.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+
+    xlog $self, "disable scheduling";
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calId => {
+                    schedulingEnabled => JSON::false
+                }
+            }
+         }, "R1"],
+        ['Calendar/get', {
+            properties => [ 'schedulingEnabled' ]
+         }, "R2"]
+    ]);
+    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{schedulingEnabled});
+
+    xlog $self, "add an attendee";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+        $id => {
+            'participants/att2' => {
+                '@type' => "Participant",
+                email => 'rr@looneytunes.com',
+                expectReply => JSON::true,
+                kind => "individual",
+                participationStatus => "needs-action",
+                name => "Road Runner",
+                roles => {
+                    attendee => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:rr@looneytunes.com',
+                }
+            }
+         }
+    }}, "R1"]]);
+
+    xlog $self, "Verify that no iMIP invite is sent";
+
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_null($imip);
+
+    xlog $self, "We should have generated a syslog message about annotation";
+    $self->assert_syslog_matches($self->{instance},
+        qr/Scheduling disabled for user cassandane on mailbox user.cassandane.#calendars.Default by CY:scheduling-enabled annotation/);
+}

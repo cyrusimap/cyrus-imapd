@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_changes_shared
+    :min_version_3_3
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
+    my $mantalk = $manifold_user->caldav;
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1']
+    ]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    # This should work, but it currently doesn't.
+    # At least we can check for the correct error.
+
+    $res = $jmap->CallMethods([
+        ['CalendarEventNotification/queryChanges', {
+            accountId => 'cassandane',
+            sinceQueryState => $state,
+        }, 'R1']
+    ]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+}

@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast qw(vcard2hash);
+
+sub test_itip_request_with_transp
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    $self->{instance}->getnotify();
+
+    xlog $self, "Create scheduled event with transparent TRANSP";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    '@type' => 'Event',
+                    duration => 'P1D',
+                    freeBusyStatus => 'free',
+                    participants => {
+                        cassandane => {
+                            roles => {
+                                attendee => JSON::true,
+                            },
+                            sendTo => {
+                                imip => 'mailto:someone@example.com',
+                            },
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        },
+                    },
+                    replyTo => {
+                        imip => 'mailto:cassandane@example.com',
+                    },
+                    showWithoutTime => JSON::true,
+                    start => '2026-01-01T00:00:00',
+                    title => 'event',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{event}{id};
+    $self->assert_not_null($eventId);
+
+    xlog $self, "Assert that TRANSP is included in iTIP REQUEST";
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my $ical = vcard2hash((decode_json($notif->{MESSAGE}))->{ical});
+    $self->assert_str_equals('TRANSPARENT',
+        $ical->{objects}[0]{objects}[0]{properties}{transp}[0]{value});
+}
