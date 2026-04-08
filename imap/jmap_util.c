@@ -1349,6 +1349,24 @@ EXPORTED void jmap_set_contactid(struct conversations_state *cstate,
     }
 }
 
+EXPORTED void jmap_set_calendarid(struct conversations_state *cstate,
+                                  const mbentry_t *mbentry, char *calid)
+{
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        strlcpy(calid, mbentry->jmapid, JMAP_MAX_CALENDARID_SIZE);
+        // replace MAILBOXID prefix with CALENDAR prefix
+        calid[0] = JMAP_CALENDARID_PREFIX;
+    }
+    else {
+        // last segment of mailbox name
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        const strarray_t *boxes = mbname_boxes(mbname);
+        const char *id = strarray_nth(boxes, -1);
+        strlcpy(calid, id, JMAP_MAX_CALENDARID_SIZE);
+        mbname_free(&mbname);
+    }
+}
+
 EXPORTED char *jmap_role_to_specialuse(const char *role)
 {
     if (!role) return NULL;
