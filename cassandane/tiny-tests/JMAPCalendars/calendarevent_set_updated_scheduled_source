@@ -29,14 +29,10 @@ sub test_calendarevent_set_updated_scheduled_source
                     title => 'event',
                     created => $past,
                     updated => $past,
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         someone => {
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',
                         },
@@ -61,9 +57,7 @@ sub test_calendarevent_set_updated_scheduled_source
             update => {
                 $eventId => {
                     'participants/someoneelse' => {
-                        sendTo => {
-                            imip => 'mailto:someoneelse@example.com',
-                        },
+                        calendarAddress => 'mailto:someoneelse@example.com',
                         expectReply => JSON::true,
                         participationStatus => 'needs-action',
                     },

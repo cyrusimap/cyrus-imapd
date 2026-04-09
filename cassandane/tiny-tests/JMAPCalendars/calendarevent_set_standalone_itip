@@ -34,17 +34,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[0]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'tentative',
                             expectReply => JSON::true,
                         },
@@ -102,17 +95,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[1]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'accepted',
                             expectReply => JSON::true,
                         },
@@ -212,17 +198,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[2]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         },

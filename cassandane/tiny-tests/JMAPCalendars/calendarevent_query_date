@@ -114,9 +114,9 @@ sub test_calendarevent_query_date
                             "showWithoutTime" => JSON::true,
                             "start" => "2017-01-01T00:00:00",
                             "duration" => "P1D",
-                            "recurrenceRules" => [{
+                            "recurrenceRule" => {
                                 "frequency" => "yearly",
-                            }],
+                            },
                         },
                     }}, "R1"]]);
     # Assert both events are found

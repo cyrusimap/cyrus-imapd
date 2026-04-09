@@ -23,9 +23,10 @@ sub test_crasher20191227
                     "duration"=> "PT2H",
                     "timeZone" => "Europe/London",
                     "showWithoutTime"=> JSON::false,
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2015-11-14T09:00:00' => {
                             title => 'foo',

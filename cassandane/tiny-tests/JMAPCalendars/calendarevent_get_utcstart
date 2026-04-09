@@ -33,10 +33,11 @@ sub test_calendarevent_get_utcstart
                     start => "2019-12-06T11:21:01",
                     duration => "PT5M",
                     timeZone => "Europe/Vienna",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 3,
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2019-12-07T11:21:01.8' => {
                             start => '2019-12-07T13:00:00',

@@ -27,32 +27,23 @@ sub test_calendarevent_set_create_no_reply_exdate
             title           => 'test',
             start           => '2024-06-18T14:00:00',
             timeZone        => 'Etc/UTC',
-            recurrenceRules => [
-              {
+            recurrenceRule => {
                 '@type'   => 'RecurrenceRule',
                 count     => 3,
                 frequency => 'weekly',
               },
-            ],
             recurrenceOverrides => {
               '2024-06-25T14:00:00' => {
                 excluded => JSON::true,
               },
             },
-            replyTo => {
-              imip => 'mailto:organizer@example.com',
-            },
+            organizerCalendarAddress => 'mailto:organizer@example.com',
             participants => {
               attendee1 => {
                 '@type'             => 'Participant',
                 expectReply         => JSON::true,
                 participationStatus => 'needs-action',
-                roles               => {
-                  attendee => JSON::true,
-                },
-                sendTo => {
-                  imip => 'mailto:cassandane@example.com',
-                },
+                calendarAddress => 'mailto:cassandane@example.com',
               },
               attendee2 => {
                 '@type'             => 'Participant',
@@ -61,9 +52,7 @@ sub test_calendarevent_set_create_no_reply_exdate
                 roles               => {
                   owner => JSON::true,
                 },
-                sendTo => {
-                  imip => 'mailto:organizer@example.com',
-                },
+                calendarAddress => 'mailto:organizer@example.com',
               },
             },
           },

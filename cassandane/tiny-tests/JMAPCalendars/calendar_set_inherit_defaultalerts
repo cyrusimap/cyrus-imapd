@@ -18,7 +18,6 @@ sub test_calendar_set_inherit_defaultalerts
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
                 offset => '-PT1H',
             },
             action => 'email',
@@ -32,10 +31,8 @@ sub test_calendar_set_inherit_defaultalerts
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
-                relativeTo => 'start',
                 offset => 'PT0S',
             },
-            action => 'display',
         },
     };
 

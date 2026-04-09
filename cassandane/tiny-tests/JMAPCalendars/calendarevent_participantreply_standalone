@@ -22,6 +22,7 @@ sub test_calendarevent_participantreply_standalone
         'urn:ietf:params:jmap:calendars:preferences',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $participants = {
@@ -30,18 +31,11 @@ sub test_calendarevent_participantreply_standalone
             roles => {
                 'owner' => JSON::true,
             },
-            sendTo => {
-                imip => 'cassandane@example.com',
-            },
+            calendarAddress => 'cassandane@example.com',
         },
         "att" => {
             "name" => "Bugs Bunny",
-            roles => {
-                'attendee' => JSON::true,
-            },
-            sendTo => {
-                imip => 'bugs@looneytunes.com',
-            },
+            calendarAddress => 'bugs@looneytunes.com',
         },
     };
 

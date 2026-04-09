@@ -27,32 +27,25 @@ sub test_calendarevent_query_text
                             "duration"=> "PT1H",
                             "timeZone" => "Europe/London",
                             "showWithoutTime"=> JSON::false,
-                            "replyTo" => { imip => "mailto:tux\@local" },
+                            "organizerCalendarAddress" => "mailto:tux\@local",
                             "participants" => {
                                 "tux" => {
                                     name => "",
                                     roles => {
                                         'owner' => JSON::true,
                                     },
-                                    locationId => "loc1",
-                                    sendTo => {
-                                        imip => 'tux@local',
-                                    },
+                                    calendarAddress => 'tux@local',
                                 },
                                 "qux" => {
                                     name => "Quuks",
-                                    roles => {
-                                        'attendee' => JSON::true,
-                                    },
-                                    sendTo => {
-                                        imip => 'qux@local',
-                                    },
+                                    calendarAddress => 'qux@local',
                                 },
                             },
-                            recurrenceRules => [{
+                            recurrenceRule => {
                                 frequency => "monthly",
                                 count => 12,
-                            }],
+                            },
+
                             "recurrenceOverrides" => {
                                 "2016-04-01T10:00:00" => {
                                     "description" => "blah",

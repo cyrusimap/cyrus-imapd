@@ -93,9 +93,9 @@ sub test_calendarevent_query_datetime
                             "start" => "2017-01-01T09:00:00",
                             "timeZone" => "Europe/Vienna",
                             "duration" => "PT1H",
-                            "recurrenceRules" => [{
+                            "recurrenceRule" => {
                                 "frequency" => "yearly",
-                            }],
+                            },
                         },
                     }}, "R1"]]);
     # Assert both events are found

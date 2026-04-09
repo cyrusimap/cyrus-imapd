@@ -74,11 +74,19 @@ sub test_calendarevent_set_alerts_description
     my $blobId3 = $res->[0][1]{created}{3}{'blobId'};
     $self->assert_not_null($blobId3);
 
+    # The implementation for JSCalendar v1.0 set the event title or
+    # description as the alarm description, only falling back to
+    # "Reminder" in case neither are set. The new implementation
+    # always sets "Reminder (or whatever the conversion module is
+    # configured to use as default title).
+    # This is in line with Apple and Google, which set "Reminder"
+    # and "This is an event reminder", respectively.
+
     $res = $jmap->Download('cassandane', $blobId1);
-    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:title[\s\S]+END:VALARM/g);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:Reminder[\s\S]+END:VALARM/g);
 
     $res = $jmap->Download('cassandane', $blobId2);
-    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:description[\s\S]+END:VALARM/g);
+    $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:Reminder[\s\S]+END:VALARM/g);
 
     $res = $jmap->Download('cassandane', $blobId3);
     $self->assert($res->{content} =~ /BEGIN:VALARM[\s\S]+DESCRIPTION:Reminder[\s\S]+END:VALARM/g);

@@ -18,6 +18,7 @@ sub test_calendareventnotification_prune
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     xlog $self, "Share calendar";

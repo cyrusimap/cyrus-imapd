@@ -98,7 +98,7 @@ EOF
             properties => ['useDefaultAlerts'],
         }, 'R1'],
     ]);
-    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{useDefaultAlerts});
+    $self->assert_null($res->[0][1]{list}[0]{useDefaultAlerts});
     my $eventId = $res->[0][1]{list}[0]{id};
 
     # clean notification cache
