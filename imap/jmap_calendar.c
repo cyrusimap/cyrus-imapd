@@ -298,6 +298,9 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
         json_object_set_new(settings->server_capabilities,
                 JMAP_CALENDARS_EXTENSION, json_pack("{s:b}", "isRFC", 1));
 
+        json_object_set_new(settings->server_capabilities,
+                JMAP_JSCALENDARBIS_EXTENSION, json_object());
+
         jmap_add_methods(jmap_calendar_methods_nonstandard, settings);
     }
 
