@@ -889,7 +889,7 @@ static json_t *rrule_from_ical(struct icalrecurrencetype *rrule,
     }
 
     // rscale
-    if (!strcasecmpsafe(rrule->rscale, "gregorian")) {
+    if (rrule->rscale && strcasecmp(rrule->rscale, "gregorian")) {
         buf_setcstr(&buf, rrule->rscale);
         const char *rscale = buf_lcase(&buf);
         json_object_set_new(jrrule, "rscale", json_string(rscale));
