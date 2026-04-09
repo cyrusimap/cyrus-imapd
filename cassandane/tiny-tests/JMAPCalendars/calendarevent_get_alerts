@@ -14,7 +14,6 @@ sub test_calendarevent_get_alerts
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
-                relativeTo => "start",
                 offset => "-PT5M",
             },
             action => "email",
@@ -26,16 +25,13 @@ sub test_calendarevent_get_alerts
                 when => "2016-09-28T13:55:00Z",
             },
             acknowledged => "2016-09-28T14:00:05Z",
-            action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
             '@type' => 'Alert',
             trigger => {
                 '@type' => 'OffsetTrigger',
-                relativeTo => "start",
                 offset => "PT10M",
             },
-            action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3-snoozed1' => {
             '@type' => 'Alert',
@@ -43,7 +39,6 @@ sub test_calendarevent_get_alerts
                 '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T15:00:05Z',
             },
-            action => "display",
             relatedTo => {
                 '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
                     '@type' => 'Relation',
@@ -59,11 +54,9 @@ sub test_calendarevent_get_alerts
                 '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T15:00:05Z',
             },
-            action => "display",
             relatedTo => {
                 '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
                     '@type' => 'Relation',
-                    relation => {}
                 },
             },
         },
@@ -73,11 +66,10 @@ sub test_calendarevent_get_alerts
                 '@type' => 'AbsoluteTrigger',
                 when => '1976-04-01T00:55:45Z',
             },
-            action => "display",
         },
     };
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_str_equals(JSON::false, $event->{useDefaultAlerts});
+    $self->assert_null($event->{useDefaultAlerts});
     $self->assert_deep_equals($alerts, $event->{alerts});
 }
