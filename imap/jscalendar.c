@@ -14,6 +14,7 @@
 #include "jscalendar.h"
 #include "json_support.h"
 #include "ptrarray.h"
+#include "strarray.h"
 #include "util.h"
 #include "xcal.h"
 
@@ -2505,6 +2506,39 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
                           json_t *jentry,
                           icalcomponent *ical);
 
+static void sanitize_override_patch(json_t *jpatch)
+{
+    static const char * const skip_prefixes[] = {
+        "@type",
+        "method",
+        "organizerCalendarAddress",
+        "privacy",
+        "prodId",
+        "recurrenceId",
+        "recurrenceIdTimeZone",
+        "recurrenceOverrides",
+        "recurrenceRule",
+        "relatedTo",
+        "uid",
+        NULL
+    };
+    strarray_t del_keys = STRARRAY_INITIALIZER;
+    const char *pkey;
+    json_t *pval;
+    json_object_foreach(jpatch, pkey, pval) {
+        for (int i = 0; skip_prefixes[i]; i++) {
+            if (!strncmp(pkey, skip_prefixes[i], strlen(skip_prefixes[i]))) {
+                strarray_append(&del_keys, pkey);
+                break;
+            }
+        }
+    }
+    for (int i = 0; i < strarray_size(&del_keys); i++) {
+        json_object_del(jpatch, strarray_nth(&del_keys, i));
+    }
+    strarray_fini(&del_keys);
+}
+
 static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
                                    json_t *jentry,
                                    icalcomponent *comp)
@@ -2535,6 +2569,8 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
         icalrecurid.is_date = t_master.is_date;
         icalparameter *tzid =
             tzid_master ? icalparameter_clone(tzid_master) : NULL;
+
+        sanitize_override_patch(jpatch);
 
         if (!json_object_size(jpatch)) {
             struct icaldatetimeperiodtype rdate = { .time = icalrecurid };
