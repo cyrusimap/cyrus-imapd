@@ -991,7 +991,7 @@ static json_t *rrule_from_ical(struct icalrecurrencetype *rrule,
                                  weekdays[wday - ICAL_SUNDAY_WEEKDAY]);
                 int pos = icalrecurrencetype_day_position(val);
                 if (pos) {
-                    json_object_set_new(jval, "nthOfPeriod", json_integer(val));
+                    json_object_set_new(jval, "nthOfPeriod", json_integer(pos));
                 }
                 break;
             }
