@@ -4060,10 +4060,13 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
                                            json_t *jobj,
                                            struct jmap_parser *parser)
 {
-    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-    icalcomponent *ical = NULL;
+    jscalendar_cfg_t mycfg = { 0 };
+    if (!cfg) cfg = &mycfg;
 
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
     if (!parser) parser = &myparser;
+
+    icalcomponent *ical = NULL;
 
     const char *type = json_string_value(json_object_get(jobj, "@type"));
     if (!strcasecmpsafe(type, "Group")) {
@@ -5625,6 +5628,9 @@ static void entries_from_ical(jscalendar_cfg_t *cfg,
 EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
                                       icalcomponent *ical)
 {
+    jscalendar_cfg_t mycfg = { 0 };
+    if (!cfg) cfg = &mycfg;
+
     json_t *jobj = json_pack("{s:s}", "@type", "Group");
     struct buf buf = BUF_INITIALIZER;
     icalcomponent *myical = icalcomponent_clone(ical);
