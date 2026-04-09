@@ -21,6 +21,7 @@ sub test_calendarevent_blobid
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     xlog $self, "create calendar event in other users calendar";

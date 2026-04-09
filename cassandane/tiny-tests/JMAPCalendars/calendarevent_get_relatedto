@@ -32,7 +32,6 @@ sub test_calendarevent_get_relatedto
             },
             "bar" => {
                 '@type' => 'Relation',
-                relation => {}
             },
     }, $event->{relatedTo});
 }

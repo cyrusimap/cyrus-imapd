@@ -1,0 +1,301 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::UUID;
+
+my sub assert_guesstz
+    :needs_dependency_guesstz
+    ($self, $ical, $expect_event)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+    my $caldav = $self->{caldav};
+    my $uid = (Data::UUID->new)->create_str();
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([['CalendarEvent/get', {
+        properties => [
+            'cyrusimap.org:unguessableTimezones',
+            'start',
+            'timeZone',
+            'duration',
+            'recurrenceRule',
+            'recurrenceOverrides',
+            'recurrenceId',
+            'recurrenceIdTimeZone',
+            'title',
+            'prodId',
+            'x-href',
+        ],
+    }, 'R1']]);
+    my $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+
+    $self->assert_cmp_deeply($expect_event, $event);
+}
+
+sub test_calendarevent_get_guesstz_utc
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART:20260102T030405Z
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Etc/UTC',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_iana_no_vtimezone
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=Europe/Berlin:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Europe/Berlin',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_iana_ignore_vtimezone
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:Europe/Berlin
+        LAST-MODIFIED:20260416T112251Z
+        BEGIN:DAYLIGHT
+        TZOFFSETFROM:+0000
+        TZOFFSETTO:+0100
+        DTSTART:19810329T010000
+        RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+        END:DAYLIGHT
+        BEGIN:STANDARD
+        TZOFFSETFROM:+0100
+        TZOFFSETTO:+0000
+        DTSTART:19961027T020000
+        RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=Europe/Berlin:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Europe/Berlin',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_microsoft_no_vtimezone
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=W. Europe Standard Time:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Europe/Berlin',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_microsoft_with_vtimezone
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:W. Europe Standard Time
+        BEGIN:STANDARD
+        DTSTART:16010101T030000
+        TZOFFSETFROM:+0200
+        TZOFFSETTO:+0100
+        RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10
+        END:STANDARD
+        BEGIN:DAYLIGHT
+        DTSTART:16010101T020000
+        TZOFFSETFROM:+0100
+        TZOFFSETTO:+0200
+        RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3
+        END:DAYLIGHT
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=W. Europe Standard Time:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Europe/Berlin',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_custom_tzid_guess
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:Foo
+        LAST-MODIFIED:20260416T112251Z
+        BEGIN:DAYLIGHT
+        TZOFFSETFROM:+0100
+        TZOFFSETTO:+0200
+        DTSTART:19810329T020000
+        RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+        END:DAYLIGHT
+        BEGIN:STANDARD
+        TZOFFSETFROM:+0200
+        TZOFFSETTO:+0100
+        DTSTART:19961027T030000
+        RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=Foo:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Europe/Berlin',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_custom_tzid_guess_gmt
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:Foo
+        LAST-MODIFIED:20260416T112251Z
+        BEGIN:STANDARD
+        TZOFFSETFROM:-1000
+        TZOFFSETTO:-1000
+        DTSTART:16010101T000000
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=Foo:20260102T030405
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T03:04:05',
+            timeZone => 'Etc/GMT+10',
+        })
+    );
+}
+
+sub test_calendarevent_get_guesstz_custom_tzid_unguessable
+    :needs_dependency_guesstz
+    ($self)
+{
+    assert_guesstz($self, <<~EOF
+        BEGIN:VCALENDAR
+        PRODID: -//xxx//yyy//EN
+        VERSION:2.0
+        BEGIN:VTIMEZONE
+        TZID:Foo
+        LAST-MODIFIED:20260416T112251Z
+        BEGIN:STANDARD
+        TZOFFSETFROM:-0835
+        TZOFFSETTO:-0835
+        DTSTART:16010101T000000
+        END:STANDARD
+        END:VTIMEZONE
+        BEGIN:VEVENT
+        UID:DFA12F38-1910-4979-9ECA-F42A1BD1FDEF
+        DTSTAMP:20201226T180609Z
+        DTSTART;TZID=Foo:20260102T100000
+        DURATION:PT1H
+        SUMMARY:test
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+        ,
+        superhashof({
+            start => '2026-01-02T10:00:00',
+        })
+    );
+}

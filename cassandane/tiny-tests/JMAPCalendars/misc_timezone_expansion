@@ -27,9 +27,9 @@ sub test_misc_timezone_expansion
         "privacy" => "secret",
         "participants" => undef,
         "alerts"=> undef,
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             frequency => "weekly",
-        }],
+        },
     };
 
     my $ret = $self->createandget_event($event);

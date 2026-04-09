@@ -25,21 +25,15 @@ sub test_calendarevent_set_reply_partstat_changed
                     start => '2021-01-01T15:30:00',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 30,
-                    }],
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
                     },
+
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         },

@@ -23,9 +23,9 @@ sub test_calendarevent_set_recurrence_patch
                     "timeZone" => "Europe/London",
                     "showWithoutTime"=> JSON::false,
                     "freeBusyStatus"=> "busy",
-                    "recurrenceRules" => [{
+                    "recurrenceRule" => {
                         frequency => 'monthly',
-                    }],
+                    },
                     "recurrenceOverrides" => {
                         '2019-02-01T09:00:00' => {
                             duration => 'PT2H',

@@ -30,16 +30,11 @@ sub test_calendarevent_set_endtimezone
     $event->{calendarIds} = $ret->{calendarIds};
     $self->assert_normalized_event_equals($event, $ret);
 
-    $event->{locations} = {
-        "loc1" => {
-            "timeZone" => "Europe/Berlin",
-            "relativeTo" => "end",
-        },
-    };
+    $event->{endTimeZone} = "Europe/Berlin";
     $ret = $self->updateandget_event({
             id => $event->{id},
             calendarIds => $event->{calendarIds},
-            locations => $event->{locations},
+            endTimeZone => $event->{endTimeZone},
     });
 
     $self->assert_normalized_event_equals($event, $ret);

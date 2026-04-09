@@ -37,11 +37,6 @@ sub test_calendarevent_get_privacy_shared
         created => '2020-12-21T07:47:00Z',
         description => 'description',
         duration => 'PT1H',
-        excludedRecurrenceRules => [{
-            frequency => 'daily',
-            interval => 2,
-            count => 1,
-        }],
         keywords => {
             keyword1 => JSON::true,
         },
@@ -58,12 +53,7 @@ sub test_calendarevent_get_privacy_shared
         },
         participants => {
             participant1 => {
-                sendTo => {
-                    imip => 'mailto:participant1@local',
-                },
-                roles => {
-                    attendee => JSON::true,
-                },
+                calendarAddress => 'mailto:participant1@local',
             },
         },
         priority => 7,
@@ -74,16 +64,15 @@ sub test_calendarevent_get_privacy_shared
                 duration => 'PT2H',
             },
         },
-        recurrenceRules => [{
+        recurrenceRule => {
             frequency => 'daily',
             count => 3,
-        }],
+        },
+
         relatedTo => {
             '3a996522-dfc3-484c-bea9-070c408143ea' => { },
         },
-        replyTo => {
-            imip => 'mailto:orga@local',
-        },
+        organizerCalendarAddress => 'mailto:orga@local',
         sequence => 3,
         showWithoutTime => JSON::true,
         start => '2021-01-01T01:00:00',
@@ -178,7 +167,7 @@ sub test_calendarevent_get_privacy_shared
         id => 1,
         isDraft => 1,
         privacy => 1,
-        recurrenceRules => 1,
+        recurrenceRule => 1,
         recurrenceOverrides => 1,
         sequence => 1,
         showWithoutTime => 1,

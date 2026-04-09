@@ -35,27 +35,24 @@ sub test_calendarevent_set_fullblown
         description => 'event1description',
         descriptionContentType => 'text/plain',
         showWithoutTime => JSON::true,
+        endTimeZone => 'Africa/Windhoek',
         locations => {
             loc1 => {
                 '@type' => 'Location',
                 name => 'loc1name',
-                description => 'loc1description',
                 locationTypes => {
                     hotel => JSON::true,
                     other => JSON::true,
                 },
-                relativeTo => 'end',
-                timeZone => 'Africa/Windhoek',
                 coordinates => 'geo:-22.55941,17.08323',
                 links => {
                     link1 => {
                         '@type' => 'Link',
                         href => 'https://local/loc1link1.jpg',
-                        cid => 'foo@local',
                         contentType => 'image/jpeg',
                         size => 123,
                         rel => 'icon',
-                        display => 'fullsize',
+                        display => { fullsize => JSON::true },
                         title => 'loc1title',
                     },
                 },
@@ -65,7 +62,6 @@ sub test_calendarevent_set_fullblown
             virtloc1 => {
                 '@type' => 'VirtualLocation',
                 name => 'virtloc1name',
-                description => 'virtloca1description',
                 uri => 'tel:+1-555-555-5555',
                 features => {
                     audio => JSON::true,
@@ -82,11 +78,10 @@ sub test_calendarevent_set_fullblown
             link1 => {
                 '@type' => 'Link',
                 href => 'https://local/link1.jpg',
-                cid => 'foo@local',
                 contentType => 'image/jpeg',
                 size => 123,
                 rel => 'icon',
-                display => 'fullsize',
+                display => { fullsize => JSON::true },
                 title => 'link1title',
             },
         },
@@ -96,7 +91,7 @@ sub test_calendarevent_set_fullblown
             keyword2 => JSON::true,
         },
         color => 'silver',
-        recurrenceRules => [{
+        recurrenceRule => {
             '@type' => 'RecurrenceRule',
             frequency => 'monthly',
             interval => 2,
@@ -114,26 +109,7 @@ sub test_calendarevent_set_fullblown
             bySecond => [5,10],
             bySetPosition => [1,5,9],
             count => 7,
-        }],
-        excludedRecurrenceRules => [{
-            '@type' => 'RecurrenceRule',
-            frequency => 'monthly',
-            interval => 3,
-            rscale => 'gregorian',
-            skip => 'forward',
-            firstDayOfWeek => 'tu',
-            byDay => [{
-                '@type' => 'NDay',
-                day => 'we',
-                nthOfPeriod => 3,
-            }],
-            byMonthDay => [1,6,13,16,30],
-            byHour => [7,13],
-            byMinute => [2,46],
-            bySecond => [5,10],
-            bySetPosition => [1,5,9],
-            count => 7,
-        }],
+        },
         recurrenceOverrides => {
             '2021-02-02T02:00:00' => {
                 title => 'recurrenceOverrideTitle',
@@ -142,16 +118,12 @@ sub test_calendarevent_set_fullblown
         priority => 7,
         freeBusyStatus => 'free',
         privacy => 'secret',
-        replyTo => {
-            imip => 'mailto:orga@local',
-        },
+        organizerCalendarAddress => 'mailto:orga@local',
         participants => {
             orga => {
                 '@type' => 'Participant',
                 email => 'orga@local',
-                sendTo => {
-                    imip => 'mailto:orga@local',
-                },
+                calendarAddress => 'mailto:orga@local',
                 roles => {
                     owner => JSON::true,
                 },
@@ -161,19 +133,12 @@ sub test_calendarevent_set_fullblown
                 name => 'participant1Name',
                 email => 'participant1@local',
                 description => 'participant1Description',
-                sendTo => {
-                    imip => 'mailto:participant1@local',
-                    web => 'https://local/participant1',
-                },
+                calendarAddress => 'mailto:participant1@local',
                 kind => 'individual',
                 roles => {
-                    attendee => JSON::true,
                     chair => JSON::true,
                 },
-                locationId => 'loc1',
-                language => 'de',
                 participationStatus => 'tentative',
-                participationComment => 'participant1Comment',
                 expectReply => JSON::true,
                 delegatedTo => {
                     participant2 => JSON::true,
@@ -185,7 +150,6 @@ sub test_calendarevent_set_fullblown
                     link1 => {
                         '@type' => 'Link',
                         href => 'https://local/participant1link1.jpg',
-                        cid => 'foo@local',
                         contentType => 'image/jpeg',
                         size => 123,
                         rel => 'describedby',
@@ -196,22 +160,12 @@ sub test_calendarevent_set_fullblown
             participant2 => {
                 '@type' => 'Participant',
                 email => 'participant2@local',
-                sendTo => {
-                    imip => 'mailto:participant2@local',
-                },
-                roles => {
-                    attendee => JSON::true,
-                },
+                calendarAddress => 'mailto:participant2@local',
             },
             participant3 => {
                 '@type' => 'Participant',
                 email => 'participant3@local',
-                sendTo => {
-                    imip => 'mailto:participant3@local',
-                },
-                roles => {
-                    attendee => JSON::true,
-                },
+                calendarAddress => 'mailto:participant3@local',
             },
         },
         alerts => {
