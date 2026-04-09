@@ -1288,7 +1288,11 @@ static const char *jsid_from_comp(icalcomponent *comp,
     }
 
     // Generate a UUID5 for the normalized iCalendar and our custom namespace.
-    const char *s = icalcomponent_as_ical_string(comp);
+    icalcomponent *mycomp = icalcomponent_clone(comp);
+    icalcomponent_normalize(mycomp);
+    const char *s = icalcomponent_as_ical_string(mycomp);
+    icalcomponent_free(mycomp);
+
     const char *key =
         makeuuid5(JSCAL_UUID5NAMESPACE, (const unsigned char *) s, strlen(s));
     if (key && !json_object_get(jobj, key)) {
@@ -5650,37 +5654,35 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
 
     json_t *jobj = json_pack("{s:s}", "@type", "Group");
     struct buf buf = BUF_INITIALIZER;
-    icalcomponent *myical = icalcomponent_clone(ical);
-    icalcomponent_normalize(myical);
 
-    categories_from_ical(cfg, myical, jobj);
-    keywords_from_ical(cfg, myical, jobj);
-    entries_from_ical(cfg, myical, jobj);
-    description_from_ical(cfg, myical, jobj);
-    links_from_ical(cfg, myical, jobj);
+    categories_from_ical(cfg, ical, jobj);
+    keywords_from_ical(cfg, ical, jobj);
+    entries_from_ical(cfg, ical, jobj);
+    description_from_ical(cfg, ical, jobj);
+    links_from_ical(cfg, ical, jobj);
 
     icalproperty *prop;
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_COLOR_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_COLOR_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_color(prop));
         jobj_set_icalprop(cfg, jobj, "color", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_CREATED_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_CREATED_PROPERTY))) {
         icaltimetype t = icalproperty_get_created(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
         jobj_set_icalprop(cfg, jobj, "created", jval, prop);
     }
 
     if ((prop =
-             myicalcomponent_get_property(myical, ICAL_LASTMODIFIED_PROPERTY)))
+             myicalcomponent_get_property(ical, ICAL_LASTMODIFIED_PROPERTY)))
     {
         icaltimetype t = icalproperty_get_lastmodified(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
         jobj_set_icalprop(cfg, jobj, "updated", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_NAME_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_NAME_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_name(prop));
         jobj_set_icalprop(cfg, jobj, "title", jval, prop);
         icalparameter *param =
@@ -5691,25 +5693,24 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
         }
     }
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_PRODID_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_PRODID_PROPERTY))) {
         const char *prodid = icalproperty_get_prodid(prop);
         jobj_set_icalprop(cfg, jobj, "prodId", json_string(prodid), prop);
     }
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_SOURCE_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_SOURCE_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_source(prop));
         jobj_set_icalprop(cfg, jobj, "source", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(myical, ICAL_UID_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(ical, ICAL_UID_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_uid(prop));
         jobj_set_icalprop(cfg, jobj, "uid", jval, prop);
     }
 
-    jobj_set_icalcomp(cfg, jobj, myical);
-    vendorexts_from_ical(myical, jobj);
+    jobj_set_icalcomp(cfg, jobj, ical);
+    vendorexts_from_ical(ical, jobj);
 
-    icalcomponent_free(myical);
     buf_free(&buf);
     return jobj;
 }
