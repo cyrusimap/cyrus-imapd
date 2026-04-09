@@ -890,9 +890,9 @@ AC_CACHE_VAL(cyrus_cv_func_mmap_shared,AC_TRY_RUN([
 int main() {
     char *base;
     int mmapflags = MAP_SHARED;
-    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
-    if (fd == -1) return 1;
-    if (write(fd, "test", 4) != 4) return 1;
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0660);
+    if (fd == -1) return 2;
+    if (write(fd, "test", 4) != 4) return 3;
     fsync(fd);
 #ifdef MAP_FILE
     mmapflags |= MAP_FILE;
@@ -901,11 +901,11 @@ int main() {
     mmapflags |= MAP_VARIABLE;
 #endif
     base = mmap((caddr_t)0, 100, PROT_READ, mmapflags, fd, 0L);
-    if (base == (caddr_t)-1) return 1;
-    if (memcmp(base, "test", 4) != 0) return 1;
-    if (write(fd, "test", 4) != 4) return 1;
+    if (base == (caddr_t)-1) return 4;
+    if (memcmp(base, "test", 4) != 0) return 5;
+    if (write(fd, "test", 4) != 4) return 6;
     fsync(fd);
-    if (memcmp(base+4, "test", 4) != 0) return 1;
+    if (memcmp(base+4, "test", 4) != 0) return 7;
     return 0;
 }
 ],cyrus_cv_func_mmap_shared=yes,cyrus_cv_func_mmap_shared=no,
@@ -923,10 +923,10 @@ AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
 #include <unistd.h>
 int main() {
     char *base;
-    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0666);
+    int fd = open("conftestmmap", O_RDWR|O_CREAT|O_TRUNC, 0660);
     int mmapflags = MAP_SHARED;
-    if (fd == -1) return 1;
-    if (write(fd, "test", 4) != 4) return 1;
+    if (fd == -1) return 2;
+    if (write(fd, "test", 4) != 4) return 3;
     fsync(fd);
 #ifdef MAP_FILE
     mmapflags |= MAP_FILE;
@@ -935,12 +935,12 @@ int main() {
     mmapflags |= MAP_VARIABLE;
 #endif
     base = mmap((caddr_t)0, 4, PROT_READ, mmapflags, fd, 0L);
-    if (base == (caddr_t)-1) return 1;
-    if (memcmp(base, "test", 4) != 0) return 1;
+    if (base == (caddr_t)-1) return 4;
+    if (memcmp(base, "test", 4) != 0) return 5;
     lseek(fd, 0L, 0);
-    if (write(fd, "xyzz", 4) != 4) return 1;
+    if (write(fd, "xyzz", 4) != 4) return 6;
     fsync(fd);
-    if (memcmp(base, "xyzz", 4) != 0) return 1;
+    if (memcmp(base, "xyzz", 4) != 0) return 7;
     return 0;
 }
 ],cyrus_cv_func_mmap_stupidshared=yes,cyrus_cv_func_mmap_stupidshared=no,
