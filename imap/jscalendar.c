@@ -3850,6 +3850,23 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
                 jmap_parser_pop(parser);
             }
         }
+        // JMAP Calendar properties
+        else if (!strcmp("baseEventId", key) ||
+                 !strcmp("blobId", key) ||
+                 !strcmp("calendarIds", key) ||
+                 !strcmp("hideAttendees", key) ||
+                 !strcmp("id", key) ||
+                 !strcmp("isDraft", key) ||
+                 !strcmp("isOrigin", key) ||
+                 !strcmp("mayInviteOthers", key) ||
+                 !strcmp("mayInviteSelf", key) ||
+                 !strcmp("scheduleSequence", key) ||
+                 !strcmp("scheduleUpdated", key) ||
+                 !strcmp("useDefaultAlerts", key) ||
+                 !strcmp("utcStart", key) ||
+                 !strcmp("utcEnd", key)) {
+            // ignore
+        }
         else if (!is_vendorext_key(key)) {
             jmap_parser_invalid(parser, key);
         }
