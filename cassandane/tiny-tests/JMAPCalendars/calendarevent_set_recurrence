@@ -10,7 +10,7 @@ sub test_calendarevent_set_recurrence
 
     my $calid = $self->default_user->calendars->default->id;
 
-    my $recurrenceRules = [{
+    my $recurrenceRule = {
         frequency => "monthly",
         interval => 2,
         firstDayOfWeek => "su",
@@ -21,7 +21,7 @@ sub test_calendarevent_set_recurrence
             }, {
                 day => "sa",
         }],
-    }];
+    };
 
     my $event =  {
         calendarIds => {
@@ -34,7 +34,7 @@ sub test_calendarevent_set_recurrence
         "timeZone" => "Europe/London",
         "showWithoutTime"=> JSON::false,
         "freeBusyStatus"=> "busy",
-        "recurrenceRules" => $recurrenceRules,
+        "recurrenceRule" => $recurrenceRule,
     };
 
     my $ret = $self->createandget_event($event);
@@ -47,7 +47,7 @@ sub test_calendarevent_set_recurrence
         ['CalendarEvent/set',{
             update => {
                 $event->{id} => {
-                    recurrenceRules => undef,
+                    recurrenceRule => undef,
                 },
             },
         }, "R1"],
@@ -57,7 +57,7 @@ sub test_calendarevent_set_recurrence
     ]);
     $self->assert(exists $res->[0][1]{updated}{$event->{id}});
 
-    delete $event->{recurrenceRules};
+    delete $event->{recurrenceRule};
     $ret = $res->[1][1]{list}[0];
     $self->assert_normalized_event_equals($event, $ret);
 }

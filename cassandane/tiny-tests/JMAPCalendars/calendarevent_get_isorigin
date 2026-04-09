@@ -31,14 +31,10 @@ sub test_calendarevent_get_isorigin
                     start => '2021-01-01T15:30:00',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         participant1 => {
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                 },
@@ -51,14 +47,10 @@ sub test_calendarevent_get_isorigin
                     start => '2021-01-01T15:30:00',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:someone@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:someone@example.com',
                     participants => {
                         participant1 => {
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                     },
                 },
@@ -90,14 +82,10 @@ sub test_calendarevent_get_isorigin
         ['CalendarEvent/set', {
             update => {
                 $eventNoReplyToId => {
-                    replyTo => {
-                        imip => 'mailto:someone@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:someone@example.com',
                     participants => {
                         participant1 => {
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                     },
                 },

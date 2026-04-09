@@ -28,10 +28,8 @@ EOF
         '@type' => 'Alert',
         trigger => {
             '@type' => 'OffsetTrigger',
-            relativeTo => 'start',
             offset => '-PT5M',
         },
-        action => 'display',
     };
 
     my $alertWithoutTimeId = 'baedd1d3-36d6-4d8f-986c-073c5e1f2f70';
@@ -39,10 +37,8 @@ EOF
         '@type' => 'Alert',
         trigger => {
             '@type' => 'OffsetTrigger',
-            relativeTo => 'start',
             offset => 'PT0S',
         },
-        action => 'display',
     };
 
     xlog 'Set default alerts on calendar';
@@ -80,7 +76,7 @@ UID:6de280c9-edff-4019-8ebd-cfebc73f8201
 DTEND;TZID=America/New_York:20210923T183000
 TRANSP:OPAQUE
 SUMMARY:An Event
-DTSTART;TZID=American/New_York:20210923T153000
+DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
 ORGANIZER;CN=Test User:MAILTO:foo@example.net
@@ -118,10 +114,8 @@ EOF
         '@type' => 'Alert',
         trigger => {
             '@type' => 'OffsetTrigger',
-            relativeTo => 'start',
             offset => '-PT10M',
         },
-        action => 'display',
     };
 
     xlog "Set custom alert on event";
@@ -158,7 +152,7 @@ UID:6de280c9-edff-4019-8ebd-cfebc73f8201
 DTEND;TZID=America/New_York:20210923T183000
 TRANSP:OPAQUE
 SUMMARY:An Updated Event
-DTSTART;TZID=American/New_York:20210923T153000
+DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
 ORGANIZER;CN=Test User:MAILTO:foo@example.net
@@ -182,8 +176,6 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_equals(JSON::false,
-        $res->[0][1]{list}[0]{useDefaultAlerts});
     $self->assert_deep_equals({ $customAlertId => $customAlert },
         $res->[0][1]{list}[0]{alerts});
 }

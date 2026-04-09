@@ -23,10 +23,10 @@ sub test_calendarevent_set_recurrence_untilallday
         "uid" =>"76f46024-7284-4701-b93f-d9cd812f3f43",
         "title" =>"allday event with non-zero time until",
         "\@type" =>"Event",
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" =>"weekly",
             "until" =>"2019-04-20T23:59:59"
-        }],
+        },
         "description" =>"",
         "duration" =>"P1D"
     };

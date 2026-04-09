@@ -22,9 +22,7 @@ sub test_calendarevent_set_participants_organame
         "showWithoutTime"=> JSON::false,
         "freeBusyStatus"=> "busy",
         "status" => "confirmed",
-        "replyTo" => {
-            "imip" => "mailto:foo\@local",
-        },
+        "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'foo' => {
                 '@type' => 'Participant',
@@ -32,25 +30,18 @@ sub test_calendarevent_set_participants_organame
                 roles => {
                     'owner' => JSON::true,
                 },
-                sendTo => {
-                    imip => 'mailto:foo@local',
-                },
+                calendarAddress => 'mailto:foo@local',
             },
             'bar' => {
                 '@type' => 'Participant',
                 name => 'Bar',
                 kind => 'individual',
-                roles => {
-                    'attendee' => JSON::true,
-                },
-                sendTo => {
-                    imip => 'mailto:bar@local',
-                },
+                calendarAddress => 'mailto:bar@local',
             },
         },
     };
 
     my $ret = $self->createandget_event($event);
-    $event->{participants}{bar}{sendTo}{imip} = 'mailto:bar@local';
+    $event->{participants}{bar}{calendarAddress} = 'mailto:bar@local';
     $self->assert_normalized_event_equals($event, $ret);
 }

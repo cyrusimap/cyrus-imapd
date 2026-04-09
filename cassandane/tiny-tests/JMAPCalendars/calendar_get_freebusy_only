@@ -19,6 +19,7 @@ sub test_calendar_get_freebusy_only
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $otherJmap->CallMethods([

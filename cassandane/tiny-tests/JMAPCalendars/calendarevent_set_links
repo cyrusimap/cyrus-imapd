@@ -33,8 +33,7 @@ sub test_calendarevent_set_links
             "image" => {
                href => "https://foo.local/favicon.png",
                rel => "icon",
-               cid => '123456789asd',
-               display => 'badge',
+               display => { 'badge' => JSON::true },
             },
             "attach" => {
                href => "http://example.com/some.url",
