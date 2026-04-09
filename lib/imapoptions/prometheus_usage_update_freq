@@ -1,0 +1,12 @@
+Name: prometheus_usage_update_freq
+Type: DURATION
+Default-Value: NULL
+Last-Modified: 3.12.0
+
+Frequency in at which promstatsd should re-collate its usage
+statistics report.  Note that this report is relatively expensive to
+produce.  If not set, usage statistics are not reported.
+
+Best to make this a multiple of *prometheus_service_update_freq*.
+
+If no unit is specified, seconds is assumed. 

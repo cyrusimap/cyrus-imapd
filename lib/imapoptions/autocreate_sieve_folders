@@ -1,0 +1,13 @@
+Name: autocreate_sieve_folders
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+A "|" separated list of subfolders of INBOX that will be
+automatically created, if requested by a sieve filter, through the
+"fileinto" action. The default is to create no folders
+automatically.
+
+Leading and trailing whitespace is stripped from each folder, so a
+setting of "Junk | Trash" will create two folders: "Junk" and
+"Trash". 

@@ -1,0 +1,9 @@
+Name: tcp_keepalive_intvl
+Type: DURATION
+Default-Value: 0
+Last-Modified: 3.1.8
+
+Time between keepalive probes (0 == system default).
+
+For backward compatibility, if no unit is specified, seconds is
+assumed. 

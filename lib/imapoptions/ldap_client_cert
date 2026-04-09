@@ -1,0 +1,7 @@
+Name: ldap_client_cert
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+File containing the client certificate. 
+

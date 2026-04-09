@@ -1,0 +1,5 @@
+Name: object_storage_enabled
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.13.3
+Deprecated-Since: 3.13.3

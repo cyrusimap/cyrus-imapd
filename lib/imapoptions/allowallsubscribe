@@ -1,0 +1,11 @@
+Name: allowallsubscribe
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Allow subscription to nonexistent mailboxes.  This option is
+typically used on backend servers in a Murder so that users can
+subscribe to mailboxes that don't reside on their "home" server.
+This option can also be used as a workaround for IMAP clients which
+don't play well with nonexistent or unselectable mailboxes (e.g.,
+Microsoft Outlook). 

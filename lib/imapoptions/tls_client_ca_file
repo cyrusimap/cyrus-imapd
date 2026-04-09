@@ -1,0 +1,7 @@
+Name: tls_client_ca_file
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+Path to a file containing the CA certificate(s) used to verify
+client SSL certificates used for authentication. 

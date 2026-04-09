@@ -1,0 +1,11 @@
+Name: uidbatches_max_messages
+Type: INT
+Default-Value: 100000
+Last-Modified: 3.13.1
+
+The maximum number of messages that the server will process in a
+single UIDBATCHES command - either the number of requested batches
+multiplied by the batch size, or the number of messages in the
+mailbox if all batches are requested.
+The default of 100000 is the minimum allowed value per the
+specification. 

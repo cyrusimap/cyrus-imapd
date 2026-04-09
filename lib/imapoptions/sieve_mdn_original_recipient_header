@@ -1,0 +1,7 @@
+Name: sieve_mdn_original_recipient_header
+Type: STRING
+Default-Value: original-recipient
+Last-Modified: 3.13.1
+
+The name of the header field in which the Sieve "reject" action can find the
+original recipient of the message. 

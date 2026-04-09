@@ -1,0 +1,7 @@
+Name: srs_hashlength
+Type: INT
+Default-Value: 0
+Last-Modified: 3.1.2
+
+The hash length to generate in a rewritten address. 
+

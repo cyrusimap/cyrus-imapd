@@ -1,0 +1,7 @@
+Name: virusscan_notification_subject
+Type: STRING
+Default-Value: Automatically deleted mail
+Last-Modified: 3.1.8
+
+The text used in the subject of email notifications created by
+**cyr_virusscan(8)** when deleting infected mail. 

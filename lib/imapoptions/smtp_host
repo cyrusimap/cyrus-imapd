@@ -1,0 +1,13 @@
+Name: smtp_host
+Type: STRING
+Default-Value: localhost:587
+Last-Modified: 3.1.4
+
+The SMTP host to use for sending mail (also see the
+smtp_backend option). The value of this option must
+the name or IP address of a TCP host, followed optionally
+by a colon and the port or service to use. The default
+port is 587. TLS may be activated by appending \"/tls\"
+to the value. Authentication is enabled if smtp_auth_authname
+is set. Authentication can be explicitly disabled by appending
+\"/noauth\" to the host address. 

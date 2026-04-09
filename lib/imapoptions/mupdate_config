@@ -1,0 +1,13 @@
+Name: mupdate_config
+Type: ENUM
+Allowed-Values: standard unified replicated
+Default-Value: standard
+Last-Modified: 2.3.17
+
+The configuration of the mupdate servers in the Cyrus Murder.
+The "standard" config is one in which there are discreet frontend
+(proxy) and backend servers.  The "unified" config is one in which
+a server can be both a frontend and backend.  The "replicated"
+config is one in which multiple backend servers all share the same
+mailspool, but each have their own "replicated" copy of
+mailboxes.db. 

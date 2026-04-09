@@ -1,0 +1,5 @@
+Name: openio_proxy_timeout
+Type: DURATION
+Default-Value: 5s
+Last-Modified: 3.13.3
+Deprecated-Since: 3.13.3

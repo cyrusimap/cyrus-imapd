@@ -1,0 +1,9 @@
+Name: prometheus_service_update_freq
+Type: DURATION
+Default-Value: 10s
+Last-Modified: 3.12.0
+
+Frequency in at which promstatsd should re-collate its service
+statistics report.  The minimum value is 1 second.
+
+If no unit is specified, seconds is assumed. 

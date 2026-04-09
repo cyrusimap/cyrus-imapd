@@ -1,0 +1,15 @@
+Name: jmap_querycache_max_age
+Type: DURATION
+Default-Value: 0m
+Last-Modified: 3.6.0
+
+The duration after which unused cached JMAP query results
+must be evicted from process memory. If non-zero, then the
+full result of the last query (before windowing) is stored
+in-memory. Subsequent queries with the same expression and
+query state can then page through the cached result.
+A zero value disables query result caching.
+
+If no unit is specified, minutes is assumed.
+
+This feature currently only is enabled for Email/query. 

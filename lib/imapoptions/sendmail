@@ -1,0 +1,7 @@
+Name: sendmail
+Type: STRING
+Default-Value: /usr/lib/sendmail
+Last-Modified: 2.3.17
+
+The pathname of the sendmail executable.  Sieve invokes sendmail
+for sending rejections, redirects and vacation responses. 

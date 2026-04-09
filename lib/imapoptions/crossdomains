@@ -1,0 +1,7 @@
+Name: crossdomains
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+Enable cross domain sharing.  This works best with alt namespace and
+unix hierarchy separators on, so you get Other Users/foo@example.com/... 

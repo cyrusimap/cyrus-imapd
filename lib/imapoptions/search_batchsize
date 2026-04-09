@@ -1,0 +1,7 @@
+Name: search_batchsize
+Type: INT
+Default-Value: 20
+Last-Modified: 3.0.0
+
+The number of messages to be indexed in one batch (default 20).
+Note that long batches may delay user commands or mail delivery. 

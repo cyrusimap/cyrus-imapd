@@ -1,0 +1,7 @@
+Name: newsprefix
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+Prefix to be prepended to newsgroup names to make the corresponding
+IMAP mailbox names. 

@@ -1,0 +1,8 @@
+Name: jmapaccess_url
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.12.0
+
+The JMAP Session URL to advertise to sucessfully authenticated IMAP clients,
+if the same credentials can be used to authenticate via JMAP
+(see draft-ietf-extra-jmapaccess). 
