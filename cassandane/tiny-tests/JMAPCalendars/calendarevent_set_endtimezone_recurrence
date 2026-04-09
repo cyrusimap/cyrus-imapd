@@ -27,10 +27,10 @@ sub test_calendarevent_set_endtimezone_recurrence
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "prodId" => "foo",
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" => "monthly",
             count => 12,
-        }],
+        },
         "recurrenceOverrides" => {
             "2015-12-07T09:00:00" => {
                 "locations/loc1/timeZone" => "America/New_York",

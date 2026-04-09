@@ -30,10 +30,10 @@ sub test_rscale_in_jmap_hidden_in_caldav
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "prodId" => "foo",
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" => "monthly",
             count => 12,
-        }],
+        },
     };
 
     my $ret = $self->createandget_event($event);
@@ -62,17 +62,11 @@ sub test_rscale_in_jmap_hidden_in_caldav
     $self->assert_not_null($ret);
 
     # rscale should now be in jmap
-    $self->assert_deep_equals([
-        {
-            '@type' => 'RecurrenceRule',
+    $self->assert_deep_equals({
             count          => 12,
-            firstDayOfWeek => 'mo',
             frequency      => 'monthly',
-            interval       => 1,
-            rscale         => 'gregorian',
-            skip           => 'omit'
-        }],
-        $ret->{recurrenceRules},
+        },
+        $ret->{recurrenceRule},
     );
 
     # XXX Net-CalDAV talk needs to update

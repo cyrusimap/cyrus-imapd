@@ -70,10 +70,10 @@ sub test_calendarevent_participantreply_simple
                             "freeBusyStatus" => "busy",
                             "showWithoutTime" => JSON::false,
                             "start" => "2022-11-23T16:45:00",
-                            "recurrenceRules" => [{
+                            "recurrenceRule" => {
                                 "\@type" => "RecurrenceRule",
                                 "frequency" => "weekly"
-                            }],
+                            },
                             "timeZone" => "Australia/Melbourne",
                             "duration" => "PT1H",
                             "replyTo" => { imip => "mailto:cassandane\@example.com"},

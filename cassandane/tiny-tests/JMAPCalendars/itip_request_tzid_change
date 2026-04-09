@@ -27,10 +27,11 @@ sub test_itip_request_tzid_change
                     start => '2021-01-01T15:30:00',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 30,
-                    }],
+                    },
+
                     replyTo => {
                         imip => 'mailto:cassandane@example.com',
                     },

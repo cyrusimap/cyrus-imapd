@@ -19,9 +19,9 @@ sub test_calendarevent_set_participants_recur
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "showWithoutTime"=> JSON::false,
-        "recurrenceRules"=> [{
+        "recurrenceRule"=> {
             "frequency"=> "weekly",
-        }],
+        },
         "replyTo" => {
             "imip" => "mailto:foo\@local",
         },
