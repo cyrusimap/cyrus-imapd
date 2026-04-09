@@ -49,10 +49,11 @@ sub test_calendarevent_query_text
                                     },
                                 },
                             },
-                            recurrenceRules => [{
+                            recurrenceRule => {
                                 frequency => "monthly",
                                 count => 12,
-                            }],
+                            },
+
                             "recurrenceOverrides" => {
                                 "2016-04-01T10:00:00" => {
                                     "description" => "blah",

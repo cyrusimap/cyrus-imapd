@@ -26,10 +26,11 @@ sub test_calendarevent_set_recurrenceinstances
                     start => "2019-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
                         count => 5,
-                    }],
+                    },
+
                 },
             }
         }, 'R1']

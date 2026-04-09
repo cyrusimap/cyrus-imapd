@@ -26,10 +26,11 @@ sub test_calendarevent_query_expandrecurrences_with_exrule
                     start => "2020-08-04T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
                         interval => 4,
-                    }],
+                    },
+
                     excludedRecurrenceRules => [{
                         frequency => 'monthly',
                         byMonthDay => [1],

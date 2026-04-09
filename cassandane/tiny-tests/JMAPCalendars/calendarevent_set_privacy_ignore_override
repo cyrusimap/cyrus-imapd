@@ -24,10 +24,11 @@ sub test_calendarevent_set_privacy_ignore_override
                     timeZone => 'Europe/Vienna',
                     duration => 'PT1H',
                     privacy => 'private',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 3,
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2020-01-02T09:00:00' => {
                             title => 'event1Override',

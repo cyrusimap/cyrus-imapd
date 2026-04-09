@@ -2835,6 +2835,7 @@ static void getcalendarevents_filterinstance(json_t *myevent,
                                              const char *ical_uid)
 {
     json_object_del(myevent, "recurrenceOverrides");
+    json_object_del(myevent, "recurrenceRule");
     json_object_del(myevent, "recurrenceRules");
     json_object_del(myevent, "excludedRecurrenceRules");
     jmap_filterprops(myevent, props);
@@ -3160,6 +3161,7 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "privacy", json_true());
         json_object_set_new(publicprops, "recurrenceId", json_true());
         json_object_set_new(publicprops, "recurrenceIdTimeZone", json_true());
+        json_object_set_new(publicprops, "recurrenceRule", json_true());
         json_object_set_new(publicprops, "recurrenceRules", json_true());
         json_object_set_new(publicprops, "recurrenceOverrides", json_true());
         json_object_set_new(publicprops, "sequence", json_true());
@@ -4843,6 +4845,7 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
         json_array_append_new(invalid, json_string("baseEventId"));
     }
 
+    json_object_del(new_instance, "recurrenceRule");
     json_object_del(new_instance, "recurrenceRules");
     json_object_del(new_instance, "recurrenceOverrides");
     json_object_del(new_instance, "excludedRecurrenceRules");
@@ -4852,6 +4855,7 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_object_del(new_override, "prodId");
     json_object_del(new_override, "recurrenceId");
     json_object_del(new_override, "recurrenceIdTimeZone");
+    json_object_del(new_override, "recurrenceRule");
     json_object_del(new_override, "recurrenceRules");
     json_object_del(new_override, "recurrenceOverrides");
     json_object_del(new_override, "excludedRecurrenceRules");
@@ -9243,6 +9247,7 @@ static int principal_getavailability_ical_cb(icalcomponent *comp,
 
         /* Filter properties and set event */
         json_object_del(jevent, "recurrenceOverrides");
+        json_object_del(jevent, "recurrenceRule");
         json_object_del(jevent, "recurrenceRules");
         json_object_del(jevent, "excludedRecurrenceRules");
         jmap_filterprops(jevent, rock->eventprops);

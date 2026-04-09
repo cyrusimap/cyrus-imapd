@@ -240,34 +240,33 @@ sub normalize_event
     if (not exists $event->{replyTo}) {
         $event->{replyTo} = undef;
     }
-    if (not exists $event->{recurrenceRules}) {
-        $event->{recurrenceRules} = undef;
-    } elsif (defined $event->{recurrenceRules}) {
-        foreach my $rrule (@{$event->{recurrenceRules}}) {
-            if (not exists $rrule->{interval}) {
-                $rrule->{interval} = 1;
-            }
-            if (not exists $rrule->{firstDayOfWeek}) {
-                $rrule->{firstDayOfWeek} = 'mo';
-            }
-            if (not exists $rrule->{rscale}) {
-                $rrule->{rscale} = 'gregorian';
-            }
-            if (not exists $rrule->{skip}) {
-                $rrule->{skip} = 'omit';
-            }
-            if (not exists $rrule->{byDay}) {
-                $rrule->{byDay} = undef;
-            } elsif (defined $rrule->{byDay}) {
-                foreach my $nday (@{$rrule->{byDay}}) {
-                    if (not exists $nday->{q{@type}}) {
-                        $nday->{q{@type}} = 'NDay';
-                    }
+    if (not exists $event->{recurrenceRule}) {
+        $event->{recurrenceRule} = undef;
+    } elsif (defined $event->{recurrenceRule}) {
+        my $rrule = $event->{recurrenceRule};
+        if (not exists $rrule->{interval}) {
+            $rrule->{interval} = 1;
+        }
+        if (not exists $rrule->{firstDayOfWeek}) {
+            $rrule->{firstDayOfWeek} = 'mo';
+        }
+        if (not exists $rrule->{rscale}) {
+            $rrule->{rscale} = 'gregorian';
+        }
+        if (not exists $rrule->{skip}) {
+            $rrule->{skip} = 'omit';
+        }
+        if (not exists $rrule->{byDay}) {
+            $rrule->{byDay} = undef;
+        } elsif (defined $rrule->{byDay}) {
+            foreach my $nday (@{$rrule->{byDay}}) {
+                if (not exists $nday->{q{@type}}) {
+                    $nday->{q{@type}} = 'NDay';
                 }
             }
-            if (not exists $rrule->{q{@type}}) {
-                $rrule->{q{@type}} = 'RecurrenceRule';
-            }
+        }
+        if (not exists $rrule->{q{@type}}) {
+            $rrule->{q{@type}} = 'RecurrenceRule';
         }
     }
     if (not exists $event->{excludedRecurrenceRules}) {

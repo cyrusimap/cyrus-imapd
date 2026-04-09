@@ -96,7 +96,7 @@ sub test_calendarevent_set_fullblown
             keyword2 => JSON::true,
         },
         color => 'silver',
-        recurrenceRules => [{
+        recurrenceRule => {
             '@type' => 'RecurrenceRule',
             frequency => 'monthly',
             interval => 2,
@@ -114,7 +114,8 @@ sub test_calendarevent_set_fullblown
             bySecond => [5,10],
             bySetPosition => [1,5,9],
             count => 7,
-        }],
+        },
+
         excludedRecurrenceRules => [{
             '@type' => 'RecurrenceRule',
             frequency => 'monthly',

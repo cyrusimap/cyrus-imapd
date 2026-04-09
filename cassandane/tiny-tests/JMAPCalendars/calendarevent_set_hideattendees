@@ -25,10 +25,11 @@ sub test_calendarevent_set_hideattendees
                     start => "2020-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 3,
-                    }],
+                    },
+
                     replyTo => {
                         imip => 'mailto:cassandane@example.com',
                     },

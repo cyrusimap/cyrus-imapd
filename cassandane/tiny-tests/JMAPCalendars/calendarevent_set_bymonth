@@ -15,14 +15,14 @@ sub test_calendarevent_set_bymonth
                     $calid => JSON::true,
                 },
                 "start"=> "2010-02-12T00:00:00",
-                "recurrenceRules"=> [{
+                "recurrenceRule"=> {
                         "frequency"=> "monthly",
                         "interval"=> 13,
                         "byMonth"=> [
                                 "4L"
                         ],
                         "count"=> 3,
-                }],
+                },
                 "\@type"=> "Event",
                 "title"=> "",
                 "description"=> "",

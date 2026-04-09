@@ -68,9 +68,10 @@ sub test_calendarevent_set_method
                             },
                         },
                     },
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2022-01-29T09:00:00' => {
                             title => 'override',

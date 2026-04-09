@@ -23,9 +23,10 @@ sub test_calendarevent_get_recurrenceoverrides_before_after
                     start => "2020-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2020-01-02T09:00:00' => {
                             title => 'override1',

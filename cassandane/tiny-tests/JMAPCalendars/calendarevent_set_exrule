@@ -19,9 +19,10 @@ sub test_calendarevent_set_exrule
         timeZone => "Europe/London",
         showWithoutTime => JSON::false,
         freeBusyStatus => "busy",
-        recurrenceRules => [{
+        recurrenceRule => {
             frequency => 'weekly',
-        }],
+        },
+
         excludedRecurrenceRules => [{
             frequency => 'monthly',
             byMonthDay => [1],

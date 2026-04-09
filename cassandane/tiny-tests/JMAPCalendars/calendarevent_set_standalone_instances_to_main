@@ -75,11 +75,12 @@ sub test_calendarevent_set_standalone_instances_to_main
                     start => '2020-12-01T11:11:11',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         '@type' => 'RecurrenceRule',
                         frequency => 'monthly',
                         count => 3,
-                    }],
+                    },
+
                 },
             },
         }, 'R1'],
