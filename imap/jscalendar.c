@@ -4329,6 +4329,8 @@ static void vendorexts_from_ical(icalcomponent *comp, json_t *jobj)
 
     if (json_object_size(jpatch))
         jmap_patchobject_applym(jobj, jpatch, NULL, PATCH_KEEP_EXISTING);
+
+    json_decref(jpatch);
 }
 
 static void relatedto_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
@@ -4406,7 +4408,6 @@ static void alerts_from_ical(jscalendar_cfg_t *cfg,
     {
         const char *key = hashu64_lookup((uintptr_t) valarm, &alertkey_by_ptr);
         json_t *jalert = json_pack("{s:s}", "@type", "Alert");
-        struct buf buf = BUF_INITIALIZER;
         icalproperty *prop;
 
         if ((prop = myicalcomponent_get_property(valarm,
