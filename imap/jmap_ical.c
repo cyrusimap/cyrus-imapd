@@ -4176,140 +4176,22 @@ calendarevent_from_ical(icalcomponent *comp,
     return event;
 }
 
-static void repair_broken_ical(icalcomponent **icalp)
-{
-    icalcomponent *original_ical = *icalp;
-    icalcomponent *myical = NULL;
-    struct buf buf = BUF_INITIALIZER;
-
-    if (icalcomponent_isa(original_ical) == ICAL_VEVENT_COMPONENT) {
-        // Wrap a single VEVENT in a VCALENDAR.
-        myical =
-            icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
-                                icalproperty_new_version("2.0"), (void *)0);
-        icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
-    }
-    else myical = original_ical;
-
-    if (icalcomponent_isa(myical) != ICAL_VCALENDAR_COMPONENT ||
-        !icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT)) {
-        // that's just unrepairably broken
-        return;
-    }
-
-    // Assuming that almost all iCalendar data is valid, let's
-    // inspect the iCalendar data in a first pass. If it turns
-    // out to be valid then return early. Only in a second pass
-    // duplicate the in-memory iCalendar tree and rewrite it.
-
-    for (int pass = 1; pass <= 2; pass++) {
-        int needs_rewrite = 0;
-        icalproperty_method method = icalcomponent_get_method(myical);
-
-        if (pass == 2 && myical == original_ical) {
-            // We need to rewrite the iCalendar data but haven't
-            // made a copy of it, yet. Clone it now.
-            myical = icalcomponent_clone(original_ical);
-        }
-
-        icalcomponent *vevent;
-        for (vevent = icalcomponent_get_first_component(myical,
-                    ICAL_VEVENT_COMPONENT);
-             vevent;
-             vevent = icalcomponent_get_next_component(myical,
-                    ICAL_VEVENT_COMPONENT)) {
-
-            // Remove VALARM without TRIGGER. Set missing ACTION to DISPLAY.
-            icalcomponent *valarm, *nextvalarm;
-            for (valarm = icalcomponent_get_first_component(vevent, ICAL_VALARM_COMPONENT);
-                 valarm; valarm = nextvalarm) {
-                nextvalarm = icalcomponent_get_next_component(
-                    vevent, ICAL_VALARM_COMPONENT);
-
-                if (!icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY)) {
-                    if (pass == 2) {
-                        icalcomponent_remove_component(vevent, valarm);
-                        icalcomponent_free(valarm);
-                    }
-                    else needs_rewrite = 1;
-                }
-                else if (!icalcomponent_get_first_property(valarm, ICAL_ACTION_PROPERTY)) {
-                    if (pass == 2) {
-                        icalcomponent_add_property(valarm,
-                            icalproperty_new_action(ICAL_ACTION_DISPLAY));
-                    }
-                    else needs_rewrite = 1;
-                }
-            }
-
-            // Make sure that the mandatory UID property is set.
-            if (!icalcomponent_get_uid(vevent)) {
-                if (pass == 2) {
-                    // Generate UID property by hashing normalized component
-                    icalcomponent *norm_comp = icalcomponent_clone(vevent);
-                    icalcomponent_normalize_x(norm_comp);
-                    char hexbuf[JMAPICAL_SHA1HEXSTR_LEN];
-                    sha1hexstr(icalcomponent_as_ical_string(norm_comp), hexbuf);
-                    buf_setcstr(&buf, "nouid");
-                    buf_appendcstr(&buf, hexbuf);
-                    icalcomponent_add_property(
-                        vevent, icalproperty_new_uid(buf_cstring(&buf)));
-                    icalcomponent_free(norm_comp);
-                }
-                else needs_rewrite = 1;
-            }
-
-            // Remove METHOD:PUBLISH if no ORGANIZER is set
-            if (method == ICAL_METHOD_PUBLISH &&
-                !icalcomponent_get_first_property(vevent,
-                                                  ICAL_ORGANIZER_PROPERTY)) {
-                if (pass == 2) {
-                    // XXX this resets the property iterator of ical
-                    icalproperty *prop = icalcomponent_get_first_property(myical,
-                            ICAL_METHOD_PROPERTY);
-                    if (prop) {
-                        icalcomponent_remove_property(myical, prop);
-                        icalproperty_free(prop);
-                    }
-                }
-                else needs_rewrite = 1;
-            }
-
-            // Make sure SEQUENCE >= 0
-            if (icalcomponent_get_sequence(vevent) < 0) {
-                icalcomponent_set_sequence(vevent, 0);
-            }
-        }
-
-        if (!needs_rewrite)
-            break;
-    }
-
-    buf_free(&buf);
-    *icalp = myical;
-}
-
 static json_t *jmapical_tojmap_all_icalobj(icalcomponent *ical,
                                            hash_table *props,
                                            struct jmapical_ctx *jmapctx)
 {
     json_t *jsevents = json_array();
-    icalcomponent *myical = ical;
     icalcomponent *comp;
     struct buf buf = BUF_INITIALIZER;
     jstimezones_t *jstzones = jstimezones_new(ical, 0);
 
-    if (jmapctx && jmapctx->from_ical.repair_broken_ical) {
-        repair_broken_ical(&myical);
-    }
-
     size_t ncomps =
-        icalcomponent_count_components(myical, ICAL_VEVENT_COMPONENT);
+        icalcomponent_count_components(ical, ICAL_VEVENT_COMPONENT);
 
     if (ncomps < 2) {
         // Fast-path: There's at most one component in the VCALENDAR
         if (ncomps) {
-            comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
+            comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
             json_array_append_new(jsevents, calendarevent_from_ical(comp, NULL,
                         props, NULL, NULL, jmapctx));
         }
@@ -4326,9 +4208,9 @@ static json_t *jmapical_tojmap_all_icalobj(icalcomponent *ical,
 
     strarray_t uids = STRARRAY_INITIALIZER;
 
-    for (comp = icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT);
+    for (comp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          comp;
-         comp = icalcomponent_get_next_component(myical, ICAL_VEVENT_COMPONENT)) {
+         comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
 
         const char *uid = icalcomponent_get_uid(comp);
         if (!uid) continue;
@@ -4401,9 +4283,6 @@ static json_t *jmapical_tojmap_all_icalobj(icalcomponent *ical,
 
 done:
     jstimezones_free(&jstzones);
-    if (myical && myical != ical) {
-        icalcomponent_free(myical);
-    }
     buf_free(&buf);
     return jsevents;
 }
