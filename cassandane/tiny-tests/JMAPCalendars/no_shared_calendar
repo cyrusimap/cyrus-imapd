@@ -21,6 +21,7 @@ sub test_no_shared_calendar
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $otherJmap->CallMethods([

@@ -17,6 +17,7 @@ sub test_admin_rewrite_calendarevent_privacy
         https://cyrusimap.org/ns/jmap/calendars
         https://cyrusimap.org/ns/jmap/debug
         https://cyrusimap.org/ns/jmap/performance
+        https://cyrusimap.org/ns/jmap/jscalendarbis
     );
 
     xlog $self, "Make sure regular user can't call Admin method";
