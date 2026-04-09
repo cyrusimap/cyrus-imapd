@@ -84,6 +84,17 @@ sub set_up
             'urn:ietf:params:jmap:calendars:preferences',
             'https://cyrusimap.org/ns/jmap/calendars',
             'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
+        ]);
+
+        $self->default_user->jmap->DefaultUsing([
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'urn:ietf:params:jmap:principals',
+            'urn:ietf:params:jmap:calendars:preferences',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
         ]);
     }
 }
@@ -547,6 +558,7 @@ sub create_user
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $caldav = $user_obj->caldav;

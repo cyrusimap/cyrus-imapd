@@ -66,6 +66,7 @@ sub test_calendarevent_set_peruser
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     xlog "Set and assert per-user properties for owner";

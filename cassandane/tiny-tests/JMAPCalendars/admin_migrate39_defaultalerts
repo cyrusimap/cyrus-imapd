@@ -19,6 +19,7 @@ sub test_admin_migrate39_defaultalerts
         https://cyrusimap.org/ns/jmap/calendars
         https://cyrusimap.org/ns/jmap/debug
         https://cyrusimap.org/ns/jmap/performance
+        https://cyrusimap.org/ns/jmap/jscalendarbis
     );
 
     my $http = $self->{instance}->get_service("http");

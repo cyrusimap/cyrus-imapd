@@ -16,6 +16,7 @@ sub test_calendarevent_set_writeown
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $jmap->CallMethods([
