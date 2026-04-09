@@ -786,6 +786,8 @@ static struct icalrecurrencetype *rrule_to_ical(json_t *jrrule,
             const char *day = json_string_value(json_object_get(jnday, "day"));
             json_int_t n =
                 json_integer_value(json_object_get(jnday, "nthOfPeriod"));
+
+            if (i) buf_putc(&buf, ',');
             if (n) buf_printf(&buf, "%lld", n);
             buf_appendcstr(&buf, day);
         }
