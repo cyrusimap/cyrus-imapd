@@ -35,6 +35,7 @@
 #include "mboxname.h"
 #include "json_support.h"
 #include "jmap_ical.h"
+#include "jscalendar.h"
 #include "jmap_notif.h"
 #include "jmap_util.h"
 #include "search_query.h"
@@ -3238,6 +3239,38 @@ static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
 
 }
 
+static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
+                               struct jmapical_ctx *jmapctx)
+{
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        json_t *jgroup = jscalendar_from_ical(NULL, ical);
+        if (!jgroup) return NULL;
+        json_t *jevent = json_incref(
+            json_array_get(json_object_get(jgroup, "entries"), 0));
+        json_decref(jgroup);
+        return jevent;
+    }
+    else {
+        return jmapical_tojmap(ical, NULL, jmapctx);
+    }
+}
+
+static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
+                                hash_table *props,
+                                struct jmapical_ctx *jmapctx)
+{
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        json_t *jgroup = jscalendar_from_ical(NULL, ical);
+        if (!jgroup) return NULL;
+        json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
+        json_decref(jgroup);
+        return jentries;
+    }
+    else {
+        return jmapical_tojmap_all(ical, props, jmapctx);
+    }
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3438,7 +3471,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
     /* Convert to JMAP */
     context_begin_cdata(jmapctx, rock->mbentry, cdata);
-    jsevent = jmapical_tojmap(rock->ical, NULL, jmapctx);
+    jsevent = ical_to_jsevent(req, rock->ical, jmapctx);
     context_end_cdata(jmapctx);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
@@ -4172,8 +4205,16 @@ static int createevent_toical(jmap_req_t *req,
         buf_reset(&buf);
     }
 
-    create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
-            create->serverset, &create->comp, NULL, jmapctx);
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        create->ical = jscalendar_to_ical(NULL, create->jsevent, parser);
+        if (create->ical)
+            create->comp = icalcomponent_get_first_component(
+                create->ical, ICAL_VEVENT_COMPONENT);
+    }
+    else {
+        create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
+                create->serverset, &create->comp, NULL, jmapctx);
+    }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(create->serverset, "isOrigin",
@@ -5072,7 +5113,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
 
     // Read old event
     context_begin_cdata(jmapctx, update->mbentry, update->cdata);
-    old_event = jmapical_tojmap(myoldical, NULL, jmapctx);
+    old_event = ical_to_jsevent(req, myoldical, jmapctx);
     if (!old_event) {
         r = IMAP_INTERNAL;
         goto done;
@@ -5111,8 +5152,17 @@ static int updateevent_apply_patch(jmap_req_t *req,
             update->serverset, update->schedule_addresses);
 
     /* Convert to iCalendar */
-    icalcomponent *newical = jmapical_toical(new_event, myoldical,
-            invalid, update->serverset, NULL, &update->jstzones, jmapctx);
+    icalcomponent *newical;
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+        newical = jscalendar_to_ical(NULL, new_event, &myparser);
+        json_array_extend(invalid, myparser.invalid);
+        jmap_parser_fini(&myparser);
+    }
+    else {
+        newical = jmapical_toical(new_event, myoldical,
+                invalid, update->serverset, NULL, &update->jstzones, jmapctx);
+    }
     if (!newical || json_array_size(invalid)) {
         if (newical) icalcomponent_free(newical);
         goto done;
@@ -5753,7 +5803,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                 eid->ical_recurid, 1);
         struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
-        old_event = jmapical_tojmap(myical, NULL, jmapctx);
+        old_event = ical_to_jsevent(req, myical, jmapctx);
         jmapical_context_free(&jmapctx);
         newical = NULL;
         icalcomponent_free(myical);
@@ -5769,7 +5819,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     else {
         struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
         context_begin_cdata(jmapctx, mbentry, cdata);
-        old_event = jmapical_tojmap(oldical, NULL, jmapctx);
+        old_event = ical_to_jsevent(req, oldical, jmapctx);
         jmapical_context_free(&jmapctx);
         newical = NULL;
     }
@@ -7388,7 +7438,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     struct jmapical_ctx *jmapctx = jmapical_context_new(req, &schedule_addresses);
     jmapctx->to_ical.no_sanitize_timestamps = 1;
     context_begin_cdata(jmapctx, mbentry, cdata);
-    json_t *src_event = jmapical_tojmap(src_ical, NULL, jmapctx);
+    json_t *src_event = ical_to_jsevent(req, src_ical, jmapctx);
     if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
     }
@@ -7629,7 +7679,7 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 
         ical = icalparser_parse_string(buf_cstring(&blob_ctx.blob));
         if (ical) {
-            events = jmapical_tojmap_all(ical, args.props, jmapctx);
+            events = ical_to_jsevents(req, ical, args.props, jmapctx);
             icalcomponent_free(ical);
         }
 
@@ -9154,7 +9204,7 @@ static int principal_getavailability_cb(void *vrock, struct caldav_jscal *jscal)
     if (rock->show_details) {
         /* Fetch all properties, we need them for recurrence overrides */
         context_begin_cdata(rock->jmapctx, rock->mbentry, cdata);
-        rock->jevent = jmapical_tojmap(ical, NULL, rock->jmapctx);
+        rock->jevent = ical_to_jsevent(rock->req, ical, rock->jmapctx);
         context_end_cdata(rock->jmapctx);
     }
 
@@ -11322,7 +11372,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         jmapctx->from_ical.cyrus_msg.uid = uid;
         jmapctx->from_ical.cyrus_msg.partid = partid;
         jmapctx->from_ical.repair_broken_ical = 1;
-        json_t *jsevents = jmapical_tojmap_all(ical, NULL, jmapctx);
+        json_t *jsevents = ical_to_jsevents(req, ical, NULL, jmapctx);
         if (json_array_size(jsevents)) {
             json_object_set_new(jsevents_by_partid, part->part_id, jsevents);
         }
