@@ -4276,6 +4276,11 @@ static int createevent_toical(jmap_req_t *req,
 
     jmapctx->to_ical.serverset = create->serverset;
 
+    // Set @type property if not already set.
+    if (!json_object_get(create->jsevent, "@type")) {
+        json_object_set_new(create->jsevent, "@type", json_string("Event"));
+    }
+
     // Validate extension properties
     json_t *jval = json_object_get(create->jsevent, "isDraft");
     if (jval && !json_is_boolean(jval)) {
