@@ -3982,36 +3982,22 @@ static void validate_group(struct jmap_parser *parser, json_t *jgroup)
         jmap_parser_invalid(parser, "entries");
 }
 
-EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
-                                           json_t *jgroup,
-                                           struct jmap_parser *parser)
+static void group_to_ical(jscalendar_cfg_t *cfg,
+                          json_t *jgroup,
+                          icalcomponent *ical)
 {
-    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-    icalcomponent *vcal = NULL;
-
-    if (!parser) parser = &myparser;
-
-    validate_group(parser, jgroup);
-    if (json_array_size(parser->invalid))
-        goto done;
-
-    vcal = jobj_get_icalcomp(
-        cfg, jgroup, ICAL_VCALENDAR_COMPONENT, GET_ICAL_CREATE);
-    icalcomponent_add_property(vcal, icalproperty_new_version("2.0"));
-    icalcomponent_add_property(vcal, icalproperty_new_calscale("GREGORIAN"));
-
     json_t *jentries = json_object_get(jgroup, "entries");
     json_t *jentry;
     size_t i;
     json_array_foreach(jentries, i, jentry)
     {
-        entry_to_ical(cfg, jentry, vcal);
+        entry_to_ical(cfg, jentry, ical);
     }
 
-    categories_to_ical(cfg, jgroup, vcal);
-    description_to_ical(cfg, jgroup, vcal);
-    keywords_to_ical(cfg, jgroup, vcal);
-    links_to_ical(cfg, jgroup, vcal);
+    categories_to_ical(cfg, jgroup, ical);
+    description_to_ical(cfg, jgroup, ical);
+    keywords_to_ical(cfg, jgroup, ical);
+    links_to_ical(cfg, jgroup, ical);
 
     json_t *jval;
 
@@ -4020,7 +4006,7 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
             cfg, jgroup, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
-        icalcomponent_add_property(vcal, prop);
+        icalcomponent_add_property(ical, prop);
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "created"))) {
@@ -4028,7 +4014,7 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
             cfg, jgroup, "created", ICAL_CREATED_PROPERTY, GET_ICAL_CREATE);
         icaltimetype t = utctime_to_icaltime(json_string_value(jval));
         icalproperty_set_value(prop, icalvalue_new_datetime(t));
-        icalcomponent_add_property(vcal, prop);
+        icalcomponent_add_property(ical, prop);
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "prodId"))) {
@@ -4036,7 +4022,7 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
             cfg, jgroup, "prodId", ICAL_PRODID_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
-        icalcomponent_add_property(vcal, prop);
+        icalcomponent_add_property(ical, prop);
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "source"))) {
@@ -4044,7 +4030,7 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
             cfg, jgroup, "source", ICAL_SOURCE_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_uri(s));
-        icalcomponent_add_property(vcal, prop);
+        icalcomponent_add_property(ical, prop);
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "title"))) {
@@ -4052,26 +4038,59 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
             cfg, jgroup, "title", ICAL_NAME_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
-        icalcomponent_add_property(vcal, prop);
+        icalcomponent_add_property(ical, prop);
         const char *l = json_string_value(json_object_get(jgroup, "locale"));
         if (l) icalproperty_add_parameter(prop, icalparameter_new_language(l));
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "uid"))) {
         const char *s = json_string_value(jval);
-        icalcomponent_add_property(vcal, icalproperty_new_uid(s));
+        icalcomponent_add_property(ical, icalproperty_new_uid(s));
     }
 
     if (JNOTNULL(jval = json_object_get(jgroup, "updated"))) {
         icaltimetype t = utctime_to_icaltime(json_string_value(jval));
-        icalcomponent_add_property(vcal, icalproperty_new_lastmodified(t));
+        icalcomponent_add_property(ical, icalproperty_new_lastmodified(t));
     }
 
-    vendorexts_to_ical(cfg, jgroup, NULL, vcal);
+    vendorexts_to_ical(cfg, jgroup, NULL, ical);
+}
+
+EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
+                                           json_t *jobj,
+                                           struct jmap_parser *parser)
+{
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+    icalcomponent *ical = NULL;
+
+    if (!parser) parser = &myparser;
+
+    const char *type = json_string_value(json_object_get(jobj, "@type"));
+    if (!strcasecmpsafe(type, "Group")) {
+        validate_group(parser, jobj);
+    }
+    else {
+        validate_entry(parser, jobj);
+    }
+
+    if (json_array_size(parser->invalid))
+        goto done;
+
+    ical = jobj_get_icalcomp(
+        cfg, jobj, ICAL_VCALENDAR_COMPONENT, GET_ICAL_CREATE);
+    icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
+    icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
+
+    if (!strcasecmpsafe(type, "Group")) {
+        group_to_ical(cfg, jobj, ical);
+    }
+    else {
+        entry_to_ical(cfg, jobj, ical);
+    }
 
 done:
     jmap_parser_fini(&myparser);
-    return vcal;
+    return ical;
 }
 
 // ---------------
