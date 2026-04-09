@@ -40,11 +40,11 @@ typedef struct {
     const char *displayalert_default_description;
 
     /**
-     *  Toggles if to ignore iCalendar conversion properties. If true, the
-     *  "iCalComponent" conversion property will be ignored when converting
-     *  to iCalendar and not set when converting to JSCalendar.
+     *  Toggles if to use iCalendar conversion properties. If true, the
+     *  "iCalComponent" conversion property will be read when converting
+     *  to iCalendar and set when converting to JSCalendar.
      */
-    bool ignore_icalendar_convprops;
+    bool use_icalendar_convprops;
 } jscalendar_cfg_t;
 
 /** @brief Convert a JSCalendar object to an iCalendar object.

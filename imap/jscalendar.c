@@ -1034,7 +1034,7 @@ static icalcomponent *jobj_get_icalcomp(jscalendar_cfg_t *cfg,
 {
     icalcomponent *comp = NULL;
 
-    if (cfg->ignore_icalendar_convprops) {
+    if (!cfg->use_icalendar_convprops) {
         if (want_kind != ICAL_ANY_COMPONENT && (flags & GET_ICAL_CREATE)) {
             comp = icalcomponent_new(want_kind);
         }
@@ -1102,7 +1102,7 @@ static icalproperty *jobj_get_icalprop(jscalendar_cfg_t *cfg,
 {
     icalproperty *prop = NULL;
 
-    if (cfg->ignore_icalendar_convprops) {
+    if (!cfg->use_icalendar_convprops) {
         if (want_kind != ICAL_ANY_PROPERTY && (flags & GET_ICAL_CREATE)) {
             prop = icalproperty_new(want_kind);
         }
@@ -4102,7 +4102,7 @@ static json_t *jobj_set_icalcomp_name(jscalendar_cfg_t *cfg,
                                       json_t *jobj,
                                       icalcomponent *comp)
 {
-    if (cfg->ignore_icalendar_convprops) return NULL;
+    if (!cfg->use_icalendar_convprops) return NULL;
 
     const char *comp_name = icalcomponent_get_component_name(comp);
     struct buf buf = BUF_INITIALIZER;
@@ -4124,7 +4124,7 @@ static json_t *jobj_set_icalcomp(jscalendar_cfg_t *cfg,
                                  json_t *jobj,
                                  icalcomponent *comp)
 {
-    if (cfg->ignore_icalendar_convprops) return NULL;
+    if (!cfg->use_icalendar_convprops) return NULL;
 
     json_t *jcomps = json_array();
     json_t *jprops = json_array();
@@ -4167,7 +4167,7 @@ static json_t *jobj_set_icalprop_name(jscalendar_cfg_t *cfg,
                                       const char *key,
                                       icalproperty *prop)
 {
-    if (cfg->ignore_icalendar_convprops) return NULL;
+    if (!cfg->use_icalendar_convprops) return NULL;
 
     icalcomponent *comp = icalproperty_get_parent(prop);
     if (!comp) return NULL;
@@ -4193,7 +4193,7 @@ static json_t *jobj_set_icalprop_valuetype(jscalendar_cfg_t *cfg,
                                            const char *key,
                                            icalproperty *prop)
 {
-    if (cfg->ignore_icalendar_convprops) return NULL;
+    if (!cfg->use_icalendar_convprops) return NULL;
 
     json_t *jicalprop = jobj_set_icalprop_name(cfg, jobj, key, prop);
     if (!jicalprop) return NULL;
@@ -4212,7 +4212,7 @@ static void jobj_set_icalprop_param(jscalendar_cfg_t *cfg,
                                     icalproperty *prop,
                                     icalparameter *param)
 {
-    if (cfg->ignore_icalendar_convprops) return;
+    if (!cfg->use_icalendar_convprops) return;
 
     json_t *jicalprop = jobj_set_icalprop_name(cfg, jobj, key, prop);
     json_t *jparams = json_object_get_vanew(jicalprop, "parameters", "{}");
@@ -4224,7 +4224,7 @@ static void jobj_set_icalprop_params(jscalendar_cfg_t *cfg,
                                      const char *key,
                                      icalproperty *prop)
 {
-    if (cfg->ignore_icalendar_convprops) return;
+    if (!cfg->use_icalendar_convprops) return;
 
     json_t *jparams = json_object();
 
