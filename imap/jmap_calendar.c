@@ -3239,6 +3239,125 @@ static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
 
 }
 
+static void repair_broken_ical(icalcomponent **icalp)
+{
+    icalcomponent *original_ical = *icalp;
+    icalcomponent *myical = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (icalcomponent_isa(original_ical) == ICAL_VEVENT_COMPONENT) {
+        // Wrap a single VEVENT in a VCALENDAR.
+        myical =
+            icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                                icalproperty_new_version("2.0"), (void *)0);
+        icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
+    }
+    else myical = original_ical;
+
+    if (icalcomponent_isa(myical) != ICAL_VCALENDAR_COMPONENT ||
+        !icalcomponent_get_first_component(myical, ICAL_VEVENT_COMPONENT)) {
+        // that's just unrepairably broken
+        return;
+    }
+
+    // Assuming that almost all iCalendar data is valid, let's
+    // inspect the iCalendar data in a first pass. If it turns
+    // out to be valid then return early. Only in a second pass
+    // duplicate the in-memory iCalendar tree and rewrite it.
+
+    for (int pass = 1; pass <= 2; pass++) {
+        int needs_rewrite = 0;
+        icalproperty_method method = icalcomponent_get_method(myical);
+
+        if (pass == 2 && myical == original_ical) {
+            // We need to rewrite the iCalendar data but haven't
+            // made a copy of it, yet. Clone it now.
+            myical = icalcomponent_clone(original_ical);
+        }
+
+        icalcomponent *vevent;
+        for (vevent = icalcomponent_get_first_component(myical,
+                    ICAL_VEVENT_COMPONENT);
+             vevent;
+             vevent = icalcomponent_get_next_component(myical,
+                    ICAL_VEVENT_COMPONENT)) {
+
+            // Remove VALARM without TRIGGER. Set missing ACTION to DISPLAY.
+            icalcomponent *valarm, *nextvalarm;
+            for (valarm = icalcomponent_get_first_component(vevent, ICAL_VALARM_COMPONENT);
+                 valarm; valarm = nextvalarm) {
+                nextvalarm = icalcomponent_get_next_component(
+                    vevent, ICAL_VALARM_COMPONENT);
+
+                if (!icalcomponent_get_first_property(valarm, ICAL_TRIGGER_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_remove_component(vevent, valarm);
+                        icalcomponent_free(valarm);
+                    }
+                    else needs_rewrite = 1;
+                }
+                else if (!icalcomponent_get_first_property(valarm, ICAL_ACTION_PROPERTY)) {
+                    if (pass == 2) {
+                        icalcomponent_add_property(valarm,
+                            icalproperty_new_action(ICAL_ACTION_DISPLAY));
+                    }
+                    else needs_rewrite = 1;
+                }
+            }
+
+            // Make sure that the mandatory UID property is set.
+            if (!icalcomponent_get_uid(vevent)) {
+                if (pass == 2) {
+                    // Generate UID property by hashing normalized component
+                    icalcomponent *norm_comp = icalcomponent_clone(vevent);
+                    icalcomponent_normalize_x(norm_comp);
+                    unsigned char sha1dest[SHA1_DIGEST_LENGTH];
+                    char hexbuf[2*SHA1_DIGEST_LENGTH+1];
+                    const char *ical_str = icalcomponent_as_ical_string(norm_comp);
+                    xsha1((const unsigned char *)ical_str, strlen(ical_str), sha1dest);
+                    bin_to_hex(sha1dest, SHA1_DIGEST_LENGTH, hexbuf, BH_LOWER);
+                    hexbuf[2*SHA1_DIGEST_LENGTH] = '\0';
+                    buf_setcstr(&buf, "nouid");
+                    buf_appendcstr(&buf, hexbuf);
+                    icalcomponent_add_property(
+                        vevent, icalproperty_new_uid(buf_cstring(&buf)));
+                    icalcomponent_free(norm_comp);
+                }
+                else needs_rewrite = 1;
+            }
+
+            // Remove METHOD:PUBLISH if no ORGANIZER is set
+            if (method == ICAL_METHOD_PUBLISH &&
+                !icalcomponent_get_first_property(vevent,
+                                                  ICAL_ORGANIZER_PROPERTY)) {
+                if (pass == 2) {
+                    // XXX this resets the property iterator of ical
+                    icalproperty *prop = icalcomponent_get_first_property(myical,
+                            ICAL_METHOD_PROPERTY);
+                    if (prop) {
+                        icalcomponent_remove_property(myical, prop);
+                        icalproperty_free(prop);
+                    }
+                }
+                else needs_rewrite = 1;
+            }
+
+            // Make sure SEQUENCE >= 0
+            if (icalcomponent_get_sequence(vevent) < 0) {
+                icalcomponent_set_sequence(vevent, 0);
+            }
+        }
+
+        if (!needs_rewrite)
+            break;
+    }
+
+    buf_free(&buf);
+    if (myical != original_ical)
+        icalcomponent_free(original_ical);
+    *icalp = myical;
+}
+
 static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
                                struct jmapical_ctx *jmapctx)
 {
@@ -7648,7 +7767,6 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
     jmap_getblob_ctx_init(&blob_ctx, NULL, NULL, "text/calendar", 1);
 
     struct jmapical_ctx *jmapctx = jmapical_context_new(req, NULL);
-    jmapctx->from_ical.repair_broken_ical = args.repair_broken_ical;
 
     json_t *jval;
     size_t i;
@@ -7679,6 +7797,7 @@ static int jmap_calendarevent_parse(jmap_req_t *req)
 
         ical = icalparser_parse_string(buf_cstring(&blob_ctx.blob));
         if (ical) {
+            if (args.repair_broken_ical) repair_broken_ical(&ical);
             events = ical_to_jsevents(req, ical, args.props, jmapctx);
             icalcomponent_free(ical);
         }
@@ -11371,7 +11490,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
         jmapctx->from_ical.cyrus_msg.mboxid = mboxid;
         jmapctx->from_ical.cyrus_msg.uid = uid;
         jmapctx->from_ical.cyrus_msg.partid = partid;
-        jmapctx->from_ical.repair_broken_ical = 1;
+        repair_broken_ical(&ical);
         json_t *jsevents = ical_to_jsevents(req, ical, NULL, jmapctx);
         if (json_array_size(jsevents)) {
             json_object_set_new(jsevents_by_partid, part->part_id, jsevents);
