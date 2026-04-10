@@ -34,7 +34,6 @@ sub test_calendarevent_query_text
                                     roles => {
                                         'owner' => JSON::true,
                                     },
-                                    locationId => "loc1",
                                     calendarAddress => 'tux@local',
                                 },
                                 "qux" => {
