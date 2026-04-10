@@ -1121,6 +1121,11 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
 
     if (type == DELETE) return delete_here(txn, loc);
 
+    // promote to fat record if key or value exceeds skinny field sizes
+    // (ADD+1 == FATADD, REPLACE+1 == FATREPLACE)
+    if (keylen > 0xFFFF || vallen > 0xFFFFFFFFULL)
+        type++;
+
     size_t headlen = HLCALC(type, level);
     size_t taillen = TLCALC(type, keylen, vallen);
     size_t reclen = headlen + 8 + taillen;
