@@ -31,7 +31,6 @@ sub test_calendarevent_set_participants
                     'owner' => JSON::true,
                     'chair' => JSON::true,
                 },
-                locationId => 'loc1',
                 participationStatus => 'accepted',
                 expectReply => JSON::false,
                 links => {
@@ -46,7 +45,6 @@ sub test_calendarevent_set_participants
             'bar' => {
                 name => 'Bar',
                 kind => 'individual',
-                locationId => 'loc2',
                 participationStatus => 'needs-action',
                 expectReply => JSON::true,
                 delegatedTo => {
@@ -89,16 +87,7 @@ sub test_calendarevent_set_participants
             'location' => {
                 name => 'Some location',
                 kind => 'location',
-                locationId => 'loc1',
                 calendarAddress => 'mailto:location@local',
-            },
-        },
-        locations => {
-            loc1 => {
-                name => 'location1',
-            },
-            loc2 => {
-                name => 'location2',
             },
         },
     };

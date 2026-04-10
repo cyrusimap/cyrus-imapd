@@ -163,7 +163,6 @@ sub test_calendarevent_set_fullblown
                 roles => {
                     chair => JSON::true,
                 },
-                locationId => 'loc1',
                 language => 'de',
                 participationStatus => 'tentative',
                 participationComment => 'participant1Comment',
