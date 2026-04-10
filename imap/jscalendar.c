@@ -72,6 +72,7 @@ static icalparameter *myicalparameter_new_jsid(const char *key)
     return param;
 }
 
+__attribute__((unused))
 static const char *myicalparameter_get_jsid(icalparameter *param)
 {
     if (!myicalparameter_has_name(param, "JSID")) return NULL;
@@ -99,10 +100,13 @@ static icalproperty *myicalproperty_new_jsid(const char *key)
     return prop;
 }
 
+__attribute__((unused))
 static const char *myicalproperty_get_jsid(icalproperty *prop)
 {
     if (!myicalproperty_has_name(prop, "JSID")) return NULL;
-    return icalproperty_get_value_as_string(prop);
+    icalvalue *value = icalproperty_get_value(prop);
+    if (icalvalue_isa(value) != ICAL_TEXT_VALUE) return NULL;
+    return icalvalue_get_text(value);
 }
 
 static icalproperty *myicalproperty_new_jsprop(const char *val)
@@ -244,6 +248,9 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         if (myicalparameter_has_name(param, "JSID")) {
             return true;
         }
+        if (myicalparameter_has_name(param, "X-JMAP-ID")) {
+            return true;
+        }
         // fallthrough
     }
 
@@ -314,6 +321,9 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
     icalproperty_kind prop_kind = icalproperty_isa(prop);
 
     if (myicalproperty_has_name(prop, "JSID"))
+        return true;
+
+    if (myicalproperty_has_name(prop, "X-JMAP-ID"))
         return true;
 
     if (myicalproperty_has_name(prop, "JSPROP"))
@@ -1182,18 +1192,27 @@ static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
     }
 }
 
+static bool prop_has_jsid(icalproperty *prop)
+{
+    return myicalproperty_get_parameter_by_name(prop, "JSID") ||
+           myicalproperty_get_parameter_by_name(prop, "X-JMAP-ID");
+}
+
 static const char *jsid_from_prop(icalproperty *prop,
                                   json_t *jobj,
                                   struct buf *buf)
 {
     // Use JSID parameter value, if set.
+    const char *jsid = NULL;
     icalparameter *param = myicalproperty_get_parameter_by_name(prop, "JSID");
-    if (param) {
-        const char *jsid = icalparameter_get_iana(param);
-        if (jsid && !json_object_get(jobj, jsid)) {
-            buf_setcstr(buf, jsid);
-            return buf_cstring(buf);
-        }
+    if (param) jsid = icalparameter_get_iana(param);
+    if (!jsid) {
+        param = myicalproperty_get_parameter_by_name(prop, "X-JMAP-ID");
+        if (param) jsid = icalparameter_get_x(param);
+    }
+    if (jsid && !json_object_get(jobj, jsid)) {
+        buf_setcstr(buf, jsid);
+        return buf_cstring(buf);
     }
 
     // Generate UUIDv5 from property value.
@@ -1247,6 +1266,12 @@ done:
     buf_free(&buf);
 }
 
+static bool comp_has_jsid(icalcomponent *prop)
+{
+    return myicalcomponent_get_property_by_name(prop, "JSID") ||
+           myicalcomponent_get_property_by_name(prop, "X-JMAP-ID");
+}
+
 static const char *jsid_from_comp(icalcomponent *comp,
                                   json_t *jobj,
                                   struct buf *buf)
@@ -1255,6 +1280,7 @@ static const char *jsid_from_comp(icalcomponent *comp,
 
     // Use JSID property value, if set.
     icalproperty *prop = myicalcomponent_get_property_by_name(comp, "JSID");
+    if (!prop) prop = myicalcomponent_get_property_by_name(comp, "X-JMAP-ID");
     if (prop) {
         const char *jsid = icalproperty_get_value_as_string(prop);
         if (jsid && !json_object_get(jobj, jsid)) {
@@ -4894,9 +4920,9 @@ static void locations_from_ical(jscalendar_cfg_t *cfg,
     icalproperty *mainloc_prop =
         myicalcomponent_get_property(comp, ICAL_LOCATION_PROPERTY);
     if (mainloc_prop) {
-        icalparameter *param =
-            myicalproperty_get_parameter_by_name(mainloc_prop, "JSID");
-        if (param) mainloc_id = xstrdupnull(myicalparameter_get_jsid(param));
+        if (prop_has_jsid(mainloc_prop)) {
+            mainloc_id = xstrdup(jsid_from_prop(mainloc_prop, jlocs, &buf));
+        }
 
         if (!myicalproperty_is_derived(mainloc_prop)) {
             json_t *jloc = json_pack("{s:s}", "@type", "Location");
@@ -4942,10 +4968,12 @@ static void locations_from_ical(jscalendar_cfg_t *cfg,
         comp, ICAL_VLOCATION_COMPONENT, vloc, comp_iter)
     {
         // Match VLOCATION by Location id.
-        prop = myicalcomponent_get_property_by_name(vloc, "JSID");
-        if (prop && !strcmpsafe(mainloc_id, myicalproperty_get_jsid(prop))) {
-            mainloc_vloc = vloc;
-            break;
+        if (comp_has_jsid(vloc)) {
+            const char *vloc_id = jsid_from_comp(vloc, jlocs, &buf);
+            if (!strcmpsafe(mainloc_id, vloc_id)) {
+                mainloc_vloc = vloc;
+                break;
+            }
         }
 
         // Match VLOCATION by value of main location name.
@@ -5076,10 +5104,7 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
             if (organizer_attendee) {
                 participant_from_icalprop(organizer_attendee, jpart);
                 // Get JSID key from ATTENDEE, if set.
-                if (!myicalproperty_get_parameter_by_name(organizer,
-                                                         "JSID") &&
-                    myicalproperty_get_parameter_by_name(organizer_attendee,
-                                                         "JSID")) {
+                if (!prop_has_jsid(organizer) && prop_has_jsid(organizer_attendee)) {
                     jsid_from_prop(organizer_attendee, jparts, &key);
                 }
             }
