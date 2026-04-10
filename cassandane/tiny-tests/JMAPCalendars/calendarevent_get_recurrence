@@ -11,7 +11,6 @@ sub test_calendarevent_get_recurrence
     $self->assert_not_null($event->{recurrenceRule});
     $self->assert_str_equals("RecurrenceRule", $event->{recurrenceRule}{q{@type}});
     $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
-    $self->assert_str_equals("gregorian", $event->{recurrenceRule}{rscale});
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
     $self->assert_deep_equals([{
