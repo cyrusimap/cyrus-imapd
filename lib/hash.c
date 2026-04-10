@@ -47,6 +47,8 @@
 extern inline size_t hash_count(const hash_table *table);
 extern inline bool hash_constructed(const hash_table *table);
 
+#include "hash_priv.h"
+
 struct bucket {
     void *data;
     struct bucket *next;
@@ -80,12 +82,79 @@ struct bucket {
 ** diagnostic "Virtual memory exhausted"
 */
 
+/* We've changed the hash table size from "whatever the user asked for" to
+ * power of two (and therefore sizes must round up to the next power of two).
+ * This permits us to use a bitmask to map the hash code to the bucket, which is
+ * *considerably* faster than integer modulo.
+ *
+ * For example:
+ * https://johnnysswlab.com/make-your-programs-run-faster-avoid-expensive-instructions/
+ *
+ *       To test the speed difference, we implemented an open addressing hash
+ *       map whose size is always the power of two. We used working sets of
+ *       several sizes and tested it. The results are in the table below:
+ *
+ * and shifting is between 12% and 40% faster.
+ *
+ * This does, however, rely on a good hash function which properly mixes all the
+ * entropy into the low bits of the hash code. For example, the pre-2021
+ * algorithm is not:
+ *
+ *       ret_val ^= i;
+ *       ret_val <<= 1;
+ *
+ * The second operation in the loop is is "multiply by two". There is no final
+ * mixing step, so it will always generate an even number. Masking this would
+ * leave half the buckets unreachable!
+ *
+ * This doesn't matter if instead of masking, one uses modulo of an odd number
+ * to find the bucket. Hence the other "classic" approach is constraining the
+ * table size to be a prime number, and choosing the bucket modulo that.
+ *
+ * Compiler writers know a bunch of integer maths tricks to make modulo of an
+ * integer constant fast (by not actually using the CPU modulo operation).
+ * But modulo of a run time integer is slow. So one way to get speed back is:
+ *
+ *
+ *       So then how do we solve the problem of the slow integer modulo? For
+ *       this I’m using a trick that I copied from boost::multi_index: I make
+ *       all integer modulos use a compile time constant. I don’t allow all
+ *       possible prime numbers as sizes for the table. Instead I have a
+ *       selection of pre-picked prime numbers and will always grow the table to
+ *       the next largest one out of that list. Then I store the index of the
+ *       number that your table has. When it later comes time to do the integer
+ *       modulo to assign the hash value to a slot, you will see that my code
+ *       does this:
+ *
+ *       switch(prime_index)
+ *       {
+ *       case 0:
+ *           return 0llu;
+ *       case 1:
+ *           return hash % 2llu;
+ *       case 2:
+ *           return hash % 3llu;
+ *       case 3:
+ *           return hash % 5llu;
+ * ...
+ *
+ * https://probablydance.com/2017/02/26/i-wrote-the-fastest-hashtable/
+ *
+ * which would result in code much much longer than this comment.
+ *
+ * So we go with integer sizes and a good enough hash function as a reasonable
+ * speed/size trade off.
+ */
+
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
       assert(table);
       assert(size);
 
+      uint8_t size_log2 = hash_base2_size_for_entries(size);
+      size = 1ULL << size_log2;
       table->size = size;
+      table->mask = ~0ULL >> (8 * sizeof(size_t) - size_log2);
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
       table->hash_load_warned_at = 0;
@@ -135,7 +204,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      unsigned val = hash & table->mask;
       bucket *ptr, *newptr;
 
       /*
@@ -202,7 +271,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      unsigned val = hash & table->mask;
 
       if (!(table->table)[val])
             return NULL;
@@ -224,7 +293,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash % table->size;
+      unsigned val = hash & table->mask;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
