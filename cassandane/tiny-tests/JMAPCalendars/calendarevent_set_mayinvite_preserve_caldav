@@ -29,14 +29,10 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         someone => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',

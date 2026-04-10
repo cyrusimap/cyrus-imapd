@@ -35,9 +35,6 @@ sub test_calendarevent_participantreply_plusaddr
         },
         "att1" => {
             "name" => "Bugs Bunny",
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'mailto:bugs%2Bcarrot@looneytunes.com',
         },
     };

@@ -14,16 +14,12 @@ sub test_calendarevent_set_schedule_request_add_participant
         org => {
             name => "Cassandane",
             roles => {
-                attendee => JSON::true,
                 owner => JSON::true,
             },
             calendarAddress => 'cassandane@example.com',
         },
         att => {
             name => "Bugs Bunny",
-            roles => {
-                attendee => JSON::true,
-            },
             calendarAddress => 'bugs@looneytunes.com',
         },
     };
@@ -70,9 +66,6 @@ sub test_calendarevent_set_schedule_request_add_participant
                 kind => "individual",
                 participationStatus => "needs-action",
                 name => "Road Runner",
-                roles => {
-                    attendee => JSON::true,
-                },
                 calendarAddress => 'mailto:rr@looneytunes.com',
             }
          }

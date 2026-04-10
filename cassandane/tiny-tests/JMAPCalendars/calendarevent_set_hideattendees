@@ -35,22 +35,15 @@ sub test_calendarevent_set_hideattendees
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         sharee => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:sharee@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',
                         },
                         attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:attendee1@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'accepted',
@@ -59,9 +52,6 @@ sub test_calendarevent_set_hideattendees
                     recurrenceOverrides => {
                         '2020-01-02T09:00:00' => {
                             'participants/attendee2' => {
-                                roles => {
-                                    'attendee' => JSON::true,
-                                },
                                 calendarAddress => 'mailto:attendee2@example.com',
                                 expectReply => JSON::true,
                                 participationStatus => 'accepted',

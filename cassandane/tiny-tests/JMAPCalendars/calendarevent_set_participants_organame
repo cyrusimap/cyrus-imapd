@@ -36,9 +36,6 @@ sub test_calendarevent_set_participants_organame
                 '@type' => 'Participant',
                 name => 'Bar',
                 kind => 'individual',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 calendarAddress => 'mailto:bar@local',
             },
         },

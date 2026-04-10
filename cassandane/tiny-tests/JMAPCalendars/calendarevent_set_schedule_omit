@@ -35,9 +35,6 @@ sub test_calendarevent_set_schedule_omit
                 "att" => {
                     "name" => "Cassandane",
                     "email" => "cassandane\@example.com",
-                    roles => {
-                        'attendee' => JSON::true,
-                    },
                 },
             },
         }

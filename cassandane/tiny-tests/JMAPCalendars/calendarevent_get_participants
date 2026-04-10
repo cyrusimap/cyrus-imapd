@@ -15,7 +15,6 @@ sub test_calendarevent_get_participants
             name => 'Monty Burns',
             roles => {
                 'owner' => JSON::true,
-                'attendee' => JSON::true,
             },
             participationStatus => 'accepted',
             calendarAddress => 'mailto:smithers@example.com',
@@ -36,9 +35,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Carl Carlson',
             participationStatus => 'tentative',
-            roles => {
-                'attendee' => JSON::true,
-            },
             scheduleSequence => 3,
             scheduleUpdated => '2017-01-02T03:04:05Z',
             delegatedFrom => {
@@ -51,9 +47,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Lenny Leonard',
             participationStatus => 'delegated',
-            roles => {
-                'attendee' => JSON::true,
-            },
             delegatedTo => {
                 'carl' => JSON::true,
             },
@@ -64,9 +57,6 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Larry Burns',
             participationStatus => 'declined',
-            roles => {
-                'attendee' => JSON::true,
-            },
             memberOf => {
                 '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
             },

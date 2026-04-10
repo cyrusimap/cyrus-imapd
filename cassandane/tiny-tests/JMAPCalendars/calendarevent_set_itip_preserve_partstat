@@ -30,14 +30,10 @@ sub test_calendarevent_set_itip_preserve_partstat
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         other => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:other@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',

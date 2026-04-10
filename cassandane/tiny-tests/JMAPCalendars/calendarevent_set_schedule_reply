@@ -21,9 +21,6 @@ sub test_calendarevent_set_schedule_reply
         "att" => {
             "name" => "Cassandane",
             calendarAddress => 'mailto:cassandane@example.com',
-            roles => {
-                'attendee' => JSON::true,
-            },
         },
     };
 

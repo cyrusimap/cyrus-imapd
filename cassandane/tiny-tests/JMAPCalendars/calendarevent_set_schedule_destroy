@@ -42,9 +42,6 @@ sub test_calendarevent_set_schedule_destroy
                                 },
                                 "att" => {
                                     "name" => "Bugs Bunny",
-                                    roles => {
-                                        'attendee' => JSON::true,
-                                    },
                                     calendarAddress => 'mailto:bugs@example.com',
                                 },
                             },

@@ -15,7 +15,6 @@ sub test_calendarevent_get_organizermailto
             name => 'Organizer',
             roles => {
                 'owner' => JSON::true,
-                'attendee' => JSON::true,
             },
             calendarAddress => 'mailto:organizer@local',
             expectReply => JSON::false,
@@ -24,9 +23,6 @@ sub test_calendarevent_get_organizermailto
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
             name => 'Attendee',
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'mailto:attendee@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',

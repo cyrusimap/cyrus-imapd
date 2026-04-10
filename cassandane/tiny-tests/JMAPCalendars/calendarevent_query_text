@@ -39,9 +39,6 @@ sub test_calendarevent_query_text
                                 },
                                 "qux" => {
                                     name => "Quuks",
-                                    roles => {
-                                        'attendee' => JSON::true,
-                                    },
                                     calendarAddress => 'qux@local',
                                 },
                             },

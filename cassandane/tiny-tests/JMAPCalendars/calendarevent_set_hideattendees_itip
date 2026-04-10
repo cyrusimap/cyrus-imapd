@@ -30,20 +30,13 @@ sub test_calendarevent_set_hideattendees_itip
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:attendee1@example.com',
                         },
                         attendee2 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:attendee2@example.com',
                         },
                     },

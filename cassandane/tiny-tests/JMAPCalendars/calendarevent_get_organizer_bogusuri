@@ -17,7 +17,6 @@ sub test_calendarevent_get_organizer_bogusuri
             '@type' => 'Participant',
             name => 'Organizer',
             roles => {
-                'attendee' => JSON::true,
                 'owner' => JSON::true,
             },
             calendarAddress => '/foo-bar/principal/',
@@ -26,9 +25,6 @@ sub test_calendarevent_get_organizer_bogusuri
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'mailto:attendee@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',

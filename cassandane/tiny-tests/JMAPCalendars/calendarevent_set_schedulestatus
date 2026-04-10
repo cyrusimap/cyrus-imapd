@@ -22,9 +22,6 @@ sub test_calendarevent_set_schedulestatus
                         part1 => {
                             '@type' => 'Participant',
                             calendarAddress => 'mailto:part1@local',
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             scheduleStatus => ['2.0', '2.4'],
                         },
                     },

@@ -21,9 +21,6 @@ sub test_calendarevent_get_organizer
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'mailto:attendee@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',

@@ -47,9 +47,6 @@ EOF
                     organizerCalendarAddress => 'mailto:cassandane%2Btest@example.com',
                     participants => {
                         foo => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:foo@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,

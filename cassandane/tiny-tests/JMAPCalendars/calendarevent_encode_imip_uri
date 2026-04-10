@@ -37,9 +37,6 @@ EOF
                     organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         plusuri => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:plus%2Buri@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',

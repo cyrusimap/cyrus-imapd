@@ -59,9 +59,6 @@ sub test_calendarevent_get_privacy_shared
         participants => {
             participant1 => {
                 calendarAddress => 'mailto:participant1@local',
-                roles => {
-                    attendee => JSON::true,
-                },
             },
         },
         priority => 7,

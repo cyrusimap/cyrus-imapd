@@ -43,9 +43,6 @@ sub test_rewrite_webdav_attachment_url_itip_jmap
                         part1 => {
                             '@type' => 'Participant',
                             calendarAddress => 'mailto:part1@local',
-                            roles => {
-                                attendee => JSON::true,
-                            },
                         },
                     },
                     start => '2021-01-01T01:00:00',

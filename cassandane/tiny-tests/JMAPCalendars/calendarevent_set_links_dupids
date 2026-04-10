@@ -61,9 +61,6 @@ sub test_calendarevent_set_links_dupids
             part1 => {
                 email => 'part1@local',
                 calendarAddress => 'mailto:part1@local',
-                roles => {
-                    attendee => JSON::true,
-                },
                 links => {
                     link1 => {
                         href => 'https://local/part1/link1',
@@ -78,9 +75,6 @@ sub test_calendarevent_set_links_dupids
             part2 => {
                 email => 'part2@local',
                 calendarAddress => 'mailto:part2@local',
-                roles => {
-                    attendee => JSON::true,
-                },
                 links => {
                     link1 => {
                         href => 'https://local/part2/link1',
@@ -97,7 +91,6 @@ sub test_calendarevent_set_links_dupids
                 calendarAddress => 'mailto:orga@local',
                 roles => {
                     owner => JSON::true,
-                    attendee => JSON::true,
                 },
             },
         }
