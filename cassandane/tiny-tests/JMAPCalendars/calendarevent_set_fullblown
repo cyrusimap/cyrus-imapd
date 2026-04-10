@@ -165,7 +165,6 @@ sub test_calendarevent_set_fullblown
                 },
                 language => 'de',
                 participationStatus => 'tentative',
-                participationComment => 'participant1Comment',
                 expectReply => JSON::true,
                 delegatedTo => {
                     participant2 => JSON::true,
