@@ -5068,16 +5068,29 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
             || icalproperty_count_parameters(organizer))
         {
             // Convert ORGANIZER to Participant.
+            struct buf key = BUF_INITIALIZER;
             json_t *jpart = json_pack("{s:s}", "@type", "Participant");
             json_object_set(jpart_by_caladdr, caladdr, jpart);
             participant_from_icalprop(organizer, jpart);
-            if (organizer_attendee)
+
+            if (organizer_attendee) {
                 participant_from_icalprop(organizer_attendee, jpart);
+                // Get JSID key from ATTENDEE, if set.
+                if (!myicalproperty_get_parameter_by_name(organizer,
+                                                         "JSID") &&
+                    myicalproperty_get_parameter_by_name(organizer_attendee,
+                                                         "JSID")) {
+                    jsid_from_prop(organizer_attendee, jparts, &key);
+                }
+            }
 
             json_t *jroles = json_object_get_vanew(jpart, "roles", "{}");
             json_object_set_new(jroles, "owner", json_true());
-            const char *key = jsid_from_prop(organizer, jparts, &buf);
-            json_object_set_new(jparts, key, jpart);
+            if (!buf_len(&key)) {
+                jsid_from_prop(organizer, jparts, &key);
+            }
+            json_object_set_new(jparts, buf_cstring(&key), jpart);
+            buf_free(&key);
         }
     }
 
