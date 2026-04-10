@@ -143,6 +143,9 @@ sub normalize_event
     if (not exists $event->{description}) {
         $event->{description} = '';
     }
+    if (not exists $event->{duration}) {
+        $event->{duration} = 'PT0S';
+    }
     if (not exists $event->{descriptionContentType}) {
         $event->{descriptionContentType} = 'text/plain';
     }
