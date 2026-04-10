@@ -9,8 +9,8 @@ sub test_calendarevent_get_participants
 
     my $event = $self->putandget_vevent($id, $ical);
 
-    my $wantParticipants = {
-        '375507f588e65ec6eb800757ab94ccd10ad58599' => {
+    my $wantParticipants = hashbag(
+        ignore() => {
             '@type' => 'Participant',
             name => 'Monty Burns',
             roles => {
@@ -18,9 +18,8 @@ sub test_calendarevent_get_participants
             },
             participationStatus => 'accepted',
             calendarAddress => 'mailto:smithers@example.com',
-            expectReply => JSON::false,
         },
-        '39b16b858076733c1d890cbcef73eca0e874064d' => {
+        ignore() => {
             '@type' => 'Participant',
             name => 'Homer Simpson',
             participationStatus => 'accepted',
@@ -29,7 +28,6 @@ sub test_calendarevent_get_participants
             },
             locationId => 'loc1',
             calendarAddress => 'mailto:homer@example.com',
-            expectReply => JSON::false,
         },
         'carl' => {
             '@type' => 'Participant',
@@ -37,33 +35,24 @@ sub test_calendarevent_get_participants
             participationStatus => 'tentative',
             scheduleSequence => 3,
             scheduleUpdated => '2017-01-02T03:04:05Z',
-            delegatedFrom => {
-                'a6ef900d284067bb327d7be1469fb44693a5ec13' => JSON::true,
-            },
+            delegatedFrom => hashbag(ignore() => JSON::true),
             calendarAddress => 'mailto:carl@example.com',
-            expectReply => JSON::false,
         },
-        'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
+        ignore() => {
             '@type' => 'Participant',
             name => 'Lenny Leonard',
             participationStatus => 'delegated',
-            delegatedTo => {
-                'carl' => JSON::true,
-            },
+            delegatedTo => hashbag('carl' => JSON::true),
             calendarAddress => 'mailto:lenny@example.com',
-            expectReply => JSON::false,
         },
-        'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
+        ignore() => {
             '@type' => 'Participant',
             name => 'Larry Burns',
             participationStatus => 'declined',
-            memberOf => {
-                '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
-            },
+            memberOf => hashbag(ignore() => JSON::true),
             scheduleUpdated => '2015-09-29T14:44:23Z',
             calendarAddress => 'mailto:larry@example.com',
-            expectReply => JSON::false,
         },
-    };
-    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    );
+    $self->assert_cmp_deeply($wantParticipants, $event->{participants});
 }
