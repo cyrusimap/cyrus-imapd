@@ -214,6 +214,8 @@ extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                                      icaltimetype *last_dtstart,
                                                      int ms_compatible);
 
+void icalcomponent_add_required_timezones(icalcomponent *ical);
+
 extern int ical_categories_is_color(icalproperty *cprop);
 
 /* Normalizes both standard and cyrus-extensions */

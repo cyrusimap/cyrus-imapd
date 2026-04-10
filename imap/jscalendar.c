@@ -9,6 +9,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include "ical_support.h"
 #include "jcal.h"
 #include "jmap_util.h"
 #include "jscalendar.h"
@@ -4181,6 +4182,8 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
     else {
         entry_to_ical(cfg, jobj, ical);
     }
+
+    icalcomponent_add_required_timezones(ical);
 
 done:
     jmap_parser_fini(&myparser);
