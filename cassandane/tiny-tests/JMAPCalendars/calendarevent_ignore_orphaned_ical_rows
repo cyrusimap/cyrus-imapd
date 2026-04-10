@@ -7,7 +7,6 @@ sub test_calendarevent_ignore_orphaned_ical_rows
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
 
@@ -32,6 +31,8 @@ EOF
     ]);
     my $calendarId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($calendarId);
+    my $calendarHref = $res->[0][1]{created}{1}{'x-href'};
+    $self->assert_not_null($calendarHref);
 
     xlog "Create event via CalDAV";
     my $ical = <<'EOF';
@@ -54,7 +55,7 @@ END:VCALENDAR
 EOF
 
     $res = $caldav->Request('PUT',
-        '/dav/calendars/user/cassandane/' . $calendarId . '/test.ics',
+        $calendarHref . '/test.ics',
         $ical, 'Content-Type' => 'text/calendar');
 
     $res = $jmap->CallMethods([
