@@ -30,19 +30,17 @@ sub test_calendarevent_set_participants_patch
                 expectReply => JSON::true,
                 calendarAddress => 'mailto:bar@local',
             },
+            foo => {
+                roles => {
+                    'owner' => JSON::true,
+                },
+                calendarAddress => 'mailto:foo@local',
+            },
         },
     };
 
     my $ret = $self->createandget_event($event);
     delete $event->{method};
-
-    # Add auto-generated owner participant for ORGANIZER.
-    $event->{participants}{'3e6a0e46cc0af22aff762f2e1869f23de7aca482'} = {
-        roles => {
-            'owner' => JSON::true,
-        },
-        calendarAddress => 'mailto:foo@local',
-    };
     $self->assert_normalized_event_equals($event, $ret);
     my $eventId = $ret->{id};
 
