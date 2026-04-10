@@ -39,7 +39,6 @@ sub test_calendarevent_set_participants
                         rel => "enclosure",
                     },
                 },
-                participationComment => 'Sure; see you "soon"!',
                 calendarAddress => 'mailto:foo@local',
             },
             'bar' => {
@@ -61,7 +60,6 @@ sub test_calendarevent_set_participants
                 },
                 email => 'bar2@local', # different email than calendarAddress
                 calendarAddress => 'mailto:bar@local',
-                invitedBy => 'foo',
             },
             'bam' => {
                 name => 'Bam',
