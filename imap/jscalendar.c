@@ -898,7 +898,7 @@ static json_t *rrule_from_ical(struct icalrecurrencetype *rrule,
     json_object_set_new(jrrule, "frequency", json_string(freq));
 
     // interval
-    if (rrule->interval > 0) {
+    if (rrule->interval > 1) {
         json_object_set_new(jrrule, "interval", json_integer(rrule->interval));
     }
 
