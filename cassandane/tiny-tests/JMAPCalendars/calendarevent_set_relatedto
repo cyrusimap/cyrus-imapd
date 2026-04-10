@@ -25,7 +25,7 @@ sub test_calendarevent_set_relatedto
                 'x-unknown1' => JSON::true,
                 'x-unknown2' => JSON::true
             }},
-            "uid4" => { relation => {} },
+            "uid4" => { },
         },
         "title"=> "foo",
         "start"=> "2015-11-07T09:00:00",
