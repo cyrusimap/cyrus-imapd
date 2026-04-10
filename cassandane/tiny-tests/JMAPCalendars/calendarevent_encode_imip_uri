@@ -59,6 +59,7 @@ EOF
     my $blobId = $res->[0][1]{created}{event1}{blobId};
     $res = $jmap->Download('cassandane', $blobId);
     my $ical = $res->{content};
+    $ical =~ s/\r\n[ \t]//g;
     $self->assert($ical =~ /mailto:plus%2Buri\@example\.com/g);
 
     xlog "Assert the iMIP notification has the decoded recipient";
@@ -72,6 +73,7 @@ EOF
 
     xlog "Assert the iTIP message has the encoded URI";
     my $itip = $payload->{ical};
+    $itip =~ s/\r\n[ \t]//g;
     $self->assert($itip =~ /mailto:plus%2Buri\@example\.com/g);
     $self->assert($itip =~ "METHOD:REQUEST");
 
