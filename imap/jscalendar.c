@@ -5626,7 +5626,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
             myicalproperty_get_parameter(prop, ICAL_LANGUAGE_PARAMETER);
         if (param) {
             const char *l = icalparameter_get_language(param);
-            json_object_set(jobj, "locale", json_string(l));
+            json_object_set_new(jobj, "locale", json_string(l));
         }
     }
 
