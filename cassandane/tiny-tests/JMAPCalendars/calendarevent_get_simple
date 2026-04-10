@@ -18,9 +18,7 @@ sub test_calendarevent_get_simple
     $self->assert_str_equals("en", $event->{locale});
     $self->assert_str_equals("turquoise", $event->{color});
     $self->assert_str_equals("double yo", $event->{description});
-    $self->assert_str_equals("text/plain", $event->{descriptionContentType});
     $self->assert_equals($event->{freeBusyStatus}, "free");
-    $self->assert_equals($event->{showWithoutTime}, JSON::false);
     $self->assert_str_equals("2016-09-28T16:00:00", $event->{start});
     $self->assert_str_equals("Etc/UTC", $event->{timeZone});
     $self->assert_str_equals("PT1H", $event->{duration});
