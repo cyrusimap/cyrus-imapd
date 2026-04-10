@@ -4422,7 +4422,7 @@ static void relatedto_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
         json_t *jrelobj =
             json_object_get_vanew(jrelto, key, "{s:s}", "@type", "Relation");
 
-        json_t *jrel = json_object();
+        json_t *jrel = json_object_get_vanew(jrelobj, "relation", "{}");
         icalparameter *param;
         icalparamiter param_iter;
         myicalproperty_foreach_parameter(
@@ -4432,8 +4432,9 @@ static void relatedto_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
             json_object_set_new(jrel, buf_lcase(&buf), json_true());
         }
 
-        if (json_object_size(jrel)) json_object_set(jrelobj, "relation", jrel);
-        json_decref(jrel);
+        if (!json_object_size(jrel)) {
+            json_object_del(jrelobj, "relation");
+        }
     }
 
     if (json_object_size(jrelto)) json_object_set(jobj, "relatedTo", jrelto);
