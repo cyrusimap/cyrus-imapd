@@ -24,9 +24,6 @@ sub test_calendarevent_set_method
                     organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         someone => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                         },
                     },
@@ -54,9 +51,6 @@ sub test_calendarevent_set_method
                     organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         someone => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                         },
                     },

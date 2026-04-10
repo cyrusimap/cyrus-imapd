@@ -33,9 +33,6 @@ sub test_calendarevent_set_reply_partstat_changed
                     organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,

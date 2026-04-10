@@ -29,7 +29,6 @@ sub test_calendarevent_set_participants
                 kind => 'individual',
                 roles => {
                     'owner' => JSON::true,
-                    'attendee' => JSON::true,
                     'chair' => JSON::true,
                 },
                 locationId => 'loc1',
@@ -47,9 +46,6 @@ sub test_calendarevent_set_participants
             'bar' => {
                 name => 'Bar',
                 kind => 'individual',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 locationId => 'loc2',
                 participationStatus => 'needs-action',
                 expectReply => JSON::true,
@@ -71,9 +67,6 @@ sub test_calendarevent_set_participants
             },
             'bam' => {
                 name => 'Bam',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 delegatedFrom => {
                     'bar' => JSON::true,
                 },
@@ -85,26 +78,17 @@ sub test_calendarevent_set_participants
             'group' => {
                 name => 'Group',
                 kind => 'group',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 email => 'group@local',
                 calendarAddress => 'mailto:groupimip@local',
             },
             'resource' => {
                 name => 'Some resource',
                 kind => 'resource',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 calendarAddress => 'mailto:resource@local',
             },
             'location' => {
                 name => 'Some location',
                 kind => 'location',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 locationId => 'loc1',
                 calendarAddress => 'mailto:location@local',
             },

@@ -29,14 +29,10 @@ sub test_calendarevent_set_mayinviteothers
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         someone => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'accepted',
@@ -93,9 +89,6 @@ sub test_calendarevent_set_mayinviteothers
             update => {
                 $eventId => {
                     'participants/invitee' => {
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
                         calendarAddress => 'mailto:invitee@example.com',
                         expectReply => JSON::true,
                         participationStatus => 'accepted',
@@ -130,9 +123,6 @@ sub test_calendarevent_set_mayinviteothers
             update => {
                 $eventId => {
                     'participants/invitee' => {
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
                         calendarAddress => 'mailto:invitee@example.com',
                         expectReply => JSON::true,
                         participationStatus => 'accepted',
@@ -149,9 +139,6 @@ sub test_calendarevent_set_mayinviteothers
             update => {
                 $eventId => {
                     'participants/sharee' => {
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
                         calendarAddress => 'mailto:sharee@example.com',
                         expectReply => JSON::true,
                         participationStatus => 'accepted',
@@ -170,7 +157,6 @@ sub test_calendarevent_set_mayinviteothers
                 $eventId => {
                     'participants/invitee' => {
                         roles => {
-                            'attendee' => JSON::true,
                             'chair' => JSON::true,
                         },
                         calendarAddress => 'mailto:invitee@example.com',
@@ -190,9 +176,6 @@ sub test_calendarevent_set_mayinviteothers
             update => {
                 $eventId => {
                     'participants/invitee' => {
-                        roles => {
-                            'attendee' => JSON::true,
-                        },
                         calendarAddress => 'mailto:invitee@example.com',
                         expectReply => JSON::true,
                         participationStatus => 'accepted',

@@ -20,9 +20,6 @@ sub test_calendarevent_set_schedule_request
         },
         "att" => {
             "name" => "Bugs Bunny",
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'bugs@example.com',
         },
     };

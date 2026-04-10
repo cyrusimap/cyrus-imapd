@@ -13,9 +13,6 @@ sub test_calendarevent_set_participantid
     my $participants = {
         "foo" => {
             email => 'foo@local',
-            roles => {
-                'attendee' => JSON::true,
-            },
             locationId => "locX",
             calendarAddress => 'mailto:foo@local',
         },
@@ -24,7 +21,6 @@ sub test_calendarevent_set_participantid
             email => 'cassandane@example.com',
             roles => {
                 'owner' => JSON::true,
-                'attendee' => JSON::true,
             },
             calendarAddress => 'mailto:cassandane@example.com',
         },

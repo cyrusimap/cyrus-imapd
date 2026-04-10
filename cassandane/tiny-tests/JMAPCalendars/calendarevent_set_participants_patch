@@ -26,9 +26,6 @@ sub test_calendarevent_set_participants_patch
         "participants" => {
             'bar' => {
                 name => 'Bar',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 participationStatus => 'needs-action',
                 expectReply => JSON::true,
                 calendarAddress => 'mailto:bar@local',

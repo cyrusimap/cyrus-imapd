@@ -29,14 +29,10 @@ sub test_calendarevent_set_mayrsvp
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                         sharee => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:sharee@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',

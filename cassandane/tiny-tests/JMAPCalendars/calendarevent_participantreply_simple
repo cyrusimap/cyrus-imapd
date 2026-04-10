@@ -35,16 +35,10 @@ sub test_calendarevent_participantreply_simple
         },
         "att1" => {
             "name" => "Bugs Bunny",
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'bugs@looneytunes.com',
         },
         "att2" => {
             "name" => "Road Runner",
-            roles => {
-                'attendee' => JSON::true,
-            },
             calendarAddress => 'rr@looneytunes.com',
         },
     };

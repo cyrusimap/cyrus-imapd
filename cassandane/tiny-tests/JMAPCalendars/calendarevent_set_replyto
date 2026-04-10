@@ -22,9 +22,6 @@ sub test_calendarevent_set_replyto
                     organizerCalendarAddress => 'mailto:myreplyto@example.com',
                     participants => {
                         someone => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                         },
                     },
@@ -39,9 +36,6 @@ sub test_calendarevent_set_replyto
                     title => 'event',
                     participants => {
                         someone => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                         },
                     },
@@ -101,9 +95,6 @@ sub test_calendarevent_set_replyto
                 $eventId => {
                     participants => {
                         someone => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
                             calendarAddress => 'mailto:someone@example.com',
                         },
                     },

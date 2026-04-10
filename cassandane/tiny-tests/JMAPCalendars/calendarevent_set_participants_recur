@@ -25,17 +25,11 @@ sub test_calendarevent_set_participants_recur
         "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'bar' => {
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 expectReply => JSON::true,
                 calendarAddress => 'mailto:bar@local',
             },
             'bam' => {
                 email => 'bam@local',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 expectReply => JSON::true,
                 calendarAddress => 'mailto:bam@local',
             },

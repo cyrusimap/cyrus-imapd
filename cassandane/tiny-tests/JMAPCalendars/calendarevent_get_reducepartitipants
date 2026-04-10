@@ -27,26 +27,16 @@ sub test_calendarevent_get_reducepartitipants
                         owner => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
                             calendarAddress => 'mailto:owner@example.com',
                         },
                         attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:attendee1@example.com',
                         },
                         attendee2 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:attendee2@example.com',
                         },
                         cassandane => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
                             calendarAddress => 'mailto:cassandane@example.com',
                         },
                     },

@@ -43,9 +43,6 @@ sub test_calendarevent_set_create_no_reply_exdate
                 '@type'             => 'Participant',
                 expectReply         => JSON::true,
                 participationStatus => 'needs-action',
-                roles               => {
-                  attendee => JSON::true,
-                },
                 calendarAddress => 'mailto:cassandane@example.com',
               },
               attendee2 => {

@@ -51,9 +51,6 @@ sub test_calendarevent_set_writeown
                         part1 => {
                             '@type' => 'Participant',
                             calendarAddress => 'mailto:part1@local',
-                            roles => {
-                                attendee => JSON::true,
-                            },
                         },
                     },
                     start => '2021-01-01T01:00:00',
@@ -71,9 +68,6 @@ sub test_calendarevent_set_writeown
                         part1 => {
                             '@type' => 'Participant',
                             calendarAddress => 'mailto:part1@local',
-                            roles => {
-                                attendee => JSON::true,
-                            },
                         },
                     },
                     start => '2021-01-01T01:00:00',

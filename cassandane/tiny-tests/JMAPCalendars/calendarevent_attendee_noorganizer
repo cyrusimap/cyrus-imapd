@@ -17,9 +17,6 @@ sub test_calendarevent_attendee_noorganizer
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
             'calendarAddress' => 'mailto:attendee@local',
-            'roles' => {
-                'attendee' => JSON::true
-            },
             'participationStatus' => 'needs-action',
             'expectReply' => JSON::false,
         }
