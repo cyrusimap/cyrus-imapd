@@ -22,11 +22,7 @@ sub test_calendarevent_set_participants
         "showWithoutTime"=> JSON::false,
         "freeBusyStatus"=> "busy",
         "status" => "confirmed",
-        "replyTo" => {
-            "imip" => "mailto:foo\@local",
-            "web" => "http://local/rsvp",
-
-        },
+        "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'foo' => {
                 name => 'Foo',
@@ -46,9 +42,7 @@ sub test_calendarevent_set_participants
                     },
                 },
                 participationComment => 'Sure; see you "soon"!',
-                sendTo => {
-                    imip => 'mailto:foo@local',
-                },
+                calendarAddress => 'mailto:foo@local',
             },
             'bar' => {
                 name => 'Bar',
@@ -71,10 +65,8 @@ sub test_calendarevent_set_participants
                         rel => "enclosure",
                     },
                 },
-                email => 'bar2@local', # different email than sendTo
-                sendTo => {
-                    imip => 'mailto:bar@local',
-                },
+                email => 'bar2@local', # different email than calendarAddress
+                calendarAddress => 'mailto:bar@local',
                 invitedBy => 'foo',
             },
             'bam' => {
@@ -87,10 +79,8 @@ sub test_calendarevent_set_participants
                 },
                 scheduleSequence => 7,
                 scheduleUpdated => '2018-07-06T05:03:02Z',
-                email => 'bam@local', # same email as sendTo
-                sendTo => {
-                    imip => 'mailto:bam@local',
-                },
+                email => 'bam@local', # same email as calendarAddress
+                calendarAddress => 'mailto:bam@local',
             },
             'group' => {
                 name => 'Group',
@@ -99,10 +89,7 @@ sub test_calendarevent_set_participants
                     'attendee' => JSON::true,
                 },
                 email => 'group@local',
-                sendTo => {
-                    'imip' => 'mailto:groupimip@local',
-                    'other' => 'tel:+1-123-5555-1234',
-                },
+                calendarAddress => 'mailto:groupimip@local',
             },
             'resource' => {
                 name => 'Some resource',
@@ -110,9 +97,7 @@ sub test_calendarevent_set_participants
                 roles => {
                     'attendee' => JSON::true,
                 },
-                sendTo => {
-                    imip => 'mailto:resource@local',
-                },
+                calendarAddress => 'mailto:resource@local',
             },
             'location' => {
                 name => 'Some location',
@@ -121,9 +106,7 @@ sub test_calendarevent_set_participants
                     'attendee' => JSON::true,
                 },
                 locationId => 'loc1',
-                sendTo => {
-                    imip => 'mailto:location@local',
-                },
+                calendarAddress => 'mailto:location@local',
             },
         },
         locations => {
@@ -137,7 +120,6 @@ sub test_calendarevent_set_participants
     };
 
     my $ret = $self->createandget_event($event);
-    $event->{participants}{foo}{sendTo} = { imip => 'mailto:foo@local' };
     delete $event->{method};
     $self->assert_normalized_event_equals($event, $ret);
 }

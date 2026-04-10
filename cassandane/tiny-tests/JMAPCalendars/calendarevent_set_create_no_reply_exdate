@@ -37,9 +37,7 @@ sub test_calendarevent_set_create_no_reply_exdate
                 excluded => JSON::true,
               },
             },
-            replyTo => {
-              imip => 'mailto:organizer@example.com',
-            },
+            organizerCalendarAddress => 'mailto:organizer@example.com',
             participants => {
               attendee1 => {
                 '@type'             => 'Participant',
@@ -48,9 +46,7 @@ sub test_calendarevent_set_create_no_reply_exdate
                 roles               => {
                   attendee => JSON::true,
                 },
-                sendTo => {
-                  imip => 'mailto:cassandane@example.com',
-                },
+                calendarAddress => 'mailto:cassandane@example.com',
               },
               attendee2 => {
                 '@type'             => 'Participant',
@@ -59,9 +55,7 @@ sub test_calendarevent_set_create_no_reply_exdate
                 roles               => {
                   owner => JSON::true,
                 },
-                sendTo => {
-                  imip => 'mailto:organizer@example.com',
-                },
+                calendarAddress => 'mailto:organizer@example.com',
               },
             },
           },

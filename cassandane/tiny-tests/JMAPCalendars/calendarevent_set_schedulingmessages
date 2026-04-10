@@ -25,26 +25,20 @@ sub test_calendarevent_set_schedulingmessages
                     start => "2020-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                         attendee1 => {
                             roles => {
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
+                            calendarAddress => 'mailto:attendee1@example.com',
                         },
                     },
                 },

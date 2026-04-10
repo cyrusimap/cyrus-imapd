@@ -19,17 +19,13 @@ sub test_calendarevent_set_replyto
                     timeZone => 'Etc/UTC',
                     duration => 'PT1H',
                     title => 'event',
-                    replyTo => {
-                        imip => 'mailto:myreplyto@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:myreplyto@example.com',
                     participants => {
                         someone => {
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                 },
@@ -46,9 +42,7 @@ sub test_calendarevent_set_replyto
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                 },
@@ -60,9 +54,7 @@ sub test_calendarevent_set_replyto
                     timeZone => 'Etc/UTC',
                     duration => 'PT1H',
                     title => 'event',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                 },
                 eventNoScheduling => {
                     calendarIds => {
@@ -77,34 +69,31 @@ sub test_calendarevent_set_replyto
         }, 'R1'],
         ['CalendarEvent/get', {
             ids => ['#eventReplyTo'],
-            properties => ['replyTo'],
+            properties => ['organizerCalendarAddress'],
         }, 'R2'],
         ['CalendarEvent/get', {
             ids => ['#eventNoReplyTo'],
-            properties => ['replyTo'],
+            properties => ['organizerCalendarAddress'],
         }, 'R3'],
     ]);
 
-    xlog "Preserve client-set replyTo";
-    $self->assert_deep_equals({
-        imip => 'mailto:myreplyto@example.com',
-    }, $res->[1][1]{list}[0]{replyTo});
+    xlog "Preserve client-set organizerCalendarAddress";
+    $self->assert_str_equals('mailto:myreplyto@example.com',
+        $res->[1][1]{list}[0]{organizerCalendarAddress});
 
-    xlog "Use server-set replyTo if not set by client";
-    $self->assert_deep_equals({
-        imip => 'mailto:cassandane@example.com',
-    }, $res->[0][1]{created}{eventNoReplyTo}{replyTo});
-    $self->assert_deep_equals({
-        imip => 'mailto:cassandane@example.com',
-    }, $res->[2][1]{list}[0]{replyTo});
+    xlog "Use server-set organizerCalendarAddress if not set by client";
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{created}{eventNoReplyTo}{organizerCalendarAddress});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[2][1]{list}[0]{organizerCalendarAddress});
 
-    xlog "Reject event with replyTo but no participants";
+    xlog "Reject event with organizerCalendarAddress but no participants";
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{eventReplyToNoParticipants}{type});
-    $self->assert_deep_equals(['replyTo', 'participants'],
+    $self->assert_deep_equals(['organizerCalendarAddress', 'participants'],
         $res->[0][1]{notCreated}{eventReplyToNoParticipants}{properties});
 
-    xlog "Use server-set replyTo when participants added in update";
+    xlog "Use server-set organizerCalendarAddress when participants added in update";
     my $eventId = $res->[0][1]{created}{eventNoScheduling}{id};
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -115,16 +104,13 @@ sub test_calendarevent_set_replyto
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                 },
             },
         }, 'R1'],
     ]);
-    $self->assert_deep_equals({
-        imip => 'mailto:cassandane@example.com',
-    }, $res->[0][1]{updated}{$eventId}{replyTo});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{updated}{$eventId}{organizerCalendarAddress});
 }

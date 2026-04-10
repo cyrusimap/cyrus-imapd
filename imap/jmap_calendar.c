@@ -4861,6 +4861,7 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_object_del(new_override, "excludedRecurrenceRules");
     json_object_del(new_override, "relatedTo");
     json_object_del(new_override, "replyTo");
+    json_object_del(new_override, "organizerCalendarAddress");
     json_object_del(new_override, "uid");
     json_decref(new_instance);
 
@@ -5104,9 +5105,12 @@ static void updateevent_bump_sequence(json_t *old_event,
     /* Bump sequence iff... */
 
     /* ... server is the source of the event */
-    json_t *jreplyto = json_object_get(new_event, "replyTo");
-    if (JNOTNULL(jreplyto)) {
-        const char *addr = json_string_value(json_object_get(jreplyto, "imip"));
+    json_t *jorga = json_object_get(new_event, "organizerCalendarAddress");
+    if (JNULL(jorga)) {
+        jorga = json_object_get(json_object_get(new_event, "replyTo"), "imip");
+    }
+    if (JNOTNULL(jorga)) {
+        const char *addr = json_string_value(jorga);
         if (addr && !strncasecmp(addr, "mailto:", 7) &&
                 !strarray_contains(schedule_addresses, addr + 7)) {
             return;

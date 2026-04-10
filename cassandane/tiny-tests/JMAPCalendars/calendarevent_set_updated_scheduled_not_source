@@ -29,14 +29,10 @@ sub test_calendarevent_set_updated_scheduled_not_source
                     title => 'event',
                     created => $past,
                     updated => $past,
-                    replyTo => {
-                        imip => 'mailto:someone@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:someone@example.com',
                     participants => {
                         cassandane => {
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'accepted',
                         },

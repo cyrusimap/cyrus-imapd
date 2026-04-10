@@ -34,7 +34,6 @@ sub test_calendarevent_set_bymonth
                 "recurrenceOverrides"=> undef,
                 "status"=> "confirmed",
                 "freeBusyStatus"=> "busy",
-                "replyTo"=> undef,
                 "participants"=> undef,
                 "useDefaultAlerts"=> JSON::false,
                 "alerts"=> undef

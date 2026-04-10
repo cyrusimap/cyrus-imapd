@@ -22,42 +22,32 @@ sub test_calendarevent_get_reducepartitipants
                     start => "2020-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    replyTo => {
-                        imip => 'mailto:owner@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:owner@example.com',
                     participants => {
                         owner => {
                             roles => {
                                 'owner' => JSON::true,
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:owner@example.com',
-                            },
+                            calendarAddress => 'mailto:owner@example.com',
                         },
                         attendee1 => {
                             roles => {
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
+                            calendarAddress => 'mailto:attendee1@example.com',
                         },
                         attendee2 => {
                             roles => {
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:attendee2@example.com',
-                            },
+                            calendarAddress => 'mailto:attendee2@example.com',
                         },
                         cassandane => {
                             roles => {
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                     },
                 },
@@ -76,7 +66,7 @@ sub test_calendarevent_get_reducepartitipants
         'mailto:owner@example.com' => 1,
         'mailto:cassandane@example.com' => 1,
     };
-    my %haveUris = map { $_->{sendTo}{imip} => 1 }
+    my %haveUris = map { $_->{calendarAddress} => 1 }
             values %{$res->[1][1]{list}[0]{participants}};
     $self->assert_deep_equals($wantUris, \%haveUris);
 
@@ -105,7 +95,7 @@ sub test_calendarevent_get_reducepartitipants
         'mailto:owner@example.com' => 1,
         'mailto:attendee1@example.com' => 1,
     };
-    %haveUris = map { $_->{sendTo}{imip} => 1 }
+    %haveUris = map { $_->{calendarAddress} => 1 }
             values %{$res->[0][1]{list}[0]{participants}};
     $self->assert_deep_equals($wantUris, \%haveUris);
 }

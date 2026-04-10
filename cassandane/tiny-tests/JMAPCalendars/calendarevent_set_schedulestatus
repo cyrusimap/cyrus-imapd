@@ -17,15 +17,11 @@ sub test_calendarevent_set_schedulestatus
                     },
                     '@type' => 'Event',
                     title => 'test',
-                    replyTo => {
-                        imip => 'mailto:orga@local',
-                    },
+                    organizerCalendarAddress => 'mailto:orga@local',
                     participants => {
                         part1 => {
                             '@type' => 'Participant',
-                            sendTo => {
-                                imip => 'mailto:part1@local',
-                            },
+                            calendarAddress => 'mailto:part1@local',
                             roles => {
                                 attendee => JSON::true,
                             },

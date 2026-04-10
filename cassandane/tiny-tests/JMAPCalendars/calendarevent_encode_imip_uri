@@ -34,17 +34,13 @@ EOF
                     start => '2020-01-01T09:00:00',
                     timeZone => 'Europe/Vienna',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         plusuri => {
                             roles => {
                                 'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:plus%2Buri@example.com',
-                            },
+                            calendarAddress => 'mailto:plus%2Buri@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',
                         },
@@ -60,7 +56,7 @@ EOF
 
     xlog "Assert the Participant uri is encoded";
     $self->assert_str_equals('mailto:plus%2Buri@example.com',
-        $res->[1][1]{list}[0]{participants}{plusuri}{sendTo}{imip});
+        $res->[1][1]{list}[0]{participants}{plusuri}{calendarAddress});
 
     xlog "Assert the iCalendar data has the encoded URI";
     my $blobId = $res->[0][1]{created}{event1}{blobId};
@@ -105,7 +101,7 @@ EOF
         }, 'R1'],
     ]);
     $self->assert_str_equals('mailto:plus%2Buri@example.com',
-        $res->[0][1]{list}[0]{participants}{plusuri}{sendTo}{imip});
+        $res->[0][1]{list}[0]{participants}{plusuri}{calendarAddress});
     $self->assert_str_equals('accepted',
         $res->[0][1]{list}[0]{participants}{plusuri}{participationStatus});
 }

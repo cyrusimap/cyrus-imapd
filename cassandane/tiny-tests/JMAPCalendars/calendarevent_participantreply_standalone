@@ -31,18 +31,14 @@ sub test_calendarevent_participantreply_standalone
             roles => {
                 'owner' => JSON::true,
             },
-            sendTo => {
-                imip => 'cassandane@example.com',
-            },
+            calendarAddress => 'cassandane@example.com',
         },
         "att" => {
             "name" => "Bugs Bunny",
             roles => {
                 'attendee' => JSON::true,
             },
-            sendTo => {
-                imip => 'bugs@looneytunes.com',
-            },
+            calendarAddress => 'bugs@looneytunes.com',
         },
     };
 

@@ -46,15 +46,11 @@ sub test_calendarevent_set_writeown
                     },
                     '@type' => 'Event',
                     title => 'eventCassOwner',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         part1 => {
                             '@type' => 'Participant',
-                            sendTo => {
-                                imip => 'mailto:part1@local',
-                            },
+                            calendarAddress => 'mailto:part1@local',
                             roles => {
                                 attendee => JSON::true,
                             },
@@ -70,15 +66,11 @@ sub test_calendarevent_set_writeown
                     },
                     '@type' => 'Event',
                     title => 'eventShareeOwner',
-                    replyTo => {
-                        imip => 'mailto:sharee@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:sharee@example.com',
                     participants => {
                         part1 => {
                             '@type' => 'Participant',
-                            sendTo => {
-                                imip => 'mailto:part1@local',
-                            },
+                            calendarAddress => 'mailto:part1@local',
                             roles => {
                                 attendee => JSON::true,
                             },

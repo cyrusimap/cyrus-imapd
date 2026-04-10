@@ -22,9 +22,7 @@ sub test_calendarevent_set_participants_patch
         "showWithoutTime"=> JSON::false,
         "freeBusyStatus"=> "busy",
         "status" => "confirmed",
-        "replyTo" => {
-            "imip" => "mailto:foo\@local",
-        },
+        "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'bar' => {
                 name => 'Bar',
@@ -33,9 +31,7 @@ sub test_calendarevent_set_participants_patch
                 },
                 participationStatus => 'needs-action',
                 expectReply => JSON::true,
-                sendTo => {
-                    imip => 'mailto:bar@local',
-                },
+                calendarAddress => 'mailto:bar@local',
             },
         },
     };
@@ -48,9 +44,7 @@ sub test_calendarevent_set_participants_patch
         roles => {
             'owner' => JSON::true,
         },
-        sendTo => {
-            imip => 'mailto:foo@local',
-        },
+        calendarAddress => 'mailto:foo@local',
     };
     $self->assert_normalized_event_equals($event, $ret);
     my $eventId = $ret->{id};

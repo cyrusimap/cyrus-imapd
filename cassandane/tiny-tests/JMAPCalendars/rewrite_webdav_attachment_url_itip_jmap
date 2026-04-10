@@ -38,15 +38,11 @@ sub test_rewrite_webdav_attachment_url_itip_jmap
                             contentType => 'image/jpg',
                         },
                     },
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         part1 => {
                             '@type' => 'Participant',
-                            sendTo => {
-                                imip => 'mailto:part1@local',
-                            },
+                            calendarAddress => 'mailto:part1@local',
                             roles => {
                                 attendee => JSON::true,
                             },

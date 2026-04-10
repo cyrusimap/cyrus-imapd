@@ -90,6 +90,7 @@ jmap_property_t;
 #
 # jscalendarbis spec
 "recurrenceRule",         NULL, 0
+"organizerCalendarAddress", NULL, 0
 %%
 
 const jmap_prop_hash_table_t jmap_event_props_map = {

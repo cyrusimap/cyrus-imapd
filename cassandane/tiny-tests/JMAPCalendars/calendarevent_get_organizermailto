@@ -17,9 +17,7 @@ sub test_calendarevent_get_organizermailto
                 'owner' => JSON::true,
                 'attendee' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:organizer@local',
-            },
+            calendarAddress => 'mailto:organizer@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',
         },
@@ -29,9 +27,7 @@ sub test_calendarevent_get_organizermailto
             roles => {
                 'attendee' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:attendee@local',
-            },
+            calendarAddress => 'mailto:attendee@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',
         },

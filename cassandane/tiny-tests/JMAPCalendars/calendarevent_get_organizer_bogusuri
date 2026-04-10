@@ -20,9 +20,7 @@ sub test_calendarevent_get_organizer_bogusuri
                 'attendee' => JSON::true,
                 'owner' => JSON::true,
             },
-            sendTo => {
-                other => '/foo-bar/principal/',
-            },
+            calendarAddress => '/foo-bar/principal/',
             expectReply => JSON::false,
             participationStatus => 'needs-action',
         },
@@ -31,14 +29,11 @@ sub test_calendarevent_get_organizer_bogusuri
             roles => {
                 'attendee' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:attendee@local',
-            },
+            calendarAddress => 'mailto:attendee@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
-    $self->assert_null($event->{replyTo}{imip});
-    $self->assert_str_equals('/foo-bar/principal/', $event->{replyTo}{other});
+    $self->assert_str_equals('/foo-bar/principal/', $event->{organizerCalendarAddress});
 }
