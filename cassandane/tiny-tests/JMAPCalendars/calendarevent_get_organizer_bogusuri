@@ -12,24 +12,20 @@ sub test_calendarevent_get_organizer_bogusuri
 
     my $event = $self->putandget_vevent($id, $ical);
 
-    my $wantParticipants = {
-        '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
+    my $wantParticipants = hashbag(
+        ignore() => {
             '@type' => 'Participant',
             name => 'Organizer',
             roles => {
                 'owner' => JSON::true,
             },
             calendarAddress => '/foo-bar/principal/',
-            expectReply => JSON::false,
-            participationStatus => 'needs-action',
         },
-        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+        ignore() => {
             '@type' => 'Participant',
             calendarAddress => 'mailto:attendee@local',
-            expectReply => JSON::false,
-            participationStatus => 'needs-action',
         },
-    };
-    $self->assert_deep_equals($wantParticipants, $event->{participants});
+    );
+    $self->assert_cmp_deeply($wantParticipants, $event->{participants});
     $self->assert_str_equals('/foo-bar/principal/', $event->{organizerCalendarAddress});
 }

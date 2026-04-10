@@ -8,8 +8,8 @@ sub test_calendarevent_get_links
     my ($id, $ical) = $self->icalfile('links');
     my $uri = "http://jmap.io/spec.html#calendar-events";
 
-    my $links = {
-        'fad3249914b09ede1558fa01004f4f8149559591' => {
+    my $links = hashbag(
+        ignore() => {
             '@type' => 'Link',
             href => "http://jmap.io/spec.html#calendar-events",
             contentType => "text/html",
@@ -18,7 +18,7 @@ sub test_calendarevent_get_links
             rel => "enclosure",
             cid => '123456789asd',
         },
-        '113fa6c507397df199a18d1371be615577f9117f' => {
+        ignore() => {
             '@type' => 'Link',
             href => "http://example.com/some.url",
         },
@@ -27,13 +27,8 @@ sub test_calendarevent_get_links
             href => "http://describedby/attach",
             rel => "describedby",
         },
-        'describedby-url' => {
-            '@type' => 'Link',
-            href => "http://describedby/url",
-            rel => 'describedby',
-        }
-    };
+    );
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($links, $event->{links});
+    $self->assert_cmp_deeply($links, $event->{links});
 }

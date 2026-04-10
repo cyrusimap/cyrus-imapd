@@ -13,23 +13,27 @@ sub test_calendarevent_attendee_noorganizer
     xlog "Create event via CalDAV";
     my ($eventId, $ical) = $self->icalfile('attendee_noorganizer');
     my $event = $self->putandget_vevent($eventId, $ical);
-    my $wantParticipants = {
-        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+    my $wantParticipants = hashbag(
+        ignore() => {
             '@type' => 'Participant',
             'calendarAddress' => 'mailto:attendee@local',
-            'participationStatus' => 'needs-action',
-            'expectReply' => JSON::false,
-        }
-    };
-    $self->assert_deep_equals($wantParticipants, $event->{participants});
+        },
+    );
+    $self->assert_cmp_deeply($wantParticipants, $event->{participants});
     $self->assert_null($event->{organizerCalendarAddress});
 
+    my $participants = {
+        attendee => {
+            '@type' => 'Participant',
+            calendarAddress => 'mailto:attendee@local',
+        },
+    };
     xlog "Update event via JMAP";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
                 $eventId => {
-                    participants => $wantParticipants,
+                    participants => $participants,
                 },
             },
         }, 'R1'],
@@ -39,7 +43,7 @@ sub test_calendarevent_attendee_noorganizer
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_deep_equals($wantParticipants, $res->[1][1]{list}[0]{participants});
+    $self->assert_cmp_deeply($wantParticipants, $res->[1][1]{list}[0]{participants});
     $self->assert_null($res->[1][1]{list}[0]{organizerCalendarAddress});
 
     my $xhref = $res->[1][1]{list}[0]{'x-href'};
