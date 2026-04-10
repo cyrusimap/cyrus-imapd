@@ -50,10 +50,7 @@ sub test_calendarevent_set_standalone_instances_to_main
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notUpdated}{$instance1Id}{type});
     $self->assert_deep_equals([
-            # XXX invalidProperties doesn't deduplicate,
-            # but we'll only change this when we merged
-            # this feature branch
-            'recurrenceId', 'recurrenceId', 'recurrenceIdTimeZone'
+            'recurrenceId', 'recurrenceIdTimeZone'
     ], $res->[0][1]{notUpdated}{$instance1Id}{properties});
 
     $self->assert_str_equals($state, $res->[1][1]{newState});
