@@ -1876,6 +1876,9 @@ static void locations_to_ical(jscalendar_cfg_t *cfg,
                 mainloc_prop = prop;
                 mainloc_id = key;
             }
+            else if (!vloc) {
+                vloc = icalcomponent_new_vlocation();
+            }
 
             if (vloc) {
                 // Set the NAME property in the VLOCATION.
