@@ -104,6 +104,7 @@ BUILT_SOURCES = \
 
 CLEANFILES = \
     tools/mkimap \
+    tools/rehash \
     lib/chartable.c \
     lib/imapopts.c \
     lib/imapopts.h
@@ -141,7 +142,7 @@ MAINTAINERCLEANFILES = \
 
 SUBDIRS = . perl/annotator perl/imap
 DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
-sbin_SCRIPTS = tools/mkimap
+sbin_SCRIPTS = tools/mkimap tools/rehash
 dist_sbin_SCRIPTS =
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
@@ -490,7 +491,8 @@ EXTRA_DIST = \
     sieve/tests/actionExtensions/serverm/ueamail-notify2 \
     sieve/tests/actionExtensions/serverm/ueamail-vacation \
     timsieved/TODO \
-    tools/mkimap.in
+    tools/mkimap.in \
+    tools/rehash.in
 
 TEXINFO_TEX = com_err/et/texinfo.tex
 dist_noinst_SCRIPTS = \
@@ -510,7 +512,6 @@ dist_noinst_SCRIPTS = \
     tools/masssievec \
     tools/mknewsgroups \
     tools/perl2rst \
-    tools/rehash \
     tools/translatesieve
 noinst_MAN = \
     com_err/et/com_err.3 \
