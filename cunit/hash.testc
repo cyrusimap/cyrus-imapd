@@ -377,24 +377,24 @@ static void test_load_factor_warning(void)
     const char *const words[] = {
         "id", "faucibus", "nisl", "tincidunt", "eget", "nullam", "non", "nisi",
         "est", "sit", "amet", "facilisis", "magna", "etiam", "tempor", "orci",
-        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie"
+        "eu", "lobortis", "elementum", "nibh", "tellus", "molestie", "congue",
+        "consequat", "ac", "felis", "volutpat", "mauris", "nunc", "sed",
+        "augue", "lacus", "viverra"
     };
-    const size_t n_words = sizeof words / sizeof words[0]; /* 22 */
-    const size_t n_buckets = n_words / 4; /* 5 */
+    const size_t n_words = sizeof words / sizeof words[0]; /* 33 */
     unsigned i;
     unsigned int syslog_index;
 
     hash_table ht;
 
     /* make sure numeric assumptions hold */
-    CU_ASSERT_EQUAL_FATAL(22, n_words);
-    CU_ASSERT_EQUAL_FATAL(5, n_buckets);
+    CU_ASSERT_EQUAL_FATAL(33, n_words);
 
-    construct_hash_table(&ht, n_buckets, 0);
-    CU_ASSERT_EQUAL(n_buckets, ht.size);
+    construct_hash_table(&ht, 5, 0);
+    CU_ASSERT_EQUAL(8, ht.size);
 
     syslog_index = CU_SYSLOG_MATCH("hash table load factor exceeds 3.0");
-    /* 5 buckets will hit load factor 3.0 after 15 insertions, 4.0 after 20
+    /* 8 buckets will hit load factor 3.0 after 24 insertions, 4.0 after 32
      * insertions, and it won't reach 5.0, so we should warn exactly twice */
     for (i = 0; i < n_words; i++) {
         hash_insert(words[i], NULL, &ht);
@@ -403,6 +403,43 @@ static void test_load_factor_warning(void)
     CU_ASSERT_SYSLOG(syslog_index, 2);
 
     free_hash_table(&ht, NULL);
+}
+
+static void test_hash_size_rounding(void)
+{
+    size_t tests[][2] = {
+        { 1, 8 },
+        { 2, 8 },
+        { 3, 8 },
+        { 4, 8 },
+        { 5, 8 },
+        { 6, 8 },
+        { 7, 8 },
+        { 8, 8 },
+        { 9, 16 },
+        { 15, 16 },
+        { 16, 16 },
+        { 17, 32 },
+        { 42, 64 },
+        { 54, 64 },
+        { 255, 256 },
+        { 256, 256 },
+        { 257, 512 },
+        { 65535, 65536 },
+        { 65536, 65536 },
+        { 65537, 131072 },
+    };
+
+    unsigned i = sizeof(tests) / sizeof(size_t) / 2;
+
+    while(--i) {
+        size_t *test = tests[i];
+        hash_table ht;
+
+        construct_hash_table(&ht, test[0], 0);
+        CU_ASSERT_EQUAL(test[1], ht.size);
+        free_hash_table(&ht, NULL);
+    }
 }
 
 /* vim: set ft=c: */

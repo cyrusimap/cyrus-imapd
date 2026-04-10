@@ -822,6 +822,7 @@ noinst_HEADERS += \
     lib/bufarray.h \
     lib/byteorder.h \
     lib/gai.h \
+    lib/hash_priv.h \
     lib/md5.h \
     lib/prot.h \
     lib/ptrarray.h \
