@@ -7,7 +7,6 @@ use warnings;
 
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
-use strict;
 use File::Temp qw/ tempfile /;
 use Pod::Usage;
 use Term::ReadLine;
@@ -52,13 +51,13 @@ my $filehandle;
 my $interactive;
 
 if ($exfile ne "") {
-    open(FILEH,"<$exfile") || die "unable to open file: $?";
-    $filehandle = *FILEH;
+    open(my $fh, '<', $exfile) || die "unable to open file: $!";
+    $filehandle = $fh;
     $interactive = 0;
 } elsif ($ex ne "") {
     $filehandle = tempfile();
 
-    if (!$filehandle) { die "unable to open tmp file: $?"; }
+    if (!$filehandle) { die "unable to open tmp file: $!"; }
 
     print $filehandle $ex;
     seek $filehandle, 0, 0; # rewind file
@@ -107,8 +106,8 @@ sub prompt {
 
   print "$prompt: ";
 
-  $b = <STDIN>;
-  chop($b);
+  my $b = <STDIN>;
+  chomp($b);
 
   print $str;
   system "stty $ostty";
@@ -237,9 +236,9 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
             $exitcode = 1;
         } else {
             if ($words[2]) {
-                open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
-                print OUTPUT $str;
-                close(OUTPUT);
+                open(my $output, '>', $words[2]) || die "Unable to open $words[2]";
+                print $output $str;
+                close($output);
             } else {
                 print $str;
             }
@@ -255,7 +254,7 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
     }
 }
 
-exit $exitcode
+exit $exitcode;
 
 __END__
 
