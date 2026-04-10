@@ -320,6 +320,9 @@ sub normalize_event
                     if (not exists $rel->{q{@type}}) {
                         $rel->{q{@type}} = 'Relation';
                     }
+                    if (not exists $rel->{relation}) {
+                        $rel->{relation} = {};
+                    }
                 }
             }
             if ($alert->{trigger} and $alert->{trigger}{q{@type}} eq 'OffsetTrigger') {
