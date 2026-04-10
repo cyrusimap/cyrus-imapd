@@ -1869,6 +1869,11 @@ case "${target_os}" in
         AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
 esac
 
+# tools/mkimap needs its perl path set.  It doesn't use any Cyrus modules,
+# so it does't need a full fixsearchpath.pl run; it's enough to just let
+# configure substitute the shebang and set the mode.
+AC_CONFIG_FILES([tools/mkimap], [chmod +x tools/mkimap])
+
 CMU_LIBWRAP
 
 # Figure out what directories we're linking against.
