@@ -32,17 +32,13 @@ sub test_itip_request_tzid_change
                         count => 30,
                     },
 
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         },

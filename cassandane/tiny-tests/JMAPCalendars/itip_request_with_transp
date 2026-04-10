@@ -27,16 +27,12 @@ sub test_itip_request_with_transp
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         },
                     },
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     showWithoutTime => JSON::true,
                     start => '2026-01-01T00:00:00',
                     title => 'event',

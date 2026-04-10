@@ -58,9 +58,7 @@ sub test_calendarevent_get_privacy_shared
         },
         participants => {
             participant1 => {
-                sendTo => {
-                    imip => 'mailto:participant1@local',
-                },
+                calendarAddress => 'mailto:participant1@local',
                 roles => {
                     attendee => JSON::true,
                 },
@@ -82,9 +80,7 @@ sub test_calendarevent_get_privacy_shared
         relatedTo => {
             '3a996522-dfc3-484c-bea9-070c408143ea' => { },
         },
-        replyTo => {
-            imip => 'mailto:orga@local',
-        },
+        organizerCalendarAddress => 'mailto:orga@local',
         sequence => 3,
         showWithoutTime => JSON::true,
         start => '2021-01-01T01:00:00',

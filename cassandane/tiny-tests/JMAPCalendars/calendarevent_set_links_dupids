@@ -56,15 +56,11 @@ sub test_calendarevent_set_links_dupids
                 },
             },
         },
-        replyTo => {
-            imip => 'mailto:orga@local',
-        },
+        organizerCalendarAddress => 'mailto:orga@local',
         participants => {
             part1 => {
                 email => 'part1@local',
-                sendTo => {
-                    imip => 'mailto:part1@local',
-                },
+                calendarAddress => 'mailto:part1@local',
                 roles => {
                     attendee => JSON::true,
                 },
@@ -81,9 +77,7 @@ sub test_calendarevent_set_links_dupids
             },
             part2 => {
                 email => 'part2@local',
-                sendTo => {
-                    imip => 'mailto:part2@local',
-                },
+                calendarAddress => 'mailto:part2@local',
                 roles => {
                     attendee => JSON::true,
                 },
@@ -100,9 +94,7 @@ sub test_calendarevent_set_links_dupids
             },
             orga => {
                 email => 'orga@local',
-                sendTo => {
-                    imip => 'mailto:orga@local',
-                },
+                calendarAddress => 'mailto:orga@local',
                 roles => {
                     owner => JSON::true,
                     attendee => JSON::true,

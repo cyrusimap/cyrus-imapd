@@ -27,7 +27,7 @@ sub test_calendarevent_query_text
                             "duration"=> "PT1H",
                             "timeZone" => "Europe/London",
                             "showWithoutTime"=> JSON::false,
-                            "replyTo" => { imip => "mailto:tux\@local" },
+                            "organizerCalendarAddress" => "mailto:tux\@local",
                             "participants" => {
                                 "tux" => {
                                     name => "",
@@ -35,18 +35,14 @@ sub test_calendarevent_query_text
                                         'owner' => JSON::true,
                                     },
                                     locationId => "loc1",
-                                    sendTo => {
-                                        imip => 'tux@local',
-                                    },
+                                    calendarAddress => 'tux@local',
                                 },
                                 "qux" => {
                                     name => "Quuks",
                                     roles => {
                                         'attendee' => JSON::true,
                                     },
-                                    sendTo => {
-                                        imip => 'qux@local',
-                                    },
+                                    calendarAddress => 'qux@local',
                                 },
                             },
                             recurrenceRule => {

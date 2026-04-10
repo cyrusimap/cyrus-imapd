@@ -22,18 +22,14 @@ sub test_calendarevent_set_participants_recur
         "recurrenceRule"=> {
             "frequency"=> "weekly",
         },
-        "replyTo" => {
-            "imip" => "mailto:foo\@local",
-        },
+        "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'bar' => {
                 roles => {
                     'attendee' => JSON::true,
                 },
                 expectReply => JSON::true,
-                sendTo => {
-                    imip => 'mailto:bar@local',
-                },
+                calendarAddress => 'mailto:bar@local',
             },
             'bam' => {
                 email => 'bam@local',
@@ -41,9 +37,7 @@ sub test_calendarevent_set_participants_recur
                     'attendee' => JSON::true,
                 },
                 expectReply => JSON::true,
-                sendTo => {
-                    imip => 'mailto:bam@local',
-                },
+                calendarAddress => 'mailto:bam@local',
             },
         },
     };
@@ -54,7 +48,7 @@ sub test_calendarevent_set_participants_recur
 
     my $barParticipantId;
     while (my ($key, $value) = each(%{$ret->{participants}})) {
-        if ($value->{sendTo}{imip} eq 'mailto:bar@local') {
+        if ($value->{calendarAddress} eq 'mailto:bar@local') {
             $barParticipantId = $key;
             last;
         }

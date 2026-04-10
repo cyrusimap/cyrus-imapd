@@ -21,17 +21,13 @@ sub test_calendarevent_set_method
                     duration => 'PT1H',
                     title => 'event',
                     method => 'request',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         someone => {
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                 },
@@ -55,17 +51,13 @@ sub test_calendarevent_set_method
                     timeZone => 'Etc/UTC',
                     duration => 'PT1H',
                     title => 'event',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         someone => {
                             roles => {
                                 attendee => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                         },
                     },
                     recurrenceRule => {

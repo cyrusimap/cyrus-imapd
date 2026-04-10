@@ -18,9 +18,7 @@ sub test_calendarevent_get_participants
                 'attendee' => JSON::true,
             },
             participationStatus => 'accepted',
-            sendTo => {
-                imip => 'mailto:smithers@example.com',
-            },
+            calendarAddress => 'mailto:smithers@example.com',
             expectReply => JSON::false,
         },
         '39b16b858076733c1d890cbcef73eca0e874064d' => {
@@ -31,9 +29,7 @@ sub test_calendarevent_get_participants
                 'optional' => JSON::true,
             },
             locationId => 'loc1',
-            sendTo => {
-                imip => 'mailto:homer@example.com',
-            },
+            calendarAddress => 'mailto:homer@example.com',
             expectReply => JSON::false,
         },
         'carl' => {
@@ -48,9 +44,7 @@ sub test_calendarevent_get_participants
             delegatedFrom => {
                 'a6ef900d284067bb327d7be1469fb44693a5ec13' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:carl@example.com',
-            },
+            calendarAddress => 'mailto:carl@example.com',
             expectReply => JSON::false,
         },
         'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
@@ -63,9 +57,7 @@ sub test_calendarevent_get_participants
             delegatedTo => {
                 'carl' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:lenny@example.com',
-            },
+            calendarAddress => 'mailto:lenny@example.com',
             expectReply => JSON::false,
         },
         'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
@@ -79,9 +71,7 @@ sub test_calendarevent_get_participants
                 '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
             },
             scheduleUpdated => '2015-09-29T14:44:23Z',
-            sendTo => {
-                imip => 'mailto:larry@example.com',
-            },
+            calendarAddress => 'mailto:larry@example.com',
             expectReply => JSON::false,
         },
     };
