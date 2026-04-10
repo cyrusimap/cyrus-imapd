@@ -2994,7 +2994,10 @@ static void validate_relatedto(struct jmap_parser *parser, json_t *jrelto)
                     jmap_parser_invalid(parser, key);
             }
             else if (!strcmp("relation", key)) {
-                if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
+                if (!json_is_object(jval) ||
+                        (json_object_size(jval) && !is_stringset(jval, NULL))) {
+                    jmap_parser_invalid(parser, key);
+                }
             }
             // Extension properties
             else if (!is_vendorext_key(key)) {
