@@ -3061,8 +3061,13 @@ static void getcalendarevents_reduce_participants_internal(json_t *jparticipants
         if (json_object_get(json_object_get(jparticipant, "roles"), "owner"))
             continue;
 
-        json_t *jsendto = json_object_get(jparticipant,"sendTo");
-        const char *uri = json_string_value(json_object_get(jsendto, "imip"));
+        json_t *juri = json_object_get(jparticipant, "calendarAddress");
+        if (JNULL(juri)) {
+            json_t *jsendto = json_object_get(jparticipant,"sendTo");
+            juri = json_object_get(jsendto, "imip");
+        }
+
+        const char *uri = json_string_value(juri);
         if (uri && !strncasecmp(uri, "mailto:", 7)) {
             if (!strcasecmp(userid, uri + 7)) {
                 json_object_set_new(keep_ids,
