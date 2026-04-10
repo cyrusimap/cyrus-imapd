@@ -2308,7 +2308,7 @@ static void virtuallocations_to_ical(jscalendar_cfg_t *cfg
         }
 
         // Add CONFERENCE property.
-        bool has_vendorexts = vendorexts_to_ical(cfg, jvloc, NULL, comp);
+        bool has_vendorexts = vendorexts_to_ical(cfg, jvloc, &parser, comp);
         jsid_to_prop(conf, key, has_vendorexts);
         icalcomponent_add_property(comp, conf);
 
@@ -4373,13 +4373,15 @@ static void vendorexts_from_ical(icalcomponent *comp, json_t *jobj)
 
         /*
          * Ignore any nested pointer, unless it points into the "links"
-         * property. For any other property, the JSPROP property should
-         * be set on the iCalendar component of the nested object type.
+         * or "virtualLocations" properties. For any other property,
+         * the JSPROP property should be set on the iCalendar component
+         * of the nested object type.
          */
         strarray_t *segs = strarray_split(ptr, "/", 0);
         const char *propname = NULL;
         if (strarray_size(segs) == 3) {
-            if (!strcmp(strarray_nth(segs, 0), "links")
+            if ((!strcmp(strarray_nth(segs, 0), "links") ||
+                 !strcmp(strarray_nth(segs, 0), "virtualLocations"))
                 && strlen(strarray_nth(segs, 1))) {
                 propname = strarray_nth(segs, 2);
             }
