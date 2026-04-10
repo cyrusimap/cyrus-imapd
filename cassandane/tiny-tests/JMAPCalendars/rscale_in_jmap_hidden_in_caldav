@@ -20,12 +20,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
-        "locations" => {
-            "loc1" => {
-                "timeZone" => "Europe/Berlin",
-                "relativeTo" => "end",
-            },
-        },
+        "endTimeZone" => "Europe/Berlin",
         "showWithoutTime"=> JSON::false,
         "description"=> "",
         "freeBusyStatus"=> "busy",
@@ -63,6 +58,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
 
     # rscale should now be in jmap
     $self->assert_deep_equals({
+            '@type' => "RecurrenceRule",
             count          => 12,
             frequency      => 'monthly',
         },

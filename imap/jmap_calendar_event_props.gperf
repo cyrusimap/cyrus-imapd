@@ -89,8 +89,9 @@ jmap_property_t;
 "debugBlobId",             JMAP_DEBUG_EXTENSION,     JMAP_PROP_SERVER_SET
 #
 # jscalendarbis spec
-"recurrenceRule",         NULL, 0
+"endTimeZone",             NULL, 0
 "organizerCalendarAddress", NULL, 0
+"recurrenceRule",          NULL, 0
 %%
 
 const jmap_prop_hash_table_t jmap_event_props_map = {

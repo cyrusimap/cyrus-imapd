@@ -1,7 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_get_locations_dtend
+sub test_calendarevent_get_endtimezone_recur
   : needs_component_jmap
     ($self)
 {
@@ -46,16 +46,12 @@ EOF
                     name     => 'CalendarEvent/query',
                     path     => '/ids'
                 },
-                properties => [ 'locations', 'recurrenceOverrides' ],
+                properties => [ 'endTimeZone', 'recurrenceOverrides' ],
             },
             'R2'
         ],
     ]);
-    my @locations = values %{ $res->[1][1]{list}[0]{locations} };
-    $self->assert_deep_equals(
-        \@locations,
-        [ { '@type' => 'Location', timeZone => 'America/New_York', relativeTo => 'end' } ]
-    );
+    $self->assert_str_equals('America/New_York', $res->[1][1]{list}[0]{endTimeZone});
 
     my @recurOverrides = values %{ $res->[1][1]{list}[0]{recurrenceOverrides} };
     $self->assert_deep_equals(

@@ -17,12 +17,7 @@ sub test_calendarevent_set_endtimezone_recurrence
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
-        "locations" => {
-            "loc1" => {
-                "timeZone" => "Europe/Berlin",
-                "relativeTo" => "end",
-            },
-        },
+        "endTimeZone" => "Europe/Berlin",
         "showWithoutTime"=> JSON::false,
         "description"=> "",
         "freeBusyStatus"=> "busy",
@@ -33,7 +28,7 @@ sub test_calendarevent_set_endtimezone_recurrence
         },
         "recurrenceOverrides" => {
             "2015-12-07T09:00:00" => {
-                "locations/loc1/timeZone" => "America/New_York",
+                "endTimeZone" => "America/New_York",
             },
         },
     };
