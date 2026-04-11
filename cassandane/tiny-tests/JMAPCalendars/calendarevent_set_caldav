@@ -74,7 +74,6 @@ DTEND;VALUE=DATE:20151009
 END:VEVENT
 END:VCALENDAR
 EOF
-    my $eventId2 = encode_eventid($uid2);
 
     xlog $self, "PUT event with UID $uid2";
     $res = $caldav->Request('PUT', "$calid/$uid2.ics", $ical, 'Content-Type' => 'text/calendar');
@@ -84,7 +83,7 @@ EOF
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_equals($eventId2, $res->[0][1]{created}[0]);
+    my $eventId2 = $res->[0][1]{created}[0];
     $state = $res->[0][1]{newState};
 
     xlog $self, "get x-href of event $eventId2";

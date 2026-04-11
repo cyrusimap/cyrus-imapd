@@ -7,6 +7,7 @@
 
 #include <jansson.h>
 
+#include "caldav_db.h"
 #include "carddav_db.h"
 #include "hash.h"
 #include "ical_support.h"
@@ -206,9 +207,12 @@ struct jmap_caleventid {
     const char *ical_uid;
     const char *ical_recurid;
     char *_alloced[2];
+    modseq_t createdmodseq;
 };
 
-extern struct jmap_caleventid *jmap_caleventid_decode(const char *id) __attribute__((nonnull, returns_nonnull, warn_unused_result));
+extern struct jmap_caleventid *jmap_caleventid_decode(const char *id,
+                                                      struct caldav_db *db,
+                                                      struct caldav_data **cdata) __attribute__((nonnull(1), returns_nonnull, warn_unused_result));
 
 extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
 

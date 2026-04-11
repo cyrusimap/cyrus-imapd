@@ -506,7 +506,7 @@ static int meth_post_isched(struct transaction_t *txn,
             if (meth == ICAL_METHOD_REPLY) flags |= SCHEDFLAG_IS_REPLY;
             struct sched_data sched_data =
                 { SCHED_MECH_ISCHEDULE, flags, ical, NULL, NULL,
-                  ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL };
+                  ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL, NULL, 0 };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
             struct auth_state *authstate;

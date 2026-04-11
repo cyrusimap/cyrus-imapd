@@ -1513,14 +1513,16 @@ static int caldav_delete_cal(struct transaction_t *txn,
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, ical, NULL, SCHED_MECH_CALDAV);
+                              cdata->organizer, ical, NULL,
+                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
                 sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            ical, NULL, SCHED_MECH_CALDAV);
+                            ical, NULL,
+                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
 
         free(sched_userid);
@@ -1533,9 +1535,13 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (ical) {
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                struct jmap_caleventid eid = {
+                    .createdmodseq = cdata->dav.createdmodseq,
+                    .ical_uid = cdata->ical_uid
+                };
                 int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
                     httpd_authstate, mailbox_name(mailbox),
-                    cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
+                    &eid, &schedule_addresses, is_draft, ical, NULL);
                 if (r2) {
                     xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                             "error=%s", error_message(r2));
@@ -3221,14 +3227,16 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, oldical, ical, SCHED_MECH_CALDAV);
+                              cdata->organizer, oldical, ical,
+                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
                 sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            oldical, ical, SCHED_MECH_CALDAV);
+                            oldical, ical,
+                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
 
         free(sched_userid);
@@ -4192,7 +4200,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
                         sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                                      organizer, oldical, ical, SCHED_MECH_CALDAV);
+                                      organizer, oldical, ical, 0, SCHED_MECH_CALDAV);
                 }
             }
             else {
@@ -4211,7 +4219,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
                         sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                                    oldical, ical, SCHED_MECH_CALDAV);
+                                    oldical, ical, 0, SCHED_MECH_CALDAV);
                 }
             }
 
@@ -4322,8 +4330,12 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = caldav_record_to_ical(mailbox, cdata,
                         NULL, NULL);
             }
+            struct jmap_caleventid eid = {
+                .createdmodseq = cdata->dav.createdmodseq,
+                .ical_uid = uid
+            };
             int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
-                    httpd_authstate, mailbox_name(mailbox), uid,
+                    httpd_authstate, mailbox_name(mailbox), &eid,
                     &schedule_addresses, is_draft, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
