@@ -1,0 +1,25 @@
+Description:
+
+The :cyrusman:`mkimap(8)` and :cyrusman:`rehash(8)` tools are now
+installed to $prefix/sbin by `make install`.
+
+
+Documentation:
+
+(man pages)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+If your deployment system previously installed these tools manually,
+it no longer needs to.
+
+
+GitHub issue:
+
+If theres a github issue number for this, put it here.

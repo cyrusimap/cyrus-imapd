@@ -1869,6 +1869,12 @@ case "${target_os}" in
         AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
 esac
 
+# These scripts need their perl shebang set.  They don't use any Cyrus modules,
+# so they don't need a full fixsearchpath.pl run; it's enough to just let
+# configure substitute the shebangs and set the mode.
+AC_CONFIG_FILES([tools/mkimap], [chmod +x tools/mkimap])
+AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
+
 CMU_LIBWRAP
 
 # Figure out what directories we're linking against.

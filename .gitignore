@@ -219,4 +219,6 @@ sieve/test_mailbox
 sieve/tests/
 stamp-h1
 timsieved/timsieved
+tools/mkimap
+tools/rehash
 ylwrap
