@@ -418,10 +418,23 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
         case ICAL_VERSION_PROPERTY:
             return true;
         default:
+            // Defined in draft-ietf-calext-icalendar-jscalendar-extensions
             if (myicalproperty_has_name(prop, "COORDINATES") ||
                 myicalproperty_has_name(prop, "SHOW-WITHOUT-TIME")) {
                 return true;
             }
+            // Extension properties for Cyrus JMAP Calendars
+            if (myicalproperty_has_name(prop, "X-JMAP-ID"))
+                return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
+                return true;
+            // Our previous jscalendar draft implementation erroneously
+            // used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
+            // not the VALARM. We support it for backwards compatibility.
+            if (myicalproperty_has_name(prop, "X-APPLE-DEFAULT-ALARM"))
+                return true;
+
+            // Unknown property.
             return false;
         }
 
@@ -2796,6 +2809,15 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
         icalcomponent_add_property(comp, icalproperty_new_dtstamp(t));
         // Also reset LAST-MODIFIED property.
         icalcomponent_add_property(comp, icalproperty_new_lastmodified(t));
+    }
+
+    if (JNOTNULL(jval = json_object_get(jentry, "useDefaultAlerts"))) {
+        if (json_boolean_value(jval)) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-USEDEFAULTALERTS");
+            icalproperty_set_value(prop, icalvalue_new_boolean(true));
+            icalcomponent_add_property(comp, prop);
+        }
     }
 
     // Vendor extension properties.
@@ -5650,6 +5672,19 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         if ((prop = myicalcomponent_get_property(ical, ICAL_PRODID_PROPERTY))) {
             const char *prodid = icalproperty_get_prodid(prop);
             json_object_set_new(jobj, "prodId", json_string(prodid));
+        }
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-USEDEFAULTALERTS")) ||
+        // Our previous jscalendar draft implementation erroneously
+        // used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
+        // not the VALARM. We support it for backwards compatibility.
+        (prop = myicalcomponent_get_property_by_name(
+             comp, "X-APPLE-DEFAULT-ALARM"))) {
+        const char *v = icalproperty_get_value_as_string(prop);
+        if (!strcasecmpsafe(v, "TRUE")) {
+            json_object_set_new(jobj, "useDefaultAlerts", json_true());
         }
     }
 
