@@ -37,11 +37,6 @@ sub test_calendarevent_get_privacy_shared
         created => '2020-12-21T07:47:00Z',
         description => 'description',
         duration => 'PT1H',
-        excludedRecurrenceRules => [{
-            frequency => 'daily',
-            interval => 2,
-            count => 1,
-        }],
         keywords => {
             keyword1 => JSON::true,
         },
