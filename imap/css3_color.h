@@ -5,8 +5,29 @@
 #ifndef CSS3_COLOR_H
 #define CSS3_COLOR_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef struct {
+    /* The longest current color name is "lightgoldenrodyellow" at 20 chars, so
+     * name[] must be at least 21 bytes.  Rounding up to 29 makes this struct
+     * 32 bytes wide, which gives us a neat 2 records per 64 byte cache line.
+     *
+     * If name[] were 21 bytes it would still be fine.  The struct would be 24
+     * bytes wide, which is still both 4- and 8-byte aligned; but it would no
+     * longer evenly subdivide cache lines.  That shouldn't cause problems, but
+     * I'm being cautious.
+     */
+    char name[29];
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} css3_color_t;
+
 const char *css3_color_hex_to_name(const char *hexstr);
 
-int is_css3_color(const char *s);
+bool is_css3_color(const char *s);
+
+void css3_color_foreach(int (*cb)(const css3_color_t *c, void *rock), void *rock);
 
 #endif /* CSS3_COLOR_H */

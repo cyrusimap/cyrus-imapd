@@ -172,6 +172,7 @@ BUILT_SOURCES += \
     imap/promdata.h \
     lib/htmlchar.c \
     lib/htmlchar.h \
+    imap/css3_color_array.h \
     imap/rfc822_header.c \
     imap/rfc822_header.h \
     imap/mailbox_header_cache.h
@@ -348,6 +349,7 @@ EXTRA_DIST = \
     doc/legacy/netnews.png \
     doc \
     docsrc \
+    imap/css3_color_array.gperf \
     imap/http_cal_abook_admin.js \
     imap/http_err.et \
     imap/imap_err.et \
@@ -616,6 +618,7 @@ cunit_TESTS = \
     cunit/command.testc \
     cunit/conversations.testc \
     cunit/cron.testc \
+    cunit/css3_color.testc \
     cunit/cyr_qsort_r.testc \
     cunit/crc32.testc \
     cunit/dlist.testc \
@@ -677,7 +680,7 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-    imap/mutex_fake.c imap/spool.c imap/search_expr.c \
+    imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
     master/event.c master/cronevent.c
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
@@ -1515,6 +1518,9 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 # so do a tricky directory change
 %_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
+
+imap/css3_color_array.h: imap/css3_color_array.gperf
+	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
 # Build jmap_*_props.[ch] from jmap_*_props.gperf
 .gperf.c:

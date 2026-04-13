@@ -1,0 +1,73 @@
+#include "cunit/unit.h"
+#include "imap/css3_color.h"
+#include "buf.h"
+
+static int discover_cb(const css3_color_t *c, void *rock)
+{
+    struct buf *buf = rock;
+    const char *name = c->name;
+
+    /* test case-insensitivity by upper-casing names beginning with 'n' - 'z' */
+    if (name[0] >= 'n') {
+        buf_setcstr(buf, name);
+        buf_ucase(buf);
+        name = buf_cstring(buf);
+    }
+
+    bool found = is_css3_color(name);
+
+    CU_ASSERT_EQUAL(found, true);
+
+    return 1;
+}
+
+static void test_all_colors_discoverable(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    css3_color_foreach(&discover_cb, &buf);
+
+    buf_free(&buf);
+}
+
+static void test_non_colors_are_not_discoverable(void)
+{
+    static const struct {
+        const char *name;
+    } tests[] = {
+        /* these will probably never be css color names... */
+        { "giraffe" },
+        { "cowabunga" },
+        { "isotope" },
+    };
+    const unsigned n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        bool found = is_css3_color(tests[i].name);
+
+        CU_ASSERT_EQUAL(found, false);
+    }
+}
+
+static void test_closest_color(void)
+{
+    static const struct {
+        const char *hex;
+        const char *name;
+    } tests[] = {
+        { "#A0A0A0", "darkgrey" },
+        { "#663399", "rebeccapurple" }, // exact match
+        { "#D00000", "red" },
+    };
+    const unsigned n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        const char *name = css3_color_hex_to_name(tests[i].hex);
+
+        CU_ASSERT_STRING_EQUAL(name, tests[i].name);
+    }
+}
+
+/* vim: set ft=c: */
