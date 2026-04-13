@@ -1121,6 +1121,11 @@ static int store_here(struct twom_txn *txn, const char *key, size_t keylen, cons
 
     if (type == DELETE) return delete_here(txn, loc);
 
+    // promote to fat record if key or value exceeds skinny field sizes
+    // (ADD+1 == FATADD, REPLACE+1 == FATREPLACE)
+    if (keylen > 0xFFFF || vallen > 0xFFFFFFFFULL)
+        type++;
+
     size_t headlen = HLCALC(type, level);
     size_t taillen = TLCALC(type, keylen, vallen);
     size_t reclen = headlen + 8 + taillen;
@@ -3008,10 +3013,31 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
         printf("%08llX ", (LLU)offset);
 
         ptr = loc->file->base + offset;
-        if (*ptr & ~7) {
-            printf("BAD TYPE %d AT %08llX\n", (int)*ptr, (LLU)offset);
+        uint8_t type = TYPE(ptr);
+        uint8_t level = LEVEL(ptr);
+        // sanity-check type and level before touching anything that
+        // indexes by type or computes RECLEN (which would otherwise
+        // dereference reclenfn[] out of range and crash)
+        if (type == 0 || type > COMMIT) {
+            printf("BAD TYPE %d AT %08llX\n", (int)type, (LLU)offset);
+            break;
         }
-        if (loc->file->size < offset + RECLEN(ptr)) break;
+        if (level > MAXLEVEL) {
+            printf("BAD LEVEL %d AT %08llX\n", (int)level, (LLU)offset);
+            break;
+        }
+        // ensure the full head (including checksums) fits before we
+        // read any length fields used by RECLEN / KEYPTR
+        if (loc->file->size < offset + HEADLEN(ptr) + 8) {
+            printf("TRUNCATED HEAD AT %08llX\n", (LLU)offset);
+            break;
+        }
+        size_t reclen = RECLEN(ptr);
+        if (loc->file->size < offset + reclen) {
+            printf("TRUNCATED RECORD AT %08llX len=%llu\n",
+                   (LLU)offset, (LLU)reclen);
+            break;
+        }
 
         if (check_headcsum(txn, loc->file, ptr, offset)) {
             printf("ERROR [HEADCSUM %08lX %08lX] ",
@@ -3025,20 +3051,36 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
                     (long unsigned) loc->file->csum(KEYPTR(ptr), TAILLEN(ptr)));
         }
 
-        uint8_t type = TYPE(ptr);
         if (type == COMMIT) {
             printf("COMMIT start=%08llX\n", (LLU)NEXT0(ptr, 0));
         }
         else if (type == DELETE) {
             size_t parent_offset = NEXT0(ptr, 0);
-            const char *key = KEYPTR(loc->file->base + parent_offset);
-            size_t len = KEYLEN(loc->file->base + parent_offset);
-            if (len > 79) len = 79;
-            if (key && len) strncpy(scratch, key, len);
-            scratch[len] = 0;
-            for (i = 0; i < len; i++)
-                if (!scratch[i]) scratch[i] = '-';
-            printf("DELETE kl=%llu (%s)\n", (LLU)KEYLEN(loc->file->base + parent_offset), scratch);
+            // the DELETE points to the record it tombstones; if that
+            // offset is out of range or points at an invalid record
+            // header we must not dereference its key pointer
+            if (parent_offset + 24 > loc->file->size) {
+                printf("DELETE BAD PARENT %08llX\n", (LLU)parent_offset);
+            }
+            else {
+                const char *pptr = loc->file->base + parent_offset;
+                uint8_t ptype = TYPE(pptr);
+                if (ptype == 0 || ptype > COMMIT
+                    || parent_offset + HEADLEN(pptr) + 8 > loc->file->size
+                    || parent_offset + RECLEN(pptr) > loc->file->size) {
+                    printf("DELETE BAD PARENT %08llX\n", (LLU)parent_offset);
+                }
+                else {
+                    const char *key = KEYPTR(pptr);
+                    size_t len = KEYLEN(pptr);
+                    if (len > 79) len = 79;
+                    if (key && len) strncpy(scratch, key, len);
+                    scratch[len] = 0;
+                    for (i = 0; i < len; i++)
+                        if (!scratch[i]) scratch[i] = '-';
+                    printf("DELETE kl=%llu (%s)\n", (LLU)KEYLEN(pptr), scratch);
+                }
+            }
             printf("\t%08llX <-\n", (LLU)parent_offset);
         }
         else {
@@ -3057,7 +3099,6 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
                 printf("\t%08llX <-\n", (LLU)ANCESTOR(ptr));
             }
             printf("\t%08llX %08llX", (LLU)NEXT0(ptr, 0), (LLU)NEXT0(ptr, 1));
-            uint8_t level = LEVEL(ptr);
             for (i = 1; i < level; i++) {
                 if (!((i-1) % 8))
                     printf("\n\t");
@@ -3074,7 +3115,7 @@ static int twom_txn_dump(struct twom_txn *txn, int detail)
             }
         }
 
-        offset += RECLEN(ptr);
+        offset += reclen;
     }
 
     return 0;
