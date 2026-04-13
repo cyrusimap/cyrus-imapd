@@ -2649,6 +2649,8 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
             json_decref(jovr);
         }
     }
+
+    json_decref(jmaster);
 }
 
 static void entry_to_ical(jscalendar_cfg_t *cfg,
@@ -3741,10 +3743,13 @@ static void validate_recurrenceoverrides(struct jmap_parser *parser,
             }
 
             json_decref(jinvalid);
+            json_decref(jovr);
         }
 
         jmap_parser_pop(parser);
     }
+
+    json_decref(jmaster);
 }
 
 static void validate_entry(struct jmap_parser *parser, json_t *jentry)
@@ -5385,10 +5390,10 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
                             json_t *jobj,
                             ptrarray_t *overrides);
 
-static void overrides_from_ical(jscalendar_cfg_t *cfg,
-                                icalcomponent *comp,
-                                json_t *jobj,
-                                ptrarray_t *overrides)
+static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
+                                     icalcomponent *comp,
+                                     json_t *jobj,
+                                     ptrarray_t *overrides)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *jovrs = json_object();
@@ -5688,7 +5693,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         }
     }
 
-    overrides_from_ical(cfg, comp, jobj, overrides);
+    recuroverrides_from_ical(cfg, comp, jobj, overrides);
 
     jobj_set_icalcomp(cfg, jobj, comp);
     vendorexts_from_ical(comp, jobj);
