@@ -426,6 +426,8 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
             // Extension properties for Cyrus JMAP Calendars
             if (myicalproperty_has_name(prop, "X-JMAP-ID"))
                 return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-PRIVACY"))
+                return true;
             if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
                 return true;
             // Our previous jscalendar draft implementation erroneously
@@ -2747,19 +2749,11 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     }
 
     if (JNOTNULL(jval = json_object_get(jentry, "privacy"))) {
-        icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "privacy", ICAL_CLASS_PROPERTY, GET_ICAL_CREATE);
-        icalproperty_class class = ICAL_CLASS_NONE;
         const char *s = json_string_value(jval);
-        if (!strcasecmpsafe("public", s))
-            class = ICAL_CLASS_PUBLIC;
-        else if (!strcasecmpsafe("private", s))
-            class = ICAL_CLASS_PRIVATE;
-        else if (!strcasecmpsafe("secret", s))
-            class = ICAL_CLASS_CONFIDENTIAL;
-
-        if (class != ICAL_CLASS_NONE) {
-            icalproperty_set_class(prop, class);
+        if (s) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-PRIVACY");
+            icalproperty_set_value(prop, icalvalue_new_text(s));
             icalcomponent_add_property(comp, prop);
         }
     }
@@ -5581,19 +5575,6 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     struct buf buf = BUF_INITIALIZER;
     icalproperty *prop;
 
-    if ((prop = myicalcomponent_get_property(comp, ICAL_CLASS_PROPERTY))) {
-        icalproperty_class class = icalproperty_get_class(prop);
-        if (class == ICAL_CLASS_PUBLIC)
-            jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("public"), prop);
-        else if (class == ICAL_CLASS_PRIVATE)
-            jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("private"), prop);
-        else
-            jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("secret"), prop);
-    }
-
     if ((prop = myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY))) {
         const char *color = icalproperty_get_color(prop);
         jobj_set_icalprop(cfg, jobj, "color", json_string(color), prop);
@@ -5686,6 +5667,18 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE")) {
             json_object_set_new(jobj, "useDefaultAlerts", json_true());
+        }
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-PRIVACY"))) {
+        icalvalue *v = icalproperty_get_value(prop);
+        const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
+            icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
+        if (s) {
+            buf_setcstr(&buf, s);
+            json_object_set_new(jobj, "privacy", json_string(buf_lcase(&buf)));
+            buf_reset(&buf);
         }
     }
 
