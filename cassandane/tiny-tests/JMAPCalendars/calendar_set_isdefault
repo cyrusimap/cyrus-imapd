@@ -130,9 +130,10 @@ sub test_calendar_set_isdefault
 
     $self->assert_cmp_deeply(
         superhashof({
-            notDestroyed => {
-                $id3 => { type => 'forbidden' }
-            },
+#            notDestroyed => {
+#                $id3 => { type => 'forbidden' }
+#            },
+            destroyed => [ $id3 ]
         }),
         $res
     );
