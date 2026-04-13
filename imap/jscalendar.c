@@ -1933,6 +1933,8 @@ static void locations_to_ical(jscalendar_cfg_t *cfg,
 
         jmap_parser_pop(&parser);
     }
+
+    jmap_parser_fini(&parser);
 }
 
 static void participants_to_ical(jscalendar_cfg_t *cfg,
@@ -5495,6 +5497,8 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
             json_object_del(jpatch, "start");
         }
         json_object_set_new(jovrs, recurid, jpatch);
+
+        json_decref(jovr);
     }
 
     if (json_object_size(jovrs))
