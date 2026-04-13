@@ -5466,9 +5466,15 @@ static void overrides_from_ical(jscalendar_cfg_t *cfg,
 
         json_t *jpatch = jmap_patchobject_create(jobj, jovr, 0);
         json_object_del(jpatch, "method");
+        json_object_del(jpatch, "organizerCalendarAddress");
+        json_object_del(jpatch, "privacy");
         json_object_del(jpatch, "prodId");
+        json_object_del(jpatch, "recurrenceId");
+        json_object_del(jpatch, "recurrenceIdTimeZone");
         json_object_del(jpatch, "recurrenceOverrides");
         json_object_del(jpatch, "recurrenceRule");
+        json_object_del(jpatch, "relatedTo");
+        json_object_del(jpatch, "uid");
         const char *recurid = localtime_from_icaltime(icalrecurid, &buf);
 
         const char *ovr_start = json_string_value(json_object_get(jpatch, "start"));
