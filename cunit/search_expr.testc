@@ -13,6 +13,7 @@
 #include "imap/imapd.h"
 #include "imap/index.h"
 #include "imap/imapparse.h"
+#include "imap/search_query.h"
 
 static struct namespace ns;
 static const char *userid = "fred";
@@ -1395,6 +1396,50 @@ static int set_up(void)
     push_tz(TZ_MELBOURNE);
 
     return 0;
+}
+
+static void test_sort_mutability(void)
+{
+    struct sortcrit sort[2] = { 0 };
+    search_expr_t *e = search_expr_new(NULL, SEOP_TRUE);
+
+#define TESTCASE(is_mutable, sortkey) \
+    { \
+        sort[0].key = (sortkey); \
+        CU_ASSERT_EQUAL((is_mutable), search_is_mutable(sort, e)); \
+    }
+
+    TESTCASE(0, SORT_SEQUENCE);
+    TESTCASE(0, SORT_ARRIVAL);
+    TESTCASE(0, SORT_CC);
+    TESTCASE(0, SORT_DATE);
+    TESTCASE(0, SORT_DISPLAYFROM);
+    TESTCASE(0, SORT_DISPLAYTO);
+    TESTCASE(0, SORT_FROM);
+    TESTCASE(0, SORT_SIZE);
+    TESTCASE(0, SORT_SUBJECT);
+    TESTCASE(0, SORT_TO);
+    TESTCASE(1, SORT_ANNOTATION);
+    TESTCASE(1, SORT_MODSEQ);
+    TESTCASE(0, SORT_UID);
+    TESTCASE(1, SORT_HASFLAG);
+    TESTCASE(1, SORT_CONVMODSEQ);
+    TESTCASE(1, SORT_CONVEXISTS);
+    TESTCASE(1, SORT_CONVSIZE);
+    TESTCASE(1, SORT_HASCONVFLAG);
+    TESTCASE(0, SORT_FOLDER);
+    TESTCASE(0, SORT_RELEVANCY);
+    TESTCASE(0, SORT_SPAMSCORE);
+    TESTCASE(0, SORT_GUID);
+    TESTCASE(0, SORT_EMAILID);
+    TESTCASE(0, SORT_THREADID);
+    TESTCASE(0, SORT_SAVEDATE);
+    TESTCASE(1, SORT_SNOOZEDUNTIL);
+    TESTCASE(0, SORT_CREATEDMODSEQ);
+
+#undef TESTCASE
+
+    search_expr_free(e);
 }
 
 static int tear_down(void)
