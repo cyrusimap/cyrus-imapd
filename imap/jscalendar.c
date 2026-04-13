@@ -2541,6 +2541,7 @@ static void timeprops_to_ical(jscalendar_cfg_t *cfg,
         struct icalrecurrencetype *rrule = rrule_to_ical(jrrule, tz);
         if (rrule) {
             icalcomponent_add_property(comp, icalproperty_new_rrule(rrule));
+            icalrecurrencetype_unref(rrule);
         }
     }
 }
