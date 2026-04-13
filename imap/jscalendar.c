@@ -1658,7 +1658,7 @@ static void links_to_ical(jscalendar_cfg_t *cfg,
                 prop = icalproperty_new(ICAL_ATTACH_PROPERTY);
         }
 
-        // Determine property value data type and set value.
+        // Convert data: URI value to BINARY value
         if (!strncasecmp("data:", href, 5)
             && icalproperty_isa(prop) != ICAL_LINK_PROPERTY)
         {
@@ -1682,14 +1682,22 @@ static void links_to_ical(jscalendar_cfg_t *cfg,
                         prop, icalparameter_new_fmttype(buf_cstring(&fmttype)));
                 }
             }
-            else {
-                icalproperty_set_value(prop, icalvalue_new_uri(href));
-            }
 
             buf_free(&fmttype);
         }
-        else {
-            icalproperty_set_value(prop, icalvalue_new_uri(href));
+
+        // Otherwise set URI value but make sure it's using the same
+        // libical-internal value type as if read from iCalendar.
+        if (!icalproperty_get_value(prop)) {
+            if (icalproperty_isa(prop) == ICAL_ATTACH_PROPERTY ||
+                icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY) {
+                icalattach *attach = icalattach_new_from_url(href);
+                icalproperty_set_value(prop, icalvalue_new_attach(attach));
+                icalattach_unref(attach);
+            }
+            else {
+                icalproperty_set_value(prop, icalvalue_new_uri(href));
+            }
         }
 
         json_t *jval;
