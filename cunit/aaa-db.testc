@@ -2012,4 +2012,62 @@ static void test_foreach_replace(void)
 }
 
 
+static void test_huge_key(void)
+{
+    int r;
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+
+    /* flat backend doesn't support large keys */
+    if (!strcmp(backend, "flat")) return;
+    /* sql backend doesn't support large keys */
+    if (!strcmp(backend, "sql")) return;
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
+
+    /* 100,035-byte key: chosen to reproduce the uint16_t truncation bug
+     * (100035 & 0xFFFF == 34499) that caused tail checksum failures in
+     * conversations.db and duplicate.db */
+    const size_t keylen = 100035;
+    const char *val1 = "first-value";
+    const size_t val1len = strlen(val1);
+    const char *val2 = "second-value";
+    const size_t val2len = strlen(val2);
+
+    char *key = xmalloc(keylen);
+    memset(key, 'K', keylen);
+
+    /* ADD */
+    CANSTORE(key, keylen, val1, val1len);
+    CANCOMMIT();
+
+    CANFETCH(key, keylen, val1, val1len);
+    CANCOMMIT();
+
+    ISCONSISTENT();
+
+    /* REPLACE */
+    CANSTORE(key, keylen, val2, val2len);
+    CANCOMMIT();
+
+    CANFETCH(key, keylen, val2, val2len);
+    CANCOMMIT();
+
+    ISCONSISTENT();
+
+    CANREOPEN();
+
+    CANFETCH(key, keylen, val2, val2len);
+    CANCOMMIT();
+
+    ISCONSISTENT();
+
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    free(key);
+}
+
 /* vim: set ft=c: */
