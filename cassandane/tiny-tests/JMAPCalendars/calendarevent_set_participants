@@ -47,10 +47,10 @@ sub test_calendarevent_set_participants
                 participationStatus => 'needs-action',
                 expectReply => JSON::true,
                 delegatedTo => {
-                    'bam' => JSON::true,
+                    'mailto:bam@local' => JSON::true,
                 },
                 memberOf => {
-                    'group' => JSON::true,
+                    'mailto:groupimip@local' => JSON::true,
                 },
                 links => {
                     link1 => {
@@ -64,7 +64,7 @@ sub test_calendarevent_set_participants
             'bam' => {
                 name => 'Bam',
                 delegatedFrom => {
-                    'bar' => JSON::true,
+                    'mailto:bar@local' => JSON::true,
                 },
                 scheduleSequence => 7,
                 scheduleUpdated => '2018-07-06T05:03:02Z',

@@ -13,9 +13,7 @@ sub test_calendarevent_get_participants
         ignore() => {
             '@type' => 'Participant',
             name => 'Monty Burns',
-            roles => {
-                'owner' => JSON::true,
-            },
+            roles => { 'required' => JSON::true, 'owner' => JSON::true },
             participationStatus => 'accepted',
             calendarAddress => 'mailto:smithers@example.com',
         },
@@ -23,10 +21,7 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Homer Simpson',
             participationStatus => 'accepted',
-            roles => {
-                'optional' => JSON::true,
-            },
-            locationId => 'loc1',
+            roles => { 'optional' => JSON::true },
             calendarAddress => 'mailto:homer@example.com',
         },
         'carl' => {
@@ -35,21 +30,22 @@ sub test_calendarevent_get_participants
             participationStatus => 'tentative',
             scheduleSequence => 3,
             scheduleUpdated => '2017-01-02T03:04:05Z',
-            delegatedFrom => hashbag(ignore() => JSON::true),
+            delegatedFrom => hashbag('mailto:lenny@example.com' => JSON::true),
             calendarAddress => 'mailto:carl@example.com',
         },
         ignore() => {
             '@type' => 'Participant',
             name => 'Lenny Leonard',
             participationStatus => 'delegated',
-            delegatedTo => hashbag('carl' => JSON::true),
+            delegatedTo => hashbag('mailto:carl@example.com' => JSON::true),
             calendarAddress => 'mailto:lenny@example.com',
         },
         ignore() => {
             '@type' => 'Participant',
             name => 'Larry Burns',
             participationStatus => 'declined',
-            memberOf => hashbag(ignore() => JSON::true),
+            roles => { 'required' => JSON::true },
+            memberOf => hashbag('mailto:projectA@example.com' => JSON::true),
             scheduleUpdated => '2015-09-29T14:44:23Z',
             calendarAddress => 'mailto:larry@example.com',
         },
