@@ -4362,6 +4362,11 @@ static int createevent_toical(jmap_req_t *req,
     }
 
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        // Do not allow to set method.
+        if (JNOTNULL(json_object_get(create->jsevent, "method"))) {
+            jmap_parser_invalid(parser, "method");
+        }
+
         create->ical = jscalendar_to_ical(NULL, create->jsevent, parser);
         if (create->ical)
             create->comp = icalcomponent_get_first_component(
@@ -5317,6 +5322,17 @@ static int updateevent_apply_patch(jmap_req_t *req,
     /* Convert to iCalendar */
     icalcomponent *newical;
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        // Do not allow to set method - but ignore keeping it.
+        const char *new_method =
+            json_string_value(json_object_get(update->event_patch, "method"));
+        if (new_method) {
+            const char *old_method =
+                json_string_value(json_object_get(old_event, "method"));
+            if (!old_method || strcasecmp(old_method, new_method)) {
+                json_array_append_new(invalid, json_string("method"));
+            }
+        }
+
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
         newical = jscalendar_to_ical(NULL, new_event, &myparser);
         json_array_extend(invalid, myparser.invalid);
