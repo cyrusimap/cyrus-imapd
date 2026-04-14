@@ -830,10 +830,28 @@ static int jmap_note_set(jmap_req_t *req)
     }
 
     
-    /* create */
+    /* destroy */
     const char *creation_id, *id;
     json_t *val;
+    size_t i;
+    hash_table ids = HASH_TABLE_INITIALIZER;
+    struct set_rock srock = { &set, &buf, rights };
 
+    construct_hash_table(&ids, 32, 0);
+
+    /* Build hash of ids */
+    json_array_foreach(set.destroy, i, val) {
+        hash_insert(json_string_value(val), (void *) 1, &ids);
+    }
+
+    /* Iterate through each message and destroy matching ids */
+    foreach_note(mbox, &ids, &_notes_destroy_cb, &srock);
+
+    /* Any remaining ids are not destroyed */
+    hash_enumerate(&ids, &not_found_cb, set.not_destroyed);
+    free_hash_table(&ids, NULL);
+
+    /* create */
     json_object_foreach(set.create, creation_id, val) {
         json_t *new_note = NULL;
 
@@ -857,11 +875,7 @@ static int jmap_note_set(jmap_req_t *req)
         }
     }
 
-
     /* update */
-    hash_table ids = HASH_TABLE_INITIALIZER;
-    struct set_rock srock = { &set, &buf, rights };
-
     construct_hash_table(&ids, 32, 0);
 
     /* Build hash of ids */
@@ -874,23 +888,6 @@ static int jmap_note_set(jmap_req_t *req)
 
     /* Any remaining ids are not updated */
     hash_enumerate(&ids, &not_found_cb, set.not_updated);
-    free_hash_table(&ids, NULL);
-
-    
-    /* destroy */
-    construct_hash_table(&ids, 32, 0);
-
-    /* Build hash of ids */
-    size_t i;
-    json_array_foreach(set.destroy, i, val) {
-        hash_insert(json_string_value(val), (void *) 1, &ids);
-    }
-
-    /* Iterate through each message and destroy matching ids */
-    foreach_note(mbox, &ids, &_notes_destroy_cb, &srock);
-
-    /* Any remaining ids are not destroyed */
-    hash_enumerate(&ids, &not_found_cb, set.not_destroyed);
     free_hash_table(&ids, NULL);
 
 
