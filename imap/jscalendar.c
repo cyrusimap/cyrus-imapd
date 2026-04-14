@@ -2285,12 +2285,13 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
             icalcomponent_add_component(comp, part);
         }
 
-        // Set object key in iCalendar. Prefer setting it
-        // only on PARTICIPANT, possibly reusing its CALENDAR-ADDRESS
-        // or UID property. Otherwise set key on ATTENDEE or ORGANIZER.
-        if (attendee && !caladdrprop) jsid_to_prop(attendee, key, false);
+        // Set object key in iCalendar.
+        // Set it on both the PARTICIPANT and ATTENDEE, as we can't rely
+        // on clients to preserve the PARTICIPANT component.
+        // Only set it on the ORGANIZER if there is no ATTENDEE for it.
+        if (attendee) jsid_to_prop(attendee, key, false);
         if (part) jsid_to_comp(part, key);
-        if (organizer && !attendee && !caladdrprop)
+        if (organizer && !attendee)
             jsid_to_prop(organizer, key, false);
 
         // Set UID, if none set already.
