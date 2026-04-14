@@ -236,6 +236,179 @@ static icalproperty *myicalcomponent_get_property_by_name(icalcomponent *comp, c
 
 // ---------------
 
+static void sanitize_timeprop(icalproperty *prop) {
+
+    icalvalue *val = icalproperty_get_value(prop);
+    if (icalvalue_isa(val) != ICAL_DATE_VALUE &&
+        icalvalue_isa(val) != ICAL_DATETIME_VALUE) {
+        return;
+    }
+
+    icaltimetype t = icalvalue_get_datetimedate(val);
+
+    icalparameter *tzid_param =
+        myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
+
+    if (tzid_param) {
+        if (t.is_date) {
+            // DATE value with TZID - convert to DATETIME.
+            t.is_date = t.hour = t.minute = t.second = 0;
+            icalvalue_set_datetime(val, t);
+        }
+        else if (t.zone == icaltimezone_get_utc_timezone()) {
+            const char *tzid = icalparameter_get_tzid(tzid_param);
+            icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            if (tz) {
+                // Convert UTC DATETIME to DATETIME with TZID.
+                t = icaltime_convert_to_zone(t, tz);
+                icalvalue_set_datetime(val, t);
+            }
+            else {
+                // Unknown TZID - remove TZID and keep UTC time.
+                icalproperty_remove_parameter_by_ref(prop, tzid_param);
+            }
+        }
+    }
+}
+
+static void sanitize_veventtodo(ptrarray_t *complist)
+{
+    if (!ptrarray_size(complist)) return;
+
+    // First, sanitize DTSTART and DTEND.
+    for (int i = 0; i < ptrarray_size(complist); i++) {
+        icalcomponent *comp = ptrarray_nth(complist, i);
+
+        icalproperty *dtstart =
+            myicalcomponent_get_property(comp, ICAL_DTSTART_PROPERTY);
+        icalproperty *dtend =
+            myicalcomponent_get_property(comp, ICAL_DTEND_PROPERTY);
+
+        if (dtstart && dtend) {
+            // Fix floating time mixed with zoned time.
+            icalparameter *dtstart_tzid =
+                myicalproperty_get_parameter(dtstart, ICAL_TZID_PARAMETER);
+
+            icalparameter *dtend_tzid =
+                myicalproperty_get_parameter(dtend, ICAL_TZID_PARAMETER);
+
+            if (!dtstart_tzid != !dtend_tzid) {
+                if (dtstart_tzid) {
+                    icalproperty_add_parameter(dtend,
+                            icalparameter_clone(dtstart_tzid));
+                }
+                else {
+                    icalproperty_add_parameter(dtstart,
+                            icalparameter_clone(dtend_tzid));
+                }
+            }
+        }
+
+        if (dtstart)
+            sanitize_timeprop(dtstart);
+        if (dtend)
+            sanitize_timeprop(dtend);
+    }
+
+    // Now, sanitize RECURRENCE-ID.
+    icalproperty *dtstart_main = NULL;
+    icalcomponent *comp = ptrarray_nth(complist, 0);
+    if (!myicalcomponent_get_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+        dtstart_main = myicalcomponent_get_property(comp, ICAL_DTSTART_PROPERTY);
+    }
+
+    for (int i = 0; i < ptrarray_size(complist); i++) {
+        icalcomponent *comp = ptrarray_nth(complist, i);
+
+        icalproperty *recurid =
+            myicalcomponent_get_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (!recurid) continue;
+
+        if (dtstart_main) {
+            // Align temporal type of RECURRENCE-ID with main DTSTART.
+            icaltimetype t_start = icalproperty_get_dtstart(dtstart_main);
+            icaltimetype t_recur = icalproperty_get_recurrenceid(recurid);
+            if (t_recur.is_date != t_start.is_date) {
+                t_recur.is_date = t_start.is_date;
+                icalproperty_set_recurrenceid(recurid, t_recur);
+            }
+
+            icalparameter *dtstart_tzid =
+                myicalproperty_get_parameter(dtstart_main, ICAL_TZID_PARAMETER);
+
+            icalparameter *recurid_tzid =
+                myicalproperty_get_parameter(recurid, ICAL_TZID_PARAMETER);
+
+            if (dtstart_tzid && recurid_tzid) {
+                // TZID of RECURRENCE-ID must match main DTSTART.
+                const char *start_tzid = icalparameter_get_tzid(dtstart_tzid);
+                const char *recur_tzid = icalparameter_get_tzid(recurid_tzid);
+
+                icaltimezone *start_tz =
+                    icaltimezone_get_cyrus_timezone_from_tzid(start_tzid);
+                icaltimezone *recur_tz =
+                    icaltimezone_get_cyrus_timezone_from_tzid(recur_tzid);
+
+                if (t_start.zone != t_recur.zone) {
+                    t_recur.zone = recur_tz;
+                    t_recur = icaltime_convert_to_zone(t_recur, start_tz);
+                    icalproperty_set_recurrenceid(recurid, t_recur);
+
+                    icalproperty_remove_parameter_by_ref(recurid, recurid_tzid);
+                    icalproperty_add_parameter(recurid,
+                            icalparameter_clone(dtstart_tzid));
+                }
+            }
+            else if (dtstart_tzid) {
+                // No TZID no RECURRENCE-ID, use DSTART TZID.
+                icalproperty_add_parameter(recurid,
+                        icalparameter_clone(dtstart_tzid));
+            }
+            else if (recurid_tzid) {
+                // No TZID on DTSTART, remove from RECURRENCE-ID.
+                icalproperty_remove_parameter_by_ref(recurid, recurid_tzid);
+            }
+        }
+
+        sanitize_timeprop(recurid);
+    }
+
+
+}
+
+static void sanitize_icalobj(icalcomponent *ical)
+{
+    ptrarray_t comps = PTRARRAY_INITIALIZER;
+    ptrarray_push(&comps, ical);
+
+    while (ptrarray_size(&comps)) {
+        icalcomponent *comp = ptrarray_pop(&comps);
+
+        // Remove all properties with no value.
+        icalpropiter pi =
+            icalcomponent_begin_property(comp, ICAL_ANY_PROPERTY);
+        icalproperty *prop = icalpropiter_deref(&pi);
+        while (prop) {
+            icalproperty *next = icalpropiter_next(&pi);
+            if (icalvalue_isa(icalproperty_get_value(prop)) == ICAL_NO_VALUE) {
+                icalcomponent_remove_property(comp, prop);
+                icalproperty_free(prop);
+            }
+            prop = next;
+        }
+
+        icalcompiter ci;
+        icalcomponent *child;
+        myicalcomponent_foreach_component(comp, ICAL_ANY_COMPONENT, child, ci) {
+            ptrarray_push(&comps, child);
+        }
+    }
+
+    ptrarray_fini(&comps);
+}
+
+// ---------------
+
 static bool is_known_param(icalproperty *prop, icalparameter *param)
 {
     icalproperty_kind prop_kind = icalproperty_isa(prop);
@@ -5878,17 +6051,17 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     buf_free(&buf);
 }
 
-static void entries_from_ical(jscalendar_cfg_t *cfg,
-                              icalcomponent *ical,
-                              json_t *jobj)
+static hash_table ical_comps_by_kind_uid(icalcomponent *ical)
 {
-    struct buf buf = BUF_INITIALIZER;
+    // Hash VEVENT and VTODO components in ical by "KIND/UID" key.
+    // Each hash value is a ptrarray_t of components: the main component
+    // (no RECURRENCE-ID) first, followed by overrides.
 
-    // Hash components by kind and UID.
     hash_table comps = HASH_TABLE_INITIALIZER;
     size_t ncomps = icalcomponent_count_components(ical, ICAL_ANY_COMPONENT);
     construct_hash_table(&comps, ncomps + 1, 0);
 
+    struct buf buf = BUF_INITIALIZER;
     icalcomponent *comp;
     icalcompiter comp_iter;
     myicalcomponent_foreach_component(ical, ICAL_ANY_COMPONENT, comp, comp_iter)
@@ -5915,13 +6088,34 @@ static void entries_from_ical(jscalendar_cfg_t *cfg,
         else
             ptrarray_unshift(complist, comp);
     }
+    buf_free(&buf);
 
+    return comps;
+}
+
+EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
+                                      icalcomponent *ical)
+{
+    json_t *jgroup = json_pack("{s:s}", "@type", "Group");
+
+    jscalendar_cfg_t mycfg = { 0 };
+    if (!cfg) cfg = &mycfg;
+    struct buf buf = BUF_INITIALIZER;
+
+    icalcomponent *myical = icalcomponent_clone(ical);
+    // Apply general sanitizations.
+    sanitize_icalobj(myical);
+
+    hash_table comps = ical_comps_by_kind_uid(myical);
+
+    // Convert entries.
     json_t *jentries = json_array();
-
-    // Process entries by kind and UID.
     hash_iter *hit = hash_table_iter(&comps);
     while (hash_iter_next(hit)) {
         ptrarray_t *complist = hash_iter_val(hit);
+        // Apply sanitizations specific to VEVENT and VTODO.
+        sanitize_veventtodo(complist);
+
         icalcomponent *comp;
         while ((comp = ptrarray_shift(complist))) {
             json_t *jentry = json_object();
@@ -5945,78 +6139,65 @@ static void entries_from_ical(jscalendar_cfg_t *cfg,
         ptrarray_free(complist);
     }
     hash_iter_free(&hit);
+    json_object_set_new(jgroup, "entries", jentries);
 
-    json_object_set_new(jobj, "entries", jentries);
-
-    free_hash_table(&comps, NULL);
-    buf_free(&buf);
-}
-
-EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
-                                      icalcomponent *ical)
-{
-    jscalendar_cfg_t mycfg = { 0 };
-    if (!cfg) cfg = &mycfg;
-
-    json_t *jobj = json_pack("{s:s}", "@type", "Group");
-    struct buf buf = BUF_INITIALIZER;
-
-    categories_from_ical(cfg, ical, jobj);
-    keywords_from_ical(cfg, ical, jobj);
-    entries_from_ical(cfg, ical, jobj);
-    description_from_ical(cfg, ical, jobj);
-    links_from_ical(cfg, ical, jobj);
+    categories_from_ical(cfg, myical, jgroup);
+    keywords_from_ical(cfg, myical, jgroup);
+    description_from_ical(cfg, myical, jgroup);
+    links_from_ical(cfg, myical, jgroup);
 
     icalproperty *prop;
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_COLOR_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_COLOR_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_color(prop));
-        jobj_set_icalprop(cfg, jobj, "color", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "color", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_CREATED_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_CREATED_PROPERTY))) {
         icaltimetype t = icalproperty_get_created(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jobj, "created", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "created", jval, prop);
     }
 
     if ((prop =
-             myicalcomponent_get_property(ical, ICAL_LASTMODIFIED_PROPERTY)))
+             myicalcomponent_get_property(myical, ICAL_LASTMODIFIED_PROPERTY)))
     {
         icaltimetype t = icalproperty_get_lastmodified(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jobj, "updated", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "updated", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_NAME_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_NAME_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_name(prop));
-        jobj_set_icalprop(cfg, jobj, "title", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "title", jval, prop);
         icalparameter *param =
             myicalproperty_get_parameter(prop, ICAL_LANGUAGE_PARAMETER);
         if (param) {
             const char *l = icalparameter_get_language(param);
-            json_object_set(jobj, "locale", json_string(l));
+            json_object_set(jgroup, "locale", json_string(l));
         }
     }
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_PRODID_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_PRODID_PROPERTY))) {
         const char *prodid = icalproperty_get_prodid(prop);
-        jobj_set_icalprop(cfg, jobj, "prodId", json_string(prodid), prop);
+        jobj_set_icalprop(cfg, jgroup, "prodId", json_string(prodid), prop);
     }
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_SOURCE_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_SOURCE_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_source(prop));
-        jobj_set_icalprop(cfg, jobj, "source", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "source", jval, prop);
     }
 
-    if ((prop = myicalcomponent_get_property(ical, ICAL_UID_PROPERTY))) {
+    if ((prop = myicalcomponent_get_property(myical, ICAL_UID_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_uid(prop));
-        jobj_set_icalprop(cfg, jobj, "uid", jval, prop);
+        jobj_set_icalprop(cfg, jgroup, "uid", jval, prop);
     }
 
-    jobj_set_icalcomp(cfg, jobj, ical);
-    vendorexts_from_ical(ical, jobj);
+    jobj_set_icalcomp(cfg, jgroup, myical);
+    vendorexts_from_ical(myical, jgroup);
 
+    free_hash_table(&comps, NULL);
+    icalcomponent_free(myical);
     buf_free(&buf);
-    return jobj;
+    return jgroup;
 }
