@@ -3397,6 +3397,25 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
     }
 }
 
+static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addresses)
+{
+    json_t *jreplyto = json_object_get(jsevent, "replyTo");
+    if (json_is_object(jreplyto)) {
+        if (schedule_addresses) {
+            const char *orga = json_string_value(json_object_get(jreplyto, "imip"));
+            if (orga) {
+                if (!strncasecmp(orga, "mailto:", 7)) {
+                    orga += 7;
+                }
+                if (!strarray_contains_case(schedule_addresses, orga)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -3642,7 +3661,7 @@ gotevent:
     }
     if (jmap_wantprop(props, "isOrigin")) {
         json_object_set_new(jsevent, "isOrigin",
-                json_boolean(jmapical_is_origin(jsevent,
+                json_boolean(jsevent_is_origin(jsevent,
                         &rock->schedule_addresses)));
     }
 
@@ -4281,6 +4300,7 @@ static int createevent_toical(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
+    jmapctx->jsevent_is_origin = jsevent_is_origin;
     jmapctx->to_ical.serverset = create->serverset;
 
     // Set @type property if not already set.
@@ -4349,7 +4369,7 @@ static int createevent_toical(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(create->serverset, "isOrigin",
-                json_boolean(jmapical_is_origin(create->jsevent,
+                json_boolean(jsevent_is_origin(create->jsevent,
                         &create->schedule_addresses)));
     }
 
@@ -5243,6 +5263,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     // Set up conversion context
     struct jmapical_ctx *jmapctx = jmapical_context_new(req,
             update->schedule_addresses);
+    jmapctx->jsevent_is_origin = jsevent_is_origin;
     jmapctx->to_ical.serverset = update->serverset;
     jmapctx->from_ical.dont_guess_timezones = 1;
     jmapctx->from_ical.want_icalprops = 1;
@@ -5311,8 +5332,8 @@ static int updateevent_apply_patch(jmap_req_t *req,
     update->newical = newical;
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
-        int old_is_origin = jmapical_is_origin(old_event, update->schedule_addresses);
-        int new_is_origin = jmapical_is_origin(new_event, update->schedule_addresses);
+        bool old_is_origin = jsevent_is_origin(old_event, update->schedule_addresses);
+        bool new_is_origin = jsevent_is_origin(new_event, update->schedule_addresses);
         if (old_is_origin != new_is_origin) {
             json_object_set_new(serverset, "isOrigin", json_boolean(new_is_origin));
         }

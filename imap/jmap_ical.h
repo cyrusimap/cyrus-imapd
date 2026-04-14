@@ -94,6 +94,7 @@ struct jmapical_ctx {
         unsigned dont_guess_timezones : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
+    bool (*jsevent_is_origin)(json_t *jsevent, const strarray_t *schedule_addresses);
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
@@ -257,8 +258,6 @@ extern void jmapical_duration_as_string(const struct jmapical_duration *dur, str
 extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
-
-extern int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses);
 
 extern const char *jmap_partid_from_ical(icalproperty *prop);
 
