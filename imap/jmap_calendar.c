@@ -3399,20 +3399,25 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
 
 static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addresses)
 {
-    json_t *jreplyto = json_object_get(jsevent, "replyTo");
-    if (json_is_object(jreplyto)) {
-        if (schedule_addresses) {
-            const char *orga = json_string_value(json_object_get(jreplyto, "imip"));
-            if (orga) {
-                if (!strncasecmp(orga, "mailto:", 7)) {
-                    orga += 7;
-                }
-                if (!strarray_contains_case(schedule_addresses, orga)) {
-                    return false;
-                }
-            }
+    const char *organizer =
+        json_string_value(json_object_get(jsevent, "organizerCalendarAddress"));
+
+    if (!organizer) {
+        json_t *jreplyto = json_object_get(jsevent, "replyTo");
+        if (json_is_object(jreplyto)) {
+            organizer = json_string_value(json_object_get(jreplyto, "imip"));
         }
     }
+
+    if (organizer && schedule_addresses) {
+        if (!strncasecmp(organizer, "mailto:", 7)) {
+            organizer += 7;
+        }
+        if (!strarray_contains_case(schedule_addresses, organizer)) {
+            return false;
+        }
+    }
+
     return true;
 }
 
