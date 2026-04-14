@@ -428,6 +428,8 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
                 return true;
             if (myicalproperty_has_name(prop, "X-JMAP-PRIVACY"))
                 return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-SENT-BY"))
+                return true;
             if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
                 return true;
             // Our previous jscalendar draft implementation erroneously
@@ -2575,6 +2577,7 @@ static void sanitize_override_patch(json_t *jpatch)
         "recurrenceOverrides",
         "recurrenceRule",
         "relatedTo",
+        "sentBy",
         "uid",
         NULL
     };
@@ -2765,6 +2768,16 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
         if (s) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, "X-JMAP-PRIVACY");
+            icalproperty_set_value(prop, icalvalue_new_text(s));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+
+    if (JNOTNULL(jval = json_object_get(jentry, "sentBy"))) {
+        const char *s = json_string_value(jval);
+        if (s) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-SENT-BY");
             icalproperty_set_value(prop, icalvalue_new_text(s));
             icalcomponent_add_property(comp, prop);
         }
@@ -3913,6 +3926,9 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
                 validate_relatedto(parser, jval);
                 jmap_parser_pop(parser);
             }
+        }
+        else if (!strcmp("sentBy", key)) {
+            if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("sequence", key)) {
             json_int_t v = json_integer_value(jval);
@@ -5489,6 +5505,7 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
         json_object_del(jpatch, "recurrenceOverrides");
         json_object_del(jpatch, "recurrenceRule");
         json_object_del(jpatch, "relatedTo");
+        json_object_del(jpatch, "sentBy");
         json_object_del(jpatch, "uid");
         const char *recurid = localtime_from_icaltime(icalrecurid, &buf);
 
@@ -5703,6 +5720,14 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
             json_object_set_new(jobj, "privacy", json_string(buf_lcase(&buf)));
             buf_reset(&buf);
         }
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-SENT-BY"))) {
+        icalvalue *v = icalproperty_get_value(prop);
+        const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
+            icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
+        if (s) json_object_set_new(jobj, "sentBy", json_string(s));
     }
 
     recuroverrides_from_ical(cfg, comp, jobj, overrides);
