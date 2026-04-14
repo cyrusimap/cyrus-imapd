@@ -2056,8 +2056,9 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
             if (JNOTNULL(jval = json_object_get(jpart, "kind"))) {
                 if (!attendee)
                     attendee = icalproperty_new(ICAL_ATTENDEE_PROPERTY);
-                icalparameter_cutype cu =
-                    icalparameter_string_to_enum(json_string_value(jval));
+                const char *s = json_string_value(jval);
+                icalparameter_cutype cu = !strcasecmpsafe(s, "location") ?
+                    ICAL_CUTYPE_ROOM : icalparameter_string_to_enum(s);
                 if (cu != ICAL_CUTYPE_NONE) {
                     icalproperty_add_parameter(attendee,
                                                icalparameter_new_cutype(cu));
