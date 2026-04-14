@@ -10,6 +10,29 @@ use Getopt::Long;
 use File::Temp qw/ tempfile /;
 use Pod::Usage;
 use Term::ReadLine;
+use POSIX qw(:termios_h);
+
+my $termios_saved;
+my $termios_fd;
+
+sub term_noecho {
+    $termios_fd = fileno(STDIN);
+    $termios_saved = POSIX::Termios->new;
+    $termios_saved->getattr($termios_fd);
+
+    my $term_noecho = POSIX::Termios->new;
+    $term_noecho->getattr($termios_fd);
+    $term_noecho->setlflag($term_noecho->getlflag & ~ECHO);
+    $term_noecho->setattr($termios_fd, TCSANOW);
+}
+
+sub term_restore {
+    if (defined $termios_saved && defined $termios_fd) {
+        $termios_saved->setattr($termios_fd, TCSANOW);
+    }
+}
+
+END { term_restore() }
 
 my $puthelp =        "put <filename> [<target name>]\n" .
                      "                 - upload script to server\n";
@@ -83,35 +106,33 @@ sub prompt {
 
   my($type, $prompt) = @_ ;
 
-  if (($type eq "username") && (defined $username)) {
-      return $username;
-  } elsif (($type eq "authname") && (defined $authname)) {
-      return $authname;
-  } elsif (($type eq "realm") && (defined $realm)) {
-      return $realm;
-  } elsif (($type eq "password") && (defined $password)) {
-      return $password;
+  my %defaults = (
+      username => $username,
+      authname => $authname,
+      password => $password,
+      realm    => $realm,
+  );
+
+  if (defined $defaults{$type}) {
+      return $defaults{$type};
   }
 
-  my $ostty;
-  my $str = "";
-  chomp($ostty = `stty -g`);
-
-  if ($type eq "password") {
-      system "stty -echo -icanon min 1 time 0 2>/dev/null || " .
-             "stty -echo cbreak";
-      $str = "\n";
-  }
+  my $input;
 
   print "$prompt: ";
 
-  $b = <STDIN>;
-  chop($b);
+  if ($type eq "password") {
+    term_noecho();
+    $input = <STDIN>;
+    term_restore();
+    print "\n";
+  } else {
+    $input = <STDIN>;
+  }
 
-  print $str;
-  system "stty $ostty";
-
-  return $b;
+  return "" unless defined $input;
+  chomp($input);
+  return $input;
 }
 
 sub show_help {
