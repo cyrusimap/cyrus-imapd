@@ -73,13 +73,12 @@ my $filehandle;
 my $interactive;
 
 if ($exfile ne "") {
-    open(FILEH,"<$exfile") || die "unable to open file: $?";
-    $filehandle = *FILEH;
+    open($filehandle, '<', $exfile) || die "unable to open file: $!";
     $interactive = 0;
 } elsif ($ex ne "") {
     $filehandle = tempfile();
 
-    if (!$filehandle) { die "unable to open tmp file: $?"; }
+    if (!$filehandle) { die "unable to open tmp file: $!"; }
 
     print $filehandle $ex;
     seek $filehandle, 0, 0; # rewind file
