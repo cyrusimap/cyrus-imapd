@@ -429,6 +429,12 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
             // Extension properties for Cyrus JMAP Calendars
             if (myicalproperty_has_name(prop, "X-JMAP-ID"))
                 return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-HIDE-ATTENDEES"))
+                return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-MAY-INVITE-OTHERS"))
+                return true;
+            if (myicalproperty_has_name(prop, "X-JMAP-MAY-INVITE-SELF"))
+                return true;
             if (myicalproperty_has_name(prop, "X-JMAP-PRIVACY"))
                 return true;
             if (myicalproperty_has_name(prop, "X-JMAP-SENT-BY"))
@@ -2597,6 +2603,9 @@ static void sanitize_override_patch(json_t *jpatch)
 {
     static const char * const skip_prefixes[] = {
         "@type",
+        "hideAttendees",
+        "mayInviteOthers",
+        "mayInviteSelf",
         "method",
         "organizerCalendarAddress",
         "privacy",
@@ -2858,6 +2867,33 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
         icalcomponent_add_property(comp, icalproperty_new_dtstamp(t));
         // Also reset LAST-MODIFIED property.
         icalcomponent_add_property(comp, icalproperty_new_lastmodified(t));
+    }
+
+    if (JNOTNULL(jval = json_object_get(jentry, "hideAttendees"))) {
+        if (json_boolean_value(jval)) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-HIDE-ATTENDEES");
+            icalproperty_set_value(prop, icalvalue_new_boolean(true));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+
+    if (JNOTNULL(jval = json_object_get(jentry, "mayInviteOthers"))) {
+        if (json_boolean_value(jval)) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-MAY-INVITE-OTHERS");
+            icalproperty_set_value(prop, icalvalue_new_boolean(true));
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+
+    if (JNOTNULL(jval = json_object_get(jentry, "mayInviteSelf"))) {
+        if (json_boolean_value(jval)) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "X-JMAP-MAY-INVITE-SELF");
+            icalproperty_set_value(prop, icalvalue_new_boolean(true));
+            icalcomponent_add_property(comp, prop);
+        }
     }
 
     if (JNOTNULL(jval = json_object_get(jentry, "useDefaultAlerts"))) {
@@ -3880,6 +3916,9 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("freeBusyStatus", key)) {
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
         }
+        else if (!strcmp("hideAttendees", key)) {
+            if (!json_is_boolean(jval)) jmap_parser_invalid(parser, key);
+        }
         else if (!strcmp("keywords", key)) {
             if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
         }
@@ -3903,6 +3942,12 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("mainLocationId", key)) {
             const char *s = json_string_value(jval);
             if (!s || !jmap_is_valid_id(s)) jmap_parser_invalid(parser, key);
+        }
+        else if (!strcmp("mayInviteOthers", key)) {
+            if (!json_is_boolean(jval)) jmap_parser_invalid(parser, key);
+        }
+        else if (!strcmp("mayInviteSelf", key)) {
+            if (!json_is_boolean(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("method", key)) {
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
@@ -4014,12 +4059,9 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("baseEventId", key) ||
                  !strcmp("blobId", key) ||
                  !strcmp("calendarIds", key) ||
-                 !strcmp("hideAttendees", key) ||
                  !strcmp("id", key) ||
                  !strcmp("isDraft", key) ||
                  !strcmp("isOrigin", key) ||
-                 !strcmp("mayInviteOthers", key) ||
-                 !strcmp("mayInviteSelf", key) ||
                  !strcmp("scheduleSequence", key) ||
                  !strcmp("scheduleUpdated", key) ||
                  !strcmp("useDefaultAlerts", key) ||
@@ -5569,6 +5611,9 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
         json_object_del(jovr, "recurrenceIdTimeZone");
 
         json_t *jpatch = jmap_patchobject_create(jobj, jovr, 0);
+        json_object_del(jpatch, "hideAttendees");
+        json_object_del(jpatch, "mayInviteOthers");
+        json_object_del(jpatch, "mayInviteSelf");
         json_object_del(jpatch, "method");
         json_object_del(jpatch, "organizerCalendarAddress");
         json_object_del(jpatch, "privacy");
@@ -5781,6 +5826,27 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         if (!strcasecmpsafe(v, "TRUE")) {
             json_object_set_new(jobj, "useDefaultAlerts", json_true());
         }
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-HIDE-ATTENDEES"))) {
+        const char *v = icalproperty_get_value_as_string(prop);
+        if (!strcasecmpsafe(v, "TRUE"))
+            json_object_set_new(jobj, "hideAttendees", json_true());
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-MAY-INVITE-OTHERS"))) {
+        const char *v = icalproperty_get_value_as_string(prop);
+        if (!strcasecmpsafe(v, "TRUE"))
+            json_object_set_new(jobj, "mayInviteOthers", json_true());
+    }
+
+    if ((prop = myicalcomponent_get_property_by_name(
+             comp, "X-JMAP-MAY-INVITE-SELF"))) {
+        const char *v = icalproperty_get_value_as_string(prop);
+        if (!strcasecmpsafe(v, "TRUE"))
+            json_object_set_new(jobj, "mayInviteSelf", json_true());
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
