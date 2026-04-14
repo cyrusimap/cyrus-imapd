@@ -352,7 +352,7 @@ EXPORTED void setentryatt(struct entryattlist **l, const char *entry,
     }
 }
 
-EXPORTED char *dumpentryatt(const struct entryattlist *l)
+HIDDEN char *dumpentryatt(const struct entryattlist *l)
 {
     struct buf buf = BUF_INITIALIZER;
 
@@ -2912,7 +2912,7 @@ static int _annotate_lookup(const char *mboxname, const char *mboxid,
     return r;
 }
 
-EXPORTED int _annotate_lookupmask(const char *mboxname, const char *mboxid,
+static int _annotate_lookupmask(const char *mboxname, const char *mboxid,
                                   uint32_t uid, const char *entry,
                                   const char *userid, struct buf *value)
 {
@@ -3308,7 +3308,7 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
                        state->silent, NULL, /*maywrite*/1);
 }
 
-EXPORTED int annotate_state_writesilent(annotate_state_t *state,
+HIDDEN int annotate_state_writesilent(annotate_state_t *state,
                                         const char *entry,
                                         const char *userid,
                                         const struct buf *value)
@@ -4139,7 +4139,7 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
                                         &rename_cb, &rrock, /*flags*/0);
 }
 
-EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
+HIDDEN int annotate_delete_mailbox(struct mailbox *mailbox)
 {
     int r = 0;
     char *fname = NULL;
