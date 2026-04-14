@@ -4066,7 +4066,8 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
                  !strcmp("scheduleUpdated", key) ||
                  !strcmp("useDefaultAlerts", key) ||
                  !strcmp("utcStart", key) ||
-                 !strcmp("utcEnd", key)) {
+                 !strcmp("utcEnd", key) ||
+                 !strcmp("x-href", key)) {
             // ignore
         }
         else if (!is_vendorext_key(key)) {
