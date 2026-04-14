@@ -162,8 +162,8 @@ my $obj = sieve_get_handle($acapserver,
                            "prompt", "prompt", "prompt", "prompt");
 
 if (!defined $obj) {
-    die "unable to connect to server";
-}
+    my $errstr = sieve_get_global_error() // "unknown error";
+    die "unable to connect to '$acapserver': $errstr";
 
 my $term = Term::ReadLine->new("sieveshell");
 
