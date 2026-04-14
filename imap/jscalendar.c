@@ -281,6 +281,9 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         case ICAL_SCHEDULESTATUS_PARAMETER:
             return true;
         default:
+            if (myicalparameter_has_name(param, "X-DTSTAMP") ||
+                myicalparameter_has_name(param, "X-SEQUENCE"))
+                return true;
             return false;
         }
 
@@ -2154,6 +2157,30 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
             }
 
             if (attendee) {
+                jval = json_object_get(jpart, "scheduleSequence");
+                if (json_is_integer(jval) && json_integer_value(jval) >= 0) {
+                    struct buf buf = BUF_INITIALIZER;
+                    buf_printf(&buf, "%lld", json_integer_value(jval));
+                    icalparameter *param = icalparameter_new_iana(buf_cstring(&buf));
+                    icalparameter_set_iana_name(param, "X-SEQUENCE");
+                    icalproperty_add_parameter(attendee, param);
+                    buf_free(&buf);
+                }
+
+                jval = json_object_get(jpart, "scheduleUpdated");
+                if (json_is_string(jval)) {
+                    icaltimetype t = utctime_to_icaltime(json_string_value(jval));
+                    if (!icaltime_is_null_time(t)) {
+                        char *tmp = icaltime_as_ical_string_r(t);
+                        icalparameter *param = icalparameter_new_iana(tmp);
+                        icalparameter_set_iana_name(param, "X-DTSTAMP");
+                        icalproperty_add_parameter(attendee, param);
+                        free(tmp);
+                    }
+                }
+            }
+
+            if (attendee) {
                 icalproperty_set_value(attendee,
                                        icalvalue_new_caladdress(caladdr));
             }
@@ -3379,6 +3406,14 @@ static void validate_participants(struct jmap_parser *parser,
             }
             else if (!strcmp("roles", key)) {
                 if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
+            }
+            else if (!strcmp("scheduleSequence", key)) {
+                json_int_t v = json_integer_value(jval);
+                if (!json_is_integer(jval) || v < 0)
+                    jmap_parser_invalid(parser, key);
+            }
+            else if (!strcmp("scheduleUpdated", key)) {
+                if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
             }
             else if (!strcmp("sentBy", key)) {
                 if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
@@ -4963,6 +4998,30 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
         else if (param_kind == ICAL_SENTBY_PARAMETER) {
             const char *sentby = icalparameter_get_sentby(param);
             json_object_set_new(jpart, "sentBy", json_string(sentby));
+        }
+
+        else if (myicalparameter_has_name(param, "X-SEQUENCE")) {
+            const char *xval = icalparameter_get_value_as_string(param);
+            if (xval) {
+                bit64 res = 0;
+                if (parsenum(xval, &xval, strlen(xval), &res) == 0)
+                    json_object_set_new(jpart, "scheduleSequence",
+                                        json_integer(res));
+            }
+        }
+
+        else if (myicalparameter_has_name(param, "X-DTSTAMP")) {
+            const char *xval = icalparameter_get_value_as_string(param);
+            if (xval) {
+                icaltimetype t = icaltime_from_string(xval);
+                if (!icaltime_is_null_time(t) && !t.is_date &&
+                        t.zone == icaltimezone_get_utc_timezone()) {
+                    struct buf buf = BUF_INITIALIZER;
+                    json_object_set_new(jpart, "scheduleUpdated",
+                        json_string(utctime_from_icaltime(t, &buf)));
+                    buf_free(&buf);
+                }
+            }
         }
     }
 }
