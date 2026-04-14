@@ -4270,6 +4270,16 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
 
     icalcomponent_add_required_timezones(ical);
 
+    if (!myicalcomponent_get_property(ical, ICAL_PRODID_PROPERTY)) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, "-//CyrusIMAP.org/Cyrus ");
+        buf_appendcstr(&buf, CYRUS_VERSION);
+        buf_appendcstr(&buf, "//EN");
+        icalcomponent_add_property(ical,
+                icalproperty_new_prodid(buf_cstring(&buf)));
+        buf_free(&buf);
+    }
+
 done:
     jmap_parser_fini(&myparser);
     return ical;
