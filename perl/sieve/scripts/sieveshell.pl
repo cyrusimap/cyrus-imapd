@@ -268,7 +268,9 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
     }
 }
 
-exit $exitcode
+close($filehandle) if !$interactive;
+
+exit $exitcode;
 
 __END__
 
