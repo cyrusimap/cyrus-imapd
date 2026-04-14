@@ -797,9 +797,19 @@ static int jmap_sieve_set(struct jmap_req *req)
     }
 
 
-    /* create */
-    const char *creation_id, *script_id;
+    /* destroy */
+    const char *creation_id, *script_id, *id;
     json_t *val;
+    size_t i;
+    json_array_foreach(set.destroy, i, val) {
+        id = json_string_value(val);
+        script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
+        if (!script_id) continue;
+
+        set_destroy(script_id, mailbox, db, &set);
+    }
+
+    /* create */
     if (json_object_size(set.create)) {
         /* Count existing scripts */
         int num_scripts;
@@ -827,25 +837,12 @@ static int jmap_sieve_set(struct jmap_req *req)
         }
     }
 
-
     /* update */
-    const char *id;
     json_object_foreach(set.update, id, val) {
         script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
         if (!script_id) continue;
 
         set_update(req, script_id, val, mailbox, db, &set);
-    }
-
-
-    /* destroy */
-    size_t i;
-    json_array_foreach(set.destroy, i, val) {
-        id = json_string_value(val);
-        script_id = (id && id[0] == '#') ? jmap_lookup_id(req, id + 1) : id;
-        if (!script_id) continue;
-
-        set_destroy(script_id, mailbox, db, &set);
     }
 
     if (!json_object_size(set.not_created) &&

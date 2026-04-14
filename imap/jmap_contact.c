@@ -1025,6 +1025,73 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         if (r) goto done;
     }
 
+    /* destroy */
+    size_t index;
+    for (index = 0; index < json_array_size(set.destroy); index++) {
+        const char *id = _json_array_get_string(set.destroy, index);
+        if (!id) {
+            json_t *err = json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set_new(set.not_destroyed, id, err);
+            continue;
+        }
+        mbentry_t *mbentry = NULL;
+        struct carddav_data *cdata = NULL;
+        uint32_t olduid;
+        if (kind == CARDDAV_KIND_ANY && USER_COMPACT_EMAILIDS(req->cstate)) {
+            if (id[0] == JMAP_CONTACTID_PREFIX &&
+                strlen(id) < JMAP_CONTACTID_SIZE) {
+                r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
+            }
+        }
+        else {
+            r = carddav_lookup_uid(db, NULL, id, &cdata);
+        }
+
+        /* is it a valid contact? */
+        if (r || !cdata || !cdata->dav.imap_uid ||
+            (cdata->kind != kind && kind != CARDDAV_KIND_ANY)) {
+            r = 0;
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_destroyed, id, err);
+            continue;
+        }
+        olduid = cdata->dav.imap_uid;
+
+        mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+
+        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
+            int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
+            json_t *err = json_pack("{s:s}", "type",
+                                    rights & JACL_READITEMS ?
+                                    "accountReadOnly" : "notFound");
+            json_object_set_new(set.not_destroyed, id, err);
+            mboxlist_entry_free(&mbentry);
+            continue;
+        }
+
+        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
+            mailbox_close(&mailbox);
+            r = mailbox_open_iwl(mbentry->name, &mailbox);
+        }
+        mboxlist_entry_free(&mbentry);
+        if (r) goto done;
+
+        syslog(LOG_NOTICE,
+               "jmap: remove %s %s/%s",
+               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+               req->accountid, id);
+        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
+        if (r) {
+            xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
+                             "kind=<%s> mailbox=<%s> olduid=<%u>",
+                             kind == CARDDAV_KIND_GROUP ? "group" : "contact",
+                             mailbox_name(mailbox), olduid);
+            goto done;
+        }
+
+        json_array_append_new(set.destroyed, json_string(id));
+    }
+
     /* create */
     const char *key;
     json_t *arg;
@@ -1151,73 +1218,6 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_object_set_new(set.updated, uid, item);
     }
 
-
-    /* destroy */
-    size_t index;
-    for (index = 0; index < json_array_size(set.destroy); index++) {
-        const char *id = _json_array_get_string(set.destroy, index);
-        if (!id) {
-            json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-            json_object_set_new(set.not_destroyed, id, err);
-            continue;
-        }
-        mbentry_t *mbentry = NULL;
-        struct carddav_data *cdata = NULL;
-        uint32_t olduid;
-        if (kind == CARDDAV_KIND_ANY && USER_COMPACT_EMAILIDS(req->cstate)) {
-            if (id[0] == JMAP_CONTACTID_PREFIX &&
-                strlen(id) < JMAP_CONTACTID_SIZE) {
-                r = carddav_lookup_jmapid(db, id+1, &cdata);  // strip prefix
-            }
-        }
-        else {
-            r = carddav_lookup_uid(db, NULL, id, &cdata);
-        }
-
-        /* is it a valid contact? */
-        if (r || !cdata || !cdata->dav.imap_uid ||
-            (cdata->kind != kind && kind != CARDDAV_KIND_ANY)) {
-            r = 0;
-            json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, id, err);
-            continue;
-        }
-        olduid = cdata->dav.imap_uid;
-
-        mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
-
-        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
-            int rights = mbentry ? jmap_myrights_mbentry(req, mbentry) : 0;
-            json_t *err = json_pack("{s:s}", "type",
-                                    rights & JACL_READITEMS ?
-                                    "accountReadOnly" : "notFound");
-            json_object_set_new(set.not_destroyed, id, err);
-            mboxlist_entry_free(&mbentry);
-            continue;
-        }
-
-        if (!mailbox || strcmp(mailbox_name(mailbox), mbentry->name)) {
-            mailbox_close(&mailbox);
-            r = mailbox_open_iwl(mbentry->name, &mailbox);
-        }
-        mboxlist_entry_free(&mbentry);
-        if (r) goto done;
-
-        syslog(LOG_NOTICE,
-               "jmap: remove %s %s/%s",
-               kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-               req->accountid, id);
-        r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->userid);
-        if (r) {
-            xsyslog(LOG_ERR, "IOERROR: carddav remove failed",
-                             "kind=<%s> mailbox=<%s> olduid=<%u>",
-                             kind == CARDDAV_KIND_GROUP ? "group" : "contact",
-                             mailbox_name(mailbox), olduid);
-            goto done;
-        }
-
-        json_array_append_new(set.destroyed, json_string(id));
-    }
 
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
@@ -5825,6 +5825,35 @@ static int jmap_addressbook_set(struct jmap_req *req)
         if (r) goto done;
     }
 
+    /* destroy */
+    size_t index;
+    json_t *jid;
+
+    json_array_foreach(set.destroy, index, jid) {
+        const char *id = json_string_value(jid);
+        if (json_object_get(set.not_destroyed, id)) {
+            continue;
+        }
+        /* Resolve abookid */
+        const char *abookid = id;
+        if (abookid && abookid[0] == '#') {
+            const char *newabookid = jmap_lookup_id(req, abookid + 1);
+            if (!newabookid) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(set.not_destroyed, id, err);
+                continue;
+            }
+            abookid = newabookid;
+        }
+        json_t *err = NULL;
+        setaddressbooks_destroy(req, abookid, default_addrbookname,
+                                setargs.on_destroy_remove_contents, &err);
+        if (!err) {
+            json_array_append_new(set.destroyed, json_string(id));
+        }
+        else json_object_set_new(set.not_destroyed, id, err);
+    }
+
     /* create */
     const char *key;
     json_t *arg;
@@ -5870,35 +5899,6 @@ static int jmap_addressbook_set(struct jmap_req *req)
             json_object_set_new(set.updated, id, record);
         }
         else json_object_set_new(set.not_updated, id, err);
-    }
-
-    /* destroy */
-    size_t index;
-    json_t *jid;
-
-    json_array_foreach(set.destroy, index, jid) {
-        const char *id = json_string_value(jid);
-        if (json_object_get(set.not_destroyed, id)) {
-            continue;
-        }
-        /* Resolve abookid */
-        const char *abookid = id;
-        if (abookid && abookid[0] == '#') {
-            const char *newabookid = jmap_lookup_id(req, abookid + 1);
-            if (!newabookid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_destroyed, id, err);
-                continue;
-            }
-            abookid = newabookid;
-        }
-        json_t *err = NULL;
-        setaddressbooks_destroy(req, abookid, default_addrbookname,
-                                setargs.on_destroy_remove_contents, &err);
-        if (!err) {
-            json_array_append_new(set.destroyed, json_string(id));
-        }
-        else json_object_set_new(set.not_destroyed, id, err);
     }
 
     if (setargs.on_success_set_is_default &&
