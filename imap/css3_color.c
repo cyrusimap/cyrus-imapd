@@ -7,16 +7,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "css3_color.h"
 #include "util.h"
 
-struct css3_color_t {
-    const char *name;
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-};
-
 static const struct css3_color_t css3_colors[] = {
+    /* must be all lowercase, sorted by name */
     { "aliceblue",            240, 248, 255 },
     { "antiquewhite",         250, 235, 215 },
     { "aqua",                   0, 255, 255 },
@@ -165,7 +160,7 @@ static const struct css3_color_t css3_colors[] = {
     { "whitesmoke",           245, 245, 245 },
     { "yellow",               255, 255,   0 },
     { "yellowgreen",          154, 205,  50 },
-    { NULL,                     0,   0,   0 }
+    { "",                       0,   0,   0 }
 };
 
 /* Take a hex value for a color and find best matching css3 color name using:
@@ -196,7 +191,7 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
     unsigned long best = ULONG_MAX;
     const char *name = NULL;
 
-    for (css = css3_colors; css->name; css++) {
+    for (css = css3_colors; css->name[0]; css++) {
         int dR = css->r - C.r;
         int dG = css->g - C.g;
         int dB = css->b - C.b;
@@ -220,11 +215,30 @@ EXPORTED const char *css3_color_hex_to_name(const char *hexstr)
     return name;
 }
 
-EXPORTED int is_css3_color(const char *s)
+EXPORTED bool is_css3_color(const char *s)
 {
+    char needle[CSS3_COLOR_T_NAME_LEN] = {0};
     const struct css3_color_t *c;
 
-    for (c = css3_colors; c->name && strcasecmp(s, c->name); c++);
+    if (strlen(s) >= CSS3_COLOR_T_NAME_LEN)
+        return false; /* too long, can't possibly match */
 
-    return (c->name != NULL);
+    strncpy(needle, s, CSS3_COLOR_T_NAME_LEN - 1);
+    lcase(needle);
+
+    for (c = css3_colors;
+         c->name[0] && c->name[0] <= needle[0];
+         c++)
+    {
+        if (0 == strcmp(needle, c->name))
+            return true;
+    }
+
+    return false;
+}
+
+/* unit tests need to be able to see the table */
+HIDDEN const struct css3_color_t *css3_color_table(void)
+{
+    return css3_colors;
 }
