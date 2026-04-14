@@ -7,11 +7,9 @@ use warnings;
 
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
-use strict;
 use File::Temp qw/ tempfile /;
 use Pod::Usage;
 use Term::ReadLine;
-use POSIX qw(:sys_wait_h);
 
 my $puthelp =        "put <filename> [<target name>]\n" .
                      "                 - upload script to server\n";
