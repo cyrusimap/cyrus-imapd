@@ -5212,7 +5212,7 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
             comp, ICAL_ATTENDEE_PROPERTY, attendee, prop_iter)
         {
             const char *attcaladdr = icalproperty_get_attendee(attendee);
-            if (!strcmpsafe(caladdr, attcaladdr)) {
+            if (!strcasecmpsafe(caladdr, attcaladdr)) {
                 organizer_attendee = attendee;
             }
 
@@ -5229,7 +5229,8 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
             // Convert ORGANIZER to Participant.
             struct buf key = BUF_INITIALIZER;
             json_t *jpart = json_pack("{s:s}", "@type", "Participant");
-            json_object_set(jpart_by_caladdr, caladdr, jpart);
+            buf_setcstr(&buf, caladdr);
+            json_object_set(jpart_by_caladdr, buf_lcase(&buf), jpart);
             participant_from_icalprop(organizer, jpart);
 
             if (organizer_attendee) {
@@ -5260,7 +5261,8 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
         if (attendee == organizer_attendee) continue;
 
         const char *caladdr = icalproperty_get_attendee(attendee);
-        json_t *jpart = json_object_get(jpart_by_caladdr, caladdr);
+        buf_setcstr(&buf, caladdr);
+        json_t *jpart = json_object_get(jpart_by_caladdr, buf_lcase(&buf));
         if (!jpart) {
             jpart = json_pack("{s:s}", "@type", "Participant");
             json_object_set(jpart_by_caladdr, caladdr, jpart);
