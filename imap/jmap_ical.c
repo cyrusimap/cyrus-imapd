@@ -7545,25 +7545,6 @@ static void overrides_to_ical(icalcomponent *comp,
     json_decref(master);
 }
 
-HIDDEN int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses)
-{
-    json_t *jreplyto = json_object_get(jsevent, "replyTo");
-    if (json_is_object(jreplyto)) {
-        if (schedule_addresses) {
-            const char *orga = json_string_value(json_object_get(jreplyto, "imip"));
-            if (orga) {
-                if (!strncasecmp(orga, "mailto:", 7)) {
-                    orga += 7;
-                }
-                if (!strarray_contains_case(schedule_addresses, orga)) {
-                    return 0;
-                }
-            }
-        }
-    }
-    return 1;
-}
-
 static void timestamps_to_ical(icalcomponent *comp,
                                struct jmap_parser *parser,
                                json_t *jsevent,
@@ -7594,7 +7575,8 @@ static void timestamps_to_ical(icalcomponent *comp,
     // Validate updated
     int updated_is_server_set = jmapctx &&
         !jmapctx->to_ical.no_sanitize_timestamps &&
-        jmapical_is_origin(jsevent, jmapctx->schedule_addresses);
+        jmapctx->jsevent_is_origin &&
+        jmapctx->jsevent_is_origin(jsevent, jmapctx->schedule_addresses);
 
     icaltimetype updated = now;
     jval = json_object_get(jsevent, "updated");
