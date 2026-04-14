@@ -13666,6 +13666,8 @@ static int jmap_email_set(jmap_req_t *req)
 
     set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
+    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
+
     json_t *email;
     const char *creation_id;
     json_object_foreach(set.create, creation_id, email) {
@@ -13688,8 +13690,6 @@ static int jmap_email_set(jmap_req_t *req)
         debug_bulkupdate = json_object();
     }
     _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
-
-    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
 
     set.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 
