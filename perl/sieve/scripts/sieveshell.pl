@@ -130,6 +130,12 @@ sub show_help {
   print "quit             - quit\n";
 }
 
+sub check_sieve_error {
+    my ($obj, $action) = @_;
+    my $errstr = sieve_get_error($obj) // "unknown error";
+    print "$action failed: $errstr\n";
+}
+
 # main code
 
 print "connecting to $acapserver\n";
@@ -151,106 +157,95 @@ while(defined($_  = ($interactive ? $term->readline('> ') : <$filehandle>))){
 
   $term->addhistory($_);
 
-  my @words = split ' ',$_;
+  my ($cmd, @args) = split ' ', $_;
   my $str;
-    if ($#words < 0) {
+    if (!defined $cmd) {
         next;
     }
 
-    if (($words[0] eq "put") ||
-        ($words[0] eq "p")) {
-      if($#words == 1) {
-        $ret = sieve_put_file($obj, $words[1]);
-      } elsif ($#words == 2) {
-        $ret = sieve_put_file_withdest($obj, $words[1], $words[2]);
-      } else {
-        print $puthelp;
-        next;
-      }
-      if ($ret != 0) {
-        my $errstr = sieve_get_error($obj);
-        $errstr = "unknown error" if(!defined($errstr));
-        print "upload failed: $errstr\n";
-        $exitcode = 1;
-      }
-    } elsif (($words[0] eq "list") ||
-             ($words[0] eq "l") ||
-             ($words[0] eq "ls")) {
-        $ret = sieve_list($obj, "list_cb");
+    if ($cmd eq "put" || $cmd eq "p") {
+        if (@args == 1) {
+            $ret = sieve_put_file($obj, $args[0]);
+        } elsif (@args == 2) {
+            $ret = sieve_put_file_withdest($obj, $args[0], $args[1]);
+        } else {
+            print $puthelp;
+            next;
+        }
         if ($ret != 0) {
-            my $errstr = sieve_get_error($obj);
-            $errstr = "unknown error" if(!defined($errstr));
-            print "list failed: $errstr\n";
+            check_sieve_error($obj, "upload");
             $exitcode = 1;
         }
-    } elsif (($words[0] eq "activate") ||
-             ($words[0] eq "a")) {
-        if ($#words != 1) {
+
+    } elsif ($cmd eq "list" || $cmd eq "l" || $cmd eq "ls") {
+        $ret = sieve_list($obj, "list_cb");
+        if ($ret != 0) {
+            check_sieve_error($obj, "list");
+            $exitcode = 1;
+        }
+
+    } elsif ($cmd eq "activate" || $cmd eq "a") {
+        if (@args != 1) {
             print $activatehelp;
             next;
         }
-        $ret = sieve_activate($obj, $words[1]);
+        $ret = sieve_activate($obj, $args[0]);
         if ($ret != 0) {
-            my $errstr = sieve_get_error($obj);
-            $errstr = "unknown error" if(!defined($errstr));
-            print "activate failed: $errstr\n";
+            check_sieve_error($obj, "activate");
             $exitcode = 1;
         }
-    } elsif (($words[0] eq "deactivate") ||
-             ($words[0] eq "da")) {
-        if ($#words != 0) {
+
+    } elsif ($cmd eq "deactivate" || $cmd eq "da") {
+        if (@args != 0) {
             print $deactivatehelp;
             next;
         }
         $ret = sieve_activate($obj, "");
         if ($ret != 0) {
-            my $errstr = sieve_get_error($obj);
-            $errstr = "unknown error" if(!defined($errstr));
-            print "deactivate failed: $errstr\n";
+            check_sieve_error($obj, "deactivate");
             $exitcode = 1;
         }
-    } elsif (($words[0] eq "delete") ||
-             ($words[0] eq "d")) {
-        if ($#words != 1) {
+
+    } elsif ($cmd eq "delete" || $cmd eq "d") {
+        if (@args != 1) {
             print $deletehelp;
             next;
         }
-        $ret = sieve_delete($obj, $words[1]);
+        $ret = sieve_delete($obj, $args[0]);
         if ($ret != 0) {
-            my $errstr = sieve_get_error($obj);
-            $errstr = "unknown error" if(!defined($errstr));
-            print "delete failed: $errstr\n";
+            check_sieve_error($obj, "delete");
             $exitcode = 1;
         }
-    } elsif (($words[0] eq "get") ||
-             ($words[0] eq "g")) {
-        if ($#words != 1 && $#words != 2) {
+
+    } elsif ($cmd eq "get" || $cmd eq "g") {
+        if (@args != 1 && @args != 2) {
             print $gethelp;
             next;
         }
         $str = "";
-        $ret = sieve_get($obj, $words[1], $str);
+        $ret = sieve_get($obj, $args[0], $str);
         if ($ret != 0) {
-            my $errstr = sieve_get_error($obj);
-            $errstr = "unknown error" if(!defined($errstr));
-            print "get failed: $errstr\n";
+            check_sieve_error($obj, "get");
             $exitcode = 1;
         } else {
-            if ($words[2]) {
-                open (OUTPUT,">$words[2]") || die "Unable to open $words[2]";
-                print OUTPUT $str;
-                close(OUTPUT);
+            if (defined $args[1]) {
+                open(my $output, '>', $args[1]) || die "Unable to open $args[1]: $!";
+                print $output $str;
+                close($output);
             } else {
                 print $str;
             }
         }
-    } elsif (($words[0] eq "quit") || ($words[0] eq "q")) {
+
+    } elsif ($cmd eq "quit" || $cmd eq "q") {
         sieve_logout($obj);
         last;
-    } elsif (($words[0] eq "help") || ($words[0] eq "?")) {
+
+    } elsif ($cmd eq "help" || $cmd eq "?") {
         show_help();
+
     } else {
-        print "Invalid command: $words[0]\n";
+        print "Invalid command: $cmd\n";
         $exitcode = 1;
     }
 }
