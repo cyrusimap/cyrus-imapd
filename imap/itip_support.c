@@ -1452,23 +1452,30 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         defaultalarms_fini(&defalarms);
     }
 
-    /* Set SENT-BY property */
+    /* Set SENT-BY parameter */
     if (mailfrom && ical) {
         char *val = address_get_all(mailfrom, 0);
 
-        // XXX could use SENT-BY parameter as defined in RFC5545?
         for (comp = icalcomponent_get_first_real_component(ical);
              comp;
              comp = icalcomponent_get_next_component(ical,
                  icalcomponent_isa(comp))) {
 
+            // Use SENT-BY parameter as defined in RFC5545
+            icalproperty *orga =
+                icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+            if (orga) {
+                icalproperty_remove_parameter_by_kind(orga, ICAL_SENTBY_PARAMETER);
+                icalproperty_add_parameter(orga, icalparameter_new_sentby(val));
+            }
+
+            // XXX set legacy extension property until jmap_ical.c is removed
             // Remove any stale SENT-BY properties
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(val));
