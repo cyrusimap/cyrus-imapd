@@ -73,6 +73,13 @@ extern icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
 extern json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
                                     icalcomponent *vcal);
 
+/** @brief Returns the key of the Participant object for a property.
+ *
+ *  @param prop  An iCalendar ATTENDEE or ORGANIZER property.
+ *  @return      The Participant object key, or NULL if the argument isn't an
+ *               ATTENDEE or ORGANIZER property. */
+extern char *jscalendar_participant_id(icalproperty *prop);
+
 #ifdef __cplusplus
 }
 #endif

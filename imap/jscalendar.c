@@ -6293,3 +6293,16 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
     buf_free(&buf);
     return jgroup;
 }
+
+EXPORTED char *jscalendar_participant_id(icalproperty *prop)
+{
+    if (icalproperty_isa(prop) != ICAL_ATTENDEE_PROPERTY &&
+        icalproperty_isa(prop) != ICAL_ORGANIZER_PROPERTY)
+        return NULL;
+
+    struct buf buf = BUF_INITIALIZER;
+    json_t *jobj = json_object(); // XXX doesn't handle id collisions
+    jsid_from_prop(prop, jobj, &buf);
+    json_decref(jobj);
+    return buf_release(&buf);
+}
