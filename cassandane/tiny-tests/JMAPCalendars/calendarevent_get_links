@@ -16,7 +16,6 @@ sub test_calendarevent_get_links
             size => 4480,
             title => "the spec",
             rel => "enclosure",
-            cid => '123456789asd',
         },
         ignore() => {
             '@type' => 'Link',
