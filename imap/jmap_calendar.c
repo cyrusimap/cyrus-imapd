@@ -7906,6 +7906,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     struct updateevent update = { .schedule_addresses = &schedule_addr };
     icalparameter_partstat ical_part_stat = ICAL_PARTSTAT_NONE;
     json_t *res = json_object();
+    char *part_id = NULL;
     json_t *err = NULL;
     int r = 0;
 
@@ -8053,7 +8054,6 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     /* Find participantId */
     icalcomponent *comp = icalcomponent_get_first_real_component(update.oldical);
     icalcomponent_kind kind = icalcomponent_isa(comp);
-    const char *part_id = NULL;
 
     for (; comp; comp = icalcomponent_get_next_component(update.oldical, kind)) {
         icalproperty *prop =
@@ -8089,7 +8089,12 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
                 goto no_op;
             }
 
-            part_id = jmap_partid_from_ical(prop);
+            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+                part_id = jscalendar_participant_id(prop);
+            }
+            else {
+                part_id = xstrdupnull(jmap_partid_from_ical(prop));
+            }
             break;
         }
     }
@@ -8219,6 +8224,7 @@ done:
     json_decref(update.old_event);
     strarray_fini(&schedule_addr);
     mboxlist_entry_free(&mbentry);
+    free(part_id);
     return 0;
 }
 
