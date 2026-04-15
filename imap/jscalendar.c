@@ -5078,6 +5078,19 @@ static void links_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
                     json_object_set_new(jlink, "size", json_integer(num));
                 }
             }
+            // Support legacy X-parameter.
+            else if (param_kind == ICAL_X_PARAMETER) {
+                if (myicalparameter_has_name(param, "X-JMAP-REL")) {
+                    const char *rel = icalparameter_get_value_as_string(param);
+                    if (rel && !json_object_get(jlink, "rel"))
+                        json_object_set_new(jlink, "rel", json_string(rel));
+                }
+                else if (myicalparameter_has_name(param, "X-TITLE")) {
+                    const char *s = icalparameter_get_value_as_string(param);
+                    if (s && !json_object_get(jlink, "title"))
+                        json_object_set_new(jlink, "title", json_string(s));
+                }
+            }
         }
 
         const char *key = jsid_from_prop(prop, jlinks, &buf);
