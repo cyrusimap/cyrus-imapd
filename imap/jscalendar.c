@@ -2992,7 +2992,8 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "sentBy"))) {
         const char *s = json_string_value(jval);
-        icalproperty *orga = myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY);
+        icalproperty *orga =
+            myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY);
         if (s && orga) {
             icalproperty_add_parameter(orga, icalparameter_new_sentby(s));
         }
@@ -4278,6 +4279,11 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         && json_object_get(jentry, "recurrenceId"))
     {
         jmap_parser_invalid(parser, "recurrenceRule");
+    }
+
+    if (JNOTNULL(json_object_get(jentry, "sentBy")) &&
+        JNULL(json_object_get(jentry, "organizerCalendarAddress"))) {
+        jmap_parser_invalid(parser, "sentBy");
     }
 
     if (!is_task && !json_object_get(jentry, "start")) {
