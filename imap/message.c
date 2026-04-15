@@ -3735,14 +3735,12 @@ static int extract_convdata(struct conversations_state *state,
     int i;
     size_t j;
     int r = 0;
-    int is_memo = 0;
 
     r = message_need(msg, M_RECORD|M_CACHE);
     if (!r) {
         const struct index_record *record = msg_record(msg);
         struct mailbox *mbox = msg_mailbox(msg);
         if (record && mbox) {
-            is_memo = mailbox_record_hasflag(mbox, record, "$memo");
         }
     }
     else {
@@ -3854,47 +3852,6 @@ static int extract_convdata(struct conversations_state *state,
     if (!is_valid_rfc2822_inreplyto(hdrs[1]))
         hdrs[1] = NULL;
 
-    // Special-handle memos.
-    if (hdrs[1] && is_memo) {
-        // Parse In-Reply-To header.
-        char *repid = message_iter_msgid(
-            hdrs[1], MESSAGE_ITER_MSGID_FLAG_REQUIRE_BRACKET, NULL);
-        if (repid) {
-            lcase(repid);
-            if (conversations_check_msgid(repid, strlen(repid))) {
-                xzfree(repid);
-            }
-        }
-
-        // Parse Message-ID header.
-        char *msgid = message_iter_msgid(hdrs[2], 0, NULL);
-        if (msgid) {
-            lcase(msgid);
-            if (conversations_check_msgid(msgid, strlen(msgid))) {
-                xzfree(msgid);
-            }
-        }
-
-        bool did_match = false;
-
-        // Lookup conversation for In-Reply-To header value.
-        if (repid && !conversations_get_msgid(state, repid, &cids)
-            && arrayu64_size(&cids))
-        {
-            // Only report the message-ids of the memo and its parent.
-            if (msgid) strarray_append(msgidlist, msgid);
-            strarray_append(msgidlist, repid);
-            // Only use first thread id of parent.
-            arrayu64_add(matchlist, arrayu64_nth(&cids, 0));
-            did_match = true;
-        }
-
-        free(repid);
-        free(msgid);
-
-        if (did_match) goto out;
-    }
-
     for (i = 0 ; i < 4 ; i++) {
         // Require message-ids in In-Reply-To header be enclosed in
         // brackets, allow bare dot-atom identifiers otherwise.
@@ -3952,8 +3909,8 @@ static int extract_convdata(struct conversations_state *state,
                 /* Do not require subjects to match if message has the
                  * $memo keyword set. */
 
-                if (!conv || i == 3 || !conv->subject || is_memo
-                    || message_subject_matchconv(&subj, conv)) {
+                if (!conv || i == 3 || !conv->subject ||
+                        message_subject_matchconv(&subj, conv)) {
                     arrayu64_add(matchlist, cid);
                 }
             }
@@ -3997,6 +3954,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     int r = 0;
     struct mailbox *local_mailbox = NULL;
     message_t *msg = message_new_from_record(mailbox, record);
+    bool is_memo = mailbox_record_hasflag(mailbox, record, "$memo");;
 
     /* extract existing conversations for this message */
     r = extract_convdata(state, msg, &msgidlist, &matchlist, &msubj);
@@ -4015,10 +3973,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         if (!record->cid) {
             record->cid = generate_conversation_id(record);
             if (record->cid) mustkeep = 1;
-        }
-        if (!mustkeep) {
-            /* Do not split conversations for messages with '$memo' flag */
-            mustkeep = mailbox_record_hasflag(mailbox, record, "$memo");
         }
         if (!mustkeep && !record->basecid) {
             /* try finding a CID in the match list, or if we came in with it */
@@ -4052,7 +4006,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     if (!conv) conv = conversation_new();
 
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
-    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate) {
+    if (conv->exists >= max_thread && !mustkeep && !record->silentupdate && !is_memo) {
         /* time to reset the conversation */
         conversation_id_t was = record->cid;
         record->cid = generate_conversation_id(record);
