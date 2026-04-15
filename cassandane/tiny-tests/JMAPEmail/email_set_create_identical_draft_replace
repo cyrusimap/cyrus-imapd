@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_identical_draft_replace ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "create drafts mailbox";
+    my $drafts_mbox = $user->mailboxes->create({ role => 'drafts' });
+
+    # Fixed messageId and sentAt ensure deterministic RFC822 output,
+    # so two creates with the same properties produce the same blob.
+    my %draftProps = (
+        from        => [ { name => "Test", email => 'test@example.com' } ],
+        keywords    => { '$draft' => JSON::true },
+        mailboxIds  => { $drafts_mbox->id => JSON::true },
+        messageId   => ['identical-draft-replace@example.com'],
+        sentAt      => '2024-06-15T12:00:00Z',
+        subject     => "Identical draft replace test",
+        to          => [ { name => "Dest", email => 'dest@example.com' } ],
+        bodyStructure => {
+            type     => 'multipart/alternative',
+            subParts => [
+                { type   => 'text/plain', partId => 'text' },
+                { type   => 'text/html',  partId => 'html' },
+            ],
+        },
+        bodyValues => {
+            text => { value => "Hello world" },
+            html => { value => "<p>Hello world</p>" },
+        },
+    );
+
+    xlog $self, "create the initial draft";
+    my $email_set_res = $jmap->request([[
+        'Email/set' => { create => { "a" => \%draftProps } },
+    ]]);
+
+    my $got = $email_set_res->single_sentence('Email/set')->arguments;
+    my $emailId1 = $got->{created}{a}{id};
+    my $blobId1 = $got->{created}{a}{blobId};
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($blobId1);
+
+    xlog $self, "replace draft with identical content in a single Email/set";
+    $email_set_res = $jmap->request([[
+        'Email/set' => {
+            create  => { "b" => \%draftProps },
+            destroy => [ $emailId1 ],
+        },
+    ]]);
+    $got = $email_set_res->single_sentence('Email/set')->arguments;
+
+    xlog $self, "create must succeed (not alreadyExists)";
+    my $emailId2 = $got->{created}{b}{id};
+    my $blobId2 = $got->{created}{b}{blobId};
+    $self->assert_not_null($emailId2);
+    $self->assert_not_null($blobId2);
+
+    xlog $self, "destroy must succeed";
+    $self->assert_str_equals($emailId1, $got->{destroyed}[0]);
+
+    xlog $self, "new email has different id but same blob (identical content)";
+    $self->assert_str_not_equals($emailId1, $emailId2);
+    $self->assert_str_equals($blobId1, $blobId2);
+}
