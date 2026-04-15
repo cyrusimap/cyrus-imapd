@@ -422,6 +422,7 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         if (myicalparameter_has_name(param, "JSID")) {
             return true;
         }
+        // XXX quirk: this got set in the former implementation
         if (myicalparameter_has_name(param, "X-JMAP-ID")) {
             return true;
         }
@@ -501,6 +502,7 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
     if (myicalproperty_has_name(prop, "JSID"))
         return true;
 
+    // XXX quirk: this got set in the former implementation
     if (myicalproperty_has_name(prop, "X-JMAP-ID"))
         return true;
 
@@ -601,6 +603,9 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
                 return true;
             }
             // Extension properties for Cyrus JMAP Calendars
+            if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
+                return true;
+            // XXX quirk: these got set in the former implementation
             if (myicalproperty_has_name(prop, "X-JMAP-ID"))
                 return true;
             if (myicalproperty_has_name(prop, "X-JMAP-HIDE-ATTENDEES"))
@@ -613,11 +618,9 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
                 return true;
             if (myicalproperty_has_name(prop, "X-JMAP-SENT-BY"))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
-                return true;
-            // Our previous jscalendar draft implementation erroneously
-            // used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
-            // not the VALARM. We support it for backwards compatibility.
+            // XXX quirk: our previous jscalendar draft implementation
+            // erroneously used the X-APPLE-DEFAULT-ALARM annotation ino
+            // the VEVENT, not the VALARM. We support it for backwards compatibility.
             if (myicalproperty_has_name(prop, "X-APPLE-DEFAULT-ALARM"))
                 return true;
 
@@ -5078,7 +5081,7 @@ static void links_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
                     json_object_set_new(jlink, "size", json_integer(num));
                 }
             }
-            // Support legacy X-parameter.
+            // XXX quirk: these got set in the former implementation
             else if (param_kind == ICAL_X_PARAMETER) {
                 if (myicalparameter_has_name(param, "X-JMAP-REL")) {
                     const char *rel = icalparameter_get_value_as_string(param);
@@ -6049,7 +6052,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
             const char *s = icalparameter_get_sentby(param);
             json_object_set_new(jobj, "sentBy", json_string(s));
         }
-        // Read legacy extension property.
+        // XXX quirk: this got set in the former implementation
         else if ((prop = myicalcomponent_get_property_by_name(
                         comp, "X-JMAP-SENT-BY"))) {
             icalvalue *v = icalproperty_get_value(prop);
@@ -6079,9 +6082,10 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
 
     if ((prop = myicalcomponent_get_property_by_name(
              comp, "X-JMAP-USEDEFAULTALERTS")) ||
-        // Our previous jscalendar draft implementation erroneously
-        // used the X-APPLE-DEFAULT-ALARM annotation in the VEVENT,
-        // not the VALARM. We support it for backwards compatibility.
+        // XXX quirk: our previous jscalendar draft implementation
+        // erroneously used the X-APPLE-DEFAULT-ALARM annotation in
+        // the VEVENT, not the VALARM. We support it for backwards
+        // compatibility.
         (prop = myicalcomponent_get_property_by_name(
              comp, "X-APPLE-DEFAULT-ALARM"))) {
         const char *v = icalproperty_get_value_as_string(prop);
@@ -6123,6 +6127,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
             jobj_set_icalprop(
                 cfg, jobj, "privacy", json_string("secret"), prop);
     }
+    // XXX quirk: this got set in the former implementation
     else if ((prop = myicalcomponent_get_property_by_name(
              comp, "X-JMAP-PRIVACY"))) {
         icalvalue *v = icalproperty_get_value(prop);
