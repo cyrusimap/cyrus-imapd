@@ -6649,6 +6649,14 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
     }
     if (r) goto done;
 
+    if (config_auditlog)
+        syslog(LOG_NOTICE, "auditlog: rename sessionid=<%s> "
+                           "oldmailbox=<%s> newmailbox=<%s> uniqueid=<%s>",
+                           session_id(),
+                           mailbox_name(oldmailbox), newname,
+                           mailbox_uniqueid(&newmailbox));
+
+
     /* unless on a replica, bump the modseq */
     if (!silent) mailbox_modseq_dirty(oldmailbox);
 
