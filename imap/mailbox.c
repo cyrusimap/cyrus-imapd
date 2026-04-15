@@ -6506,6 +6506,8 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
     }
     if (r) goto done;
 
+    auditlog_mailbox("rename", oldmailbox, &newmailbox, NULL);
+
     /* unless on a replica, bump the modseq */
     if (!silent) mailbox_modseq_dirty(oldmailbox);
 
