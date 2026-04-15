@@ -5741,11 +5741,29 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
         if (kind != ICAL_RDATE_PROPERTY && kind != ICAL_EXDATE_PROPERTY)
             continue;
 
+        struct icaldurationtype dur = icaldurationtype_null_duration();
+
         icaltimetype t = icaltime_null_time();
-        if (kind == ICAL_RDATE_PROPERTY)
-            t = icalproperty_get_rdate(prop).time;
-        else
-            t = icalproperty_get_exdate(prop);
+        if (kind == ICAL_RDATE_PROPERTY) {
+            struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
+            if (!icaltime_is_null_time(rdate.time)) {
+                t = icalproperty_get_rdate(prop).time;
+            } else if (icalperiodtype_is_valid_period(rdate.period) &&
+                       !icalperiodtype_is_null_period(rdate.period)) {
+                t = rdate.period.start;
+
+                if (!icaltime_is_null_time(rdate.period.end)) {
+                    dur =
+                        icalduration_from_times(rdate.period.end, rdate.period.start);
+                } else {
+                    dur = rdate.period.duration;
+                }
+
+                dur = icaldurationtype_normalize(dur);
+            }
+        } else {
+          t = icalproperty_get_exdate(prop);
+        }
 
         if (icaltime_is_null_time(t)) continue;
 
@@ -5761,8 +5779,14 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
         }
 
         json_t *jovr = json_object();
-        if (kind == ICAL_EXDATE_PROPERTY)
+        if (kind == ICAL_EXDATE_PROPERTY) {
             json_object_set_new(jovr, "excluded", json_true());
+        }
+        else if (!icaldurationtype_is_null_duration(dur)) {
+            const char *s = icaldurationtype_as_ical_string(dur);
+            json_object_set_new(jovr, "duration", json_string(s));
+        }
+
         const char *recurid = localtime_from_icaltime(t, &buf);
         json_object_set_new(jovrs, recurid, jovr);
     }
