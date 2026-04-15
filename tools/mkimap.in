@@ -1,11 +1,15 @@
-#!/usr/bin/perl
+#!@PERL@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 
 require 5;
 
-#use strict; # XXX does not compile with strict :(
+use strict;
 use warnings;
+
+my @configs;
+my @parts;
+my $confdir;
 
 sub read_conf {
     my $file = shift;
@@ -36,18 +40,18 @@ sub read_conf {
     close CONF;
 }
 
-$imapdconf = shift || "/etc/imapd.conf";
+my $imapdconf = shift || "/etc/imapd.conf";
 
 push @configs, $imapdconf;
 
-while ($conf = shift @configs) {
+while (my $conf = shift @configs) {
     read_conf($conf);
 }
 
 defined $confdir or die "'configdirectory:' in $imapdconf is missing";
 @parts or die "No partition defined in $imapdconf";
-$d = $confdir;
 
+my $d = $confdir;
 print "configuring $d...\n";
 
 chdir $d or die "couldn't change to $d";
@@ -60,7 +64,7 @@ mkdir "msg", 0755 || warn "can't create $d/msg: $!";
 mkdir "ptclient", 0755 || warn "can't create $d/ptclient: $!";
 mkdir "sync", 0755 || warn "can't create $d/sync: $!";
 
-while ($part = shift @parts) {
+while (my $part = shift @parts) {
     print "creating $part...\n";
     mkdir $part, 0755 || warn "can't create $part: $!";
     chdir $part or die "couldn't change to partition $part";
@@ -69,3 +73,5 @@ while ($part = shift @parts) {
 }
 
 print "done\n";
+
+# vim: set ft=perl :
