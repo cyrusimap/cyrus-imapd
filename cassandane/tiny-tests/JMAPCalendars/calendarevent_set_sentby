@@ -21,6 +21,10 @@ sub test_calendarevent_set_sentby
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
                     sentBy => 'sender@example.net',
+                    organizerCalendarAddress => 'mailto:organizer@local',
+                    participants => {
+                        1 => { calendarAddress => 'mailto:attendee@local' },
+                    }
                 },
             },
         }, 'R1'],
