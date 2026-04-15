@@ -452,6 +452,7 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         case ICAL_SCHEDULEAGENT_PARAMETER:
         case ICAL_SCHEDULEFORCESEND_PARAMETER:
         case ICAL_SCHEDULESTATUS_PARAMETER:
+        case ICAL_SENTBY_PARAMETER:
             return true;
         default:
             if (myicalparameter_has_name(param, "X-DTSTAMP") ||
@@ -2994,11 +2995,9 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "sentBy"))) {
         const char *s = json_string_value(jval);
-        if (s) {
-            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-SENT-BY");
-            icalproperty_set_value(prop, icalvalue_new_text(s));
-            icalcomponent_add_property(comp, prop);
+        icalproperty *orga = myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY);
+        if (s && orga) {
+            icalproperty_add_parameter(orga, icalparameter_new_sentby(s));
         }
     }
 
@@ -5979,6 +5978,23 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         }
     }
 
+    if ((prop = myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY))) {
+        icalparameter *param =
+            myicalproperty_get_parameter(prop, ICAL_SENTBY_PARAMETER);
+        if (param) {
+            const char *s = icalparameter_get_sentby(param);
+            json_object_set_new(jobj, "sentBy", json_string(s));
+        }
+        // Read legacy extension property.
+        else if ((prop = myicalcomponent_get_property_by_name(
+                        comp, "X-JMAP-SENT-BY"))) {
+            icalvalue *v = icalproperty_get_value(prop);
+            const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
+                icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
+            if (s) json_object_set_new(jobj, "sentBy", json_string(s));
+        }
+    }
+
     if ((prop = myicalcomponent_get_property(comp, ICAL_UID_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_uid(prop));
         jobj_set_icalprop(cfg, jobj, "uid", jval, prop);
@@ -6053,14 +6069,6 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
             json_object_set_new(jobj, "privacy", json_string(buf_lcase(&buf)));
             buf_reset(&buf);
         }
-    }
-
-    if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-SENT-BY"))) {
-        icalvalue *v = icalproperty_get_value(prop);
-        const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
-            icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
-        if (s) json_object_set_new(jobj, "sentBy", json_string(s));
     }
 
     recuroverrides_from_ical(cfg, comp, jobj, overrides);
