@@ -1920,11 +1920,8 @@ static void links_to_ical(jscalendar_cfg_t *cfg,
 
         if (JNOTNULL(jval = json_object_get(jlink, "rel"))) {
             const char *rel = json_string_value(jval);
-            if (icalproperty_isa(prop) != ICAL_IMAGE_PROPERTY
-                || strcasecmp("icon", rel)) {
-                icalproperty_add_parameter(prop,
-                                           icalparameter_new_linkrel(rel));
-            }
+            icalproperty_add_parameter(prop,
+                    icalparameter_new_linkrel(rel));
         }
 
         if (JNOTNULL(jval = json_object_get(jlink, "size"))) {
