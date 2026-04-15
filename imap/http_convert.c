@@ -135,6 +135,7 @@ static int convert_to_jscal(struct transaction_t *txn)
     jscalendar_cfg_t jscal_cfg = {
         .emailalert_default_uri = httpd_userid,
         .use_icalendar_convprops = true,
+        .no_quirk = true,
     };
     int ret = 0;
 
@@ -182,6 +183,7 @@ static int convert_to_ical(struct transaction_t *txn)
     jscalendar_cfg_t jscal_cfg = {
         .emailalert_default_uri = httpd_userid,
         .use_icalendar_convprops = true,
+        .no_quirk = true,
     };
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     int ret = 0;

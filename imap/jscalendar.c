@@ -4917,7 +4917,7 @@ static void description_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void keywords_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
+static void keywords_from_ical(jscalendar_cfg_t *cfg,
                                icalcomponent *comp,
                                json_t *jobj)
 {
@@ -4927,8 +4927,8 @@ static void keywords_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
     // if COLOR wasn't set. This is because clients such as Fantastical
     // set colors in CATEGORIES (they now switched to COLOR). Preserve
     // quirk but in contrast to the former implementation, do not omit
-    // the color-named keyword.
-    bool set_color =
+    // the color-named keyword even in quirk mode.
+    bool set_color = !cfg->no_quirk &&
         icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT &&
         !myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY);
 

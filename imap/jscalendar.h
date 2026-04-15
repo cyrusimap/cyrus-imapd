@@ -45,6 +45,13 @@ typedef struct {
      *  to iCalendar and set when converting to JSCalendar.
      */
     bool use_icalendar_convprops;
+
+    /**
+     *  Toggles if to preserve quirks of the former JSCalendar conversion
+     *  code in Cyrus. The default is to preserve quirks.
+     */
+    bool no_quirk;
+
 } jscalendar_cfg_t;
 
 /** @brief Convert a JSCalendar object to an iCalendar object.
