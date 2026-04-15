@@ -1341,16 +1341,36 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     }
     cdata->comp_flags.transp = transp;
 
-    /* Determine JSCalendar privacy */
-    cdata->comp_flags.privacy = 0;
-    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
+    /* Determine privacy */
+    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
     if (prop) {
-        const char *val = icalproperty_get_value_as_string(prop);
-        if (val) {
-            if (!strcasecmp(val, "secret"))
+        switch (icalproperty_get_class(prop)) {
+            case ICAL_CLASS_CONFIDENTIAL:
                 cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-            else if (!strcasecmp(val, "private"))
+                break;
+            case ICAL_CLASS_PUBLIC:
+                cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+                break;
+            default:
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+        }
+    }
+    else {
+        // Between 2022 and 2026, Cyrus used X-JMAP-PRIVACY for the
+        // JSCalendar "privacy" property.
+        // See 7ed6bbcd64b550eee9903b91c213442243edfebb
+        prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
+        if (prop) {
+            const char *val = icalproperty_get_value_as_string(prop);
+            if (val) {
+                if (!strcasecmp(val, "secret"))
+                    cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
+                else if (!strcasecmp(val, "public"))
+                    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+                else
+                    cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+            }
         }
     }
 
