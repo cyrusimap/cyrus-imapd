@@ -741,8 +741,10 @@ static int deliver_merge_request(const char *attendee,
                 icalproperty_add_parameter(prop, param);
             }
 
-            /* Copy over JMAP privacy from current component to iTIP component */
-                        prop =
+            /* Copy over privacy from current component to iTIP component */
+            prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+            // CLASS takes precedence over legacy X-JMAP-PRIVACY.
+            if (!prop) prop =
                 icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
@@ -778,9 +780,12 @@ static int deliver_merge_request(const char *attendee,
                                                icalproperty_clone(prop));
                 }
 
-                /* Inherit JMAP privacy from master */
-                prop = icalcomponent_get_x_property_by_name(master,
-                                                            JMAPICAL_XPROP_PRIVACY);
+                /* Inherit privacy from master */
+                prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+                // CLASS takes precedence over legacy X-JMAP-PRIVACY.
+                if (!prop) prop =
+                    icalcomponent_get_x_property_by_name(master,
+                            JMAPICAL_XPROP_PRIVACY);
                 if (prop) {
                     icalcomponent_add_property(new_comp,
                                                icalproperty_clone(prop));
@@ -1013,6 +1018,11 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp, bool remove_transp)
             if (!ical_categories_is_color(prop)) break;
 
             GCC_FALLTHROUGH
+
+        case ICAL_CLASS_PROPERTY:
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+            break;
 
         case ICAL_COLOR_PROPERTY:
             icalcomponent_remove_property(comp, prop);
