@@ -4923,6 +4923,15 @@ static void keywords_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
 {
     json_t *jkeywords = json_object();
 
+    // XXX quirk: the former implementation read color from CATEGORIES
+    // if COLOR wasn't set. This is because clients such as Fantastical
+    // set colors in CATEGORIES (they now switched to COLOR). Preserve
+    // quirk but in contrast to the former implementation, do not omit
+    // the color-named keyword.
+    bool set_color =
+        icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT &&
+        !myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY);
+
     icalproperty *prop;
     icalpropiter prop_iter;
     myicalcomponent_foreach_property(
@@ -4930,6 +4939,10 @@ static void keywords_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
     {
         const char *category = icalproperty_get_categories(prop);
         json_object_set_new(jkeywords, category, json_true());
+
+        if (set_color && ical_categories_is_color(prop)) {
+            json_object_set_new(jobj, "color", json_string(category));
+        }
     }
 
     if (json_object_size(jkeywords))
