@@ -4065,7 +4065,10 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
             if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("color", key)) {
-            if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
+            const char *s = json_string_value(jval);
+            if (!s || !ical_is_valid_color(s)) {
+                jmap_parser_invalid(parser, key);
+            }
         }
         else if (!strcmp("created", key)) {
             if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
@@ -5937,7 +5940,9 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY))) {
         const char *color = icalproperty_get_color(prop);
-        jobj_set_icalprop(cfg, jobj, "color", json_string(color), prop);
+        if (ical_is_valid_color(color)) {
+            jobj_set_icalprop(cfg, jobj, "color", json_string(color), prop);
+        }
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_CREATED_PROPERTY))) {
