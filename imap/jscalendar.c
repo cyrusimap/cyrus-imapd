@@ -1366,6 +1366,42 @@ static icalproperty *jobj_get_icalprop(jscalendar_cfg_t *cfg,
     return prop;
 }
 
+static enum icalvalue_kind jobj_get_icalprop_valuetype(jscalendar_cfg_t *cfg,
+                                                       json_t *jobj,
+                                                       const char *proppath,
+                                                       icalproperty_kind prop_kind)
+{
+    if (!cfg->use_icalendar_convprops) return ICAL_NO_VALUE;
+
+    json_t *jcomp = json_object_get(jobj, "iCalendar");
+    if (jcomp) {
+        json_t *jconvprops = json_object_get(jcomp, "convertedProperties");
+        if (jconvprops) {
+            json_t *jconvprop = json_object_get(jconvprops, proppath);
+            if (jconvprop) {
+                // Match property name.
+                if (prop_kind != ICAL_ANY_PROPERTY) {
+                    const char *prop_name =
+                        json_string_value(json_object_get(jconvprop, "name"));
+                    if (!prop_name ||
+                            icalproperty_string_to_kind(prop_name) != prop_kind) {
+                        return ICAL_NO_VALUE;
+                    }
+                }
+
+                // Determine value type.
+                const char *value_type =
+                    json_string_value(json_object_get(jconvprop, "valueType"));
+                if (value_type) {
+                    return icalvalue_string_to_kind(value_type);
+                }
+            }
+        }
+    }
+
+    return ICAL_NO_VALUE;
+}
+
 // ---------------
 
 static const char *const JSCAL_UUID5NAMESPACE =
@@ -2818,6 +2854,7 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
     if (JNULL(jovrs)) return;
 
     icalcomponent *ical = icalcomponent_get_parent(comp);
+    struct buf buf = BUF_INITIALIZER;
 
     json_t *jmaster = json_copy(jentry);
     json_object_del(jmaster, "recurrenceId");
@@ -2843,6 +2880,13 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
 
         sanitize_override_patch(jpatch);
 
+        // Check if this was an RDATE.
+        buf_setcstr(&buf, "recurrenceOverrides/");
+        buf_appendcstr(&buf, recurid);
+        enum icalvalue_kind rdate_value_kind =
+            jobj_get_icalprop_valuetype(cfg,
+                jentry, buf_cstring(&buf), ICAL_RDATE_PROPERTY);
+
         if (!json_object_size(jpatch)) {
             struct icaldatetimeperiodtype rdate = { .time = icalrecurid };
             icalproperty *prop = icalproperty_new_rdate(rdate);
@@ -2851,6 +2895,19 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
         }
         else if (json_object_get(jpatch, "excluded")) {
             icalproperty *prop = icalproperty_new_exdate(icalrecurid);
+            if (tzid) icalproperty_add_parameter(prop, tzid);
+            icalcomponent_add_property(comp, prop);
+        }
+        else if (json_object_size(jpatch) == 1 &&
+                 json_object_get(jpatch, "duration") &&
+                 rdate_value_kind == ICAL_PERIOD_VALUE) {
+            const char *dur =
+                json_string_value(json_object_get(jpatch, "duration"));
+            struct icaldatetimeperiodtype rdate = {
+                .period.start = icalrecurid,
+                .period.duration = icaldurationtype_from_string(dur)
+            };
+            icalproperty *prop = icalproperty_new_rdate(rdate);
             if (tzid) icalproperty_add_parameter(prop, tzid);
             icalcomponent_add_property(comp, prop);
         }
@@ -2876,6 +2933,7 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
     }
 
     json_decref(jmaster);
+    buf_free(&buf);
 }
 
 static void entry_to_ical(jscalendar_cfg_t *cfg,
@@ -5824,6 +5882,14 @@ static void recuroverrides_from_ical(jscalendar_cfg_t *cfg,
 
         const char *recurid = localtime_from_icaltime(t, &buf);
         json_object_set_new(jovrs, recurid, jovr);
+
+        if (icalproperty_isa(prop) == ICAL_RDATE_PROPERTY &&
+            icalvalue_isa(icalproperty_get_value(prop)) == ICAL_PERIOD_VALUE) {
+            // Buffer already holds recurrence-id, prepend it with path.
+            buf_insertcstr(&buf, 0, "recurrenceOverrides/");
+            jobj_set_icalprop_valuetype(cfg, jobj, buf_cstring(&buf), prop);
+            buf_reset(&buf);
+        }
     }
 
     for (int i = 0; i < ptrarray_size(overrides); i++) {
