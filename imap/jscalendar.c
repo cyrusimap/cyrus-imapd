@@ -1262,10 +1262,10 @@ static icalcomponent *jobj_get_icalcomp(jscalendar_cfg_t *cfg,
     if (jcomp) {
         const char *name = json_string_value(json_object_get(jcomp, "name"));
         if (name) {
-            json_t *jcalprops = json_object_get(jcomp, "properties");
+            json_t *jcalprops = json_incref(json_object_get(jcomp, "properties"));
             if (!jcalprops) jcalprops = json_array();
 
-            json_t *jcalcomps = json_object_get(jcomp, "components");
+            json_t *jcalcomps = json_incref(json_object_get(jcomp, "components"));
             if (!jcalcomps) jcalcomps = json_array();
 
             json_t *jcal = json_pack("[s,o,o]", name, jcalprops, jcalcomps);
