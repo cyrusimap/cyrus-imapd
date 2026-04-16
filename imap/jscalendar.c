@@ -1268,7 +1268,7 @@ static icalcomponent *jobj_get_icalcomp(jscalendar_cfg_t *cfg,
             json_t *jcalcomps = json_object_get(jcomp, "components");
             if (!jcalcomps) jcalcomps = json_array();
 
-            json_t *jcal = json_pack("[s,O,O]", name, jcalprops, jcalcomps);
+            json_t *jcal = json_pack("[s,o,o]", name, jcalprops, jcalcomps);
             comp = jcal_array_as_icalcomponent(jcal);
 
             if (want_kind != ICAL_ANY_COMPONENT
@@ -1400,6 +1400,17 @@ static enum icalvalue_kind jobj_get_icalprop_valuetype(jscalendar_cfg_t *cfg,
     }
 
     return ICAL_NO_VALUE;
+}
+
+static bool jobj_has_icalquirk(json_t *jobj, const char *quirk)
+{
+    json_t *jcomp = json_object_get(jobj, "iCalendar");
+    if (!jcomp) return false;
+
+    json_t *jquirks = json_object_get(jcomp, "cyrusimap.org:quirks");
+    if (!jquirks) return false;
+
+    return json_is_true(json_object_get(jquirks, quirk));
 }
 
 // ---------------
@@ -2191,11 +2202,10 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
 
         json_t *jval = json_object_get(jpart, "calendarAddress");
         const char *caladdr = json_string_value(jval);
-        if (caladdr) {
-            bool is_organizer =
-                organizer
-                && !strcmp(caladdr, icalproperty_get_organizer(organizer));
+        bool is_organizer = organizer &&
+            !strcmpsafe(caladdr, icalproperty_get_organizer(organizer));
 
+        if (caladdr) {
             attendee = jobj_get_icalprop(
                 cfg,
                 jobj,
@@ -2484,7 +2494,7 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
         }
 
         // Make sure either ATTENDEE or PARTICIPANT is set.
-        if (caladdr && !attendee && !part) {
+        if (caladdr && !attendee && !part && !is_organizer) {
             attendee = icalproperty_new_attendee(caladdr);
         }
 
@@ -2504,11 +2514,9 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
         // Set object key in iCalendar.
         // Set it on both the PARTICIPANT and ATTENDEE, as we can't rely
         // on clients to preserve the PARTICIPANT component.
-        // Only set it on the ORGANIZER if there is no ATTENDEE for it.
         if (attendee) jsid_to_prop(attendee, key, false);
         if (part) jsid_to_comp(part, key);
-        if (organizer && !attendee)
-            jsid_to_prop(organizer, key, false);
+        if (organizer && is_organizer) jsid_to_prop(organizer, key, false);
 
         // Set UID, if none set already.
         if (part && !icalcomponent_get_uid(part)) {
@@ -2516,6 +2524,22 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
         }
 
         jmap_parser_pop(&parser);
+    }
+
+    // Make sure that at least one ATTENDEE is set if ORGANIZER is set.
+    if (organizer &&
+            !icalcomponent_count_properties(comp, ICAL_ATTENDEE_PROPERTY) &&
+            !jobj_has_icalquirk(jobj, "no-organizer-attendee")) {
+        // Clone ORGANIZER as ATTENDEE.
+        const char *s = icalproperty_get_organizer(organizer);
+        icalproperty *attendee = icalproperty_new_attendee(s);
+        icalparamiter param_iter;
+        icalparameter *param;
+        myicalproperty_foreach_parameter(organizer, ICAL_ANY_PARAMETER,
+                param, param_iter) {
+            icalproperty_add_parameter(attendee, icalparameter_clone(param));
+        }
+        icalcomponent_add_property(comp, attendee);
     }
 
     jmap_parser_fini(&parser);
@@ -3241,7 +3265,8 @@ static bool is_intarray(json_t *jarray, json_int_t min, json_int_t max)
     return true;
 }
 
-static void validate_jicalproperty(struct jmap_parser *parser, json_t *jprop)
+static void validate_jicalproperty(jscalendar_cfg_t *cfg __attribute__((unused)),
+                                   struct jmap_parser *parser, json_t *jprop)
 {
     if (!json_is_object(jprop)) {
         jmap_parser_invalid(parser, NULL);
@@ -3271,7 +3296,8 @@ static void validate_jicalproperty(struct jmap_parser *parser, json_t *jprop)
     }
 }
 
-static void validate_jicalcomponent(struct jmap_parser *parser, json_t *jcomp)
+static void validate_jicalcomponent(jscalendar_cfg_t *cfg,
+                                    struct jmap_parser *parser, json_t *jcomp)
 {
     if (!json_is_object(jcomp)) {
         jmap_parser_invalid(parser, NULL);
@@ -3297,7 +3323,7 @@ static void validate_jicalcomponent(struct jmap_parser *parser, json_t *jcomp)
                 json_object_foreach(jval, path, jprop)
                 {
                     jmap_parser_push(parser, path);
-                    validate_jicalproperty(parser, jprop);
+                    validate_jicalproperty(cfg, parser, jprop);
                     jmap_parser_pop(parser);
                 }
                 jmap_parser_pop(parser);
@@ -3311,13 +3337,18 @@ static void validate_jicalcomponent(struct jmap_parser *parser, json_t *jcomp)
         else if (!strcmp("properties", key)) {
             if (!json_is_array(jval)) jmap_parser_invalid(parser, key);
         }
+        else if (!strcmp("cyrusimap.org:quirks", key)) {
+            if (!is_stringset(jval, NULL))
+                jmap_parser_invalid(parser, key);
+        }
         else {
             jmap_parser_invalid(parser, key);
         }
     }
 }
 
-static void validate_relatedto(struct jmap_parser *parser, json_t *jrelto)
+static void validate_relatedto(jscalendar_cfg_t *cfg __attribute__((unused)),
+                               struct jmap_parser *parser, json_t *jrelto)
 {
     if (!json_is_object(jrelto)) {
         jmap_parser_invalid(parser, NULL);
@@ -3359,7 +3390,8 @@ static void validate_relatedto(struct jmap_parser *parser, json_t *jrelto)
     }
 }
 
-static void validate_trigger(struct jmap_parser *parser, json_t *jtrigger)
+static void validate_trigger(jscalendar_cfg_t *cfg __attribute__((unused)),
+                             struct jmap_parser *parser, json_t *jtrigger)
 {
     if (!json_is_object(jtrigger)) {
         jmap_parser_invalid(parser, NULL);
@@ -3413,7 +3445,8 @@ static void validate_trigger(struct jmap_parser *parser, json_t *jtrigger)
     }
 }
 
-static void validate_alerts(struct jmap_parser *parser, json_t *jalerts)
+static void validate_alerts(jscalendar_cfg_t *cfg,
+                            struct jmap_parser *parser, json_t *jalerts)
 {
     if (!json_is_object(jalerts)) {
         jmap_parser_invalid(parser, NULL);
@@ -3447,14 +3480,14 @@ static void validate_alerts(struct jmap_parser *parser, json_t *jalerts)
             else if (!strcmp("relatedTo", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_relatedto(parser, jval);
+                    validate_relatedto(cfg, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
             else if (!strcmp("trigger", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_trigger(parser, jval);
+                    validate_trigger(cfg, parser, jval);
                     jmap_parser_pop(parser);
                 }
                 else {
@@ -3465,7 +3498,7 @@ static void validate_alerts(struct jmap_parser *parser, json_t *jalerts)
             else if (!strcmp("iCalendar", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_jicalcomponent(parser, jval);
+                    validate_jicalcomponent(cfg, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3482,7 +3515,8 @@ static void validate_alerts(struct jmap_parser *parser, json_t *jalerts)
     }
 }
 
-static void validate_links(struct jmap_parser *parser, json_t *jlinks)
+static void validate_links(jscalendar_cfg_t *cfg __attribute__((unused)),
+                           struct jmap_parser *parser, json_t *jlinks)
 {
     if (!json_is_object(jlinks)) {
         jmap_parser_invalid(parser, NULL);
@@ -3548,7 +3582,8 @@ static void validate_links(struct jmap_parser *parser, json_t *jlinks)
     }
 }
 
-static void validate_locations(struct jmap_parser *parser, json_t *jlocs)
+static void validate_locations(jscalendar_cfg_t *cfg,
+                               struct jmap_parser *parser, json_t *jlocs)
 {
     if (!json_is_object(jlocs)) {
         jmap_parser_invalid(parser, NULL);
@@ -3579,7 +3614,7 @@ static void validate_locations(struct jmap_parser *parser, json_t *jlocs)
             else if (!strcmp("links", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_links(parser, jval);
+                    validate_links(cfg, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3592,7 +3627,7 @@ static void validate_locations(struct jmap_parser *parser, json_t *jlocs)
             // Extension properties
             else if (!strcmp("iCalendar", key)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(parser, jval);
+                validate_jicalcomponent(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
             else if (!is_vendorext_key(key)) {
@@ -3604,7 +3639,8 @@ static void validate_locations(struct jmap_parser *parser, json_t *jlocs)
     }
 }
 
-static void validate_participants(struct jmap_parser *parser,
+static void validate_participants(jscalendar_cfg_t *cfg,
+                                  struct jmap_parser *parser,
                                   const char *entry_type,
                                   json_t *jparts)
 {
@@ -3658,7 +3694,7 @@ static void validate_participants(struct jmap_parser *parser,
             else if (!strcmp("links", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_links(parser, jval);
+                    validate_links(cfg, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3698,7 +3734,7 @@ static void validate_participants(struct jmap_parser *parser,
             // Extension properties
             else if (!strcmp("iCalendar", key)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(parser, jval);
+                validate_jicalcomponent(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
             else if (!is_vendorext_key(key)) {
@@ -3723,7 +3759,8 @@ static void validate_participants(struct jmap_parser *parser,
     }
 }
 
-static void validate_virtuallocations(struct jmap_parser *parser,
+static void validate_virtuallocations(jscalendar_cfg_t *cfg __attribute__((unused)),
+                                      struct jmap_parser *parser,
                                       json_t *jvlocs)
 {
     if (!json_is_object(jvlocs)) {
@@ -3783,7 +3820,8 @@ static void validate_virtuallocations(struct jmap_parser *parser,
     }
 }
 
-static void validate_recurrencerule_nday(struct jmap_parser *parser,
+static void validate_recurrencerule_nday(jscalendar_cfg_t *cfg __attribute__((unused)),
+                                         struct jmap_parser *parser,
                                          json_t *jnday)
 {
     if (!json_is_object(jnday)) {
@@ -3830,7 +3868,8 @@ static void validate_recurrencerule_nday(struct jmap_parser *parser,
     }
 }
 
-static void validate_recurrencerule(struct jmap_parser *parser, json_t *jrrule)
+static void validate_recurrencerule(jscalendar_cfg_t *cfg,
+                                    struct jmap_parser *parser, json_t *jrrule)
 {
     if (!json_is_object(jrrule)) {
         jmap_parser_invalid(parser, NULL);
@@ -3852,7 +3891,7 @@ static void validate_recurrencerule(struct jmap_parser *parser, json_t *jrrule)
                 json_array_foreach(jval, i, jnday)
                 {
                     jmap_parser_push_index(parser, key, i, NULL);
-                    validate_recurrencerule_nday(parser, jnday);
+                    validate_recurrencerule_nday(cfg, parser, jnday);
                     jmap_parser_pop(parser);
                 }
                 if (i < json_array_size(jval)) jmap_parser_invalid(parser, key);
@@ -3986,9 +4025,11 @@ static void validate_recurrencerule(struct jmap_parser *parser, json_t *jrrule)
     }
 }
 
-static void validate_entry(struct jmap_parser *parser, json_t *jentry);
+static void validate_entry(jscalendar_cfg_t *cfg,
+                           struct jmap_parser *parser, json_t *jentry);
 
-static void validate_recurrenceoverrides(struct jmap_parser *parser,
+static void validate_recurrenceoverrides(jscalendar_cfg_t *cfg,
+                                         struct jmap_parser *parser,
                                          json_t *jentry,
                                          json_t *jovrs)
 {
@@ -4028,7 +4069,7 @@ static void validate_recurrenceoverrides(struct jmap_parser *parser,
                 // The patch-object is valid, let's validate if the resulting
                 // recurrence override is valid, too.
                 struct jmap_parser ovrparser = JMAP_PARSER_INITIALIZER;
-                validate_entry(&ovrparser, jovr);
+                validate_entry(cfg, &ovrparser, jovr);
                 if (json_array_size(ovrparser.invalid)) {
                     // The override is invalid. Prune the list of invalid
                     // properties and keep only the ones set in the patch.
@@ -4087,7 +4128,8 @@ static void validate_recurrenceoverrides(struct jmap_parser *parser,
     json_decref(jmaster);
 }
 
-static void validate_entry(struct jmap_parser *parser, json_t *jentry)
+static void validate_entry(jscalendar_cfg_t *cfg,
+                           struct jmap_parser *parser, json_t *jentry)
 {
     if (!json_is_object(jentry)) {
         jmap_parser_invalid(parser, NULL);
@@ -4119,7 +4161,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("alerts", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_alerts(parser, jval);
+                validate_alerts(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4167,7 +4209,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("links", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_links(parser, jval);
+                validate_links(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4177,7 +4219,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("locations", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_locations(parser, jval);
+                validate_locations(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4200,7 +4242,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("participants", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_participants(parser, entry_type, jval);
+                validate_participants(cfg, parser, entry_type, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4233,21 +4275,21 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("recurrenceOverrides", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_recurrenceoverrides(parser, jentry, jval);
+                validate_recurrenceoverrides(cfg, parser, jentry, jval);
                 jmap_parser_pop(parser);
             }
         }
         else if (!strcmp("recurrenceRule", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_recurrencerule(parser, jval);
+                validate_recurrencerule(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
         else if (!strcmp("relatedTo", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_relatedto(parser, jval);
+                validate_relatedto(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4285,7 +4327,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("virtualLocations", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_virtuallocations(parser, jval);
+                validate_virtuallocations(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4293,7 +4335,7 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
         else if (!strcmp("iCalendar", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(parser, jval);
+                validate_jicalcomponent(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4362,9 +4404,33 @@ static void validate_entry(struct jmap_parser *parser, json_t *jentry)
             }
         }
     }
+
+    // Validate co-existence of organizerCalendarAddress and participants.
+    bool has_organizer =
+        JNOTNULL(json_object_get(jentry, "organizerCalendarAddress"));
+    bool has_scheduled_participant = false;
+    json_t *jpart;
+    json_object_foreach(json_object_get(jentry, "participants"), key, jpart) {
+        if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+            has_scheduled_participant = true;
+            break;
+        }
+    }
+
+    if (has_organizer != has_scheduled_participant) {
+        if (!jobj_has_icalquirk(jentry, "no-organizer-attendee")) {
+            if (!has_organizer) {
+                jmap_parser_invalid(parser, "organizerCalendarAddress");
+            }
+            else if (!has_scheduled_participant) {
+                jmap_parser_invalid(parser, "participants");
+            }
+        }
+    }
 }
 
-static void validate_group(struct jmap_parser *parser, json_t *jgroup)
+static void validate_group(jscalendar_cfg_t *cfg,
+                           struct jmap_parser *parser, json_t *jgroup)
 {
     if (!json_is_object(jgroup)) {
         jmap_parser_invalid(parser, NULL);
@@ -4398,7 +4464,7 @@ static void validate_group(struct jmap_parser *parser, json_t *jgroup)
             if (json_is_array(jval)) {
                 for (size_t i = 0; i < json_array_size(jval); i++) {
                     jmap_parser_push_index(parser, key, i, NULL);
-                    validate_entry(parser, json_array_get(jval, i));
+                    validate_entry(cfg, parser, json_array_get(jval, i));
                     jmap_parser_pop(parser);
                 }
             }
@@ -4412,7 +4478,7 @@ static void validate_group(struct jmap_parser *parser, json_t *jgroup)
         else if (!strcmp("links", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_links(parser, jval);
+                validate_links(cfg, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4437,7 +4503,7 @@ static void validate_group(struct jmap_parser *parser, json_t *jgroup)
         // Extension properties
         else if (!strcmp("iCalendar", key)) {
             jmap_parser_push(parser, key);
-            validate_jicalcomponent(parser, jval);
+            validate_jicalcomponent(cfg, parser, jval);
             jmap_parser_pop(parser);
         }
         else if (!is_vendorext_key(key)) {
@@ -4537,10 +4603,10 @@ EXPORTED icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
 
     const char *type = json_string_value(json_object_get(jobj, "@type"));
     if (!strcasecmpsafe(type, "Group")) {
-        validate_group(parser, jobj);
+        validate_group(cfg, parser, jobj);
     }
     else {
-        validate_entry(parser, jobj);
+        validate_entry(cfg, parser, jobj);
     }
 
     if (json_array_size(parser->invalid))
@@ -4731,6 +4797,25 @@ static void jobj_set_icalprop(jscalendar_cfg_t *cfg,
 {
     json_object_set_new(jobj, key, jval);
     jobj_set_icalprop_params(cfg, jobj, key, prop);
+}
+
+static void jobj_set_icalquirk(jscalendar_cfg_t *cfg,
+                               icalcomponent *comp,
+                               json_t *jobj,
+                               const char *quirk)
+{
+    if (!cfg->use_icalendar_convprops) return;
+
+    json_t *jcomp = jobj_set_icalcomp_name(cfg, jobj, comp);
+    if (!jcomp) return;
+
+    json_t *jquirks = json_object_get(jcomp, "cyrusimap.org:quirks");
+    if (!jquirks) {
+        jquirks = json_object();
+        json_object_set_new(jcomp, "cyrusimap.org:quirks", jquirks);
+    }
+
+    json_object_set(jquirks, quirk, json_true());
 }
 
 // ---------------
@@ -5510,6 +5595,14 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
     json_t *jparts = json_object();
     struct buf buf = BUF_INITIALIZER;
     json_t *jpart_by_caladdr = json_object();
+
+    // iCalendar data is supposed to contain either both ORGANIZER and
+    // ATTENDEE, or neither. Keep track if this component doesn't, we'll
+    // consider it when validating and converting the JSCalendar object.
+    if (!myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY) !=
+        !myicalcomponent_get_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+        jobj_set_icalquirk(cfg, comp, jobj, "no-organizer-attendee");
+    }
 
     // Convert ORGANIZER.
     icalproperty *organizer =
