@@ -4361,6 +4361,30 @@ static int createevent_toical(jmap_req_t *req,
             jmap_parser_invalid(parser, "method");
         }
 
+        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses)) {
+            // Set updated and created.
+            time_t t_now = time(NULL);
+            char s[RFC3339_DATETIME_MAX+1] = { 0 };
+            time_to_rfc3339(t_now, s, RFC3339_DATETIME_MAX+1);
+            json_t *jupdated = json_string(s);
+
+            json_object_set(create->jsevent, "updated", jupdated);
+            json_object_set(create->serverset, "updated", jupdated);
+
+            json_t *jcreated = json_object_get(create->jsevent, "created");
+            const char *created = json_string_value(jcreated);
+            time_t t_created = t_now;
+            if (created && time_from_iso8601(created, &t_created) == -1) {
+                t_created = t_now;
+            }
+            if (JNULL(jcreated) || t_created > t_now) {
+                json_object_set(create->jsevent, "created", jupdated);
+                json_object_set(create->serverset, "created", jupdated);
+            }
+
+            json_decref(jupdated);
+        }
+
         create->ical = jscalendar_to_ical(NULL, create->jsevent, parser);
         if (create->ical)
             create->comp = icalcomponent_get_first_component(
@@ -5325,6 +5349,16 @@ static int updateevent_apply_patch(jmap_req_t *req,
             if (!old_method || strcasecmp(old_method, new_method)) {
                 json_array_append_new(invalid, json_string("method"));
             }
+        }
+
+        // Set updated.
+        if (jsevent_is_origin(new_event, update->schedule_addresses)) {
+            char s[RFC3339_DATETIME_MAX+1] = { 0 };
+            time_to_rfc3339(time(NULL), s, RFC3339_DATETIME_MAX+1);
+            json_t *jupdated = json_string(s);
+            json_object_set(new_event, "updated", jupdated);
+            json_object_set(update->serverset, "updated", jupdated);
+            json_decref(jupdated);
         }
 
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
