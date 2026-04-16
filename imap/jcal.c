@@ -89,7 +89,10 @@ static json_t *icalreqstattype_as_json_array(struct icalreqstattype stat)
     json_t *jstat;
     char code[22];
 
-    icalerror_check_arg_rz((stat.code != ICAL_UNKNOWN_STATUS),"Status");
+    if (stat.code != ICAL_UNKNOWN_STATUS)  {
+        icalerror_set_errno(ICAL_BADARG_ERROR);
+        return NULL;
+    }
 
     if (!stat.desc) stat.desc = icalenum_reqstat_desc(stat.code);
 
