@@ -82,6 +82,29 @@ struct bucket {
 ** diagnostic "Virtual memory exhausted"
 */
 
+static size_t table_size(const hash_table *table) {
+    return table && table->table ? (1ULL << table->size_log2) : 0;
+}
+
+/* The arithmetic in this code is 64 bit so that
+ * 1) it's future proof if we move to a 64 bit hash
+ * 2) it's consistent with the hashu64 code
+ * 3) the known working sizeof(size_t) doesn't need changing and debugging
+ *
+ * Multiplying by 9e3779b97f4a7c15ULL and shifting is Fibonacci Hashing
+ * It's not great in itself, but it's computationally cheap. We use this as a
+ * final mixing stage as djbx33x lacks one, hence leaves all the recent entropy
+ * in the lowest bits of the hash.
+ */
+
+static size_t table_index(const hash_table *table, uint32_t hash) {
+    /* Ensure we truncate this to 64 bits, even on a platform with 128 bit
+     * long longs. At some point, some joker is going to throw that at us:
+     */
+    uint64_t mixed = hash * 0x9e3779b97f4a7c15ULL;
+    return mixed >> (64 - table->size_log2);
+}
+
 /* We've changed the hash table size from "whatever the user asked for" to
  * power of two (and therefore sizes must round up to the next power of two).
  * This permits us to use a bitmask to map the hash code to the bucket, which is
@@ -153,8 +176,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 
       uint8_t size_log2 = hash_base2_size_for_entries(size);
       size = 1ULL << size_log2;
-      table->size = size;
-      table->mask = ~0ULL >> (8 * sizeof(size_t) - size_log2);
+      table->size_log2 = size_log2;
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
       table->hash_load_warned_at = 0;
@@ -180,14 +202,14 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 
 #define check_load_factor(table) do {                                   \
     hash_table *t = (table);                                            \
-    const double load_factor = t->count * 1.0 / t->size;                \
+    const double load_factor = t->count * 1.0 / table_size(t);          \
     if (load_factor > 3.0) {                                            \
         if (t->hash_load_warned_at == 0                                 \
             || (int) load_factor > t->hash_load_warned_at) {            \
             xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
                                "table=<%p> entries=<" SIZE_T_FMT ">"    \
                                " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
-                               t, t->count, t->size, load_factor);      \
+                    t, t->count, table_size(t), load_factor);           \
             t->hash_load_warned_at = (int) load_factor;                 \
         }                                                               \
     }                                                                   \
@@ -204,7 +226,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash & table->mask;
+      size_t val = table_index(table, hash);
       bucket *ptr, *newptr;
 
       /*
@@ -267,11 +289,11 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       bucket *ptr;
 
-      if (!table->size || !table->count)
+      if (!table->table || !table->count)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash & table->mask;
+      size_t val = table_index(table, hash);
 
       if (!(table->table)[val])
             return NULL;
@@ -293,7 +315,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
       uint32_t hash = strhash_seeded(table->seed, key);
-      unsigned val = hash & table->mask;
+      size_t val = table_index(table, hash);
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -356,8 +378,9 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
 
 EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 {
-      unsigned i;
+      size_t i;
       bucket *ptr, *temp;
+      size_t size = table_size(table);
 
       if (!table) return;
 
@@ -365,7 +388,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       /* We also need to traverse this anyway if we aren't using a memory
        * pool */
       if(func || !table->pool) {
-          for (i=0;i<table->size; i++)
+          for (i=0;i<size; i++)
           {
               ptr = (table->table)[i];
               while (ptr)
@@ -389,7 +412,7 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
           free(table->table);
       }
       table->table = NULL;
-      table->size = 0;
+      table->size_log2 = 0;
       table->count = 0;
 }
 
@@ -401,10 +424,11 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
                     void *rock)
 {
-      unsigned i;
+      size_t i;
       bucket *temp, *temp_next;
+      size_t size = table_size(table);
 
-      for (i=0;i<table->size; i++)
+      for (i=0;i<size; i++)
       {
             if ((table->table)[i] != NULL)
             {
@@ -422,11 +446,12 @@ EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void 
 EXPORTED strarray_t *hash_keys(const hash_table *table)
 {
     const bucket *temp;
-    unsigned i;
+    size_t i;
+    size_t size = table_size(table);
 
     strarray_t *sa = strarray_new();
 
-    for (i = 0; i < table->size; i++) {
+    for (i = 0; i < size; i++) {
         temp = (table->table)[i];
         while (temp) {
             strarray_append(sa, temp->key);
@@ -470,9 +495,10 @@ EXPORTED hash_iter *hash_table_iter(hash_table *table)
 EXPORTED void hash_iter_reset(hash_iter *iter)
 {
     hash_table *table = iter->table;
+    size_t size = table_size(table);
     iter->curr = NULL;
     iter->peek = NULL;
-    for (iter->i = 0; iter->i < table->size; iter->i++) {
+    for (iter->i = 0; iter->i < size; iter->i++) {
         if ((iter->peek = table->table[iter->i])) {
             break;
         }
@@ -493,10 +519,14 @@ EXPORTED const char *hash_iter_next(hash_iter *iter)
         return NULL;
     else if (iter->curr->next)
         iter->peek = iter->curr->next;
-    else if (iter->i < table->size) {
-        for (iter->i = iter->i + 1; iter->i < table->size; iter->i++) {
-            if ((iter->peek = table->table[iter->i])) {
-                break;
+    else {
+        size_t size = table_size(table);
+
+        if (iter->i < size) {
+            for (iter->i = iter->i + 1; iter->i < size; iter->i++) {
+                if ((iter->peek = table->table[iter->i])) {
+                    break;
+                }
             }
         }
     }

@@ -46,6 +46,15 @@ struct bucketu64 {
 ** diagnostic "Virtual memory exhausted"
 */
 
+static size_t table_size(const hashu64_table *table) {
+    return table && table->table ? (1ULL << table->size_log2) : 0;
+}
+
+static size_t table_index(const hashu64_table *table, uint64_t key) {
+    uint64_t mixed = key * 0x9e3779b97f4a7c15ULL;
+    return mixed >> (64 - table->size_log2);
+}
+
 EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
 {
       assert(table);
@@ -53,8 +62,7 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
 
       uint8_t size_log2 = hash_base2_size_for_entries(size);
       size = 1ULL << size_log2;
-      table->size = size;
-      table->mask = ~0ULL >> (8 * sizeof(size_t) - size_log2);
+      table->size_log2 = size_log2;
       table->count = 0;
 
       /* Allocate the table -- different for using memory pools and not */
@@ -84,7 +92,7 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
 
 EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 {
-      unsigned val = key & table->mask;
+      size_t val = table_index(table, key);
       bucketu64 *ptr, *newptr;
 
       /*
@@ -129,10 +137,10 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 
 EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
 {
-      if (!table->size || !table->count)
+      if (!table->table || !table->count)
           return NULL;
 
-      unsigned val = key & table->mask;
+      size_t val = table_index(table, key);
       bucketu64 *ptr;
 
       if (!(table->table)[val])
@@ -154,7 +162,7 @@ EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
 {
-      unsigned val = key & table->mask;
+      size_t val = table_index(table, key);
       bucketu64 *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -219,12 +227,13 @@ EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
 {
       unsigned i;
       bucketu64 *ptr, *temp;
+      size_t size = table_size(table);
 
       /* If we have a function to free the data, apply it everywhere */
       /* We also need to traverse this anyway if we aren't using a memory
        * pool */
       if(func || !table->pool) {
-          for (i=0;i<table->size; i++)
+          for (i=0;i<size; i++)
           {
               ptr = (table->table)[i];
               while (ptr)
@@ -248,7 +257,7 @@ EXPORTED void free_hashu64_table(hashu64_table *table, void (*func)(void *))
           free(table->table);
       }
       table->table = NULL;
-      table->size = 0;
+      table->size_log2 = 0;
       table->count = 0;
 }
 
@@ -263,8 +272,9 @@ EXPORTED void hashu64_enumerate(hashu64_table *table,
 {
       unsigned i;
       bucketu64 *temp, *temp_next;
+      size_t size = table_size(table);
 
-      for (i=0;i<table->size; i++)
+      for (i=0;i<size; i++)
       {
             if ((table->table)[i] != NULL)
             {
