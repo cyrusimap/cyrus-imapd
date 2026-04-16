@@ -4305,7 +4305,7 @@ static int createevent_toical(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
-    jmapctx->jsevent_is_origin = jsevent_is_origin;
+    jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = create->serverset;
 
     // Set @type property if not already set.
@@ -5273,7 +5273,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
     // Set up conversion context
     struct jmapical_ctx *jmapctx = jmapical_context_new(req,
             update->schedule_addresses);
-    jmapctx->jsevent_is_origin = jsevent_is_origin;
+    jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = update->serverset;
     jmapctx->from_ical.dont_guess_timezones = 1;
     jmapctx->from_ical.want_icalprops = 1;
