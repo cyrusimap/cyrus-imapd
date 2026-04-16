@@ -432,6 +432,30 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
+#define CMD_SELCMODSEQ CMD_READFIELDS \
+    " WHERE createdmodseq = :cmodseq AND mailbox != :inbox AND alive = 1;"
+
+EXPORTED int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
+                                      modseq_t cmodseq,
+                                      struct caldav_data **result)
+{
+    struct sqldb_bindval bval[] = {
+        { ":cmodseq", SQLITE_INTEGER, { .i = cmodseq } },
+        { ":inbox",   SQLITE_TEXT,    { .s = caldavdb->sched_inbox } },
+        { NULL,       SQLITE_NULL,    { .s = NULL } } };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
+    int r;
+
+    *result = memset(&cdata, 0, sizeof(struct caldav_data));
+
+    r = sqldb_exec(caldavdb->db, CMD_SELCMODSEQ, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELMBOX CMD_READFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1;"
 
@@ -1223,6 +1247,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         if (!new_jscal->ical_recurid[0]) {
             // old standalone instances got replaced with main event
+            new_jscal->createdmodseq = cdata->dav.modseq;
             ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
