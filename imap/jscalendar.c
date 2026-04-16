@@ -2939,6 +2939,9 @@ static void recuroverrides_to_ical(jscalendar_cfg_t *cfg,
         else {
             json_t *jovr = jmap_patchobject_apply(jmaster, jpatch, NULL, 0);
             if (JNOTNULL(jovr)) {
+                if (!json_object_get(jpatch, "start")) {
+                    json_object_set_new(jovr, "start", json_string(recurid));
+                }
                 icalcomponent *ovrical = icalcomponent_new_vcalendar();
                 entry_to_ical(cfg, jovr, ovrical);
                 icalcomponent *ovrcomp =
