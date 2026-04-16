@@ -3630,7 +3630,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
         goto done;
     }
 
-    /* Add isDraft to cached event, we remove it later if not requested */
+    /* Add isDraft to cached event */
     json_object_set_new(jsevent, "isDraft", json_boolean(rock->is_draft));
 
     /* Set utcStart and utcEnd */
@@ -3659,16 +3659,15 @@ gotevent:
         json_object_set_new(jsevent, "x-href", json_string(xhref));
         free(xhref);
     }
-    if (jmap_wantprop(props, "calendarIds")) {
-        const strarray_t *boxes = mbname_boxes(rock->mbname);
-        json_object_set_new(jsevent, "calendarIds", json_pack("{s:b}",
-                    strarray_nth(boxes, -1), 1));
-    }
-    if (jmap_wantprop(props, "isOrigin")) {
-        json_object_set_new(jsevent, "isOrigin",
-                json_boolean(jsevent_is_origin(jsevent,
-                        &rock->schedule_addresses)));
-    }
+
+    /* The calendarIds and isOrigin properties MUST be set */
+    const strarray_t *boxes = mbname_boxes(rock->mbname);
+    json_object_set_new(jsevent, "calendarIds", json_pack("{s:b}",
+                strarray_nth(boxes, -1), 1));
+
+    json_object_set_new(jsevent, "isOrigin",
+            json_boolean(jsevent_is_origin(jsevent,
+                    &rock->schedule_addresses)));
 
     /* Update event properties based on JMAP request capabilities */
     const char *linkid;
@@ -3728,11 +3727,6 @@ gotevent:
                 }
             }
         }
-    }
-
-    /* Remove isDraft if client didn't ask for it */
-    if (!jmap_is_using(req, JMAP_URN_CALENDARS) || !jmap_wantprop(props, "isDraft")) {
-        json_object_del(jsevent, "isDraft");
     }
 
     /* Remove UTC start/end if client didn't ask for it */
