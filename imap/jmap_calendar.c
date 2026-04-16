@@ -4265,6 +4265,7 @@ struct createevent {
     strarray_t schedule_addresses;
     icalcomponent *ical_standalone;
     modseq_t deletedmodseq;
+    bool is_copy;
 };
 
 static int createevent_lookup_calendar(jmap_req_t *req,
@@ -4309,15 +4310,11 @@ static int createevent_lookup_calendar(jmap_req_t *req,
 }
 
 static int createevent_toical(jmap_req_t *req,
-                              struct jmapical_ctx *jmapctx,
                               struct jmap_parser *parser,
                               struct createevent *create)
 {
-    struct jmapical_ctx *myjmapctx = NULL;
-    if (!jmapctx) {
-        myjmapctx = jmapctx =
+    struct jmapical_ctx *jmapctx =
             jmapical_context_new(req, &create->schedule_addresses);
-    }
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
@@ -4379,11 +4376,12 @@ static int createevent_toical(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         // Do not allow to set method.
-        if (JNOTNULL(json_object_get(create->jsevent, "method"))) {
+        if (JNOTNULL(json_object_get(create->jsevent, "method")) && !create->is_copy) {
             jmap_parser_invalid(parser, "method");
         }
 
-        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses)) {
+
+        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses) && !create->is_copy) {
             // Set updated and created.
             time_t t_now = time(NULL);
             char s[RFC3339_DATETIME_MAX+1] = { 0 };
@@ -4403,11 +4401,36 @@ static int createevent_toical(jmap_req_t *req,
                 json_object_set(create->jsevent, "created", jupdated);
                 json_object_set(create->serverset, "created", jupdated);
             }
-
             json_decref(jupdated);
+
+            // XXX quirk: former implementation set organizer address
+            if (JNULL(json_object_get(create->jsevent, "organizerCalendarAddress"))) {
+                json_t *jparts = json_object_get(create->jsevent, "participants");
+                json_t *jpart;
+                const char *key;
+                json_object_foreach(jparts, key, jpart) {
+                    if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+                        // At least one scheduled Participant is set.
+                        json_t *jreplyto =
+                            jmapctx ? jmapctx->to_ical.replyto : NULL;
+                        const char *orga =
+                            json_string_value(json_object_get(jreplyto, "imip"));
+                        if (orga) {
+                            json_t *jorga = json_string(orga);
+                            json_object_set(create->jsevent,
+                                    "organizerCalendarAddress", jorga);
+                            json_object_set(create->serverset,
+                                    "organizerCalendarAddress", jorga);
+                            json_decref(jorga);
+                        }
+                    }
+                    break;
+                }
+            }
         }
 
         jscalendar_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        cfg.use_icalendar_convprops = create->is_copy;
         create->ical = jscalendar_to_ical(&cfg, create->jsevent, parser);
         if (create->ical)
             create->comp = icalcomponent_get_first_component(
@@ -4425,7 +4448,7 @@ static int createevent_toical(jmap_req_t *req,
     }
 
 done:
-    if (myjmapctx) jmapical_context_free(&myjmapctx);
+    jmapical_context_free(&jmapctx);
     if (r && create->ical) {
         icalcomponent_free(create->ical);
         create->ical = NULL;
@@ -4717,7 +4740,7 @@ static void setcalendarevents_create(jmap_req_t *req,
                                      struct caldav_db *db,
                                      struct mailbox *notifmbox,
                                      int send_itip,
-                                     struct jmapical_ctx *jmapctx,
+                                     bool is_copy,
                                      json_t *serverset,
                                      json_t **errptr)
 {
@@ -4728,9 +4751,10 @@ static void setcalendarevents_create(jmap_req_t *req,
         .jsevent = json_deep_copy(jsevent),
         .db = db,
         .serverset = serverset,
+        .is_copy = is_copy,
     };
 
-    if (!jmapctx || !jmapctx->from_ical.want_icalprops) {
+    if (!is_copy) {
         remove_jsicalprops(create.jsevent, &parser);
         if (json_array_size(parser.invalid)) goto done;
     }
@@ -4738,7 +4762,7 @@ static void setcalendarevents_create(jmap_req_t *req,
     r = createevent_lookup_calendar(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
 
-    r = createevent_toical(req, jmapctx, &parser, &create);
+    r = createevent_toical(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
 
     r = createevent_store(req, &parser, &create, notifmbox, send_itip);
@@ -6292,7 +6316,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         json_t *create = json_object();
         json_t *err = NULL;
-        setcalendarevents_create(req, arg, db, notifmbox, send_itip, NULL, create, &err);
+        setcalendarevents_create(req, arg, db, notifmbox, send_itip, false, create, &err);
         if (err) {
             json_object_set_new(set.not_created, key, err);
         }
@@ -7687,8 +7711,7 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     *new_event = json_object();
-    setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, NULL,
-            *new_event, set_err);
+    setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, true, *new_event, set_err);
     if (*set_err) goto done;
 
 done:

@@ -84,10 +84,11 @@ sub test_calendarevent_set_replyto
     xlog "Reject event with organizerCalendarAddress but no participants";
     $self->assert_str_equals('invalidProperties',
         $res->[0][1]{notCreated}{eventReplyToNoParticipants}{type});
-    $self->assert_deep_equals(['organizerCalendarAddress', 'participants'],
+    $self->assert_deep_equals(['participants'],
         $res->[0][1]{notCreated}{eventReplyToNoParticipants}{properties});
 
-    xlog "Use server-set organizerCalendarAddress when participants added in update";
+    # XXX former implementation allowed this, but let's not
+    xlog "Do not use server-set organizerCalendarAddress when participants added in update";
     my $eventId = $res->[0][1]{created}{eventNoScheduling}{id};
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -102,6 +103,6 @@ sub test_calendarevent_set_replyto
             },
         }, 'R1'],
     ]);
-    $self->assert_str_equals('mailto:cassandane@example.com',
-        $res->[0][1]{updated}{$eventId}{organizerCalendarAddress});
+    $self->assert_deep_equals(['organizerCalendarAddress'],
+        $res->[0][1]{notUpdated}{$eventId}{properties});
 }
