@@ -7575,8 +7575,8 @@ static void timestamps_to_ical(icalcomponent *comp,
     // Validate updated
     int updated_is_server_set = jmapctx &&
         !jmapctx->to_ical.no_sanitize_timestamps &&
-        jmapctx->jsevent_is_origin &&
-        jmapctx->jsevent_is_origin(jsevent, jmapctx->schedule_addresses);
+        jmapctx->jsevent_is_origin_cb &&
+        jmapctx->jsevent_is_origin_cb(jsevent, jmapctx->schedule_addresses);
 
     icaltimetype updated = now;
     jval = json_object_get(jsevent, "updated");

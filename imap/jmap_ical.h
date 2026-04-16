@@ -94,7 +94,7 @@ struct jmapical_ctx {
         unsigned dont_guess_timezones : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
-    bool (*jsevent_is_origin)(json_t *jsevent, const strarray_t *schedule_addresses);
+    bool (*jsevent_is_origin_cb)(json_t *jsevent, const strarray_t *schedule_addresses);
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
