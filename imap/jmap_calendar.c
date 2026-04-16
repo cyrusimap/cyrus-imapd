@@ -390,6 +390,9 @@ HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities,
         buf_appendcstr(&buf, addr);
         json_object_set_new(calprincipalcap, "sendTo",
                 json_pack("{s:s}", "imip", buf_cstring(&buf)));
+        // XXX set both calendarAddress and sendTo
+        json_object_set_new(calprincipalcap, "calendarAddress",
+                json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
     else json_object_set_new(calprincipalcap, "sendTo", json_null());
@@ -8460,18 +8463,27 @@ static json_t *buildprincipal(struct jmap_req *req,
         json_object_set(jp, "account", jaccount ? jaccount : json_null());
     }
 
-    if (jmap_wantprop(props, "sendTo")) {
-        json_t *jsendTo = json_null();
+    if (jmap_wantprop(props, "sendTo") || jmap_wantprop(props, "calendarAddress")) {
         if (strarray_size(&addrs)) {
             const char *addr = strarray_nth(&addrs, 0);
             if (strncasecmp(addr, "mailto:", 7)) {
                 buf_setcstr(&buf, "mailto:");
             }
             buf_appendcstr(&buf, addr);
-            jsendTo = json_pack("{s:s}", "imip", buf_cstring(&buf));
+
+            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+                json_object_set_new(jp, "calendarAddress",
+                        json_string(buf_cstring(&buf)));
+            }
+            else {
+                json_t *jsendTo = json_null();
+                jsendTo = json_pack("{s:s}", "imip", buf_cstring(&buf));
+                json_object_set_new(jp, "sendTo", jsendTo);
+            }
+
+
             buf_reset(&buf);
         }
-        json_object_set_new(jp, "sendTo", jsendTo);
     }
 
     free(calhomename);
@@ -11438,11 +11450,21 @@ static int jmap_participantidentity_get(struct jmap_req *req)
         }
 
         /* sendTo */
-        if (jmap_wantprop(get.props, "sendTo")) {
+
+        if (jmap_wantprop(get.props, "sendTo") ||
+            jmap_wantprop(get.props, "calendarAddress")) {
+
             if (!strchr(addr, ':')) buf_setcstr(&buf, "mailto:");
             buf_appendcstr(&buf, addr);
-            json_object_set_new(jpartid, "sendTo",
-                    json_pack("{s:s}", "imip", buf_cstring(&buf)));
+
+            if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+                json_object_set_new(jpartid, "calendarAddress",
+                        json_string(buf_cstring(&buf)));
+            }
+            else {
+                json_object_set_new(jpartid, "sendTo",
+                        json_pack("{s:s}", "imip", buf_cstring(&buf)));
+            }
             buf_reset(&buf);
         }
 
