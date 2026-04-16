@@ -3,7 +3,7 @@
 
 #include <stddef.h>           /* For size_t     */
 
-#define HASHU64_TABLE_INITIALIZER {0, 0, 0, NULL, NULL}
+#define HASHU64_TABLE_INITIALIZER {NULL, NULL, 0, 0}
 
 #ifndef EXPORTED
 #define EXPORTED __attribute__((visibility("default")))
@@ -28,11 +28,10 @@ typedef struct bucketu64 bucketu64;
 */
 
 typedef struct hashu64_table {
-    size_t size;
-    size_t mask;
-    size_t count;
     bucketu64 **table;
     struct mpool *pool;
+    size_t count;
+    uint8_t size_log2;
 } hashu64_table;
 
 /*
