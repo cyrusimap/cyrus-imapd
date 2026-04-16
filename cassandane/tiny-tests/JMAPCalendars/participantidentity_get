@@ -16,9 +16,8 @@ sub test_participantidentity_get
     ]);
 
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals({
-        imip => 'mailto:cassandane@example.com',
-    }, $res->[0][1]{list}[0]{sendTo});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{list}[0]{calendarAddress});
     my $partId1 = $res->[0][1]{list}[0]{id};
 
     $caldav->Request(
@@ -48,8 +47,7 @@ sub test_participantidentity_get
         }, 'R1'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_deep_equals({
-        imip => 'mailto:cassandane@example.com',
-    }, $res->[0][1]{list}[0]{sendTo});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{list}[0]{calendarAddress});
     $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
 }
