@@ -9,6 +9,7 @@
 #include <string.h>
 #include <syslog.h>
 
+#include "bsearch.h"
 #include "ical_support.h"
 #include "jcal.h"
 #include "jmap_util.h"
@@ -6307,12 +6308,13 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     buf_free(&buf);
 }
 
-static hash_table ical_comps_by_kind_uid(icalcomponent *ical)
+static ptrarray_t ical_comps_by_uid(icalcomponent *ical)
 {
     // Hash VEVENT and VTODO components in ical by "KIND/UID" key.
     // Each hash value is a ptrarray_t of components: the main component
     // (no RECURRENCE-ID) first, followed by overrides.
 
+    strarray_t hash_keys = STRARRAY_INITIALIZER;
     hash_table comps = HASH_TABLE_INITIALIZER;
     size_t ncomps = icalcomponent_count_components(ical, ICAL_ANY_COMPONENT);
     construct_hash_table(&comps, ncomps + 1, 0);
@@ -6337,6 +6339,7 @@ static hash_table ical_comps_by_kind_uid(icalcomponent *ical)
         if (!complist) {
             complist = ptrarray_new();
             hash_insert(buf_cstring(&buf), complist, &comps);
+            strarray_append(&hash_keys, buf_cstring(&buf));
         }
 
         if (myicalcomponent_get_property(comp, ICAL_RECURRENCEID_PROPERTY))
@@ -6346,7 +6349,17 @@ static hash_table ical_comps_by_kind_uid(icalcomponent *ical)
     }
     buf_free(&buf);
 
-    return comps;
+    // Sort keys for deterministic order.
+    strarray_sort(&hash_keys, cmpstringp_raw);
+    ptrarray_t sorted_complists = PTRARRAY_INITIALIZER;
+    for (int i = 0; i < strarray_size(&hash_keys); i++) {
+        ptrarray_t *complist = hash_lookup(strarray_nth(&hash_keys, i), &comps);
+        ptrarray_append(&sorted_complists, complist);
+    }
+
+    strarray_fini(&hash_keys);
+    free_hash_table(&comps, NULL);
+    return sorted_complists;
 }
 
 EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
@@ -6362,13 +6375,13 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
     // Apply general sanitizations.
     sanitize_icalobj(myical);
 
-    hash_table comps = ical_comps_by_kind_uid(myical);
+    // Combine components with same UID and kind.
+    ptrarray_t complists = ical_comps_by_uid(myical);
 
     // Convert entries.
     json_t *jentries = json_array();
-    hash_iter *hit = hash_table_iter(&comps);
-    while (hash_iter_next(hit)) {
-        ptrarray_t *complist = hash_iter_val(hit);
+    for (int i = 0; i < ptrarray_size(&complists); i++) {
+        ptrarray_t *complist = ptrarray_nth(&complists, i);
         // Apply sanitizations specific to VEVENT and VTODO.
         sanitize_veventtodo(complist);
 
@@ -6394,7 +6407,6 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
         }
         ptrarray_free(complist);
     }
-    hash_iter_free(&hit);
     json_object_set_new(jgroup, "entries", jentries);
 
     categories_from_ical(cfg, myical, jgroup);
@@ -6452,7 +6464,7 @@ EXPORTED json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
     jobj_set_icalcomp(cfg, jgroup, myical);
     vendorexts_from_ical(myical, jgroup);
 
-    free_hash_table(&comps, NULL);
+    ptrarray_fini(&complists);
     icalcomponent_free(myical);
     buf_free(&buf);
     return jgroup;
