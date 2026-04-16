@@ -360,6 +360,7 @@ EOF
 
 sub timsieved_client {
     my $self = shift;
+    my $userid = shift // 'cassandane';
 
     my $srv = $self->{instance}->get_service('sieve');
     my $client = IO::Socket::IP->new(
@@ -375,7 +376,7 @@ sub timsieved_client {
     timsieved_write($client, "AUTHENTICATE \"PLAIN\"\n");
     $self->assert_str_equals("{0}\r\n\r\n", timsieved_read($client));
 
-    my $plain = encode_base64("\0cassandane\0test", "");
+    my $plain = encode_base64("\0" . $userid . "\0test", "");
     my $len = length($plain);
     timsieved_write($client, "{$len+}\r\n");
     timsieved_write($client, "$plain\n");
