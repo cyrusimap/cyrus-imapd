@@ -1,8 +1,7 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_replyto
-    :min_version_3_7
+sub test_calendarevent_set_organizer
     ($self)
 {
     my $jmap = $self->default_user->jmap;
