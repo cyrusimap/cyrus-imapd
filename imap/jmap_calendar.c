@@ -3529,10 +3529,14 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     /* Try to read from cache */
-    if (jscal->cacheversion == JMAPCACHE_CALVERSION) {
-        json_error_t jerr;
-        jsevent = json_loads(jscal->cachedata, 0, &jerr);
-        if (jsevent) goto gotevent;
+    // XXX disable cache for experimental jscalendarbis branch
+    // until caching supports both implementations to co-exist.
+    if (!jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        if (jscal->cacheversion == JMAPCACHE_CALVERSION) {
+            json_error_t jerr;
+            jsevent = json_loads(jscal->cachedata, 0, &jerr);
+            if (jsevent) goto gotevent;
+        }
     }
 
     if ((rock->imap_uid != cdata->dav.imap_uid) || !rock->ical) {
@@ -3830,6 +3834,13 @@ static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
     json_t *jsevent;
     const char *ical_recurid;
     json_object_foreach(cached_events, ical_recurid, jsevent) {
+        // XXX disable cache for experimental jscalendarbis branch
+        // until caching supports both implementations to co-exist.
+        if (jmap_is_using(rock->req, JMAP_JSCALENDARBIS_EXTENSION)) {
+            json_decref(jsevent);
+            continue;
+        }
+
         // there's no way to return errors, but luckily it doesn't matter if we
         // fail to cache
         char *data = json_dumps(jsevent, 0);
