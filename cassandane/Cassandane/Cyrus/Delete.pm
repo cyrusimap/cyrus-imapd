@@ -1085,4 +1085,30 @@ sub test_cyr_expire_delete_noexpire
     $self->check_syslog($self->{instance});
 }
 
+sub test_localdelete_other
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user("other");
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create('user/other/foo');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl('user/other/foo', 'cassandane' => 'l');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # shouldn't be able to delete another user's mailbox
+    $imaptalk->delete('Other Users/other/foo');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{Permission denied}, $imaptalk->get_last_error());
+
+    # shouldn't be able to localdelete it either!
+    $imaptalk->localdelete('Other Users/other/foo');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr{Permission denied}, $imaptalk->get_last_error());
+}
+
 1;
