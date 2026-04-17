@@ -293,6 +293,69 @@ static void test_patchobject_invalid(void)
 #undef TESTCASE
 }
 
+
+static void test_patchobject_apply_keep_existing(void)
+{
+#define TESTCASE(obj, patch, want) \
+    { \
+        json_t *_jobj = json_loads((obj), 0, NULL); \
+        CU_ASSERT_PTR_NOT_NULL(_jobj); \
+        json_t *_jpatch = json_loads((patch), 0, NULL); \
+        CU_ASSERT_PTR_NOT_NULL(_jpatch); \
+        json_t *_jwant = json_loads((want), 0, NULL); \
+        CU_ASSERT_PTR_NOT_NULL(_jpatch); \
+        json_t *_jgot = \
+            jmap_patchobject_apply(_jobj, _jpatch, NULL, PATCH_KEEP_EXISTING); \
+        CU_ASSERT_PTR_NOT_NULL(_jgot); \
+        CU_ASSERT_EQUAL(json_equal(_jwant, _jgot), 1); \
+        json_decref(_jobj); \
+        json_decref(_jpatch); \
+        json_decref(_jwant); \
+        json_decref(_jgot); \
+    }
+
+    // PATCH-KEEP-EXISTING: preserve top-level property.
+    const char *obj = "{"
+    " \"a\": 1,"
+    " \"b\": 2"
+    "}";
+    const char *patch = "{"
+    " \"b\": 99,"
+    " \"c\": 99"
+    "}";
+    const char *want = "{"
+    " \"a\": 1,"
+    " \"b\": 2,"
+    " \"c\": 99"
+    "}";
+    TESTCASE(obj, patch, want);
+
+    // PATCH-KEEP-EXISTING: preserve nested property.
+    obj = "{"
+    "  \"a\": 1,"
+    "  \"b\": {"
+    "    \"c\": 2,"
+    "    \"d\": 3"
+    " }"
+    "}";
+    patch = "{"
+    "  \"b/c\": 99,"
+    "  \"b/e\": 99"
+    "}";
+    want = "{"
+    "  \"a\": 1,"
+    "  \"b\": {"
+    "    \"c\": 2,"
+    "    \"d\": 3,"
+    "    \"e\": 99"
+    "  }"
+    "}";
+    TESTCASE(obj, patch, want);
+
+
+#undef TESTCASE
+}
+
 static void test_decode_to_utf8(void)
 {
     struct testcase {

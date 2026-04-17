@@ -1,0 +1,170 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_isdefault
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap; 
+
+    xlog $self, "get default calendar";
+    my $res = $jmap->request([[
+        'Calendar/get' => {
+        },
+    ]])->single_sentence("Calendar/get")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            isDefault => JSON::true,
+            myRights => superhashof({
+                mayDelete => JSON::false
+            })
+        }),
+        $res->{list}[0]
+    );
+    my $id1 = $res->{list}[0]{id};
+
+    xlog $self, "create calendar";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            create => {
+                1 => {
+                    name => "foo",
+                    description => "My foo",
+                }
+            }
+        },
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    my $id2 = $res->{created}{1}{id};
+    my $state = $res->{newState};
+
+    xlog $self, "change default calendar";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            onSuccessSetIsDefault => $id2
+        },
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            $id1 => {isDefault => JSON::false},
+            $id2 => {isDefault => JSON::true}
+        }),
+        $res->{updated}
+    );
+
+    $res = $jmap->request([[
+        'Calendar/changes' => {
+            sinceState => $state
+        },
+    ]])->single_sentence("Calendar/changes")->arguments;
+
+    $self->assert_cmp_deeply(
+        bag($id1, $id2),
+        $res->{updated}
+    );
+
+    xlog $self, "get calendars";
+    $res = $jmap->request([[
+        'Calendar/get' => {
+        },
+    ]])->single_sentence("Calendar/get")->arguments;
+
+    $self->assert_cmp_deeply(
+        superbagof(
+            superhashof({
+                id => $id1,
+                isDefault => JSON::false,
+                myRights => superhashof({
+                    mayDelete => JSON::true
+                })
+            }),
+            superhashof({
+                id => $id2,
+                isDefault => JSON::true,
+                myRights => superhashof({
+                    mayDelete => JSON::false
+                })
+            }),
+        ),
+        $res->{list}
+    );
+
+    xlog $self, "delete the original default create another calendar and make it the default";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            destroy => [ $id1 ],
+            create => {
+                2 => {
+                    name => "bar",
+                    description => "My bar",
+                }
+            },
+            onSuccessSetIsDefault => '#2'
+        },
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                2 => superhashof({
+                    isDefault => JSON::true
+                })
+            },
+            updated => {                   
+                $id2 => {isDefault => JSON::false},
+            },
+            destroyed => [ $id1 ]
+        }),
+        $res
+    );
+    my $id3 = $res->{created}{2}{id};
+
+    xlog $self, "try to deleted the current default";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            destroy => [ $id3 ],
+        },
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            notDestroyed => {
+                $id3 => { type => 'forbidden' }
+            },
+        }),
+        $res
+    );
+
+    xlog $self, "try to change the default along with an update that will fail";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            update => {
+                foo => {
+                    name => "baz",
+                }
+            },
+            onSuccessSetIsDefault => $id3
+        }
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            notUpdated => {
+                foo => { type => 'notFound' }
+            },
+            updated => JSON::null
+        }),
+        $res
+    );
+
+    xlog $self, "try to change the default to a bogus calendar id";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            onSuccessSetIsDefault => 'foo'
+        }
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_equals(JSON::null, $res->{updated});
+}

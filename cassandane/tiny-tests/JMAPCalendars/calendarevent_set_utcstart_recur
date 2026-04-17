@@ -31,10 +31,11 @@ sub test_calendarevent_set_utcstart_recur
                     utcStart => "2019-12-10T23:30:00Z",
                     duration => "PT1H",
                     timeZone => "Australia/Melbourne",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 5,
-                    }],
+                    },
+
                 },
             },
         }, 'R1'],

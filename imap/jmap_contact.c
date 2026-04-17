@@ -921,7 +921,7 @@ static void reject_convprops_internal(struct jmap_parser *parser,
                 if (!strncasecmp(subpath, "vCard", 5)) {
                     did_reject = true;
                     json_array_append_new(
-                        invalid, json_string(jmap_parser_path(parser, buf)));
+                        invalid, json_string(jmap_parser_path(parser)));
                     break;
                 }
                 else {
@@ -9086,7 +9086,7 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
         jmap_parser_push(parser, key);
     }
 
-    const char *ptr = jmap_parser_path(parser, &parser->buf);
+    const char *ptr = jmap_parser_path(parser);
     char *val = json_dumps(jval, JSON_COMPACT|JSON_ENCODE_ANY);
     vcardproperty *prop =
         vcardproperty_vanew_jsprop(val,
@@ -11109,7 +11109,7 @@ static void _invalid_l10n_patches_by_id(const char *id, void *val, void *rock)
             int len;
 
             jmap_parser_push(brock->parser, id);
-            jmap_parser_path(brock->parser, &buf);
+            buf_setcstr(&buf, jmap_parser_path(brock->parser));
             len = buf_len(&buf);
 
             json_object_foreach(jpatch, path, val) {

@@ -17,6 +17,7 @@ sub test_admin_rewrite_calendarevent_privacy
         https://cyrusimap.org/ns/jmap/calendars
         https://cyrusimap.org/ns/jmap/debug
         https://cyrusimap.org/ns/jmap/performance
+        https://cyrusimap.org/ns/jmap/jscalendarbis
     );
 
     xlog $self, "Make sure regular user can't call Admin method";
@@ -41,26 +42,16 @@ sub test_admin_rewrite_calendarevent_privacy
                     start => '2020-01-01T09:00:00',
                     timeZone => 'Europe/Vienna',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                         attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
+                            calendarAddress => 'mailto:attendee1@example.com',
                         },
                     },
                 },
@@ -73,26 +64,16 @@ sub test_admin_rewrite_calendarevent_privacy
                     start => '2020-02-02T09:00:00',
                     timeZone => 'Europe/Vienna',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                         attendee1 => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:attendee1@example.com',
-                            },
+                            calendarAddress => 'mailto:attendee1@example.com',
                         },
                     },
                 },

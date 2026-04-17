@@ -302,10 +302,11 @@ sub create_test ($self)
                     start => $start->strftime('%Y-%m-%dT%H:%M:%S'),
                     timeZone => 'Europe/Vienna',
                     duration => 'PT15M',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         '@type' => 'RecurrenceRule',
                         frequency => 'weekly',
-                    }],
+                    },
+
                     useDefaultAlerts => JSON::true,
                 },
             },

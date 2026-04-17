@@ -20,13 +20,11 @@ sub test_calendarevent_organizer_noattendees_legacy
             roles => {
                 'owner' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:organizer@local',
-            },
+            calendarAddress => 'mailto:organizer@local',
             expectReply => JSON::false,
             participationStatus => 'needs-action',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
-    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+    $self->assert_equals('mailto:organizer@local', $event->{organizerCalendarAddress});
 }

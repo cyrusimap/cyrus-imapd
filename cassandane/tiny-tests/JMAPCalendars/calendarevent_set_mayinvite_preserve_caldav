@@ -24,26 +24,16 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
                     start => '2021-01-01T11:11:11',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                         someone => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:someone@example.com',
-                            },
+                            calendarAddress => 'mailto:someone@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',
                         },

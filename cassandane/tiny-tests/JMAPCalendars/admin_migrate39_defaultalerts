@@ -19,6 +19,7 @@ sub test_admin_migrate39_defaultalerts
         https://cyrusimap.org/ns/jmap/calendars
         https://cyrusimap.org/ns/jmap/debug
         https://cyrusimap.org/ns/jmap/performance
+        https://cyrusimap.org/ns/jmap/jscalendarbis
     );
 
     my $http = $self->{instance}->get_service("http");
@@ -371,7 +372,7 @@ EOF
     my $eventA2 = $eventsByUid{$eventUidA2};
     $self->assert_not_null($eventA2);
     $self->assert_str_equals('red', $eventA2->{color});
-    $self->assert_equals(JSON::false, $eventA2->{useDefaultAlerts});
+    $self->assert_null($eventA2->{useDefaultAlerts});
     $self->assert_null($eventA2->{alerts});
 
     my $eventB1 = $eventsByUid{$eventUidB1};
@@ -381,7 +382,7 @@ EOF
     my $eventB2 = $eventsByUid{$eventUidB2};
     $self->assert_not_null($eventB2);
     $self->assert_str_equals('brown', $eventB2->{color});
-    $self->assert_equals(JSON::false, $eventB2->{useDefaultAlerts});
+    $self->assert_null($eventB2->{useDefaultAlerts});
     $self->assert_null($eventB2->{alerts});
 
     if (not $state->{did_migrate}) {
@@ -396,10 +397,10 @@ EOF
             $default_cal_id => undef,
         }, $state->{migrateResponse}{migrated}{sharee});
 
-        $self->assert_equals(JSON::false, $eventA1->{useDefaultAlerts});
+        $self->assert_null($eventA1->{useDefaultAlerts});
         $self->assert_not_null($eventA1->{alerts});
 
-        $self->assert_equals(JSON::false, $eventB1->{useDefaultAlerts});
+        $self->assert_null($eventB1->{useDefaultAlerts});
         $self->assert_null($eventB1->{alerts});
     }
 }

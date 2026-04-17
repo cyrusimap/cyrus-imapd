@@ -1,0 +1,107 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_organizer
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventReplyTo => {
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2022-01-28T09:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    organizerCalendarAddress => 'mailto:myreplyto@example.com',
+                    participants => {
+                        someone => {
+                            calendarAddress => 'mailto:someone@example.com',
+                        },
+                    },
+                },
+                eventNoReplyTo => {
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2022-01-28T10:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    participants => {
+                        someone => {
+                            calendarAddress => 'mailto:someone@example.com',
+                        },
+                    },
+                },
+                eventReplyToNoParticipants => {
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2022-01-28T11:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
+                },
+                eventNoScheduling => {
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2022-01-28T12:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#eventReplyTo'],
+            properties => ['organizerCalendarAddress'],
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#eventNoReplyTo'],
+            properties => ['organizerCalendarAddress'],
+        }, 'R3'],
+    ]);
+
+    xlog "Preserve client-set organizerCalendarAddress";
+    $self->assert_str_equals('mailto:myreplyto@example.com',
+        $res->[1][1]{list}[0]{organizerCalendarAddress});
+
+    xlog "Use server-set organizerCalendarAddress if not set by client";
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{created}{eventNoReplyTo}{organizerCalendarAddress});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[2][1]{list}[0]{organizerCalendarAddress});
+
+    xlog "Reject event with organizerCalendarAddress but no participants";
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notCreated}{eventReplyToNoParticipants}{type});
+    $self->assert_deep_equals(['participants'],
+        $res->[0][1]{notCreated}{eventReplyToNoParticipants}{properties});
+
+    # XXX former implementation allowed this, but let's not
+    xlog "Do not use server-set organizerCalendarAddress when participants added in update";
+    my $eventId = $res->[0][1]{created}{eventNoScheduling}{id};
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    participants => {
+                        someone => {
+                            calendarAddress => 'mailto:someone@example.com',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals(['organizerCalendarAddress'],
+        $res->[0][1]{notUpdated}{$eventId}{properties});
+}

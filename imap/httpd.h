@@ -505,6 +505,7 @@ extern struct namespace_t namespace_domainkey;
 extern struct namespace_t namespace_tzdist;
 #ifdef WITH_JMAP
 extern struct namespace_t namespace_jmap;
+extern struct namespace_t namespace_convert;
 #endif
 extern struct namespace_t namespace_rss;
 extern struct namespace_t namespace_dblookup;

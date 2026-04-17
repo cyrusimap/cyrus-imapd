@@ -44,17 +44,10 @@ EOF
                     start => $start,
                     timeZone => 'America/New_York',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane%2Btest@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane%2Btest@example.com',
                     participants => {
                         foo => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:foo@example.com',
-                            },
+                            calendarAddress => 'mailto:foo@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         }

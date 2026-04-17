@@ -45,10 +45,11 @@ sub test_calendarevent_set_replace_standalone_with_destroy
                     start => '2021-01-01T01:01:01',
                     timeZone => 'Europe/Berlin',
                     duration => 'PT1H',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 5,
-                    }],
+                    },
+
                 },
             },
             destroy => [ $instanceId ],

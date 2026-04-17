@@ -22,12 +22,12 @@ sub test_calendarevent_set_recurrence_bymonthday
         "title" => "Recurrence test",
         "description" => "",
         "showWithoutTime" => JSON::false,
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" => "monthly",
             "byMonthDay" => [
                 -1
             ]
-        }],
+        },
     };
 
     my $ret = $self->createandget_event($event);

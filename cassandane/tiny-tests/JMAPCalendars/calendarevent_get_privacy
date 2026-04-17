@@ -9,5 +9,6 @@ sub test_calendarevent_get_privacy
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals("private", $event->{privacy});
+    # CLASS takes precedence over X-JMAP-PRIVACY
+    $self->assert_str_equals("secret", $event->{privacy});
 }

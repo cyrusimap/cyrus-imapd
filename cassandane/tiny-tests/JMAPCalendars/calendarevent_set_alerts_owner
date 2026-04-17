@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_alerts_owner
-    :min_version_3_7
+    :min_version_3_7 :max_version_0_0
     ($self)
 {
     my $ownerJmap = $self->{jmap};
@@ -66,7 +66,6 @@ sub test_calendarevent_set_alerts_owner
                     alerts => {
                         ownerAlert => {
                             '@type' => 'Alert',
-                            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',

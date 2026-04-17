@@ -25,26 +25,16 @@ sub test_calendarevent_set_itip_preserve_partstat
                     start => '2020-01-01T09:00:00',
                     timeZone => 'Europe/Vienna',
                     duration => 'PT1H',
-                    replyTo => {
-                        imip => 'mailto:cassandane@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:cassandane@example.com',
                     participants => {
                         cassandane => {
                             roles => {
                                 'owner' => JSON::true,
-                                'attendee' => JSON::true,
                             },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                         },
                         other => {
-                            roles => {
-                                'attendee' => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:other@example.com',
-                            },
+                            calendarAddress => 'mailto:other@example.com',
                             expectReply => JSON::true,
                             participationStatus => 'needs-action',
                         },

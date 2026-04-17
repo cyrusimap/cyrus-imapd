@@ -55,8 +55,9 @@ EOF
         '2016-09-02T16:15:14' => {
             title => 'testWithDateTimeRecurId',
         },
-        '2016-09-03T16:15:14' => {
+        '2016-09-03T00:00:00' => {
             title => 'testWithDateRecurId',
+            start => '2016-09-03T16:15:14',
         },
     }, $event->{recurrenceOverrides});
 }
