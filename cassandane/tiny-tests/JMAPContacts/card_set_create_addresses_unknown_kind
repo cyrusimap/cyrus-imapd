@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_addresses_unknown_kind
+    :min_version_3_9
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+
+    # "streetAddress" is not a valid AddressComponent.kind per RFC 9553
+    # section 2.5.1.1; the street name kind is "name".  An unknown kind
+    # should be rejected with invalidProperties rather than silently
+    # stored as a JSPROP fallback that no CardDAV client can display.
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id,
+                    name => { full => 'John Doe' },
+                    addresses => {
+                        a0 => {
+                            '@type' => 'Address',
+                            components => [
+                                {
+                                    kind => 'streetAddress',
+                                    value => '42 Rue de Rivoli'
+                                },
+                                {
+                                    kind => 'locality',
+                                    value => 'Paris'
+                                }
+                            ],
+                            countryCode => 'FR'
+                        }
+                    }
+                }
+            }
+        }, 'R1']
+    ]);
+
+    $self->assert_null($res->[0][1]{created}{1});
+    $self->assert_not_null($res->[0][1]{notCreated}{1});
+    $self->assert_str_equals("invalidProperties",
+                             $res->[0][1]{notCreated}{1}{type});
+    $self->assert_deep_equals(
+        ["addresses/a0/components[0]/kind"],
+        $res->[0][1]{notCreated}{1}{properties}
+    );
+}

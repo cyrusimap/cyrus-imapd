@@ -9793,9 +9793,8 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             vcardstrarray *field;
 
             if (!ckind) {
-                jmap_parser_pop(parser);
-                _jsunknown_to_vcard(parser, "components", comps, myprops, card);
-                goto fail;
+                jmap_parser_invalid(parser, "kind");
+                break;
             }
 
             /* Add phonetic to proper field */
