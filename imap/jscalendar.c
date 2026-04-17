@@ -37,6 +37,7 @@
          (param = icalparamiter_deref(&iter));                                 \
          icalparamiter_next(&iter))
 
+// Non-standard iCalendar elements.
 #define PARAM_JSID              "JSID"
 #define PARAM_JSPTR             "JSPTR"
 #define PARAM_XJMAP_REL         "X-JMAP-REL"
@@ -52,6 +53,9 @@
 #define PROP_XJMAP_PRIVACY           "X-JMAP-PRIVACY"
 #define PROP_XJMAP_SENT_BY           "X-JMAP-SENT-BY"
 #define PROP_XJMAP_USEDEFAULTALERTS  "X-JMAP-USEDEFAULTALERTS"
+
+// Supported iCalendar quirks.
+#define ICALQUIRK_NO_ORGANIZER_ATTENDEE "no-organizer-attendee"
 
 static bool myicalproperty_has_name(icalproperty *prop, const char *name)
 {
@@ -2565,7 +2569,7 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
     // Make sure that at least one ATTENDEE is set if ORGANIZER is set.
     if (organizer &&
             !icalcomponent_count_properties(comp, ICAL_ATTENDEE_PROPERTY) &&
-            !jobj_has_icalquirk(jobj, "no-organizer-attendee")) {
+            !jobj_has_icalquirk(jobj, ICALQUIRK_NO_ORGANIZER_ATTENDEE)) {
         // Clone ORGANIZER as ATTENDEE.
         const char *s = icalproperty_get_organizer(organizer);
         icalproperty *attendee = icalproperty_new_attendee(s);
@@ -4457,7 +4461,7 @@ static void validate_entry(jscalendar_cfg_t *cfg,
     }
 
     if (has_organizer != has_scheduled_participant) {
-        if (!jobj_has_icalquirk(jentry, "no-organizer-attendee")) {
+        if (!jobj_has_icalquirk(jentry, ICALQUIRK_NO_ORGANIZER_ATTENDEE)) {
             if (!has_organizer) {
                 jmap_parser_invalid(parser, "organizerCalendarAddress");
             }
@@ -5640,7 +5644,7 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
     // consider it when validating and converting the JSCalendar object.
     if (!myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY) !=
         !myicalcomponent_get_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-        jobj_set_icalquirk(cfg, comp, jobj, "no-organizer-attendee");
+        jobj_set_icalquirk(cfg, comp, jobj, ICALQUIRK_NO_ORGANIZER_ATTENDEE);
     }
 
     // Convert ORGANIZER.
