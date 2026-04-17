@@ -1,0 +1,7 @@
+Name: allowsetacl
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.1.8
+
+Defaults to enabled.  If disabled, disallows the use of the SETACL
+command at all via IMAP. 

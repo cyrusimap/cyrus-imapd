@@ -1,0 +1,9 @@
+Name: allownewnews
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Allow use of the NNTP NEWNEWS command.
+
+Note that this is a very expensive command and should only be
+enabled when absolutely necessary. 

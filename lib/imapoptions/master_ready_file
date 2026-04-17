@@ -1,0 +1,8 @@
+Name: master_ready_file
+Type: STRING
+Default-Value: {configdirectory}/master.ready
+Last-Modified: 3.10.0
+
+The path to a file that master(8) will update to indicate that it is
+ready to accept client connections.  This file will be created if it does
+not already exist, or truncated if it does.  

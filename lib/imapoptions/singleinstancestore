@@ -1,0 +1,8 @@
+Name: singleinstancestore
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+If enabled, imapd, lmtpd and nntpd attempt to only write one copy
+of a message per partition and create hard links, resulting in a
+potentially large disk savings. 

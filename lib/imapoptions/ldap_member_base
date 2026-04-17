@@ -1,0 +1,7 @@
+Name: ldap_member_base
+Type: STRING
+Default-Value: 
+Last-Modified: 2.3.17
+
+LDAP base dn for ldap_member_filter. 
+

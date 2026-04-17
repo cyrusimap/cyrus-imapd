@@ -1,0 +1,7 @@
+Name: sync_rightnow_channel
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.3.1
+
+if set, run sync_client to this channel immediately.  As with channels,
+set this value to '""' to sync the default channel! 

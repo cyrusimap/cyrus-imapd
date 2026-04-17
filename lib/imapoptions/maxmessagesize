@@ -1,0 +1,12 @@
+Name: maxmessagesize
+Type: BYTESIZE
+Default-Value: 0
+Last-Modified: 3.8.0
+
+Maximum size of messages that will be accepted by Cyrus.  This affects LMTP
+deliveries, IMAP appends, DAV uploads, etc.  Messages larger than this will
+be rejected.
+
+If set to 0 (the default), a large internally-defined limit will be applied.
+
+If no unit is specified, bytes is assumed. 

@@ -1,0 +1,9 @@
+Name: lmtp_preparse
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.3.1
+
+If enabled, lmtpd will map in the email and parse the xapian data
+for jmapsearch.  The advantage is that the parsing is done without
+holding any locks.  The disadvantage is that the parsing is done
+even if it winds up not being needed. 

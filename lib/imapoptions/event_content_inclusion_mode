@@ -1,0 +1,13 @@
+Name: event_content_inclusion_mode
+Type: ENUM
+Allowed-Values: standard message header body headerbody
+Default-Value: standard
+Last-Modified: 2.5.0
+
+The mode in which message content may be included with MessageAppend and
+MessageNew. "standard" mode is the default behavior in which message is
+included up to a size with the notification. In "message" mode, the message
+is included and may be truncated to a size. In "header" mode, it includes
+headers truncated to a size. In "body" mode, it includes body truncated
+to a size. In "headerbody" mode, it includes full headers and body truncated
+to a size. 

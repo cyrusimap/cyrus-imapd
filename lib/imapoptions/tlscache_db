@@ -1,0 +1,7 @@
+Name: tlscache_db
+Type: STRINGLIST
+Allowed-Values: skiplist sql twoskip
+Default-Value: twoskip
+Last-Modified: 3.13.1
+Deprecated-Since: 2.5.0
+Replaced-By: tls_sessions_db

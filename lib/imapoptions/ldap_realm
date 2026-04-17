@@ -1,0 +1,7 @@
+Name: ldap_realm
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+SASL realm for LDAP authentication 
+

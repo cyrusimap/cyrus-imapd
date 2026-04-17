@@ -1,0 +1,6 @@
+Name: ldap_tls_cacert_file
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+Deprecated-Since: 2.5.0
+Replaced-By: ldap_ca_file

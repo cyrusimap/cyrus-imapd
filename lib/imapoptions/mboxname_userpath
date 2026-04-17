@@ -1,0 +1,10 @@
+Name: mboxname_userpath
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.13.1
+
+Path to the parent directory of the user and domain directories.
+This defaults to 'configdir' if not specified.  This option can
+be used (along with other related options) to place all persistent
+data outside the configdir, allowing it to be on ephemeral storage
+without using symlinks 

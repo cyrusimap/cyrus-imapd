@@ -1,0 +1,7 @@
+Name: tcp_keepalive_cnt
+Type: INT
+Default-Value: 0
+Last-Modified: 2.4.0
+
+Number of TCP keepalive probes to send before declaring the
+connection dead (0 == system default). 

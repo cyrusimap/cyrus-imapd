@@ -1,0 +1,11 @@
+Name: rfc3028_strict
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+If enabled, Sieve will be strict (per :rfc:`3028`) with regards to
+which headers are allowed to be used in address and envelope tests.
+This means that only those headers which are defined to contain addresses
+will be allowed in address tests and only "to" and "from" will be
+allowed in envelope tests.  When disabled, ANY grammatically correct header
+will be allowed. 
