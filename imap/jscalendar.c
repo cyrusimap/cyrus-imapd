@@ -415,21 +415,27 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
     icalproperty_kind prop_kind = icalproperty_isa(prop);
     icalparameter_kind param_kind = icalparameter_isa(param);
 
+    // Some parameters are known for any property.
     switch (param_kind) {
     case ICAL_TZID_PARAMETER:
     case ICAL_VALUE_PARAMETER:
         return true;
+    case ICAL_X_PARAMETER: {
+        const char *xname = icalparameter_get_xname(param);
+        // XXX these were set by the former implementation,
+        if (!strncasecmpsafe("X-JMAP-", xname, 7)) {
+            return true;
+        }
+        break;
+    }
     default:
         if (myicalparameter_has_name(param, "JSID")) {
             return true;
         }
-        // XXX quirk: this got set in the former implementation
-        if (myicalparameter_has_name(param, "X-JMAP-ID")) {
-            return true;
-        }
-        // fallthrough
+        break;
     }
 
+    // Check parameter by property kind.
     switch (prop_kind) {
     case ICAL_ATTACH_PROPERTY:
     case ICAL_IMAGE_PROPERTY:
@@ -456,10 +462,18 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         case ICAL_SCHEDULESTATUS_PARAMETER:
         case ICAL_SENTBY_PARAMETER:
             return true;
-        default:
-            if (myicalparameter_has_name(param, "X-DTSTAMP") ||
-                myicalparameter_has_name(param, "X-SEQUENCE"))
+        case ICAL_X_PARAMETER: {
+            const char *xname = icalparameter_get_xname(param);
+            // XXX these are set on iMIP ATTENDEE replies
+            if (!strcasecmpsafe("X-DTSTAMP", xname)
+                || !strcasecmpsafe("X-SEQUENCE", xname)
+                || !strcasecmpsafe("X-COMMENT", xname))
+            {
                 return true;
+            }
+            return false;
+        }
+        default:
             return false;
         }
 
@@ -500,16 +514,22 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
     icalcomponent_kind comp_kind = icalcomponent_isa(comp);
     icalproperty_kind prop_kind = icalproperty_isa(prop);
 
+    // Some properties are known for any components.
     if (myicalproperty_has_name(prop, "JSID"))
         return true;
-
-    // XXX quirk: this got set in the former implementation
-    if (myicalproperty_has_name(prop, "X-JMAP-ID"))
+    else if (myicalproperty_has_name(prop, "JSPROP"))
         return true;
 
-    if (myicalproperty_has_name(prop, "JSPROP"))
-        return true;
+    if (icalproperty_isa(prop) == ICAL_X_PROPERTY) {
+        const char *xname = icalproperty_get_x_name(prop);
+        // XXX these were set by the former implementation,
+        // a few are still used such as X-JMAP-USEDEFAULTALERTS
+        if (!strncasecmpsafe("X-JMAP-", xname, 7)) {
+            return true;
+        }
+    }
 
+    // Check property by component kind.
     switch (comp_kind) {
     case ICAL_VALARM_COMPONENT:
         switch (prop_kind) {
