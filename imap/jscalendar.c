@@ -37,6 +37,22 @@
          (param = icalparamiter_deref(&iter));                                 \
          icalparamiter_next(&iter))
 
+#define PARAM_JSID              "JSID"
+#define PARAM_JSPTR             "JSPTR"
+#define PARAM_XJMAP_REL         "X-JMAP-REL"
+#define PARAM_XDTSTAMP          "X-DTSTAMP"
+#define PARAM_XSEQUENCE         "X-SEQUENCE"
+
+#define PROP_JSID               "JSID"
+#define PROP_JSPROP             "JSPROP"
+#define PROP_XJMAP_HIDE_ATTENDEES    "X-JMAP-HIDE-ATTENDEES"
+#define PROP_XJMAP_ID                "X-JMAP-ID"
+#define PROP_XJMAP_MAY_INVITE_OTHERS "X-JMAP-MAY-INVITE-OTHERS"
+#define PROP_XJMAP_MAY_INVITE_SELF   "X-JMAP-MAY-INVITE-SELF"
+#define PROP_XJMAP_PRIVACY           "X-JMAP-PRIVACY"
+#define PROP_XJMAP_SENT_BY           "X-JMAP-SENT-BY"
+#define PROP_XJMAP_USEDEFAULTALERTS  "X-JMAP-USEDEFAULTALERTS"
+
 static bool myicalproperty_has_name(icalproperty *prop, const char *name)
 {
     icalproperty_kind kind = icalproperty_isa(prop);
@@ -70,14 +86,14 @@ static bool myicalparameter_has_name(icalparameter *param, const char *name)
 static icalparameter *myicalparameter_new_jsid(const char *key)
 {
     icalparameter *param = icalparameter_new_iana(key);
-    icalparameter_set_iana_name(param, "JSID");
+    icalparameter_set_iana_name(param, PARAM_JSID);
     return param;
 }
 
 __attribute__((unused))
 static const char *myicalparameter_get_jsid(icalparameter *param)
 {
-    if (!myicalparameter_has_name(param, "JSID")) return NULL;
+    if (!myicalparameter_has_name(param, PARAM_JSID)) return NULL;
     return icalparameter_get_value_as_string(param);
 }
 
@@ -85,27 +101,27 @@ static const char *myicalparameter_get_jsid(icalparameter *param)
 static icalparameter *myicalparameter_new_jsptr(const char *ptr)
 {
     icalparameter *param = icalparameter_new_iana(ptr);
-    icalparameter_set_iana_name(param, "JSPTR");
+    icalparameter_set_iana_name(param, PARAM_JSPTR);
     return param;
 }
 
 static const char *myicalparameter_get_jsptr(icalparameter *param)
 {
-    if (!myicalparameter_has_name(param, "JSPTR")) return NULL;
+    if (!myicalparameter_has_name(param, PARAM_JSPTR)) return NULL;
     return icalparameter_get_value_as_string(param);
 }
 
 static icalproperty *myicalproperty_new_jsid(const char *key)
 {
     icalproperty *prop = icalproperty_new_iana(key);
-    icalproperty_set_iana_name(prop, "JSID");
+    icalproperty_set_iana_name(prop, PROP_JSID);
     return prop;
 }
 
 __attribute__((unused))
 static const char *myicalproperty_get_jsid(icalproperty *prop)
 {
-    if (!myicalproperty_has_name(prop, "JSID")) return NULL;
+    if (!myicalproperty_has_name(prop, PROP_JSID)) return NULL;
     icalvalue *value = icalproperty_get_value(prop);
     if (icalvalue_isa(value) != ICAL_TEXT_VALUE) return NULL;
     return icalvalue_get_text(value);
@@ -114,13 +130,13 @@ static const char *myicalproperty_get_jsid(icalproperty *prop)
 static icalproperty *myicalproperty_new_jsprop(const char *val)
 {
     icalproperty *prop = icalproperty_new_iana(val);
-    icalproperty_set_iana_name(prop, "JSPROP");
+    icalproperty_set_iana_name(prop, PROP_JSPROP);
     return prop;
 }
 
 static const char *myicalproperty_get_jsprop(icalproperty *prop)
 {
-    if (!myicalproperty_has_name(prop, "JSPROP")) return NULL;
+    if (!myicalproperty_has_name(prop, PROP_JSPROP)) return NULL;
     icalvalue *value = icalproperty_get_value(prop);
     if (icalvalue_isa(value) != ICAL_TEXT_VALUE) return NULL;
     return icalvalue_get_text(value);
@@ -429,7 +445,7 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         break;
     }
     default:
-        if (myicalparameter_has_name(param, "JSID")) {
+        if (myicalparameter_has_name(param, PARAM_JSID)) {
             return true;
         }
         break;
@@ -465,9 +481,8 @@ static bool is_known_param(icalproperty *prop, icalparameter *param)
         case ICAL_X_PARAMETER: {
             const char *xname = icalparameter_get_xname(param);
             // XXX these are set on iMIP ATTENDEE replies
-            if (!strcasecmpsafe("X-DTSTAMP", xname)
-                || !strcasecmpsafe("X-SEQUENCE", xname)
-                || !strcasecmpsafe("X-COMMENT", xname))
+            if (!strcasecmpsafe(PARAM_XDTSTAMP, xname)
+                || !strcasecmpsafe(PARAM_XSEQUENCE, xname))
             {
                 return true;
             }
@@ -515,9 +530,9 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
     icalproperty_kind prop_kind = icalproperty_isa(prop);
 
     // Some properties are known for any components.
-    if (myicalproperty_has_name(prop, "JSID"))
+    if (myicalproperty_has_name(prop, PROP_JSID))
         return true;
-    else if (myicalproperty_has_name(prop, "JSPROP"))
+    else if (myicalproperty_has_name(prop, PROP_JSPROP))
         return true;
 
     if (icalproperty_isa(prop) == ICAL_X_PROPERTY) {
@@ -624,20 +639,20 @@ static bool is_known_prop(icalcomponent *comp, icalproperty *prop)
                 return true;
             }
             // Extension properties for Cyrus JMAP Calendars
-            if (myicalproperty_has_name(prop, "X-JMAP-USEDEFAULTALERTS"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_USEDEFAULTALERTS))
                 return true;
             // XXX quirk: these got set in the former implementation
-            if (myicalproperty_has_name(prop, "X-JMAP-ID"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_ID))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-HIDE-ATTENDEES"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_HIDE_ATTENDEES))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-MAY-INVITE-OTHERS"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_OTHERS))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-MAY-INVITE-SELF"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_MAY_INVITE_SELF))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-PRIVACY"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_PRIVACY))
                 return true;
-            if (myicalproperty_has_name(prop, "X-JMAP-SENT-BY"))
+            if (myicalproperty_has_name(prop, PROP_XJMAP_SENT_BY))
                 return true;
             // XXX quirk: our previous jscalendar draft implementation
             // erroneously used the X-APPLE-DEFAULT-ALARM annotation ino
@@ -1466,8 +1481,8 @@ static void jsid_to_prop(icalproperty *prop, const char *key, bool force)
 
 static bool prop_has_jsid(icalproperty *prop)
 {
-    return myicalproperty_get_parameter_by_name(prop, "JSID") ||
-           myicalproperty_get_parameter_by_name(prop, "X-JMAP-ID");
+    return myicalproperty_get_parameter_by_name(prop, PARAM_JSID) ||
+           myicalproperty_get_parameter_by_name(prop, PROP_XJMAP_ID);
 }
 
 static const char *jsid_from_prop(icalproperty *prop,
@@ -1476,10 +1491,10 @@ static const char *jsid_from_prop(icalproperty *prop,
 {
     // Use JSID parameter value, if set.
     const char *jsid = NULL;
-    icalparameter *param = myicalproperty_get_parameter_by_name(prop, "JSID");
+    icalparameter *param = myicalproperty_get_parameter_by_name(prop, PARAM_JSID);
     if (param) jsid = icalparameter_get_iana(param);
     if (!jsid) {
-        param = myicalproperty_get_parameter_by_name(prop, "X-JMAP-ID");
+        param = myicalproperty_get_parameter_by_name(prop, PROP_XJMAP_ID);
         if (param) jsid = icalparameter_get_x(param);
     }
     if (jsid && !json_object_get(jobj, jsid)) {
@@ -1540,8 +1555,8 @@ done:
 
 static bool comp_has_jsid(icalcomponent *prop)
 {
-    return myicalcomponent_get_property_by_name(prop, "JSID") ||
-           myicalcomponent_get_property_by_name(prop, "X-JMAP-ID");
+    return myicalcomponent_get_property_by_name(prop, PROP_JSID) ||
+           myicalcomponent_get_property_by_name(prop, PROP_XJMAP_ID);
 }
 
 static const char *jsid_from_comp(icalcomponent *comp,
@@ -1551,8 +1566,8 @@ static const char *jsid_from_comp(icalcomponent *comp,
     buf_reset(buf);
 
     // Use JSID property value, if set.
-    icalproperty *prop = myicalcomponent_get_property_by_name(comp, "JSID");
-    if (!prop) prop = myicalcomponent_get_property_by_name(comp, "X-JMAP-ID");
+    icalproperty *prop = myicalcomponent_get_property_by_name(comp, PROP_JSID);
+    if (!prop) prop = myicalcomponent_get_property_by_name(comp, PROP_XJMAP_ID);
     if (prop) {
         const char *jsid = icalproperty_get_value_as_string(prop);
         if (jsid && !json_object_get(jobj, jsid)) {
@@ -2410,7 +2425,7 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
                     struct buf buf = BUF_INITIALIZER;
                     buf_printf(&buf, "%lld", json_integer_value(jval));
                     icalparameter *param = icalparameter_new_iana(buf_cstring(&buf));
-                    icalparameter_set_iana_name(param, "X-SEQUENCE");
+                    icalparameter_set_iana_name(param, PARAM_XSEQUENCE);
                     icalproperty_add_parameter(attendee, param);
                     buf_free(&buf);
                 }
@@ -2421,7 +2436,7 @@ static void participants_to_ical(jscalendar_cfg_t *cfg,
                     if (!icaltime_is_null_time(t)) {
                         char *tmp = icaltime_as_ical_string_r(t);
                         icalparameter *param = icalparameter_new_iana(tmp);
-                        icalparameter_set_iana_name(param, "X-DTSTAMP");
+                        icalparameter_set_iana_name(param, PARAM_XDTSTAMP);
                         icalproperty_add_parameter(attendee, param);
                         free(tmp);
                     }
@@ -3159,7 +3174,7 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     if (JNOTNULL(jval = json_object_get(jentry, "hideAttendees"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-HIDE-ATTENDEES");
+            icalproperty_set_x_name(prop, PROP_XJMAP_HIDE_ATTENDEES);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3168,7 +3183,7 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     if (JNOTNULL(jval = json_object_get(jentry, "mayInviteOthers"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-MAY-INVITE-OTHERS");
+            icalproperty_set_x_name(prop, PROP_XJMAP_MAY_INVITE_OTHERS);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3177,7 +3192,7 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     if (JNOTNULL(jval = json_object_get(jentry, "mayInviteSelf"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-MAY-INVITE-SELF");
+            icalproperty_set_x_name(prop, PROP_XJMAP_MAY_INVITE_SELF);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -3186,7 +3201,7 @@ static void entry_to_ical(jscalendar_cfg_t *cfg,
     if (JNOTNULL(jval = json_object_get(jentry, "useDefaultAlerts"))) {
         if (json_boolean_value(jval)) {
             icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
-            icalproperty_set_x_name(prop, "X-JMAP-USEDEFAULTALERTS");
+            icalproperty_set_x_name(prop, PROP_XJMAP_USEDEFAULTALERTS);
             icalproperty_set_value(prop, icalvalue_new_boolean(true));
             icalcomponent_add_property(comp, prop);
         }
@@ -4852,11 +4867,11 @@ static void vendorexts_from_ical(icalcomponent *comp, json_t *jobj)
     icalpropiter iter;
     myicalcomponent_foreach_property(comp, ICAL_IANA_PROPERTY, prop, iter)
     {
-        if (!myicalproperty_has_name(prop, "JSPROP")) {
+        if (!myicalproperty_has_name(prop, PROP_JSPROP)) {
             continue;
         }
 
-        icalparameter *param = myicalproperty_get_parameter_by_name(prop, "JSPTR");
+        icalparameter *param = myicalproperty_get_parameter_by_name(prop, PARAM_JSPTR);
         if (!param) continue;
 
         const char *ptr = myicalparameter_get_jsptr(param);
@@ -5250,7 +5265,7 @@ static void links_from_ical(jscalendar_cfg_t *cfg __attribute__((unused)),
             }
             // XXX quirk: these got set in the former implementation
             else if (param_kind == ICAL_X_PARAMETER) {
-                if (myicalparameter_has_name(param, "X-JMAP-REL")) {
+                if (myicalparameter_has_name(param, PARAM_XJMAP_REL)) {
                     const char *rel = icalparameter_get_value_as_string(param);
                     if (rel && !json_object_get(jlink, "rel"))
                         json_object_set_new(jlink, "rel", json_string(rel));
@@ -5437,7 +5452,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
             json_object_set_new(jpart, "sentBy", json_string(sentby));
         }
 
-        else if (myicalparameter_has_name(param, "X-SEQUENCE")) {
+        else if (myicalparameter_has_name(param, PARAM_XSEQUENCE)) {
             const char *xval = icalparameter_get_value_as_string(param);
             if (xval) {
                 bit64 res = 0;
@@ -5447,7 +5462,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
             }
         }
 
-        else if (myicalparameter_has_name(param, "X-DTSTAMP")) {
+        else if (myicalparameter_has_name(param, PARAM_XDTSTAMP)) {
             const char *xval = icalparameter_get_value_as_string(param);
             if (xval) {
                 icaltimetype t = icaltime_from_string(xval);
@@ -6237,7 +6252,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
         }
         // XXX quirk: this got set in the former implementation
         else if ((prop = myicalcomponent_get_property_by_name(
-                        comp, "X-JMAP-SENT-BY"))) {
+                        comp, PROP_XJMAP_SENT_BY))) {
             icalvalue *v = icalproperty_get_value(prop);
             const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
                 icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
@@ -6264,7 +6279,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-USEDEFAULTALERTS")) ||
+             comp, PROP_XJMAP_USEDEFAULTALERTS)) ||
         // XXX quirk: our previous jscalendar draft implementation
         // erroneously used the X-APPLE-DEFAULT-ALARM annotation in
         // the VEVENT, not the VALARM. We support it for backwards
@@ -6278,21 +6293,21 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-HIDE-ATTENDEES"))) {
+             comp, PROP_XJMAP_HIDE_ATTENDEES))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "hideAttendees", json_true());
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-MAY-INVITE-OTHERS"))) {
+             comp, PROP_XJMAP_MAY_INVITE_OTHERS))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "mayInviteOthers", json_true());
     }
 
     if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-MAY-INVITE-SELF"))) {
+             comp, PROP_XJMAP_MAY_INVITE_SELF))) {
         const char *v = icalproperty_get_value_as_string(prop);
         if (!strcasecmpsafe(v, "TRUE"))
             json_object_set_new(jobj, "mayInviteSelf", json_true());
@@ -6312,7 +6327,7 @@ static void entry_from_ical(jscalendar_cfg_t *cfg,
     }
     // XXX quirk: this got set in the former implementation
     else if ((prop = myicalcomponent_get_property_by_name(
-             comp, "X-JMAP-PRIVACY"))) {
+             comp, PROP_XJMAP_PRIVACY))) {
         icalvalue *v = icalproperty_get_value(prop);
         const char *s = icalvalue_isa(v) == ICAL_TEXT_VALUE ?
             icalvalue_get_text(v) : icalproperty_get_value_as_string(prop);
