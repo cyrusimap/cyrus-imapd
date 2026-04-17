@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_alerts_owner
-    :min_version_3_7
+    :min_version_3_7 :max_version_0_0
     ($self)
 {
     my $ownerJmap = $self->{jmap};

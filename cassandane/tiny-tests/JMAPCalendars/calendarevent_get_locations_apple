@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_locations_apple
-    :min_version_3_1
+    :min_version_3_1 :max_version_0_0
     ($self)
 {
     my ($id, $ical) = $self->icalfile('locations-apple');
