@@ -3218,8 +3218,10 @@ struct emailquery_result {
     int is_mutable;
     int is_guidsearch;
     int is_imapfoldersearch;
+    int has_fuzzymatch;
     int never_matches;
     size_t total_ceiling;
+    char *querystate;
 
     void(*ensure)(struct emailquery *q, struct emailquery_cache *qc, size_t n);
     const char *(*partid)(uint64_t partnum, void *rock);
@@ -3303,6 +3305,19 @@ static int emailsearch_is_mutable(struct emailsearch *search)
 {
     /* can calculate changes for mutable sort, but not mutable search */
     return search->is_mutable > 1 ? 0 : 1;
+}
+
+static int emailsearch_has_fuzzymatch_cb(search_expr_t *e,
+                                         void *rock __attribute__((unused)))
+{
+    return e->op == SEOP_FUZZYMATCH;
+}
+
+static int emailsearch_has_fuzzymatch(struct emailsearch *search)
+{
+    return search->expr_orig &&
+           search_expr_apply(search->expr_orig,
+                             emailsearch_has_fuzzymatch_cb, NULL);
 }
 
 // GUID search
@@ -4566,6 +4581,7 @@ static int emailquery_search(jmap_req_t *req,
     qr->is_mutable = emailsearch_is_mutable(&search);
     qr->is_imapfoldersearch = search.is_imapfolder;
     qr->is_guidsearch = is_guidsearch;
+    qr->has_fuzzymatch = emailsearch_has_fuzzymatch(&search);
     qr->never_matches = search.never_matches;
 
     /* set search cost info */
@@ -4610,6 +4626,7 @@ static void emailquery_cache_reset(struct emailquery_cache *qc)
     free(qc->uncollapsed_matches);
     free(qc->collapsed_matches); // members are shallow copy of uncollapsed
     free(qc->fingerprint);
+    free(qc->qr.querystate);
     if (qc->seen_threads) hashset_free(&qc->seen_threads);
     if (qc->qr.free) {
         qc->qr.free(qc->qr.rock);
@@ -4868,9 +4885,9 @@ static void emailquery_buildresult(struct emailquery *q,
 static void emailquery_fingerprint(struct buf *fingerprint,
                                    const char *accountid,
                                    const char *userid,
-                                   const char *querystate,
+                                   modseq_t modseq,
+                                   modseq_t addrbook_modseq,
                                    struct emailquery *q)
-
 {
     buf_reset(fingerprint);
 
@@ -4882,9 +4899,8 @@ static void emailquery_fingerprint(struct buf *fingerprint,
     buf_appendcstr(fingerprint, accountid);
     buf_putc(fingerprint, '>');
 
-    buf_putc(fingerprint, '<');
-    buf_appendcstr(fingerprint, querystate);
-    buf_putc(fingerprint, '>');
+    buf_printf(fingerprint, "<" MODSEQ_FMT ">", modseq);
+    buf_printf(fingerprint, "<" MODSEQ_FMT ">", addrbook_modseq);
 
     if (JNOTNULL(q->super.filter)) {
         buf_putc(fingerprint, '<');
@@ -4947,13 +4963,14 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     json_t *res = NULL;
     int r = 0;
 
-    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
     modseq_t addrbook_modseq = contactgroups->size ?
         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
-    char *querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
+
+    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
 
     struct buf fingerprint = BUF_INITIALIZER;
-    emailquery_fingerprint(&fingerprint, req->userid, req->accountid, querystate, q);
+    emailquery_fingerprint(&fingerprint, req->userid, req->accountid,
+                           modseq, addrbook_modseq, q);
 
     /* Try to reuse cached query result */
     int is_cached;
@@ -4963,6 +4980,16 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
         is_cached = 0;
         r = emailquery_search(req, q, &emailquery_cache.qr, contactgroups, errp);
         if (r || *errp) goto done;
+
+        /* Use the highest indexed modseq for searches backed by Xapian */
+        modseq_t state_modseq = modseq;
+        if (emailquery_cache.qr.has_fuzzymatch) {
+            modseq_t indexed_modseq = search_get_indexed_modseq(req->accountid);
+            if (indexed_modseq) state_modseq = indexed_modseq;
+        }
+        emailquery_cache.qr.querystate =
+            _email_make_querystate(req, state_modseq, 0, addrbook_modseq);
+
         emailquery_cache.fingerprint = buf_release(&fingerprint);
         emailquery_cache.last_accessed = time(NULL);
     }
@@ -4981,7 +5008,7 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     emailquery_buildresult(q, &emailquery_cache, errp);
     if (*errp) goto done;
     q->super.can_calculate_changes = emailquery_cache.qr.is_mutable;
-    q->super.query_state = xstrdupnull(querystate);
+    q->super.query_state = xstrdupnull(emailquery_cache.qr.querystate);
 
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
         json_object_set_new(req->perf_details, "isImapFolderSearch",
@@ -5039,7 +5066,6 @@ done:
         else *errp = jmap_server_error(r);
     }
     buf_free(&fingerprint);
-    free(querystate);
     return res;
 }
 
@@ -5129,6 +5155,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t expunged_modseq = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -5223,6 +5250,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
+
+        if (is_expunged && md->modseq > expunged_modseq)
+            expunged_modseq = md->modseq;
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -5324,7 +5354,15 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
     free_hashu64_table(&touched_cids, NULL);
 
-    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+    modseq_t modseq = 0;
+    if (emailsearch_has_fuzzymatch(&search)) {
+        modseq = search_get_indexed_modseq(req->accountid);
+        if (modseq && expunged_modseq > modseq) {
+            modseq = expunged_modseq;
+        }
+    }
+    if (!modseq) modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:
@@ -5347,6 +5385,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
     modseq_t addrbook_modseq = 0;
+    modseq_t expunged_modseq = 0;
     int r = 0;
 
     if (!_email_read_querystate(req, query->since_querystate,
@@ -5421,6 +5460,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
+        if (is_expunged && md->modseq > expunged_modseq)
+            expunged_modseq = md->modseq;
+
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
 
@@ -5489,7 +5531,15 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     free_hash_table(&touched_ids, NULL);
 
-    modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+    modseq_t modseq = 0;
+    if (emailsearch_has_fuzzymatch(&search)) {
+        modseq = search_get_indexed_modseq(req->accountid);
+        if (modseq && expunged_modseq > modseq) {
+            modseq = expunged_modseq;
+        }
+    }
+    if (!modseq) modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
+
     query->new_querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
 done:

@@ -586,6 +586,29 @@ static int cachetier_cb(void *vrock, const char *key, size_t keylen,
     struct indexeddb *idb = rock->idb;
 
     if (idb->version >= 2) {
+        /* Handle highest indexed modseq with max semantics */
+        if (!strcmp(key, "*MAXMODSEQ*")) {
+            bit64 srcmodseq = 0;
+            if (datalen > 0 && parsenum(data, NULL, datalen, &srcmodseq))
+                return 0;
+            const char *olddata = NULL;
+            size_t olddatalen = 0;
+            bit64 oldmodseq = 0;
+            int r = cyrusdb_fetch(idb->db, key, keylen, &olddata, &olddatalen, &idb->txn);
+            if (!r && olddatalen > 0)
+                parsenum(olddata, NULL, olddatalen, &oldmodseq);
+            if (srcmodseq <= oldmodseq) return 0;
+            struct buf val = BUF_INITIALIZER;
+            buf_printf(&val, MODSEQ_FMT, srcmodseq);
+            r = cyrusdb_store(idb->db, key, keylen,
+                              buf_base(&val), buf_len(&val), &idb->txn);
+            buf_free(&val);
+            if (r) {
+                xsyslog(LOG_ERR, "could not save key", "key=<%.*s> dberror=<%s>",
+                        (int)keylen, key, cyrusdb_strerror(r));
+            }
+            return r;
+        }
         /* Ignore all but mailbox entries */
         if (keylen < 3 || strncmp(key, "*M*", 3)) return 0;
     }
@@ -1011,6 +1034,7 @@ static int write_indexed(const char *dir,
                          uint32_t uidvalidity,
                          const char *uniqueid,
                          seqset_t *seq,
+                         modseq_t modseq,
                          int verbose)
 {
     struct buf path = BUF_INITIALIZER;
@@ -1042,6 +1066,27 @@ static int write_indexed(const char *dir,
     }
 
     r = store_indexed(idb, key.s, key.len, seq);
+    if (r) goto out;
+
+    /* Update the highest indexed modseq for this user */
+    if (modseq && idb->version >= 2) {
+        const char *data = NULL;
+        size_t datalen = 0;
+        modseq_t oldmodseq = 0;
+        int r2 = cyrusdb_fetch(idb->db, "*MAXMODSEQ*", 11, &data, &datalen, &idb->txn);
+        if (!r2 && datalen > 0) {
+            bit64 num;
+            if (!parsenum(data, NULL, datalen, &num))
+                oldmodseq = (modseq_t)num;
+        }
+        if (modseq > oldmodseq) {
+            struct buf val = BUF_INITIALIZER;
+            buf_printf(&val, MODSEQ_FMT, modseq);
+            r = cyrusdb_store(idb->db, "*MAXMODSEQ*", 11,
+                              buf_base(&val), buf_len(&val), &idb->txn);
+            buf_free(&val);
+        }
+    }
 
 out:
     if (idb) {
@@ -2130,6 +2175,7 @@ struct xapian_receiver
     struct message_guid guid;
     uint32_t uid;
     time_t internaldate;
+    modseq_t modseq;
     enum search_part part;
     const struct message_guid *part_guid;
     const char *partid;
@@ -2149,6 +2195,7 @@ struct xapian_update_receiver
     unsigned int commits;
     seqset_t *oldindexed;
     seqset_t *indexed;
+    modseq_t highest_modseq;
     strarray_t *activedirs;
     strarray_t *activetiers;
     hash_table cached_seqs;
@@ -2296,7 +2343,8 @@ static int flush(search_text_receiver_t *rx)
     if (tr->indexed) {
         r = write_indexed(strarray_nth(tr->activedirs, 0),
                 mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
-                mailbox_uniqueid(tr->super.mailbox), tr->indexed, tr->super.verbose);
+                mailbox_uniqueid(tr->super.mailbox), tr->indexed,
+                tr->highest_modseq, tr->super.verbose);
         if (r) goto out;
     }
 
@@ -2368,6 +2416,7 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
     int r = message_get_uid(msg, &tr->super.uid);
     if (!r) r = message_get_guid(msg, &guid);
     if (!r) r = message_get_internaldate(msg, &tr->super.internaldate);
+    if (!r) r = message_get_modseq(msg, &tr->super.modseq);
     if (r) return r;
 
     message_guid_copy(&tr->super.guid, guid);
@@ -2594,11 +2643,14 @@ static int end_message_update(search_text_receiver_t *rx, uint8_t indexlevel)
         seqset_add(tr->indexed, seqset_firstnonmember(tr->oldindexed), 1);
     }
     seqset_add(tr->indexed, tr->super.uid, 1);
+    if (tr->super.modseq > tr->highest_modseq)
+        tr->highest_modseq = tr->super.modseq;
 
 out:
     tr->super.uid = 0;
     message_guid_set_null(&tr->super.guid);
     tr->super.internaldate = 0;
+    tr->super.modseq = 0;
     return r;
 }
 
@@ -4273,6 +4325,60 @@ out:
     mailbox_close(&mailbox);
     free(inboxname);
     return r;
+}
+
+EXPORTED modseq_t search_get_indexed_modseq(const char *userid)
+{
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct mailbox *inbox = NULL;
+    struct mappedfile *activefile = NULL;
+    strarray_t *active = NULL;
+    strarray_t *activedirs = NULL;
+    strarray_t *activetiers = NULL;
+    struct indexeddb *idb = NULL;
+    modseq_t modseq = 0;
+    int r = 0;
+
+    r = mailbox_open_irl(inboxname, &inbox);
+    if (r) goto out;
+
+    r = activefile_open(mailbox_name(inbox), mailbox_partition(inbox),
+                        &activefile, AF_LOCK_READ, &active);
+    if (r) goto out;
+
+    activedirs = activefile_resolve(mailbox_name(inbox), mailbox_partition(inbox),
+                                    active, /*dostat*/1, &activetiers);
+    if (!activedirs || !activedirs->count) goto out;
+
+    struct buf path = BUF_INITIALIZER;
+    buf_printf(&path, "%s%s", strarray_nth(activedirs, 0), INDEXEDDB_FNAME);
+    r = indexeddb_open(userid, buf_cstring(&path), 0, &idb);
+    buf_free(&path);
+    if (r) goto out;
+
+    if (idb->version >= 2) {
+        const char *data = NULL;
+        size_t datalen = 0;
+        r = cyrusdb_fetch(idb->db, "*MAXMODSEQ*", 11, &data, &datalen, NULL);
+        if (!r && datalen > 0) {
+            bit64 num;
+            if (!parsenum(data, NULL, datalen, &num))
+                modseq = (modseq_t)num;
+        }
+    }
+
+out:
+    indexeddb_close(&idb, 0);
+    strarray_free(activedirs);
+    strarray_free(activetiers);
+    strarray_free(active);
+    if (activefile) {
+        mappedfile_unlock(activefile);
+        mappedfile_close(&activefile);
+    }
+    mailbox_close(&inbox);
+    free(inboxname);
+    return modseq;
 }
 
 static int can_match(enum search_op matchop, enum search_part partnum)

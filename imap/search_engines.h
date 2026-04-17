@@ -190,6 +190,7 @@ int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox **mailboxptr,
                           int min_indexlevel, int flags);
 int search_end_update(search_text_receiver_t *rx);
+modseq_t search_get_indexed_modseq(const char *userid);
 
 /* Create a search text receiver for snippets. For each non-empty
  * snippet generated from a message search part, callback proc is called.
