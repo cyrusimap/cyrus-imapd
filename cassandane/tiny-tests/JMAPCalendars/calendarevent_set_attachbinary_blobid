@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_set_attachbinary_blobid
-    :min_version_3_5
+    :min_version_3_5 :max_version_0_0
     ($self)
 {
     my $jmap = $self->default_user->jmap;

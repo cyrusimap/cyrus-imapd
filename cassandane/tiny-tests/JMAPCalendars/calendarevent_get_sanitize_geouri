@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_calendarevent_get_sanitize_geouri
-    :min_version_3_9
+    :min_version_3_9 :max_version_0_0
     ($self)
 {
     my $jmap = $self->default_user->jmap;
