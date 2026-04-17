@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_unresolvable_jsprop
+    :min_version_3_9
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    # Get the starting JMAP state before we create anything, so we can ask
+    # ContactCard/changes for the id of the card we're about to put.  We need
+    # changes because ContactCard/get is the very thing under test -- if the
+    # bug is present, asking /get to enumerate ids hides the same card we want
+    # to look up by id.
+    my $startState = $jmap->request([['ContactCard/get', { ids => [] } ]])
+                          ->single_sentence->arguments->{state};
+
+    # This vCard has a JSPROP whose JSPTR points into a JSContact
+    # subtree that will not be reconstructed on read: there is no ADR
+    # property, so the converted JSContact has no "addresses" object at
+    # all, and the patch "addresses/a0/components" = [...] cannot be
+    # applied.
+    #
+    # This shape used to be produced by ContactCard/set when a client
+    # sent an AddressComponent with an invalid "kind"; such cards may
+    # still exist on disk from before that bug was fixed.
+    #
+    # ContactCard/get used to silently drop such cards from the result:
+    # jmap_card_from_vcard returned NULL, but getcards_cb did not
+    # notice and bumped its row count anyway, so the caller put the id
+    # in neither "list" nor "notFound" -- a JMAP spec violation.
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $vcard = <<EOF;
+BEGIN:VCARD
+VERSION:4.0
+UID:$uid
+FN:Broken Contact
+JSPROP;JSPTR=addresses/a0/components:"Main St"
+END:VCARD
+EOF
+    $vcard =~ s/\r?\n/\r\n/gs;
+    $carddav->Request('PUT', 'Default/broken.vcf', $vcard,
+        'Content-Type' => 'text/vcard');
+
+    my $res = $jmap->request([
+        ['ContactCard/changes', { sinceState => $startState } ],
+    ]);
+    my $created = $res->single_sentence->arguments->{created};
+    $self->assert_num_equals(1, scalar $created->@*);
+    my $id = $created->[0];
+
+    $res = $jmap->request([ ['ContactCard/get', { ids => [$id] } ] ]);
+
+    my $got      = $res->single_sentence->arguments->{list};
+    my $notFound = $res->single_sentence->arguments->{notFound};
+
+    $self->assert(
+        ($got->@* == 1 && $got->[0]{id} eq $id)
+         || ($notFound->@* == 1 && $notFound->[0] eq $id),
+        "requested id must appear in either list or notFound"
+    );
+}
