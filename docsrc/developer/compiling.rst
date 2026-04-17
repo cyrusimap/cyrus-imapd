@@ -40,14 +40,17 @@ required to build a functional cyrus-imapd.
     `flex`_, flex, flex
     `gcc`_, gcc, gcc
     `gperf`_, gperf, gperf
+    `ICU`_, libicu-dev, libicu-devel, "version 55 or newer"
     `jansson`_, libjansson-dev, jansson-devel
     `libbsd`_, libbsd-dev, libbsd-devel
     `libtool`_, libtool, libtool
-    `ICU`_, libicu-dev, libicu-devel, "version 55 or newer"
-    `uuid`_, uuid-dev, libuuid-devel
     `openssl`_ :ref:`(Note about versions) <openssl-versions>`, libssl-dev, openssl-devel
+    `perl`_, perl, perl
+    `perl App-Cmd`_, libapp-cmd-perl, perl-App-Cmd
+    `perl Moo`_, libmoo-perl, perl-Moo
     `pkgconfig`_, pkg-config, pkgconfig
     `sqlite`_, libsqlite3-dev, sqlite-devel
+    `uuid`_, uuid-dev, libuuid-devel
 
 .. _autoconf: http://www.gnu.org/software/autoconf/
 .. _automake: http://www.gnu.org/software/automake/
@@ -56,14 +59,17 @@ required to build a functional cyrus-imapd.
 .. _flex: http://flex.sourceforge.net/
 .. _gcc: http://gcc.gnu.org
 .. _gperf: http://www.gnu.org/software/gperf/
+.. _ICU: http://www.icu-project.org/
 .. _jansson: http://www.digip.org/jansson/
 .. _libbsd: https://libbsd.freedesktop.org/wiki/
 .. _libtool: http://www.gnu.org/software/libtool/
-.. _ICU: http://www.icu-project.org/
-.. _uuid: https://www.kernel.org/pub/linux/utils/util-linux/
 .. _openssl: http://www.openssl.org/
+.. _perl: https://www.perl.org/
+.. _perl App-Cmd: https://metacpan.org/dist/App-Cmd
+.. _perl Moo: https://metacpan.org/dist/Moo
 .. _pkgconfig: http://pkgconfig.freedesktop.org
 .. _sqlite: https://www.sqlite.org/
+.. _uuid: https://www.kernel.org/pub/linux/utils/util-linux/
 
 To install all dependencies from packages on Debian Jessie, use this:
 
