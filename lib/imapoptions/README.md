@@ -5,8 +5,7 @@ recognised by Cyrus.
 This database is used by tools/imapoptions.pl, which uses it to produce outputs
 in the various formats needed by parts of the build.
 
-FORMAT
-======
+# FORMAT
 
 Each file is approximately an RFC822 email file, consisting of:
 
@@ -14,19 +13,16 @@ Each file is approximately an RFC822 email file, consisting of:
 2) An empty line
 3) A block of documentation in RST format
 
-HEADERS
-=======
+# HEADERS
 
 Long headers may be wrapped across multiple lines in the usual way for RFC822.
 
-Name
-----
+## Name
 The name of the option.  Must match the filename!
 
 This header is required.
 
-Type
-----
+## Type
 The libconfig data type of the option.
 
 * BITFIELD: a subset from a set of bits
@@ -40,8 +36,7 @@ The libconfig data type of the option.
 
 This header is required.
 
-Allowed-Values
---------------
+## Allowed-Values
 The set of possible values for this option, separated by spaces.  The order of
 values is significant and preserved.
 
@@ -49,8 +44,7 @@ For BITFIELD, ENUM, and STRINGLIST, this header is required.
 
 For other types, this header is forbidden.
 
-Default-Value
--------------
+## Default-Value
 The default value for this option.
 
 For BITFIELD, this may be multiple values separated by spaces.  All must have
@@ -76,9 +70,7 @@ For SWITCH, this must be either 1 (enabled) or 0 (not enabled).
 
 This header is required.
 
-Last-Modified
--------------
-
+## Last-Modified
 Set this to UNRELEASED if you add a new option, or change the behaviour of
 an existing one.
 
@@ -87,9 +79,7 @@ release process.
 
 This header is required.
 
-Deprecated-Since
-----------------
-
+## Deprecated-Since
 Set this to UNRELEASED to mark the option as deprecated.
 
 The release manager will replace it with a real version number during the
@@ -97,9 +87,7 @@ release process.
 
 This header is optional.
 
-Replaced-By
------------
-
+## Replaced-By
 The name of another option that replaces this one.  The option so named must
 exist and not itself be deprecated.
 
@@ -107,16 +95,13 @@ When Deprecated-Since is set, this header is optional.
 
 When Deprecated-Since is not set, this header is forbidden.
 
-For-Documentation-Only
-----------------------
-
+## For-Documentation-Only
 There are some options that we need to document but which do not get an
 entry in the imapopts struct.  Set this flag to 1 for that behaviour.
 
 This header is optional.
 
-DOCUMENTATION
-=============
+# DOCUMENTATION
 
 The documentation block should be formatted as [reStructuredText][1].
 
