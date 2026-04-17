@@ -7505,17 +7505,20 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* local mailbox */
     if (!r) {
+        int delflags = force ? MBOXLIST_DELETE_FORCE : 0;
+
         if (mbname_isdeleted(mbname)) {
             r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        isadmin, imapd_userid,
                                        imapd_authstate, mboxevent,
-                                       MBOXLIST_DELETE_LOCALONLY);
+                                       delflags | MBOXLIST_DELETE_LOCALONLY);
         }
         else if (!isadmin && mbname_issystem(mbname)) {
             r = IMAP_PERMISSION_DENIED;
         }
         else {
-            int delflags = (1-force) ? MBOXLIST_DELETE_CHECKACL : 0;
+            if (!force)
+                delflags |= MBOXLIST_DELETE_CHECKACL;
 
             if (!delete_user && mboxlist_haschildren(mbname_intname(mbname))) {
                 r = IMAP_MAILBOX_HASCHILDREN;
