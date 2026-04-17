@@ -15,7 +15,7 @@ use Storable 'dclone';
 use Cwd qw(abs_path);
 use File::Basename;
 use XML::Spice;
-use MIME::Base64 qw(encode_base64url decode_base64url);
+use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base64);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
