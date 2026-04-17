@@ -884,6 +884,7 @@ static struct icalgeotype geouri_to_icalgeo(const char *uri, bool *is_lossy)
     }
     strncpy(icalgeo.lon, geouri.coords[1], n);
 
+    geouri_fini(&geouri);
     return icalgeo;
 }
 
@@ -1169,6 +1170,7 @@ static json_t *rrule_from_ical(struct icalrecurrencetype *rrule,
     if (buf_len(&skip)) {
         json_object_set_new(jrrule, "skip", json_string(buf_lcase(&skip)));
     }
+    buf_free(&skip);
 
     // firstDayOfWeek
     static const char *const weekdays[7] = { "su", "mo", "tu", "we",
