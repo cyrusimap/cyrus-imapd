@@ -57,10 +57,11 @@ sub _from_string
         if (@a) {
             $values{$v} = [ @a ];
 
-            foreach my $a (@a) {
-                die "'$a' defined twice"
-                    if exists $values{$a} or exists $aliases{$a};
-                $aliases{$a} = undef;
+            # not '$a' because that evades strict vars protections
+            foreach my $x (@a) {
+                die "'$x' defined twice"
+                    if exists $values{$x} or exists $aliases{$x};
+                $aliases{$x} = undef;
             }
         }
         else {
