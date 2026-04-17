@@ -40,18 +40,22 @@ sub set_up
     $self->SUPER::set_up();
     $self->{instance}->create_user("otheruser");
 
+    $self->_discover_unix_groups();
+}
+
+sub _discover_unix_groups
+{
+    my ($self) = @_;
+
     my $userid = 'cassandane';
     my @member_groups;
     my %seen;
 
     my @pw = getpwnam($userid);
+    my $primary_group;
     if (@pw) {
         my $primary_gid = $pw[3];
-        my $primary_group = getgrgid($primary_gid);
-        if (defined $primary_group) {
-            push @member_groups, $primary_group;
-            $seen{$primary_group} = 1;
-        }
+        $primary_group = getgrgid($primary_gid);
     }
 
     setgrent();
@@ -63,6 +67,13 @@ sub set_up
         $seen{$name} = 1;
     }
     endgrent();
+
+    # Prefer supplementary groups for group ACL tests: they exercise reverse
+    # ACL updates more reliably than the account's primary group name.
+    if (!@member_groups && defined $primary_group) {
+        push @member_groups, $primary_group;
+        $seen{$primary_group} = 1;
+    }
 
     my $nonmember_group;
     setgrent();
@@ -82,6 +93,11 @@ sub set_up
 sub skip_check
 {
     my ($self) = @_;
+
+    # skip_runtime_check is evaluated before set_up(), so ensure these are
+    # populated before applying prerequisite checks.
+    $self->_discover_unix_groups()
+        if not defined $self->{unix_member_groups};
 
     if ($self->{_name} =~ /list_order_racl/) {
         return "requires at least two unix groups containing user 'cassandane'"
