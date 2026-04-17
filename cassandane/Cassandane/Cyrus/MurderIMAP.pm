@@ -371,14 +371,18 @@ sub test_move_to_backend_nonexistent
 
     my $frontend = $self->{frontend_store}->get_client();
     my $backend = $self->{backend1_store}->get_client();
+    my $backend_admin = $self->{backend1_adminstore}->get_client();
 
     # create a destination folder (on both frontend and backend)
     $frontend->create($dest_folder);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
     # nuke the destination folder (on the backend only)
-    $backend->localdelete($dest_folder);
-    $self->assert_str_equals('ok', $backend->get_last_completion_response());
+    # n.b. 'INBOX' is part of the mailbox name, it's not just the cassandane
+    # user's inbox, hence the weird admin path here.  Not sure why I did it
+    # that way, might have been just what was in the bug report.
+    $backend_admin->localdelete('user.cassandane.INBOX.dest');
+    $self->assert_str_equals('ok', $backend_admin->get_last_completion_response());
 
     my $f_folders = $frontend->list('', '*');
     $self->assert_deep_equals(
