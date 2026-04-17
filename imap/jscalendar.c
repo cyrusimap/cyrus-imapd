@@ -5703,6 +5703,22 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
         }
     }
 
+    // Set iTIP REPLY timestamp and sequence on Participant
+    icaltimetype itip_dtstamp = icaltime_null_time();
+    int itip_sequence = -1;
+    if (!cfg->no_quirk && icalcomponent_get_parent(comp)) {
+        icalcomponent *ical = icalcomponent_get_parent(comp);
+        icalproperty_method method = icalcomponent_get_method(ical);
+
+        if (method == ICAL_METHOD_COUNTER ||
+            method == ICAL_METHOD_REFRESH ||
+            method == ICAL_METHOD_REPLY)
+        {
+            itip_dtstamp = icalcomponent_get_dtstamp(comp);
+            itip_sequence = icalcomponent_get_sequence(comp);
+        }
+    }
+
     // Convert ATTENDEEs.
     icalproperty *attendee;
     icalpropiter prop_iter;
@@ -5722,6 +5738,16 @@ static void participants_from_ical(jscalendar_cfg_t *cfg
             json_object_set_new(jparts, key, jpart);
         }
         participant_from_icalprop(attendee, jpart);
+
+        if (!icaltime_is_null_time(itip_dtstamp)) {
+            json_object_set_new(jpart, "scheduleUpdated",
+                json_string(utctime_from_icaltime(itip_dtstamp, &buf)));
+        }
+
+        if (itip_sequence >= 0) {
+            json_object_set_new(jpart, "scheduleSequence",
+                json_integer(itip_sequence));
+        }
     }
 
     // Convert PARTICIPANT components.
