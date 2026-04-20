@@ -52,7 +52,7 @@ typedef struct {
      */
     bool no_quirk;
 
-} jscalendar_cfg_t;
+} jscal_cfg_t;
 
 /** @brief Convert a JSCalendar object to an iCalendar object.
  *
@@ -60,9 +60,9 @@ typedef struct {
  *  @param jobj    JSON object representing a JSCalendar Group or Event.
  *  @param parser  JMAP parser used to report property errors.
  *  @return        A newly allocated iCalendar object, or NULL on error. */
-extern icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
-                                         json_t *jobj,
-                                         struct jmap_parser *parser);
+extern icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
+                                    json_t *jobj,
+                                    struct jmap_parser *parser);
 
 /** @brief Convert an iCalendar object to a JSCalendar Group object.
  *
@@ -70,15 +70,14 @@ extern icalcomponent *jscalendar_to_ical(jscalendar_cfg_t *cfg,
  *  @param vcal  An iCalendar VCALENDAR component.
  *  @return      A newly allocated JSON object representing a JSCalendar Group,
  *               or NULL on error. */
-extern json_t *jscalendar_from_ical(jscalendar_cfg_t *cfg,
-                                    icalcomponent *vcal);
+extern json_t *jscal_from_ical(jscal_cfg_t *cfg, icalcomponent *vcal);
 
 /** @brief Returns the key of the Participant object for a property.
  *
  *  @param prop  An iCalendar ATTENDEE or ORGANIZER property.
  *  @return      The Participant object key, or NULL if the argument isn't an
  *               ATTENDEE or ORGANIZER property. */
-extern char *jscalendar_participant_id(icalproperty *prop);
+extern char *jscal_participant_id(icalproperty *prop);
 
 #ifdef __cplusplus
 }
