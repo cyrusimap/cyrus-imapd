@@ -319,13 +319,13 @@ the user.dav databases need to be reconstructed due to format changes.::
 
     dav_reconstruct -a
 
-If have the `reverseacls` feature enabled in :cyrusman:`imapd.conf(5)`, you may
+If you have the :imapdconf:`reverseacls` feature enabled, you may
 need to regenerate the data it uses (which is stored in `mailboxes.db`).  This
 is automatically regenerated at startup by ``ctl_cyrusdb -r`` if the
 `reverseacls` setting has changed. So, to force a regeneration:
 
     1. Shut down Cyrus
-    2. Change `reverseacls` to `0` in :cyrusman:`imapd.conf(5)`
+    2. Change :imapdconf:`reverseacls` to `0`
     3. Run :cyrusman:`ctl_cyrusdb(8)` with the `-r` switch (or just start
        Cyrus, assuming your :cyrusman:`cyrus.conf(5)` contains a
        `ctl_cyrusdb -r` entry in the START section).  The old RACL entries
