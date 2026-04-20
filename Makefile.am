@@ -105,6 +105,7 @@ BUILT_SOURCES = \
 CLEANFILES = \
     tools/mkimap \
     tools/rehash \
+    imap/css3_color_array.h \
     lib/chartable.c \
     lib/imapopts.c \
     lib/imapopts.h
@@ -175,6 +176,7 @@ BUILT_SOURCES += \
     imap/promdata.h \
     lib/htmlchar.c \
     lib/htmlchar.h \
+    imap/css3_color_array.h \
     imap/rfc822_header.c \
     imap/rfc822_header.h \
     imap/mailbox_header_cache.h
@@ -351,6 +353,7 @@ EXTRA_DIST = \
     doc/legacy/netnews.png \
     doc \
     docsrc \
+    imap/css3_color_array.gperf \
     imap/http_cal_abook_admin.js \
     imap/http_err.et \
     imap/imap_err.et \
@@ -1519,6 +1522,9 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 # so do a tricky directory change
 %_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
+
+imap/css3_color_array.h: imap/css3_color_array.gperf
+	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
 # Build jmap_*_props.[ch] from jmap_*_props.gperf
 .gperf.c:
