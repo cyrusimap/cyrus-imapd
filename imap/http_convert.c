@@ -132,7 +132,7 @@ static int convert_to_jscal(struct transaction_t *txn)
     icalcomponent *ical = NULL;
     json_t *jsgroup = NULL;
     char *resp_payload = NULL;
-    jscalendar_cfg_t jscal_cfg = {
+    jscal_cfg_t jscal_cfg = {
         .emailalert_default_uri = httpd_userid,
         .use_icalendar_convprops = true,
         .no_quirk = true,
@@ -148,7 +148,7 @@ static int convert_to_jscal(struct transaction_t *txn)
     }
 
     /* Convert to JSCalendar */
-    jsgroup = jscalendar_from_ical(&jscal_cfg, ical);
+    jsgroup = jscal_from_ical(&jscal_cfg, ical);
     if (!jsgroup) {
         txn->error.desc = "Failed to convert to JSCalendar";
         ret = HTTP_SERVER_ERROR;
@@ -180,7 +180,7 @@ static int convert_to_ical(struct transaction_t *txn)
 {
     json_t *jobj = NULL;
     icalcomponent *ical = NULL;
-    jscalendar_cfg_t jscal_cfg = {
+    jscal_cfg_t jscal_cfg = {
         .emailalert_default_uri = httpd_userid,
         .use_icalendar_convprops = true,
         .no_quirk = true,
@@ -198,7 +198,7 @@ static int convert_to_ical(struct transaction_t *txn)
     }
 
     /* Convert to iCalendar */
-    ical = jscalendar_to_ical(&jscal_cfg, jobj, &parser);
+    ical = jscal_to_ical(&jscal_cfg, jobj, &parser);
     if (ical) {
         const char *resp_payload = icalcomponent_as_ical_string(ical);
         write_body(HTTP_OK, txn, resp_payload, strlen(resp_payload));
