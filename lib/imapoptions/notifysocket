@@ -4,4 +4,3 @@ Default-Value: {configdirectory}/socket/notify
 Last-Modified: 2.3.17
 
 Unix domain socket that the mail notification daemon listens on. 
-

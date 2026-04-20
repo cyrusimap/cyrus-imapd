@@ -6,4 +6,3 @@ Last-Modified: 3.10.0
 The maximum count of CalendarEventNotification objects to keep per account.
 Any notifications exceeding this count are expunged to make room for new
 ones. Zero or any negative number disables this limit.
-

@@ -8,4 +8,3 @@ Returned as the maxSizeRequest property value of the JMAP
 \"urn:ietf:params:jmap:core\" capabilities object.
 
 For backward compatibility, if no unit is specified, kibibytes is assumed.
-

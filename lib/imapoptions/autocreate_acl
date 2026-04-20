@@ -15,4 +15,3 @@ this setting multiple times.
 
 For example, "autocreate_acl Plus anyone p" would allow lmtp delivery
 to a folder named "Plus".
-

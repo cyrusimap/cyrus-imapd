@@ -8,4 +8,3 @@ With **delete_mode** set to *delayed*, the
 deleted mailboxes.
 
 The hierarchy delimiter will be automatically appended.
-

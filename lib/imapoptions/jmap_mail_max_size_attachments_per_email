@@ -8,4 +8,3 @@ The value to return for the maxSizeAttachmentsPerEmail property of the JMAP
 implementation does not enforce this size limit.
 
 For backward compatibility, if no unit is specified, kibibytes is assumed.
-

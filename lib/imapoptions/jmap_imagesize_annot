@@ -14,4 +14,3 @@ For example, if message part 1.2 contains an image of width 300
 and height 200, then the value of this annotation would be:
 
 { "1.2" : [ 300, 200 ] }
-

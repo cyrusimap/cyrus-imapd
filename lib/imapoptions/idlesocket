@@ -4,4 +4,3 @@ Default-Value: {configdirectory}/socket/idle
 Last-Modified: 2.3.17
 
 Unix domain socket that idled listens on. 
-

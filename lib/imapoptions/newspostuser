@@ -8,7 +8,6 @@ Userid used to deliver usenet articles to newsgroup folders
 to "post+comp.mail.imap" would be delivered to the "comp.mail.imap"
 folder.
 
-
 When set, the Cyrus NNTP server will add the header(s) specified in
 the **newsaddheaders** option to each incoming usenet article.
 The added header(s) will contain email delivery addresses

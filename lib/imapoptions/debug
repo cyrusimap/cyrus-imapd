@@ -6,4 +6,3 @@ Last-Modified: 3.12.0
 If enabled, allow syslog() to pass LOG_DEBUG messages.
 
 This can be toggled for a running process by sending it SIGUSR1.
-

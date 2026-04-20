@@ -10,7 +10,6 @@ This allows for the occasional polling rate faster than popminpoll,
 (i.e., for clients that require a send/receive to send mail) but still
 enforces the rate long-term.  Default is 1 (disabled).
 
-
 The easiest way to think of it is a queue of past connections, with one
 slot being filled for every connection, and one slot being cleared
 every *popminpoll* minutes. When the queue is full, the user

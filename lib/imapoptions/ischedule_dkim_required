@@ -4,4 +4,3 @@ Default-Value: 1
 Last-Modified: 3.1.4
 
 A DKIM signature is required on received iSchedule requests. 
-

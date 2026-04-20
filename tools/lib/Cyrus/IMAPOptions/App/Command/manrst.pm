@@ -171,10 +171,7 @@ sub _print_option
             print "$line\n";
         }
 
-        if (scalar $option->documentation->@* == 1) {
-            # XXX perverse newline behaviour
-            print "\n";
-        }
+        print "\n";
     }
 
     if ($option->has_deprecated_since) {

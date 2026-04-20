@@ -23,4 +23,3 @@ Server selection mode.
 *freespace-percent-weighted-delta*
     same as for partition selection, comparing the free space (%) of the least used
     partition of each backend.
-

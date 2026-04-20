@@ -4,4 +4,3 @@ Default-Value: (&(objectclass=domainrelatedobject)(associateddomain=%s))
 Last-Modified: 2.5.0
 
 Filter to use searching for domains. 
-

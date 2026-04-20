@@ -23,4 +23,3 @@ using the "Bearer" authentication scheme. The JWS Header must include the
 The JWS Payload must include the "sub" claim with the Cyrus user
 identifier as value. It may include the "iat" claim (see *http_jwt_max_age*).
 A payload with any other claim is rejected.
-

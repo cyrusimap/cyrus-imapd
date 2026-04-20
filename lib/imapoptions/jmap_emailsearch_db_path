@@ -7,4 +7,3 @@ Deprecated-Since: 3.6.0
 The absolute path to the JMAP email search cache file.  If not
 specified, JMAP Email/query and Email/queryChanges will not
 cache email search results. 
-

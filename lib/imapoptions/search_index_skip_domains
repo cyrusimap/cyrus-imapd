@@ -6,4 +6,3 @@ Last-Modified: 3.3.1
 
 A space separated list of domains - if set, any users in the listed domains
 will be skipped when indexing.
-

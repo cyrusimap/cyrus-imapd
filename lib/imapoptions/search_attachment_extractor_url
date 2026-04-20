@@ -32,4 +32,3 @@ Any other HTTP status code is treated as an error. For performance
 reasons, the Cyrus indexer attempts to keep-alive the TCP connection
 to the extractor.
 Xapian only.
-

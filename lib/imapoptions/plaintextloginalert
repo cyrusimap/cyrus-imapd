@@ -4,4 +4,3 @@ Default-Value: NULL
 Last-Modified: 2.3.17
 
 Message to send to client after a successful plaintext login. 
-

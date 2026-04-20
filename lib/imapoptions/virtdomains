@@ -22,4 +22,3 @@ on
     will have their domain determined by doing a reverse lookup on the IP address
     of the incoming network interface, or if no record is found, the
     *defaultdomain* will be used.
-

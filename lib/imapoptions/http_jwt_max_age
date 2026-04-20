@@ -16,4 +16,3 @@ only is validated if no "exp" claim is present.
 The zero value disables validation of the "iat" JWS claim.
 
 Starting from Cyrus 3.8, the "nbf" and "exp" claims always are validated.
-

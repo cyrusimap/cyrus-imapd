@@ -4,4 +4,3 @@ Default-Value: 0
 Last-Modified: 3.1.2
 
 Enable per-user calendar administration web UI on the CalDAV server. 
-

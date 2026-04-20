@@ -42,7 +42,6 @@ has the following form:
     **uint**
         non-negative integers are accepted.
 
-
 *proxy-type*
     specifies whether this attribute is for the **backend** or
     **proxy** servers or both (**proxy_and_backend**)
@@ -67,4 +66,3 @@ has the following form:
     particular the **a** permission bit does not achieve this.
 
     Blank lines and lines beginning with \`\`#'' are ignored.
-

@@ -4,4 +4,3 @@ Default-Value:
 Last-Modified: 2.3.17
 
 Contains the LDAP base dn for the LDAP ptloader module. 
-

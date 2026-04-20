@@ -21,5 +21,3 @@ INBOX folders are created under both the following conditions:
 2.
     A message arrives for the user through the *lmtpd(8)*.
     *autocreate_post* option must be enabled.
-
-

@@ -4,4 +4,3 @@ Default-Value: NULL
 Last-Modified: 3.12.0
 
 If this file exists, calalarmd will not process events 
-

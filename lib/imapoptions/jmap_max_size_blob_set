@@ -8,4 +8,3 @@ maxSizeBlobSet property value of the JMAP
 \"urn:ietf:params:jmap:blob\" capabilities object.
 
 For backward compatibility, if no unit is specified, kibibytes is assumed.
-

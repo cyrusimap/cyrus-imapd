@@ -18,4 +18,3 @@ command line options:
     .. option:: -m    mailbox
 
     And the notification message will be available on *stdin*.
-

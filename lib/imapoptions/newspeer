@@ -15,7 +15,6 @@ no 'wildmat' is specified, all groups are fed.  If 'user' is specified
 the article to the server, otherwise the IHAVE command will be
 used.
 
-
 A '@' may be used in place of '!' in the wildmat to prevent feeding
 articles cross-posted to the given group, otherwise cross-posted
 articles are fed if any part of the wildmat matches.  For example,

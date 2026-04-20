@@ -11,4 +11,3 @@ removed later by **cyr_expire(8)**.
 
 In *immediate* mode, the mailbox is removed from the filesystem
 immediately.
-
