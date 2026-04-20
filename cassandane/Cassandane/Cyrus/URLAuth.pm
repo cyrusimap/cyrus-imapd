@@ -44,6 +44,7 @@ use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
 use Data::Dumper;
+use Digest::SHA qw(hmac_sha1_hex);
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -251,6 +252,59 @@ sub test_revoked_access_invalidates_url
         $bare_url,
     );
     $self->assert_null($stolen, 'URL must not fetch after authorizer access revoked');
+}
+
+sub test_forged_empty_key
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    # The victim has an INBOX and a second folder.  The secret we don't want
+    # leaked lives in the second folder.
+    my $talk = $self->{store}->get_client;
+    $talk->create("Archive") or die "create Archive: " . $talk->get_last_error;
+
+    $self->{store}->set_folder("INBOX");
+    $self->make_message("Public INBOX message");
+
+    $self->{store}->set_folder("Archive");
+    $self->make_message("Secret archived message");
+
+    # Cause the victim's mboxkey.db to be created, but with an entry only for
+    # the INBOX -- *not* for the Archive folder we're about to attack.  An
+    # mboxkey.db appears in the wild whenever a user has ever issued a
+    # GENURLAUTH (or a RESETKEY for a specific mailbox).
+    my $seed;
+    $talk->_imap_cmd(
+        'genurlauth', 0,
+        { genurlauth => sub { $seed = $_[1]->[0] } },
+        'imap://cassandane@127.0.0.1/INBOX/;uid=1;urlauth=user+cassandane',
+        'INTERNAL',
+    );
+    $self->assert_not_null($seed, 'victim should be able to URLAUTH their own INBOX');
+
+    # Now the attacker forges a token for the *Archive* folder.  Because
+    # mboxkey_read() returns {key=NULL, keylen=0} for any mailbox it has never
+    # stored, cmd_urlfetch computes HMAC-SHA1 with an empty key -- which is
+    # entirely attacker-computable.
+    $self->{instance}->create_user('attacker');
+
+    my $rump = 'imap://cassandane@127.0.0.1/Archive/;uid=1;urlauth=user+attacker';
+    my $token = '00' . hmac_sha1_hex($rump, '');
+    my $forged = "$rump:internal:$token";
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'attacker');
+    my $attacker = $store->get_client();
+
+    my $stolen;
+    $attacker->_imap_cmd(
+        'urlfetch', 0,
+        { urlfetch => sub { $stolen = $_[1]->[1] } },
+        $forged,
+    );
+
+    $self->assert_null($stolen);
 }
 
 1;
