@@ -25,21 +25,10 @@ sub test_perms
     "INTERNAL",
   );
 
-  # This should fail in some way, commented out to show we really do fetch the
-  # email
-#  $self->assert_null($url);
-
-  my $email;
-  %handlers = (
-    urlfetch => sub {
-      my ($cmd, $params) = @_;
-      $email = ${$params}[1];
-    },
-  );
-
-  my $res = $talk->_imap_cmd('urlfetch', 0, \%handlers, $url);
-
-  warn $email if $email;
-
-  $self->assert_null($email);
+    # 'other' has no rights on cassandane's mailbox, so the server must refuse
+    # to mint a URLAUTH token for it. Without this check, cmd_urlfetch would
+    # happily hand over the message: it skips ACLs whenever urlauth.access is
+    # set, trusting that a valid token implies the authorizer had the rights
+    # to delegate.
+    $self->assert_null($url);
 }
