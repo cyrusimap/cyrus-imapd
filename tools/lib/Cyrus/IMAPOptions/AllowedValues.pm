@@ -92,6 +92,21 @@ sub values_and_aliases
     return @tuples;
 }
 
+sub values_and_aliases_flat
+{
+    my ($self) = @_;
+
+    my @flat;
+
+    foreach my $value ($self->_order->@*) {
+        push @flat, $value;
+        push @flat, $self->_values->{$value}->@*
+            if $self->_values->{$value};
+    }
+
+    return @flat;
+}
+
 sub value_alias_strings
 {
     my ($self) = @_;

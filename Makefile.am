@@ -496,6 +496,7 @@ EXTRA_DIST = \
 
 IMAPOPTIONS_LIBS = \
     tools/lib/Cyrus/IMAPOptions/AllowedValues.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/bitfields.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/csource.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/cheader.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/manrst.pm \
