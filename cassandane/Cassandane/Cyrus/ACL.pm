@@ -270,6 +270,30 @@ sub test_setacl_badrights
     $self->assert_deep_equals($origacl, $newacl);
 }
 
+sub test_listrights_other_user
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client;
+
+    # Create a victim user.  We grant the attacker no explicit rights on the
+    # victim's mailbox: the default ACL "anyone p" is enough to expose the
+    # bug.  (LISTRIGHTS gates only on "has any right at all", where it ought
+    # to require ACL_ADMIN; ACL_POST from the anyone grant is sufficient to
+    # slip past.)
+    $self->{instance}->create_user('victim');
+
+    my $seen;
+    $talk->_imap_cmd(
+        'LISTRIGHTS', 0,
+        { listrights => sub { $seen = 1 } },
+        'Other Users.victim', 'victim',
+    );
+
+    $self->assert_str_equals('no', $talk->get_last_completion_response);
+    $self->assert_null($seen);
+}
+
 # see also LDAP.pm for groupid tests
 
 1;
