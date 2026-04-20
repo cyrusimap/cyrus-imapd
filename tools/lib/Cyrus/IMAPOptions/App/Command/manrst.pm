@@ -112,8 +112,8 @@ sub header
     unit is specified, an option-specific backward-compatible default unit is
     assumed (documented on an option-by-option basis).
 
-    FIELD DESCRIPTIONS
-    ==================
+    OPTION DESCRIPTIONS
+    ===================
 
     The sections below detail options that can be placed in the
     **/etc/imapd.conf** file, and show each option's default value.
@@ -142,23 +142,33 @@ sub footer
     print $rst;
 }
 
+sub _rst_heading
+{
+    my ($s, $u) = @_;
+
+    $u //= '-';
+
+    return "$s\n" . $u x length($s) . "\n\n";
+}
+
 sub _print_option
 {
     my ($name, $option) = @_;
 
-    print "    .. startblob $name\n\n";
-
     my $dv = $option->docs_default_value;
     $dv =~ s/\*/\\\*/g;
 
-    print "``$name:`` $dv\n\n";
+    print ".. imapdconf:: $name\n\n";
+    print _rst_heading($name);
+
+    print ".. startblob $name\n\n";
+
+    print "Default: $dv\n\n";
 
     if ($option->has_documentation) {
         foreach my $line ($option->documentation->@*) {
             chomp $line;
-
-            # no indent on blank lines
-            print $line ? "    $line\n" : "\n";
+            print "$line\n";
         }
 
         print "\n";
@@ -166,23 +176,23 @@ sub _print_option
 
     if ($option->has_deprecated_since) {
         if ($option->has_replaced_by) {
-            print '    Deprecated in favour of *';
+            print 'Deprecated in favour of :imapdconf:`';
             print $option->replaced_by;
-            print "*.\n";
+            print "`.\n";
         }
         else {
-            print "    Deprecated. No longer used.\n";
+            print "Deprecated. No longer used.\n";
         }
         print "\n";
     }
     elsif ($option->has_allowed_values) {
-        print "    Allowed values: ";
+        print "Allowed values: ";
         print join ', ', map { '*' . $_ . '*' }
                          $option->allowed_values->value_alias_strings;
         print "\n\n";
     }
 
-    print "    .. endblob $name\n\n";
+    print ".. endblob $name\n\n";
 }
 
 1;
