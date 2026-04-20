@@ -1,0 +1,8 @@
+Name: calendar_user_address_set
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+Space-separated list of domains corresponding to calendar user
+addresses for which the server is responsible.  If not set (the
+default), the value of the "defaultdomain" option will be used. 

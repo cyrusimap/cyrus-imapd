@@ -1,0 +1,6 @@
+Name: aps_topic_caldav
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+
+Topic for Apple Push Service registration for CalDAV. 

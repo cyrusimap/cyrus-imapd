@@ -1,0 +1,6 @@
+Name: sql_usessl
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+If enabled, a secure connection will be made to the SQL server. 

@@ -1,0 +1,13 @@
+Name: xlist-flag
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.0.0
+For-Documentation-Only: 1
+
+Set the special-use flag *flag* on the specified folder when it
+is autocreated (see the *autocreate_inbox_folders* option).  For
+example, if **xlist-junk: Spam** is set, and the folder **Spam**
+is autocreated, the special-use flag **\\Junk** will be set on it.
+
+(This option is so named for backward compatibility with old config
+files.)

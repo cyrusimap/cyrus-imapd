@@ -1,0 +1,25 @@
+Name: serverlist_select_mode
+Type: STRINGLIST
+Allowed-Values: random freespace-most freespace-percent-most
+ freespace-percent-weighted freespace-percent-weighted-delta
+Default-Value: freespace-most
+Last-Modified: 2.5.0
+
+Server selection mode.
+
+*random*
+    (pseudo-)random selection
+
+*freespace-most*
+    backend with the most (total) free space (KiB)
+
+*freespace-percent-most*
+    backend whose partition has the most free space (%)
+
+*freespace-percent-weighted*
+    same as for partition selection, comparing the free space (%) of the least used
+    partition of each backend
+
+*freespace-percent-weighted-delta*
+    same as for partition selection, comparing the free space (%) of the least used
+    partition of each backend.

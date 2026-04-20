@@ -1,0 +1,7 @@
+Name: sql_engine
+Type: STRINGLIST
+Allowed-Values: mysql pgsql sqlite
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+Name of the SQL engine to use. 

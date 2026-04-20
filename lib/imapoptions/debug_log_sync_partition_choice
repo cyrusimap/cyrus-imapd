@@ -1,0 +1,7 @@
+Name: debug_log_sync_partition_choice
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.8.0
+
+If enabled, replication will log which partition it chose for staging.
+This is mainly useful for regression testing the sync_client -a switch. 

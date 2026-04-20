@@ -1,0 +1,6 @@
+Name: ldap_member_attribute
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+See ldap_member_method. 

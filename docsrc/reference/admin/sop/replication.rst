@@ -98,9 +98,7 @@ Cyrus supports chained replication, in which one replica replicates to
 another.  I.e. A replicates to B; B replicates to C.  If you wish to
 use this approach, please see the ``sync_log_chain`` setting:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_log_chain
-        :end-before: endblob sync_log_chain
+* :ref:`imapd-conf-sync_log_chain`
 
 Note that sync_log_chain is to be set on the middle server(s) in a
 chain, not on the first or last.
@@ -119,9 +117,7 @@ process the synchronization instructions.  If you wish, you may
 override this by setting the ``sync_try_imap`` setting in
 :cyrusman:`imapd.conf(5)` to False.
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_try_imap
-        :end-before: endblob sync_try_imap
+* :ref:`imapd-conf-sync_try_imap`
 
 Installation
 ============
@@ -337,7 +333,7 @@ You may control the number of messages replicated in each batch, via
 the ``sync_batchsize`` setting:
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_batchsize
+* :ref:`imapd-conf-sync_batchsize`
         :end-before: endblob sync_batchsize
 
 .. _replication-channels:
@@ -421,7 +417,7 @@ Specifically, the following new settings have been added to
 :cyrusman:`imapd.conf(5)` in support of this new use of ``sync_log``:
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_log_unsuppressable_channels
+* :ref:`imapd-conf-sync_log_unsuppressable_channels`
         :end-before: endblob sync_log_unsuppressable_channels
 
 Administration

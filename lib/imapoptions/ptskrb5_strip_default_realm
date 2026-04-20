@@ -1,0 +1,8 @@
+Name: ptskrb5_strip_default_realm
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
+strip the default realm from the userid (this does not affect the stripping
+of realms specified by the afspts_localrealms option). 

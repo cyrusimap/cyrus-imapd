@@ -1,0 +1,7 @@
+Name: userdeny_db
+Type: STRINGLIST
+Allowed-Values: flat skiplist sql twom twoskip
+Default-Value: flat
+Last-Modified: 3.13.1
+
+The cyrusdb backend to use for the user access list. 

@@ -1,0 +1,9 @@
+Name: archive_maxsize
+Type: BYTESIZE
+Default-Value: 1024 K
+Last-Modified: 3.8.0
+
+The size of the largest message that won't be archived immediately.
+
+For backward compatibility, if no unit is specified, kibibytes is
+assumed. 

@@ -1,0 +1,25 @@
+Name: http_jwt_key_dir
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.6.0
+
+The absolute path to a directory containing one or more key files
+to authenticate JSON Web Tokens (:rfc:`7519`) for HTTP connections.
+Keys for the following JWS algorithms are supported: "HS256",
+"HS384", "HS512", "RS256", "RS384", "RS512".
+
+A key file consists of one or more keys encoded in PEM format.
+RSA keys must be embedded between the lines
+"-----BEGIN PUBLIC KEY-----" and "-----END PUBLIC KEY-----"
+HMAC digest keys must be embedded between the lines
+"-----BEGIN HMAC KEY-----" and "-----END HMAC KEY-----",
+encoded in base64.
+Any lines before or after a PEM key definition are ignored,
+empty lines are ignored anywhere in the file.
+
+The JSON Web Token must be the value of the HTTP "Authorization" header,
+using the "Bearer" authentication scheme. The JWS Header must include the
+"alg" and "typ" parameter. A header with any other parameter is rejected.
+The JWS Payload must include the "sub" claim with the Cyrus user
+identifier as value. It may include the "iat" claim (see *http_jwt_max_age*).
+A payload with any other claim is rejected.

@@ -1,0 +1,6 @@
+Name: ldap_groupmember_attribute
+Type: STRING
+Default-Value: member
+Last-Modified: 3.12.0
+
+Specify a field within groups with a list of members. 

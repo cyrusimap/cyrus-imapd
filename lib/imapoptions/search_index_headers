@@ -1,0 +1,10 @@
+Name: search_index_headers
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.0.0
+
+Whether to index headers other than From, To, Cc, Bcc, and Subject.
+Experiment shows that some headers such as Received and DKIM-Signature
+can contribute up to 2/3rds of the index size but almost nothing to
+the utility of searching.  Note that if header indexing is disabled,
+headers can still be searched, the searches will just be slower.

@@ -1,0 +1,7 @@
+Name: ldap_domain_scope
+Type: STRINGLIST
+Allowed-Values: sub one base
+Default-Value: sub
+Last-Modified: 2.5.0
+
+Search scope 

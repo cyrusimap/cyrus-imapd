@@ -1,0 +1,7 @@
+Name: pts_module
+Type: STRINGLIST
+Allowed-Values: afskrb ldap http
+Default-Value: afskrb
+Last-Modified: 3.8.0
+
+The PTS module to use. 

@@ -1,0 +1,6 @@
+Name: sql_hostnames
+Type: STRING
+Default-Value: 
+Last-Modified: 2.3.17
+
+Comma separated list of SQL servers (in host[:port] format). 

@@ -1,0 +1,6 @@
+Name: ldap_sasl
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+Use SASL for LDAP binds in the LDAP PTS module. 

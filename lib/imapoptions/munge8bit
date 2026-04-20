@@ -1,0 +1,10 @@
+Name: munge8bit
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 2.3.17
+
+If enabled, lmtpd munges messages with 8-bit characters in the
+headers.  The 8-bit characters are changed to \`X'.  If
+**reject8bit** is enabled, setting **munge8bit** has no effect.
+(A proper solution to non-ASCII characters in headers is offered by
+:rfc:`2047` and its predecessors.) 

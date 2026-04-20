@@ -1,0 +1,8 @@
+Name: admins_get_internal_seen
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.13.1
+
+If set, admin users see and set the internal seen state of mailboxes
+rather than their own separate copy (NOTE: they still don't update
+the RECENT timestamp unless the mailbox has SHAREDSEEN) as well. 

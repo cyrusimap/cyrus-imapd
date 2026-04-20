@@ -1,0 +1,10 @@
+Name: imapidletimeout
+Type: DURATION
+Default-Value: NULL
+Last-Modified: 3.1.8
+
+Timeout for idling clients (:rfc:`2177`).  If not set (the default),
+the value of "timeout" will be used instead.
+
+For backward compatibility, if no unit is specified, minutes
+is assumed. 

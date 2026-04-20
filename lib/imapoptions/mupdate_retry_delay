@@ -1,0 +1,6 @@
+Name: mupdate_retry_delay
+Type: INT
+Default-Value: 20
+Last-Modified: 2.3.17
+
+The base time to wait between connection retries to the mupdate server. 

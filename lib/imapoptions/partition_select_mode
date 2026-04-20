@@ -1,0 +1,29 @@
+Name: partition_select_mode
+Type: STRINGLIST
+Allowed-Values: random freespace-most freespace-percent-most
+ freespace-percent-weighted freespace-percent-weighted-delta
+Default-Value: freespace-most
+Last-Modified: 2.5.0
+
+Partition selection mode.
+
+*random*
+    (pseudo-)random selection
+
+*freespace-most*
+    partition with the most free space (KiB)
+
+*freespace-percent-most*
+    partition with the most free space (%)
+
+*freespace-percent-weighted*
+    each partition is weighted according to its free space (%); the more free space
+    the partition has, the more chances it has to be selected
+
+*freespace-percent-weighted-delta*
+    each partition is weighted according to its difference of free space (%)
+    compared to the most used partition; the more the partition is lagging behind
+    the most used partition, the more chances it has to be selected
+
+    Note that actually even the most used partition has a few chances to be
+    selected, and those chances increase when other partitions get closer

@@ -1,0 +1,7 @@
+Name: postmaster
+Type: STRING
+Default-Value: postmaster
+Last-Modified: 2.3.17
+
+Username that is used as the 'From' address in rejection MDNs produced
+by sieve. 

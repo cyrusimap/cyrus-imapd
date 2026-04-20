@@ -1,0 +1,6 @@
+Name: ldap_ca_dir
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+Path to a directory with CA (Certificate Authority) certificates. 

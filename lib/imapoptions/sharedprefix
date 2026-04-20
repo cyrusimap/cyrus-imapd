@@ -1,0 +1,7 @@
+Name: sharedprefix
+Type: STRING
+Default-Value: Shared Folders
+Last-Modified: 2.3.17
+
+If using the alternate IMAP namespace, the prefix for the shared
+namespace.  The hierarchy delimiter will be automatically appended.

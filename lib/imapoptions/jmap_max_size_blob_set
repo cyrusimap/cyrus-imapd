@@ -1,0 +1,10 @@
+Name: jmap_max_size_blob_set
+Type: BYTESIZE
+Default-Value: 4M
+Last-Modified: 3.8.0
+
+The maximum size that the JMAP API accepts for Blob/upload. Returned as the
+maxSizeBlobSet property value of the JMAP
+\"urn:ietf:params:jmap:blob\" capabilities object.
+
+For backward compatibility, if no unit is specified, kibibytes is assumed.

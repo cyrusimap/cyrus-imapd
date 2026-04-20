@@ -1,0 +1,24 @@
+Name: newspeer
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+A list of whitespace-separated news server specifications to which
+articles should be fed.  Each server specification is a string of
+the form [user[:pass]@]host[:port][/wildmat] where 'host' is the fully
+qualified hostname of the server, 'port' is the port on which the
+server is listening, 'user' and 'pass' are the authentication
+credentials and 'wildmat' is a pattern that specifies which groups
+should be fed.  If no 'port' is specified, port 119 is used.  If
+no 'wildmat' is specified, all groups are fed.  If 'user' is specified
+(even if empty), then the NNTP POST command will be used to feed
+the article to the server, otherwise the IHAVE command will be
+used.
+
+A '@' may be used in place of '!' in the wildmat to prevent feeding
+articles cross-posted to the given group, otherwise cross-posted
+articles are fed if any part of the wildmat matches.  For example,
+the string "peer.example.com:\*,!control.\*,@local.\*" would feed all
+groups except control messages and local groups to
+peer.example.com.  In the case of cross-posting to local groups,
+these articles would not be fed. 

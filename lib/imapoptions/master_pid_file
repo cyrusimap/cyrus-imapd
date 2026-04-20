@@ -1,0 +1,7 @@
+Name: master_pid_file
+Type: STRING
+Default-Value: {configdirectory}/master.pid
+Last-Modified: 3.10.0
+
+The path to a file that master(8) will write its PID to when running
+as a daemon. 

@@ -68,7 +68,7 @@ init: doxygen ../lib/imapoptions ../perl/imap/IMAP/Shell.pm
 	@echo "Creating reference/manpages/usercommands/sieveshell.rst"
 	$(PERL2RST) sieveshell < ../perl/sieve/scripts/sieveshell.pl > $(SOURCEDIR)/reference/manpages/usercommands/sieveshell.rst
 	@echo "Creating reference/manpages/configs/imapd.conf.rst"
-	../tools/config2rst ../lib/imapoptions > $(SOURCEDIR)/reference/manpages/configs/imapd.conf.rst
+	../tools/imapoptions.pl manrst ../lib/imapoptions > $(SOURCEDIR)/reference/manpages/configs/imapd.conf.rst
 
 html: init
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html

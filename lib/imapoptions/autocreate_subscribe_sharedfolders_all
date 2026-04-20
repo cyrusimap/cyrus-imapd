@@ -1,0 +1,7 @@
+Name: autocreate_subscribe_sharedfolders_all
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+If set to yes, the user is automatically subscribed to all shared folders, one has permission
+to subscribe to. 

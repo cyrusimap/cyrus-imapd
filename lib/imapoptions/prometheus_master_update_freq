@@ -1,0 +1,9 @@
+Name: prometheus_master_update_freq
+Type: DURATION
+Default-Value: NULL
+Last-Modified: 3.12.0
+
+Frequency in at which master should re-collate its statistics report.
+If not set, *prometheus_service_update_freq* is used.
+
+If no unit is specified, seconds is assumed. 

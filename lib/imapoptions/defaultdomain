@@ -1,0 +1,6 @@
+Name: defaultdomain
+Type: STRING
+Default-Value: internal
+Last-Modified: 3.0.0
+
+The default domain for virtual domain support. 

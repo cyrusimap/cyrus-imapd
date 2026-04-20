@@ -1,0 +1,24 @@
+Name: virtdomains
+Type: ENUM
+Allowed-Values: off userid on
+Default-Value: off
+Last-Modified: 3.1.8
+
+Configure virtual domain support.
+
+off
+    Cyrus does not know or care about domains. Only the local part of email
+    addresses is ever considered.  This is not recommended for any deployment,
+    but is currently the default.
+
+userid
+    The user's domain is determined by splitting a fully qualified userid at the
+    last '@' or '%' symbol.  If the userid is unqualified, the *defaultdomain*
+    will be used.  This is the recommended configuration for all deployments.
+    If you wish to provide calendaring services you must use this configuration.
+
+on
+    Fully qualified userids are respected, as per "userid".  Unqualified userids
+    will have their domain determined by doing a reverse lookup on the IP address
+    of the incoming network interface, or if no record is found, the
+    *defaultdomain* will be used.

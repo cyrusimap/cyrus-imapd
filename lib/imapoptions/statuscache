@@ -1,0 +1,6 @@
+Name: statuscache
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Enable/disable the imap status cache. 

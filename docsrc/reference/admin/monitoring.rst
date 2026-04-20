@@ -28,29 +28,12 @@ Setup
 Configuration options
 =====================
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_enabled
-        :end-before: endblob prometheus_enabled
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_need_auth
-        :end-before: endblob prometheus_need_auth
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_service_update_freq
-        :end-before: endblob prometheus_service_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_master_update_freq
-        :end-before: endblob prometheus_master_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_usage_update_freq
-        :end-before: endblob prometheus_usage_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_stats_dir
-        :end-before: endblob prometheus_stats_dir
+* :ref:`imapd-conf-prometheus_enabled`
+* :ref:`imapd-conf-prometheus_need_auth`
+* :ref:`imapd-conf-prometheus_service_update_freq`
+* :ref:`imapd-conf-prometheus_master_update_freq`
+* :ref:`imapd-conf-prometheus_usage_update_freq`
+* :ref:`imapd-conf-prometheus_stats_dir`
 
 .. _imap-admin-monitoring-end:
 

@@ -1,0 +1,9 @@
+Name: partition_select_soft_usage_limit
+Type: INT
+Default-Value: 0
+Last-Modified: 2.5.0
+
+Limit of partition usage (%): if a partition is over that limit, it is
+automatically excluded from selection mode.
+
+If all partitions are over that limit, this feature is not used anymore.

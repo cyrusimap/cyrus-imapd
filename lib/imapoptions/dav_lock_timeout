@@ -1,0 +1,11 @@
+Name: dav_lock_timeout
+Type: DURATION
+Default-Value: 20s
+Last-Modified: 3.1.8
+
+The maximum time to wait for a write lock on the per-user DAV database
+before timeout. For HTTP requests, the HTTP status code 503 is returned
+if the lock can not be obtained within this time.
+
+For backward compatibility, if no unit is specified, seconds is
+assumed. 

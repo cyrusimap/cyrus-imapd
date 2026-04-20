@@ -1,0 +1,8 @@
+Name: search_index_skip_users
+Type: STRING
+Default-Value: NULL
+Last-Modified: 3.3.1
+
+
+A space separated list of usernames - if set, any users in the list
+will be skipped when indexing.

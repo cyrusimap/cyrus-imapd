@@ -1,0 +1,7 @@
+Name: sieve_use_lmtp_reject
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.1.1
+
+Enabled by default.  If reject can be done via LMTP, then return a 550
+rather than generating the bounce message in Cyrus. 
