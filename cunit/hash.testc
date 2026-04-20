@@ -394,13 +394,11 @@ static void test_load_factor_warning(void)
     CU_ASSERT_EQUAL(3, ht.size_log2);
 
     syslog_index = CU_SYSLOG_MATCH("hash table load factor exceeds 3.0");
-    /* 8 buckets will hit load factor 3.0 after 24 insertions, 4.0 after 32
-     * insertions, and it won't reach 5.0, so we should warn exactly twice */
     for (i = 0; i < n_words; i++) {
         hash_insert(words[i], NULL, &ht);
     }
     CU_ASSERT_EQUAL(n_words, hash_count(&ht));
-    CU_ASSERT_SYSLOG(syslog_index, 2);
+    CU_ASSERT_SYSLOG(syslog_index, 0);
 
     free_hash_table(&ht, NULL);
 }
@@ -408,6 +406,7 @@ static void test_load_factor_warning(void)
 static void test_hash_size_rounding(void)
 {
     size_t tests[][2] = {
+        { 0, 3 },
         { 1, 3 },
         { 2, 3 },
         { 3, 3 },

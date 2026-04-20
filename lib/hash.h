@@ -7,7 +7,7 @@
 #include "mpool.h"
 #include "strarray.h"
 
-#define HASH_TABLE_INITIALIZER {NULL, NULL, 0, 0, 0, 0}
+#define HASH_TABLE_INITIALIZER {NULL, NULL, 0, 0, 0}
 
 /* This is an installed header, so it can't assume that EXPORTED is already
  * defined. */
@@ -28,10 +28,7 @@ typedef struct bucket bucket;
 /*
 ** This is what you actually declare an instance of to create a table.
 ** You then call 'construct_hash_table' with the address of this structure,
-** and a guess at the size of the table.  Note that more nodes than this
-** can be inserted in the table, but performance degrades as this
-** happens.  Performance should still be quite adequate until 2 or 3
-** times as many nodes have been inserted as the table was created with.
+** and a guess at the size of the table, or 0 to use the default size.
 */
 
 typedef struct hash_table {
@@ -39,13 +36,13 @@ typedef struct hash_table {
     struct mpool *pool;
     size_t count;
     uint32_t seed;
-    int hash_load_warned_at;
     uint8_t size_log2;
 } hash_table;
 
 /*
 ** This is used to construct the table.  If it can't allocate sufficient memory
 ** it will terminate the program with the diagnostic "Virtual memory exhausted".
+** If size is 0 it allocates a suitable default size.
 */
 
 hash_table *construct_hash_table(hash_table *table, size_t size,
