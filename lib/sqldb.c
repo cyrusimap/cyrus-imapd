@@ -444,6 +444,8 @@ EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
 
 EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
 {
+    if (!open->writelock) return 0;
+
     assert(open->trans.count);
     char *prev = strarray_pop(&open->trans);
     if (name) assert(!strcmp(prev, name));
