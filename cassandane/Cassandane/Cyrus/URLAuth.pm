@@ -161,4 +161,50 @@ sub test_urlfetch
     $self->assert_str_equals($data, "ody");
 }
 
+sub test_perms
+    :UnixHierarchySep :AltNamespace
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user('other');
+
+  my $msg = $self->make_message("Message A");
+
+  my $url;
+  my %handlers = (
+    genurlauth => sub {
+      my ($cmd, $params) = @_;
+      $url = $params->[0];
+    }
+  );
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'other');
+    my $talk = $store->get_client();
+
+  $talk->_imap_cmd(
+    'genurlauth', 0, \%handlers,
+    "imap://other\@127.0.0.1/Other%20Users%2fcassandane/;uid=1;urlauth=user+other",
+    "INTERNAL",
+  );
+
+  # This should fail in some way, commented out to show we really do fetch the
+  # email
+#  $self->assert_null($url);
+
+  my $email;
+  %handlers = (
+    urlfetch => sub {
+      my ($cmd, $params) = @_;
+      $email = ${$params}[1];
+    },
+  );
+
+  my $res = $talk->_imap_cmd('urlfetch', 0, \%handlers, $url);
+
+  warn $email if $email;
+
+  $self->assert_null($email);
+}
+
 1;
