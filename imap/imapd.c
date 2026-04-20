@@ -13554,7 +13554,15 @@ static void cmd_urlfetch(char *tag)
                 if (r) break;
 
                 r = mboxkey_read(mboxkey_db, intname, &key, &keylen);
-                if (r) break;
+                if (!r && (!key || !keylen)) {
+                    /* If there's no key, we can't possibly validate against
+                     * it! */
+                    r = IMAP_BADURL;
+                }
+                if (r) {
+                    mboxkey_close(mboxkey_db);
+                    break;
+                }
 
                 HMAC(EVP_sha1(), key, keylen, (unsigned char *) arg.s,
                      url.urlauth.rump_len, vtoken, &vtoken_len);
