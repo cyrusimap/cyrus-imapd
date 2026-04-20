@@ -6,42 +6,14 @@ use strict;
 use warnings;
 
 use Cassandane::Cassini;
+use Cassandane::Config::Bitfields;
 use Cassandane::Util::Log;
 
 my $default;
 
-# XXX Manually entered from lib/imapoptions in cyrus-imapd repo.
-# XXX Once these repositories are merged, we'll be able to automate keeping
-# XXX this synchronised...
-my %bitfields = (
-    'calendar_component_set' => 'VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL',
-    'event_extra_params' => 'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid vnd.cmu.visibleUsers',
-    'event_groups' => 'message quota flags access mailbox subscription calendar applepushservice jmap',
-    'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
-    'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
-    'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery processcalendar vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple',
-);
-my $bitfields_fixed = 0;
-
-sub init_bitfields
-{
-    if (!$bitfields_fixed) {
-        while (my ($key, $allvalues) = each %bitfields) {
-            $bitfields{$key} = {};
-            foreach my $v (split /\s/, $allvalues) {
-                $bitfields{$key}->{$v} = 1;
-            }
-        }
-        $bitfields_fixed = 1;
-    }
-}
-
 sub new
 {
     my $class = shift;
-
-    init_bitfields();
 
     my $self = {
         parent => undef,
@@ -121,7 +93,7 @@ sub set
     my ($self, %nv) = @_;
     while (my ($n, $v) = each %nv)
     {
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             # it's a bitfield, set exactly what's given (clearing others)
             if (ref $v eq 'ARRAY') {
                 $self->clear_all_bits($n);
@@ -146,7 +118,7 @@ sub set_if_undef
     my ($self, %nv) = @_;
 
     while (my ($n, $v) = each %nv) {
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             # XXX bitfield behaviour?
             die "can't set_if_undef with bitfield '$n'";
         }
@@ -163,7 +135,7 @@ sub set_bits
 {
     my ($self, $name, @bits) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
     # explode space-delimited list as only bit
     if (scalar @bits == 1 && $bits[0] =~ m/ /) {
@@ -172,7 +144,7 @@ sub set_bits
 
     foreach my $bit (@bits) {
         die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
+            if not is_bitfield_bit($name, $bit);
 
         $self->{params}->{$name}->{$bit} = 1;
     }
@@ -182,7 +154,7 @@ sub clear_bits
 {
     my ($self, $name, @bits) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
     # explode space-delimited list as only bit
     if (scalar @bits == 1 && $bits[0] =~ m/ /) {
@@ -191,7 +163,7 @@ sub clear_bits
 
     foreach my $bit (@bits) {
         die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
+            if not is_bitfield_bit($name, $bit);
 
         $self->{params}->{$name}->{$bit} = 0;
     }
@@ -201,15 +173,15 @@ sub clear_all_bits
 {
     my ($self, $name) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
-    $self->{params}->{$name}->{$_} = 0 for keys %{$bitfields{$name}};
+    $self->{params}->{$name}->{$_} = 0 for get_bitfield_bits($name);
 }
 
 sub get
 {
     my ($self, $n) = @_;
-    if (exists $bitfields{$n}) {
+    if (is_bitfield($n)) {
         my %bits;
         while (defined $self) {
             if (exists $self->{params}->{$n}) {
@@ -237,8 +209,7 @@ sub get_bit
 {
     my ($self, $name, $bit) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-    die "$bit is not a $name value" if not exists $bitfields{$name}->{$bit};
+    die "$bit is not a $name value" if not is_bitfield_bit($name, $bit);
 
     while (defined $self) {
         return $self->{params}->{$name}->{$bit}
@@ -252,7 +223,7 @@ sub get_bool
 {
     my ($self, $n, $def) = @_;
 
-    die "bitfield $n cannot be boolean" if exists $bitfields{$n};
+    die "bitfield $n cannot be boolean" if is_bitfield($n);
 
     $def = 'no' if !defined $def;
     my $v = $self->get($n);
@@ -324,7 +295,7 @@ sub _flatten
     {
         foreach my $n (keys %{$conf->{params}})
         {
-            if (exists $bitfields{$n}) {
+            if (is_bitfield($n)) {
                 # no variable substitution on bitfields
                 while (my ($bit, $val) = each %{$conf->{params}->{$n}}) {
                     $nv{$n}->{$bit} //= $val;
@@ -349,7 +320,7 @@ sub generate
     while (my ($n, $v) = each %$nv)
     {
         next unless defined $v;
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             my @bits = grep { $nv->{$n}->{$_} } sort keys %{$nv->{$n}};
             print CONF "$n: " . join(q{ }, @bits) . "\n";
         }
@@ -364,31 +335,27 @@ sub is_bitfield
 {
     my ($name) = @_;
 
-    init_bitfields();
-
-    return defined $bitfields{$name};
+    return defined $Cassandane::Config::Bitfields::bitfields{$name};
 }
 
 sub is_bitfield_bit
 {
     my ($name, $value) = @_;
 
-    init_bitfields();
+    die "$name is not a bitfield option"
+        if not exists $Cassandane::Config::Bitfields::bitfields{$name};
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    return defined $bitfields{$name}->{$value};
+    return defined $Cassandane::Config::Bitfields::bitfields{$name}->{$value};
 }
 
 sub get_bitfield_bits
 {
     my ($name) = @_;
 
-    init_bitfields();
+    die "$name is not a bitfield option"
+        if not exists $Cassandane::Config::Bitfields::bitfields{$name};
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    return sort keys %{$bitfields{$name}};
+    return sort keys %{$Cassandane::Config::Bitfields::bitfields{$name}};
 }
 
 1;

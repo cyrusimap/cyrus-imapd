@@ -1,0 +1,5 @@
+Name: search_index_parts
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.2.1
+Deprecated-Since: 3.2.1

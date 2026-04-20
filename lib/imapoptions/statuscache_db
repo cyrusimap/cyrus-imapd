@@ -1,0 +1,7 @@
+Name: statuscache_db
+Type: STRINGLIST
+Allowed-Values: skiplist sql twom twoskip
+Default-Value: twoskip
+Last-Modified: 3.13.1
+
+The cyrusdb backend to use for the imap status cache. 

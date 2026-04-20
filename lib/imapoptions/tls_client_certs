@@ -1,0 +1,8 @@
+Name: tls_client_certs
+Type: ENUM
+Allowed-Values: off optional require
+Default-Value: optional
+Last-Modified: 2.5.0
+
+Disable ("off"), allow ("optional", default) or require ("require") the
+use of SSL certificates by clients to authenticate themselves. 

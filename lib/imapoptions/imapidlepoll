@@ -1,0 +1,12 @@
+Name: imapidlepoll
+Type: DURATION
+Default-Value: 60s
+Last-Modified: 3.1.8
+
+The interval for polling for mailbox changes and ALERTs while running
+the IDLE command.  This option is used when idled is not enabled or
+cannot be contacted.  The minimum value is 1 second.  A value of 0
+will disable IDLE.
+
+For backward compatibility, if no unit is specified, seconds is
+assumed. 

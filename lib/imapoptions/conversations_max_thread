@@ -1,0 +1,7 @@
+Name: conversations_max_thread
+Type: INT
+Default-Value: 100
+Last-Modified: 3.1.1
+
+maximum size for a single thread.  Threads will split if they have this many
+messages in them and another message arrives. 

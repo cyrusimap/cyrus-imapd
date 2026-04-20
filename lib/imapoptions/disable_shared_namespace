@@ -1,0 +1,8 @@
+Name: disable_shared_namespace
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+Preclude list command on shared namespace.  If set to 'yes', the
+LIST response will never include any non-user mailboxes.  Admin
+users will always see all mailboxes. 

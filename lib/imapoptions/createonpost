@@ -1,0 +1,6 @@
+Name: createonpost
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+Deprecated-Since: 2.5.0
+Replaced-By: autocreate_post

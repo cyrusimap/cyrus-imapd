@@ -1,0 +1,6 @@
+Name: generate_compiled_sieve_script
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+Deprecated-Since: 2.5.0
+Replaced-By: autocreate_sieve_script_compile

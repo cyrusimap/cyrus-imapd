@@ -29,6 +29,7 @@ Makefile.old
 aclocal.m4
 autom4te.cache/
 bench/cyrdbbench
+cassandane/Cassandane/Config/Bitfields.pm
 cmulocal/libtool.m4
 cmulocal/ltoptions.m4
 cmulocal/ltsugar.m4

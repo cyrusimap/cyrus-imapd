@@ -1,0 +1,7 @@
+Name: allowanonymouslogin
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.3.17
+
+Permit logins by the user "anonymous" using any password.  Also
+allows use of the SASL ANONYMOUS mechanism. 

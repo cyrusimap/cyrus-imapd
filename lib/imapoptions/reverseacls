@@ -1,0 +1,7 @@
+Name: reverseacls
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.0.0
+
+At startup time, ctl_cyrusdb -r will check this value and it
+will either add or remove reverse ACL pointers from mailboxes.db 

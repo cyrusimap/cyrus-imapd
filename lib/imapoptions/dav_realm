@@ -1,0 +1,8 @@
+Name: dav_realm
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+The realm to present for HTTP authentication of generic DAV
+resources (principals).  If not set (the default), the value of the
+"servername" option will be used.

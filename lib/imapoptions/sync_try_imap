@@ -1,0 +1,9 @@
+Name: sync_try_imap
+Type: SWITCH
+Default-Value: 1
+Last-Modified: 3.0.0
+
+Whether sync_client should try to perform an IMAP connection
+before falling back to csync.  If this is set to "no",
+sync_client will only use csync.  Prefix with a channel name to
+apply only for that channel. 

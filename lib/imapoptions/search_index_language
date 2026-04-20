@@ -1,0 +1,10 @@
+Name: search_index_language
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 3.3.1
+
+
+If enabled, then messages bodies are stemmed by detected language
+in addition to the default English stemmer.
+Xapian only.
+
