@@ -6,42 +6,14 @@ use strict;
 use warnings;
 
 use Cassandane::Cassini;
+use Cassandane::Config::Bitfields;
 use Cassandane::Util::Log;
 
 my $default;
 
-# XXX Manually entered from lib/imapoptions in cyrus-imapd repo.
-# XXX Once these repositories are merged, we'll be able to automate keeping
-# XXX this synchronised...
-my %bitfields = (
-    'calendar_component_set' => 'VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL',
-    'event_extra_params' => 'bodyStructure clientAddress diskUsed flagNames messageContent messageSize messages modseq service timestamp uidnext vnd.cmu.midset vnd.cmu.unseenMessages vnd.cmu.envelope vnd.cmu.sessionId vnd.cmu.mailboxACL vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.fastmail.clientId vnd.fastmail.sessionId vnd.fastmail.convExists vnd.fastmail.convUnseen vnd.fastmail.cid vnd.fastmail.counters vnd.fastmail.jmapEmail vnd.fastmail.jmapStates vnd.cmu.emailid vnd.cmu.threadid vnd.cmu.visibleUsers',
-    'event_groups' => 'message quota flags access mailbox subscription calendar applepushservice jmap',
-    'httpmodules' => 'admin caldav carddav cgi domainkey freebusy ischedule jmap prometheus rss tzdist webdav',
-    'metapartition_files' => 'header index cache expunge squat annotations lock dav archivecache',
-    'newsaddheaders' => 'to replyto',
-    'sieve_extensions' => 'fileinto reject vacation vacation-seconds notify include envelope environment body relational regex subaddress copy date index imap4flags imapflags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid vnd.cyrus.log x-cyrus-log vnd.cyrus.jmapquery x-cyrus-jmapquery processcalendar vnd.cyrus.imip snooze vnd.cyrus.snooze x-cyrus-snooze vnd.cyrus.implicit_keep_target vnd.cyrus.redirect-multiple',
-);
-my $bitfields_fixed = 0;
-
-sub init_bitfields
-{
-    if (!$bitfields_fixed) {
-        while (my ($key, $allvalues) = each %bitfields) {
-            $bitfields{$key} = {};
-            foreach my $v (split /\s/, $allvalues) {
-                $bitfields{$key}->{$v} = 1;
-            }
-        }
-        $bitfields_fixed = 1;
-    }
-}
-
 sub new
 {
     my $class = shift;
-
-    init_bitfields();
 
     my $self = {
         parent => undef,
@@ -363,31 +335,27 @@ sub is_bitfield
 {
     my ($name) = @_;
 
-    init_bitfields();
-
-    return defined $bitfields{$name};
+    return defined $Cassandane::Config::Bitfields::bitfields{$name};
 }
 
 sub is_bitfield_bit
 {
     my ($name, $value) = @_;
 
-    init_bitfields();
+    die "$name is not a bitfield option"
+        if not exists $Cassandane::Config::Bitfields::bitfields{$name};
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    return defined $bitfields{$name}->{$value};
+    return defined $Cassandane::Config::Bitfields::bitfields{$name}->{$value};
 }
 
 sub get_bitfield_bits
 {
     my ($name) = @_;
 
-    init_bitfields();
+    die "$name is not a bitfield option"
+        if not exists $Cassandane::Config::Bitfields::bitfields{$name};
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-
-    return sort keys %{$bitfields{$name}};
+    return sort keys %{$Cassandane::Config::Bitfields::bitfields{$name}};
 }
 
 1;
