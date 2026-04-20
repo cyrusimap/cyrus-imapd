@@ -13729,6 +13729,14 @@ static void cmd_genurlauth(char *tag)
             continue;
         }
 
+        /* You can't give permission you don't have! */
+        if (!imapd_userisadmin &&
+            !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ)) {
+            mboxlist_entry_free(&mbentry);
+            r = IMAP_BADURL;
+            goto err;
+        }
+
         mboxlist_entry_free(&mbentry);
 
         /* lookup key */
