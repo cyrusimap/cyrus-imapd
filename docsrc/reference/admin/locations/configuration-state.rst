@@ -18,7 +18,7 @@ in Cyrus IMAP documentation, and is set via the ``configdirectory``
 entry in :cyrusman:`imapd.conf(5)`:
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob configdirectory
+* :ref:`imapd-conf-configdirectory`
         :end-before: endblob configdirectory
 
 While Cyrus itself has no default values for this setting, most
@@ -44,49 +44,17 @@ The links above document the purpose, DB type and choices for those
 files.  You may adjust the locations of these database files via various
 settings in :cyrusman:`imapd.conf(5)`:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob annotation_db_path
-        :end-before: endblob annotation_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob backup_db_path
-        :end-before: endblob backup_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob duplicate_db_path
-        :end-before: endblob duplicate_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob mboxlist_db_path
-        :end-before: endblob mboxlist_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob newsrc_db_path
-        :end-before: endblob newsrc_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob ptscache_db_path
-        :end-before: endblob ptscache_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db_path
-        :end-before: endblob quota_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob statuscache_db_path
-        :end-before: endblob statuscache_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob tls_sessions_db_path
-        :end-before: endblob tls_sessions_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob userdeny_db_path
-        :end-before: endblob userdeny_db_path
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob zoneinfo_db_path
-        :end-before: endblob zoneinfo_db_path
+* :ref:`imapd-conf-annotation_db_path`
+* :ref:`imapd-conf-backup_db_path`
+* :ref:`imapd-conf-duplicate_db_path`
+* :ref:`imapd-conf-mboxlist_db_path`
+* :ref:`imapd-conf-newsrc_db_path`
+* :ref:`imapd-conf-ptscache_db_path`
+* :ref:`imapd-conf-quota_db_path`
+* :ref:`imapd-conf-statuscache_db_path`
+* :ref:`imapd-conf-tls_sessions_db_path`
+* :ref:`imapd-conf-userdeny_db_path`
+* :ref:`imapd-conf-zoneinfo_db_path`
 
 Ephemeral Databases
 ^^^^^^^^^^^^^^^^^^^
@@ -131,19 +99,19 @@ As with the DB files, above, many of these, too, may be relocated via
 settings in :cyrusman:`imapd.conf(5)`:
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob mboxname_lockpath
+* :ref:`imapd-conf-mboxname_lockpath`
         :end-before: endblob mboxname_lockpath
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob proc_path
+* :ref:`imapd-conf-proc_path`
         :end-before: endblob proc_path
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob ptloader_sock
+* :ref:`imapd-conf-ptloader_sock`
         :end-before: endblob ptloader_sock
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db_path
+* :ref:`imapd-conf-quota_db_path`
         :end-before: endblob quota_db_path
 
 .. note::
@@ -154,23 +122,23 @@ settings in :cyrusman:`imapd.conf(5)`:
     the actual filename.
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sieveusehomedir
+* :ref:`imapd-conf-sieveusehomedir`
         :end-before: endblob sieveusehomedir
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sievedir
+* :ref:`imapd-conf-sievedir`
         :end-before: endblob sievedir
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob idlesocket
+* :ref:`imapd-conf-idlesocket`
         :end-before: endblob idlesocket
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob lmtpsocket
+* :ref:`imapd-conf-lmtpsocket`
         :end-before: endblob lmtpsocket
 
 .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob notifysocket
+* :ref:`imapd-conf-notifysocket`
         :end-before: endblob notifysocket
 
 Per-user State Directories

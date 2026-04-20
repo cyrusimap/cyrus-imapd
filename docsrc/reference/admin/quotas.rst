@@ -31,39 +31,13 @@ Controlling Quota Behavior
 How restrictive quotas will be may be tailored to the needs of different
 sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob lmtp_over_quota_perm_failure
-        :end-before: endblob lmtp_over_quota_perm_failure
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob lmtp_strict_quota
-        :end-before: endblob lmtp_strict_quota
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnpercent
-        :end-before: endblob quotawarnpercent
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnsize
-        :end-before: endblob quotawarnsize
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnmsg
-        :end-before: endblob quotawarnmsg
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob autocreate_quota
-        :end-before: endblob autocreate_quota
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob autocreate_quota_messages
-        :end-before: endblob autocreate_quota_messages
+* :ref:`imapd-conf-lmtp_over_quota_perm_failure`
+* :ref:`imapd-conf-lmtp_strict_quota`
+* :ref:`imapd-conf-quotawarnpercent`
+* :ref:`imapd-conf-quotawarnsize`
+* :ref:`imapd-conf-quotawarnmsg`
+* :ref:`imapd-conf-autocreate_quota`
+* :ref:`imapd-conf-autocreate_quota_messages`
 
 .. _imap-admin-quotas-database:
 
@@ -75,13 +49,8 @@ skiplist) or in "quotalegacy" format, which is a filesystem hierarchy.
 This is controlled by the ``quota_db`` setting in
 :cyrusman:`imapd.conf(5)`.  Here's more about the pertinent settings:
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db
-        :end-before: endblob quota_db
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db_path
-        :end-before: endblob quota_db_path
+* :ref:`imapd-conf-quota_db`
+* :ref:`imapd-conf-quota_db_path`
 
 .. _imap-admin-quotas-convert-db:
 
