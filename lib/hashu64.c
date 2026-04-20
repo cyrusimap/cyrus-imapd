@@ -51,7 +51,7 @@ static size_t table_size(const hashu64_table *table) {
 }
 
 static size_t table_index(const hashu64_table *table, uint64_t key) {
-    uint64_t mixed = key * 0x9e3779b97f4a7c15ULL;
+    uint64_t mixed = (key ^ table->chaff) * 0x9e3779b97f4a7c15ULL;
     return mixed >> (64 - table->size_log2);
 }
 
@@ -63,6 +63,7 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
       size = 1ULL << size_log2;
       table->size_log2 = size_log2;
       table->count = 0;
+      table->chaff = rand();
 
       /* Allocate the table -- different for using memory pools and not */
       if(use_mpool) {
@@ -103,6 +104,8 @@ static void hash_split(hashu64_table *table) {
     memset(new_table, 0, wanted);
 
     size_t i = old_size;
+
+    table->chaff = rand();
 
     /* This is (roughly) hash_enumerate */
     while(i-- > 0) {

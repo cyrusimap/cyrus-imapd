@@ -86,6 +86,111 @@ static size_t table_size(const hash_table *table) {
     return table && table->table ? (1ULL << table->size_log2) : 0;
 }
 
+/* Approaches to attacking hash tables, and how to defend against it...
+**
+** Hash tables are a seductive data structure, with amortised O(1) complexity
+** for insertion and lookup. Worst case, however, is O(n).
+**
+** An attacker seeks to exploit this worst case performance, by crafting data
+** such that it hits the worst case, and causes degraded performance equivalent
+** to large volumes of data, but only requires sending a small amount of data.
+** This can be used to create a Denial Of Service attack on a server (such as
+** Cyrus) which is behind a layer protecting it from brute force flooding.
+**
+** The attacker knows
+** * the hash function (converting string keys to integers)
+** * the hash table structure (here an array of linked lists)
+** * the threshold where the hash resizes
+**
+** The attacker controls
+** * the strings for the keys
+** * the order that those keys are inserted
+** * when to "read" the hash (to some extent)
+**
+** The attacker can read
+** * the order that keys are returned in by iterators
+**
+** which lets them infer partial state of the data structure
+**
+**
+** The attacker doesn't know the full state of the data structure, or any secret
+** "salt" used to randomise it. If the attacker can figure some of this out,
+** they can locally construct hash keys to send that will trigger pathological
+** behaviour. They might need to brute force these locally, but this is an
+** acceptable trade off to get to small network traffic with an outsized remote
+** effect.
+**
+** The attack style came to widespread public attention with a paper by
+** Crosy & Wallach at the 12th USENIX Security Symposium in 2003:
+** Denial of Service via Algorithmic Complexity Attacks
+** https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf
+**
+** The authors showed that if there is no random internal state, it's easy to
+** craft a set of keys that will always collide, and hence generate a CPU
+** denial of service
+**
+** The "obvious" fix to this is to add random state - a "salt" to the algorithm
+** that converts string keys to integer bucket locations.
+**
+** Of course, at this point the attacker seeks to figure out what the salt is.
+**
+** What is often missed from these discussions is that one doesn't need to find
+** two strings that generate identical 32 (or 64) bit integers. If the hash
+** table code only uses the bottom (or top) $n bits to pick a bucket, then the
+** hash code only needs to collide on those bits. Hence, it's important that the
+** hash algorithm has a good final mixing stage
+** 1) so that the bucket isn't unduly biased by the last (or first) bytes of
+**    the string key
+** 2) so that the choice of bucket doesn't unduly expose a subset of the salt
+**    bits
+**
+** The latter is not obvious, but it's possible to incrementally figure out the
+** salt by
+** 1) supplying a small set of keys
+** 2) reading the iteration order
+** 3) adding more keys
+** 4) observing which keys change order
+** 5) computing which bits of the salt have to be 0 or 1 to explain observations
+** 6) goto 3
+**
+** at which point it may be possible to know enough of the salt to collide keys
+**
+** It's also unwise to trigger the hash array split on linked list chain length.
+** If the attacker can figure out sufficient state to cause bucket collisions
+** then they can create keys where
+** 1) the first $n chain to the same bucket, 1 under the threshold
+**    (and all share many or most hash code bits that keep them in the same
+**     bucket as the hash array splits)
+** 2) each subsequent key is computed to initially land on that long chain
+** 3) triggering a split
+** 4) where that key (only) moves to a different bucket
+**
+** and with a small number of keys one can rapidly (attempt to) exhaust all
+** memory on the victim machine, likely instead causing the process to die with
+** an allocation attempt for an array with 2**29 (or 2**30) entries.
+**
+** Hence
+**
+** 1) the only safe trigger for splitting appears to be "load factor"
+** 2) it's important to hide the iteration order
+**
+** Perl 5 achieves the latter by randomising iteration order for each iteration.
+** I believe that whilst correct, given that the attacker already knows the
+** timing of the array split, there's no need to conceal when the split
+** happened. Hence it's equivalently secure simply to ensure that for any level
+** of "split" the iteration order gives no clue about the low (or high) $n bits
+** of the full hash code used to pick the bucket.
+**
+** The hash code needs to stay the same either side of the hash split (to avoid
+** the performance hit of recomputing every key's hash code).
+** Hence this code mixes a random 32 bit integer into the hash code before
+** computing the bucket, and changes that integer each time the array splits.
+**
+** The attacker cannot infer anything about the random salt used (and hence gain
+** leverage to craft keys that collide) without first inferring a different
+** random 32 bit value. And one that changes each time they "look".
+*/
+
 /* The arithmetic in this code is 64 bit so that
  * 1) it's future proof if we move to a 64 bit hash
  * 2) it's consistent with the hashu64 code
@@ -101,7 +206,7 @@ static size_t table_index(const hash_table *table, uint32_t hash) {
     /* Ensure we truncate this to 64 bits, even on a platform with 128 bit
      * long longs. At some point, some joker is going to throw that at us:
      */
-    uint64_t mixed = hash * 0x9e3779b97f4a7c15ULL;
+    uint64_t mixed = (hash ^ table->chaff) * 0x9e3779b97f4a7c15ULL;
     return mixed >> (64 - table->size_log2);
 }
 
@@ -178,6 +283,7 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       table->size_log2 = size_log2;
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
+      table->chaff = rand();
 
       /* Allocate the table -- different for using memory pools and not */
       if (use_mpool) {
@@ -218,6 +324,8 @@ static void hash_split(hash_table *table) {
     memset(new_table, 0, wanted);
 
     size_t i = old_size;
+
+    table->chaff = rand();
 
     /* This is (roughly) hash_enumerate */
     while(i-- > 0) {
