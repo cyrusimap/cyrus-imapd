@@ -172,14 +172,12 @@ static size_t table_index(const hash_table *table, uint32_t hash) {
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
       assert(table);
-      assert(size);
 
       uint8_t size_log2 = hash_base2_size_for_entries(size);
       size = 1ULL << size_log2;
       table->size_log2 = size_log2;
       table->count = 0;
       table->seed = rand(); /* might be zero, that's okay */
-      table->hash_load_warned_at = 0;
 
       /* Allocate the table -- different for using memory pools and not */
       if (use_mpool) {
@@ -200,23 +198,57 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
       return table;
 }
 
-#define check_load_factor(table) do {                                   \
-    hash_table *t = (table);                                            \
-    const double load_factor = t->count * 1.0 / table_size(t);          \
-    if (load_factor > 3.0) {                                            \
-        if (t->hash_load_warned_at == 0                                 \
-            || (int) load_factor > t->hash_load_warned_at) {            \
-            xsyslog(LOG_DEBUG, "hash table load factor exceeds 3.0",    \
-                               "table=<%p> entries=<" SIZE_T_FMT ">"    \
-                               " buckets=<" SIZE_T_FMT "> load=<%.2g>", \
-                    t, t->count, table_size(t), load_factor);           \
-            t->hash_load_warned_at = (int) load_factor;                 \
-        }                                                               \
-    }                                                                   \
-    else {                                                              \
-        t->hash_load_warned_at = 0;                                     \
-    }                                                                   \
-} while(0)
+static void hash_split(hash_table *table) {
+    size_t old_size = 1ULL << table->size_log2++;
+    size_t new_size = old_size * 2;
+    size_t wanted = sizeof(bucket *) * new_size;
+
+    if(new_size < old_size) {
+        fatal("Virtual memory exhausted by hash", EX_TEMPFAIL);
+    }
+
+    bucket **old_table = table->table;
+    bucket **new_table;
+
+    if (table->pool) {
+        new_table = (bucket **)mpool_malloc(table->pool, wanted);
+    } else {
+        new_table = xmalloc(wanted);
+    }
+    memset(new_table, 0, wanted);
+
+    size_t i = old_size;
+
+    /* This is (roughly) hash_enumerate */
+    while(i-- > 0) {
+        bucket *next = old_table[i];
+
+        /* Peel each bucket off in turn.
+         * Remember the next bucket, and set this bucket's next pointer to NULL
+         * Splice this bucket into the correct place in the new table
+         */
+        while(next) {
+            bucket *current = next;
+            next = next->next;
+            /* Conceptually current->next should be assigned NULL at this point
+             * (the bucket is detached and no longer linked to the previous
+             * chain) but we assign it a new value just below:
+             */
+
+            /* This is the logic at the guts of hash_insert: */
+            size_t val = table_index(table, current->hash);
+
+            current->next = new_table[val];
+            new_table[val] = current;
+        }
+    }
+
+    table->table = new_table;
+
+    if(!table->pool) {
+        free(old_table);
+    }
+}
 
 /*
 ** Insert 'key' into hash table.
@@ -244,6 +276,11 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
               ptr -> data = data;
               return old_data;
           }
+      }
+
+      if(++table->count > table_size(table) * HASH_LOAD_FACTOR) {
+          hash_split(table);
+          val = table_index(table, hash);
       }
 
       /*
@@ -275,8 +312,6 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
       newptr->data = data;
       newptr->next = (table->table)[val];
       (table->table)[val] = newptr;
-      table->count++;
-      check_load_factor(table);
       return data;
 }
 

@@ -21,10 +21,7 @@ typedef struct bucketu64 bucketu64;
 /*
 ** This is what you actually declare an instance of to create a table.
 ** You then call 'construct_hashu64_table' with the address of this structure,
-** and a guess at the size of the table.  Note that more nodes than this
-** can be inserted in the table, but performance degrades as this
-** happens.  Performance should still be quite adequate until 2 or 3
-** times as many nodes have been inserted as the table was created with.
+** and a guess at the size of the table, or 0 to use the default size.
 */
 
 typedef struct hashu64_table {
@@ -37,6 +34,7 @@ typedef struct hashu64_table {
 /*
 ** This is used to construct the table.  If it can't allocate sufficient memory
 ** it will terminate the program with the diagnostic "Virtual memory exhausted".
+** If size is 0 it allocates a suitable default size.
 */
 
 hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size,

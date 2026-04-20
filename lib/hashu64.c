@@ -58,7 +58,6 @@ static size_t table_index(const hashu64_table *table, uint64_t key) {
 EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
 {
       assert(table);
-      assert(size);
 
       uint8_t size_log2 = hash_base2_size_for_entries(size);
       size = 1ULL << size_log2;
@@ -82,6 +81,58 @@ EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t siz
       memset(table->table, 0, sizeof(bucketu64 *) * size);
 
       return table;
+}
+
+static void hash_split(hashu64_table *table) {
+    size_t old_size = 1ULL << table->size_log2++;
+    size_t new_size = old_size * 2;
+    size_t wanted = sizeof(bucketu64 *) * new_size;
+
+    if(new_size < old_size) {
+        fatal("Virtual memory exhausted by hash", EX_TEMPFAIL);
+    }
+
+    bucketu64 **old_table = table->table;
+    bucketu64 **new_table;
+
+    if (table->pool) {
+        new_table = (bucketu64 **)mpool_malloc(table->pool, wanted);
+    } else {
+        new_table = xmalloc(wanted);
+    }
+    memset(new_table, 0, wanted);
+
+    size_t i = old_size;
+
+    /* This is (roughly) hash_enumerate */
+    while(i-- > 0) {
+        bucketu64 *next = old_table[i];
+
+        /* Peel each bucket off in turn.
+         * Remember the next bucket, and set this bucket's next pointer to NULL
+         * Splice this bucket into the correct place in the new table
+         */
+        while(next) {
+            bucketu64 *current = next;
+            next = next->next;
+            /* Conceptually current->next should be assigned NULL at this point
+             * (the bucket is detached and no longer linked to the previous
+             * chain) but we assign it a new value just below:
+             */
+
+            /* This is the logic at the guts of hash_insert: */
+            size_t val = table_index(table, current->key);
+
+            current->next = new_table[val];
+            new_table[val] = current;
+        }
+    }
+
+    table->table = new_table;
+
+    if(!table->pool) {
+        free(old_table);
+    }
 }
 
 /*
@@ -112,6 +163,11 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
           }
       }
 
+      if(++table->count > table_size(table) * HASH_LOAD_FACTOR) {
+          hash_split(table);
+          val = table_index(table, key);
+      }
+
       /*
       ** Add new keys to the start of the list (which might be empty)
       */
@@ -125,7 +181,6 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
       newptr->data = data;
       newptr->next = (table->table)[val];
       (table->table)[val] = newptr;
-      table->count++;
       return data;
 }
 
