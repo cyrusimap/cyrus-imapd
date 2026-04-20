@@ -121,7 +121,7 @@ sub set
     my ($self, %nv) = @_;
     while (my ($n, $v) = each %nv)
     {
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             # it's a bitfield, set exactly what's given (clearing others)
             if (ref $v eq 'ARRAY') {
                 $self->clear_all_bits($n);
@@ -146,7 +146,7 @@ sub set_if_undef
     my ($self, %nv) = @_;
 
     while (my ($n, $v) = each %nv) {
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             # XXX bitfield behaviour?
             die "can't set_if_undef with bitfield '$n'";
         }
@@ -163,7 +163,7 @@ sub set_bits
 {
     my ($self, $name, @bits) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
     # explode space-delimited list as only bit
     if (scalar @bits == 1 && $bits[0] =~ m/ /) {
@@ -172,7 +172,7 @@ sub set_bits
 
     foreach my $bit (@bits) {
         die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
+            if not is_bitfield_bit($name, $bit);
 
         $self->{params}->{$name}->{$bit} = 1;
     }
@@ -182,7 +182,7 @@ sub clear_bits
 {
     my ($self, $name, @bits) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
     # explode space-delimited list as only bit
     if (scalar @bits == 1 && $bits[0] =~ m/ /) {
@@ -191,7 +191,7 @@ sub clear_bits
 
     foreach my $bit (@bits) {
         die "$bit is not a $name value"
-            if not exists $bitfields{$name}->{$bit};
+            if not is_bitfield_bit($name, $bit);
 
         $self->{params}->{$name}->{$bit} = 0;
     }
@@ -201,15 +201,15 @@ sub clear_all_bits
 {
     my ($self, $name) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
+    die "$name is not a bitfield option" if not is_bitfield($name);
 
-    $self->{params}->{$name}->{$_} = 0 for keys %{$bitfields{$name}};
+    $self->{params}->{$name}->{$_} = 0 for get_bitfield_bits($name);
 }
 
 sub get
 {
     my ($self, $n) = @_;
-    if (exists $bitfields{$n}) {
+    if (is_bitfield($n)) {
         my %bits;
         while (defined $self) {
             if (exists $self->{params}->{$n}) {
@@ -237,8 +237,7 @@ sub get_bit
 {
     my ($self, $name, $bit) = @_;
 
-    die "$name is not a bitfield option" if not exists $bitfields{$name};
-    die "$bit is not a $name value" if not exists $bitfields{$name}->{$bit};
+    die "$bit is not a $name value" if not is_bitfield_bit($name, $bit);
 
     while (defined $self) {
         return $self->{params}->{$name}->{$bit}
@@ -252,7 +251,7 @@ sub get_bool
 {
     my ($self, $n, $def) = @_;
 
-    die "bitfield $n cannot be boolean" if exists $bitfields{$n};
+    die "bitfield $n cannot be boolean" if is_bitfield($n);
 
     $def = 'no' if !defined $def;
     my $v = $self->get($n);
@@ -324,7 +323,7 @@ sub _flatten
     {
         foreach my $n (keys %{$conf->{params}})
         {
-            if (exists $bitfields{$n}) {
+            if (is_bitfield($n)) {
                 # no variable substitution on bitfields
                 while (my ($bit, $val) = each %{$conf->{params}->{$n}}) {
                     $nv{$n}->{$bit} //= $val;
@@ -349,7 +348,7 @@ sub generate
     while (my ($n, $v) = each %$nv)
     {
         next unless defined $v;
-        if (exists $bitfields{$n}) {
+        if (is_bitfield($n)) {
             my @bits = grep { $nv->{$n}->{$_} } sort keys %{$nv->{$n}};
             print CONF "$n: " . join(q{ }, @bits) . "\n";
         }
