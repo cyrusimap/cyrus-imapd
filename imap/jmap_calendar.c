@@ -3368,14 +3368,14 @@ static void repair_broken_ical(icalcomponent **icalp)
     *icalp = myical;
 }
 
-jscalendar_cfg_t jmapical_ctx_to_jscalendar_cfg(struct jmapical_ctx *jmapctx)
+jscal_cfg_t jmapical_ctx_to_jscalendar_cfg(struct jmapical_ctx *jmapctx)
 {
     // XXX this is a helper function while both the former and the
     // new JSCalendar implementations co-exist. Once we remove the
     // old implementation, this should get rewritten to not require
     // a jmapctx for initialization.
 
-    jscalendar_cfg_t cfg = { 0 };
+    jscal_cfg_t cfg = { 0 };
     if (!jmapctx) return cfg;
 
     cfg.use_icalendar_convprops = jmapctx->from_ical.want_icalprops;
@@ -3389,8 +3389,8 @@ static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
                                struct jmapical_ctx *jmapctx)
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        jscalendar_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        json_t *jgroup = jscalendar_from_ical(&cfg, ical);
+        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
         json_t *jevent = json_incref(
             json_array_get(json_object_get(jgroup, "entries"), 0));
@@ -3407,7 +3407,7 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
                                 struct jmapical_ctx *jmapctx)
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        json_t *jgroup = jscalendar_from_ical(NULL, ical);
+        json_t *jgroup = jscal_from_ical(NULL, ical);
         if (!jgroup) return NULL;
         json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
         json_decref(jgroup);
@@ -4432,9 +4432,9 @@ static int createevent_toical(jmap_req_t *req,
             }
         }
 
-        jscalendar_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
         cfg.use_icalendar_convprops = create->is_copy;
-        create->ical = jscalendar_to_ical(&cfg, create->jsevent, parser);
+        create->ical = jscal_to_ical(&cfg, create->jsevent, parser);
         if (create->ical)
             create->comp = icalcomponent_get_first_component(
                 create->ical, ICAL_VEVENT_COMPONENT);
@@ -5415,8 +5415,8 @@ static int updateevent_apply_patch(jmap_req_t *req,
         }
 
         struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-        jscalendar_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
-        newical = jscalendar_to_ical(&cfg, new_event, &myparser);
+        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        newical = jscal_to_ical(&cfg, new_event, &myparser);
         json_array_extend(invalid, myparser.invalid);
         jmap_parser_fini(&myparser);
     }
@@ -8172,7 +8172,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
             }
 
             if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-                part_id = jscalendar_participant_id(prop);
+                part_id = jscal_participant_id(prop);
             }
             else {
                 part_id = xstrdupnull(jmap_partid_from_ical(prop));
