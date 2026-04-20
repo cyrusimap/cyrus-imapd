@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_leak_other_user
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client;
+    my $talk = $self->{store}->get_client;
+
+    # Create a victim user and a subfolder on their account.  The attacker
+    # holds nothing on it beyond the "anyone p" default ACL.
+    $self->{instance}->create_user('victim');
+    $admintalk->create('user.victim.bah') or die "create: " . $admintalk->get_last_error;
+
+    my @responses;
+    $talk->_imap_cmd(
+        'XAPPLEPUSHSERVICE', 0,
+        { xapplepushservice => sub { push @responses, [ @{$_[1]} ] } },
+        'mailboxes',         [ 'Other Users.victim.bah' ],
+        'aps-version',       '2',
+        'aps-account-id',    'accountid',
+        'aps-device-token',  'devtoken',
+        'aps-subtopic',      'subtopic',
+    );
+
+    # Every invocation of XAPPLEPUSHSERVICE gets the trailing "aps-version"
+    # status response; that's fine.  What must not appear is a
+    # * XAPPLEPUSHSERVICE "mailbox" "<name>" echo, which both confirms the
+    # mailbox exists and (via mboxevent_set_applepushservice) subscribes
+    # the attacker's APNS device to the victim's mail.
+    my @mailbox_echoes = grep { ($_->[0] // '') eq 'mailbox' } @responses;
+    $self->assert_deep_equals([], \@mailbox_echoes);
+}
