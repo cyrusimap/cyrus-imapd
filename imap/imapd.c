@@ -8530,9 +8530,10 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
     if (!r) {
         rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
 
-        if (!rights && !imapd_userisadmin &&
+        if (!(rights & ACL_ADMIN) && !imapd_userisadmin &&
             !mboxname_userownsmailbox(imapd_userid, intname)) {
-            r = IMAP_MAILBOX_NONEXISTENT;
+            r = (rights & ACL_LOOKUP) ?
+                IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
         }
     }
 
