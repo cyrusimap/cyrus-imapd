@@ -1986,18 +1986,23 @@ static Xapian::Query *xapian_query_new_match_word_break(const xapian_db_t *db,
                                                         const char *str)
 {
     std::string prefix(get_term_prefix(partnum));
+    unsigned flags = Xapian::QueryParser::FLAG_PHRASE |
+                     Xapian::QueryParser::FLAG_WILDCARD;
 
     Xapian::Query *q = new Xapian::Query {db->parser->parse_query(
             str,
 #if defined(USE_XAPIAN_WORD_BREAKS)
-            Xapian::QueryParser::FLAG_WORD_BREAKS,
+            flags | Xapian::QueryParser::FLAG_WORD_BREAKS,
 #elif defined(USE_XAPIAN_CJK_WORDS)
-            Xapian::QueryParser::FLAG_CJK_WORDS,
+            flags | Xapian::QueryParser::FLAG_CJK_WORDS,
 #else
-            Xapian::QueryParser::FLAG_CJK_NGRAM,
+            flags | Xapian::QueryParser::FLAG_CJK_NGRAM,
 #endif
             prefix)};
 
+    if (xapian_db_has_version_lower_than(db, 17)) {
+    // Before index version 17, fullwidth Latin characters were indexed
+    // capitalized. This requires special-handling.
 #if defined(USE_XAPIAN_WORD_BREAKS) || defined(USE_XAPIAN_CJK_WORDS)
     // There is a bug in Xapian v1.5 and CJK word segmentation, in which
     // a term starting with a fullwidth Latin character such as U+FF21
@@ -2027,6 +2032,7 @@ static Xapian::Query *xapian_query_new_match_word_break(const xapian_db_t *db,
         }
     }
 #endif
+    }
 
     return q;
 }
