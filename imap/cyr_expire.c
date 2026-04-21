@@ -857,7 +857,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
         { "no-conversations", no_argument, NULL, 'c' },
         { "help", no_argument, NULL, 'h' },
         { "prefix", required_argument, NULL, 'p' },
-        { "prune-userflags", required_argument, NULL, 't' },
+        { "prune-userflags", no_argument, NULL, 't' },
         { "userid", required_argument, NULL, 'u' },
         { "verbose", no_argument, NULL, 'v' },
         { "no-expunge", no_argument, NULL, 'x' },
