@@ -1333,13 +1333,13 @@ EOF
   },
 };
 
-my %SystemFlagMap = (
+our %SystemFlagMap = (
    0 => "\\Answered",
    1 => "\\Flagged",
    2 => "\\Deleted",
    3 => "\\Draft",
    4 => "\\Seen",
-  26 => "\\Snoozed",
+  26 => "[SNOOZED]",
   27 => "[SPLITCONVERSATION]",
   28 => "[NEEDS-CLEANUP]",
   29 => "[ARCHIVED]",
