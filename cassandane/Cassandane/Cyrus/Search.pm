@@ -901,4 +901,44 @@ sub test_partial
     $self->assert_str_equals('4:5', $results[0][8][1]);
 }
 
+sub test_multisearch_cross_user
+    :NoAltNamespace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client;
+    my $talk = $self->{store}->get_client;
+
+    # victim has a private subfolder with a message. cassandane has no
+    # explicit grant on it, only whatever the "anyone p" default provides --
+    # i.e. ACL_POST, which is not enough to run a search.
+    $self->{instance}->create_user('victim');
+
+    $admintalk->create('user.victim.private')
+        || die "create: " . $admintalk->get_last_error;
+
+    $admintalk->append(
+        'user.victim.private',
+        "From: t\@example.com\r\nSubject: secret\r\n\r\nconfidential body",
+    ) || die "append: " . $admintalk->get_last_error;
+
+    # Check our assumptions: default user has no access to victim's private
+    # folder.
+    $talk->select('user.victim.private');
+    $self->assert_str_equals('no', $talk->get_last_completion_response);
+
+    # The actual test: assert that cassandane user can't find anything by
+    # ESEARCHing victim's private mailbox.
+    my @esearch_responses;
+    $talk->_imap_cmd(
+        'ESEARCH', 0,
+        { esearch => sub { push @esearch_responses, $_[1] } },
+        'IN', '(MAILBOXES "user.victim.private")',
+        'RETURN', '(ALL)', 'ALL',
+    );
+
+    $self->assert_str_equals('ok', $talk->get_last_completion_response);
+    $self->assert_deep_equals([], \@esearch_responses);
+}
+
 1;
