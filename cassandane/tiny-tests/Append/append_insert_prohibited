@@ -77,6 +77,27 @@ EOF
 
     $imaptalk->copy(1, 'INBOX.Snoozed');
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Reconnect with magic +DAV";
+    $imaptalk->logout();
+    $imaptalk = $self->{store}->get_client(NoLogin => 1);
+    $imaptalk->login("cassandane+dav", "secret");
+
+    # APPEND/COPY into calendar/addressbook-home-set is always prohibited
+    xlog $self, "Attempt to APPEND/COPY into calendar/addressbook-home-set";
+    $imaptalk->append('INBOX.#calendars', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#addressbooks', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->examine('INBOX');
+
+    $imaptalk->copy(1, 'INBOX.#calendars');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#addressbooks');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
 }
 
 1;
