@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_cjk_phrase
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+use utf8;
+
+    # Create emails with bodies containing CJK text.
+    my %test_emails = (
+        # This contains the terms we'll query in phrase search:
+        match => '【デビットカード】ご利用のお知らせ',
+        # These contain the queried terms, but not in the right
+        # order for phrase search:
+        nomatch1 => '【デビットカード】ご利用不可のお知らせ',
+        nomatch2 => '【デビットカードご利用の方へ】臨時システムメンテナンスのお知らせ',
+    );
+
+    my %create_emails = map {
+        $_ => {
+            mailboxIds => {
+                '$inbox' => JSON::true
+            },
+            from => [{ email => 'foo@local' }],
+            to => [{ email => 'bar@local' }],
+            subject => $_,
+            bodyStructure => {
+                type => 'text/plain',
+                partId => 'part1',
+            },
+            bodyValues => {
+                part1 => {
+                    value => $test_emails{$_},
+                },
+            },
+        }
+    } keys %test_emails;
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => \%create_emails,
+        }, 'R1'],
+    ]);
+
+    my $match_id = $res->[0][1]{created}{'match'}{id};
+    $self->assert_not_null($match_id);
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    # Now query for CJK phrase. Only the expected email must match.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                conditions => [{
+                    body => '"デビットカード"'
+                }, {
+                    body => '"ご利用のお知らせ"',
+                }],
+                operator => 'AND',
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals([ $match_id ], $res->[0][1]{ids});
+
+no utf8;
+}
