@@ -6080,6 +6080,11 @@ static int multisearch_cb(const mbentry_t *mbentry, void *rock)
         hash_lookup(mbentry->name, &mrock->mailboxes))
         return 0;
 
+    /* Skip mailboxes the caller can't read. */
+    if (!imapd_userisadmin &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ))
+        return 0;
+
     switch (mrock->filter) {
     case SEARCH_SOURCE_INBOXES:
         /* Only allow user's INBOX or those postable by anonymous */
