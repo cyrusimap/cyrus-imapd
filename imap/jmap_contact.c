@@ -7977,8 +7977,22 @@ static json_t *jmap_card_from_vcard(const char *userid,
         json_t *patched = jmap_patchobject_apply(jcard, crock.patch, NULL, 0);
 
         json_decref(crock.patch);
-        json_decref(jcard);
-        jcard = patched;
+        if (patched) {
+            json_decref(jcard);
+            jcard = patched;
+        }
+        else {
+            /* The JSPTR of at least one of the JSPROP properties pointed into
+             * a JSContact subtree that the vCard-to-JSContact conversion did
+             * not reconstruct, so the patch could not be applied. Keep the
+             * unpatched card as defined in RFC 9555, Section 3.2.1.  The
+             * JSPROP contents are preserved in the stored vCard and a client
+             * that requests them directly can still retrieve them. */
+            syslog(LOG_NOTICE,
+                   "jmap_card_from_vcard: patch failed for record %u:%s",
+                   record  ? record->uid : 0,
+                   mailbox ? mailbox_name(mailbox) : "<none>");
+        }
     }
 
     /* Record properties */
@@ -8102,6 +8116,13 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     obj = jmap_card_from_vcard(req->userid, vcard, crock->db,
                                crock->mailbox, &record, from_vcard_flags);
     vcardcomponent_free(vcard);
+
+    if (!obj) {
+        syslog(LOG_ERR, "jmap_card_from_vcard returned NULL for %u:%s",
+                cdata->dav.imap_uid, mailbox_name(crock->mailbox));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     if (!crock->args.disable_uri_as_blobid) {
         /* Only cache contacts with media as blobids */
@@ -9793,9 +9814,8 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
             vcardstrarray *field;
 
             if (!ckind) {
-                jmap_parser_pop(parser);
-                _jsunknown_to_vcard(parser, "components", comps, myprops, card);
-                goto fail;
+                jmap_parser_invalid(parser, "kind");
+                break;
             }
 
             /* Add phonetic to proper field */
