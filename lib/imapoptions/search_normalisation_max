@@ -3,7 +3,6 @@ Type: INT
 Default-Value: 1000
 Last-Modified: 3.0.0
 
-A resource bound for the combinatorial explosion of search expression
-tree complexity caused by normalising expressions with many OR nodes.
-These can use more CPU time to optimise than they save IO time in scanning
-folders. 
+A resource bound for the combinatorial explosion of search expression tree
+complexity caused by normalising expressions with many OR nodes.  These can
+use more CPU time to optimise than they save IO time in scanning folders.

@@ -3,5 +3,4 @@ Type: INT
 Default-Value: 50
 Last-Modified: 2.3.17
 
-The maximum number of mupdate worker threads (overall). 
-
+The maximum number of mupdate worker threads (overall).

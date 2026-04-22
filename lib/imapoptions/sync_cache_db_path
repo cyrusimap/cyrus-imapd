@@ -3,6 +3,6 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.3.1
 
-The path for the replication cache.  Prefix with a
-channel name to apply for that channel.  NOTE, it's
-quite important to have a different one per backend! 
+The path for the replication cache.  Prefix with a channel name to apply
+for that channel.  NOTE, it's quite important to have a different one per
+backend!

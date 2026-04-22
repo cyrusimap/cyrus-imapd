@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 2.3.17
 
-If enabled, timsieved will issue referrals to clients when the
-user's scripts reside on a remote server (in a Murder).
-Otherwise, timsieved will proxy traffic to the remote server. 
+If enabled, timsieved will issue referrals to clients when the user's
+scripts reside on a remote server (in a Murder).  Otherwise, timsieved will
+proxy traffic to the remote server.

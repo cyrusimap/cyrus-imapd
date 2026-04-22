@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 5000
 Last-Modified: 3.3.0
 
-maximum records with the same guid.  This is just a sanity check to stop the same
-email being added and removed over and over. 
+maximum records with the same guid.  This is just a sanity check to stop
+the same email being added and removed over and over.

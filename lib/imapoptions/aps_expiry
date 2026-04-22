@@ -3,6 +3,6 @@ Type: DURATION
 Default-Value: 1d
 Last-Modified: 3.10.0
 
-Time after which a CalDAV/CardDAV push subscription will expire.
-A client will have to refresh the subscription in order to continue to
-receive push notifications. 
+Time after which a CalDAV/CardDAV push subscription will expire.  A client
+will have to refresh the subscription in order to continue to receive push
+notifications.

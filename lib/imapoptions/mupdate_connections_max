@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 128
 Last-Modified: 2.3.17
 
-The max number of connections that a mupdate process will allow, this
-is related to the number of file descriptors in the mupdate process.
-Beyond this number connections will be immediately issued a BYE response. 
+The max number of connections that a mupdate process will allow, this is
+related to the number of file descriptors in the mupdate process.  Beyond
+this number connections will be immediately issued a BYE response.

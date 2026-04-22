@@ -6,4 +6,4 @@ Last-Modified: 2.3.17
 Notifyd(8) method to use for "SIEVE" notifications.  If not set, "SIEVE"
 notifications are disabled.
 
-This method is only used when no method is specified in the script. 
+This method is only used when no method is specified in the script.

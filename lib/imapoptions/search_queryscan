@@ -4,5 +4,4 @@ Default-Value: 5000
 Last-Modified: 3.1.7
 
 The minimum number of records require to do a direct scan of all G keys
-\* rather than indexed lookups.  A value of 0 means always do indexed lookups.
-
+rather than indexed lookups.  A value of 0 means always do indexed lookups.

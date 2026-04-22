@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 2.3.17
 
-Convert usernames to all lowercase before login/authentication.  This
-is useful with authentication backends which ignore case during
-username lookups (such as LDAP). 
+Convert usernames to all lowercase before login/authentication.  This is
+useful with authentication backends which ignore case during username
+lookups (such as LDAP).

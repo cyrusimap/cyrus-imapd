@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 0
 Last-Modified: 2.5.0
 
-The maximum amount of messages at which to give a quota warning
-(if this value is 0, or if the quota is smaller than this
-amount, then warnings are always given). 
+The maximum amount of messages at which to give a quota warning (if this
+value is 0, or if the quota is smaller than this amount, then warnings are
+always given).

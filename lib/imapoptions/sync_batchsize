@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 8192
 Last-Modified: 3.0.0
 
-the number of messages to upload in a single mailbox replication.
-Default is 8192.  If there are more than this many messages appended
-to the mailbox, generate a synthetic partial state and send that. 
+the number of messages to upload in a single mailbox replication.  Default
+is 8192.  If there are more than this many messages appended to the
+mailbox, generate a synthetic partial state and send that.

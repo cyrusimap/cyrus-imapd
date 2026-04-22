@@ -7,4 +7,3 @@ Limit of backend usage (%): if a backend is over that limit, it is
 automatically excluded from selection mode.
 
 If all backends are over that limit, this feature is not used anymore.
-

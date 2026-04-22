@@ -3,6 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-Whitespace separated list of backend server names.  Used for
-finding server with the most available free space for proxying
-CREATE. 
+Whitespace separated list of backend server names.  Used for finding server
+with the most available free space for proxying CREATE.

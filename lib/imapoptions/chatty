@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-If yes, syslog tags and commands for every IMAP command, mailboxes
-for every LMTP connection, every POP3 command, etc. 
+If yes, syslog tags and commands for every IMAP command, mailboxes for
+every LMTP connection, every POP3 command, etc.

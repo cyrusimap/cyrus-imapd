@@ -3,10 +3,9 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-Allow moving user accounts (with associated meta-data) via RENAME
-or XFER.
+Allow moving user accounts (with associated meta-data) via RENAME or XFER.
 
-Note that measures should be taken to make sure that the user being
-moved is not logged in, and cannot login during the move.  Failure
-to do so may result in the user's meta-data (seen state,
-subscriptions, etc) being corrupted or out of date. 
+Note that measures should be taken to make sure that the user being moved
+is not logged in, and cannot login during the move.  Failure to do so may
+result in the user's meta-data (seen state, subscriptions, etc) being
+corrupted or out of date.

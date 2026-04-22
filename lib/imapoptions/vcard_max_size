@@ -4,9 +4,11 @@ Default-Value: 0
 Last-Modified: 3.8.0
 
 Maximum allowed vCard size.
-If non-zero, CardDAV and JMAP will reject storage of contacts whose
-vCard representation is larger than *vcard_max_size*.
 
-If set to 0 (the default), a large internally-defined limit will be applied.
+If non-zero, CardDAV and JMAP will reject storage of contacts whose vCard
+representation is larger than *vcard_max_size*.
 
-If no unit is specified, bytes is assumed. 
+If set to 0 (the default), a large internally-defined limit will be
+applied.
+
+If no unit is specified, bytes is assumed.

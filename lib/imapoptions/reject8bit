@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, lmtpd rejects messages with 8-bit characters in the
-headers. 
+If enabled, lmtpd rejects messages with 8-bit characters in the headers.

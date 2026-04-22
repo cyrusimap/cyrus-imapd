@@ -3,11 +3,11 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Space-separated list of relative URLs (paths) rooted at
-"httpdocroot" (see below) to be served by httpd.  If set, this
-option will limit served static content to only those paths specified
-(returning "404 Not Found" to any other client requested URLs).
-Otherwise, httpd will serve any content found in "httpdocroot".
+Space-separated list of relative URLs (paths) rooted at "httpdocroot" (see
+below) to be served by httpd.  If set, this option will limit served static
+content to only those paths specified (returning "404 Not Found" to any
+other client requested URLs).  Otherwise, httpd will serve any content
+found in "httpdocroot".
 
-Note that any path specified by "rss_feedlist_template" is an
-exception to this rule.
+Note that any path specified by "rss_feedlist_template" is an exception to
+this rule.

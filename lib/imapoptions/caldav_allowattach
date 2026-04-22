@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.0.0
 
-Enable managed attachments support on the CalDAV server. 
-
+Enable managed attachments support on the CalDAV server.

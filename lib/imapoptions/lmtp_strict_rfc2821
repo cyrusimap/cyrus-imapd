@@ -6,5 +6,5 @@ Last-Modified: 2.5.0
 By default, lmtpd will be strict (per :rfc:`2821`) with regards to which
 envelope addresses are allowed.  If this option is set to false, 8bit
 characters in the local-part of envelope addresses are changed to 'X'
-instead.  This is useful to avoid generating backscatter with
-certain MTAs like Postfix or Exim which accept such messages. 
+instead.  This is useful to avoid generating backscatter with certain MTAs
+like Postfix or Exim which accept such messages.

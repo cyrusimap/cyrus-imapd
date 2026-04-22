@@ -4,4 +4,5 @@ Default-Value: NULL
 Last-Modified: 3.8.0
 
 The URL endpoint to use when for querying group membership, in URI Template
-(level 1) format [:rfc:`6570`].  The URL MUST contain a variable called "groupId" 
+(level 1) format [:rfc:`6570`].  The URL MUST contain a variable called
+"groupId"

@@ -3,9 +3,8 @@ Type: DURATION
 Default-Value: 30m
 Last-Modified: 3.1.8
 
-How long to wait for a response before returning a timeout failure
-when talking to a replication peer (client or server).  The minimum
-duration is 3 seconds, the default is 30 minutes.
+How long to wait for a response before returning a timeout failure when
+talking to a replication peer (client or server).  The minimum duration is
+3 seconds, the default is 30 minutes.
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

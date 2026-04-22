@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, the sieve engine expects folder names for the
-*fileinto* action in scripts to use UTF8 encoding.  Otherwise,
-modified UTF7 encoding should be used. 
+If enabled, the sieve engine expects folder names for the *fileinto* action
+in scripts to use UTF8 encoding.  Otherwise, modified UTF7 encoding should
+be used.

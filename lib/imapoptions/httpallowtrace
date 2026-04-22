@@ -5,4 +5,4 @@ Last-Modified: 2.5.0
 
 Allow use of the TRACE method.
 
-Note that sensitive data might be disclosed by the response. 
+Note that sensitive data might be disclosed by the response.

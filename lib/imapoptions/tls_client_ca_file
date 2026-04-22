@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Path to a file containing the CA certificate(s) used to verify
-client SSL certificates used for authentication. 
+Path to a file containing the CA certificate(s) used to verify client SSL
+certificates used for authentication.

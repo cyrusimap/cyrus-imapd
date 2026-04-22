@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.0.0
 
-If set, messages with the \\Flagged system flag won't be archived,
-provided they are smaller than **archive_maxsize**. 
+If set, messages with the \\Flagged system flag won't be archived, provided
+they are smaller than **archive_maxsize**.

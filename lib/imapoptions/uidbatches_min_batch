@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 500
 Last-Modified: 3.13.1
 
-The minimum batch size allowed by the server for a UIDBATCHES command.
-The default of 500 is the maximum allowed value per the
-specification.  The minium allowed value is 10. 
+The minimum batch size allowed by the server for a UIDBATCHES command.  The
+default of 500 is the maximum allowed value per the specification.  The
+minium allowed value is 10.

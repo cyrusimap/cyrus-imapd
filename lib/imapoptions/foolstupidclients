@@ -4,4 +4,4 @@ Default-Value: 0
 Last-Modified: 2.3.17
 
 If enabled, only list the personal namespace when a LIST "\*" is performed
-(it changes the request to a LIST "INBOX\*"). 
+(it changes the request to a LIST "INBOX\*").

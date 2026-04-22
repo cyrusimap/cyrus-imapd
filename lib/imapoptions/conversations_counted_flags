@@ -3,7 +3,7 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.0.0
 
-space-separated list of flags for which per-conversation counts
-will be kept.  Note that you need to reconstruct the conversations
-database with ctl_conversationsdb if you change this option on a
-running server, or the counts will be wrong. 
+space-separated list of flags for which per-conversation counts will be
+kept.  Note that you need to reconstruct the conversations database with
+ctl_conversationsdb if you change this option on a running server, or the
+counts will be wrong.

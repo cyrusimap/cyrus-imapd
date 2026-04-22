@@ -3,7 +3,7 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, the pop server will set and obey IMAP flags.  Messages
-having the \\Deleted flag are ignored as if they do not exist.
-Messages that are retrieved by the client will have the \\Seen flag
-set.  All messages will have the \\Recent flag unset. 
+If enabled, the pop server will set and obey IMAP flags.  Messages having
+the \\Deleted flag are ignored as if they do not exist.  Messages that are
+retrieved by the client will have the \\Seen flag set.  All messages will
+have the \\Recent flag unset.

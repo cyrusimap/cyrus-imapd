@@ -4,7 +4,7 @@ Default-Value: 1000
 Last-Modified: 2.3.17
 
 Maximum number of lines of header that will be processed into cache
-records.  Default 1000.  If set to zero, it is unlimited.
-If a message hits the limit, an error will be logged and the rest of
-the lines in the header will be skipped.  This is to avoid malformed
-messages causing giant cache records. 
+records.  Default 1000.  If set to zero, it is unlimited.  If a message
+hits the limit, an error will be logged and the rest of the lines in the
+header will be skipped.  This is to avoid malformed messages causing giant
+cache records.

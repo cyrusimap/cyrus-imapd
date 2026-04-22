@@ -3,10 +3,9 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.6.0
 
-The base URL for WebDAV managed attachments, excluding the
-Cyrus-specific URL paths. Typically, this only includes the
-HTTP scheme and host name at which DAV clients may fetch
-managed attachments from, e.g.  "https://dav.example.com".
-If not specified, the target host of the DAV HTTP request that uploaded
-the attachment will be used. For JMAP, the Link.blobId property of
-JSCalendar objects will be disabled. 
+The base URL for WebDAV managed attachments, excluding the Cyrus-specific
+URL paths. Typically, this only includes the HTTP scheme and host name at
+which DAV clients may fetch managed attachments from, e.g.
+"https://dav.example.com".  If not specified, the target host of the DAV
+HTTP request that uploaded the attachment will be used. For JMAP, the
+Link.blobId property of JSCalendar objects will be disabled.

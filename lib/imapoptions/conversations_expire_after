@@ -3,9 +3,7 @@ Type: DURATION
 Default-Value: 90d
 Last-Modified: 3.1.8
 
-How long the conversations database keeps the message tracking
-information needed for receiving new messages in existing
-conversations.
+How long the conversations database keeps the message tracking information
+needed for receiving new messages in existing conversations.
 
-For backward compatibility, if no unit is specified, days is
-assumed. 
+For backward compatibility, if no unit is specified, days is assumed.

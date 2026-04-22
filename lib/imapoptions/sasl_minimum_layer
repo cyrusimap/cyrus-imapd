@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 0
 Last-Modified: 2.3.17
 
-The minimum SSF that the server will allow a client to negotiate.
-A value of 1 requires integrity protection; any higher value
-requires some amount of encryption. 
+The minimum SSF that the server will allow a client to negotiate.  A value
+of 1 requires integrity protection; any higher value requires some amount
+of encryption.

@@ -4,4 +4,4 @@ Allowed-Values: flat skiplist twom twoskip
 Default-Value: twoskip
 Last-Modified: 3.13.1
 
-The cyrusdb backend to use for the seen state. 
+The cyrusdb backend to use for the seen state.

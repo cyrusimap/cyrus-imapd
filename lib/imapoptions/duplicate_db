@@ -4,5 +4,5 @@ Allowed-Values: skiplist sql twom twoskip
 Default-Value: twoskip
 Last-Modified: 3.13.1
 
-The cyrusdb backend to use for the duplicate delivery suppression
-and sieve. 
+The cyrusdb backend to use for the duplicate delivery suppression and
+sieve.

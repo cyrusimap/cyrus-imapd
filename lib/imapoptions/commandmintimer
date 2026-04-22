@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 2.4.0
 
 Time in floating point seconds. Any imap command that takes longer than
-this time is logged. 
+this time is logged.

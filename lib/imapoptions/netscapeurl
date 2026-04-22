@@ -3,6 +3,6 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-If enabled at compile time, this specifies a URL to reply when
-Netscape asks the server where the mail administration HTTP server
-is.  Administrators should set this to a local resource. 
+If enabled at compile time, this specifies a URL to reply when Netscape
+asks the server where the mail administration HTTP server is.
+Administrators should set this to a local resource.

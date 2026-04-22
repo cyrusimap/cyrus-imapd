@@ -3,9 +3,8 @@ Type: BYTESIZE
 Default-Value: 10M
 Last-Modified: 3.8.0
 
-The maximum size that the JMAP API accepts for requests at the API endpoint.
-Returned as the maxSizeRequest property value of the JMAP
+The maximum size that the JMAP API accepts for requests at the API
+endpoint.  Returned as the maxSizeRequest property value of the JMAP
 \"urn:ietf:params:jmap:core\" capabilities object.
 
 For backward compatibility, if no unit is specified, kibibytes is assumed.
-

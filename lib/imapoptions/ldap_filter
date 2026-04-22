@@ -3,17 +3,30 @@ Type: STRING
 Default-Value: (uid=%u)
 Last-Modified: 2.3.17
 
-Specify a filter that searches user identifiers.  The following tokens can be
-used in the filter string:
+Specify a filter that searches user identifiers.  The following tokens can
+be used in the filter string:
 
-%%   = %
-%u   = user
-%U   = user portion of %u (%U = test when %u = test@domain.tld)
-%d   = domain portion of %u if available (%d = domain.tld when %u =
-test@domain.tld), otherwise same as %R
-%R   = domain portion of %u starting with @ (%R = @domain.tld
-when %u = test@domain.tld)
-%D   = user dn.  (use when ldap_member_method: filter)
-%1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
+%%
+    %
 
-ldap_filter is not used when ldap_sasl is enabled. 
+%u
+    user
+
+%U
+    user portion of %u (%U = test when %u = test@domain.tld)
+
+%d
+    domain portion of %u if available (%d = domain.tld when %u =
+    test@domain.tld), otherwise same as %R
+
+%R
+    domain portion of %u starting with @ (%R = @domain.tld when %u =
+    test@domain.tld)
+
+%D
+    user dn (use when ldap_member_method: filter)
+
+%1-9
+    domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
+
+ldap_filter is not used when ldap_sasl is enabled.

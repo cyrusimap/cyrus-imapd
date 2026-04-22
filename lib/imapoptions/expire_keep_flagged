@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.13.1
 
-If true, don't expire messages which have the \`\Flagged\` IMAP
-flag set.  Default is false. 
+If true, don't expire messages which have the \`\Flagged\` IMAP flag set.
+Default is false.

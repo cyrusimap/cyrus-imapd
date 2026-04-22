@@ -3,8 +3,7 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-If enabled, HTTP response payloads including server-generated
-markup languages (HTML, XML) will utilize line breaks and
-indentation to promote better human-readability in telemetry logs.
-Note that enabling this option will increase the amount of data
-sent across the wire. 
+If enabled, HTTP response payloads including server-generated markup
+languages (HTML, XML) will utilize line breaks and indentation to promote
+better human-readability in telemetry logs.  Note that enabling this option
+will increase the amount of data sent across the wire.

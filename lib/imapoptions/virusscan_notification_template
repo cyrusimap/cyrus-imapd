@@ -4,6 +4,6 @@ Default-Value: NULL
 Last-Modified: 3.1.8
 
 The absolute path to a file containing a template to use to describe
-infected messages that have been deleted by **cyr_virusscan(8)**.
-See **cyr_virusscan(8)** for specification of the format of this file.
-If not specified, the builtin default template will be used. 
+infected messages that have been deleted by **cyr_virusscan(8)**.  See
+**cyr_virusscan(8)** for specification of the format of this file.  If not
+specified, the builtin default template will be used.

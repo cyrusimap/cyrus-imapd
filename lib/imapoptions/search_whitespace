@@ -4,10 +4,9 @@ Allowed-Values: skip merge keep
 Default-Value: merge
 Last-Modified: 2.5.0
 
-When searching, how whitespace should be handled.  Options are:
-"skip" (default in 2.3 and earlier series) - where a search for
-"equi" would match "the quick brown fox".  "merge" - the default,
-where "he  qu" would match "the quick   brownfox", and "keep",
-where whitespace must match exactly.  The default of "merge" is
-recommended for most cases - it's a good compromise which
-keeps words separate. 
+When searching, how whitespace should be handled.  Options are: "skip"
+(default in 2.3 and earlier series) - where a search for "equi" would match
+"the quick brown fox".  "merge" - the default, where "he  qu" would match
+"the quick   brownfox", and "keep", where whitespace must match exactly.
+The default of "merge" is recommended for most cases - it's a good
+compromise which keeps words separate.

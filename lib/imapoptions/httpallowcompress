@@ -4,6 +4,6 @@ Default-Value: 1
 Last-Modified: 2.5.0
 
 If enabled, the server will compress response payloads if the client
-indicates that it can accept them.  Note that the compressed data
-will appear in telemetry logs, leaving only the response headers as
+indicates that it can accept them.  Note that the compressed data will
+appear in telemetry logs, leaving only the response headers as
 human-readable.

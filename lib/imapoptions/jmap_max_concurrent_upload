@@ -3,6 +3,6 @@ Type: INT
 Default-Value: 5
 Last-Modified: 3.1.6
 
-The value to return for the maxConcurrentUpload property of
-the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
-implementation does not enforce this rate-limit. 
+The value to return for the maxConcurrentUpload property of the JMAP
+\"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
+implementation does not enforce this rate-limit.

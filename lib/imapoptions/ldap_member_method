@@ -4,8 +4,8 @@ Allowed-Values: attribute filter
 Default-Value: attribute
 Last-Modified: 2.3.17
 
-Specify a group method.  The "attribute" method retrieves groups from
-a multi-valued attribute specified in ldap_member_attribute.
+Specify a group method.  The "attribute" method retrieves groups from a
+multi-valued attribute specified in ldap_member_attribute.
 
 The "filter" method uses a filter, specified by ldap_member_filter, to find
-groups; ldap_member_attribute is a single-value attribute group name. 
+groups; ldap_member_attribute is a single-value attribute group name.

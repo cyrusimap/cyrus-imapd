@@ -5,4 +5,4 @@ Last-Modified: 2.3.17
 For-Documentation-Only: 1
 
 If enabled, the SASL library will automatically create authentication
-secrets when given a plaintext password.  See the SASL documentation. 
+secrets when given a plaintext password.  See the SASL documentation.

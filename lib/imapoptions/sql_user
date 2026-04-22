@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-Username to use for authentication to the SQL server. 
-
+Username to use for authentication to the SQL server.

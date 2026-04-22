@@ -5,6 +5,7 @@ Last-Modified: 2.3.17
 
 Debug command to be used by processes started with -D option.  The string
 is a C format string that gets 3 options: the first is the name of the
-executable (as specified in the cmd parameter in cyrus.conf). The second
-is the pid (integer) and the third is the service ID.
-Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d 
+executable (as specified in the cmd parameter in cyrus.conf). The second is
+the pid (integer) and the third is the service ID.
+
+Example: /usr/local/bin/gdb /usr/cyrus/bin/%s %d

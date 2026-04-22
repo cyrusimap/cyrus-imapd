@@ -6,8 +6,8 @@ Last-Modified: 2.4.0
 Path to the external program that notifyd(8) will call to send mail
 notifications.
 
-The external program will be called with the following
-command line options:
+The external program will be called with the following command line
+options:
 
     .. option:: -c    class
 
@@ -17,5 +17,4 @@ command line options:
 
     .. option:: -m    mailbox
 
-    And the notification message will be available on *stdin*.
-
+And the notification message will be available on *stdin*.

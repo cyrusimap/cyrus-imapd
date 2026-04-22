@@ -4,6 +4,6 @@ Default-Value: #drive
 Last-Modified: 3.0.0
 
 The prefix for the DAV storage mailboxes hierarchies.  The hierarchy
-delimiter will be automatically appended.  The public storage
-hierarchy will be at the toplevel of the shared namespace.  A
-user's personal storage hierarchy will be a child of their Inbox. 
+delimiter will be automatically appended.  The public storage hierarchy
+will be at the toplevel of the shared namespace.  A user's personal storage
+hierarchy will be a child of their Inbox.

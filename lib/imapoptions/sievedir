@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: /usr/sieve
 Last-Modified: 2.3.17
 
-If sieveusehomedir is false, this directory is searched for Sieve
-scripts. 
+If sieveusehomedir is false, this directory is searched for Sieve scripts.

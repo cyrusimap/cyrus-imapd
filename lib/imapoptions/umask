@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: 077
 Last-Modified: 2.3.17
 
-The umask value used by various Cyrus IMAP programs. 
-
+The umask value used by various Cyrus IMAP programs.

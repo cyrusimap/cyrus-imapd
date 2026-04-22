@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.0.0
 
-If enabled, HTML parts of messages are skipped, i.e. not indexed and
-not searchable.  Otherwise, they're indexed. 
+If enabled, HTML parts of messages are skipped, i.e. not indexed and not
+searchable.  Otherwise, they're indexed.

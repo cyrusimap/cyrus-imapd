@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.13.1
 
-If true, calculate age of messages for expiry by the savedate
-(timestamp when the message was added to this folder) rather
-than gmtime (date header on the message).  Default is true. 
+If true, calculate age of messages for expiry by the savedate (timestamp
+when the message was added to this folder) rather than gmtime (date header
+on the message).  Default is true.

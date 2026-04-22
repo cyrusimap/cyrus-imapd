@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.1.4
 
-The authentication SASL realm to use when authenticating to a SMTP
-server. 
+The authentication SASL realm to use when authenticating to a SMTP server.

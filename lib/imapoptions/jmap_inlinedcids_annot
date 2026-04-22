@@ -3,15 +3,14 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.1.1
 
-The name of the per-message annotation, if any, that stores a
-JSON object, mapping :rfc:`2392` Content-IDs referenced in HTML bodies
-to the respective HTML body part number.
+The name of the per-message annotation, if any, that stores a JSON object,
+mapping :rfc:`2392` Content-IDs referenced in HTML bodies to the respective
+HTML body part number.
 
-For example, if message part 1.2 contains HTML and references an
-inlined image at "cid:foo", then the value of this annotation
-would be:
+For example, if message part 1.2 contains HTML and references an inlined
+image at "cid:foo", then the value of this annotation would be:
 
 { "<foo>" : "1.2" }
 
-Note that the Content-ID key must be URL-unescaped and enclosed in
-angular brackets, as defined in :rfc:`2392`. 
+Note that the Content-ID key must be URL-unescaped and enclosed in angular
+brackets, as defined in :rfc:`2392`.

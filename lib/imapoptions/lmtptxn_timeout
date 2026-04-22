@@ -8,5 +8,4 @@ murder environment).  Can be used to prevent hung lmtpds on proxy hosts
 when a backend server becomes unresponsive during a lmtp transaction.
 Change to zero for infinite.
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

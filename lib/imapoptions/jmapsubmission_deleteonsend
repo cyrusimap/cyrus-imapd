@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.1.8
 
-If enabled (the default) then delete the EmailSubmission as soon as the email
-\* has been sent. 
+If enabled (the default) then delete the EmailSubmission as soon as the
+email has been sent.

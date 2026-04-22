@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-Preclude list command on user namespace.  If set to 'yes', the
-LIST response will never include any other user's mailbox.  Admin
-users will always see all mailboxes. 
+Preclude list command on user namespace.  If set to 'yes', the LIST
+response will never include any other user's mailbox.  Admin users will
+always see all mailboxes.

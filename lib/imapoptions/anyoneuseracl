@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 2.3.17
 
-Should non-admin users be allowed to set ACLs for the 'anyone'
-user on their mailboxes?  In a large organization this can cause
-support problems, but it's enabled by default. 
+Should non-admin users be allowed to set ACLs for the 'anyone' user on
+their mailboxes?  In a large organization this can cause support problems,
+but it's enabled by default.

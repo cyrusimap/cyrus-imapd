@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Don't send event notification for given IMAP flag(s). 
-
+Don't send event notification for given IMAP flag(s).

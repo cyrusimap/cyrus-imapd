@@ -3,11 +3,10 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.1.8
 
-String to be prepended to the process name in syslog entries. Can
-be further overridden by setting the $CYRUS_SYSLOG_PREFIX environment
+String to be prepended to the process name in syslog entries. Can be
+further overridden by setting the $CYRUS_SYSLOG_PREFIX environment
 variable.
 
 Using the $CYRUS_SYSLOG_PREFIX environment variable has the additional
-advantage that it can be set before the **imapd.conf** is read, so
-errors while reading the config file can be syslogged with the correct
-prefix. 
+advantage that it can be set before the **imapd.conf** is read, so errors
+while reading the config file can be syslogged with the correct prefix.

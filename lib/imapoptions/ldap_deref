@@ -4,4 +4,4 @@ Allowed-Values: search find always never
 Default-Value: never
 Last-Modified: 2.3.17
 
-Specify how aliases dereferencing is handled during search. 
+Specify how aliases dereferencing is handled during search.

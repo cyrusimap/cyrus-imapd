@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.1.1
 
-If enabled, this option causes unextended LIST and LSUB output to
-include the "special-use" flags. 
+If enabled, this option causes unextended LIST and LSUB output to include
+the "special-use" flags.

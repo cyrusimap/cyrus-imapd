@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.0.0
 
-Create the 'Attachments' collection if it doesn't already exist. 
-
+Create the 'Attachments' collection if it doesn't already exist.

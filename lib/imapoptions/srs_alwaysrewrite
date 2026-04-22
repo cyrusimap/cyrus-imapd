@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-If true, perform SRS rewriting for ALL forwarding, even when not required. 
-
+If true, perform SRS rewriting for ALL forwarding, even when not required.

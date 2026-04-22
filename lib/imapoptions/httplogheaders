@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.3.1
 
-Space-separated list of HTTP header fields that will be included
-in the requests logged by httpd(8). 
+Space-separated list of HTTP header fields that will be included in the
+requests logged by httpd(8).

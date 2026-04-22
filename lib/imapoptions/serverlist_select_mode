@@ -17,10 +17,9 @@ Server selection mode.
     backend whose partition has the most free space (%)
 
 *freespace-percent-weighted*
-    same as for partition selection, comparing the free space (%) of the least used
-    partition of each backend
+    same as for partition selection, comparing the free space (%) of the
+    least used partition of each backend
 
 *freespace-percent-weighted-delta*
-    same as for partition selection, comparing the free space (%) of the least used
-    partition of each backend.
-
+    same as for partition selection, comparing the free space (%) of the
+    least used partition of each backend.

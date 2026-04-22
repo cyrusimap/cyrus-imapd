@@ -6,4 +6,4 @@ Last-Modified: 3.12.0
 If enabled, I/O operations will be artificially slowed down.  This option
 has no effect unless Cyrus was compiled with the --enable-debug-slowio
 configure argument.  This is mainly useful for testing certain edge case
-handling. 
+handling.

@@ -5,5 +5,5 @@ Last-Modified: 3.6.0
 
 If set, any arriving message with this guid will fail as if the underlying
 disk write had failed, pretending to be a disk full condition.  This is
-mainly useful for regression testing certain edge case handling.
-Currently only implemented for replication uploads. 
+mainly useful for regression testing certain edge case handling.  Currently
+only implemented for replication uploads.

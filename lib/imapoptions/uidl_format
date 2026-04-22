@@ -5,6 +5,6 @@ Default-Value: cyrus
 Last-Modified: 3.0.0
 
 Choose the format for UIDLs in pop3.  Possible values are "uidonly",
-"cyrus", "dovecot" and "courier".  "uidonly" forces the old default
-of UID, "cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading
-hex (lower case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID. 
+"cyrus", "dovecot" and "courier".  "uidonly" forces the old default of UID,
+"cyrus" is UIDVALIDITY.UID.  Dovecot is 8 digits of leading hex (lower
+case) each UID UIDVALIDITY. Courier is UIDVALIDITY-UID.

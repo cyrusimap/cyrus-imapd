@@ -4,8 +4,8 @@ Default-Value: 0
 Last-Modified: 2.3.17
 
 If enabled, imapd will be strict (per :rfc:`2046`) when matching MIME
-boundary strings.  This means that boundaries containing other
-boundaries as substrings will be treated as identical.  Since
-enabling this option will break some messages created by Eudora 5.1
-(and earlier), it is recommended that it be left disabled unless
-there is good reason to do otherwise. 
+boundary strings.  This means that boundaries containing other boundaries
+as substrings will be treated as identical.  Since enabling this option
+will break some messages created by Eudora 5.1 (and earlier), it is
+recommended that it be left disabled unless there is good reason to do
+otherwise.

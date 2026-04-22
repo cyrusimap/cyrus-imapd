@@ -7,4 +7,4 @@ Maximum size of a single word allowed by the IMAP parser.
 
 If set to 0, a large internally-defined limit will be applied.
 
-If no unit is specified, bytes is assumed. 
+If no unit is specified, bytes is assumed.

@@ -6,4 +6,4 @@ Last-Modified: 3.8.0
 Truncate the message content that may be included with MessageAppend and
 MessageNew. Set 0 to include the entire message itself.
 
-If no unit is specified, bytes is assumed. 
+If no unit is specified, bytes is assumed.

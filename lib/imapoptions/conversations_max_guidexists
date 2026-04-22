@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 100
 Last-Modified: 3.3.0
 
-maximum records with the same guid.  This maps to "labels", so with the default
-of 100, you can only have 100 labels on an email in JMAP. 
+maximum records with the same guid.  This maps to "labels", so with the
+default of 100, you can only have 100 labels on an email in JMAP.

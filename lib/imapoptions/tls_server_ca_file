@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 2.5.0
 
 Path to a file containing CA certificates used to verify certificates
-offered by the server, when cyrus acts as client. 
+offered by the server, when cyrus acts as client.

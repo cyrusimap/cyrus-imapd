@@ -6,6 +6,7 @@ Last-Modified: 3.8.0
 Maximum allowed iCalendar size. CalDAV and JMAP will reject storage of
 resources whose iCalendar representation is larger than this.
 
-If set to 0 (the default), a large internally-defined limit will be applied.
+If set to 0 (the default), a large internally-defined limit will be
+applied.
 
-If no unit is specified, bytes is assumed. 
+If no unit is specified, bytes is assumed.

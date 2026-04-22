@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-Cell to use for AFS PTS lookups.  Defaults to the local cell. 
-
+Cell to use for AFS PTS lookups.  Defaults to the local cell.

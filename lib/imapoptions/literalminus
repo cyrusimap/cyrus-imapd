@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.0.0
 
-if enabled, CAPABILITIES will reply with LITERAL- rather than
-LITERAL+ (:rfc:`7888`).  Doesn't actually size-restrict uploads though. 
+if enabled, CAPABILITIES will reply with LITERAL- rather than LITERAL+
+(:rfc:`7888`).  Doesn't actually size-restrict uploads though.

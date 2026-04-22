@@ -6,5 +6,4 @@ Last-Modified: 3.8.0
 Maximum size any sieve script can be, enforced at submission by
 timsieved(8) and JMAP.
 
-For backward compatibility, if no unit is specified, kibibytes is
-assumed. 
+For backward compatibility, if no unit is specified, kibibytes is assumed.

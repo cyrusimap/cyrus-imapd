@@ -4,6 +4,6 @@ Default-Value: c
 Last-Modified: 2.3.17
 
 Deprecated - only used for backwards compatibility with existing
-installations.  Lists the old :rfc:`2086` right which was used to
-grant the user the ability to delete a mailbox.  If a user has this
-right, they will automatically be given the new 'x' right. 
+installations.  Lists the old :rfc:`2086` right which was used to grant the
+user the ability to delete a mailbox.  If a user has this right, they will
+automatically be given the new 'x' right.

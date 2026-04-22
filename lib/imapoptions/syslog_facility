@@ -3,6 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Configure a syslog facility.  The default is whatever is compiled
-in.  Allowed values are: DAEMON, MAIL, NEWS, USER, and LOCAL0
-through to LOCAL7 
+Configure a syslog facility.  The default is whatever is compiled in.
+Allowed values are: DAEMON, MAIL, NEWS, USER, and LOCAL0 through to LOCAL7

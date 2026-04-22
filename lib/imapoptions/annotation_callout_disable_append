@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.1.2
 
-Disables annotations on append with xrunannotator. 
-
+Disables annotations on append with xrunannotator.

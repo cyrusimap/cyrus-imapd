@@ -1,7 +1,6 @@
 Name: ldap_domain_base_dn
 Type: STRING
-Default-Value: 
+Default-Value:
 Last-Modified: 2.5.0
 
-Base DN to search for domain name spaces. 
-
+Base DN to search for domain name spaces.

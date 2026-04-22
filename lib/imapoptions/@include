@@ -4,6 +4,5 @@ Default-Value: NULL
 Last-Modified: 2.3.17
 For-Documentation-Only: 1
 
-Directive which includes the specified file as part of the
-configuration.  If the path to the file is not absolute, CYRUS_PATH
-is prepended. 
+Directive which includes the specified file as part of the configuration.
+If the path to the file is not absolute, CYRUS_PATH is prepended.

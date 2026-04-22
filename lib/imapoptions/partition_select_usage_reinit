@@ -4,4 +4,4 @@ Default-Value: 0
 Last-Modified: 2.5.0
 
 For a given session, number of **operations** (e.g. partition selection)
-for which partitions usage data are cached. 
+for which partitions usage data are cached.

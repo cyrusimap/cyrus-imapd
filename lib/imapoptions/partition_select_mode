@@ -17,14 +17,14 @@ Partition selection mode.
     partition with the most free space (%)
 
 *freespace-percent-weighted*
-    each partition is weighted according to its free space (%); the more free space
-    the partition has, the more chances it has to be selected
+    each partition is weighted according to its free space (%); the more
+    free space the partition has, the more chances it has to be selected
 
 *freespace-percent-weighted-delta*
-    each partition is weighted according to its difference of free space (%)
-    compared to the most used partition; the more the partition is lagging behind
-    the most used partition, the more chances it has to be selected
+    each partition is weighted according to its difference of free space
+    (%) compared to the most used partition; the more the partition is
+    lagging behind the most used partition, the more chances it has to be
+    selected
 
-    Note that actually even the most used partition has a few chances to be
-    selected, and those chances increase when other partitions get closer
-
+Note that actually even the most used partition has a few chances to be
+selected, and those chances increase when other partitions get closer

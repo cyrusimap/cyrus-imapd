@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.12.0
 
-Use a global shared lock for ALL writes, allowing the global lock
-wrapper tool to freeze the world 
+Use a global shared lock for ALL writes, allowing the global lock wrapper
+tool to freeze the world

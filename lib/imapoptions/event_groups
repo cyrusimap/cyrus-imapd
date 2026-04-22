@@ -5,4 +5,4 @@ Allowed-Values: message quota flags access mailbox subscription calendar
 Default-Value: message mailbox
 Last-Modified: 3.8.0
 
-Space-separated list of groups of related events to turn on notification. 
+Space-separated list of groups of related events to turn on notification.
