@@ -57,33 +57,32 @@ sub _print_option
 
     my $underline = '-' x length $name;
 
-    # XXX don't ucfirst the name
-    print '#  ' . ucfirst($name) . "\n#  $underline\n";
+    print "# $name\n# $underline\n";
 
     if ($option->has_documentation) {
         foreach my $line ($option->documentation->@*) {
             chomp $line;
 
             print $line
-                  ? "#    $line\n"
+                  ? "# $line\n"
                   : "#\n";
         }
     }
 
     if ($option->has_deprecated_since) {
         if ($option->has_replaced_by) {
-            print '#    Deprecated in favour of ';
+            print '# Deprecated in favour of ';
             print $option->replaced_by;
-            print ". \n";
+            print ".\n";
         }
         else {
-            print "#    Deprecated. No longer used. \n";
+            print "# Deprecated. No longer used.\n";
         }
         print "\n";
     }
     elsif ($option->has_allowed_values) {
         print "\n";
-        print '#    Allowed values: ';
+        print '# Allowed values: ';
         print join(', ', $option->allowed_values->values);
         print "\n";
     }

@@ -161,20 +161,17 @@ sub _print_option
             print $line ? "    $line\n" : "\n";
         }
 
-        if (scalar $option->documentation->@* == 1) {
-            # XXX perverse newline behaviour
-            print "\n";
-        }
+        print "\n";
     }
 
     if ($option->has_deprecated_since) {
         if ($option->has_replaced_by) {
             print '    Deprecated in favour of *';
             print $option->replaced_by;
-            print "*. \n";
+            print "*.\n";
         }
         else {
-            print "    Deprecated. No longer used. \n";
+            print "    Deprecated. No longer used.\n";
         }
         print "\n";
     }
@@ -185,7 +182,7 @@ sub _print_option
         print "\n\n";
     }
 
-    print "\n    .. endblob $name\n\n";
+    print "    .. endblob $name\n\n";
 }
 
 1;
