@@ -4210,7 +4210,15 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
 
     /* See if we can append */
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(tag, name, intname, &mbentry);
+
+    /* Prohibit APPENDing to non-IMAP mailboxes unless using magic +DAV */
+    if (strcasecmpsafe(imapd_magicplus, "+dav") &&
+        mboxname_isnonimapmailbox(intname, 0)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+    else {
+        r = mlookup(tag, name, intname, &mbentry);
+    }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
@@ -6662,7 +6670,15 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
     if (ismove) client_behavior_mask |= CB_MOVE;
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(NULL, NULL, intname, &mbentry);
+
+    /* Prohibit COPYing to non-IMAP mailboxes unless using magic +DAV */
+    if (strcasecmpsafe(imapd_magicplus, "+dav") &&
+        mboxname_isnonimapmailbox(intname, 0)) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+    else {
+        r = mlookup(NULL, NULL, intname, &mbentry);
+    }
 
     if (!r) myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
 
