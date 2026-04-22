@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_vacation_with_fcc_otheruser_denied
+    :min_version_3_1
+    :NoAltNameSpace
+    :want_smtpdaemon
+{
+    my ($self) = @_;
+
+    my $target = "user.other.target";
+
+    xlog $self, "Create victim user 'other' and a target folder";
+    $self->{instance}->create_user('other');
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create($target)
+        or die "Cannot create $target: $@";
+
+    xlog $self, "Give cassandane read-only access (no 'i'/'p' rights)";
+    $admintalk->setacl($target, 'cassandane' => 'lrs');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    xlog $self, "Confirm cassandane cannot APPEND directly to $target";
+    my $talk = $self->{store}->get_client();
+    $talk->append($target,
+        "From: nobody\@example.com\r\n"
+        . "Subject: direct-append\r\n\r\n"
+        . "denied\r\n");
+    $self->assert_str_equals('no',
+        $talk->get_last_completion_response());
+
+    xlog $self, "Install a vacation rule that :fcc's into the victim's folder";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["vacation", "fcc"];
+
+vacation :fcc "$target" :days 1 :addresses ["cassandane\@example.com"] text:
+I am out of the office today. I will answer your email as soon as I can.
+.
+;
+EOF
+    );
+
+    xlog $self, "Deliver a message to trigger the vacation auto-reply";
+    my $msg1 = $self->{gen}->generate(
+        subject => "Message 1",
+        to => Cassandane::Address->new(localpart => 'cassandane',
+                                       domain => 'example.com'),
+    );
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Check that nothing was filed into the victim's folder";
+    $admintalk->select($target);
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $self->assert_num_equals(0, $admintalk->get_response_code('exists'));
+}
