@@ -1,0 +1,8 @@
+Name: tls_client_key
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+File containing the private key belonging to the tls_client_cert
+certificate. A value of "disabled" will disable this server's use
+of certificate-based authentication. 

@@ -1,0 +1,11 @@
+Name: prometheus_update_freq
+Type: DURATION
+Default-Value: 10s
+Last-Modified: 3.1.8
+Deprecated-Since: 3.12.0
+Replaced-By: prometheus_service_update_freq
+
+Deprecated in favour of *prometheus_service_update_freq*,
+*prometheus_master_update_freq*, and
+*prometheus_usage_update_freq*. 
+

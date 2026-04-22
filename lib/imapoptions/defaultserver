@@ -1,0 +1,8 @@
+Name: defaultserver
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.3.17
+
+The backend server name used by default for new mailboxes.  If not
+specified, the server with the most free space will be used for new
+mailboxes. 

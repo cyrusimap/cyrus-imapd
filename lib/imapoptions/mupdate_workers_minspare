@@ -1,0 +1,7 @@
+Name: mupdate_workers_minspare
+Type: INT
+Default-Value: 2
+Last-Modified: 2.3.17
+
+The minimum number of idle mupdate worker threads. 
+

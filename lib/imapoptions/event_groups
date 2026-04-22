@@ -1,0 +1,8 @@
+Name: event_groups
+Type: BITFIELD
+Allowed-Values: message quota flags access mailbox subscription calendar
+ applepushservice jmap
+Default-Value: message mailbox
+Last-Modified: 3.8.0
+
+Space-separated list of groups of related events to turn on notification. 

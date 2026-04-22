@@ -1,0 +1,7 @@
+Name: ldap_group_scope
+Type: STRINGLIST
+Allowed-Values: sub one base
+Default-Value: sub
+Last-Modified: 2.3.17
+
+Specify search scope for ldap_group_filter. 

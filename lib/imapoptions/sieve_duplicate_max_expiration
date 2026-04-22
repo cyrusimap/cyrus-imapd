@@ -1,0 +1,9 @@
+Name: sieve_duplicate_max_expiration
+Type: DURATION
+Default-Value: 90d
+Last-Modified: 3.1.8
+
+Maximum expiration time for duplicate message tracking records.
+
+For backward compatibility, if no unit is specified, seconds is
+assumed. 

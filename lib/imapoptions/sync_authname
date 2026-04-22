@@ -1,0 +1,7 @@
+Name: sync_authname
+Type: STRING
+Default-Value: NULL
+Last-Modified: 2.5.0
+
+The authentication name to use when authenticating to a sync server.
+Prefix with a channel name to only apply for that channel. 

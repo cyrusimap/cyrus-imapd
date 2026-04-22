@@ -1,0 +1,7 @@
+Name: tls_prefer_server_ciphers
+Type: SWITCH
+Default-Value: 0
+Last-Modified: 2.5.0
+
+Prefer the ciphers on the server side instead of client side. 
+

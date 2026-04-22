@@ -1,0 +1,9 @@
+Name: postuser
+Type: STRING
+Default-Value: 
+Last-Modified: 2.3.17
+
+Userid used to deliver messages to shared folders.  For example, if
+set to "bb", email sent to "bb+shared.blah" would be delivered to
+the "shared.blah" folder.  By default, an email address of
+"+shared.blah" would be used. 
