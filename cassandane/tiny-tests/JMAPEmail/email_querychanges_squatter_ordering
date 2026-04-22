@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+# If an email query happens before squatter runs, we get the new query state
+# but our results don't have the correct total or list of messages, which
+# messes up further positional Email/query responses
+
+sub test_email_querychanges_snoozed_mail
+    :needs_component_sieve
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $inbox = $user->mailboxes->inbox;
+
+    xlog $self, "Install script to flag messages in inbox";
+    $self->{instance}->install_sieve_script(<<~EOF
+        require ["imap4flags"];
+        addflag "\\Seen";
+        EOF
+    );
+
+    xlog $self, "Make a bunch of messages that match our query";
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "Garnet");
+        $self->{instance}->deliver($msg);
+    }
+
+    xlog $self, "Run squatter to index them";  
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    xlog $self, "Deliver a matching message but don't run squatter";
+    my $msg1 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg1);
+
+    # Uncomment this and things behave
+#    xlog $self, "Run squatter to index them";  
+#    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my %common_query = (
+        sort => [
+            {
+                isAscending => JSON::false,
+                mailboxId   => $inbox->id,
+                property    => 'snoozedUntil',
+            }, {
+                isAscending => JSON::false,
+                property    => 'receivedAt'
+            },
+        ],
+        filter => {
+            conditions => [
+                { inMailbox => $inbox->id },
+                { text      => 'Garnet'   },
+            ],
+            operator => 'AND',
+        },
+    );
+
+    xlog $self, "Get our query state";
+    my $res = $jmap->request([[
+        "Email/query" => {
+            %common_query,
+            limit => 5,
+            calculateTotal => JSON::true,
+        },
+    ]]);
+
+    my $qres = $res->sentence_named("Email/query")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            canCalculateChanges => JSON::true,
+            ids                 => [ (jstr()) x 5 ],
+            position            => 0,
+#           total               => 10, # Or 11 if squatter is run first
+            queryState          => jstr,
+        }),
+        $qres,
+    );
+
+    my $qstate = $qres->{queryState};
+    $self->assert_not_null($qstate);
+
+    xlog $self, "Query state: $qstate";
+
+    my $upto = $qres->{ids}->[-1];
+    $self->assert_not_null($upto);
+
+    xlog $self, "Our query state is $qstate";
+
+    xlog $self, "Now squatter runs...";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    # Deliver once more
+    xlog $self, "Deliver a new matching message";
+    my $msg2 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg2);
+
+    xlog $self, "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Email/queryChanges output for informational use...";
+    $res = $jmap->request([[
+        "Email/queryChanges" => {
+            %common_query,
+            sinceQueryState => $qstate,
+            upToId => $upto,
+        },
+    ]]);
+
+    my $qcres = $res->sentence_named("Email/queryChanges")->arguments;
+    my $newqstate = $qcres->{newQueryState};
+
+    xlog $self, "New query state: $newqstate";
+
+    xlog $self, "Check email/query with position 5. Should start at $upto since one new message was delivered at position 0 from the given query state";
+    $res = $jmap->request([[
+        "Email/query" => {
+          %common_query,
+          position => 5,
+        },
+    ]]);
+
+    $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_str_equals($upto, $qres->{ids}[0]);
+}
