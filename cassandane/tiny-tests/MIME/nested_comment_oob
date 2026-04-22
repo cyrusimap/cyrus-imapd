@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_nested_comment_oob
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    # Create a multipart message where the vulnerability is in a nested part.
+    # Based on the PoC description, this reproduces the backslash handling bug
+    # in message_parse_rfc822space() when parsing nested Content-Type headers.
+    # The malformed header must be the last content to ensure backslash is final byte.
+    my $msg = <<'EOF';
+From: test@example.org
+To: test@example.org
+Subject: Test heap disclosure
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain
+
+This is a normal part.
+
+--BOUNDARY
+Content-Type: text/plain (\
+EOF
+
+    # Remove trailing newline so backslash is the final byte before NUL
+    chomp $msg;
+    $msg =~ s/\r?\n/\r\n/gs;
+
+    # Append the message
+    $talk->append('INBOX', $msg) || die $@;
+
+    # Select the mailbox
+    $talk->select('INBOX');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Fetch BODYSTRUCTURE - this exercises the vulnerable MIME parsing code
+    # In vulnerable versions, this may crash or leak heap data as MIME parameters
+    my $response = $talk->fetch('1', 'BODYSTRUCTURE');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Log the bodystructure for manual inspection of any anomalies
+    # In a release build with heap spray, unexpected parameters may appear
+    if ($response && $response->{1} && $response->{1}->{bodystructure}) {
+        xlog $self, "BODYSTRUCTURE: " . Data::Dumper::Dumper($response->{1}->{bodystructure});
+    }
+}
