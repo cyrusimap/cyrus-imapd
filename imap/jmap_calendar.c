@@ -3204,12 +3204,10 @@ static void _icalcomponent_free_cb(void *val)
     icalcomponent_free((icalcomponent*)val);
 }
 
-static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
+static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser,
+                               const char *icalprops_name)
 {
-    static size_t icalprops_len = 0;
-    if (!icalprops_len) {
-        icalprops_len = strlen(JMAPICAL_JSPROP_ICALPROPS);
-    }
+    size_t icalprops_len = strlen(icalprops_name);
 
     const char *name;
     json_t *jval;
@@ -3218,7 +3216,7 @@ static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
 
         if (json_is_object(jval)) {
             if (parser) jmap_parser_push(parser, name);
-            remove_jsicalprops(jval, parser);
+            remove_jsicalprops(jval, parser, icalprops_name);
             if (parser) jmap_parser_pop(parser);
         }
         else if (json_is_array(jval)) {
@@ -3227,14 +3225,14 @@ static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
             json_array_foreach(jval, i, jval2) {
                 if (json_is_object(jval2)) {
                     if (parser) jmap_parser_push_index(parser, name, i, NULL);
-                    remove_jsicalprops(jval, parser);
+                    remove_jsicalprops(jval, parser, icalprops_name);
                     if (parser) jmap_parser_pop(parser);
                 }
             }
         }
 
         // Remove iCalProps patches
-        const char *s = strstr(name, JMAPICAL_JSPROP_ICALPROPS);
+        const char *s = strstr(name, icalprops_name);
         if (s && (s == name || (s[-1] == '/')) &&
                 (!s[icalprops_len] || s[icalprops_len] == '/')) {
             if (parser) jmap_parser_invalid_path(parser, name);
@@ -3243,8 +3241,8 @@ static void remove_jsicalprops(json_t *jsobj, struct jmap_parser *parser)
     }
 
     // Remove iCalProps property
-    if (json_object_del(jsobj, JMAPICAL_JSPROP_ICALPROPS) == 0) {
-        if (parser) jmap_parser_invalid(parser, JMAPICAL_JSPROP_ICALPROPS);
+    if (json_object_del(jsobj, icalprops_name) == 0) {
+        if (parser) jmap_parser_invalid(parser, icalprops_name);
     }
 
 }
@@ -3380,7 +3378,6 @@ jscal_cfg_t jmapical_ctx_to_jscalendar_cfg(struct jmapical_ctx *jmapctx)
 
     cfg.use_icalendar_convprops = jmapctx->from_ical.want_icalprops;
     cfg.emailalert_default_uri = jmapctx->to_ical.emailalert_recipient;
-    cfg.displayalert_default_description = "Reminder";
 
     return cfg;
 }
@@ -3704,7 +3701,9 @@ gotevent:
     if (!jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_del(jsevent, "blobId");
         json_object_del(jsevent, "debugBlobId");
-        remove_jsicalprops(jsevent, NULL);
+        remove_jsicalprops(jsevent, NULL,
+                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
+                    "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
     }
 
     /* Process recurrenceOverrides[Before,After] */
@@ -3902,8 +3901,12 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         goto done;
     }
 
-    /* Only include iCalProps if asked for */
-    if (get.props && jmap_wantprop(get.props, JMAPICAL_JSPROP_ICALPROPS)) {
+    /* Only include custom iCalendar properties if asked for */
+    if (get.props &&
+            ((jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) &&
+              jmap_wantprop(get.props, "iCalendar")) ||
+            ((!jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) &&
+              jmap_wantprop(get.props, JMAPICAL_JSPROP_ICALPROPS))))) {
         rock.jmapctx->from_ical.want_icalprops = 1;
     }
 
@@ -4758,7 +4761,9 @@ static void setcalendarevents_create(jmap_req_t *req,
     };
 
     if (!is_copy) {
-        remove_jsicalprops(create.jsevent, &parser);
+        remove_jsicalprops(create.jsevent, &parser,
+                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
+                "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
         if (json_array_size(parser.invalid)) goto done;
     }
 
@@ -5548,7 +5553,9 @@ static void setcalendarevents_update(jmap_req_t *req,
         .serverset = serverset,
     };
 
-    remove_jsicalprops(update.event_patch, &parser);
+    remove_jsicalprops(update.event_patch, &parser,
+            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
+                "iCalendar" : JMAPICAL_JSPROP_ICALPROPS);
     if (json_array_size(parser.invalid)) goto done;
 
     static int64_t icalendar_max_size = -1;
