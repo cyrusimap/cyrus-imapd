@@ -114,6 +114,12 @@ int caldav_lookup_imapuid(struct caldav_db *caldavdb,
 int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
                       struct caldav_data **result);
 
+/* lookup an entry from 'caldavdb' by createdmodseq
+   (optionally inside a transaction for updates) */
+int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
+                             modseq_t cmodseq,
+                             struct caldav_data **result);
+
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry,
                    caldav_cb_t *cb, void *rock);

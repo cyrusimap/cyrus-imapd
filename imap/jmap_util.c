@@ -1359,30 +1359,43 @@ EXPORTED char *jmap_role_to_specialuse(const char *role)
 }
 
 #ifdef HAVE_ICAL
-EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
+EXPORTED struct jmap_caleventid *jmap_caleventid_lookup(const char *id,
+                                                        struct caldav_db *db,
+                                                        struct caldav_data **cdata)
 {
     struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
+
     eid->raw = id;
 
-    int has_recurid = 0;
-    int is_base64 = 0;
+    bool has_recurid = false;
+    bool is_base64 = false;
+    bool old_style = false;
     const char *p = id;
 
     // read prefix
     if (*p != 'E')
         goto done;
+
+    if (*(p+1) == 'M') {
+        goto uid;
+    }
+
     p++;
     if (*p == 'R') {
-        has_recurid = 1;
+        has_recurid = true;
         p++;
     }
     if (*p == 'B') {
-        is_base64 = 1;
+        is_base64 = true;
+        old_style = true;
         p++;
     }
-    if (*p != '-')
+    if (*p == '-') {
+        old_style = true;
+        p++;
+    }
+    else if (old_style)
         goto done;
-    p++;
 
     // read recurid
     if (has_recurid) {
@@ -1403,9 +1416,30 @@ EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
         }
     }
 
+uid:
     // read uid
-    eid->ical_uid = eid->_alloced[0] = is_base64 ?
-        jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+    if (old_style) {
+        eid->ical_uid = eid->_alloced[0] = is_base64 ?
+            jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+    }
+    else if (*p++ == 'E' && *p++ == 'M') {
+        MODSEQ_FROM_JMAPID(p, &eid->createdmodseq);
+
+        if (db) {
+            struct caldav_data *mycdata = NULL;
+            int r = caldav_lookup_by_cmodseq(db, eid->createdmodseq, &mycdata);
+            if (r && r != CYRUSDB_NOTFOUND) {
+                syslog(LOG_ERR,
+                       "caldav_lookup_by_modseq(%s => " MODSEQ_FMT ") failed: %s",
+                       p, eid->createdmodseq, error_message(r));
+            }
+            if (!r && mycdata && mycdata->ical_uid)
+                eid->ical_uid = eid->_alloced[0] = xstrdup(mycdata->ical_uid);
+
+            if (cdata) *cdata = mycdata;
+        }
+        return eid;
+    }
 
 done:
     if (!eid->ical_uid) {
@@ -1414,6 +1448,14 @@ done:
         xzfree(eid->_alloced[1]);
         eid->ical_recurid = NULL;
         eid->ical_uid = eid->_alloced[0] = xstrdup(id);
+    }
+
+    if (db && cdata) {
+        int r = caldav_lookup_uid(db, eid->ical_uid, cdata);
+        if (r && r != CYRUSDB_NOTFOUND) {
+            syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
+                   eid->ical_uid, error_message(r));
+        }
     }
 
     return eid;
@@ -1432,42 +1474,24 @@ EXPORTED void jmap_caleventid_free(struct jmap_caleventid **eidptr)
 
 EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf)
 {
-    buf_reset(buf);
-
-    int need_base64 = 0;
-    const char *c;
-    for (c = eid->ical_uid; *c; c++) {
-        if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
-            need_base64 = 1;
-            break;
-        }
-    }
-
     int has_recurid = eid->ical_recurid && eid->ical_recurid[0];
 
-    buf_putc(buf, 'E');
-    if (has_recurid)
-        buf_putc(buf, 'R');
-    if (need_base64)
-        buf_putc(buf, 'B');
-    buf_putc(buf, '-');
+    buf_reset(buf);
 
     if (has_recurid) {
+        buf_putc(buf, 'E');
+        buf_putc(buf, 'R');
         buf_appendcstr(buf, eid->ical_recurid);
         buf_putc(buf, '-');
     }
 
-    if (need_base64) {
-        char *tmp = jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
-        buf_appendcstr(buf, tmp);
-        free(tmp);
-    }
-    else {
-        buf_appendcstr(buf, eid->ical_uid);
-    }
+    buf_putc(buf, 'E');
+    buf_putc(buf, 'M');
+    MODSEQ_TO_JMAPID(buf, eid->createdmodseq);
 
     return buf_cstring(buf);
 }
+
 
 EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 {

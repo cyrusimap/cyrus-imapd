@@ -41,7 +41,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $self->assert_not_null($eventId1);
 
     xlog $self, "Delete RDATE by setting it excluded";
-    my $overrideId1 = encode_eventid('event1uid','20190110T140000');
+    my $overrideId1 = encode_eventid($eventId1,'20190110T140000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
