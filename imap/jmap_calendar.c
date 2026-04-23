@@ -3387,6 +3387,10 @@ static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+            cfg.debug = true;
+        }
+
         json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
         json_t *jevent = json_incref(
@@ -3405,7 +3409,12 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
                                 struct jmapical_ctx *jmapctx)
 {
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
-        json_t *jgroup = jscal_from_ical(NULL, ical);
+        jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
+        if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+            cfg.debug = true;
+        }
+
+        json_t *jgroup = jscal_from_ical(&cfg, ical);
         if (!jgroup) return NULL;
         json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
         for (size_t i = 0; i < json_array_size(jentries); i++) {

@@ -9,6 +9,10 @@
 #include <string.h>
 #include <syslog.h>
 
+#ifdef HAVE_GUESSTZ
+#include <guesstz.h>
+#endif
+
 #include "bsearch.h"
 #include "ical_support.h"
 #include "jcal.h"
@@ -59,6 +63,8 @@
 
 // Supported iCalendar quirks.
 #define ICALQUIRK_NO_ORGANIZER_ATTENDEE "no-organizer-attendee"
+
+// ---------------
 
 static bool myicalproperty_has_name(icalproperty *prop, const char *name)
 {
@@ -256,6 +262,145 @@ static icalproperty *myicalcomponent_get_property_by_name(icalcomponent *comp, c
     }
 
     return NULL;
+}
+
+// ---------------
+
+typedef struct {
+    jscal_cfg_t cfg;
+#ifdef HAVE_GUESSTZ
+    guesstz_t *gtz;
+    hash_table iana_tzid_by_custom_tzid;
+    ptrarray_t unguessable_vtimezones;
+#endif
+} jscal_ctx_t;
+
+static jscal_ctx_t jscal_ctx_init(const jscal_cfg_t *cfg)
+{
+    jscal_ctx_t ctx = { .cfg = *cfg };
+    return ctx;
+}
+
+static void jscal_ctx_fini(jscal_ctx_t *ctx)
+{
+    if (!ctx) return;
+
+#ifdef HAVE_GUESSTZ
+    guesstz_close(&ctx->gtz);
+#endif
+
+    if (ctx->iana_tzid_by_custom_tzid.size) {
+        free_hash_table(&ctx->iana_tzid_by_custom_tzid, free);
+    }
+
+    // VTIMEZONE pointers are owned by iCalendar object.
+    ptrarray_fini(&ctx->unguessable_vtimezones);
+}
+
+// ---------------
+
+static icaltimezone *get_icaltimezone_for_tzid(jscal_ctx_t *ctx, const char *tzid)
+{
+    if (!tzid) return NULL;
+
+    icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+    if (!tz && ctx->iana_tzid_by_custom_tzid.size) {
+        const char *iana_tzid =
+            hash_lookup(tzid, &ctx->iana_tzid_by_custom_tzid);
+        if (iana_tzid) {
+            tz = icaltimezone_get_cyrus_timezone_from_tzid(iana_tzid);
+        }
+    }
+
+    return tz;
+}
+
+static void guess_timezones(jscal_ctx_t *ctx, icalcomponent *ical)
+{
+    ptrarray_t custom_vtzs = PTRARRAY_INITIALIZER;
+
+    // Gather all VTIMEZONE components with TZIDs that are neither an
+    // IANA timezone name or a Microsoft timezone.
+    icalcompiter iter;
+    icalcomponent *vtz;
+    myicalcomponent_foreach_component(ical, ICAL_VTIMEZONE_COMPONENT, vtz, iter) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+        if (!prop) continue;
+
+        const char *tzid = icalproperty_get_tzid(prop);
+        if (!tzid || !*tzid) continue;
+
+        if (!icaltimezone_get_cyrus_timezone_from_tzid(tzid)) {
+            // found a custom timezone
+            ptrarray_append(&custom_vtzs, vtz);
+        }
+    }
+
+    // Return early if there is nothing to do.
+    if (!ptrarray_size(&custom_vtzs)) goto done;
+
+    // Determine the timespan of the calendar component.
+    unsigned is_recurring = 0;
+    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+    if (!comp) goto done;
+
+    struct icalperiodtype guess_span = icalrecurrenceset_get_utc_timespan(ical,
+            icalcomponent_isa(comp), NULL, &is_recurring, NULL, NULL);
+    /* XXX needed?
+        if (icaltime_as_timet_with_zone(guess_span.end, utc) == caldav_epoch) {
+            guess_span.end = icaltime_null_time();
+        }
+    */
+
+#ifdef HAVE_GUESSTZ
+    if (!ctx->gtz) {
+        // Open timezone guessing database.
+        if (config_zoneinfo_dir) {
+            char *fname = strconcat(config_zoneinfo_dir, "/guesstz.db", NULL);
+            ctx->gtz = guesstz_open(fname);
+            free(fname);
+            if (guesstz_error(ctx->gtz)) {
+                xsyslog(LOG_ERR, "can't open guesstz database",
+                        "err<%s>", guesstz_error(ctx->gtz));
+                guesstz_close(&ctx->gtz);
+            }
+        }
+    }
+#endif
+
+    if (!ctx->iana_tzid_by_custom_tzid.size) {
+        construct_hash_table(&ctx->iana_tzid_by_custom_tzid,
+                ptrarray_size(&custom_vtzs), 0);
+    }
+
+    // Process custom timezones.
+    while ((vtz = ptrarray_pop(&custom_vtzs))) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+        const char *tzid = icalproperty_get_tzid(prop);
+
+        if (hash_lookup(tzid, &ctx->iana_tzid_by_custom_tzid)) {
+            // Already guessed an IANA name for this TZID.
+            continue;
+        }
+
+        char *iana_tzid = NULL;
+        if (ctx->gtz) {
+            iana_tzid =
+                guesstz_guess(ctx->gtz, vtz, guess_span.start, guess_span.end);
+        }
+
+        if (iana_tzid) {
+            hash_insert(tzid, iana_tzid, &ctx->iana_tzid_by_custom_tzid);
+        }
+        else {
+            ptrarray_append(&ctx->unguessable_vtimezones, vtz);
+        }
+    }
+
+done:
+    ptrarray_fini(&custom_vtzs);
 }
 
 // ---------------
@@ -1289,14 +1434,14 @@ enum get_ical_flags {
     GET_ICAL_KEEPKNOWN = (1 << 1),
 };
 
-static icalcomponent *jobj_get_icalcomp(jscal_cfg_t *cfg,
+static icalcomponent *jobj_get_icalcomp(jscal_ctx_t *ctx,
                                         json_t *jobj,
                                         icalcomponent_kind want_kind,
                                         enum get_ical_flags flags)
 {
     icalcomponent *comp = NULL;
 
-    if (!cfg->use_icalendar_convprops) {
+    if (!ctx->cfg.use_icalendar_convprops) {
         if (want_kind != ICAL_ANY_COMPONENT && (flags & GET_ICAL_CREATE)) {
             comp = icalcomponent_new(want_kind);
         }
@@ -1356,7 +1501,7 @@ static icalcomponent *jobj_get_icalcomp(jscal_cfg_t *cfg,
     return comp;
 }
 
-static icalproperty *jobj_get_icalprop(jscal_cfg_t *cfg,
+static icalproperty *jobj_get_icalprop(jscal_ctx_t *ctx,
                                        json_t *jobj,
                                        const char *proppath,
                                        icalproperty_kind want_kind,
@@ -1364,7 +1509,7 @@ static icalproperty *jobj_get_icalprop(jscal_cfg_t *cfg,
 {
     icalproperty *prop = NULL;
 
-    if (!cfg->use_icalendar_convprops) {
+    if (!ctx->cfg.use_icalendar_convprops) {
         if (want_kind != ICAL_ANY_PROPERTY && (flags & GET_ICAL_CREATE)) {
             prop = icalproperty_new(want_kind);
         }
@@ -1411,12 +1556,12 @@ static icalproperty *jobj_get_icalprop(jscal_cfg_t *cfg,
     return prop;
 }
 
-static enum icalvalue_kind jobj_get_icalprop_valuetype(jscal_cfg_t *cfg,
+static enum icalvalue_kind jobj_get_icalprop_valuetype(jscal_ctx_t *ctx,
                                                        json_t *jobj,
                                                        const char *proppath,
                                                        icalproperty_kind prop_kind)
 {
-    if (!cfg->use_icalendar_convprops) return ICAL_NO_VALUE;
+    if (!ctx->cfg.use_icalendar_convprops) return ICAL_NO_VALUE;
 
     json_t *jcomp = json_object_get(jobj, "iCalendar");
     if (jcomp) {
@@ -1632,7 +1777,7 @@ static const char *jsid_from_comp(icalcomponent *comp,
 
 // ---------------
 
-static void relatedto_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void relatedto_to_ical(jscal_ctx_t *ctx __attribute__((unused)),
                               json_t *jobj,
                               icalcomponent *comp,
                               const char *(*keytouid)(const char *, void *),
@@ -1685,7 +1830,7 @@ static bool jobject_has_xprops(json_t *jobj)
     return false;
 }
 
-static bool vendorexts_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static bool vendorexts_to_ical(jscal_ctx_t *ctx __attribute__((unused)),
                                json_t *jobj,
                                struct jmap_parser *parser,
                                icalcomponent *comp)
@@ -1721,7 +1866,7 @@ static const char *alerts_relatedto_to_ical_cb(const char *key, void *rock)
     return icalcomponent_get_uid(valarm);
 }
 
-static void alerts_to_ical(jscal_cfg_t *cfg,
+static void alerts_to_ical(jscal_ctx_t *ctx,
                            json_t *jobj,
                            icalcomponent *comp)
 {
@@ -1744,7 +1889,7 @@ static void alerts_to_ical(jscal_cfg_t *cfg,
             continue;
 
         icalcomponent *valarm = jobj_get_icalcomp(
-            cfg, jalert, ICAL_VALARM_COMPONENT, GET_ICAL_CREATE);
+            ctx, jalert, ICAL_VALARM_COMPONENT, GET_ICAL_CREATE);
         jsid_to_comp(valarm, key);
 
         // Set UID, if none set already.
@@ -1804,7 +1949,7 @@ static void alerts_to_ical(jscal_cfg_t *cfg,
         }
 
         relatedto_to_ical(
-            cfg, jalert, valarm, alerts_relatedto_to_ical_cb, &valarm_by_jsid);
+            ctx, jalert, valarm, alerts_relatedto_to_ical_cb, &valarm_by_jsid);
 
         // Convert action.
         icalproperty_action was_action = icalproperty_get_action(
@@ -1817,11 +1962,11 @@ static void alerts_to_ical(jscal_cfg_t *cfg,
             icalcomponent_add_property(
                 valarm, icalproperty_new_action(ICAL_ACTION_EMAIL));
             if (!myicalcomponent_get_property(valarm, ICAL_ATTENDEE_PROPERTY)
-                && cfg->emailalert_default_uri)
+                && ctx->cfg.emailalert_default_uri)
             {
                 icalcomponent_add_property(
                     valarm,
-                    icalproperty_new_attendee(cfg->emailalert_default_uri));
+                    icalproperty_new_attendee(ctx->cfg.emailalert_default_uri));
             }
         }
         else if (was_action == ICAL_ACTION_NONE
@@ -1830,23 +1975,23 @@ static void alerts_to_ical(jscal_cfg_t *cfg,
             icalcomponent_add_property(
                 valarm, icalproperty_new_action(ICAL_ACTION_DISPLAY));
             if (!myicalcomponent_get_property(valarm, ICAL_DESCRIPTION_PROPERTY)
-                && cfg->displayalert_default_description)
+                && ctx->cfg.displayalert_default_description)
             {
                 icalcomponent_add_property(
                     valarm,
                     icalproperty_new_description(
-                        cfg->displayalert_default_description));
+                        ctx->cfg.displayalert_default_description));
             }
         }
 
-        vendorexts_to_ical(cfg, jalert, NULL, valarm);
+        vendorexts_to_ical(ctx, jalert, NULL, valarm);
         icalcomponent_add_component(comp, valarm);
     }
 
     free_hash_table(&valarm_by_jsid, NULL);
 }
 
-static void categories_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void categories_to_ical(jscal_ctx_t *ctx __attribute__((unused)),
                                json_t *jobj,
                                icalcomponent *comp)
 {
@@ -1862,7 +2007,7 @@ static void categories_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void description_to_ical(jscal_cfg_t *cfg,
+static void description_to_ical(jscal_ctx_t *ctx,
                                 json_t *jobj,
                                 icalcomponent *comp)
 {
@@ -1878,7 +2023,7 @@ static void description_to_ical(jscal_cfg_t *cfg,
         prop_kind = ICAL_STYLEDDESCRIPTION_PROPERTY;
     }
     icalproperty *prop =
-        jobj_get_icalprop(cfg, jobj, "description", prop_kind, GET_ICAL_CREATE);
+        jobj_get_icalprop(ctx, jobj, "description", prop_kind, GET_ICAL_CREATE);
     if (prop_kind == ICAL_STYLEDDESCRIPTION_PROPERTY) {
         icalproperty_add_parameter(prop, icalparameter_new_fmttype(mtype));
     }
@@ -1887,7 +2032,7 @@ static void description_to_ical(jscal_cfg_t *cfg,
     icalcomponent_add_property(comp, prop);
 }
 
-static void keywords_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void keywords_to_ical(jscal_ctx_t *ctx __attribute__((unused)),
                              json_t *jobj,
                              icalcomponent *comp)
 {
@@ -1903,7 +2048,7 @@ static void keywords_to_ical(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void links_to_ical(jscal_cfg_t *cfg,
+static void links_to_ical(jscal_ctx_t *ctx,
                           json_t *jobj,
                           icalcomponent *comp)
 {
@@ -1924,7 +2069,7 @@ static void links_to_ical(jscal_cfg_t *cfg,
 
         // Determine which property kind to use, keep using former one.
         icalproperty *prop =
-            jobj_get_icalprop(cfg,
+            jobj_get_icalprop(ctx,
                               jobj,
                               jmap_parser_path_at(&parser, "href"),
                               ICAL_ANY_PROPERTY,
@@ -2034,7 +2179,7 @@ static void links_to_ical(jscal_cfg_t *cfg,
 
         // Add property.
         icalcomponent_add_property(comp, prop);
-        bool has_vendorexts = vendorexts_to_ical(cfg, jlink, &parser, comp);
+        bool has_vendorexts = vendorexts_to_ical(ctx, jlink, &parser, comp);
 
         // Set JSID parameter, if required.
         jsid_to_prop(prop, key, has_vendorexts);
@@ -2046,7 +2191,7 @@ static void links_to_ical(jscal_cfg_t *cfg,
     jmap_parser_fini(&parser);
 }
 
-static void locations_to_ical(jscal_cfg_t *cfg,
+static void locations_to_ical(jscal_ctx_t *ctx,
                               json_t *jobj,
                               icalcomponent *comp)
 {
@@ -2069,11 +2214,11 @@ static void locations_to_ical(jscal_cfg_t *cfg,
 
         // Use VLOCATION component if it was set before.
         icalcomponent *vloc =
-            jobj_get_icalcomp(cfg, jloc, ICAL_VLOCATION_COMPONENT, 0);
+            jobj_get_icalcomp(ctx, jloc, ICAL_VLOCATION_COMPONENT, 0);
 
         if (JNOTNULL(json_object_get(jloc, "links"))) {
             if (!vloc) vloc = icalcomponent_new_vlocation();
-            links_to_ical(cfg, jloc, vloc);
+            links_to_ical(ctx, jloc, vloc);
         }
 
         json_t *jval;
@@ -2109,7 +2254,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
 
             // Set GEO property in VEVENT/VTODO, if it was set before.
             icalproperty *maingeo_prop =
-                jobj_get_icalprop(cfg,
+                jobj_get_icalprop(ctx,
                                   jobj,
                                   jmap_parser_path_at(&parser, "coordinates"),
                                   ICAL_GEO_PROPERTY,
@@ -2127,7 +2272,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
 
             // Set GEO property in VLOCATION, if it was set before.
             icalproperty *prop = jobj_get_icalprop(
-                cfg, jloc, "coordinates", ICAL_ANY_PROPERTY, 0);
+                ctx, jloc, "coordinates", ICAL_ANY_PROPERTY, 0);
             if (icalproperty_isa(prop) == ICAL_GEO_PROPERTY) {
                 // Set GEO if it was set before.
                 icalproperty_set_value(prop, icalvalue_new_geo(icalgeo));
@@ -2154,7 +2299,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
         // Convert any vendor extension properties.
         if (jobject_has_xprops(jloc)) {
             if (!vloc) vloc = icalcomponent_new_vlocation();
-            vendorexts_to_ical(cfg, jloc, NULL, vloc);
+            vendorexts_to_ical(ctx, jloc, NULL, vloc);
         }
 
         // Convert "name" at the very last: we won't create a VLOCATION
@@ -2167,7 +2312,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
             if (!strcmpsafe(key, mainloc_id) || (!mainloc_id && !vloc)) {
                 // Set the LOCATION property in the VEVENT/VTODO.
                 icalproperty *prop =
-                    jobj_get_icalprop(cfg,
+                    jobj_get_icalprop(ctx,
                                       jobj,
                                       jmap_parser_path_at(&parser, "name"),
                                       ICAL_LOCATION_PROPERTY,
@@ -2184,7 +2329,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
             if (vloc) {
                 // Set the NAME property in the VLOCATION.
                 icalproperty *prop = jobj_get_icalprop(
-                    cfg, jloc, "name", ICAL_NAME_PROPERTY, GET_ICAL_CREATE);
+                    ctx, jloc, "name", ICAL_NAME_PROPERTY, GET_ICAL_CREATE);
                 icalproperty_set_value(prop, icalvalue_new_text(name));
                 icalcomponent_add_property(vloc, prop);
                 if (mainloc_prop) {
@@ -2214,7 +2359,7 @@ static void locations_to_ical(jscal_cfg_t *cfg,
     jmap_parser_fini(&parser);
 }
 
-static void participants_to_ical(jscal_cfg_t *cfg,
+static void participants_to_ical(jscal_ctx_t *ctx,
                                  json_t *jobj,
                                  icalcomponent *comp)
 {
@@ -2222,7 +2367,7 @@ static void participants_to_ical(jscal_cfg_t *cfg,
     icalproperty *organizer = NULL;
     json_t *jval;
     if (JNOTNULL(jval = json_object_get(jobj, "organizerCalendarAddress"))) {
-        organizer = jobj_get_icalprop(cfg,
+        organizer = jobj_get_icalprop(ctx,
                                       jobj,
                                       "organizerCalendarAddress",
                                       ICAL_ORGANIZER_PROPERTY,
@@ -2252,14 +2397,14 @@ static void participants_to_ical(jscal_cfg_t *cfg,
 
         if (caladdr) {
             attendee = jobj_get_icalprop(
-                cfg,
+                ctx,
                 jobj,
                 jmap_parser_path_at(&parser, "calendarUserAddress"),
                 ICAL_ATTENDEE_PROPERTY,
                 0);
 
             // Check if "calendarAddress" was set from CALENDAR-ADDRESS.
-            caladdrprop = jobj_get_icalprop(cfg,
+            caladdrprop = jobj_get_icalprop(ctx,
                                             jpart,
                                             "calendarAddress",
                                             ICAL_CALENDARADDRESS_PROPERTY,
@@ -2460,21 +2605,21 @@ static void participants_to_ical(jscal_cfg_t *cfg,
 
         // Use PARTICIPANT component if it was set before.
         icalcomponent *part =
-            jobj_get_icalcomp(cfg, jpart, ICAL_PARTICIPANT_COMPONENT, 0);
+            jobj_get_icalcomp(ctx, jpart, ICAL_PARTICIPANT_COMPONENT, 0);
 
         if (JNOTNULL(jval = json_object_get(jpart, "description"))) {
             if (!part) part = icalcomponent_new_participant();
-            description_to_ical(cfg, jpart, part);
+            description_to_ical(ctx, jpart, part);
         }
 
         if (JNOTNULL(jval = json_object_get(jpart, "links"))) {
             if (!part) part = icalcomponent_new_participant();
-            links_to_ical(cfg, jpart, part);
+            links_to_ical(ctx, jpart, part);
         }
 
         if (JNOTNULL(jval = json_object_get(jpart, "percentComplete"))) {
             icalproperty *prop =
-                jobj_get_icalprop(cfg,
+                jobj_get_icalprop(ctx,
                                   jpart,
                                   "percentComplete",
                                   ICAL_PERCENTCOMPLETE_PROPERTY,
@@ -2487,7 +2632,7 @@ static void participants_to_ical(jscal_cfg_t *cfg,
 
         if (jobject_has_xprops(jpart)) {
             if (!part) part = icalcomponent_new_participant();
-            vendorexts_to_ical(cfg, jpart, NULL, part);
+            vendorexts_to_ical(ctx, jpart, NULL, part);
         }
 
         // Convert "name" last, we won't create PARTICIPANT component
@@ -2497,7 +2642,7 @@ static void participants_to_ical(jscal_cfg_t *cfg,
             if (!attendee && !part) part = icalcomponent_new_participant();
             if (part) {
                 icalproperty *prop = jobj_get_icalprop(
-                    cfg, jpart, "name", ICAL_SUMMARY_PROPERTY, GET_ICAL_CREATE);
+                    ctx, jpart, "name", ICAL_SUMMARY_PROPERTY, GET_ICAL_CREATE);
                 const char *name = json_string_value(jval);
                 icalproperty_set_value(prop, icalvalue_new_text(name));
                 icalcomponent_add_property(part, prop);
@@ -2590,7 +2735,7 @@ static void participants_to_ical(jscal_cfg_t *cfg,
     jmap_parser_fini(&parser);
 }
 
-static void virtuallocations_to_ical(jscal_cfg_t *cfg
+static void virtuallocations_to_ical(jscal_ctx_t *ctx
                                      __attribute__((unused)),
                                      json_t *jobj,
                                      icalcomponent *comp)
@@ -2610,7 +2755,7 @@ static void virtuallocations_to_ical(jscal_cfg_t *cfg
         // Create CONFERENCE property.
         const char *uri = json_string_value(json_object_get(jvloc, "uri"));
         icalproperty *conf =
-            jobj_get_icalprop(cfg,
+            jobj_get_icalprop(ctx,
                               jobj,
                               jmap_parser_path_at(&parser, "uri"),
                               ICAL_CONFERENCE_PROPERTY,
@@ -2650,7 +2795,7 @@ static void virtuallocations_to_ical(jscal_cfg_t *cfg
         }
 
         // Add CONFERENCE property.
-        bool has_vendorexts = vendorexts_to_ical(cfg, jvloc, &parser, comp);
+        bool has_vendorexts = vendorexts_to_ical(ctx, jvloc, &parser, comp);
         jsid_to_prop(conf, key, has_vendorexts);
         icalcomponent_add_property(comp, conf);
 
@@ -2709,7 +2854,7 @@ static void timeprop_set_value(icalproperty *prop,
     }
 }
 
-static void timeprops_to_ical(jscal_cfg_t *cfg,
+static void timeprops_to_ical(jscal_ctx_t *ctx,
                               json_t *jobj,
                               icalcomponent *comp)
 {
@@ -2788,7 +2933,7 @@ static void timeprops_to_ical(jscal_cfg_t *cfg,
 
     // Set DTSTART property.
     icalproperty *dtstart =
-        jobj_get_icalprop(cfg,
+        jobj_get_icalprop(ctx,
                           jobj,
                           "start",
                           ICAL_DTSTART_PROPERTY,
@@ -2799,7 +2944,7 @@ static void timeprops_to_ical(jscal_cfg_t *cfg,
     // Set DUE property.
     if (!icaltime_is_null_time(due)) {
         icalproperty *prop =
-            jobj_get_icalprop(cfg,
+            jobj_get_icalprop(ctx,
                               jobj,
                               "due",
                               ICAL_DUE_PROPERTY,
@@ -2811,7 +2956,7 @@ static void timeprops_to_ical(jscal_cfg_t *cfg,
     // Set RECURRENCE-ID property.
     if (!icaltime_is_null_time(recurid)) {
         icalproperty *prop =
-            jobj_get_icalprop(cfg,
+            jobj_get_icalprop(ctx,
                               jobj,
                               "recurrenceId",
                               ICAL_RECURRENCEID_PROPERTY,
@@ -2824,7 +2969,7 @@ static void timeprops_to_ical(jscal_cfg_t *cfg,
     if (!icaldurationtype_is_null_duration(duration)) {
         // Keep using DTEND if it was set originally.
         icalproperty *dtend = jobj_get_icalprop(
-            cfg, jobj, "duration", ICAL_DTEND_PROPERTY, GET_ICAL_KEEPKNOWN);
+            ctx, jobj, "duration", ICAL_DTEND_PROPERTY, GET_ICAL_KEEPKNOWN);
         if (!dtend && (end_tzid && strcmpsafe(start_tzid, end_tzid))) {
             // Must use DTEND if end timezone differs.
             dtend = icalproperty_new(ICAL_DTEND_PROPERTY);
@@ -2874,7 +3019,7 @@ static void timeprops_to_ical(jscal_cfg_t *cfg,
     }
 }
 
-static void entry_to_ical(jscal_cfg_t *cfg,
+static void entry_to_ical(jscal_ctx_t *ctx,
                           json_t *jentry,
                           icalcomponent *ical);
 
@@ -2915,7 +3060,7 @@ static void sanitize_override_patch(json_t *jpatch)
     strarray_fini(&del_keys);
 }
 
-static void recuroverrides_to_ical(jscal_cfg_t *cfg,
+static void recuroverrides_to_ical(jscal_ctx_t *ctx,
                                    json_t *jentry,
                                    icalcomponent *comp)
 {
@@ -2953,7 +3098,7 @@ static void recuroverrides_to_ical(jscal_cfg_t *cfg,
         buf_setcstr(&buf, "recurrenceOverrides/");
         buf_appendcstr(&buf, recurid);
         enum icalvalue_kind rdate_value_kind =
-            jobj_get_icalprop_valuetype(cfg,
+            jobj_get_icalprop_valuetype(ctx,
                 jentry, buf_cstring(&buf), ICAL_RDATE_PROPERTY);
 
         if (!json_object_size(jpatch)) {
@@ -2987,7 +3132,7 @@ static void recuroverrides_to_ical(jscal_cfg_t *cfg,
                     json_object_set_new(jovr, "start", json_string(recurid));
                 }
                 icalcomponent *ovrical = icalcomponent_new_vcalendar();
-                entry_to_ical(cfg, jovr, ovrical);
+                entry_to_ical(ctx, jovr, ovrical);
                 icalcomponent *ovrcomp =
                     icalcomponent_get_first_real_component(ovrical);
                 if (ovrcomp) {
@@ -3008,7 +3153,7 @@ static void recuroverrides_to_ical(jscal_cfg_t *cfg,
     buf_free(&buf);
 }
 
-static void entry_to_ical(jscal_cfg_t *cfg,
+static void entry_to_ical(jscal_ctx_t *ctx,
                           json_t *jentry,
                           icalcomponent *ical)
 {
@@ -3024,7 +3169,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
         return;
 
     icalcomponent *comp =
-        jobj_get_icalcomp(cfg, jentry, want_comp_kind, GET_ICAL_CREATE);
+        jobj_get_icalcomp(ctx, jentry, want_comp_kind, GET_ICAL_CREATE);
     icalcomponent_add_component(ical, comp);
 
     bool have_method =
@@ -3034,23 +3179,23 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     // Convert properties.
 
-    timeprops_to_ical(cfg, jentry, comp);
-    alerts_to_ical(cfg, jentry, comp);
-    categories_to_ical(cfg, jentry, comp);
-    description_to_ical(cfg, jentry, comp);
-    keywords_to_ical(cfg, jentry, comp);
-    links_to_ical(cfg, jentry, comp);
-    locations_to_ical(cfg, jentry, comp);
-    participants_to_ical(cfg, jentry, comp);
-    relatedto_to_ical(cfg, jentry, comp, NULL, NULL);
-    recuroverrides_to_ical(cfg, jentry, comp);
-    virtuallocations_to_ical(cfg, jentry, comp);
+    timeprops_to_ical(ctx, jentry, comp);
+    alerts_to_ical(ctx, jentry, comp);
+    categories_to_ical(ctx, jentry, comp);
+    description_to_ical(ctx, jentry, comp);
+    keywords_to_ical(ctx, jentry, comp);
+    links_to_ical(ctx, jentry, comp);
+    locations_to_ical(ctx, jentry, comp);
+    participants_to_ical(ctx, jentry, comp);
+    relatedto_to_ical(ctx, jentry, comp, NULL, NULL);
+    recuroverrides_to_ical(ctx, jentry, comp);
+    virtuallocations_to_ical(ctx, jentry, comp);
 
     json_t *jval;
 
     if (JNOTNULL(jval = json_object_get(jentry, "color"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
         icalcomponent_add_property(comp, prop);
@@ -3058,14 +3203,14 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "created"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "created", ICAL_CREATED_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "created", ICAL_CREATED_PROPERTY, GET_ICAL_CREATE);
         icaltimetype t = utctime_to_icaltime(json_string_value(jval));
         icalproperty_set_value(prop, icalvalue_new_datetime(t));
         icalcomponent_add_property(comp, prop);
     }
 
     if (JNOTNULL(jval = json_object_get(jentry, "freeBusyStatus"))) {
-        icalproperty *prop = jobj_get_icalprop(cfg,
+        icalproperty *prop = jobj_get_icalprop(ctx,
                                                jentry,
                                                "freeBusyStatus",
                                                ICAL_TRANSP_PROPERTY,
@@ -3087,7 +3232,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
     }
 
     if (JNOTNULL(jval = json_object_get(jentry, "percentComplete"))) {
-        icalproperty *prop = jobj_get_icalprop(cfg,
+        icalproperty *prop = jobj_get_icalprop(ctx,
                                                jentry,
                                                "percentComplete",
                                                ICAL_PERCENTCOMPLETE_PROPERTY,
@@ -3099,7 +3244,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "priority"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "priority", ICAL_PRIORITY_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "priority", ICAL_PRIORITY_PROPERTY, GET_ICAL_CREATE);
         json_int_t i = json_integer_value(jval);
         icalproperty_set_value(prop, icalvalue_new_integer(i));
         icalcomponent_add_property(comp, prop);
@@ -3107,7 +3252,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "privacy"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "privacy", ICAL_CLASS_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "privacy", ICAL_CLASS_PROPERTY, GET_ICAL_CREATE);
         icalproperty_class class = ICAL_CLASS_NONE;
         const char *s = json_string_value(jval);
         if (!strcasecmpsafe("public", s))
@@ -3152,7 +3297,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "sequence"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "sequence", ICAL_SEQUENCE_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "sequence", ICAL_SEQUENCE_PROPERTY, GET_ICAL_CREATE);
         json_int_t i = json_integer_value(jval);
         icalproperty_set_value(prop, icalvalue_new_integer(i));
         icalcomponent_add_property(comp, prop);
@@ -3160,7 +3305,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jentry, "title"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jentry, "title", ICAL_SUMMARY_PROPERTY, GET_ICAL_CREATE);
+            ctx, jentry, "title", ICAL_SUMMARY_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
         icalcomponent_add_property(comp, prop);
@@ -3217,7 +3362,7 @@ static void entry_to_ical(jscal_cfg_t *cfg,
     }
 
     // Vendor extension properties.
-    vendorexts_to_ical(cfg, jentry, NULL, comp);
+    vendorexts_to_ical(ctx, jentry, NULL, comp);
 }
 
 // ---------------
@@ -3330,7 +3475,7 @@ static bool is_intarray(json_t *jarray, json_int_t min, json_int_t max)
     return true;
 }
 
-static void validate_jicalproperty(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_jicalproperty(jscal_ctx_t *ctx __attribute__((unused)),
                                    struct jmap_parser *parser, json_t *jprop)
 {
     if (!json_is_object(jprop)) {
@@ -3361,7 +3506,7 @@ static void validate_jicalproperty(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void validate_jicalcomponent(jscal_cfg_t *cfg,
+static void validate_jicalcomponent(jscal_ctx_t *ctx,
                                     struct jmap_parser *parser, json_t *jcomp)
 {
     if (!json_is_object(jcomp)) {
@@ -3388,7 +3533,7 @@ static void validate_jicalcomponent(jscal_cfg_t *cfg,
                 json_object_foreach(jval, path, jprop)
                 {
                     jmap_parser_push(parser, path);
-                    validate_jicalproperty(cfg, parser, jprop);
+                    validate_jicalproperty(ctx, parser, jprop);
                     jmap_parser_pop(parser);
                 }
                 jmap_parser_pop(parser);
@@ -3412,7 +3557,7 @@ static void validate_jicalcomponent(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_relatedto(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_relatedto(jscal_ctx_t *ctx __attribute__((unused)),
                                struct jmap_parser *parser, json_t *jrelto)
 {
     if (!json_is_object(jrelto)) {
@@ -3455,7 +3600,7 @@ static void validate_relatedto(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void validate_trigger(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_trigger(jscal_ctx_t *ctx __attribute__((unused)),
                              struct jmap_parser *parser, json_t *jtrigger)
 {
     if (!json_is_object(jtrigger)) {
@@ -3510,7 +3655,7 @@ static void validate_trigger(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void validate_alerts(jscal_cfg_t *cfg,
+static void validate_alerts(jscal_ctx_t *ctx,
                             struct jmap_parser *parser, json_t *jalerts)
 {
     if (!json_is_object(jalerts)) {
@@ -3545,14 +3690,14 @@ static void validate_alerts(jscal_cfg_t *cfg,
             else if (!strcmp("relatedTo", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_relatedto(cfg, parser, jval);
+                    validate_relatedto(ctx, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
             else if (!strcmp("trigger", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_trigger(cfg, parser, jval);
+                    validate_trigger(ctx, parser, jval);
                     jmap_parser_pop(parser);
                 }
                 else {
@@ -3563,7 +3708,7 @@ static void validate_alerts(jscal_cfg_t *cfg,
             else if (!strcmp("iCalendar", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_jicalcomponent(cfg, parser, jval);
+                    validate_jicalcomponent(ctx, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3580,7 +3725,7 @@ static void validate_alerts(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_links(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_links(jscal_ctx_t *ctx __attribute__((unused)),
                            struct jmap_parser *parser, json_t *jlinks)
 {
     if (!json_is_object(jlinks)) {
@@ -3647,7 +3792,7 @@ static void validate_links(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void validate_locations(jscal_cfg_t *cfg,
+static void validate_locations(jscal_ctx_t *ctx,
                                struct jmap_parser *parser, json_t *jlocs)
 {
     if (!json_is_object(jlocs)) {
@@ -3679,7 +3824,7 @@ static void validate_locations(jscal_cfg_t *cfg,
             else if (!strcmp("links", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_links(cfg, parser, jval);
+                    validate_links(ctx, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3692,7 +3837,7 @@ static void validate_locations(jscal_cfg_t *cfg,
             // Extension properties
             else if (!strcmp("iCalendar", key)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(cfg, parser, jval);
+                validate_jicalcomponent(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
             else if (!is_vendorext_key(key)) {
@@ -3704,7 +3849,7 @@ static void validate_locations(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_participants(jscal_cfg_t *cfg,
+static void validate_participants(jscal_ctx_t *ctx,
                                   struct jmap_parser *parser,
                                   const char *entry_type,
                                   json_t *jparts)
@@ -3759,7 +3904,7 @@ static void validate_participants(jscal_cfg_t *cfg,
             else if (!strcmp("links", key)) {
                 if (!json_is_null(jval)) {
                     jmap_parser_push(parser, key);
-                    validate_links(cfg, parser, jval);
+                    validate_links(ctx, parser, jval);
                     jmap_parser_pop(parser);
                 }
             }
@@ -3799,7 +3944,7 @@ static void validate_participants(jscal_cfg_t *cfg,
             // Extension properties
             else if (!strcmp("iCalendar", key)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(cfg, parser, jval);
+                validate_jicalcomponent(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
             else if (!is_vendorext_key(key)) {
@@ -3824,7 +3969,7 @@ static void validate_participants(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_virtuallocations(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_virtuallocations(jscal_ctx_t *ctx __attribute__((unused)),
                                       struct jmap_parser *parser,
                                       json_t *jvlocs)
 {
@@ -3885,7 +4030,7 @@ static void validate_virtuallocations(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void validate_recurrencerule_nday(jscal_cfg_t *cfg __attribute__((unused)),
+static void validate_recurrencerule_nday(jscal_ctx_t *ctx __attribute__((unused)),
                                          struct jmap_parser *parser,
                                          json_t *jnday)
 {
@@ -3933,7 +4078,7 @@ static void validate_recurrencerule_nday(jscal_cfg_t *cfg __attribute__((unused)
     }
 }
 
-static void validate_recurrencerule(jscal_cfg_t *cfg,
+static void validate_recurrencerule(jscal_ctx_t *ctx,
                                     struct jmap_parser *parser, json_t *jrrule)
 {
     if (!json_is_object(jrrule)) {
@@ -3956,7 +4101,7 @@ static void validate_recurrencerule(jscal_cfg_t *cfg,
                 json_array_foreach(jval, i, jnday)
                 {
                     jmap_parser_push_index(parser, key, i, NULL);
-                    validate_recurrencerule_nday(cfg, parser, jnday);
+                    validate_recurrencerule_nday(ctx, parser, jnday);
                     jmap_parser_pop(parser);
                 }
                 if (i < json_array_size(jval)) jmap_parser_invalid(parser, key);
@@ -4090,10 +4235,10 @@ static void validate_recurrencerule(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_entry(jscal_cfg_t *cfg,
+static void validate_entry(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jentry);
 
-static void validate_recurrenceoverrides(jscal_cfg_t *cfg,
+static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
                                          struct jmap_parser *parser,
                                          json_t *jentry,
                                          json_t *jovrs)
@@ -4134,7 +4279,7 @@ static void validate_recurrenceoverrides(jscal_cfg_t *cfg,
                 // The patch-object is valid, let's validate if the resulting
                 // recurrence override is valid, too.
                 struct jmap_parser ovrparser = JMAP_PARSER_INITIALIZER;
-                validate_entry(cfg, &ovrparser, jovr);
+                validate_entry(ctx, &ovrparser, jovr);
                 if (json_array_size(ovrparser.invalid)) {
                     // The override is invalid. Prune the list of invalid
                     // properties and keep only the ones set in the patch.
@@ -4193,7 +4338,7 @@ static void validate_recurrenceoverrides(jscal_cfg_t *cfg,
     json_decref(jmaster);
 }
 
-static void validate_entry(jscal_cfg_t *cfg,
+static void validate_entry(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jentry)
 {
     if (!json_is_object(jentry)) {
@@ -4226,7 +4371,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("alerts", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_alerts(cfg, parser, jval);
+                validate_alerts(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4274,7 +4419,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("links", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_links(cfg, parser, jval);
+                validate_links(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4284,7 +4429,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("locations", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_locations(cfg, parser, jval);
+                validate_locations(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4307,7 +4452,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("participants", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_participants(cfg, parser, entry_type, jval);
+                validate_participants(ctx, parser, entry_type, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4340,21 +4485,21 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("recurrenceOverrides", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_recurrenceoverrides(cfg, parser, jentry, jval);
+                validate_recurrenceoverrides(ctx, parser, jentry, jval);
                 jmap_parser_pop(parser);
             }
         }
         else if (!strcmp("recurrenceRule", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_recurrencerule(cfg, parser, jval);
+                validate_recurrencerule(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
         else if (!strcmp("relatedTo", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_relatedto(cfg, parser, jval);
+                validate_relatedto(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4395,7 +4540,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("virtualLocations", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_virtuallocations(cfg, parser, jval);
+                validate_virtuallocations(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4403,7 +4548,7 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("iCalendar", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_jicalcomponent(cfg, parser, jval);
+                validate_jicalcomponent(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4497,7 +4642,7 @@ static void validate_entry(jscal_cfg_t *cfg,
     }
 }
 
-static void validate_group(jscal_cfg_t *cfg,
+static void validate_group(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jgroup)
 {
     if (!json_is_object(jgroup)) {
@@ -4532,7 +4677,7 @@ static void validate_group(jscal_cfg_t *cfg,
             if (json_is_array(jval)) {
                 for (size_t i = 0; i < json_array_size(jval); i++) {
                     jmap_parser_push_index(parser, key, i, NULL);
-                    validate_entry(cfg, parser, json_array_get(jval, i));
+                    validate_entry(ctx, parser, json_array_get(jval, i));
                     jmap_parser_pop(parser);
                 }
             }
@@ -4546,7 +4691,7 @@ static void validate_group(jscal_cfg_t *cfg,
         else if (!strcmp("links", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
-                validate_links(cfg, parser, jval);
+                validate_links(ctx, parser, jval);
                 jmap_parser_pop(parser);
             }
         }
@@ -4574,7 +4719,7 @@ static void validate_group(jscal_cfg_t *cfg,
         // Extension properties
         else if (!strcmp("iCalendar", key)) {
             jmap_parser_push(parser, key);
-            validate_jicalcomponent(cfg, parser, jval);
+            validate_jicalcomponent(ctx, parser, jval);
             jmap_parser_pop(parser);
         }
         else if (!is_vendorext_key(key)) {
@@ -4591,7 +4736,7 @@ static void validate_group(jscal_cfg_t *cfg,
     }
 }
 
-static void group_to_ical(jscal_cfg_t *cfg,
+static void group_to_ical(jscal_ctx_t *ctx,
                           json_t *jgroup,
                           icalcomponent *ical)
 {
@@ -4600,19 +4745,19 @@ static void group_to_ical(jscal_cfg_t *cfg,
     size_t i;
     json_array_foreach(jentries, i, jentry)
     {
-        entry_to_ical(cfg, jentry, ical);
+        entry_to_ical(ctx, jentry, ical);
     }
 
-    categories_to_ical(cfg, jgroup, ical);
-    description_to_ical(cfg, jgroup, ical);
-    keywords_to_ical(cfg, jgroup, ical);
-    links_to_ical(cfg, jgroup, ical);
+    categories_to_ical(ctx, jgroup, ical);
+    description_to_ical(ctx, jgroup, ical);
+    keywords_to_ical(ctx, jgroup, ical);
+    links_to_ical(ctx, jgroup, ical);
 
     json_t *jval;
 
     if (JNOTNULL(jval = json_object_get(jgroup, "color"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jgroup, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
+            ctx, jgroup, "color", ICAL_COLOR_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
         icalcomponent_add_property(ical, prop);
@@ -4620,7 +4765,7 @@ static void group_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jgroup, "created"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jgroup, "created", ICAL_CREATED_PROPERTY, GET_ICAL_CREATE);
+            ctx, jgroup, "created", ICAL_CREATED_PROPERTY, GET_ICAL_CREATE);
         icaltimetype t = utctime_to_icaltime(json_string_value(jval));
         icalproperty_set_value(prop, icalvalue_new_datetime(t));
         icalcomponent_add_property(ical, prop);
@@ -4628,7 +4773,7 @@ static void group_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jgroup, "prodId"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jgroup, "prodId", ICAL_PRODID_PROPERTY, GET_ICAL_CREATE);
+            ctx, jgroup, "prodId", ICAL_PRODID_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
         icalcomponent_add_property(ical, prop);
@@ -4636,7 +4781,7 @@ static void group_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jgroup, "source"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jgroup, "source", ICAL_SOURCE_PROPERTY, GET_ICAL_CREATE);
+            ctx, jgroup, "source", ICAL_SOURCE_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_uri(s));
         icalcomponent_add_property(ical, prop);
@@ -4644,7 +4789,7 @@ static void group_to_ical(jscal_cfg_t *cfg,
 
     if (JNOTNULL(jval = json_object_get(jgroup, "title"))) {
         icalproperty *prop = jobj_get_icalprop(
-            cfg, jgroup, "title", ICAL_NAME_PROPERTY, GET_ICAL_CREATE);
+            ctx, jgroup, "title", ICAL_NAME_PROPERTY, GET_ICAL_CREATE);
         const char *s = json_string_value(jval);
         icalproperty_set_value(prop, icalvalue_new_text(s));
         icalcomponent_add_property(ical, prop);
@@ -4662,7 +4807,7 @@ static void group_to_ical(jscal_cfg_t *cfg,
         icalcomponent_add_property(ical, icalproperty_new_lastmodified(t));
     }
 
-    vendorexts_to_ical(cfg, jgroup, NULL, ical);
+    vendorexts_to_ical(ctx, jgroup, NULL, ical);
 }
 
 EXPORTED icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
@@ -4671,6 +4816,7 @@ EXPORTED icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
 {
     jscal_cfg_t mycfg = { 0 };
     if (!cfg) cfg = &mycfg;
+    jscal_ctx_t ctx = jscal_ctx_init(cfg);
 
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
     if (!parser) parser = &myparser;
@@ -4679,25 +4825,25 @@ EXPORTED icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
 
     const char *type = json_string_value(json_object_get(jobj, "@type"));
     if (!strcasecmpsafe(type, "Group")) {
-        validate_group(cfg, parser, jobj);
+        validate_group(&ctx, parser, jobj);
     }
     else {
-        validate_entry(cfg, parser, jobj);
+        validate_entry(&ctx, parser, jobj);
     }
 
     if (json_array_size(parser->invalid))
         goto done;
 
     ical = jobj_get_icalcomp(
-        cfg, jobj, ICAL_VCALENDAR_COMPONENT, GET_ICAL_CREATE);
+        &ctx, jobj, ICAL_VCALENDAR_COMPONENT, GET_ICAL_CREATE);
     icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
     icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
 
     if (!strcasecmpsafe(type, "Group")) {
-        group_to_ical(cfg, jobj, ical);
+        group_to_ical(&ctx, jobj, ical);
     }
     else {
-        entry_to_ical(cfg, jobj, ical);
+        entry_to_ical(&ctx, jobj, ical);
     }
 
     icalcomponent_add_required_timezones(ical);
@@ -4714,16 +4860,17 @@ EXPORTED icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
 
 done:
     jmap_parser_fini(&myparser);
+    jscal_ctx_fini(&ctx);
     return ical;
 }
 
 // ---------------
 
-static json_t *jobj_set_icalcomp_name(jscal_cfg_t *cfg,
+static json_t *jobj_set_icalcomp_name(jscal_ctx_t *ctx,
                                       json_t *jobj,
                                       icalcomponent *comp)
 {
-    if (!cfg->use_icalendar_convprops) return NULL;
+    if (!ctx->cfg.use_icalendar_convprops) return NULL;
 
     const char *comp_name = icalcomponent_get_component_name(comp);
     struct buf buf = BUF_INITIALIZER;
@@ -4741,11 +4888,11 @@ static json_t *jobj_set_icalcomp_name(jscal_cfg_t *cfg,
     return jcomp;
 }
 
-static json_t *jobj_set_icalcomp(jscal_cfg_t *cfg,
+static json_t *jobj_set_icalcomp(jscal_ctx_t *ctx,
                                  json_t *jobj,
                                  icalcomponent *comp)
 {
-    if (!cfg->use_icalendar_convprops) return NULL;
+    if (!ctx->cfg.use_icalendar_convprops) return NULL;
 
     json_t *jcomps = json_array();
     json_t *jprops = json_array();
@@ -4771,7 +4918,7 @@ static json_t *jobj_set_icalcomp(jscal_cfg_t *cfg,
     }
 
     if (json_array_size(jcomps) || json_array_size(jprops)) {
-        jcomp = jobj_set_icalcomp_name(cfg, jobj, comp);
+        jcomp = jobj_set_icalcomp_name(ctx, jobj, comp);
         if (json_array_size(jcomps))
             json_object_set(jcomp, "components", jcomps);
         if (json_array_size(jprops))
@@ -4783,17 +4930,17 @@ static json_t *jobj_set_icalcomp(jscal_cfg_t *cfg,
     return jcomp;
 }
 
-static json_t *jobj_set_icalprop_name(jscal_cfg_t *cfg,
+static json_t *jobj_set_icalprop_name(jscal_ctx_t *ctx,
                                       json_t *jobj,
                                       const char *key,
                                       icalproperty *prop)
 {
-    if (!cfg->use_icalendar_convprops) return NULL;
+    if (!ctx->cfg.use_icalendar_convprops) return NULL;
 
     icalcomponent *comp = icalproperty_get_parent(prop);
     if (!comp) return NULL;
 
-    json_t *jcomp = jobj_set_icalcomp_name(cfg, jobj, comp);
+    json_t *jcomp = jobj_set_icalcomp_name(ctx, jobj, comp);
     json_t *jconvprops =
         json_object_get_vanew(jcomp, "convertedProperties", "{}");
 
@@ -4809,14 +4956,14 @@ static json_t *jobj_set_icalprop_name(jscal_cfg_t *cfg,
     return jicalprop;
 }
 
-static json_t *jobj_set_icalprop_valuetype(jscal_cfg_t *cfg,
+static json_t *jobj_set_icalprop_valuetype(jscal_ctx_t *ctx,
                                            json_t *jobj,
                                            const char *key,
                                            icalproperty *prop)
 {
-    if (!cfg->use_icalendar_convprops) return NULL;
+    if (!ctx->cfg.use_icalendar_convprops) return NULL;
 
-    json_t *jicalprop = jobj_set_icalprop_name(cfg, jobj, key, prop);
+    json_t *jicalprop = jobj_set_icalprop_name(ctx, jobj, key, prop);
     if (!jicalprop) return NULL;
 
     struct buf buf = BUF_INITIALIZER;
@@ -4827,25 +4974,25 @@ static json_t *jobj_set_icalprop_valuetype(jscal_cfg_t *cfg,
     return jicalprop;
 }
 
-static void jobj_set_icalprop_param(jscal_cfg_t *cfg,
+static void jobj_set_icalprop_param(jscal_ctx_t *ctx,
                                     json_t *jobj,
                                     const char *key,
                                     icalproperty *prop,
                                     icalparameter *param)
 {
-    if (!cfg->use_icalendar_convprops) return;
+    if (!ctx->cfg.use_icalendar_convprops) return;
 
-    json_t *jicalprop = jobj_set_icalprop_name(cfg, jobj, key, prop);
+    json_t *jicalprop = jobj_set_icalprop_name(ctx, jobj, key, prop);
     json_t *jparams = json_object_get_vanew(jicalprop, "parameters", "{}");
     icalparameter_to_jcal_parameter(param, jparams);
 }
 
-static void jobj_set_icalprop_params(jscal_cfg_t *cfg,
+static void jobj_set_icalprop_params(jscal_ctx_t *ctx,
                                      json_t *jobj,
                                      const char *key,
                                      icalproperty *prop)
 {
-    if (!cfg->use_icalendar_convprops) return;
+    if (!ctx->cfg.use_icalendar_convprops) return;
 
     json_t *jparams = json_object();
 
@@ -4858,31 +5005,31 @@ static void jobj_set_icalprop_params(jscal_cfg_t *cfg,
     }
 
     if (json_object_size(jparams)) {
-        json_t *jicalprop = jobj_set_icalprop_name(cfg, jobj, key, prop);
+        json_t *jicalprop = jobj_set_icalprop_name(ctx, jobj, key, prop);
         json_object_set(jicalprop, "parameters", jparams);
     }
 
     json_decref(jparams);
 }
 
-static void jobj_set_icalprop(jscal_cfg_t *cfg,
+static void jobj_set_icalprop(jscal_ctx_t *ctx,
                               json_t *jobj,
                               const char *key,
                               json_t *jval,
                               icalproperty *prop)
 {
     json_object_set_new(jobj, key, jval);
-    jobj_set_icalprop_params(cfg, jobj, key, prop);
+    jobj_set_icalprop_params(ctx, jobj, key, prop);
 }
 
-static void jobj_set_icalquirk(jscal_cfg_t *cfg,
+static void jobj_set_icalquirk(jscal_ctx_t *ctx,
                                icalcomponent *comp,
                                json_t *jobj,
                                const char *quirk)
 {
-    if (!cfg->use_icalendar_convprops) return;
+    if (!ctx->cfg.use_icalendar_convprops) return;
 
-    json_t *jcomp = jobj_set_icalcomp_name(cfg, jobj, comp);
+    json_t *jcomp = jobj_set_icalcomp_name(ctx, jobj, comp);
     if (!jcomp) return;
 
     json_t *jquirks = json_object_get(jcomp, "cyrusimap.org:quirks");
@@ -4954,7 +5101,7 @@ static void vendorexts_from_ical(icalcomponent *comp, json_t *jobj)
     json_decref(jpatch);
 }
 
-static void relatedto_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void relatedto_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
                                 icalcomponent *comp,
                                 json_t *jobj,
                                 const char *(*uidtokey)(const char *, void *),
@@ -4999,7 +5146,7 @@ static const char *alerts_from_ical_cb(const char *uid, void *rock)
     return hash_lookup(uid, (hash_table *) rock);
 }
 
-static void alerts_from_ical(jscal_cfg_t *cfg,
+static void alerts_from_ical(jscal_ctx_t *ctx,
                              icalcomponent *comp,
                              json_t *jobj)
 {
@@ -5036,7 +5183,7 @@ static void alerts_from_ical(jscal_cfg_t *cfg,
                                                  ICAL_ACKNOWLEDGED_PROPERTY))) {
             icaltimetype t = icalproperty_get_acknowledged(prop);
             json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-            jobj_set_icalprop(cfg, jalert, "acknowledged", jval, prop);
+            jobj_set_icalprop(ctx, jalert, "acknowledged", jval, prop);
         }
 
         if ((prop = myicalcomponent_get_property(valarm, ICAL_ACTION_PROPERTY)))
@@ -5045,7 +5192,7 @@ static void alerts_from_ical(jscal_cfg_t *cfg,
             // "iCalendar" property.
             if (icalproperty_get_action(prop) == ICAL_ACTION_EMAIL) {
                 json_t *jval = json_string("email");
-                jobj_set_icalprop(cfg, jalert, "action", jval, prop);
+                jobj_set_icalprop(ctx, jalert, "action", jval, prop);
             }
         }
 
@@ -5080,9 +5227,9 @@ static void alerts_from_ical(jscal_cfg_t *cfg,
         }
 
         relatedto_from_ical(
-            cfg, valarm, jalert, alerts_from_ical_cb, &alertkey_by_uid);
+            ctx, valarm, jalert, alerts_from_ical_cb, &alertkey_by_uid);
 
-        jobj_set_icalcomp(cfg, jalert, valarm);
+        jobj_set_icalcomp(ctx, jalert, valarm);
         vendorexts_from_ical(valarm, jalert);
 
         json_object_set_new(jalerts, key, jalert);
@@ -5097,7 +5244,7 @@ static void alerts_from_ical(jscal_cfg_t *cfg,
     json_decref(jalerts);
 }
 
-static void categories_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void categories_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
                                  icalcomponent *comp,
                                  json_t *jobj)
 {
@@ -5118,7 +5265,7 @@ static void categories_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
     json_decref(jcategories);
 }
 
-static void description_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void description_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
                                   icalcomponent *comp,
                                   json_t *jobj)
 {
@@ -5137,7 +5284,7 @@ static void description_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
 
     if (prop) {
         const char *desc = icalvalue_get_text(icalproperty_get_value(prop));
-        jobj_set_icalprop(cfg, jobj, "description", json_string(desc), prop);
+        jobj_set_icalprop(ctx, jobj, "description", json_string(desc), prop);
         if (fmttype) {
             const char *s = icalparameter_get_fmttype(fmttype);
             json_object_set_new(jobj, "descriptionContentType", json_string(s));
@@ -5145,7 +5292,7 @@ static void description_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
     }
 }
 
-static void keywords_from_ical(jscal_cfg_t *cfg,
+static void keywords_from_ical(jscal_ctx_t *ctx,
                                icalcomponent *comp,
                                json_t *jobj)
 {
@@ -5156,7 +5303,7 @@ static void keywords_from_ical(jscal_cfg_t *cfg,
     // set colors in CATEGORIES (they now switched to COLOR). Preserve
     // quirk but in contrast to the former implementation, do not omit
     // the color-named keyword even in quirk mode.
-    bool set_color = !cfg->no_quirk &&
+    bool set_color = !ctx->cfg.no_quirk &&
         icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT &&
         !myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY);
 
@@ -5179,7 +5326,7 @@ static void keywords_from_ical(jscal_cfg_t *cfg,
     json_decref(jkeywords);
 }
 
-static void links_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void links_from_ical(jscal_ctx_t *ctx __attribute__((unused)),
                             icalcomponent *comp,
                             json_t *jobj)
 {
@@ -5324,22 +5471,22 @@ static void links_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
 
         if (value_kind == ICAL_BINARY_VALUE) {
             jobj_set_icalprop_valuetype(
-                cfg, jobj, jmap_parser_path(&parser), prop);
+                ctx, jobj, jmap_parser_path(&parser), prop);
         }
         else if (icalproperty_isa(prop) == ICAL_IMAGE_PROPERTY) {
             if (myicalproperty_get_parameter(prop, ICAL_LINKREL_PARAMETER))
                 jobj_set_icalprop_name(
-                    cfg, jobj, jmap_parser_path(&parser), prop);
+                    ctx, jobj, jmap_parser_path(&parser), prop);
         }
         else if (icalproperty_isa(prop) == ICAL_LINK_PROPERTY) {
             if (!myicalproperty_get_parameter(prop, ICAL_LINKREL_PARAMETER))
                 jobj_set_icalprop_name(
-                    cfg, jobj, jmap_parser_path(&parser), prop);
+                    ctx, jobj, jmap_parser_path(&parser), prop);
         }
         else if (icalproperty_isa(prop) != ICAL_ATTACH_PROPERTY) {
-            jobj_set_icalprop_name(cfg, jobj, jmap_parser_path(&parser), prop);
+            jobj_set_icalprop_name(ctx, jobj, jmap_parser_path(&parser), prop);
         }
-        jobj_set_icalprop_params(cfg, jobj, jmap_parser_path(&parser), prop);
+        jobj_set_icalprop_params(ctx, jobj, jmap_parser_path(&parser), prop);
 
         jmap_parser_pop(&parser);
         jmap_parser_pop(&parser);
@@ -5515,7 +5662,7 @@ static void participant_from_icalprop(icalproperty *prop, json_t *jpart)
     }
 }
 
-static void locations_from_ical(jscal_cfg_t *cfg,
+static void locations_from_ical(jscal_ctx_t *ctx,
                                 icalcomponent *comp,
                                 json_t *jobj)
 {
@@ -5563,7 +5710,7 @@ static void locations_from_ical(jscal_cfg_t *cfg,
 
         // Keep note that this converted from GEO.
         jobj_set_icalprop_name(
-            cfg, jobj, jmap_parser_path_at(&parser, "coordinates"), prop);
+            ctx, jobj, jmap_parser_path_at(&parser, "coordinates"), prop);
 
         jmap_parser_pop(&parser);
     }
@@ -5611,12 +5758,12 @@ static void locations_from_ical(jscal_cfg_t *cfg,
             json_object_set_new(jlocs, key, jloc);
         }
 
-        links_from_ical(cfg, vloc, jloc);
+        links_from_ical(ctx, vloc, jloc);
 
         prop = myicalcomponent_get_property_by_name(vloc, "COORDINATES");
         if (prop) {
             json_t *jval = json_string(myicalproperty_get_coordinates(prop));
-            jobj_set_icalprop(cfg, jloc, "coordinates", jval, prop);
+            jobj_set_icalprop(ctx, jloc, "coordinates", jval, prop);
         }
 
         prop = myicalcomponent_get_nonderived_property(vloc, ICAL_GEO_PROPERTY);
@@ -5625,15 +5772,15 @@ static void locations_from_ical(jscal_cfg_t *cfg,
             buf_setcstr(&buf, "geo:");
             buf_printf(&buf, "%s,%s", icalgeo.lat, icalgeo.lon);
             json_t *jval = json_string(buf_cstring(&buf));
-            jobj_set_icalprop(cfg, jloc, "coordinates", jval, prop);
+            jobj_set_icalprop(ctx, jloc, "coordinates", jval, prop);
             // Keep note that this converted from GEO.
-            jobj_set_icalprop_name(cfg, jloc, "coordinates", prop);
+            jobj_set_icalprop_name(ctx, jloc, "coordinates", prop);
         }
 
         prop = myicalcomponent_get_property(vloc, ICAL_NAME_PROPERTY);
         if (prop) {
             json_t *jval = json_string(icalproperty_get_name(prop));
-            jobj_set_icalprop(cfg, jloc, "name", jval, prop);
+            jobj_set_icalprop(ctx, jloc, "name", jval, prop);
         }
 
         icalpropiter prop_iter;
@@ -5645,11 +5792,11 @@ static void locations_from_ical(jscal_cfg_t *cfg,
             json_object_set_new(jltyps, ltyp, json_true());
         }
 
-        jobj_set_icalcomp(cfg, jloc, vloc);
+        jobj_set_icalcomp(ctx, jloc, vloc);
         vendorexts_from_ical(vloc, jloc);
 
         // Keep track this Location converted from a VLOCATION.
-        jobj_set_icalcomp_name(cfg, jloc, vloc);
+        jobj_set_icalcomp_name(ctx, jloc, vloc);
     }
 
     if (mainloc_id && json_object_size(jlocs) > 1)
@@ -5663,7 +5810,7 @@ static void locations_from_ical(jscal_cfg_t *cfg,
     buf_free(&buf);
 }
 
-static void participants_from_ical(jscal_cfg_t *cfg
+static void participants_from_ical(jscal_ctx_t *ctx
                                    __attribute__((unused)),
                                    icalcomponent *comp,
                                    json_t *jobj)
@@ -5677,7 +5824,7 @@ static void participants_from_ical(jscal_cfg_t *cfg
     // consider it when validating and converting the JSCalendar object.
     if (!myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY) !=
         !myicalcomponent_get_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-        jobj_set_icalquirk(cfg, comp, jobj, ICALQUIRK_NO_ORGANIZER_ATTENDEE);
+        jobj_set_icalquirk(ctx, comp, jobj, ICALQUIRK_NO_ORGANIZER_ATTENDEE);
     }
 
     // Convert ORGANIZER.
@@ -5739,7 +5886,7 @@ static void participants_from_ical(jscal_cfg_t *cfg
     // Set iTIP REPLY timestamp and sequence on Participant
     icaltimetype itip_dtstamp = icaltime_null_time();
     int itip_sequence = -1;
-    if (!cfg->no_quirk && icalcomponent_get_parent(comp)) {
+    if (!ctx->cfg.no_quirk && icalcomponent_get_parent(comp)) {
         icalcomponent *ical = icalcomponent_get_parent(comp);
         icalproperty_method method = icalcomponent_get_method(ical);
 
@@ -5805,8 +5952,8 @@ static void participants_from_ical(jscal_cfg_t *cfg
 
             if (!json_object_get(jpart, "calendarAddress")) {
                 jobj_set_icalprop(
-                    cfg, jpart, "calendarAddress", json_string(caladdr), prop);
-                jobj_set_icalprop_name(cfg, jpart, "calendarAddress", prop);
+                    ctx, jpart, "calendarAddress", json_string(caladdr), prop);
+                jobj_set_icalprop_name(ctx, jpart, "calendarAddress", prop);
             }
         }
 
@@ -5816,16 +5963,16 @@ static void participants_from_ical(jscal_cfg_t *cfg
             json_object_set_new(jparts, key, jpart);
         }
 
-        description_from_ical(cfg, part, jpart);
-        links_from_ical(cfg, part, jpart);
+        description_from_ical(ctx, part, jpart);
+        links_from_ical(ctx, part, jpart);
 
         if ((prop = myicalcomponent_get_property(part, ICAL_SUMMARY_PROPERTY)))
         {
             const char *name = icalproperty_get_summary(prop);
-            jobj_set_icalprop(cfg, jpart, "name", json_string(name), prop);
+            jobj_set_icalprop(ctx, jpart, "name", json_string(name), prop);
         }
 
-        jobj_set_icalcomp(cfg, jpart, part);
+        jobj_set_icalcomp(ctx, jpart, part);
         vendorexts_from_ical(part, jpart);
     }
 
@@ -5836,7 +5983,7 @@ static void participants_from_ical(jscal_cfg_t *cfg
     buf_free(&buf);
 }
 
-static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
+static void timeprops_from_ical(jscal_ctx_t *ctx,
                                 icalcomponent *comp,
                                 json_t *jobj)
 {
@@ -5851,14 +5998,14 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
             myicalproperty_get_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
         if (tzid_param) {
             const char *tzid = icalparameter_get_tzid(tzid_param);
-            dtstart.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            dtstart.zone = get_icaltimezone_for_tzid(ctx, tzid);
             if (!icaltimezone_is_builtin_timezone_tzid(tzid)) {
                 jobj_set_icalprop_param(
-                    cfg, jobj, "start", dtstart_prop, tzid_param);
+                    ctx, jobj, "start", dtstart_prop, tzid_param);
             }
         }
         json_t *jval = json_string(localtime_from_icaltime(dtstart, &buf));
-        jobj_set_icalprop(cfg, jobj, "start", jval, dtstart_prop);
+        jobj_set_icalprop(ctx, jobj, "start", jval, dtstart_prop);
 
         const char *jtzid = icaltimezone_get_location_tzid(dtstart.zone);
         if (jtzid) {
@@ -5881,7 +6028,7 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
                 myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
             if (tzid_param) {
                 const char *tzid = icalparameter_get_tzid(tzid_param);
-                dtend.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+                dtend.zone = get_icaltimezone_for_tzid(ctx, tzid);
                 if (dtstart.zone != dtend.zone) {
                     const char *jtzid =
                         icaltimezone_get_location_tzid(dtend.zone);
@@ -5891,7 +6038,7 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
                     }
                     if (!icaltimezone_is_builtin_timezone_tzid(tzid)) {
                         jobj_set_icalprop_param(
-                            cfg, jobj, "duration", prop, tzid_param);
+                            ctx, jobj, "duration", prop, tzid_param);
                     }
                 }
             }
@@ -5905,7 +6052,7 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
 
             if (dtstart.zone == dtend.zone) {
                 // Keep track that duration got converted from DTEND.
-                jobj_set_icalprop_name(cfg, jobj, "duration", prop);
+                jobj_set_icalprop_name(ctx, jobj, "duration", prop);
             }
         }
         else {
@@ -5934,14 +6081,14 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
                 myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
             if (tzid_param) {
                 const char *tzid = icalparameter_get_tzid(tzid_param);
-                due.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+                due.zone = get_icaltimezone_for_tzid(ctx, tzid);
             }
             if (dtstart_prop && dtstart.zone != due.zone) {
                 due = icaltime_convert_to_zone(due,
                                                (icaltimezone *) dtstart.zone);
             }
             json_t *jval = json_string(localtime_from_icaltime(due, &buf));
-            jobj_set_icalprop(cfg, jobj, "due", jval, prop);
+            jobj_set_icalprop(ctx, jobj, "due", jval, prop);
 
             if (!dtstart_prop) {
                 const char *jtzid = icaltimezone_get_location_tzid(due.zone);
@@ -5962,14 +6109,14 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
             myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
         if (tzid_param) {
             const char *tzid = icalparameter_get_tzid(tzid_param);
-            recurid.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            recurid.zone = get_icaltimezone_for_tzid(ctx, tzid);
             if (!icaltimezone_is_builtin_timezone_tzid(tzid)) {
                 jobj_set_icalprop_param(
-                    cfg, jobj, "recurrenceId", prop, tzid_param);
+                    ctx, jobj, "recurrenceId", prop, tzid_param);
             }
         }
         json_t *jval = json_string(localtime_from_icaltime(recurid, &buf));
-        jobj_set_icalprop(cfg, jobj, "recurrenceId", jval, prop);
+        jobj_set_icalprop(ctx, jobj, "recurrenceId", jval, prop);
 
         const char *jtzid = icaltimezone_get_location_tzid(recurid.zone);
         if (jtzid) {
@@ -5995,12 +6142,12 @@ static void timeprops_from_ical(jscal_cfg_t *cfg __attribute__((unused)),
     buf_free(&buf);
 }
 
-static void entry_from_ical(jscal_cfg_t *cfg,
+static void entry_from_ical(jscal_ctx_t *ctx,
                             icalcomponent *comp,
                             json_t *jobj,
                             ptrarray_t *overrides);
 
-static void recuroverrides_from_ical(jscal_cfg_t *cfg,
+static void recuroverrides_from_ical(jscal_ctx_t *ctx,
                                      icalcomponent *comp,
                                      json_t *jobj,
                                      ptrarray_t *overrides)
@@ -6017,7 +6164,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
             myicalproperty_get_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
         if (tzid_param) {
             const char *tzid = icalparameter_get_tzid(tzid_param);
-            dtstart.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            dtstart.zone = get_icaltimezone_for_tzid(ctx, tzid);
         }
     }
 
@@ -6059,7 +6206,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
             myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
         if (tzid_param) {
             const char *tzid = icalparameter_get_tzid(tzid_param);
-            t.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            t.zone = get_icaltimezone_for_tzid(ctx, tzid);
         }
 
         if (dtstart_prop && dtstart.zone != t.zone) {
@@ -6082,7 +6229,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
             icalvalue_isa(icalproperty_get_value(prop)) == ICAL_PERIOD_VALUE) {
             // Buffer already holds recurrence-id, prepend it with path.
             buf_insertcstr(&buf, 0, "recurrenceOverrides/");
-            jobj_set_icalprop_valuetype(cfg, jobj, buf_cstring(&buf), prop);
+            jobj_set_icalprop_valuetype(ctx, jobj, buf_cstring(&buf), prop);
             buf_reset(&buf);
         }
     }
@@ -6098,7 +6245,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
             myicalproperty_get_parameter(prop, ICAL_TZID_PARAMETER);
         if (tzid_param) {
             const char *tzid = icalparameter_get_tzid(tzid_param);
-            icalrecurid.zone = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+            icalrecurid.zone = get_icaltimezone_for_tzid(ctx, tzid);
         }
         if (dtstart_prop && dtstart.zone != icalrecurid.zone) {
             // Bogus: RECURRENCE-ID TZID differs from main component's DTSTART.
@@ -6107,7 +6254,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
         }
 
         json_t *jovr = json_object();
-        entry_from_ical(cfg, ovrc, jovr, NULL);
+        entry_from_ical(ctx, ovrc, jovr, NULL);
         json_object_del(jovr, "recurrenceId");
         json_object_del(jovr, "recurrenceIdTimeZone");
 
@@ -6144,7 +6291,7 @@ static void recuroverrides_from_ical(jscal_cfg_t *cfg,
     buf_free(&buf);
 }
 
-static void virtuallocations_from_ical(jscal_cfg_t *cfg
+static void virtuallocations_from_ical(jscal_ctx_t *ctx
                                        __attribute__((unused)),
                                        icalcomponent *comp,
                                        json_t *jobj)
@@ -6197,7 +6344,7 @@ static void virtuallocations_from_ical(jscal_cfg_t *cfg
         }
 
         jobj_set_icalprop_params(
-            cfg, jobj, jmap_parser_path_at(&parser, "uri"), prop);
+            ctx, jobj, jmap_parser_path_at(&parser, "uri"), prop);
 
         jmap_parser_pop(&parser);
     }
@@ -6210,7 +6357,7 @@ static void virtuallocations_from_ical(jscal_cfg_t *cfg
     buf_free(&buf);
 }
 
-static void entry_from_ical(jscal_cfg_t *cfg,
+static void entry_from_ical(jscal_ctx_t *ctx,
                             icalcomponent *comp,
                             json_t *jobj,
                             ptrarray_t *overrides)
@@ -6220,16 +6367,16 @@ static void entry_from_ical(jscal_cfg_t *cfg,
     else
         json_object_set_new(jobj, "@type", json_string("Event"));
 
-    timeprops_from_ical(cfg, comp, jobj);
-    alerts_from_ical(cfg, comp, jobj);
-    categories_from_ical(cfg, comp, jobj);
-    description_from_ical(cfg, comp, jobj);
-    keywords_from_ical(cfg, comp, jobj);
-    links_from_ical(cfg, comp, jobj);
-    locations_from_ical(cfg, comp, jobj);
-    participants_from_ical(cfg, comp, jobj);
-    relatedto_from_ical(cfg, comp, jobj, NULL, NULL);
-    virtuallocations_from_ical(cfg, comp, jobj);
+    timeprops_from_ical(ctx, comp, jobj);
+    alerts_from_ical(ctx, comp, jobj);
+    categories_from_ical(ctx, comp, jobj);
+    description_from_ical(ctx, comp, jobj);
+    keywords_from_ical(ctx, comp, jobj);
+    links_from_ical(ctx, comp, jobj);
+    locations_from_ical(ctx, comp, jobj);
+    participants_from_ical(ctx, comp, jobj);
+    relatedto_from_ical(ctx, comp, jobj, NULL, NULL);
+    virtuallocations_from_ical(ctx, comp, jobj);
 
     struct buf buf = BUF_INITIALIZER;
     icalproperty *prop;
@@ -6237,20 +6384,20 @@ static void entry_from_ical(jscal_cfg_t *cfg,
     if ((prop = myicalcomponent_get_property(comp, ICAL_COLOR_PROPERTY))) {
         const char *color = icalproperty_get_color(prop);
         if (ical_is_valid_color(color)) {
-            jobj_set_icalprop(cfg, jobj, "color", json_string(color), prop);
+            jobj_set_icalprop(ctx, jobj, "color", json_string(color), prop);
         }
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_CREATED_PROPERTY))) {
         icaltimetype t = icalproperty_get_created(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jobj, "created", jval, prop);
+        jobj_set_icalprop(ctx, jobj, "created", jval, prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_DTSTAMP_PROPERTY))) {
         icaltimetype t = icalproperty_get_dtstamp(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jobj, "updated", jval, prop);
+        jobj_set_icalprop(ctx, jobj, "updated", jval, prop);
     }
 
     if ((prop =
@@ -6259,17 +6406,17 @@ static void entry_from_ical(jscal_cfg_t *cfg,
     {
         int val = icalproperty_get_percentcomplete(prop);
         jobj_set_icalprop(
-            cfg, jobj, "percentComplete", json_integer(val), prop);
+            ctx, jobj, "percentComplete", json_integer(val), prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_PRIORITY_PROPERTY))) {
         int seq = icalproperty_get_priority(prop);
-        jobj_set_icalprop(cfg, jobj, "priority", json_integer(seq), prop);
+        jobj_set_icalprop(ctx, jobj, "priority", json_integer(seq), prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_SEQUENCE_PROPERTY))) {
         int seq = icalproperty_get_sequence(prop);
-        jobj_set_icalprop(cfg, jobj, "sequence", json_integer(seq), prop);
+        jobj_set_icalprop(ctx, jobj, "sequence", json_integer(seq), prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_STATUS_PROPERTY))) {
@@ -6277,21 +6424,21 @@ static void entry_from_ical(jscal_cfg_t *cfg,
         buf_setcstr(&buf, icalproperty_status_to_string(status));
         json_t *jval = json_string(buf_lcase(&buf));
         if (icalcomponent_isa(comp) == ICAL_VTODO_COMPONENT)
-            jobj_set_icalprop(cfg, jobj, "progress", jval, prop);
+            jobj_set_icalprop(ctx, jobj, "progress", jval, prop);
         else
-            jobj_set_icalprop(cfg, jobj, "status", jval, prop);
+            jobj_set_icalprop(ctx, jobj, "status", jval, prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_TRANSP_PROPERTY))) {
         const char *s = icalproperty_get_transp(prop) == ICAL_TRANSP_TRANSPARENT
                             ? "free"
                             : "busy";
-        jobj_set_icalprop(cfg, jobj, "freeBusyStatus", json_string(s), prop);
+        jobj_set_icalprop(ctx, jobj, "freeBusyStatus", json_string(s), prop);
     }
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_SUMMARY_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_name(prop));
-        jobj_set_icalprop(cfg, jobj, "title", jval, prop);
+        jobj_set_icalprop(ctx, jobj, "title", jval, prop);
         icalparameter *param =
             myicalproperty_get_parameter(prop, ICAL_LANGUAGE_PARAMETER);
         if (param) {
@@ -6302,7 +6449,7 @@ static void entry_from_ical(jscal_cfg_t *cfg,
 
     // XXX quirk: the former implementation set title to an empty string
     // if no title was set.
-    if (!cfg->no_quirk && JNULL(json_object_get(jobj, "title"))) {
+    if (!ctx->cfg.no_quirk && JNULL(json_object_get(jobj, "title"))) {
         json_object_set_new(jobj, "title", json_string(""));
     }
 
@@ -6325,7 +6472,7 @@ static void entry_from_ical(jscal_cfg_t *cfg,
 
     if ((prop = myicalcomponent_get_property(comp, ICAL_UID_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_uid(prop));
-        jobj_set_icalprop(cfg, jobj, "uid", jval, prop);
+        jobj_set_icalprop(ctx, jobj, "uid", jval, prop);
     }
 
     if (icalcomponent_get_parent(comp)) {
@@ -6380,13 +6527,13 @@ static void entry_from_ical(jscal_cfg_t *cfg,
         icalproperty_class class = icalproperty_get_class(prop);
         if (class == ICAL_CLASS_PUBLIC)
             jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("public"), prop);
+                ctx, jobj, "privacy", json_string("public"), prop);
         else if (class == ICAL_CLASS_PRIVATE)
             jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("private"), prop);
+                ctx, jobj, "privacy", json_string("private"), prop);
         else
             jobj_set_icalprop(
-                cfg, jobj, "privacy", json_string("secret"), prop);
+                ctx, jobj, "privacy", json_string("secret"), prop);
     }
     // XXX quirk: this got set in the former implementation
     else if ((prop = myicalcomponent_get_property_by_name(
@@ -6401,10 +6548,21 @@ static void entry_from_ical(jscal_cfg_t *cfg,
         }
     }
 
-    recuroverrides_from_ical(cfg, comp, jobj, overrides);
+    recuroverrides_from_ical(ctx, comp, jobj, overrides);
 
-    jobj_set_icalcomp(cfg, jobj, comp);
+    jobj_set_icalcomp(ctx, jobj, comp);
     vendorexts_from_ical(comp, jobj);
+
+    // XXX for debugging only
+    if (ctx->cfg.debug && ptrarray_size(&ctx->unguessable_vtimezones)) {
+        json_t *jtimezones = json_array();
+        for (int i = 0; i < ptrarray_size(&ctx->unguessable_vtimezones); i++) {
+            icalcomponent *vtz = ptrarray_nth(&ctx->unguessable_vtimezones, i);
+            json_array_append_new(jtimezones, icalcomponent_as_jcal_array(vtz));
+        }
+        json_object_set_new(jobj,
+                "cyrusimap.org:unguessableTimezones", jtimezones);
+    }
 
     buf_free(&buf);
 }
@@ -6470,9 +6628,14 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
 
     jscal_cfg_t mycfg = { 0 };
     if (!cfg) cfg = &mycfg;
+    jscal_ctx_t ctx = jscal_ctx_init(cfg);
     struct buf buf = BUF_INITIALIZER;
 
     icalcomponent *myical = icalcomponent_clone(ical);
+
+    // Initialize timezone guessing.
+    guess_timezones(&ctx, myical);
+
     // Apply general sanitizations.
     sanitize_icalobj(myical);
 
@@ -6502,12 +6665,12 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
                                                 ICAL_RECURRENCEID_PROPERTY))
             {
                 // Convert main component and all recurrence overrides.
-                entry_from_ical(cfg, comp, jentry, complist);
+                entry_from_ical(&ctx, comp, jentry, complist);
                 ptrarray_truncate(complist, 0);
             }
             else {
                 // Convert main component or stand-alone instance.
-                entry_from_ical(cfg, comp, jentry, NULL);
+                entry_from_ical(&ctx, comp, jentry, NULL);
             }
             json_array_append_new(jentries, jentry);
         }
@@ -6515,22 +6678,22 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
     }
     json_object_set_new(jgroup, "entries", jentries);
 
-    categories_from_ical(cfg, myical, jgroup);
-    keywords_from_ical(cfg, myical, jgroup);
-    description_from_ical(cfg, myical, jgroup);
-    links_from_ical(cfg, myical, jgroup);
+    categories_from_ical(&ctx, myical, jgroup);
+    keywords_from_ical(&ctx, myical, jgroup);
+    description_from_ical(&ctx, myical, jgroup);
+    links_from_ical(&ctx, myical, jgroup);
 
     icalproperty *prop;
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_COLOR_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_color(prop));
-        jobj_set_icalprop(cfg, jgroup, "color", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "color", jval, prop);
     }
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_CREATED_PROPERTY))) {
         icaltimetype t = icalproperty_get_created(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jgroup, "created", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "created", jval, prop);
     }
 
     if ((prop =
@@ -6538,12 +6701,12 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
     {
         icaltimetype t = icalproperty_get_lastmodified(prop);
         json_t *jval = json_string(utctime_from_icaltime(t, &buf));
-        jobj_set_icalprop(cfg, jgroup, "updated", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "updated", jval, prop);
     }
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_NAME_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_name(prop));
-        jobj_set_icalprop(cfg, jgroup, "title", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "title", jval, prop);
         icalparameter *param =
             myicalproperty_get_parameter(prop, ICAL_LANGUAGE_PARAMETER);
         if (param) {
@@ -6554,24 +6717,25 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_PRODID_PROPERTY))) {
         const char *prodid = icalproperty_get_prodid(prop);
-        jobj_set_icalprop(cfg, jgroup, "prodId", json_string(prodid), prop);
+        jobj_set_icalprop(&ctx, jgroup, "prodId", json_string(prodid), prop);
     }
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_SOURCE_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_source(prop));
-        jobj_set_icalprop(cfg, jgroup, "source", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "source", jval, prop);
     }
 
     if ((prop = myicalcomponent_get_property(myical, ICAL_UID_PROPERTY))) {
         json_t *jval = json_string(icalproperty_get_uid(prop));
-        jobj_set_icalprop(cfg, jgroup, "uid", jval, prop);
+        jobj_set_icalprop(&ctx, jgroup, "uid", jval, prop);
     }
 
-    jobj_set_icalcomp(cfg, jgroup, myical);
+    jobj_set_icalcomp(&ctx, jgroup, myical);
     vendorexts_from_ical(myical, jgroup);
 
     ptrarray_fini(&complists);
     icalcomponent_free(myical);
+    jscal_ctx_fini(&ctx);
     buf_free(&buf);
     return jgroup;
 }

@@ -52,6 +52,11 @@ typedef struct {
      */
     bool no_quirk;
 
+    /**
+     * Toggles if to enable debugging output.
+     */
+    bool debug;
+
 } jscal_cfg_t;
 
 /** @brief Convert a JSCalendar object to an iCalendar object.
