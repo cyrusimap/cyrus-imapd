@@ -7490,14 +7490,26 @@ EXPORTED void freesortcrit(struct sortcrit *s)
 EXPORTED int insert_into_mailbox_allowed(struct mailbox *mailbox)
 {
     int r = 0;
+    const char *mboxname = mailbox_name(mailbox);
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    uint32_t mbtype = mailbox_mbtype(mailbox);
 
-    /* prohibit inserting into \Snoozed mailbox */
-    if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+    /* prohibit inserting into calendar/addressbook-home-set */
+    if (strarray_size(mbname_boxes(mbname)) == 1 &&
+        (mboxname_isa(mboxname, mbtype,
+                      IMAPOPT_CALENDARPREFIX, MBTYPE_CALENDAR) ||
+         mboxname_isa(mboxname, mbtype,
+                      IMAPOPT_ADDRESSBOOKPREFIX, MBTYPE_ADDRESSBOOK))) {
+        r = IMAP_MAILBOX_NOTSUPPORTED;
+    }
+
+    else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         struct buf attrib = BUF_INITIALIZER;
-        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        const char *userid = mbname_userid(mbname);
 
-        r = annotatemore_lookup(mailbox_name(mailbox), "/specialuse", userid, &attrib);
-        free(userid);
+        /* prohibit inserting into \Snoozed mailbox */
+        r = annotatemore_lookup(mailbox_name(mailbox),
+                                "/specialuse", userid, &attrib);
 
         if (!r && buf_len(&attrib)) {
             strarray_t *specialuse =
@@ -7510,6 +7522,8 @@ EXPORTED int insert_into_mailbox_allowed(struct mailbox *mailbox)
         }
         buf_free(&attrib);
     }
+
+    mbname_free(&mbname);
 
     return r;
 }

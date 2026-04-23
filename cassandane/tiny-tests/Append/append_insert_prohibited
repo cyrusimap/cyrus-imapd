@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_insert_prohibited
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create special mailboxes";
+    $admintalk->create("user.cassandane.#jmap",
+                       ['TYPE', 'COLLECTION']) || die $@;
+    $admintalk->create("user.cassandane.#sieve",
+                       ['TYPE', 'SIEVE']) || die $@;
+    $admintalk->create("user.cassandane.#calendars",
+                       ['TYPE', 'CALENDAR']) || die $@;
+    $admintalk->create("user.cassandane.#addressbooks",
+                       ['TYPE', 'ADDRESSBOOK']) || die $@;
+    $admintalk->create("user.cassandane.#addressbooks.Default",
+                       ['TYPE', 'ADDRESSBOOK']) || die $@;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create('INBOX.Snoozed', "(USE (\\Snoozed))") || die $@;
+
+    xlog $self, "Append message into INBOX";
+    my $mimeMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+
+    $imaptalk->append('INBOX', $mimeMessage) || die $@;
+
+    xlog $self, "Attempt to APPEND into prohibited (non-IMAP) mailboxes";
+    $imaptalk->append('INBOX.#jmap', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#sieve', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#calendars', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#addressbooks', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#addressbooks.Default', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.Snoozed', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Attempt to COPY into prohibited (non-IMAP) mailboxes";
+    $imaptalk->examine('INBOX');
+
+    $imaptalk->copy(1, 'INBOX.#jmap');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#sieve');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#calendars');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#addressbooks');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#addressbooks.Default');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.Snoozed');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog $self, "Reconnect with magic +DAV";
+    $imaptalk->logout();
+    $imaptalk = $self->{store}->get_client(NoLogin => 1);
+    $imaptalk->login("cassandane+dav", "secret");
+
+    # APPEND/COPY into calendar/addressbook-home-set is always prohibited
+    xlog $self, "Attempt to APPEND/COPY into calendar/addressbook-home-set";
+    $imaptalk->append('INBOX.#calendars', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->append('INBOX.#addressbooks', $mimeMessage);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->examine('INBOX');
+
+    $imaptalk->copy(1, 'INBOX.#calendars');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    $imaptalk->copy(1, 'INBOX.#addressbooks');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+}
+
+1;
