@@ -23,8 +23,9 @@ END:VTIMEZONE
 END:VCALENDAR
 EOF
 
-    my $CalendarId = $CalDAV->NewCalendar({name => 'foo', timeZone => $UTC});
-    $self->assert_not_null($CalendarId);
+    my $default_calendar = $self->default_user->calendars->default;
+    my $CalendarId = $default_calendar->id;
+    my $CalendarHref = $default_calendar->properties->{'x-href'} . "";
 
     my $now = DateTime->today();
     $now->set_time_zone('Etc/UTC');
@@ -38,7 +39,7 @@ EOF
     my $trigger="-PT5H";
 
     my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
-    my $href = "$CalendarId/$uuid.ics";
+    my $href = "$CalendarHref/$uuid.ics";
     my $card = <<EOF;
 BEGIN:VCALENDAR
 VERSION:2.0
@@ -103,7 +104,7 @@ EOF
 EOF
 
     my $res = $CalDAV->Request('PROPPATCH',
-                               "/dav/calendars/user/cassandane/". $CalendarId,
+                               $CalendarHref,
                                $xml, 'Content-Type' => 'text/xml');
 
     $now->add(days => 7);
@@ -148,7 +149,7 @@ EOF
 EOF
 
     $res = $CalDAV->Request('PROPPATCH',
-                            "/dav/calendars/user/cassandane/". $CalendarId,
+                            $CalendarHref,
                             $xml, 'Content-Type' => 'text/xml');
 
     $now->add(days => 7);

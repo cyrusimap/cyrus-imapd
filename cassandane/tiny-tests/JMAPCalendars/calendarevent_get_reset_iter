@@ -6,7 +6,6 @@ sub test_calendarevent_get_reset_iter
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog "Create events in calendar A and B, both have IMAP uid 1";
     my $res = $jmap->CallMethods([
