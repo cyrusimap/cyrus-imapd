@@ -99,6 +99,7 @@ AM_DISTCHECK_CONFIGURE_FLAGS = \
     --with-ldap
 
 BUILT_SOURCES = \
+    cassandane/Cassandane/Config/Bitfields.pm \
     lib/imapopts.c \
     lib/imapopts.h
 
@@ -499,6 +500,7 @@ EXTRA_DIST = \
 
 IMAPOPTIONS_LIBS = \
     tools/lib/Cyrus/IMAPOptions/AllowedValues.pm \
+    tools/lib/Cyrus/IMAPOptions/App/Command/bitfields.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/csource.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/cheader.pm \
     tools/lib/Cyrus/IMAPOptions/App/Command/manrst.pm \
@@ -1723,6 +1725,11 @@ lib/imapopts.h: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
 lib/imapopts.c: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
 	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl csource \
 	    --cc="$(CC)" $(CFG2HDR_FORBID_UNRELEASED) \
+	    $< > $@.NEW && mv $@.NEW $@
+
+cassandane/Cassandane/Config/Bitfields.pm: lib/imapoptions tools/imapoptions.pl $(IMAPOPTIONS_LIBS)
+	$(AM_V_at)$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(PERL) $(top_srcdir)/tools/imapoptions.pl bitfields \
 	    $< > $@.NEW && mv $@.NEW $@
 
 imap_cvt_xlist_specialuse_SOURCES = imap/mutex_fake.c imap/cvt_xlist_specialuse.c
