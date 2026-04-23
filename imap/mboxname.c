@@ -386,6 +386,9 @@ EXPORTED mbname_t *mbname_from_userid(const char *userid)
     return mbname;
 }
 
+static const char b64mbox[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
+
 EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct namespace *ns)
 {
     mbname_t *mbname = xzmalloc(sizeof(mbname_t));
@@ -410,20 +413,34 @@ EXPORTED mbname_t *mbname_from_recipient(const char *recipient, const struct nam
 
     char *plus = strchr(mbname->localpart, '+');
     if (plus) {
+        bool is_mutf7 = false;
+        char *encoded = NULL;
         char sep[2];
         sep[0] = ns->hier_sep;
         sep[1] = '\0';
-        *plus = '\0';
+        *plus++ = '\0';
 
-        /* Encode mailbox name in IMAP UTF-7 */
-        charset_t cs = charset_lookupname("utf-8");
-        char *detail =
-            charset_to_imaputf7(plus+1, strlen(plus+1), cs, ENCODING_NONE);
+        /* Is 'detail' already IMAP UTF-7 encoded? */
+        const char *shift = strchr(plus, '&');
+        if (shift) {
+            /* Is this followed by only modified Base64 and unshift? */
+            size_t len = strspn(++shift, b64mbox);
+            if (*(shift+len) == '-') {
+                is_mutf7 = true;
+            }
+        }
 
-        mbname->boxes = strarray_split(detail, sep, /*flags*/0);
+        if (!is_mutf7) {
+            /* Encode mailbox name in IMAP UTF-7 */
+            charset_t cs = charset_lookupname("utf-8");
+            plus = encoded =
+                charset_to_imaputf7(plus, strlen(plus), cs, ENCODING_NONE);
 
-        charset_free(&cs);
-        free(detail);
+            charset_free(&cs);
+        }
+
+        mbname->boxes = strarray_split(plus, sep, /*flags*/0);
+        free(encoded);
     }
     else
         mbname->boxes = strarray_new();
