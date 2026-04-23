@@ -259,4 +259,6 @@ int caldav_get_floating_events(struct caldav_db *caldavdb,
                                const mbentry_t *mbentry,
                                caldav_cb_t *cb, void *rock);
 
+int caldav_count(struct caldav_db *caldavdb, int *count);
+
 #endif /* CALDAV_DB_H */
