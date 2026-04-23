@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_plus_address_mutf7
+    ($self)
+{
+    xlog $self, "Testing behaviour of plus addressing with mUTF7 mailbox names";
+
+    # IMAPTalk will mUTF7-encode the names
+    my $ascii = "foo";
+    my $snowman = "☃";
+    my $snowman_mutf7 = "&JgM-";
+    my $ampersand = "a&b";
+    my $ampersand_encoded = "a&-b";
+
+    xlog $self, "Create folders";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($ascii)
+        or die "Cannot create $ascii: $@";
+    $imaptalk->create($snowman)
+        or die "Cannot create $snowman: $@";
+    $imaptalk->create($ampersand)
+        or die "Cannot create $ampersand: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+$ascii");
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($ascii);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    # Need to use the mUTF7-encoded mailbox name until we support SMTPUTF8
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+$snowman_mutf7");
+
+    xlog $self, "Check that the message made it";
+    $self->{store}->set_folder($snowman);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    # Can use both plain ASCII and mUTF7-encoded mailbox names
+    $self->{instance}->deliver($msgs{1}, user => "cassandane+$ampersand");
+
+    $msgs{2} = $self->{gen}->generate(subject => "Message 2");
+    $msgs{2}->set_attribute(uid => 2);
+    $self->{instance}->deliver($msgs{2},
+                               user => "cassandane+$ampersand_encoded");
+
+    xlog $self, "Check that both messages made it";
+    $self->{store}->set_folder($ampersand);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
