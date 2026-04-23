@@ -1137,8 +1137,22 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     const char *summary = icalcomponent_get_summary(comp);
     if (summary) {
         int force = !!strchr(summary, '\n'); // force encoding if embedded LF
+        size_t limit = 1024, len = strlen(summary);
+        struct buf buf = BUF_INITIALIZER;
 
-        mimehdr = charset_encode_mimeheader(summary, 0, force);
+        /* Limit the subject to the first 1k chars of the SUMMARY.
+         * Otherwise, if the SUMMARY is huge, we could end up with more
+         * than 1000 header lines and we will fail to find the
+         * Content-Disposition header, and therefore have no resource URI.
+         */
+        if (len > limit) {
+            buf_setcstr(&buf, summary);
+            buf_truncate_utf8(&buf, 1024);
+            summary = buf_base(&buf);
+            len = buf_len(&buf);
+        }
+        mimehdr = charset_encode_mimeheader(summary, len, force);
+        buf_free(&buf);
 
         /*  trim trailing WS (LF will break our MIME message header) */
         char *end = mimehdr + strlen(mimehdr) - 1;
