@@ -20,6 +20,9 @@
 #include "util.h"
 #include "xcal.h"
 
+#define JSCAL_MAJOR_VERSION 2
+#define JSCAL_MINOR_VERSION 0
+
 // ---------------
 
 #define myicalcomponent_foreach_component(comp, comp_kind, subcomp, iter)      \
@@ -3281,6 +3284,23 @@ static bool is_utcdatetime(json_t *jval)
     return is_valid;
 }
 
+static bool is_supported_version(json_t *jversion)
+{
+    const char *s = json_string_value(jversion);
+    if (!s) return false;
+
+    uint32_t major;
+    const char *p;
+    if (parseuint32(s, &p, &major) < 0) return false;
+    if (*p++ != '.') return false;
+
+    uint32_t minor;
+    if (parseuint32(p, &p, &minor) < 0) return false;
+    if (*p != '\0') return false;
+
+    return major == JSCAL_MAJOR_VERSION;
+}
+
 static bool is_vendorext_key(const char *key)
 {
     // TODO this check could be more thoroughly
@@ -4369,6 +4389,9 @@ static void validate_entry(jscal_cfg_t *cfg,
         else if (!strcmp("updated", key)) {
             if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
         }
+        else if (!strcmp("version", key)) {
+            if (!is_supported_version(jval)) jmap_parser_invalid(parser, key);
+        }
         else if (!strcmp("virtualLocations", key)) {
             if (!json_is_null(jval)) {
                 jmap_parser_push(parser, key);
@@ -4545,6 +4568,9 @@ static void validate_group(jscal_cfg_t *cfg,
         else if (!strcmp("updated", key)) {
             if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
         }
+        else if (!strcmp("version", key)) {
+            if (!is_supported_version(jval)) jmap_parser_invalid(parser, key);
+        }
         // Extension properties
         else if (!strcmp("iCalendar", key)) {
             jmap_parser_push(parser, key);
@@ -4558,6 +4584,11 @@ static void validate_group(jscal_cfg_t *cfg,
 
     if (!json_object_get(jgroup, "entries"))
         jmap_parser_invalid(parser, "entries");
+
+    if (ctx->cfg.no_quirk && !json_object_get(jgroup, "version")) {
+        // We don't support version 1.0, aka RFC 8984.
+        jmap_parser_invalid(parser, "version");
+    }
 }
 
 static void group_to_ical(jscal_cfg_t *cfg,
@@ -6447,6 +6478,11 @@ EXPORTED json_t *jscal_from_ical(jscal_cfg_t *cfg,
 
     // Combine components with same UID and kind.
     ptrarray_t complists = ical_comps_by_uid(myical);
+
+    // Set version.
+    buf_printf(&buf, "%d.%d", JSCAL_MAJOR_VERSION, JSCAL_MINOR_VERSION);
+    json_object_set_new(jgroup, "version", json_string(buf_cstring(&buf)));
+    buf_reset(&buf);
 
     // Convert entries.
     json_t *jentries = json_array();
