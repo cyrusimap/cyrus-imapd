@@ -338,7 +338,7 @@ done:
 
 /*
  * begin_handling: handle requests on a single connection.
- * returns non-zero if requested to stop handling new connections (SIGHUP)
+ * returns non-zero if requested to stop handling new connections (SIGHUP) or protocol error
  */
 #define MAXREQUEST 1024         /* XXX  is this reasonable? */
 
@@ -425,6 +425,9 @@ static int begin_handling(void)
             else
                 prot_printf(map_out, SIZE_T_FMT ":PERM %s,",
                             5+strlen(error_message(r)), error_message(r));
+            /* Malformed netstring: do not re-parse leftover bytes as new requests. */
+            if (r == IMAP_PROTOCOL_ERROR)
+                return 1;
             break;
         }
     }
