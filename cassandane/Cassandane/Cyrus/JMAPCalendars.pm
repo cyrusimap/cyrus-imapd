@@ -401,6 +401,12 @@ sub assert_normalized_event_equals
     my ($self, $a, $b) = @_;
     my $copyA = dclone($a);
     my $copyB = dclone($b);
+
+    # Only compare property names and values,
+    # regardless of version.
+    delete($copyA->{version});
+    delete($copyB->{version});
+
     normalize_event($copyA);
     normalize_event($copyB);
     return $self->assert_deep_equals($copyA, $copyB);

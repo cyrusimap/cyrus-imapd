@@ -3391,6 +3391,7 @@ static json_t *ical_to_jsevent(jmap_req_t *req, icalcomponent *ical,
         if (!jgroup) return NULL;
         json_t *jevent = json_incref(
             json_array_get(json_object_get(jgroup, "entries"), 0));
+        json_object_set(jevent, "version", json_object_get(jgroup, "version"));
         json_decref(jgroup);
         return jevent;
     }
@@ -3407,6 +3408,10 @@ static json_t *ical_to_jsevents(jmap_req_t *req, icalcomponent *ical,
         json_t *jgroup = jscal_from_ical(NULL, ical);
         if (!jgroup) return NULL;
         json_t *jentries = json_incref(json_object_get(jgroup, "entries"));
+        for (size_t i = 0; i < json_array_size(jentries); i++) {
+            json_object_set(json_array_get(jentries, i),
+                    "version", json_object_get(jgroup, "version"));
+        }
         json_decref(jgroup);
         return jentries;
     }
