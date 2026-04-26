@@ -1,4 +1,6 @@
 #!/usr/bin/perl -c
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
 
 # Package to handle Cyrus Header files
 
@@ -219,12 +221,6 @@ sub parse_header {
 }
 
 =back
-
-=head1 AUTHOR AND COPYRIGHT
-
-Bron Gondwana <brong@fastmail.fm> - Copyright 2008 FastMail
-
-Licenced under the same terms as Cyrus IMAPd.
 
 =cut
 

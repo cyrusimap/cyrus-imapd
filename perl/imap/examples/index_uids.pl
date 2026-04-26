@@ -68,9 +68,8 @@ while (my $r = $index->next_record) {
     printf "$r->{Uid}\@$r->{Modseq} $r->{MessageGuid} $r->{CID} $r->{Size} (@flags)\n";
   }
   if ($Opts{c}) {
-    $cache->offset($r->{CacheOffset});
-    my $r = $cache->next_record();
-    print $cache->print_record($r);
+    my $crec = $cache->next_record($r);
+    print $cache->print_record($crec);
     print "------------------------------------------------\n";
   }
 }

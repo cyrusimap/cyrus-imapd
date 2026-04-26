@@ -1,4 +1,7 @@
 #!/usr/bin/perl -c
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+
 package Cyrus::IndexFile;
 
 use strict;
@@ -2373,12 +2376,6 @@ sub tv_nsec {
   return $Self->{header}{MinorVersion} < 20 ? 0
                                             : $time % 1_000_000_000;
 }
-
-=item AUTHOR AND COPYRIGHT
-
-Bron Gondwana <brong@fastmailteam.com> - Copyright 2018 FastMail
-
-Licenced under the same terms as Cyrus IMAPd.
 
 =cut
 

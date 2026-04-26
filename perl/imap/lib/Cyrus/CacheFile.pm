@@ -1,4 +1,6 @@
 #!/usr/bin/perl -c
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
 
 package Cyrus::CacheFile;
 
@@ -62,8 +64,8 @@ sub new {
   my $buf;
   # XXX - check for success!
   sysread($handle, $buf, 4);
-  my $version = unpack('N', $buf);
-  my $Self = bless { version => $version, handle => $handle, offset => 4 }, ref($class) || $class;
+  my $generation = unpack('N', $buf);
+  my $Self = bless { version => 0, generation => $generation, handle => $handle, offset => 4 }, ref($class) || $class;
   return $Self;
 }
 
@@ -86,7 +88,13 @@ sub new_file {
 }
 
 sub next_record {
-  my $Self = shift;
+  my ($Self, $index_record) = @_;
+
+  if ($index_record) {
+    $Self->offset($index_record->{CacheOffset});
+    $Self->{version} = $index_record->{CacheVersion};
+  }
+
   my $buf;
 
   my @record;
@@ -161,52 +169,70 @@ sub print_record {
     my $str = substr($record->[2], 0, $record->[0]);
     if ($rnum == 3) { # section
       my @items = unpack('N*', $str);
-      $str = parse_section(0, \@items);
+      $str = "\n" . $Self->parse_section(0, \@items);
     }
     print "$NAMES[$rnum]: $str\n";
   }
 }
 
 sub parse_section {
+  my $Self = shift;
   my $part = shift;
   my $items = shift;
+  my $depth = shift || 4;
+  my $pad = (' ' x ($depth * 2));
+
   my $num_parts = shift @$items;
-  if ($num_parts == 0) {
-    return "$part:()";
-  }
-  my $ret = "$part:(" . parse_item($items);
-  my $n = 1;
+  return '' unless $num_parts;
+  my $ret = "$pad$part:(" . scalar(@$items) . "\n";
+  my $n = 0;
   while ($n < $num_parts) {
     my $subpart = $part ? "$part.$n" : $n;
-    $ret .= " " . parse_item($items);
+    $ret .= "$pad $subpart: " . $Self->parse_item($items) . "\n";
     $n++;
   }
+  $ret .= "$pad)\n";
   $n = 1;
-  $ret .= ")";
   while ($n < $num_parts) {
     my $subpart = $part ? "$part.$n" : $n;
-    $ret .= " " . parse_section($subpart, $items);
+    $ret .= $Self->parse_section($subpart, $items, $depth) . "\n";
     $n++;
   }
   return $ret;
 }
 
 sub parse_item {
+  my $Self = shift;
   my $items = shift;
   my $header_offset = shift @$items;
   my $header_size = shift @$items;
   my $content_offset = shift @$items;
   my $content_size = shift @$items;
   my $encoding = shift @$items;
-  return "($header_offset:$header_size $content_offset:$content_size $encoding)";
+  my $length = ($encoding >> 16);
+  $encoding &= 0xff;
+  my $charset = $length;
+  if ($Self->{version} >= 4) {
+    if ($length) {
+      my $str = pack('N*', @$items);
+      $charset = substr($str, 0, $length, '');
+      $charset =~ s/\0+$//;
+      @$items = unpack('N*', $str);
+    }
+  }
+  my $sha1 = '';
+  if ($Self->{version} >= 5) {
+    $sha1 = unpack('h*', pack('N*', splice(@$items, 0, 5)));
+  }
+  my $decode_size = 0;
+  if ($Self->{version} >= 8) {
+    $decode_size = shift @$items;
+  }
+  my $content_lines = 0;
+  if ($Self->{version} >= 9) {
+    $content_lines = shift @$items;
+  }
+  return "($header_offset:$header_size $content_offset:$content_size $encoding/$charset/$sha1)";
 }
-
-=head1 AUTHOR AND COPYRIGHT
-
-Bron Gondwana <brong@fastmail.fm> - Copyright 2008 FastMail
-
-Licenced under the same terms as Cyrus IMAPd.
-
-=cut
 
 1;

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+
 # Module to handle backups.  By moving all the logic here I can more
 
 # easily support running backups from multiple different sources, and

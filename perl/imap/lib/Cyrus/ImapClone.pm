@@ -439,12 +439,6 @@ sub _splituser {
 }
 
 =back
-=head1 AUTHOR AND COPYRIGHT
-
-Bron Gondwana <brong@fastmail.fm> - Copyright 2017 FastMail
-
-Licenced under the same terms as Cyrus IMAPd.
-
 =cut
 
 1;
