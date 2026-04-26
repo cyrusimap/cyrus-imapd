@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, lmtpd returns a failure code when the incoming message
-will cause the user's mailbox to exceed its quota.  By default, the
-failure won't occur until the mailbox is already over quota. 
+If enabled, lmtpd returns a failure code when the incoming message will
+cause the user's mailbox to exceed its quota.  By default, the failure
+won't occur until the mailbox is already over quota.

@@ -3,9 +3,8 @@ Type: STRING
 Default-Value: *
 Last-Modified: 2.4.0
 
-A wildmat pattern specifying which mailbox hierarchies should be
-treated as newsgroups.  Only mailboxes matching the wildmat will
-accept and/or serve articles via NNTP.  If not set, a default
-wildmat of "\*" (ALL shared mailboxes) will be used.  If the
-*newsprefix* option is also set, the default wildmat will be
-translated to "<newsprefix>.\*" 
+A wildmat pattern specifying which mailbox hierarchies should be treated as
+newsgroups.  Only mailboxes matching the wildmat will accept and/or serve
+articles via NNTP.  If not set, a default wildmat of "\*" (ALL shared
+mailboxes) will be used.  If the *newsprefix* option is also set, the
+default wildmat will be translated to "<newsprefix>.\*"

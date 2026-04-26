@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Notifyd(8) method to use for "EVENT" notifications which are based on
-the :rfc:`5423`.  If not set, "EVENT" notifications are disabled. 
+Notifyd(8) method to use for "EVENT" notifications which are based on the
+:rfc:`5423`.  If not set, "EVENT" notifications are disabled.

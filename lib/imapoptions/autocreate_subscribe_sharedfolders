@@ -3,7 +3,8 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-A list of shared folders (bulletin boards), separated by "|", that the users get
-automatically subscribed to, after their INBOX is created. The shared folder must
-have been created and the user must have the required permissions to get subscribed
-to it. Otherwise, subscribing to the shared folder fails. 
+A list of shared folders (bulletin boards), separated by "|", that the
+users get automatically subscribed to, after their INBOX is created.  The
+shared folder must have been created and the user must have the required
+permissions to get subscribed to it.  Otherwise, subscribing to the shared
+folder fails.

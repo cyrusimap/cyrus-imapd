@@ -4,5 +4,5 @@ Default-Value: NULL
 Last-Modified: 3.0.0
 
 IPv4, IPv6 address or hostname to bind for client connections when
-**client_bind** is enabled.  If not set (the default),
-servername will be used. 
+**client_bind** is enabled.  If not set (the default), servername will be
+used.

@@ -3,16 +3,15 @@ Type: BYTESIZE
 Default-Value: -1
 Last-Modified: 3.8.0
 
-If set to a value of zero or higher, users have their INBOX folders
-created upon a successful login event or upon *lmtpd(8)*
-message delivery if *autocreate_post* is enabled, provided their
-INBOX did not yet already exist.
+If set to a value of zero or higher, users have their INBOX folders created
+upon a successful login event or upon *lmtpd(8)* message delivery if
+*autocreate_post* is enabled, provided their INBOX did not yet already
+exist.
 
-The user's quota is set to the value if it is greater than zero,
-otherwise the user has unlimited quota.
+The user's quota is set to the value if it is greater than zero, otherwise
+the user has unlimited quota.
 
-Note that quota has kibibyte granularity.  Values specified here will
-be truncated to the nearest whole kibibyte.
+Note that quota has kibibyte granularity.  Values specified here will be
+truncated to the nearest whole kibibyte.
 
-For backward compatibility, if no unit is specified, kibibytes is
-assumed. 
+For backward compatibility, if no unit is specified, kibibytes is assumed.

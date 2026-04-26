@@ -3,10 +3,8 @@ Type: DURATION
 Default-Value: 1s
 Last-Modified: 3.1.8
 
-Minimum interval between replication runs in rolling replication
-mode. If a replication run takes longer than this time, we repeat
-immediately.  Prefix with a channel name to only apply for that
-channel.
+Minimum interval between replication runs in rolling replication mode. If a
+replication run takes longer than this time, we repeat immediately.  Prefix
+with a channel name to only apply for that channel.
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

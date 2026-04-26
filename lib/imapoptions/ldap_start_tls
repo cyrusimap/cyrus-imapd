@@ -4,4 +4,4 @@ Default-Value: 0
 Last-Modified: 2.3.17
 
 Use transport layer security for ldap:// using STARTTLS. Do not use
-ldaps:// in 'ldap_uri' with this option enabled. 
+ldaps:// in 'ldap_uri' with this option enabled.

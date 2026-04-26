@@ -4,7 +4,7 @@ Default-Value: 0
 Last-Modified: 2.3.17
 
 Set to true to allow proxyd to issue referrals to clients that support it
-when answering the STATUS command.  This is disabled by default since
-some clients issue many STATUS commands in a row, and do not cache the
+when answering the STATUS command.  This is disabled by default since some
+clients issue many STATUS commands in a row, and do not cache the
 connections that these referrals would cause, thus resulting in a higher
-authentication load on the respective backend server. 
+authentication load on the respective backend server.

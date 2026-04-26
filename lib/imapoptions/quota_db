@@ -4,4 +4,4 @@ Allowed-Values: flat skiplist sql quotalegacy twom twoskip
 Default-Value: quotalegacy
 Last-Modified: 3.13.1
 
-The cyrusdb backend to use for quotas. 
+The cyrusdb backend to use for quotas.

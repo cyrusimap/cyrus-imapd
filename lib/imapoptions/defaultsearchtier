@@ -3,10 +3,10 @@ Type: STRING
 Default-Value:
 Last-Modified: 3.0.0
 
-Name of the default tier that messages will be indexed to. Search
-indexes can be organized in tiers to allow index storage in different
-directories and physical media. See the man page of squatter for
-details. The default search tier also requires the definition
-of an according *searchtierpartition-name* entry.
+Name of the default tier that messages will be indexed to. Search indexes
+can be organized in tiers to allow index storage in different directories
+and physical media. See the man page of squatter for details. The default
+search tier also requires the definition of an according
+*searchtierpartition-name* entry.
 
-This option MUST be specified for xapian search. 
+This option MUST be specified for xapian search.

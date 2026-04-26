@@ -3,7 +3,6 @@ Type: INT
 Default-Value: 0
 Last-Modified: 2.5.0
 
-Maximum RSS item synopsis length.  If non-zero, httpd will display
-no more than the first *rss_maxsynopsis* characters of an
-item's synopsis.  If set to 0, the entire synopsis will be
-displayed (the default). 
+Maximum RSS item synopsis length.  If non-zero, httpd will display no more
+than the first *rss_maxsynopsis* characters of an item's synopsis.  If set
+to 0, the entire synopsis will be displayed (the default).

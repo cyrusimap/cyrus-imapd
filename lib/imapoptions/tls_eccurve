@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: prime256v1
 Last-Modified: 2.5.0
 
-The elliptic curve used for ECDHE. Default is NIST Suite B prime256.
-See 'openssl ecparam -list_curves' for possible values. 
+The elliptic curve used for ECDHE. Default is NIST Suite B prime256.  See
+'openssl ecparam -list_curves' for possible values.

@@ -4,4 +4,4 @@ Allowed-Values: none squat xapian
 Default-Value: none
 Last-Modified: 3.1.2
 
-The indexing engine used to speed up searching. 
+The indexing engine used to speed up searching.

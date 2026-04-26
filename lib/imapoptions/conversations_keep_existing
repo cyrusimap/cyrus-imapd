@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.3.0
 
-During conversations cleanup, don't clean up if there are still existing emails
-with one of the mentioned CIDs. 
+During conversations cleanup, don't clean up if there are still existing
+emails with one of the mentioned CIDs.

@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 256
 Last-Modified: 2.3.17
 
-Maximum SSF (security strength factor) that the server will allow a
-client to negotiate. 
+Maximum SSF (security strength factor) that the server will allow a client
+to negotiate.

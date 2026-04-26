@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.6.0
 
-If enabled, any user with the admin ACL on a mailbox implicitly
-gets the ability to write to that mailbox as well. 
+If enabled, any user with the admin ACL on a mailbox implicitly gets the
+ability to write to that mailbox as well.

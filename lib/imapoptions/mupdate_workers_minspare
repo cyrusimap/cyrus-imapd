@@ -3,5 +3,4 @@ Type: INT
 Default-Value: 2
 Last-Modified: 2.3.17
 
-The minimum number of idle mupdate worker threads. 
-
+The minimum number of idle mupdate worker threads.

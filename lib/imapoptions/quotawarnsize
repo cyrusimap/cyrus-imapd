@@ -3,12 +3,11 @@ Type: BYTESIZE
 Default-Value: 0
 Last-Modified: 3.8.0
 
-The maximum amount of free space at which to give a quota warning
-(if this value is 0, or if the quota is smaller than this
-amount, then warnings are always given).
+The maximum amount of free space at which to give a quota warning (if this
+value is 0, or if the quota is smaller than this amount, then warnings are
+always given).
 
-Note that quota has kibibyte granularity.  Values specified here will
-be truncated to the nearest whole kibibyte.
+Note that quota has kibibyte granularity.  Values specified here will be
+truncated to the nearest whole kibibyte.
 
-For backward compatibility, if no unit is specified, kibibytes is
-assumed. 
+For backward compatibility, if no unit is specified, kibibytes is assumed.

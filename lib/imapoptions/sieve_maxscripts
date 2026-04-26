@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 5
 Last-Modified: 2.3.17
 
-Maximum number of sieve scripts any user may have, enforced at
-submission by timsieved(8). 
+Maximum number of sieve scripts any user may have, enforced at submission
+by timsieved(8).

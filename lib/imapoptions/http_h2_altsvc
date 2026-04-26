@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 3.6.0
 
 If set, HTTP/2 (over TLS) will be advertised as being available on the
-specified [host]:port. 
+specified [host]:port.

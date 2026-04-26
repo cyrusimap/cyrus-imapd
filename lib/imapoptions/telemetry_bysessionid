@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.0.0
 
-If true, log by sessionid instead of PID for telemetry. 
-
+If true, log by sessionid instead of PID for telemetry.

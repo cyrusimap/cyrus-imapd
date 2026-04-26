@@ -6,4 +6,4 @@ Last-Modified: 3.8.0
 The maximum byte length of an ATTACH property value when managed attachment
 URIs get rewritten to BINARY during iTIP processing.  Any attachment that
 exceeds this byte size keeps its managed attachment URI as ATTACH value. A
-zero size limit causes attachments of any size be rewritten as BINARY. 
+zero size limit causes attachments of any size be rewritten as BINARY.

@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 3.1.1
 
-The name of the per-message annotation, if any, to store message
-previews. 
+The name of the per-message annotation, if any, to store message previews.

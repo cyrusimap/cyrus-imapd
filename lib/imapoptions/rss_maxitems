@@ -3,7 +3,6 @@ Type: INT
 Default-Value: 0
 Last-Modified: 2.5.0
 
-Maximum number of items to display in an RSS channel.  If non-zero,
-httpd will display no more than the *rss_maxitems* most recent
-items.  If set to 0, all available items will be displayed (the
-default). 
+Maximum number of items to display in an RSS channel.  If non-zero, httpd
+will display no more than the *rss_maxitems* most recent items.  If set to
+0, all available items will be displayed (the default).

@@ -5,32 +5,31 @@ Last-Modified: 2.5.0
 
 File containing external (third-party) annotation definitions.
 
-Each line of the file specifies the properties of an annotation and
-has the following form:
+Each line of the file specifies the properties of an annotation and has the
+following form:
 
-    *name*, *scope*, *attrib-type*, *proxy-type*,
-    *attrib-names*, *acl*
+    *name*, *scope*, *attrib-type*, *proxy-type*, *attrib-names*, *acl*
 
 *name*
-    is the hierarchical name as in :rfc:`5257` or :rfc:`5464` (in the latter case,
-    without the leading **/shared** or **/private**).  For example,
-    /vendor/acme/blurdybloop.
+    is the hierarchical name as in :rfc:`5257` or :rfc:`5464` (in the
+    latter case, without the leading **/shared** or **/private**).  For
+    example, /vendor/acme/blurdybloop.
 
 *scope*
-    specifies whether the annotation is for the **server**, a
-    **mailbox**, or a **message**.
+    specifies whether the annotation is for the **server**, a **mailbox**,
+    or a **message**.
 
 *attrib-type*
-        specifies the attribute data type, which is used only to check the
-        string value passed by clients when setting annotations.  The
-        *attrib-type* is one of:
+    specifies the attribute data type, which is used only to check the
+    string value passed by clients when setting annotations.  The
+    *attrib-type* is one of:
 
     **string**
         any value is accepted.
 
     **content-type**
-        this obsolete data type, which was useful for early drafts of the standard,
-        is accepted but silently translated to **string**.
+        this obsolete data type, which was useful for early drafts of the
+        standard, is accepted but silently translated to **string**.
 
     **boolean**
         only the strings "true" or "false" are accepted.  Checking is
@@ -42,29 +41,27 @@ has the following form:
     **uint**
         non-negative integers are accepted.
 
-
 *proxy-type*
-    specifies whether this attribute is for the **backend** or
-    **proxy** servers or both (**proxy_and_backend**)
+    specifies whether this attribute is for the **backend** or **proxy**
+    servers or both (**proxy_and_backend**)
 
 *attrib-names*
-    is the space-separated list of available attributes for the
-    annotation. Possible attribute names are **value.shared**,
-    **value.priv**, and **value** (which permits both **value.priv**
-    and **value.shared**).  The attribute names **size**,
-    **size.shared**, and **size.priv** are accepted but ignored; these
-    attributes are automatically provided by the server if the corresponding
-    **value** attribute is specified.  Some obsolete attributes, which were
-    defined early drafts of the standard, are accepted and ignored with a
-    warning.
+    is the space-separated list of available attributes for the annotation.
+    Possible attribute names are **value.shared**, **value.priv**, and
+    **value** (which permits both **value.priv** and **value.shared**).
+    The attribute names **size**, **size.shared**, and **size.priv** are
+    accepted but ignored; these attributes are automatically provided by
+    the server if the corresponding **value** attribute is specified.  Some
+    obsolete attributes, which were defined early drafts of the standard,
+    are accepted and ignored with a warning.
 
 *extra-permissions*
-    is the extra ACL permission bits required for setting this annotation, in
-    standard IMAP ACL permission bit string format.  Note that this is
-    in addition to the permission bits specified in :rfc:`5257` and :rfc:`5464`,
-    so leaving this field empty is harmless.  Note also that there is no way
-    to specify that an annotation can only be set by an admin user; in
-    particular the **a** permission bit does not achieve this.
+    is the extra ACL permission bits required for setting this annotation,
+    in standard IMAP ACL permission bit string format.  Note that this is
+    in addition to the permission bits specified in :rfc:`5257` and
+    :rfc:`5464`, so leaving this field empty is harmless.  Note also that
+    there is no way to specify that an annotation can only be set by an
+    admin user; in particular the **a** permission bit does not achieve
+    this.
 
-    Blank lines and lines beginning with \`\`#'' are ignored.
-
+Blank lines and lines beginning with \`\`#'' are ignored.

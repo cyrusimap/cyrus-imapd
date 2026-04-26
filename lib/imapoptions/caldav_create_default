@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.0.0
 
-Create the 'Default' calendar if it doesn't already exist. 
-
+Create the 'Default' calendar if it doesn't already exist.

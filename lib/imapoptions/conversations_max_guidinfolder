@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 10
 Last-Modified: 3.3.0
 
-maximum records with the same guid in the same folder. You can't do this via JMAP,
-but could via IMAP.  The default of 10 should be heaps normally! 
+maximum records with the same guid in the same folder. You can't do this
+via JMAP, but could via IMAP.  The default of 10 should be heaps normally!

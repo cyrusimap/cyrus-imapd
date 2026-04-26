@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-Set to true to disable the use of mailbox-referrals on the
-proxy servers. 
+Set to true to disable the use of mailbox-referrals on the proxy servers.

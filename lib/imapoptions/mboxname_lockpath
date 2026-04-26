@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.4.0
 
-Path to mailbox name lock files (default $conf/lock) 
-
+Path to mailbox name lock files (default $conf/lock)

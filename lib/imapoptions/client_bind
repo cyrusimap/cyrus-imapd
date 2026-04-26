@@ -5,8 +5,8 @@ Last-Modified: 3.0.0
 
 If enabled, a specific IP will be bound when performing a client
 connection.  **client_bind_name** is used if it is set, otherwise
-**servername** is used.  This is useful on multi-homed servers where
-Cyrus should not use other services' interfaces.
+**servername** is used.  This is useful on multi-homed servers where Cyrus
+should not use other services' interfaces.
 
 If not enabled (the default), no bind will be performed.  Client
-connections will use an IP chosen by the operating system. 
+connections will use an IP chosen by the operating system.

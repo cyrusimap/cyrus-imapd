@@ -4,4 +4,4 @@ Allowed-Values: unix pts krb5 mboxgroups
 Default-Value: unix
 Last-Modified: 3.12.0
 
-The authorization mechanism to use. 
+The authorization mechanism to use.

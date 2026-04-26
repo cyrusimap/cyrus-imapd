@@ -3,5 +3,4 @@ Type: INT
 Default-Value: 3905
 Last-Modified: 2.3.17
 
-The port of the mupdate server for the Cyrus Murder. 
-
+The port of the mupdate server for the Cyrus Murder.

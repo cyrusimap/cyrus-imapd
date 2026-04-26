@@ -3,6 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-Allow clients to store values for entries which are not
-defined either by Cyrus or in the annotations_definitions
-file. 
+Allow clients to store values for entries which are not defined either by
+Cyrus or in the annotations_definitions file.

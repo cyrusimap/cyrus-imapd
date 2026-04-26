@@ -3,8 +3,8 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.1.8
 
-Allow access to deleted and expunged data in LIST and SELECT commands.
-If enabled, use the LIST selection option "vendor.cmu-include-deleted"
-to include deleted mailboxes in the LIST result. For SELECT, use the
-"VENDOR.CMU-INCLUDE-EXPUNGED" parameter to include expunged messages
-in the SELECT result. 
+Allow access to deleted and expunged data in LIST and SELECT commands.  If
+enabled, use the LIST selection option "vendor.cmu-include-deleted" to
+include deleted mailboxes in the LIST result. For SELECT, use the
+"VENDOR.CMU-INCLUDE-EXPUNGED" parameter to include expunged messages in the
+SELECT result.

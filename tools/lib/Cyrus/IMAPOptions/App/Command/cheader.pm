@@ -39,13 +39,13 @@ sub execute
     $self->header();
 
     print "enum imapopt {\n";
-    print "  IMAPOPT_ZERO = 0,\n";
+    print "    IMAPOPT_ZERO = 0,\n";
     $imapoptions->iterate(\&_print_option);
-    print "  IMAPOPT_LAST\n";
+    print "    IMAPOPT_LAST\n";
     print "};\n\n";
 
     print "enum enum_value {\n";
-    print "  IMAP_ENUM_ZERO = 0,\n";
+    print "    IMAP_ENUM_ZERO = 0,\n";
     $imapoptions->iterate(sub { $self->_print_enum_defs(@_) });
     print "};\n";
 
@@ -78,15 +78,15 @@ sub header
     #include <stdint.h>
 
     enum opttype {
-    OPT_BYTESIZE,
-    OPT_DURATION,
-    OPT_BITFIELD,
-    OPT_STRINGLIST,
-    OPT_ENUM,
-    OPT_SWITCH,
-    OPT_INT,
-    OPT_STRING,
-    OPT_NOTOPT
+        OPT_BYTESIZE,
+        OPT_DURATION,
+        OPT_BITFIELD,
+        OPT_STRINGLIST,
+        OPT_ENUM,
+        OPT_SWITCH,
+        OPT_INT,
+        OPT_STRING,
+        OPT_NOTOPT
     };
 
     END_HEADER
@@ -142,7 +142,7 @@ sub _print_option
 
     return if $option->for_documentation_only;
 
-    print '  ' . $option->c_name . ",\n";
+    print '    ' . $option->c_name . ",\n";
 }
 
 sub _print_enum_defs
@@ -154,7 +154,7 @@ sub _print_enum_defs
     foreach my $pair ($option->c_enum_defs) {
         my ($name, $init) = @$pair;
 
-        print '  ' . $name;
+        print '    ' . $name;
         print ' = ' . $init if defined $init;
         print ",\n";
     }

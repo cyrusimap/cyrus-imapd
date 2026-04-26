@@ -11,5 +11,5 @@ If not specified, and no compile-time value was set, then whatever
 definitions libical finds will be used.
 
 If you are providing a Time Zone Data Distribution Service (i.e. you have
-"tzdist" listed in *httpmodules*), then this configuration option
-or a compile time value MUST be specified. 
+"tzdist" listed in *httpmodules*), then this configuration option or a
+compile time value MUST be specified.

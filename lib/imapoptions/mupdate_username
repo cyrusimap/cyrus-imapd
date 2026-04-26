@@ -1,7 +1,7 @@
 Name: mupdate_username
 Type: STRING
-Default-Value: 
+Default-Value:
 Last-Modified: 2.3.17
 
-The SASL username (Authorization Name) to use when authenticating to
-the mupdate server. 
+The SASL username (Authorization Name) to use when authenticating to the
+mupdate server.

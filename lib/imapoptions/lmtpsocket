@@ -4,4 +4,4 @@ Default-Value: {configdirectory}/socket/lmtp
 Last-Modified: 2.3.17
 
 Unix domain socket that lmtpd listens on, used by deliver(8). This should
-match the path specified in cyrus.conf(5). 
+match the path specified in cyrus.conf(5).

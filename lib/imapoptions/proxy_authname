@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: proxy
 Last-Modified: 2.3.17
 
-The authentication name to use when authenticating to a backend server
-in the Cyrus Murder. 
+The authentication name to use when authenticating to a backend server in
+the Cyrus Murder.

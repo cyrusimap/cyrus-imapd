@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, lmtpd will look for Sieve scripts in user's home
-directories: ~user/.sieve. 
+If enabled, lmtpd will look for Sieve scripts in user's home directories:
+~user/.sieve.

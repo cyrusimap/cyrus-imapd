@@ -1,9 +1,9 @@
 Name: loginrealms
 Type: STRING
-Default-Value: 
+Default-Value:
 Last-Modified: 2.3.17
 
 The list of remote realms whose users may authenticate using cross-realm
 authentication identifiers.  Separate each realm name by a space.  (A
-cross-realm identity is considered any identity returned by SASL
-with an "@" in it.). 
+cross-realm identity is considered any identity returned by SASL with an
+"@" in it.).

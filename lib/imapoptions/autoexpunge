@@ -3,5 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.1.7
 
-If set to yes, then all \Deleted messages will be automatically expunged whenever
-an index is closed, whether CLOSE, UNSELECT, SELECT or on disconnect. 
+If set to yes, then all \Deleted messages will be automatically expunged
+whenever an index is closed, whether CLOSE, UNSELECT, SELECT or on
+disconnect.

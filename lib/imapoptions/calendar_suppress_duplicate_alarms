@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.12.0
 
-Suppress duplicate calendar alarms in calalarmd. If this is set,
-then at most one alarm notification is sent for any given alarm
-action, point in time and calendar event. 
+Suppress duplicate calendar alarms in calalarmd. If this is set, then at
+most one alarm notification is sent for any given alarm action, point in
+time and calendar event.

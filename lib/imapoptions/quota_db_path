@@ -3,6 +3,6 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-The absolute path for the quota database (if you choose a single-file
-quota DB type - or the base path if you choose quotalegacy).  If
-not specified will be configdirectory/quotas.db or configdirectory/quota/ 
+The absolute path for the quota database (if you choose a single-file quota
+DB type - or the base path if you choose quotalegacy).  If not specified
+will be configdirectory/quotas.db or configdirectory/quota/

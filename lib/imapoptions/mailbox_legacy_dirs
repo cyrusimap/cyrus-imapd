@@ -3,5 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.6.0
 
-If enabled, new mailboxes without parents will be created with legacy paths.
-sub mailboxes of users will still inherit the parent legacy setting. 
+If enabled, new mailboxes without parents will be created with legacy
+paths.  sub mailboxes of users will still inherit the parent legacy
+setting.

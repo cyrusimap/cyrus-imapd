@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-Bind DN for the connection to the LDAP server (simple bind).
-Do not use for anonymous simple binds. 
+Bind DN for the connection to the LDAP server (simple bind).  Do not use
+for anonymous simple binds.

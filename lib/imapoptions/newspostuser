@@ -3,14 +3,11 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Userid used to deliver usenet articles to newsgroup folders
-(usually via lmtp2nntp).  For example, if set to "post", email sent
-to "post+comp.mail.imap" would be delivered to the "comp.mail.imap"
-folder.
+Userid used to deliver usenet articles to newsgroup folders (usually via
+lmtp2nntp).  For example, if set to "post", email sent to
+"post+comp.mail.imap" would be delivered to the "comp.mail.imap" folder.
 
-
-When set, the Cyrus NNTP server will add the header(s) specified in
-the **newsaddheaders** option to each incoming usenet article.
-The added header(s) will contain email delivery addresses
-corresponding to each relevant newsgroup.  If not set, no headers
-are added to usenet articles. 
+When set, the Cyrus NNTP server will add the header(s) specified in the
+**newsaddheaders** option to each incoming usenet article.  The added
+header(s) will contain email delivery addresses corresponding to each
+relevant newsgroup.  If not set, no headers are added to usenet articles.

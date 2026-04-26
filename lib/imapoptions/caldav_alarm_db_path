@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 3.12.0
 
 Path to the caldav_alarm database file - defaults to
-$confdir/caldav_alarm.sqlite3 if not set 
+$confdir/caldav_alarm.sqlite3 if not set

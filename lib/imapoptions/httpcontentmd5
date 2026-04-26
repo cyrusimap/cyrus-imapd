@@ -3,8 +3,7 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-If enabled, HTTP responses will include a Content-MD5 header for
-the purpose of providing an end-to-end message integrity check
-(MIC) of the payload body.  Note that enabling this option will
-use additional CPU to generate the MD5 digest, which may be ignored
-by clients anyways. 
+If enabled, HTTP responses will include a Content-MD5 header for the
+purpose of providing an end-to-end message integrity check (MIC) of the
+payload body.  Note that enabling this option will use additional CPU to
+generate the MD5 digest, which may be ignored by clients anyways.

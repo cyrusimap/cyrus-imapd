@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-Allow access to subfolders of INBOX via POP3 by using
-userid+subfolder syntax as the authentication/authorization id. 
+Allow access to subfolders of INBOX via POP3 by using userid+subfolder
+syntax as the authentication/authorization id.

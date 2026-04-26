@@ -5,7 +5,7 @@ Last-Modified: 2.3.17
 
 Allow use of the POP3 APOP authentication command.
 
-Note that this command requires that SASL is compiled with APOP
-support, that the plaintext passwords are available in a SASL auxprop
-backend (e.g., sasldb), and that the system can provide enough entropy
-(e.g., from /dev/urandom) to create a challenge in the banner. 
+Note that this command requires that SASL is compiled with APOP support,
+that the plaintext passwords are available in a SASL auxprop backend (e.g.,
+sasldb), and that the system can provide enough entropy (e.g., from
+/dev/urandom) to create a challenge in the banner.

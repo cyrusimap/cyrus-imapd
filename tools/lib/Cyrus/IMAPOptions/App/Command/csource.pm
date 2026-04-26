@@ -101,10 +101,10 @@ sub _print_option
                '"' . $option->name . '"',
                '0',
                'OPT_' . $option->type,
-               $option->c_last_modified,
           ), ",\n";
     print '    ';
     print join(', ',
+               $option->c_last_modified,
                $option->c_deprecated_since,
                $option->c_replaced_by,
           ), ",\n";
@@ -126,7 +126,7 @@ sub _print_option
     print "    {";
     foreach my $pair ($option->c_allowed_values) {
         my ($v, $e) = @$pair;
-        print " { \"$v\" , $e },\n     ";
+        print " { \"$v\", $e },\n     ";
     }
     print " { NULL, IMAP_ENUM_ZERO } } },\n";
 }

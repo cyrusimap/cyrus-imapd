@@ -4,5 +4,5 @@ Default-Value: 0
 Last-Modified: 3.3.0
 
 If conversations it enabled and quotaroot is a user folder, use the
-conversations quota counts, which count multiple copies of exactly the
-same message (by GUID) as only one. 
+conversations quota counts, which count multiple copies of exactly the same
+message (by GUID) as only one.

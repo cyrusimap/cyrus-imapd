@@ -3,12 +3,10 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, uses an improved directory hashing scheme which hashes
-on the entire username instead of using just the first letter as
-the hash.  This changes hash algorithm used for quota and user
-directories and if *hashimapspool* is enabled, the entire mail
-spool.
+If enabled, uses an improved directory hashing scheme which hashes on the
+entire username instead of using just the first letter as the hash.  This
+changes hash algorithm used for quota and user directories and if
+*hashimapspool* is enabled, the entire mail spool.
 
-Note that this option CANNOT be changed on a live system.  The
-server must be quiesced and then the directories moved with the
-**rehash** utility. 
+Note that this option CANNOT be changed on a live system.  The server must
+be quiesced and then the directories moved with the **rehash** utility.

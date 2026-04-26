@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.6.0
 
-Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15)
-rather than rejecting them as errors. 
+Accept invalid RRULEs (e.g. FREQ=WEEKLY;BYMONTHDAY=15) rather than
+rejecting them as errors.

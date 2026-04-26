@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.3.17
 
-If enabled, the partitions will also be hashed, in addition to the
-hashing done on configuration directories.  This is recommended if
-one partition has a very bushy mailbox tree. 
+If enabled, the partitions will also be hashed, in addition to the hashing
+done on configuration directories.  This is recommended if one partition
+has a very bushy mailbox tree.

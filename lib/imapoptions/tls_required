@@ -4,4 +4,4 @@ Default-Value: 0
 Last-Modified: 3.0.0
 
 If enabled, require a TLS/SSL encryption layer to be negotiated
-prior to ANY authentication mechanisms being advertised or allowed. 
+prior to ANY authentication mechanisms being advertised or allowed.

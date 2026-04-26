@@ -7,10 +7,12 @@ Last-Modified: 2.3.17
 The server information to display in the greeting and capability
 responses. Information is displayed as follows:
 
-    "off" = no server information in the greeting or capabilities
+*off*
+    no server information in the greeting or capabilities
 
-    "min" = *servername* in the greeting; no server information in the capabilities
+*min*
+    *servername* in the greeting; no server information in the capabilities
 
-    "on" = *servername* and product version in the greeting;
-    product version in the capabilities
-
+*on*
+    *servername* and product version in the greeting; product version in
+    the capabilities

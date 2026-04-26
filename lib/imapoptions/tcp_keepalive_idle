@@ -3,8 +3,7 @@ Type: DURATION
 Default-Value: 0
 Last-Modified: 3.1.8
 
-How long a connection must be idle before keepalive probes are sent
-(0 == system default).
+How long a connection must be idle before keepalive probes are sent (0 ==
+system default).
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

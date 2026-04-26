@@ -5,9 +5,9 @@ Last-Modified: 3.3.0
 
 If enabled, failure to bind a port during startup is treated as a fatal
 error, causing master to shut down immediately.  The default is to keep
-running, with the affected service disabled until the next SIGHUP causes
-it to retry.
+running, with the affected service disabled until the next SIGHUP causes it
+to retry.
 
-Note that this only applies during startup.  New services that fail to
-come up in response to a reconfig+SIGHUP will just be logged and disabled
-like the default behaviour, without causing master to exit. 
+Note that this only applies during startup.  New services that fail to come
+up in response to a reconfig+SIGHUP will just be logged and disabled like
+the default behaviour, without causing master to exit.

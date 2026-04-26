@@ -5,5 +5,4 @@ Last-Modified: 3.1.8
 
 How long a search can take before timing out.
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

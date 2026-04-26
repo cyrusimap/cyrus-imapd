@@ -3,10 +3,9 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-The partition name used by default for new mailboxes.  If not
-specified, the partition with the most free space will be used for
-new mailboxes.
+The partition name used by default for new mailboxes.  If not specified,
+the partition with the most free space will be used for new mailboxes.
 
-Note that the partition specified by this option must also be
-specified as *partition-name*, where you substitute 'name'
-for the alphanumeric string you set *defaultpartition* to. 
+Note that the partition specified by this option must also be specified as
+*partition-name*, where you substitute 'name' for the alphanumeric string
+you set *defaultpartition* to.

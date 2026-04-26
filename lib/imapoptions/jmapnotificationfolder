@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: #jmapnotification
 Last-Modified: 3.3.0
 
-The name of the folder for JMAP notifications. 
-
+The name of the folder for JMAP notifications.

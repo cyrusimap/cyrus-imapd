@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 2.3.16
 
-When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
-do the final 524 conversion to get a n AFS style name (using '.' instead
-of '/', and using short names. 
+When using the AFSKRB ptloader module with Kerberos 5 canonicalization, do
+the final 524 conversion to get a n AFS style name (using '.' instead of
+'/', and using short names.

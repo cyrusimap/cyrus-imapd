@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 3.1.8
 
-If enabled, support the JMAP vacation extension. 
-
+If enabled, support the JMAP vacation extension.

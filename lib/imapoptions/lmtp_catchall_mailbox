@@ -3,6 +3,6 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-Mail sent to mailboxes which do not exist, will be delivered to
-this user.  NOTE: This must be an existing local user name with an
-INBOX, NOT an email address! 
+Mail sent to mailboxes which do not exist, will be delivered to this user.
+NOTE: This must be an existing local user name with an INBOX, NOT an email
+address!

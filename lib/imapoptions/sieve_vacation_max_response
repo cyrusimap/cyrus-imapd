@@ -3,8 +3,7 @@ Type: DURATION
 Default-Value: 90d
 Last-Modified: 3.1.8
 
-Maximum time interval between consecutive vacation responses, per :rfc:`6131`.
-The default is 90 days.  The minimum is 7 days.
+Maximum time interval between consecutive vacation responses, per
+:rfc:`6131`.  The default is 90 days.  The minimum is 7 days.
 
-For backward compatibility, if no unit is specified, seconds is
-assumed. 
+For backward compatibility, if no unit is specified, seconds is assumed.

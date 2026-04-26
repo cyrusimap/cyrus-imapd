@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 1
 Last-Modified: 2.3.17
 
-If enabled, the server responds to an ID command with a parameter
-list containing: version, vendor, support-url, os, os-version,
-command, arguments, environment.  Otherwise the server returns NIL. 
+If enabled, the server responds to an ID command with a parameter list
+containing: version, vendor, support-url, os, os-version, command,
+arguments, environment.  Otherwise the server returns NIL.

@@ -3,5 +3,5 @@ Type: STRING
 Default-Value: (member=%D)
 Last-Modified: 2.3.17
 
-Specify a filter for "ldap_member_method: filter".
-See ldap_filter for more options. 
+Specify a filter for "ldap_member_method: filter".  See ldap_filter for
+more options.

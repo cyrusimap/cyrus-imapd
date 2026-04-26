@@ -4,4 +4,5 @@ Allowed-Values: flat skiplist twom twoskip
 Default-Value: twoskip
 Last-Modified: 3.13.1
 
-The cyrusdb backend to use for the search latest indexed uid state.  Xapian only. 
+The cyrusdb backend to use for the search latest indexed uid state.  Xapian
+only.

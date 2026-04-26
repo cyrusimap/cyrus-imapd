@@ -3,5 +3,4 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-Should cyrus output I/O log entries. 
-
+Should cyrus output I/O log entries.

@@ -4,7 +4,7 @@ Default-Value: \\Archive \\Drafts \\Important \\Junk \\Sent \\Scheduled
  \\Snooze \\Trash
 Last-Modified: 3.1.7
 
-Whitespace separated list of special-use attributes
-to protect the mailboxes for.  If set, don't allow
-mailboxes with these special use attributes to be deleted
-or renamed to have a different parent. Default is the built-in list
+Whitespace separated list of special-use attributes to protect the
+mailboxes for.  If set, don't allow mailboxes with these special use
+attributes to be deleted or renamed to have a different parent. Default is
+the built-in list

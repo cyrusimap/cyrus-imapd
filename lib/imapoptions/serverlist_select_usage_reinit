@@ -3,5 +3,5 @@ Type: INT
 Default-Value: 0
 Last-Modified: 2.5.0
 
-For a given session, number of **operations** (e.g. backend selection)
-for which backend usage data are cached. 
+For a given session, number of **operations** (e.g. backend selection) for
+which backend usage data are cached.

@@ -3,5 +3,4 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.5.0
 
-File containing the client certificate. 
-
+File containing the client certificate.

@@ -3,5 +3,5 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 3.1.9
 
-If enabled, support non-standard JMAP extensions.  If not enabled,
-only IETF standard JMAP functionality is supported. 
+If enabled, support non-standard JMAP extensions.  If not enabled, only
+IETF standard JMAP functionality is supported.
