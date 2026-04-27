@@ -161,8 +161,6 @@ sub _print_option
     print ".. imapdconf:: $name\n\n";
     print _rst_heading($name);
 
-    print ".. startblob $name\n\n";
-
     print "Default: $dv\n\n";
 
     if ($option->has_documentation) {
@@ -191,8 +189,6 @@ sub _print_option
                          $option->allowed_values->value_alias_strings;
         print "\n\n";
     }
-
-    print ".. endblob $name\n\n";
 }
 
 1;
