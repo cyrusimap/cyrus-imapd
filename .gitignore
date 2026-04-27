@@ -159,6 +159,7 @@ lib/cron-parse.c
 lib/cron-parse.h
 lib/imapopts.c
 lib/imapopts.h
+lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc
 libcyrus_imap.pc
