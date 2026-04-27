@@ -106,10 +106,11 @@ BUILT_SOURCES = \
 CLEANFILES = \
     tools/mkimap \
     tools/rehash \
-    imap/css3_color_array.h \
     lib/chartable.c \
+    lib/htmlchar.h \
     lib/imapopts.c \
     lib/imapopts.h \
+    imap/css3_color_array.h \
     imap/mailbox_header_cache.h
 
 DISTCLEANFILES = \
@@ -176,7 +177,6 @@ BUILT_SOURCES += \
     imap/mupdate_err.h \
     imap/promdata.c \
     imap/promdata.h \
-    lib/htmlchar.c \
     lib/htmlchar.h \
     imap/css3_color_array.h \
     imap/rfc822_header.c \
@@ -371,7 +371,7 @@ EXTRA_DIST = \
     lib/charset/UnicodeData.txt \
     lib/charset/unifix.txt \
     lib/charset/us-ascii.t \
-    lib/htmlchar.st \
+    lib/htmlchar.gperf \
     lib/imapoptions \
     man/arbitronsort.pl.1 \
     man/masssievec.8 \
@@ -1535,7 +1535,8 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 # Build specific *.h from *.gperf
-gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h
+gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h \
+	lib/htmlchar.h
 
 $(gperf_tables): %.h: %.gperf
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
@@ -1562,12 +1563,6 @@ imap/rfc822_header.c: imap/rfc822_header.st
 	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
 
 imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
-
-lib/htmlchar.c: lib/htmlchar.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
-
-lib/htmlchar.h: lib/htmlchar.st
 	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 endif
 
@@ -1599,7 +1594,6 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_twoskip.c \
     lib/cyrusdb_twom.c \
     lib/glob.c \
-    lib/htmlchar.c \
     lib/htmlchar.h \
     lib/imapurl.c \
     lib/imclient.c \
