@@ -6431,7 +6431,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
                         json_object_set_new(jprop, val, json_true());
                     }
-                    else {
+                    else if (convert_unknown) {
                         /* Unknown/unexpected TYPE */
                         _unmapped_param(obj, param, param_value);
                     }
