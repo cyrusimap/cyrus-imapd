@@ -55,11 +55,19 @@ EOF
     xlog $self, "Check that the event made it to calendar";
     my $events = $CalDAV->GetEvents($CalendarId);
     $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_str_equals('',
-                             $events->[0]{participants}{'foo@example.net'}{name});
-    $self->assert_str_equals('needs-action',
-                             $events->[0]{participants}{'foo@example.net'}{scheduleStatus});
+    $self->assert_cmp_deeply(superhashof({
+        uid => $uuid,
+        participants => hashbag(
+            ignore() => superhashof({
+                name => '',
+                email => 'foo@example.net',
+                participationStatus => 'needs-action',
+            }),
+            ignore() => superhashof({
+                email => 'cassandane@example.com'
+            }),
+        ),
+    }), $events->[0]);
 
 
     my $imip = <<EOF;
@@ -96,6 +104,18 @@ EOF
     xlog $self, "Check that the reply DID NOT get merged into the event";
     $events = $CalDAV->GetEvents($CalendarId);
     $self->assert_equals(1, scalar @$events);
-    $self->assert_str_equals($uuid, $events->[0]{uid});
-    $self->assert_null($events->[0]{participants}{'bar@example.net'});
+    $self->assert_cmp_deeply(superhashof({
+        uid => $uuid,
+        participants => hashbag(
+            ignore() => superhashof({
+                name => '',
+                email => 'foo@example.net',
+                participationStatus => 'needs-action',
+            }),
+            ignore() => superhashof({
+                email => 'cassandane@example.com'
+            }),
+            # There should be know participant for 'bar@example.net'
+        ),
+    }), $events->[0]);
 }
