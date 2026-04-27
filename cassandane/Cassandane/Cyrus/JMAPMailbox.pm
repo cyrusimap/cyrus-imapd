@@ -5479,4 +5479,46 @@ sub test_mailbox_set_destroy_twice
     $self->assert_str_equals("notFound", $res->[0][1]{notDestroyed}{$id}{type});
 }
 
+sub test_mailbox_set_role_sharee
+    :min_version_3_1 :NoAltNameSpace :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create a victim user and a mailbox we'll share
+    $self->{instance}->create_user('victim');
+    $admintalk->create('user.victim.target');
+    # Grant the attacker (cassandane) lrw rights -- enough for maySetKeywords
+    $admintalk->setacl('user.victim', 'cassandane', 'lr') or die;
+    $admintalk->setacl('user.victim.target', 'cassandane', 'lrw') or die;
+
+    # Find the target mailbox ID in the victim's account
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { accountId => 'victim' }, 'R1'],
+    ]);
+    my ($target) = grep { $_->{name} eq 'target' } @{$res->[0][1]{list}};
+    $self->assert_not_null($target);
+    my $targetId = $target->{id};
+
+    # Verify the target has no role to start
+    $self->assert_null($target->{role});
+
+    # As attacker, try to set role on the victim's mailbox
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            accountId => 'victim',
+            update => {
+                $targetId => { role => 'archive' },
+            },
+        }, 'R2'],
+    ]);
+
+    # We must forbid a sharee from changing the role on a shared mailbox when
+    # they have minimal rights (like maySetKeywords).
+    $self->assert_null($res->[0][1]{updated}{$targetId});
+    $self->assert_not_null($res->[0][1]{notUpdated}{$targetId});
+    $self->assert_str_equals('forbidden', $res->[0][1]{notUpdated}{$targetId}{type});
+}
+
 1;
