@@ -94,80 +94,56 @@ EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int us
 */
 EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
       bucket *ptr, *newptr;
-      bucket **prev;
 
       /*
-      ** NULL means this bucket hasn't been used yet.  We'll simply
-      ** allocate space for our new bucket and put our data there, with
-      ** the table pointing at it.
+      ** See if the current string has already been inserted, and if so,
+      ** replace its data
       */
-      if (!((table->table)[val]))
-      {
-          if(table->pool) {
-              (table->table)[val] =
-                  (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-              (table->table)[val] -> key = mpool_strdup(table->pool, key);
-          } else {
-              (table->table)[val] = (bucket *)xmalloc(sizeof(bucket));
-              (table->table)[val] -> key = xstrdup(key);
-          }
-          (table->table)[val] -> next = NULL;
-          (table->table)[val] -> data = data;
-          table->count++;
-          check_load_factor(table);
-          return (table->table)[val] -> data;
-      }
-
-      /*
-      ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, replace its data
-      */
-      for (prev = &((table->table)[val]), ptr=(table->table)[val];
+      for (ptr=(table->table)[val];
            ptr;
-           prev=&(ptr->next),ptr=ptr->next) {
-          int cmpresult = strcmp(key,ptr->key);
-          if (!cmpresult) {
+           ptr=ptr->next) {
+          if (hash == ptr->hash && !strcmp(key, ptr->key)) {
               /* Match! Replace this value and return the old */
               void *old_data;
 
               old_data = ptr->data;
               ptr -> data = data;
               return old_data;
-          } else if (cmpresult < 0) {
-              /* The new key is smaller than the current key--
-               * insert a node and return this data */
-              if(table->pool) {
-                  newptr = (bucket *)mpool_malloc(table->pool, sizeof(bucket));
-                  newptr->key = mpool_strdup(table->pool, key);
-              } else {
-                  newptr = (bucket *)xmalloc(sizeof(bucket));
-                  newptr->key = xstrdup(key);
-              }
-              newptr->data = data;
-              newptr->next = ptr;
-              *prev = newptr;
-              table->count++;
-              check_load_factor(table);
-              return data;
           }
       }
 
       /*
-      ** This key is the largest one so far.  Add it to the end
-      ** of the list (*prev should be correct)
+      ** Add new keys to the start of the list (which might be empty)
       */
+
+      /*
+      ** sizeof(bucket) is 24 on 64 bit systems, as it has to allow for padding.
+      ** whereas offsetof(...) is 20. So using it saves 4 bytes on average
+      */
+      size_t key_len = strlen(key) + 1; /* including the trailing NUL byte */
+      size_t wanted = offsetof(bucket, key) + key_len;
+
+      /* Code reviewers observed that for short keys the above calculation
+         might result in an allocation smaller than the (fully padded) struct.
+         We believe that this is all fine by the C standard, but compilers are
+         software too, and this sort of thing might trigger bugs (or false
+         positive warnings from UBSAN etc). So we play it safe: */
+      if(wanted < sizeof(bucket))
+          wanted = sizeof(bucket);
+
       if(table->pool) {
-          newptr=(bucket *)mpool_malloc(table->pool,sizeof(bucket));
-          newptr->key = mpool_strdup(table->pool,key);
+          newptr=(bucket *)mpool_malloc(table->pool,wanted);
       } else {
-          newptr=(bucket *)xmalloc(sizeof(bucket));
-          newptr->key = xstrdup(key);
+          newptr=(bucket *)xmalloc(wanted);
       }
+      memcpy(newptr->key,key,key_len);
+      newptr->hash = hash;
       newptr->data = data;
-      newptr->next = NULL;
-      *prev = newptr;
+      newptr->next = (table->table)[val];
+      (table->table)[val] = newptr;
       table->count++;
       check_load_factor(table);
       return data;
@@ -180,24 +156,21 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 
 EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
-      unsigned val;
       bucket *ptr;
 
       if (!table->size)
           return NULL;
 
-      val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
 
       if (!(table->table)[val])
             return NULL;
 
       for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
       {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
+          if (hash == ptr->hash && !strcmp(key, ptr->key))
               return ptr->data;
-          else if(cmpresult < 0) /* key < ptr->key -- we passed it */
-              return NULL;
       }
       return NULL;
 }
@@ -210,7 +183,8 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
  * since it will leak memory until you get rid of the entire hash table */
 EXPORTED void *hash_del(const char *key, hash_table *table)
 {
-      unsigned val = strhash_seeded(table->seed, key) % table->size;
+      uint32_t hash = strhash_seeded(table->seed, key);
+      unsigned val = hash % table->size;
       bucket *ptr, *last = NULL;
 
       if (!(table->table)[val])
@@ -228,8 +202,7 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
             NULL != ptr;
             last = ptr, ptr = ptr->next)
       {
-          int cmpresult = strcmp(key, ptr->key);
-          if (!cmpresult)
+          if (hash == ptr->hash && !strcmp(key, ptr->key))
           {
               void *data = ptr->data;
               if (last != NULL )
@@ -250,15 +223,10 @@ EXPORTED void *hash_del(const char *key, hash_table *table)
                   (table->table)[val] = ptr->next;
               }
               if(!table->pool) {
-                  free(ptr->key);
                   free(ptr);
               }
               table->count--;
               return data;
-          }
-          if (cmpresult < 0) {
-              /* its not here! */
-              return NULL;
           }
       }
 
@@ -298,7 +266,6 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
                   if (func)
                       func(temp->data);
                   if(!table->pool) {
-                      free(temp->key);
                       free(temp);
                   }
               }
