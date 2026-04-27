@@ -109,7 +109,8 @@ CLEANFILES = \
     imap/css3_color_array.h \
     lib/chartable.c \
     lib/imapopts.c \
-    lib/imapopts.h
+    lib/imapopts.h \
+    imap/mailbox_header_cache.h
 
 DISTCLEANFILES = \
     com_err/et/compile_et \
@@ -1077,7 +1078,6 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/quota_db.c \
     imap/rfc822_header.c \
     imap/rfc822_header.h \
-    imap/mailbox_header_cache.h \
     imap/saslclient.c \
     imap/saslclient.h \
     imap/saslserver.c \
@@ -1534,7 +1534,10 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 %_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
-imap/css3_color_array.h: imap/css3_color_array.gperf
+# Build specific *.h from *.gperf
+gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h
+
+$(gperf_tables): %.h: %.gperf
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
 # Build jmap_*_props.[ch] from jmap_*_props.gperf
@@ -1566,9 +1569,6 @@ lib/htmlchar.c: lib/htmlchar.st
 
 lib/htmlchar.h: lib/htmlchar.st
 	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
-
-imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
-	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
