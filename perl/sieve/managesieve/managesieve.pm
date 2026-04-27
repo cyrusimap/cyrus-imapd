@@ -112,7 +112,7 @@ All the callbacks are called with the following arguments
 $string = callback($which, $prompt);
 
 where I<which> is one of the strings C<"username">, C<"authname">,
-C<"getpass">, or C<"realm"> respectively, and I<prompt> is a
+C<"password">, or C<"realm"> respectively, and I<prompt> is a
 human-readable English language prompt string for the user's benefit.
 Each callback should return a string containing the required
 information.
