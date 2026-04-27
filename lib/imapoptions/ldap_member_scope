@@ -4,4 +4,4 @@ Allowed-Values: sub one base
 Default-Value: sub
 Last-Modified: 2.3.17
 
-Specify search scope for ldap_member_filter.
+Specify search scope for :imapdconf:`ldap_member_filter`.

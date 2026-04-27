@@ -4,6 +4,6 @@ Default-Value: squatter
 Last-Modified: 2.5.0
 
 If specified, the named channels are exempt from the effect of setting
-sync_log_chain:off, i.e. they are always logged to by the sync_server
-process.  This is only really useful to allow rolling search indexing on a
-replica.
+:imapdconf:`sync_log_chain: off <sync_log_chain>`, i.e. they are always
+logged to by the sync_server process.  This is only really useful to allow
+rolling search indexing on a replica.

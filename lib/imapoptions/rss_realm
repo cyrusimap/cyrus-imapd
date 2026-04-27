@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 2.5.0
 
 The realm to present for HTTP authentication of RSS feeds.  If not set (the
-default), the value of the "servername" option will be used.
+default), the value of the :imapdconf:`servername` option will be used.
