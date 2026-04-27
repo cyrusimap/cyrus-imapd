@@ -88,6 +88,8 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 
     init_internal();
 
+    if (!user || !*user) return 0;
+
     if (!denydb) denydb_open(/*create*/0);
     if (!denydb) return 0;
 
