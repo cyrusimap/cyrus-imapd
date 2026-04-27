@@ -122,6 +122,7 @@ imap/jmap_err.h
 imap/lmtp_err.c
 imap/lmtp_err.h
 imap/lmtpd
+imap/mailbox_header_cache.h
 imap/mbexamine
 imap/mbpath
 imap/mbtool
