@@ -103,6 +103,7 @@ struct partial_caldata_t {
 static int meth_options_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_cal(struct transaction_t *txn, void *params);
 static int meth_get_head_fb(struct transaction_t *txn, void *params);
+static int meth_mkcalendar(struct transaction_t *txn, void *params);
 
 static void my_caldav_init(struct buf *serverinfo);
 static int my_caldav_auth(const char *userid);
@@ -612,8 +613,8 @@ struct namespace_t namespace_calendar = {
         { &meth_get_head_cal,   &caldav_params },       /* GET          */
         { &meth_get_head_cal,   &caldav_params },       /* HEAD         */
         { &meth_lock,           &caldav_params },       /* LOCK         */
-        { &meth_mkcol,          &caldav_params },       /* MKCALENDAR   */
-        { &meth_mkcol,          &caldav_params },       /* MKCOL        */
+        { &meth_mkcalendar,     &caldav_params },       /* MKCALENDAR   */
+        { &meth_mkcalendar,     &caldav_params },       /* MKCOL        */
         { &meth_copy_move,      &caldav_params },       /* MOVE         */
         { &meth_options_cal,    &caldav_params },       /* OPTIONS      */
         { &meth_patch,          &caldav_params },       /* PATCH        */
@@ -2677,6 +2678,48 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     /* Unknown action */
     return HTTP_NO_CONTENT;
+}
+
+static int meth_mkcalendar(struct transaction_t *txn, void *params)
+{
+    int r = 0;
+
+    /* Parse the path (use our own entry to suppress lookup) */
+    txn->req_tgt.mbentry = mboxlist_entry_create();
+    r = caldav_parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
+
+    /* Make sure method is allowed (only allowed on child of home-set) */
+    if (!txn->req_tgt.collection || txn->req_tgt.resource ||
+        (txn->req_tgt.collection[0] == 'C' &&
+         txn->req_tgt.collen <= CONV_JMAPID_SIZE + 1)) {
+        txn->error.precond = CALDAV_LOCATION_OK;
+        return HTTP_FORBIDDEN;
+    }
+    else if (r) {
+        switch (r) {
+        case IMAP_MAILBOX_EXISTS:
+            txn->error.precond = DAV_RES_EXISTS;
+            break;
+                
+        case IMAP_PERMISSION_DENIED:
+            txn->error.precond = DAV_NEED_PRIVS;
+            txn->error.rights = DACL_BIND;
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf, "%s/%s/%s",
+                       txn->req_tgt.namespace->prefix, USER_COLLECTION_PREFIX,
+                       txn->req_tgt.userid);
+            txn->error.resource = buf_cstring(&txn->buf);
+            break;
+                
+        default:
+            txn->error.precond = CALDAV_LOCATION_OK;
+            break;
+        }
+
+        return HTTP_FORBIDDEN;
+    }
+
+    return meth_mkcol(txn, params);
 }
 
 /* Perform post-create MKCOL/MKCALENDAR processing */
