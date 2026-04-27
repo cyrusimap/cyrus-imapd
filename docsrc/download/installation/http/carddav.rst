@@ -7,20 +7,12 @@ CardDAV
 Configuration
 =============
 
-.. sidebar:: addressbookprefix
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob addressbookprefix
-       :end-before: endblob addressbookprefix
-
 When enabled, the CardDAV module allows Cyrus to function as a contacts server.
 This module uses a subset of the mailbox hierarchy as addressbook collections,
-the toplevel of which is specified by the ``addressbookprefix`` option. The public
-addressbook hierarchy will reside at the toplevel of the shared mailbox
-namespace. A user's personal addressbook hierarchy will be a child of their
-Inbox.
+the toplevel of which is specified by the :imapdconf:`addressbookprefix`
+option. The public addressbook hierarchy will reside at the toplevel of the
+shared mailbox namespace. A user's personal addressbook hierarchy will be a
+child of their Inbox.
 
 For example, using the default value for addressbookprefix, an
 addressbook named Default for user "murch" would reside in the mailbox named
@@ -43,14 +35,6 @@ the first time that the user authenticates to the CardDAV server. Note that the
 user MUST have an existing IMAP Inbox in order for the addressbook to be
 created.
 
-.. sidebar:: carddav_allowaddressbookadmin
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob carddav_allowaddressbookadmin
-      :end-before: endblob carddav_allowaddressbookadmin
-
 There is also a Cyrus web GUI for managing addressbook resources.
 It allows you to:
 
@@ -62,7 +46,7 @@ It allows you to:
 To delete the value of a property, click on ✎ and then submit empty new value.
 
 The Cyrus web GUI for addressbook management is disabled by default,
-but can be enabled with the "carddav_allowaddressbookadmin" option.
+but can be enabled with the :imapdconf:`carddav_allowaddressbookadmin` option.
 
 To access the Cyrus web GUI for addressbook management, point
 a web browser at ``https://<servername>/dav/addressbooks/user/<username>``

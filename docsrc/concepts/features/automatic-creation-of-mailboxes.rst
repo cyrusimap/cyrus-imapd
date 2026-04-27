@@ -47,14 +47,8 @@ Additional features of this functionality include;
 To enable the automatic creation of mailboxes, set the following options
 in :cyrusman:`imapd.conf(5)`.
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_quota
-    :end-before: endblob autocreate_quota
-
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_post
-    :end-before: endblob autocreate_post
+    * :imapdconf:`autocreate_quota`
+    * :imapdconf:`autocreate_post`
 
 Other settings in :cyrusman:`imapd.conf(5)` affecting automatic
 options.
@@ -62,58 +56,32 @@ options.
 Autocreation of mailboxes
 -------------------------
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_inbox_folders
-    :end-before: endblob autocreate_inbox_folders
+    * :imapdconf:`autocreate_inbox_folders`
 
 Automatic quota settings
 ------------------------
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_quota_messages
-    :end-before: endblob autocreate_quota_messages
-
+    * :imapdconf:`autocreate_quota_messages`
 
 Autocreation of Sieve scripts
 -----------------------------
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_sieve_folders
-    :end-before: endblob autocreate_sieve_folders
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_sieve_script
-    :end-before: endblob autocreate_sieve_script
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_sieve_script_compile
-    :end-before: endblob autocreate_sieve_script_compile
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_sieve_script_compiled
-    :end-before: endblob autocreate_sieve_script_compiled
+    * :imapdconf:`autocreate_sieve_folders`
+    * :imapdconf:`autocreate_sieve_script`
+    * :imapdconf:`autocreate_sieve_script_compile`
+    * :imapdconf:`autocreate_sieve_script_compiled`
 
 Automated folder subscriptions
 ------------------------------
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_subscribe_folders
-    :end-before: endblob autocreate_subscribe_folders
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_subscribe_sharedfolders
-    :end-before: endblob autocreate_subscribe_sharedfolders
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_subscribe_sharedfolders_all
-    :end-before: endblob autocreate_subscribe_sharedfolders_all
+    * :imapdconf:`autocreate_subscribe_folders`
+    * :imapdconf:`autocreate_subscribe_sharedfolders`
+    * :imapdconf:`autocreate_subscribe_sharedfolders_all`
 
 Autocreation of users
 ---------------------
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-    :start-after: startblob autocreate_users
-    :end-before: endblob autocreate_users
+    * :imapdconf:`autocreate_users`
 
 See :cyrusman:`imapd.conf(5)` for the full documentation of
 all options.

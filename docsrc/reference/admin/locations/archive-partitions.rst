@@ -4,17 +4,13 @@
 Archive Partitions
 ==================
 
-Archive partitions are defined by the ``archivepartition-name`` option
-in :cyrusman:`imapd.conf(5)`:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archivepartition-name
-        :end-before: endblob archivepartition-name
+Archive partitions are defined by the :imapdconf:`archivepartition-name`
+option in :cyrusman:`imapd.conf(5)`.
 
 As is the case with :ref:`metadata <imap-features-metadata-partitions>`
 partitions, however, archive partitions do not stand alone.  They are
 closely bound to :ref:`imap-admin-locations-spool` as defined by the
-accompanying ``partition-name`` directive.
+accompanying :imapdconf:`partition-name` directive.
 
 .. include:: /assets/mailspool-parts-explain.rst
 

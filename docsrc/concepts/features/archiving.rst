@@ -29,21 +29,15 @@ traditional spinning media.
 Enabling
 ========
 
-Archive operation in Cyrus is enabled via the ``archive_enabled``
-setting in :cyrusman:`imapd.conf(5)`:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archive_enabled
-        :end-before: endblob archive_enabled
+Archive operation in Cyrus is enabled via the :imapdconf:`archive_enabled`
+setting in :cyrusman:`imapd.conf(5)`.
 
 Defining
 ========
 
 The configuration suite provides directives to define these partitions:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archivepartition-name
-        :end-before: endblob archivepartition-name
+    * :imapdconf:`archivepartition-name`
 
 Controlling
 ===========
@@ -51,24 +45,16 @@ Controlling
 And to control the criteria used to manage migration of data between
 partitions:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archive_after
-        :end-before: endblob archive_after
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archive_maxsize
-        :end-before: endblob archive_maxsize
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archive_keepflagged
-        :end-before: endblob archive_keepflagged
+    * :imapdconf:`archive_after`
+    * :imapdconf:`archive_maxsize`
+    * :imapdconf:`archive_keepflagged`
 
 .. note::
 
     Further explanation is probably required for the
     ``archive_maxsize`` option.  The value is a threshold.  Messages
     larger than this threshold will be immediately put onto the archive
-    partition, rather than waiting ``archive_days`` number of days.
+    partition, rather than waiting for ``archive_after`` to pass.
     This is to keep the high speed storage available for the largest
     number of "current" messages.
 

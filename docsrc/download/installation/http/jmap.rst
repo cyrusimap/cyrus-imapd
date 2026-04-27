@@ -24,25 +24,12 @@ have already done so. If not, check the
 :ref:`JMAP developer guide <developer-jmap>` for instructions on how to do
 so manually, assuming you have the source.
 
-.. sidebar:: JMAP configuration
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob conversations
-       :end-before: endblob conversations
-
-   |
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob conversations_db
-      :end-before: endblob conversations_db
-
 Once it's compiled, JMAP needs to be enabled in :cyrusman:`imapd.conf(5)`.
 
 Enable :ref:`conversation support <imap-concepts-deployment-db-conversations>`
 
-    * In :cyrusman:`imapd.conf(5)`, set ``conversations: 1``, ``conversations_db: twoskip``
+    * In :cyrusman:`imapd.conf(5)`, set :imapdconf:`conversations: 1 <conversations>`,
+      :imapdconf:`conversations_db: twoskip <conversations_db>`
     * Create a conversations.db for each user using
       :cyrusman:`ctl_conversationsdb(8)`: ``ctl_conversationsdb -b -r``
 

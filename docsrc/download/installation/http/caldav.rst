@@ -7,20 +7,12 @@ CalDAV
 Configuration
 =============
 
-.. sidebar:: calendarprefix
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob calendarprefix
-       :end-before: endblob calendarprefix
-
 When enabled, the CalDAV module allows Cyrus to function as a calendar and
 scheduling server. This module uses a subset of the mailbox hierarchy as
-calendar collections, the toplevel of which is specified by the ``calendarprefix``
-option. The public calendar hierarchy will reside at the toplevel of the shared
-mailbox namespace. A user's personal calendar hierarchy will be a child of
-their Inbox.
+calendar collections, the toplevel of which is specified by the
+:imapdconf:`calendarprefix` option. The public calendar hierarchy will reside
+at the toplevel of the shared mailbox namespace. A user's personal calendar
+hierarchy will be a child of their Inbox.
 
 For example, using the default value for calendarprefix, a
 calendar named Default for user "murch" would reside in the mailbox named
@@ -35,18 +27,10 @@ calendar named Default for user "murch" would reside in the mailbox named
     request for the available calendar list, but Cyrus imapd can not otherwise
     prevent an IMAP client from accessing them.
 
-.. sidebar:: caldav_allowscheduling
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob caldav_allowscheduling
-       :end-before: endblob caldav_allowscheduling
-
 By default, the CalDAV module will automatically perform scheduling operations
 when a scheduling object (invite or reply) is stored on or deleted from the
 server. Support for the calendar-auto-schedule feature can be disabled with the
-``caldav_allowscheduling`` option.
+:imapdconf:`caldav_allowscheduling` option.
 
 Administration
 ==============
@@ -55,22 +39,9 @@ The CalDAV module will *automatically* create the required calendars for a user
 the first time that the user authenticates to the CalDAV server. Note that the
 user MUST have an existing IMAP Inbox in order for the calendars to be created.
 
-.. sidebar:: autocreate options
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob caldav_create_default
-      :end-before: endblob caldav_create_default
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob caldav_create_attach
-      :end-before: endblob caldav_create_attach
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob caldav_create_sched
-      :end-before: endblob caldav_create_sched
-
 Autocreate of the various calendars can be disabled with the
-"caldav_create_default/sched/attach" options, if you have an alternate
+:imapdconf:`caldav_create_default`, :imapdconf:`caldav_create_attach`, and
+:imapdconf:`caldav_create_sched` options, if you have an alternate
 mechanism to create calendars.
 
 There is also a Cyrus web GUI for managing calendar resources.
@@ -92,15 +63,8 @@ is used to calculate the freebusy state on events with floating
 times.  Public toggles the `lrw9` rights for the `anyone` user.
 
 The Cyrus web GUI for CalDAV Collection Management is disabled by
-default, but can be enabled with the "caldav_allowcalendaradmin" option.
-
-.. sidebar:: caldav_allowcalendaradmin
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-      :start-after: startblob caldav_allowcalendaradmin
-      :end-before: endblob caldav_allowcalendaradmin
+default, but can be enabled with the :imapdconf:`caldav_allowcalendaradmin`
+option.
 
 To access the Cyrus web GUI for CalDAV Collection Management, point
 a web browser at ``https://<servername>/dav/calendars/user/<username>``
@@ -344,32 +308,12 @@ advertised by the ``calendar-no-timezone`` DAV option from :rfc:`7809`).
 Configuration
 -------------
 
-.. sidebar:: zoneinfo config
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob zoneinfo_db_path
-       :end-before: endblob zoneinfo_db_path
-
-   |
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob zoneinfo_db
-       :end-before: endblob zoneinfo_db
-
-   |
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob zoneinfo_dir
-       :end-before: endblob zoneinfo_dir
-
-The TZDist module requires the ``zoneinfo_dir`` setting in :cyrusman:`imapd.conf(5)`
-to be set to the directory where your time zone data is stored.
+The TZDist module requires the :imapdconf:`zoneinfo_dir` setting to be set
+to the directory where your time zone data is stored.
 
 The data is indexed by a database whose location is specified by the
-``zoneinfo_db_path`` option, using the format specified by the ``zoneinfo_db``
-option.
+:imapdconf:`zoneinfo_db_path` option, using the format specified by the
+:imapdconf:`zoneinfo_db` option.
 
 Administration
 --------------
@@ -386,7 +330,7 @@ IMAP requires that the vendor prefix is the empty string.
 The `cyrus-timezones package <https://github.com/cyrusimap/cyrus-timezones>`_ provides
 a vzic, which sets TZID_PREFIX to the emtpy string.
 
-The steps to populate the ``zoneinfo_dir`` directory are:
+The steps to populate the :imapdconf:`zoneinfo_dir` directory are:
 
 1. Acquire and build your choice of ``vzic`` tool.
 
@@ -449,16 +393,8 @@ allows CalDAV servers to:
   participants automatically. This is not done when scheduling over email as it
   would result in too much mail traffic and extra manual overhead for the users.
 
-.. sidebar:: caldav_allowscheduling
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob caldav_allowscheduling
-       :end-before: endblob caldav_allowscheduling
-
 iSchedule is automatically enabled in Cyrus if both the CalDAV module and the
-``caldav_allowscheduling`` options are enabled in a
+:imapdconf:`caldav_allowscheduling` options are enabled in a
 :ref:`Cyrus Murder <murder>`. In this instance, Cyrus uses iSchedule to move
 scheduling messages from frontend to backend servers.
 
