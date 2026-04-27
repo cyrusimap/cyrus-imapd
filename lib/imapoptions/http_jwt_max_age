@@ -4,7 +4,7 @@ Default-Value: 0s
 Last-Modified: 3.6.0
 
 Defines the timespan in which a JSON Web Token is valid (see
-*http_jwt_key*).  The value must be zero or positive.
+:imapdconf:`http_jwt_key_dir`).  The value must be zero or positive.
 
 If non-zero, the timespan starts at the point in time specified in the
 "iat" claim of the JWS Payload and ends after the duration of this option

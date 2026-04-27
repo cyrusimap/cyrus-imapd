@@ -3,4 +3,5 @@ Type: STRING
 Default-Value: NULL
 Last-Modified: 2.3.17
 
-See ldap_member_method.
+Specify an attribute for
+:imapdconf:`ldap_member_method: attribute <ldap_member_method>`.

@@ -4,6 +4,6 @@ Default-Value: 64B
 Last-Modified: 3.8.0
 
 The maximum length of dynamically generated message previews. Previews
-stored in jmap_preview_annot take precedence.
+stored in :imapdconf:`jmap_preview_annot` take precedence.
 
 If no unit is specified, bytes is assumed.

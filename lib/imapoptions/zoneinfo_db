@@ -5,4 +5,5 @@ Default-Value: twoskip
 Last-Modified: 3.13.1
 
 The cyrusdb backend to use for zoneinfo.  This database is used by the
-"tzdist" *httpmodules*, and is managed by **ctl_zoneinfo(8)**.
+"tzdist" :imapdconf:`httpmodule <httpmodules>`, and is managed by
+**ctl_zoneinfo(8)**.

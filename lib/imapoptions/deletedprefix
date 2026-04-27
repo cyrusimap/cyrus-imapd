@@ -3,7 +3,7 @@ Type: STRING
 Default-Value: DELETED
 Last-Modified: 2.3.17
 
-With **delete_mode** set to *delayed*, the **deletedprefix** setting
-defines the prefix for the hierarchy of deleted mailboxes.
+With :imapdconf:`delete_mode` set to *delayed*, the **deletedprefix**
+setting defines the prefix for the hierarchy of deleted mailboxes.
 
 The hierarchy delimiter will be automatically appended.

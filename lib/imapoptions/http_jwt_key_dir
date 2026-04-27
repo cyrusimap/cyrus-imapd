@@ -23,5 +23,6 @@ The JSON Web Token must be the value of the HTTP "Authorization" header,
 using the "Bearer" authentication scheme. The JWS Header must include the
 "alg" and "typ" parameter. A header with any other parameter is rejected.
 The JWS Payload must include the "sub" claim with the Cyrus user identifier
-as value.  It may include the "iat" claim (see *http_jwt_max_age*).  A
-payload with any other claim is rejected.
+as value.  It may include the "iat" claim (see
+:imapdconf:`http_jwt_max_age`).  A payload with any other claim is
+rejected.

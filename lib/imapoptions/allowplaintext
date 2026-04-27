@@ -8,4 +8,5 @@ If enabled, allows the use of cleartext passwords on the wire.
 By default, the use of cleartext passwords requires a TLS/SSL encryption
 layer to be negotiated prior to any cleartext authentication mechanisms
 being advertised or allowed.  To require a TLS/SSL encryption layer to be
-negotiated prior to ANY authentication, see the *tls_required* option.
+negotiated prior to ANY authentication, see the :imapdconf:`tls_required`
+option.
