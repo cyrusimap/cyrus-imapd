@@ -6,12 +6,12 @@ For-Documentation-Only: 1
 
 The pathname where to store the xapian search indexes of *searchtier* for
 mailboxes of partition *name*. This must be configured for the
-*defaultsearchtier* and any additional search tier (see squatter for
-details).
+:imapdconf:`defaultsearchtier` and any additional search tier (see
+:cyrusman:`squatter(8)` for details).
 
-For example: if *defaultpartition* is defined as part1 and
-*defaultsearchtier* as tier1 then the configuration must contain an entry
-*tier1searchpartition-part1* that defines the path where to store this
-tier1's search index for the part1 partition.
+For example: if :imapdconf:`defaultpartition` is defined as part1 and
+:imapdconf:`defaultsearchtier` as tier1 then the configuration must contain
+an entry *tier1searchpartition-part1* that defines the path where to store
+this tier1's search index for the part1 partition.
 
 This option MUST be specified for xapian search.

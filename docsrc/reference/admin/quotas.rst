@@ -19,9 +19,7 @@ Monitor and Repair
 ==================
 
 Quotas may be monitored and repaired via the :cyrusman:`quota(8)`
-command:
-
-    * :ref:`imap-reference-manpages-systemcommands-quota`
+command.
 
 .. _imap-admin-quotas-config:
 
@@ -31,39 +29,14 @@ Controlling Quota Behavior
 How restrictive quotas will be may be tailored to the needs of different
 sites, via the use of several settings in :cyrusman:`imapd.conf(5)`:
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob lmtp_over_quota_perm_failure
-        :end-before: endblob lmtp_over_quota_perm_failure
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob lmtp_strict_quota
-        :end-before: endblob lmtp_strict_quota
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnpercent
-        :end-before: endblob quotawarnpercent
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnsize
-        :end-before: endblob quotawarnsize
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quotawarnmsg
-        :end-before: endblob quotawarnmsg
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob autocreate_quota
-        :end-before: endblob autocreate_quota
-
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob autocreate_quota_messages
-        :end-before: endblob autocreate_quota_messages
+    * :imapdconf:`lmtp_over_quota_perm_failure`
+    * :imapdconf:`lmtp_over_quota_perm_failure`
+    * :imapdconf:`lmtp_strict_quota`
+    * :imapdconf:`quotawarnpercent`
+    * :imapdconf:`quotawarnsize`
+    * :imapdconf:`quotawarnmsg`
+    * :imapdconf:`autocreate_quota`
+    * :imapdconf:`autocreate_quota_messages`
 
 .. _imap-admin-quotas-database:
 
@@ -72,16 +45,9 @@ Quota Database
 
 Quota information is stored either in a database (i.e. twoskip,
 skiplist) or in "quotalegacy" format, which is a filesystem hierarchy.
-This is controlled by the ``quota_db`` setting in
-:cyrusman:`imapd.conf(5)`.  Here's more about the pertinent settings:
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db
-        :end-before: endblob quota_db
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob quota_db_path
-        :end-before: endblob quota_db_path
+This is controlled by the :imapdconf:`quota_db` and
+:imapdconf:`quota_db_path` settings in
+:cyrusman:`imapd.conf(5)`.
 
 .. _imap-admin-quotas-convert-db:
 

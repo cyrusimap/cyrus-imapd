@@ -11,8 +11,9 @@ responses. Information is displayed as follows:
     no server information in the greeting or capabilities
 
 *min*
-    *servername* in the greeting; no server information in the capabilities
+    :imapdconf:`servername` in the greeting; no server information in the
+    capabilities
 
 *on*
-    *servername* and product version in the greeting; product version in
-    the capabilities
+    :imapdconf:`servername` and product version in the greeting; product
+    version in the capabilities
