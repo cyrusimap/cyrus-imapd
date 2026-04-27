@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailboxexists_acl_bypass
+    :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    # Create a victim user with a private folder not shared with the attacker
+    $self->{instance}->create_user('victim');
+    my $victimstore = $self->{instance}->get_service('imap')->create_store(
+        username => 'victim');
+    my $victimtalk = $victimstore->get_client();
+    $victimtalk->create('INBOX.secret-project');
+    $self->assert_str_equals('ok', $victimtalk->get_last_completion_response());
+
+    my $hitfolder = 'INBOX.oracle-hit';
+    my $missfolder = 'INBOX.oracle-miss';
+    $talk->create($hitfolder);
+    $talk->create($missfolder);
+
+    # Install a Sieve script that uses mailboxexists against another user's mailbox.
+    # In standard (non-altnamespace) mode, other users' folders appear as user.victim.*
+    $self->{instance}->install_sieve_script(<<'EOF', username => 'cassandane');
+require ["fileinto", "mailbox"];
+if mailboxexists "user.victim.secret-project" {
+    fileinto "INBOX.oracle-hit";
+} else {
+    fileinto "INBOX.oracle-miss";
+}
+EOF
+
+    # Deliver a message -- mailboxexists must not reveal the victim's folder
+    my $msg = $self->{gen}->generate(subject => "Probe");
+    $self->{instance}->deliver($msg, users => ['cassandane']);
+
+    # Without the fix the message lands in oracle-hit (the bug leaks existence).
+    # With the fix the message must land in oracle-miss.
+    $self->{store}->set_folder($missfolder);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
