@@ -80,3 +80,10 @@ json_t *json_object_get_vanew(json_t *obj, const char *key,
 
     return val;
 }
+
+json_t *json_object_steal(json_t *object, const char *key)
+{
+    json_t *jval = json_incref(json_object_get(object, key));
+    if (jval) json_object_del(object, key);
+    return jval;
+}

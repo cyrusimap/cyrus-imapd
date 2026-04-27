@@ -87,6 +87,15 @@ jmap_property_t;
 "blobId",                  JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET
 "cyrusimap.org:iCalProps", JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
 "debugBlobId",             JMAP_DEBUG_EXTENSION,     JMAP_PROP_SERVER_SET
+"cyrusimap.org:unguessableTimezones", JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+#
+# jscalendarbis spec
+"endTimeZone",             NULL, 0
+"organizerCalendarAddress", NULL, 0
+"recurrenceRule",          NULL, 0
+"version",                 NULL, 0
+# jscalendar-icalendar spec
+"iCalendar",               JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
 %%
 
 const jmap_prop_hash_table_t jmap_event_props_map = {

@@ -256,6 +256,12 @@ static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
                                    const char *desc, const char *color);
 static void end_icalendar(struct buf *buf);
 
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color);
+
+static void end_jcal(struct buf *buf);
+
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
 // clang-format off
@@ -4233,26 +4239,33 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Set SENT-BY property */
+    /* Set SENT-BY parameter */
     if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
         const char *sentby = *hdr;
         if (!strncasecmp(sentby, "mailto:", 7)) {
             sentby += 7;
         }
 
-        // XXX could use SENT-BY parameter as defined in RFC5545?
         for (comp = icalcomponent_get_first_real_component(ical);
              comp;
              comp = icalcomponent_get_next_component(ical,
                  icalcomponent_isa(comp))) {
 
+            // Use SENT-BY parameter as defined in RFC5545
+            icalproperty *orga =
+                icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+            if (orga) {
+                icalproperty_remove_parameter_by_kind(orga, ICAL_SENTBY_PARAMETER);
+                icalproperty_add_parameter(orga, icalparameter_new_sentby(sentby));
+            }
+
+            // XXX set legacy extension property until jmap_ical.c is removed
             // Remove any stale SENT-BY properties
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(sentby));
@@ -8326,4 +8339,45 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     };
 
     return meth_options(txn, oparams->parse_path);
+}
+
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color)
+{
+    icalcomponent *ical;
+    icalproperty *prop;
+    json_t *jprops;
+    char *jbuf;
+    size_t flags = JSON_PRESERVE_ORDER;
+
+    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+
+    /* Add toplevel properties */
+    ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
+    jprops = json_array();
+
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+
+        json_array_append_new(jprops, icalproperty_as_jcal_array(prop));
+    }
+    icalcomponent_free(ical);
+
+    jbuf = json_dumps(jprops, flags);
+    json_decref(jprops);
+
+    /* Begin jCal stream */
+    buf_reset(buf);
+    buf_printf(buf, "[ \"vcalendar\",\r\n%s, [\r\n", jbuf);
+    free(jbuf);
+
+    return ",";
+}
+
+static void end_jcal(struct buf *buf)
+{
+    /* End jCal stream */
+    buf_setcstr(buf, "]]\r\n");
 }

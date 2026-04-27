@@ -24,8 +24,8 @@ sub test_calendarevent_set_peruser
         freeBusyStatus => 'busy',
         # color omitted by default
         keywords => undef,
-        useDefaultAlerts => JSON::false,
-        alerts => undef,
+        # useDefaultAlerts omitted by default
+        # alerts omitted by default
     };
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -39,10 +39,11 @@ sub test_calendarevent_set_peruser
                     start => "2019-12-10T23:30:00",
                     duration => "PT1H",
                     timeZone => "Australia/Melbourne",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 5,
-                    }],
+                    },
+
                 },
             },
         }, 'R1'],
@@ -54,8 +55,11 @@ sub test_calendarevent_set_peruser
     my $eventId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($eventId);
     my $event = $res->[1][1]{list}[0];
-    delete @{$event}{qw/id uid @type/};
-    $self->assert_deep_equals($defaultPerUserProps, $event);
+    $self->assert_null($event->{alerts});
+    $self->assert_null($event->{color});
+    $self->assert_null($event->{freeBusyStatus});
+    $self->assert_null($event->{keywords});
+    $self->assert_null($event->{useDefaultAlerts});
 
     xlog "Create other user and share owner calendar";
     my $admintalk = $self->{adminstore}->get_client();
@@ -66,6 +70,7 @@ sub test_calendarevent_set_peruser
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/calendars',
         'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     xlog "Set and assert per-user properties for owner";
@@ -81,7 +86,6 @@ sub test_calendarevent_set_peruser
                 '@type' => 'Alert',
                 trigger => {
                     '@type' => 'OffsetTrigger',
-                    relativeTo => 'start',
                     offset => "-PT5M",
                 },
                 action => "email",
@@ -122,10 +126,10 @@ sub test_calendarevent_set_peruser
         keywords => {
             'ownerKeyword' => JSON::true,
         },
-        # not inherited from owner
-        freeBusyStatus => 'busy',
-        useDefaultAlerts => JSON::false,
-        alerts => undef,
+        # not inherited from owner:
+        # freeBusyStatus
+        # useDefaultAlerts
+        # alerts
     }, $event);
 
     xlog "Update and assert per-user props as other user";
@@ -143,7 +147,6 @@ sub test_calendarevent_set_peruser
                     '@type' => 'AbsoluteTrigger',
                     when => "2019-03-04T04:05:06Z",
                 },
-                action => "display",
             },
         },
     };
@@ -180,7 +183,6 @@ sub test_calendarevent_set_peruser
 
     xlog "Remove per-user props as other user";
     $otherPerUserProps = {
-        keywords => undef,
         freeBusyStatus => 'free',
         useDefaultAlerts => JSON::true,
         alerts => {
@@ -190,7 +192,6 @@ sub test_calendarevent_set_peruser
                     '@type' => 'AbsoluteTrigger',
                     when => "2019-03-04T04:05:06Z",
                 },
-                action => "display",
             },
         },
     };

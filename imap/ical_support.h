@@ -193,6 +193,8 @@ extern const char *icaltime_get_location_tzid(icaltimetype t);
 
 extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
 
+extern bool icaltimezone_is_builtin_timezone_tzid(const char *tzid);
+
 struct observance {
     const char *name;
     icaltimetype onset;
@@ -211,6 +213,8 @@ extern void icaltimezone_truncate_vtimezone_advanced(icalcomponent *vtz,
                                                      icalcomponent **eternal_dst,
                                                      icaltimetype *last_dtstart,
                                                      int ms_compatible);
+
+void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 extern int ical_categories_is_color(icalproperty *cprop);
 

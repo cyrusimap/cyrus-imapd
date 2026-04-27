@@ -8,10 +8,9 @@ sub test_calendarevent_get_recurrence
     my ($id, $ical) = $self->icalfile('recurrence');
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_not_null($event->{recurrenceRules}[0]);
-    $self->assert_str_equals("RecurrenceRule", $event->{recurrenceRules}[0]{q{@type}});
-    $self->assert_str_equals("monthly", $event->{recurrenceRules}[0]{frequency});
-    $self->assert_str_equals("gregorian", $event->{recurrenceRules}[0]{rscale});
+    $self->assert_not_null($event->{recurrenceRule});
+    $self->assert_str_equals("RecurrenceRule", $event->{recurrenceRule}{q{@type}});
+    $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
     # This assertion is a bit brittle. It depends on the libical-internal
     # sort order for BYDAY
     $self->assert_deep_equals([{
@@ -37,5 +36,5 @@ sub test_calendarevent_get_recurrence
                 '@type' => 'NDay',
                 "day" => "su",
                 "nthOfPeriod" => -3,
-            }], $event->{recurrenceRules}[0]{byDay});
+            }], $event->{recurrenceRule}{byDay});
 }

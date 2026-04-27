@@ -27,14 +27,20 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
                               int mandatory, json_t *invalid, const char *fmt,
                               void *dst);
 
-#define PATCH_NO_REMOVE   (1<<0) // only relevant for create
-#define PATCH_ALLOW_ARRAY (1<<1)
+#define PATCH_NO_REMOVE     (1<<0) // only relevant for create
+#define PATCH_ALLOW_ARRAY   (1<<1)
+#define PATCH_KEEP_EXISTING (1<<2) // only relevant for apply
 
 /* Apply patch to a deep copy of val and return the result.
  * Return NULL on error. If invalid is a JSON array, then
  * the erroneous path in patch is appended as JSON string */
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
                                       json_t *invalid, unsigned flags);
+
+/* Apply patch to object val. If invalid is a JSON array, then
+ * any erroneous path in patch is appended as JSON string */
+extern void jmap_patchobject_applym(json_t *dst, json_t *patch,
+                                    json_t *invalid, unsigned flags);
 
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
@@ -84,9 +90,10 @@ extern void jmap_parser_push_index(struct jmap_parser *parser,
                                    const char *prop, size_t index, const char *name);
 extern void jmap_parser_push_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_pop(struct jmap_parser *parser);
-extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
+extern const char* jmap_parser_path(struct jmap_parser *parser);
+extern const char* jmap_parser_path_at(struct jmap_parser *parser, const char *subpath);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
-HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path);
+extern void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_serverset(struct jmap_parser *parser, const char *prop, json_t *val);
 
 extern json_t *jmap_server_error(int r);

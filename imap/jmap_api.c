@@ -2467,10 +2467,8 @@ HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
 
 
     if (comp.property && !comp_cb(req, &comp, comp_rock, err)) {
-        struct buf buf = BUF_INITIALIZER;
         json_array_append_new(unsupported,
-                json_string(jmap_parser_path(parser, &buf)));
-        buf_free(&buf);
+                json_string(jmap_parser_path(parser)));
     }
 }
 

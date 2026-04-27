@@ -92,9 +92,9 @@ struct jmapical_ctx {
         } cyrus_msg;
         unsigned want_icalprops : 1;
         unsigned dont_guess_timezones : 1;
-        unsigned repair_broken_ical : 1;
     } from_ical;
     const strarray_t *schedule_addresses;
+    bool (*jsevent_is_origin_cb)(json_t *jsevent, const strarray_t *schedule_addresses);
 };
 
 extern struct jmapical_ctx *jmapical_context_new(jmap_req_t *req,
@@ -172,6 +172,9 @@ extern void jstimezones_free(jstimezones_t **jstzonesptr);
 /* for CalDAV content negotiation */
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
 icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
+
+/* for HTTP convert module */
+json_t *jmapical_vcalendar_to_jsgroup(icalcomponent *ical);
 
 /* Base type for JSCalendar LocalDateTime and UTCDateTime */
 
@@ -255,8 +258,6 @@ extern void jmapical_duration_as_string(const struct jmapical_duration *dur, str
 extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);
 
 extern void jmapical_remove_peruserprops(json_t *jevent);
-
-extern int jmapical_is_origin(json_t *jsevent, const strarray_t *schedule_addresses);
 
 extern const char *jmap_partid_from_ical(icalproperty *prop);
 

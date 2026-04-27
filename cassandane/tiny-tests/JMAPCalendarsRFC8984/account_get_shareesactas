@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_account_get_shareesactas
+    :min_version_3_3
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $caldav = $self->{caldav};
+    my $http = $self->{instance}->get_service("http");
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $getCapas = sub {
+        my $session = $jmap->get_client_session->client_session;
+        $self->assert_not_null($session);
+        return $session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:calendars'};
+    };
+
+    xlog "Sharees act as self";
+    my $capas = $getCapas->();
+    $self->assert_str_equals('self', $capas->{shareesActAs});
+
+    xlog "Sharees act as secretary";
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>secretary</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    $capas = $getCapas->();
+    $self->assert_str_equals('secretary', $capas->{shareesActAs});
+
+    $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:JMAP="urn:ietf:params:jmap:calendars">
+  <D:set>
+    <D:prop>
+      <JMAP:sharees-act-as>self</JMAP:sharees-act-as>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+    $caldav->Request('PROPPATCH', "/dav/calendars/user/cassandane", $xml,
+        'Content-Type' => 'text/xml');
+
+    $capas = $getCapas->();
+    $self->assert_str_equals('self', $capas->{shareesActAs});
+}

@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -124,15 +125,19 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val,
-                                        json_t *patch,
-                                        json_t *invalid,
-                                        unsigned flags)
+EXPORTED void jmap_patchobject_applym(json_t *dst,
+                                      json_t *patch,
+                                      json_t *invalid,
+                                      unsigned flags)
 {
     const char *path;
-    json_t *newval, *dst;
+    json_t *newval;
 
-    dst = json_deep_copy(val);
+    // TODO RFC 8620, Section 5.3 states:
+    // There MUST NOT be two patches in the PatchObject where the
+    // pointer of one is the prefix of the pointer of the other, e.g.,
+    // "alerts/1/offset" and "alerts".
+
     json_object_foreach(patch, path, newval) {
         /* Start traversal at root object */
         json_t *it = dst;
@@ -172,7 +177,12 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
                 r = 0;
             }
             else {
-                r = json_object_set(it, ref, newval);
+                if ((flags & PATCH_KEEP_EXISTING) && json_object_get(it, ref)) {
+                    r = 0;
+                }
+                else {
+                    r = json_object_set(it, ref, newval);
+                }
             }
 
             free(ref);
@@ -180,10 +190,25 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
 
         if (r != 0) {
             if (invalid) json_array_append_new(invalid, json_string(path));
-            json_decref(dst);
-            return NULL;
         }
     }
+}
+
+EXPORTED json_t* jmap_patchobject_apply(json_t *val,
+                                        json_t *patch,
+                                        json_t *invalid,
+                                        unsigned flags)
+{
+    json_t *dst = json_deep_copy(val);
+
+    invalid = invalid ? json_incref(invalid) : json_array();
+    size_t prev_invalid_size = json_array_size(invalid);
+    jmap_patchobject_applym(dst, patch, invalid, flags);
+    if (json_array_size(invalid) > prev_invalid_size) {
+        json_decref(dst);
+        dst = NULL;
+    }
+    json_decref(invalid);
 
     return dst;
 }
@@ -476,27 +501,41 @@ HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
     bv_clear(&parser->is_encoded, strarray_size(&parser->path));
 }
 
-HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
+HIDDEN const char* jmap_parser_path(struct jmap_parser *parser)
 {
     int i;
-    buf_reset(buf);
+    buf_reset(&parser->buf);
 
     for (i = 0; i < parser->path.count; i++) {
         const char *p = strarray_nth(&parser->path, i);
         if (!bv_isset(&parser->is_encoded, i) && jmap_pointer_needsencode(p)) {
             char *tmp = jmap_pointer_encode(p);
-            buf_appendcstr(buf, tmp);
+            buf_appendcstr(&parser->buf, tmp);
             free(tmp);
-        }
-        else {
-            buf_appendcstr(buf, p);
+        } else {
+            buf_appendcstr(&parser->buf, p);
         }
         if ((i + 1) < parser->path.count) {
-            buf_appendcstr(buf, "/");
+            buf_appendcstr(&parser->buf, "/");
         }
     }
 
-    return buf_cstring(buf);
+    return buf_cstring(&parser->buf);
+}
+
+HIDDEN const char* jmap_parser_path_at(struct jmap_parser *parser, const char *subpath)
+{
+    // Build base path.
+    const char *base = jmap_parser_path(parser);
+    size_t base_len = buf_len(&parser->buf);
+
+    if (subpath) {
+        if (*subpath != '/' && base_len && base[base_len-1] != '/')
+            buf_putc(&parser->buf, '/');
+        buf_appendcstr(&parser->buf, subpath);
+    }
+
+    return buf_cstring(&parser->buf);
 }
 
 HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
@@ -505,7 +544,7 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_push(parser, prop);
 
     json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
+            json_string(jmap_parser_path(parser)));
 
     if (prop)
         jmap_parser_pop(parser);
@@ -523,7 +562,7 @@ HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
         jmap_parser_push(parser, prop);
 
     json_object_set_new(parser->serverset,
-            jmap_parser_path(parser, &parser->buf), val);
+            jmap_parser_path(parser), val);
 
     if (prop)
         jmap_parser_pop(parser);
@@ -1519,4 +1558,3 @@ EXPORTED int jmap_is_valid_id(const char *id)
     }
     return 1;
 }
-

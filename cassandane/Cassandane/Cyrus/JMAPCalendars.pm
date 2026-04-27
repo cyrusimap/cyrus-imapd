@@ -15,7 +15,7 @@ use Storable 'dclone';
 use Cwd qw(abs_path);
 use File::Basename;
 use XML::Spice;
-use MIME::Base64 qw(encode_base64url decode_base64url);
+use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base64);
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
@@ -84,6 +84,17 @@ sub set_up
             'urn:ietf:params:jmap:calendars:preferences',
             'https://cyrusimap.org/ns/jmap/calendars',
             'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
+        ]);
+
+        $self->default_user->jmap->DefaultUsing([
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:calendars',
+            'urn:ietf:params:jmap:principals',
+            'urn:ietf:params:jmap:calendars:preferences',
+            'https://cyrusimap.org/ns/jmap/calendars',
+            'https://cyrusimap.org/ns/jmap/debug',
+            'https://cyrusimap.org/ns/jmap/jscalendarbis',
         ]);
     }
 }
@@ -131,6 +142,9 @@ sub normalize_event
     }
     if (not exists $event->{description}) {
         $event->{description} = '';
+    }
+    if (not exists $event->{duration}) {
+        $event->{duration} = 'PT0S';
     }
     if (not exists $event->{descriptionContentType}) {
         $event->{descriptionContentType} = 'text/plain';
@@ -226,34 +240,33 @@ sub normalize_event
     if (not exists $event->{replyTo}) {
         $event->{replyTo} = undef;
     }
-    if (not exists $event->{recurrenceRules}) {
-        $event->{recurrenceRules} = undef;
-    } elsif (defined $event->{recurrenceRules}) {
-        foreach my $rrule (@{$event->{recurrenceRules}}) {
-            if (not exists $rrule->{interval}) {
-                $rrule->{interval} = 1;
-            }
-            if (not exists $rrule->{firstDayOfWeek}) {
-                $rrule->{firstDayOfWeek} = 'mo';
-            }
-            if (not exists $rrule->{rscale}) {
-                $rrule->{rscale} = 'gregorian';
-            }
-            if (not exists $rrule->{skip}) {
-                $rrule->{skip} = 'omit';
-            }
-            if (not exists $rrule->{byDay}) {
-                $rrule->{byDay} = undef;
-            } elsif (defined $rrule->{byDay}) {
-                foreach my $nday (@{$rrule->{byDay}}) {
-                    if (not exists $nday->{q{@type}}) {
-                        $nday->{q{@type}} = 'NDay';
-                    }
+    if (not exists $event->{recurrenceRule}) {
+        $event->{recurrenceRule} = undef;
+    } elsif (defined $event->{recurrenceRule}) {
+        my $rrule = $event->{recurrenceRule};
+        if (not exists $rrule->{interval}) {
+            $rrule->{interval} = 1;
+        }
+        if (not exists $rrule->{firstDayOfWeek}) {
+            $rrule->{firstDayOfWeek} = 'mo';
+        }
+        if (not exists $rrule->{rscale}) {
+            $rrule->{rscale} = 'gregorian';
+        }
+        if (not exists $rrule->{skip}) {
+            $rrule->{skip} = 'omit';
+        }
+        if (not exists $rrule->{byDay}) {
+            $rrule->{byDay} = undef;
+        } elsif (defined $rrule->{byDay}) {
+            foreach my $nday (@{$rrule->{byDay}}) {
+                if (not exists $nday->{q{@type}}) {
+                    $nday->{q{@type}} = 'NDay';
                 }
             }
-            if (not exists $rrule->{q{@type}}) {
-                $rrule->{q{@type}} = 'RecurrenceRule';
-            }
+        }
+        if (not exists $rrule->{q{@type}}) {
+            $rrule->{q{@type}} = 'RecurrenceRule';
         }
     }
     if (not exists $event->{excludedRecurrenceRules}) {
@@ -306,6 +319,9 @@ sub normalize_event
                 foreach my $rel (values %{$alert->{relatedTo}}) {
                     if (not exists $rel->{q{@type}}) {
                         $rel->{q{@type}} = 'Relation';
+                    }
+                    if (not exists $rel->{relation}) {
+                        $rel->{relation} = {};
                     }
                 }
             }
@@ -385,6 +401,12 @@ sub assert_normalized_event_equals
     my ($self, $a, $b) = @_;
     my $copyA = dclone($a);
     my $copyB = dclone($b);
+
+    # Only compare property names and values,
+    # regardless of version.
+    delete($copyA->{version});
+    delete($copyB->{version});
+
     normalize_event($copyA);
     normalize_event($copyB);
     return $self->assert_deep_equals($copyA, $copyB);
@@ -547,6 +569,7 @@ sub create_user
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $caldav = $user_obj->caldav;

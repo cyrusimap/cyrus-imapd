@@ -82,6 +82,9 @@ EXPORTED void ical_support_init(void)
 #endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
     icalproperty_set_allow_empty_properties(true);
 
+    /* Instruct libical to not drop unknown IANA elements */
+    ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
+
     initialized = 1;
 }
 
@@ -200,6 +203,12 @@ icalproperty_get_datetimeperiod(icalproperty *prop)
     }
 
     return ret;
+}
+
+EXPORTED bool icaltimezone_is_builtin_timezone_tzid(const char *tzid)
+{
+    return icaltimezone_get_builtin_timezone(tzid) != NULL
+           || icaltimezone_get_builtin_timezone_from_tzid(tzid) != NULL;
 }
 
 EXPORTED icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid)
@@ -2401,6 +2410,7 @@ EXPORTED const char *icaltimezone_get_location_tzid(const icaltimezone *zone)
 {
     const char *v = icaltimezone_get_location((icaltimezone*) zone);
     if (!v) v = icaltimezone_get_tzid((icaltimezone*) zone);
+    if (!strcmpsafe(v, "UTC")) v = "Etc/UTC";
     return v;
 }
 

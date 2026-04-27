@@ -19,6 +19,7 @@ sub test_calendarsharenotification_query
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $jmap->CallMethods([
