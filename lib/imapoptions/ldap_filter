@@ -24,9 +24,9 @@ be used in the filter string:
     test@domain.tld)
 
 %D
-    user dn (use when ldap_member_method: filter)
+    user dn (use when :imapdconf:`ldap_member_method` is set to *filter*)
 
 %1-9
     domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
 
-ldap_filter is not used when ldap_sasl is enabled.
+ldap_filter is not used when :imapdconf:`ldap_sasl` is enabled.

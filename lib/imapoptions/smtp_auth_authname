@@ -4,4 +4,4 @@ Default-Value: NULL
 Last-Modified: 3.1.4
 
 The authentication name to use when authenticating to the SMTP server
-defined in smtp_host.
+defined in :imapdconf:`smtp_host`.
