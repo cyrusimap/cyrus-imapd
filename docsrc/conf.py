@@ -74,6 +74,7 @@ nitpick_ignore_regex = [
 ]
 
 extensions.append("sphinxlocal.roles.cyrusman")
+extensions.append("sphinxlocal.roles.imapdconf")
 extensions.append("sphinxlocal.builders.gitstamp")
 
 gitstamp_fmt = "%b %d %Y"
