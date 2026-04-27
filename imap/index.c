@@ -821,8 +821,24 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
                 state->highestmodseq);
 
-    /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    /* RFC 8474 / draft-ietf-mailmaint-imap-objectid-bis */
+    if (client_capa & CAPA_OBJECTIDPLUS) {
+        // ACCOUNTID_NEEDS_FIXING
+        char *accountid = mboxname_to_userid(state->mboxname);
+        if (accountid) {
+            prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Ok\r\n",
+                        state->mailboxid, accountid);
+            free(accountid);
+        }
+        else {
+            // shared mailbox - no ACCOUNTID
+            prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s)] Ok\r\n",
+                        state->mailboxid);
+        }
+    }
+    else {
+        prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    }
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -3742,6 +3758,23 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         }
 
         prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
+        sepchar = ' ';
+    }
+    if (fetchitems & FETCH_OBJECTID) {
+        char emailid[JMAP_MAX_EMAILID_SIZE];
+        char threadid[JMAP_THREADID_SIZE];
+
+        jmap_set_emailid(convstate, &record.guid,
+                         0, &record.internaldate, emailid);
+
+        prot_printf(state->out, "%cOBJECTID (EMAILID %s", sepchar, emailid);
+
+        if (record.cid) {
+            jmap_set_threadid(convstate, record.cid, threadid);
+            prot_printf(state->out, " THREADID %s", threadid);
+        }
+
+        prot_putc(')', state->out);
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {
