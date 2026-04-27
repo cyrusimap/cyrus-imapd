@@ -7,20 +7,12 @@ Default Spool location
 ----------------------
 
 The main Cyrus IMAP mail data directory structure is the spool, and its
-location is defined by ``partition-name`` entries in
+location is defined by :imapdconf:`partition-name` entries in
 :cyrusman:`imapd.conf(5)`.
 
 Additionally, on servers with more than one spool partition, that
 partition in which new user mailboxes are to be created is specified by
-the ``defaultpartition`` directive.
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition-name
-        :end-before: endblob partition-name
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob defaultpartition
-        :end-before: endblob defaultpartition
+the :imapdconf:`defaultpartition` option.
 
 .. note::
 
@@ -47,13 +39,8 @@ Metadata Partitions
 The configuration directives to do so are quite similar to
 those for data partitions:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob metapartition_files
-        :end-before: endblob metapartition_files
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob metapartition-name
-        :end-before: endblob metapartition-name
+    * :imapdconf:`metapartition_files`
+    * :imapdconf:`metapartition-name`
 
 Again, building on our examples above:
 

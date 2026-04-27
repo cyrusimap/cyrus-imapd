@@ -14,11 +14,13 @@ To use this functionality, Cyrus IMAP must have been built with the
 Setup
 =====
 
-    * Set the `prometheus_enabled` setting in :cyrusman:`imapd.conf(5)` to "yes"
-    * Add the `prometheus` module to your `httpmodules` in :cyrusman:`imapd.conf(5)`
-    * Set the `prometheus_need_auth`, `prometheus_service_update_freq`,
-      `prometheus_master_update_freq`, `prometheus_usage_update_freq`, and
-      `prometheus_stats_dir` settings in :cyrusman:`imapd.conf(5)` to taste
+    * Set :imapdconf:`prometheus_enabled` option to "yes"
+    * Add the `prometheus` module to your :imapdconf:`httpmodules`
+    * Set the :imapdconf:`prometheus_need_auth`,
+      :imapdconf:`prometheus_service_update_freq`,
+      :imapdconf:`prometheus_master_update_freq`,
+      :imapdconf:`prometheus_usage_update_freq`, and
+      :imapdconf:`prometheus_stats_dir` settings to taste
     * Add a job to run :cyrusman:`promstatsd(8)` to the DAEMON section of
       :cyrusman:`cyrus.conf(5)` (the actual daemon process)
     * Add a job to run ``promstatsd -c`` to the START section of :cyrusman:`cyrus.conf(5)`
@@ -28,29 +30,12 @@ Setup
 Configuration options
 =====================
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_enabled
-        :end-before: endblob prometheus_enabled
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_need_auth
-        :end-before: endblob prometheus_need_auth
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_service_update_freq
-        :end-before: endblob prometheus_service_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_master_update_freq
-        :end-before: endblob prometheus_master_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_usage_update_freq
-        :end-before: endblob prometheus_usage_update_freq
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob prometheus_stats_dir
-        :end-before: endblob prometheus_stats_dir
+    * :imapdconf:`prometheus_enabled`
+    * :imapdconf:`prometheus_need_auth`
+    * :imapdconf:`prometheus_service_update_freq`
+    * :imapdconf:`prometheus_master_update_freq`
+    * :imapdconf:`prometheus_usage_update_freq`
+    * :imapdconf:`prometheus_stats_dir`
 
 .. _imap-admin-monitoring-end:
 
