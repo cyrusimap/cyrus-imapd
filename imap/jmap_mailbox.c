@@ -2714,6 +2714,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             result->err = json_pack("{s:s}", "type", "forbidden");
             goto done;
         }
+        /* specialuse is an owner-scoped annotation; sharees must not set it */
+        if (args->specialuse && strcmp(req->userid, req->accountid)) {
+            mboxlist_entry_free(&mbentry);
+            result->err = json_pack("{s:s}", "type", "forbidden");
+            goto done;
+        }
         set_annots = 1;
     }
     if (args->sortorder >= 0 || args->color || args->show_as_label >= 0) {
