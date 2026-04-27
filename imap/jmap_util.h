@@ -200,6 +200,14 @@ extern void jmap_set_contactid(struct conversations_state *cstate,
                                const struct carddav_data *cdata,
                                struct buf *cid);
 
+#define JMAP_CALENDARID_PREFIX 'C'
+#define JMAP_CALENDARID_SIZE JMAP_MAILBOXID_SIZE
+
+#define JMAP_MAX_CALENDARID_SIZE MAX(JMAP_CALENDARID_SIZE, MAX_MAILBOX_NAME+1)
+
+extern void jmap_set_calendarid(struct conversations_state *cstate,
+                                const mbentry_t *mbentry, char *calid);
+
 #ifdef HAVE_ICAL
 struct jmap_caleventid {
     const char *raw; /* as requested by client */

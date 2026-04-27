@@ -632,6 +632,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
+    if (jmap_wantprop(rock->get->props, "x-compactId")) {
+        struct conversations_state cstate =
+            { .version = 2, .compact_emailids = 1 }; // force compactId
+        char compactid[JMAP_MAX_CALENDARID_SIZE];
+        jmap_set_calendarid(&cstate, mbentry, compactid);
+        json_object_set_new(obj, "x-compactId", json_string(compactid));
+    }
+    
     if (jmap_wantprop(rock->get->props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
