@@ -1373,8 +1373,12 @@ static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *) sc;
     char *intname = mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
-    int r = mboxlist_lookup(intname, NULL, NULL);
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_lookup(intname, &mbentry, NULL);
 
+    if (!r && !(cyrus_acl_myrights(sd->authstate, mbentry->acl) & ACL_LOOKUP))
+        r = IMAP_MAILBOX_NONEXISTENT;
+    mboxlist_entry_free(&mbentry);
     free(intname);
     return r ? 0 : 1; /* 0 => exists */
 }
@@ -1449,6 +1453,21 @@ static int getmetadata(void *sc, const char *extname,
     char *intname = !extname ? xstrdup("") :
         mboxname_from_externalUTF8(extname, sd->ns, sd->userid);
     int r;
+
+    /* Require lookup rights on the named mailbox before probing metadata. */
+    if (extname) {
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup(intname, &mbentry, NULL);
+        if (!r && !(cyrus_acl_myrights(sd->authstate, mbentry->acl) & ACL_LOOKUP))
+            r = IMAP_MAILBOX_NONEXISTENT;
+        mboxlist_entry_free(&mbentry);
+        if (r) {
+            *res = NULL;
+            free(intname);
+            buf_free(&attrib);
+            return 0;
+        }
+    }
 
     if (!strncmp(keyname, "/private/", 9)) {
         r = annotatemore_lookup(intname, keyname+8, sd->userid, &attrib);

@@ -6969,4 +6969,118 @@ EOF
     $self->assert_num_equals(0, $admintalk->get_response_code('exists'));
 }
 
+sub test_mailboxexists_acl_bypass
+    :min_version_3_0 :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+
+    # Create a victim user with a private folder not shared with the attacker
+    $self->{instance}->create_user('victim');
+    my $victimstore = $self->{instance}->get_service('imap')->create_store(
+        username => 'victim');
+    my $victimtalk = $victimstore->get_client();
+    $victimtalk->create('INBOX.secret-project');
+    $self->assert_str_equals('ok', $victimtalk->get_last_completion_response());
+
+    my $hitfolder = 'INBOX.oracle-hit';
+    my $missfolder = 'INBOX.oracle-miss';
+    $talk->create($hitfolder);
+    $talk->create($missfolder);
+
+    # Install a Sieve script that uses mailboxexists against another user's mailbox.
+    # In standard (non-altnamespace) mode, other users' folders appear as user.victim.*
+    $self->{instance}->install_sieve_script(<<'EOF', username => 'cassandane');
+require ["fileinto", "mailbox"];
+if mailboxexists "user.victim.secret-project" {
+    fileinto "INBOX.oracle-hit";
+} else {
+    fileinto "INBOX.oracle-miss";
+}
+EOF
+
+    # Deliver a message -- mailboxexists must not reveal the victim's folder
+    my $msg = $self->{gen}->generate(subject => "Probe");
+    $self->{instance}->deliver($msg, users => ['cassandane']);
+
+    # Without the fix the message lands in oracle-hit (the bug leaks existence).
+    # With the fix the message must land in oracle-miss.
+    $self->{store}->set_folder($missfolder);
+    $self->check_messages({ 1 => $msg }, check_guid => 0);
+}
+
+sub test_specialuse_exists_check_acl
+    :NoAltNamespace
+{
+    my ($self) = @_;
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create sharer user with two folders";
+    $self->{instance}->create_user("sharer",
+                                   subdirs => [ 'shared', 'hidden' ]);
+
+    xlog $self, "Grant the sharee lookup access to both of the sharer's folders";
+    $admintalk->setacl("user.sharer.shared", 'cassandane' => 'lrs')
+        or die "Cannot setacl user.sharer.shared: $@";
+    $admintalk->setacl("user.sharer.hidden", 'cassandane' => 'lrs')
+        or die "Cannot setacl user.sharer.hidden: $@";
+
+    xlog $self, "Sharee assigns a private special-use flag to each shared folder";
+    $talk->setmetadata("user.sharer.shared", "/private/specialuse", "\\Junk");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setmetadata("user.sharer.hidden", "/private/specialuse", "\\Sent");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "Revoke the sharee's access to the hidden folder (annotation persists)";
+    $admintalk->deleteacl("user.sharer.hidden", 'cassandane')
+        or die "Cannot deleteacl user.sharer.hidden: $@";
+
+    xlog $self, "Sharee owns a folder carrying a special-use flag (positive control)";
+    $talk->create("INBOX.archive", "(USE (\\Archive))")
+        or die "Cannot create INBOX.archive: $@";
+
+    xlog $self, "Create result folders for Sieve script";
+    my @results = qw(
+        INBOX.own-hit
+        INBOX.shared-hit
+        INBOX.hidden-hit
+    );
+    $talk->create($_) or die "Cannot create $_: $@" for @results;
+
+    xlog $self, "Install a Sieve script with specialuse_exists checks";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["fileinto", "copy", "special-use"];
+if specialuse_exists "INBOX.archive" "\\Archive" {
+    fileinto :copy "INBOX.own-hit";
+}
+if specialuse_exists "user.sharer.shared" "\\Junk" {
+    fileinto :copy "INBOX.shared-hit";
+}
+if specialuse_exists "user.sharer.hidden" "\\Sent" {
+    fileinto :copy "INBOX.hidden-hit";
+}
+keep;
+EOF
+    );
+
+    xlog $self, "Deliver a message to the sharee";
+    my $msg = $self->{gen}->generate(subject => "test");
+    $self->{instance}->deliver($msg, users => [ 'cassandane' ]);
+
+    xlog $self, "Assert specialuse_exists is gated by the lookup right";
+    my %expected = (
+        'INBOX'            => 1,  # keep
+        'INBOX.own-hit'    => 1,  # owner has lookup + own special-use
+        'INBOX.shared-hit' => 1,  # sharee has lookup + own special-use
+        'INBOX.hidden-hit' => 0,  # special-use set, but sharee lost lookup
+    );
+    foreach my $folder (sort keys %expected) {
+        $talk->select($folder);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_num_equals($expected{$folder},
+                                 $talk->get_response_code('exists'));
+    }
+}
+
 1;
