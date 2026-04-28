@@ -111,6 +111,7 @@ CLEANFILES = \
     lib/imapopts.c \
     lib/imapopts.h \
     imap/css3_color_array.h \
+    imap/rfc822_header.h \
     imap/mailbox_header_cache.h
 
 DISTCLEANFILES = \
@@ -179,7 +180,6 @@ BUILT_SOURCES += \
     imap/promdata.h \
     lib/htmlchar.h \
     imap/css3_color_array.h \
-    imap/rfc822_header.c \
     imap/rfc822_header.h \
     imap/mailbox_header_cache.h
 
@@ -365,7 +365,7 @@ EXTRA_DIST = \
     imap/mupdate_err.et \
     imap/nntp_err.et \
     imap/promdata.p \
-    imap/rfc822_header.st \
+    imap/rfc822_header.gperf \
     imap/tz_err.et \
     lib/charset/aliases.txt \
     lib/charset/UnicodeData.txt \
@@ -518,7 +518,6 @@ dist_noinst_SCRIPTS = \
     lib/mkchartable.pl \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
-    tools/compile_st.pl \
     tools/fixsearchpath.pl \
     tools/git-version.sh \
     tools/gperf-build-prop-set.pl \
@@ -1076,7 +1075,6 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/prometheus.h \
     imap/protocol.h \
     imap/quota_db.c \
-    imap/rfc822_header.c \
     imap/rfc822_header.h \
     imap/saslclient.c \
     imap/saslclient.h \
@@ -1536,7 +1534,7 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 # Build specific *.h from *.gperf
 gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h \
-	lib/htmlchar.h
+	imap/rfc822_header.h lib/htmlchar.h
 
 $(gperf_tables): %.h: %.gperf
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
@@ -1556,14 +1554,6 @@ if HAVE_XXD
 # CDPATH echoing the path change on stdout and consequently into the .h file
 %_js.h: %.js
 	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)|sed 's/unsigned char/static const char/') > $@.NEW && mv $@.NEW $@
-endif
-
-if MAINTAINER_MODE
-imap/rfc822_header.c: imap/rfc822_header.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
-
-imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
