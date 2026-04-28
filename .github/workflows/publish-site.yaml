@@ -56,6 +56,8 @@ jobs:
   # Build job
   build:
     runs-on: ubuntu-latest
+    # Need --privileged to set kernel.core_pattern
+    # In turn, need to do that for the coredump tests
     container:
       image: ghcr.io/cyrusimap/cyrus-docker:bookworm
       options: --init --privileged
@@ -68,6 +70,21 @@ jobs:
         run: git config --global --add safe.directory /__w/cyrus-imapd/cyrus-imapd
       - name: build the documentation site
         run: cyd makesite
+      # This might seem optional, but git-version.sh needs the tags:
+      - name: fetch upstream release tags
+        if: ${{ github.repository != 'cyrusimap/cyrus-imapd' }}
+        run: |
+          git remote add upstream https://github.com/cyrusimap/cyrus-imapd.git
+          # n.b. --no-tags does not mean "no tags", it means "no automatic tag
+          # following".  we're explicitly fetching the tags we want, we do not
+          # need every other tag that's reachable from them
+          git fetch --no-tags upstream 'refs/tags/cyrus-imapd-*:refs/tags/cyrus-imapd-*'
+      - name: override kernel core pattern
+        run: sudo sysctl -w kernel.core_pattern=core.%p
+      - name: build and generate a coverage report
+        run: cyd coverage
+      - name: move it into the site
+        run: mv $CYRUS_CLONE_ROOT/coverage /tmp/CYRUS_DOCS_BUILD_DIR/cyrus-site/
       - name: Upload static files as artifact
         id: deployment
         uses: actions/upload-pages-artifact@v3

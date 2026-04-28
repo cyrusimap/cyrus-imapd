@@ -47,7 +47,9 @@ config.sub
 configure
 conftest*
 com_err/et/compile_et
+coverage.info
 coverage.xml
+coverage/
 cscope.out
 cunit/CUnitAutomated-Results.xml
 cunit/reports
