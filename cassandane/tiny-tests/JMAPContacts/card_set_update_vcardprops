@@ -1,0 +1,92 @@
+#!perl
+use Cassandane::Tiny;
+
+use Text::VCardFast;
+
+sub test_card_set_update_vcardprops
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+
+    xlog $self, "Create card";
+    my $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name    => { full => 'Test1' },
+                    emails  => {
+                        email1 => {
+                            address     => 'test1@example.com',
+                        }
+                    },
+                    onlineServices => {
+                        os1 => {
+                            uri       => 'https://test1.example.com',
+                            user      => 'test',
+                        },
+                    },
+                }
+            }
+        },
+        'R1'
+    ]]);
+    my $cardId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($cardId);
+    my $xhref = $res->[0][1]{created}{1}{'cyrusimap.org:href'};
+    $self->assert_not_null($xhref);
+
+    my $update_card = {
+        'emails/email1/vCardParams' => { "x-foo" => "Bar" },
+        'onlineServices/os1/vCardName' => "impp",
+        vCardProps => [ [ "x-foo", {}, "unknown", "Hello" ] ],
+    };
+
+    xlog $self, "Update card with vCard elements without Cyrus extension";
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:contacts',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            update => { $cardId => $update_card }
+        },
+        'R1'
+    ]], $using);
+
+    my @wantInvalidProps = sort (
+        'vCardProps', 'emails/email1/vCardParams', 'onlineServices/os1/vCardName'
+    );
+    $self->assert_not_null($res->[0][1]{notUpdated}{$cardId});
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$cardId}{type});
+    my @gotInvalidProps = sort @{$res->[0][1]{notUpdated}{$cardId}{properties}};
+    $self->assert_deep_equals(\@wantInvalidProps, \@gotInvalidProps);
+
+    xlog $self, "Update card with vCard elements with Cyrus extension";
+    push @$using, 'https://cyrusimap.org/ns/jmap/contacts';
+
+    $res = $jmap->CallMethods([ [
+        'ContactCard/set',
+        {
+            update => { $cardId => $update_card }
+        },
+        'R1'
+    ]], $using);
+    $self->assert(exists $res->[0][1]{updated}{$cardId});
+
+    xlog $self, "Assert that vCard properties were ignored";
+    $res = $carddav->Request('GET', $xhref);
+    my $vcard = Text::VCardFast::vcard2hash($res->{content});
+    $self->assert_not_null($vcard->{objects}[0]{properties}{fn});
+    $self->assert_null($vcard->{objects}[0]{properties}{'x-foo'});
+    $self->assert_null($vcard->{objects}[0]{properties}{email}[0]{params}{'x-foo'});
+    $self->assert_null($vcard->{objects}[0]{properties}{impp});
+}
+
