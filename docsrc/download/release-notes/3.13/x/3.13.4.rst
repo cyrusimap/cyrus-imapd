@@ -1,7 +1,7 @@
 :tocdepth: 3
 
 ===========================
-Cyrus IMAP 3.13.3 Tag Notes
+Cyrus IMAP 3.13.4 Tag Notes
 ===========================
 
 Unavailable for download as this is a development branch only.
@@ -16,7 +16,7 @@ Access is via git.
     generally be **large breaking changes** occurring between releases in this
     series.
 
-.. _relnotes-3.13.3-changes:
+.. _relnotes-3.13.4-changes:
 
 Major changes since the 3.12 series
 ===================================
@@ -61,6 +61,17 @@ Major changes since the 3.12 series
 * Cyrus now requires libxapian >= 2.0.0, or a recent 1.5.x bleeding edge
   snapshot.
 * JMAP methods now use perfect hashes (gperf) for increased performance.
+* The code in ``lib/imapoptions`` has been refactored for easier maintenance and
+  extensibility.
+* Building Cyrus now requires ``perl`` >= 5.28.0 and the modules ``Moo`` and
+  ``App::Cmd``. These are usually available as OS packages - e.g. on
+  Debian-based systems as ``libmoo-perl`` and ``libapp-cmd-perl``
+* The :cyrusman:`mkimap(8)` and :cyrusman:`rehash(8)` tools are now installed
+  to ``--sbindir`` by ``make install``.
+* Content for the documentation site (cyrusimap.org) can now be
+  written in Markdown.  Building the documentation, therefore, will
+  now require ``myst_parser``, which is what makes this possible.
+
 
 Updates to default configuration
 ================================
@@ -78,7 +89,7 @@ Removed features
 * The experimental zeroskip database backend has been removed.
 * Support for the obscure "objectstore" feature has been removed.
 * The long deprecated ``installsieve`` program has been removed. Please use
-  ``sieveshell`` instead.
+  :cyrusman:`sieveshell(1)` instead.
 * The following options are now deprecated:
 
  * caringo_hostname
