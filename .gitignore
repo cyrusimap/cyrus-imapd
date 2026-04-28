@@ -140,6 +140,7 @@ imap/promstatsd
 imap/quota
 imap/reconstruct
 imap/relocate_by_id
+imap/rfc822_header.h
 imap/search_test
 imap/smmapd
 imap/squatter
