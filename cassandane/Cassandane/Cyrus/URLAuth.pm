@@ -168,25 +168,25 @@ sub test_perms
 
     $self->{instance}->create_user('other');
 
-  my $msg = $self->make_message("Message A");
+    my $msg = $self->make_message("Message A");
 
-  my $url;
-  my %handlers = (
-    genurlauth => sub {
-      my ($cmd, $params) = @_;
-      $url = $params->[0];
-    }
-  );
+    my $url;
+    my %handlers = (
+        genurlauth => sub {
+            my ($cmd, $params) = @_;
+            $url = $params->[0];
+        }
+    );
 
     my $svc = $self->{instance}->get_service('imap');
     my $store = $svc->create_store(username => 'other');
     my $talk = $store->get_client();
 
-  $talk->_imap_cmd(
-    'genurlauth', 0, \%handlers,
-    "imap://other\@127.0.0.1/Other%20Users%2fcassandane/;uid=1;urlauth=user+other",
-    "INTERNAL",
-  );
+    $talk->_imap_cmd(
+        'genurlauth', 0, \%handlers,
+        "imap://other\@127.0.0.1/Other%20Users%2fcassandane/;uid=1;urlauth=user+other",
+        "INTERNAL",
+    );
 
     # 'other' has no rights on cassandane's mailbox, so the server must refuse
     # to mint a URLAUTH token for it. Without this check, cmd_urlfetch would
