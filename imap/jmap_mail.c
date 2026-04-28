@@ -758,56 +758,6 @@ static struct header_prop *_header_parseprop(const char *s)
     return hprop;
 }
 
-/* Generate a preview of text of at most len bytes, excluding the zero
- * byte.
- *
- * Consecutive whitespaces, including newlines, are collapsed to a single
- * blank. If text is longer than len and len is greater than 4, then return
- * a string  ending in '...' and holding as many complete UTF-8 characters,
- * that the total byte count of non-zero characters is at most len.
- *
- * The input string must be properly encoded UTF-8 */
-static char *_email_extract_preview(const char *text, size_t len)
-{
-    unsigned char *dst, *d, *t;
-    size_t n;
-
-    if (!text) {
-        return NULL;
-    }
-
-    /* Replace all whitespace with single blanks. */
-    dst = (unsigned char *) xzmalloc(len+1);
-    for (t = (unsigned char *) text, d = dst; *t && d < (dst+len); ++t, ++d) {
-        *d = isspace(*t) ? ' ' : *t;
-        if (isspace(*t)) {
-            while(isspace(*++t))
-                ;
-            --t;
-        }
-    }
-    n = d - dst;
-
-    /* Anything left to do? */
-    if (n < len || len <= 4) {
-        return (char*) dst;
-    }
-
-    /* Append trailing ellipsis. */
-    dst[--n] = '.';
-    dst[--n] = '.';
-    dst[--n] = '.';
-    while (n && (dst[n] & 0xc0) == 0x80) {
-        dst[n+2] = 0;
-        dst[--n] = '.';
-    }
-    if (dst[n] >= 0x80) {
-        dst[n+2] = 0;
-        dst[--n] = '.';
-    }
-    return (char *) dst;
-}
-
 struct _email_mailboxes_rock {
     jmap_req_t *req;
     json_t *mboxs;
@@ -8299,10 +8249,12 @@ static int _email_get_bodies(jmap_req_t *req,
             if (text) {
                 int64_t len = config_getbytesize(IMAPOPT_JMAP_PREVIEW_LENGTH, 'B');
                 if (len < 0) len = 0;
-                char *preview = _email_extract_preview(text, len);
-                json_object_set_new(email, "preview", json_string(preview));
-                free(preview);
-                free(text);
+                struct buf preview = BUF_INITIALIZER;
+                buf_initmcstr(&preview, text);
+                buf_truncate_utf8(&preview, len);
+                json_object_set_new(email, "preview",
+                                    json_string(buf_cstring(&preview)));
+                buf_free(&preview);
             }
         }
     }
