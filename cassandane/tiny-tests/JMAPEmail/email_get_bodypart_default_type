@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_get_bodypart_default_type
+    ($self)
+{
+    my $jmap   = $self->{jmap};
+    my $imap   = $self->{store}->get_client();
+
+    my $mime = <<'EOF';
+From: <from@local>
+To: <to@local>
+Subject: msgTopLevel
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Message-ID: <message-id-1@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+msgTopLevel
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    $mime = <<'EOF';
+From: <from@local>
+To: <to@local>
+Subject: msgMultipart
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Message-ID: <message-id-2@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/related;
+ boundary=37484ccfd6bb443d87a53fcee72c041d
+
+--37484ccfd6bb443d87a53fcee72c041d
+Content-Transfer-Encoding: 7bit
+
+msgMultiPart
+
+--37484ccfd6bb443d87a53fcee72c041d
+Content-Type: multipart/digest;
+ boundary=7741d241dde04e55ba27092968fec0ba
+
+
+--7741d241dde04e55ba27092968fec0ba
+
+From: <from@local>
+To: <to@local>
+Subject: embeddedMsg
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+Message-ID: <message-id-3@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+embeddedMsg
+--7741d241dde04e55ba27092968fec0ba--
+
+--37484ccfd6bb443d87a53fcee72c041d--
+EOF
+    $mime =~ s/\r?\n/\r\n/gs;
+    $imap->append('INBOX', $mime) || die $@;
+
+    xlog $self, "Assert all emails belong to the same thread";
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [ 'subject', 'bodyStructure' ],
+            },
+            'R2'
+        ],
+    ]);
+
+    my %emails = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+
+    $self->assert_cmp_deeply(superhashof({
+        type => 'text/plain'
+    }), $emails{msgTopLevel}->{bodyStructure});
+
+    $self->assert_cmp_deeply(superhashof({
+        type => 'multipart/related',
+        subParts => [superhashof({
+            type => 'text/plain'
+        }), superhashof({
+            type => 'multipart/digest',
+            subParts => [superhashof({
+                type => 'message/rfc822'
+            })],
+        })],
+    }), $emails{msgMultipart}->{bodyStructure});
+}

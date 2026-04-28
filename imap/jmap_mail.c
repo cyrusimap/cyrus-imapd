@@ -7698,6 +7698,7 @@ static void emailbodypart_read_name(struct buf *buf, const struct body *part)
 static json_t *_email_get_bodypart(jmap_req_t *req,
                                    struct email_getargs *args,
                                    struct cyrusmsg *msg,
+                                   const struct body *parent,
                                    const struct body *part)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -7789,12 +7790,32 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* type */
-    if (jmap_wantprop(bodyprops, "type") && part->type) {
-        buf_setcstr(&buf, part->type);
-        if (part->subtype) {
-            buf_appendcstr(&buf, "/");
-            buf_appendcstr(&buf, part->subtype);
+    if (jmap_wantprop(bodyprops, "type")) {
+        if (part->type) {
+            buf_setcstr(&buf, part->type);
+            if (part->subtype) {
+                buf_appendcstr(&buf, "/");
+                buf_appendcstr(&buf, part->subtype);
+            }
         }
+        else {
+            // Set default type, the 'type' property is mandatory.
+            if (part->numparts) {
+                // Non-standard: this indicates an error with the
+                // parsed bodystructure. Deal with it gracefully.
+                buf_setcstr(&buf, "multipart/related");
+            }
+            // Set default types according to RFC 2046.
+            else if (parent &&
+                !strcasecmpsafe(parent->type, "multipart") &&
+                !strcasecmpsafe(parent->subtype, "digest")) {
+                buf_setcstr(&buf, "message/rfc822");
+            }
+            else {
+                buf_setcstr(&buf, "text/plain");
+            }
+        }
+
         json_object_set_new(jbodypart, "type", json_string(buf_lcase(&buf)));
     }
 
@@ -7905,7 +7926,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         for (i = 0; i < part->numparts; i++) {
             struct body *subpart = part->subpart + i;
             json_array_append_new(subparts,
-                    _email_get_bodypart(req, args, msg, subpart));
+                    _email_get_bodypart(req, args, msg, part, subpart));
 
         }
         json_object_set_new(jbodypart, "subParts", subparts);
@@ -8066,7 +8087,7 @@ static int _email_get_bodies(jmap_req_t *req,
     /* bodyStructure */
     if (jmap_wantprop(props, "bodyStructure")) {
         json_object_set_new(email, "bodyStructure",
-                _email_get_bodypart(req, args, msg, part));
+                _email_get_bodypart(req, args, msg, NULL, part));
     }
 
     /* bodyValues */
@@ -8121,7 +8142,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.textlist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.textlist, i);
             json_array_append_new(text_body,
-                    _email_get_bodypart(req, args, msg, part));
+                    _email_get_bodypart(req, args, msg, NULL, part));
         }
         json_object_set_new(email, "textBody", text_body);
     }
@@ -8133,7 +8154,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.htmllist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.htmllist, i);
             json_array_append_new(html_body,
-                    _email_get_bodypart(req, args, msg, part));
+                    _email_get_bodypart(req, args, msg, NULL, part));
         }
         json_object_set_new(email, "htmlBody", html_body);
     }
@@ -8145,7 +8166,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
             json_array_append_new(attachments,
-                    _email_get_bodypart(req, args, msg, part));
+                    _email_get_bodypart(req, args, msg, NULL, part));
         }
         json_object_set_new(email, "attachments", attachments);
     }
