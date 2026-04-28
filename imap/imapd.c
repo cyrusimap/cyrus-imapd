@@ -13591,6 +13591,26 @@ static void cmd_urlfetch(char *tag)
         }
         if (r) goto err;
 
+        /* For URLAUTH-protected URLs, re-check the authorizer's ACL.  The
+         * HMAC asserts that authorization DID exist, but may have since been
+         * revoked.  We can't read the ACL via state->mailbox here: when the
+         * URL targets the currently-selected mailbox we reuse imapd_index,
+         * whose mailbox handle is closed between commands. */
+        if (url.urlauth.access) {
+            mbentry_t *authz_mbentry = NULL;
+            r = mlookup(NULL, NULL, intname, &authz_mbentry);
+            if (!r) {
+                struct auth_state *authzstate = auth_newstate(url.user);
+                int authz_rights =
+                    cyrus_acl_myrights(authzstate, authz_mbentry->acl);
+                auth_freestate(authzstate);
+                if (!(authz_rights & ACL_READ))
+                    r = IMAP_BADURL;
+            }
+            mboxlist_entry_free(&authz_mbentry);
+            if (r) goto err;
+        }
+
         if (url.uidvalidity &&
            (state->mailbox->i.uidvalidity != url.uidvalidity)) {
             r = IMAP_BADURL;
