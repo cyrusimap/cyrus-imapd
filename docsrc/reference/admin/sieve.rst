@@ -45,7 +45,7 @@ server listen to the right ports for sieveshell commands::
     managesieve   cmd="timsieved" listen="servername:4190" prefork=0
 
 Sieve scripts are stored in the directory hierarchy specified by the
-**sievedir** :cyrusman:`imapd.conf(5)` option (default: ``/usr/sieve``).
+:imapdconf:`sievedir` option (default: ``/usr/sieve``).
 This directory must exist and be writeable by the cyrus user for ``timsieved``
 to function, so organise that now.
 
@@ -71,7 +71,7 @@ users to manipulate Sieve scripts is through the :cyrusman:`sieveshell(1)`
 utility, in communication with the :cyrusman:`timsieved(8)` service.
 
 If, for some reason, you do have user home directories on the server, you can
-use the **sieveusehomedir** option in :cyrusman:`imapd.conf(5)` and have the
+use the :imapdconf:`sieveusehomedir` option in :cyrusman:`imapd.conf(5)` and have the
 sieve script stored in the home directory of the user as ``~/.sieve``.
 
 Sieve scripts in shared folders
@@ -113,7 +113,7 @@ Testing the Sieve Server
 
 The Sieve server, :cyrusman:`timsieved(8)`, is used for transporting user Sieve
 scripts to the sealed IMAP server. It is incompatible with the
-**sieveusehomedir** option. It is named after the principal author, Tim Martin,
+:imapdconf:`sieveusehomedir` option. It is named after the principal author, Tim Martin,
 who desperately wanted something named after him in the Cyrus distribution.
 
 From your normal account, telnet to the sieve port on the server you're setting
