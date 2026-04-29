@@ -900,15 +900,17 @@ static void property_blob_free(property_blob_t **blob)
     *blob = NULL;
 }
 
-static void reject_convprops_internal(struct jmap_parser *parser,
-                                      struct buf *buf,
-                                      json_t *jpatch,
-                                      json_t *invalid)
+static void reject_or_remove_convprops_internal(struct jmap_parser *parser,
+                                                struct buf *buf,
+                                                json_t *jpatch,
+                                                json_t *invalid,
+                                                bool remove)
 {
     if (json_is_object(jpatch)) {
         const char *key;
         json_t *jval;
-        json_object_foreach(jpatch, key, jval)
+        void *tmp;
+        json_object_foreach_safe(jpatch, tmp, key, jval)
         {
             if (strchr(key, '/'))
                 jmap_parser_push_path(parser, key);
@@ -916,12 +918,17 @@ static void reject_convprops_internal(struct jmap_parser *parser,
                 jmap_parser_push(parser, key);
 
             const char *subpath = key;
-            bool did_reject = false;
+            bool found_convprop = false;
             while (subpath) {
                 if (!strncasecmp(subpath, "vCard", 5)) {
-                    did_reject = true;
-                    json_array_append_new(
-                        invalid, json_string(jmap_parser_path(parser, buf)));
+                    found_convprop = true;
+                    if (remove) {
+                        json_object_del(jpatch, key);
+                    }
+                    else {
+                        json_array_append_new(
+                            invalid, json_string(jmap_parser_path(parser, buf)));
+                    }
                     break;
                 }
                 else {
@@ -930,8 +937,9 @@ static void reject_convprops_internal(struct jmap_parser *parser,
                 }
             }
 
-            if (!did_reject) {
-                reject_convprops_internal(parser, buf, jval, invalid);
+            if (!found_convprop) {
+                reject_or_remove_convprops_internal(parser, buf, jval,
+                                                    invalid, remove);
             }
 
             jmap_parser_pop(parser);
@@ -944,25 +952,28 @@ static void reject_convprops_internal(struct jmap_parser *parser,
             buf_reset(buf);
             buf_printf(buf, "%zu", i);
             jmap_parser_push(parser, buf_cstring(buf));
-            reject_convprops_internal(parser, buf, jval, invalid);
+            reject_or_remove_convprops_internal(parser, buf, jval,
+                                                invalid, remove);
             jmap_parser_pop(parser);
         }
     }
 }
 
-/* Reject any JSON pointer containing a vCard-conversion
- * property from the PatchObject "jpatch". Report the full path
- * of the removed patch entry in "invalid".
+/* Handle any JSON pointer containing a vCard-conversion property
+ * in the PatchObject "jpatch". If "remove" is false, report the
+ * full path of each such patch entry in "invalid". If "remove" is
+ * true, silently delete the entry from "jpatch" instead.
  *
  * Any property starting with "vCard" is assumed to be
  * a conversion property, e.g. such as vCardProps, vCardName
  * et al defined in RFC 9555.
  */
-static void reject_convprops(json_t *jpatch, json_t *invalid) {
+static void reject_or_remove_convprops(json_t *jpatch, json_t *invalid,
+                                       bool remove) {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
 
-    reject_convprops_internal(&parser, &buf, jpatch, invalid);
+    reject_or_remove_convprops_internal(&parser, &buf, jpatch, invalid, remove);
 
     buf_free(&buf);
     jmap_parser_fini(&parser);
@@ -1032,7 +1043,13 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = json_object();
-        reject_convprops(arg, invalid);
+        // XXX Silently remove conversion properties if extension
+        // capability is used. This is because due to a bug
+        // we had served Card objects with these properties
+        // and now client requests trying to clone or update these
+        // cards get rejected.
+        reject_or_remove_convprops(arg, invalid,
+                jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _set_create(req, kind, arg, &mailbox, item, &errors);
         if (r) {
             json_t *err;
@@ -1089,7 +1106,13 @@ static void _contacts_set(struct jmap_req *req, unsigned kind,
         json_t *invalid = json_array();
         jmap_contact_errors_t errors = { invalid, NULL };
         json_t *item = NULL;
-        reject_convprops(arg, invalid);
+        // XXX Silently remove conversion properties if extension
+        // capability is used. This is because due to a bug
+        // we had served Card objects with these properties
+        // and now client requests trying to clone or update these
+        // cards get rejected.
+        reject_or_remove_convprops(arg, invalid,
+                jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
         r = _set_update(req, set.apply_empty_updates,
                         kind, uid, arg, db, &mailbox, &item, &errors);
         if (r) {
@@ -4620,7 +4643,7 @@ static void _contact_copy(jmap_req_t *req,
 
     // Apply patch.
     json_t *invalid = json_array();
-    reject_convprops(jcard, invalid);
+    reject_or_remove_convprops(jcard, invalid, false);
     dst_card = jmap_patchobject_apply(src_card, jcard, NULL, 0);
     json_object_del(dst_card, "id");  // immutable and WILL change
     json_decref(src_card);
@@ -6431,7 +6454,7 @@ static void _add_vcard_params(json_t *obj, vcardproperty *prop,
 
                         json_object_set_new(jprop, val, json_true());
                     }
-                    else {
+                    else if (convert_unknown) {
                         /* Unknown/unexpected TYPE */
                         _unmapped_param(obj, param, param_value);
                     }
