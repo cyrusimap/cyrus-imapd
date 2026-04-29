@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_plus_address_mutf7
+    ($self)
+{
+    xlog $self, "Testing behaviour of plus addressing with mUTF7 mailbox names";
+
+    # IMAPTalk will mUTF7-encode mailbox name in CREATE/SELECT
+    my $imaptalk = $self->{store}->get_client();
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog $self, "Create folders";
+    $self->setup_mailbox_structure($imaptalk, [
+        [ 'create' => [ "foo", "☃", "a&b" ] ]
+    ]);
+
+    my %msgs;
+    my @testCases = ({
+        uid => 1,
+        plusaddr => "foo",
+        mailbox => "foo",
+    },
+    {
+        uid => 1,
+        plusaddr => "&JgM-", # mUTF7-encoded
+        mailbox => "☃",
+    },
+    {
+        uid => 1,
+        plusaddr => "a&b",
+        mailbox => "a&b",
+    },
+# Can't test UTF-8 plus address until we support SMTPUTF8
+#    {
+#        uid => 2,
+#        plusaddr => "☃",
+#        mailbox => "☃",
+#    },
+    {
+        uid => 2,
+        plusaddr => "a&-b", # mUTF7-encoded
+        mailbox => "a&b",
+    });
+
+    foreach my $tc (@testCases) {
+        my $uid = $tc->{uid};
+
+        if (!$msgs{$uid}) {
+            xlog $self, "Create message $uid";
+            $msgs{$uid} = $self->{gen}->generate(subject => "Message $uid");
+            $msgs{$uid}->set_attribute(uid => $uid);
+        }
+
+        xlog $self, "Deliver message $uid";
+        $self->{instance}->deliver($msgs{$uid},
+                                   user => "cassandane+$tc->{plusaddr}");
+
+        xlog $self, "Check that the message made it";
+        $self->{store}->set_folder($tc->{mailbox});
+        $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+    }
+}
