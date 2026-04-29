@@ -79,5 +79,6 @@ const char *buf_lcase(struct buf *buf);
 const char *buf_ucase(struct buf *buf);
 const char *buf_tocrlf(struct buf *buf);
 void buf_trim(struct buf *buf);
+void buf_truncate_utf8(struct buf *buf, size_t len);
 
 #endif

@@ -702,3 +702,51 @@ EXPORTED void buf_trim(struct buf *buf)
         buf_truncate(buf, i);
     }
 }
+
+/* Truncate a buffer of UTF-8 text to at most len bytes.
+ *
+ * Consecutive whitespaces, including newlines, are collapsed to a single
+ * blank. If text is longer than len and len is greater than 4, then return
+ * a string ending in '...' and holding as many complete UTF-8 characters,
+ * such that the total byte count of non-zero characters is at most len.
+ *
+ * The input string must be properly encoded UTF-8.
+ */
+EXPORTED void buf_truncate_utf8(struct buf *buf, size_t len)
+{
+    unsigned char *dst, *d;
+    size_t i, n;
+
+    dst = (unsigned char *) buf->s;
+
+    /* Replace all whitespace with single blanks. */
+    for (i = 0, d = dst; len && i < buf->len; ++i, ++d, --len) {
+        if (isspace(buf->s[i])) {
+            *d = ' ';
+            while (isspace(buf->s[i+1]) && ++i < buf->len);
+        }
+        else {
+            *d = buf->s[i];
+        }
+    }
+    n = d - dst;
+
+    if (i < buf->len && n > 4) {
+        /* Append trailing ellipsis. */
+        dst[--n] = '.';
+        dst[--n] = '.';
+        dst[--n] = '.';
+        while (n && (dst[n] & 0xc0) == 0x80) {
+            dst[n+2] = 0;
+            dst[--n] = '.';
+        }
+        if (dst[n] >= 0x80) {
+            dst[n+2] = 0;
+            dst[--n] = '.';
+        }
+
+        n += 3;
+    }
+
+    buf->len = n;
+}
