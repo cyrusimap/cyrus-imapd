@@ -54,6 +54,7 @@ details about how Cyrus is implemented.
     namespaces
     libraries
     Cyrus APIs <API>
+    Replication protocol <replication-protocol>
     Thoughts & Notes <thoughts>
     Guidance for Developers <guidance>
 
