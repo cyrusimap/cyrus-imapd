@@ -163,19 +163,19 @@ Download the release :ref:`3.12 package tarball <getcyrus>`.
 Fetch the libraries for your platform. The full list (including all optional
 packages) for Debian is::
 
-    sudo apt-get install -y autoconf automake autotools-dev bash-completion \
-    bison build-essential comerr-dev debhelper flex g++ git gperf groff \
-    heimdal-dev libbsd-resource-perl libclone-perl libconfig-inifiles-perl \
-    libcunit1-dev libdatetime-perl libdigest-sha-perl libencode-imaputf7-perl \
-    libfile-chdir-perl libglib2.0-dev libical-dev libio-socket-inet6-perl \
-    libio-stringy-perl libjansson-dev libldap2-dev libmysqlclient-dev \
-    libnet-server-perl libnews-nntpclient-perl libpam0g-dev libpcre2-dev \
-    libsasl2-dev libsqlite3-dev libssl-dev libtest-unit-perl libtool \
-    libunix-syslog-perl liburi-perl libxapian-dev libxml-generator-perl \
-    libxml-xpath-perl libxml2-dev libwrap0-dev libzephyr-dev lsb-base \
-    net-tools perl php-cli php-curl pkg-config po-debconf tcl-dev transfig \
-    uuid-dev vim wamerican wget xutils-dev zlib1g-dev sasl2-bin rsyslog sudo \
-    acl telnet
+    sudo apt-get install -y acl autoconf automake autotools-dev \
+    bash-completion bison build-essential comerr-dev debhelper flex g++ git \
+    gperf groff heimdal-dev libapp-cmd-perl libbsd-resource-perl libclone-perl \
+    libconfig-inifiles-perl libcunit1-dev libdatetime-perl libdigest-sha-perl \
+    libencode-imaputf7-perl libfile-chdir-perl libglib2.0-dev libical-dev \
+    libio-socket-inet6-perl libio-stringy-perl libjansson-dev libldap2-dev \
+    libmoo-perl libmysqlclient-dev libnet-server-perl libnews-nntpclient-perl \
+    libpam0g-dev libpcre2-dev libsasl2-dev libsqlite3-dev libssl-dev \
+    libtest-unit-perl libtool libunix-syslog-perl liburi-perl libxapian-dev \
+    libxml-generator-perl libxml-xpath-perl libxml2-dev libwrap0-dev \
+    libzephyr-dev lsb-base net-tools perl php-cli php-curl pkg-config \
+    po-debconf rsyslog sasl2-bin sudo tcl-dev telnet transfig uuid-dev vim \
+    wamerican wget xutils-dev zlib1g-dev
 
 If you're on another platform and can provide the list of dependencies, please
 let us know via a
