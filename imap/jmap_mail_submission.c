@@ -1486,9 +1486,27 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         set.old_state = modseqtoa(jmap_modseq(req, MBTYPE_JMAPSUBMIT, 0));
     }
 
-    /* create */
+    /* destroy */
     json_t *jsubmission;
-    const char *creation_id;
+    const char *creation_id, *id;
+    size_t i;
+    json_t *jsubmissionId;
+    json_array_foreach(set.destroy, i, jsubmissionId) {
+        id = json_string_value(jsubmissionId);
+        json_t *set_err = NULL;
+        char *emailid = NULL;
+        _emailsubmission_destroy(req, submbox, id, &set_err, &emailid);
+        if (set_err) {
+            json_object_set_new(set.not_destroyed, id, set_err);
+            free(emailid);
+            continue;
+        }
+        json_array_append_new(set.destroyed, json_string(id));
+        json_object_set_new(success_emailids, id, json_string(emailid));
+        free(emailid);
+    }
+
+    /* create */
     smtpclient_t *sm = NULL;
     json_object_foreach(set.create, creation_id, jsubmission) {
         json_t *set_err = NULL;
@@ -1501,7 +1519,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             free(emailid);
             continue;
         }
-        const char *id = json_string_value(json_object_get(new_submission, "id"));
+        id = json_string_value(json_object_get(new_submission, "id"));
         json_object_set_new(set.created, creation_id, new_submission);
         json_object_set_new(success_emailids, id, json_string(emailid));
         free(emailid);
@@ -1512,7 +1530,6 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     if (sm) smtpclient_close(&sm);
 
     /* update */
-    const char *id;
     json_object_foreach(set.update, id, jsubmission) {
         json_t *set_err = NULL;
         char *emailid = NULL;
@@ -1524,24 +1541,6 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             continue;
         }
         json_object_set_new(set.updated, id, json_pack("{s:s}", "id", id));
-        json_object_set_new(success_emailids, id, json_string(emailid));
-        free(emailid);
-    }
-
-    /* destroy */
-    size_t i;
-    json_t *jsubmissionId;
-    json_array_foreach(set.destroy, i, jsubmissionId) {
-        const char *id = json_string_value(jsubmissionId);
-        json_t *set_err = NULL;
-        char *emailid = NULL;
-        _emailsubmission_destroy(req, submbox, id, &set_err, &emailid);
-        if (set_err) {
-            json_object_set_new(set.not_destroyed, id, set_err);
-            free(emailid);
-            continue;
-        }
-        json_array_append_new(set.destroyed, json_string(id));
         json_object_set_new(success_emailids, id, json_string(emailid));
         free(emailid);
     }
