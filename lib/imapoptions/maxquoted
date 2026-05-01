@@ -6,5 +6,3 @@ Last-Modified: 3.8.0
 Maximum size of a single quoted string allowed by the IMAP parser.
 
 If set to 0, a large internally-defined limit will be applied.
-
-If no unit is specified, bytes is assumed.

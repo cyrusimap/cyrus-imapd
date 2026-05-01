@@ -1,9 +1,8 @@
 Name: poptimeout
 Type: DURATION
 Default-Value: 10m
+Default-Unit: m
 Last-Modified: 3.1.8
 
 Set the length of the POP server's inactivity autologout timer.  The
 minimum value is 10 minutes, the default.
-
-For backward compatibility, if no unit is specified, minutes is assumed.

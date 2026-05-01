@@ -1,10 +1,9 @@
 Name: websocket_timeout
 Type: DURATION
 Default-Value: 30m
+Default-Unit: m
 Last-Modified: 3.6.0
 
 Set the length of the HTTP server's inactivity autologout timer when a
 WebSocket channel has been established.  The default is 30 minutes.  The
 minimum value is 0, which will disable WebSockets.
-
-If no unit is specified, minutes is assumed.

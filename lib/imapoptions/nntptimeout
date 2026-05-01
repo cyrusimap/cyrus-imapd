@@ -1,9 +1,8 @@
 Name: nntptimeout
 Type: DURATION
 Default-Value: 3m
+Default-Unit: m
 Last-Modified: 3.1.8
 
 Set the length of the NNTP server's inactivity autologout timer.  The
 minimum value is 3 minutes, also the default.
-
-For backward compatibility, if no unit is specified, minutes is assumed.

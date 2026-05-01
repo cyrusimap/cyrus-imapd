@@ -1,9 +1,8 @@
 Name: popminpoll
 Type: DURATION
 Default-Value: NULL
+Default-Unit: m
 Last-Modified: 3.1.8
 
 Set the minimum amount of time the server forces users to wait between
 successive POP logins.
-
-For backward compatibility, if no unit is specified, minutes is assumed.

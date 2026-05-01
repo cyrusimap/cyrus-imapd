@@ -5,5 +5,3 @@ Last-Modified: 3.1.8
 
 Time to wait before returning a timeout failure when performing a client
 connection (e.g. in a murder environment).
-
-For backward compatibility, if no unit is specified, seconds is assumed.
