@@ -162,6 +162,17 @@ sub _print_option
         }
 
         print "\n";
+
+        if ($option->can_have_units) {
+            if ($option->has_default_unit) {
+                print "For backward compatibility, if no unit is specified, ";
+            }
+            else {
+                print "If no unit is specified, "
+            }
+            print $option->docs_default_unit;
+            print " is assumed.\n\n";
+        }
     }
 
     if ($option->has_deprecated_since) {
