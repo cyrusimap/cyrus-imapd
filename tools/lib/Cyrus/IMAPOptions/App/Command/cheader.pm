@@ -125,6 +125,7 @@ sub footer
         const enum imapopt preferred_opt;
         union config_value val;
         const union config_value def;
+        const int defunit;
         const struct enum_option_s enum_options[MAX_ENUM_OPTS+1];
     };
 
