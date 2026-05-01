@@ -333,6 +333,20 @@ sub docs_default_unit
     return $units{$type}->{$k};
 }
 
+sub c_default_unit
+{
+    my ($self) = @_;
+
+    if ($self->can_have_units) {
+        return $self->has_default_unit
+               ? "'" . $self->default_unit . "'"
+               : "'" . $default_unit{$self->type} . "'";
+    }
+    else {
+        return '0';
+    }
+}
+
 sub _c_name
 {
     my ($name) = @_;
