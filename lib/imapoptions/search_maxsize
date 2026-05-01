@@ -1,10 +1,9 @@
 Name: search_maxsize
 Type: BYTESIZE
 Default-Value: 4M
+Default-Unit: K
 Last-Modified: 3.8.0
 
 The maximum size to index for each message part. Message contents that
 occur after this byte offset will not be indexed nor used to generate
 search snippets. Xapian-only.
-
-For backward compatibility, if no unit is specified, kibibytes is assumed.

@@ -1,10 +1,9 @@
 Name: timeout
 Type: DURATION
 Default-Value: 32m
+Default-Unit: m
 Last-Modified: 3.1.8
 
 The length of the IMAP server's inactivity autologout timer.  The minimum
 value is 30 minutes.  The default is 32 minutes, to allow a bit of leeway
 for clients that try to NOOP every 30 minutes.
-
-For backward compatibility, if no unit is specified, minutes is assumed.

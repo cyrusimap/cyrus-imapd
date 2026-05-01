@@ -1,6 +1,7 @@
 Name: quotawarnsize
 Type: BYTESIZE
 Default-Value: 0
+Default-Unit: K
 Last-Modified: 3.8.0
 
 The maximum amount of free space at which to give a quota warning (if this
@@ -9,5 +10,3 @@ always given).
 
 Note that quota has kibibyte granularity.  Values specified here will be
 truncated to the nearest whole kibibyte.
-
-For backward compatibility, if no unit is specified, kibibytes is assumed.

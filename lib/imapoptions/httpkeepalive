@@ -8,5 +8,3 @@ seconds.  The minimum value is 0, which will disable the keepalive
 heartbeat.  When enabled, if a request takes longer than *httpkeepalive* to
 process, the server will send the client provisional responses every
 *httpkeepalive* until the final response can be sent.
-
-For backward compatibility, if no unit is specified, seconds is assumed.

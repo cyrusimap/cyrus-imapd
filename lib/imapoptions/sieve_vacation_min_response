@@ -5,5 +5,3 @@ Last-Modified: 3.1.8
 
 Minimum time interval between consecutive vacation responses, per
 :rfc:`6131`.  The default is 3 days.
-
-For backward compatibility, if no unit is specified, seconds is assumed.

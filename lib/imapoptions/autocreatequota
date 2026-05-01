@@ -1,6 +1,7 @@
 Name: autocreatequota
 Type: BYTESIZE
 Default-Value: NULL
+Default-Unit: K
 Last-Modified: 3.8.0
 Deprecated-Since: 2.5.0
 Replaced-By: autocreate_quota

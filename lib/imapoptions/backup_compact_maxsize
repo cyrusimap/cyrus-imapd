@@ -1,5 +1,6 @@
 Name: backup_compact_maxsize
 Type: BYTESIZE
 Default-Value: 0
+Default-Unit: K
 Last-Modified: 3.12.0
 Deprecated-Since: 3.12.0
