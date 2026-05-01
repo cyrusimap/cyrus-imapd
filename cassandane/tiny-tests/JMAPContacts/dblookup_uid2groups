@@ -59,161 +59,49 @@ sub test_dblookup_uid2groups
 
     xlog "Create contact in own addressbook";
     $res = $jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 ownContact => {
-                    firstName => 'Own',
-                    lastName => 'Contact',
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Own Contact' }
                 }
             }
         }, 'R1'],
     ], $using);
-    my $ownContactId = $res->[0][1]{created}{ownContact}{id};
-    $self->assert_not_null($ownContactId);
     my $ownContactUid = $res->[0][1]{created}{ownContact}{uid};
     $self->assert_not_null($ownContactUid);
 
     xlog "Create contacts in shared addressbooks";
     $res = $otherJmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 sharedContact => {
-                    firstName => 'Other',
-                    lastName => 'Contact',
-                    addressbookId => 'Shared'
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Other Contact' },
+                    addressBookIds => { $otherSharedAbookId => JSON::true }
                 }
             }
         }, 'R1'],
     ], $using);
-    my $otherSharedContactId = $res->[0][1]{created}{sharedContact}{id};
-    $self->assert_not_null($otherSharedContactId);
     my $otherSharedContactUid = $res->[0][1]{created}{sharedContact}{uid};
     $self->assert_not_null($otherSharedContactUid);
 
     $res = $other2Jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 sharedContact => {
-                    firstName => 'Other2',
-                    lastName => 'Contact',
-                    addressbookId => 'Shared'
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Other2 Contact' },
+                    addressBookIds => { $other2SharedAbookId => JSON::true }
                 }
             }
         }, 'R1'],
     ], $using);
-    my $other2SharedContactId = $res->[0][1]{created}{sharedContact}{id};
-    $self->assert_not_null($other2SharedContactId);
     my $other2SharedContactUid = $res->[0][1]{created}{sharedContact}{uid};
     $self->assert_not_null($other2SharedContactUid);
-
-    xlog "Create group in own addressbook";
-    $res = $jmap->CallMethods([
-        ['ContactGroup/set', {
-            create => {
-                ownGroup => {
-                    name => 'owngroup',
-                    contactIds => [ $ownContactId ],
-                    otherAccountContactIds => {
-                        other => [ $otherSharedContactId ]
-                    }
-                }
-            }
-        }, 'R1'],
-    ], $using);
-    my $ownGroupUid = $res->[0][1]{created}{ownGroup}{uid};
-    $self->assert_not_null($ownGroupUid);
-
-    xlog "Create group in shared addressbook";
-    $res = $otherJmap->CallMethods([
-        ['ContactGroup/set', {
-            create => {
-                otherGroup => {
-                    name => 'othergroup',
-                    contactIds => [ $otherSharedContactId ],
-                    otherAccountContactIds => {
-                        other2 => [ $other2SharedContactId ]
-                    },
-                    addressbookId => 'Shared'
-                }
-            }
-        }, 'R1'],
-    ], $using);
-    my $otherGroupUid = $res->[0][1]{created}{otherGroup}{uid};
-    $self->assert_not_null($otherGroupUid);
-
-    xlog "Lookup own groups containing ownContactUid";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'cassandane',
-        Key => $ownContactUid
-    });
-    $self->assert_cmp_deeply(
-        superhashof({
-            $ownGroupUid => 'owngroup'
-        }),
-        $res->{payload},
-    );
-
-    xlog "Lookup own groups containing ownContactUid in other user";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'cassandane',
-        Key => $ownContactUid,
-        OtherUser => 'other'
-    });
-    $self->assert_deep_equals({}, $res->{payload});
-
-    xlog "Lookup own groups containing otherSharedContactUid";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'cassandane',
-        Key => $otherSharedContactUid,
-        OtherUser => 'other'
-    });
-    $self->assert_cmp_deeply(
-        superhashof({
-            $ownGroupUid => 'owngroup'
-        }),
-        $res->{payload},
-    );
-
-    xlog "Lookup own groups containing otherSharedContactUid in own user";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'cassandane',
-        Key => $otherSharedContactUid
-    });
-    $self->assert_deep_equals({}, $res->{payload});
-
-    xlog "Lookup other groups containing otherSharedContactUid in Default abook";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'other',
-        Key => $otherSharedContactUid,
-    });
-    $self->assert_deep_equals({}, $res->{payload});
-
-    xlog "Lookup other groups containing otherSharedContactUid in Shared abook";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'other',
-        Key => $otherSharedContactUid,
-        Mailbox => 'Shared'
-    });
-    $self->assert_cmp_deeply(
-        superhashof({
-            $otherGroupUid => 'othergroup'
-        }),
-        $res->{payload},
-    );
-
-    xlog "Lookup other groups containing other2SharedContactUid in Shared abook";
-    $res = $self->dblookup('/dblookup/uid2groups' => {
-        User => 'other',
-        Key => $other2SharedContactUid,
-        OtherUser => 'other2',
-        Mailbox => 'Shared'
-    });
-    $self->assert_cmp_deeply(
-        superhashof({
-            $otherGroupUid => 'othergroup'
-        }),
-        $res->{payload},
-    );
 
     xlog "Create group in own addressbook";
     $res = $jmap->CallMethods([
@@ -245,8 +133,8 @@ sub test_dblookup_uid2groups
                     kind => 'group',
                     name => { full => 'othergroup2' },
                     members => {
-                        $otherSharedContactId => JSON::true,
-                        $other2SharedContactId => JSON::true
+                        $otherSharedContactUid => JSON::true,
+                        $other2SharedContactUid => JSON::true
                     },
                     addressBookIds => { $otherSharedAbookId => JSON::true }
                 }
@@ -263,7 +151,6 @@ sub test_dblookup_uid2groups
     });
     $self->assert_cmp_deeply(
         superhashof({
-            $ownGroupUid => 'owngroup',
             $ownGroupUid2 => 'owngroup2'
         }),
         $res->{payload},
@@ -286,7 +173,6 @@ sub test_dblookup_uid2groups
 
     $self->assert_cmp_deeply(
         superhashof({
-            $ownGroupUid => 'owngroup',
             $ownGroupUid2 => 'owngroup2'
         }),
         $res->{payload},
@@ -314,7 +200,6 @@ sub test_dblookup_uid2groups
     });
     $self->assert_cmp_deeply(
         superhashof({
-            $otherGroupUid => 'othergroup',
             $otherGroupUid2 => 'othergroup2'
         }),
         $res->{payload},
@@ -329,7 +214,6 @@ sub test_dblookup_uid2groups
     });
     $self->assert_cmp_deeply(
         superhashof({
-            $otherGroupUid => 'othergroup',
             $otherGroupUid2 => 'othergroup2'
         }),
         $res->{payload},

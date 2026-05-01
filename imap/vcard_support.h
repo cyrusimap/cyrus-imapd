@@ -9,8 +9,6 @@
 
 #include <libical/vcard.h>
 
-#include "vparse.h"
-
 #include "mailbox.h"
 #include "message_guid.h"
 #include "util.h"
@@ -18,33 +16,20 @@
 #define VCARD_MEMBER_URI_PREFIX     "urn:uuid:"
 #define VCARD_MEMBER_URI_PREFIX_LEN 9
 
+#define VCARD_APPLE_LABEL_PROPERTY "X-ABLabel"
+#define VCARD_APPLE_ABADR_PROPERTY "X-ABADR"
+
 #define VCARD_NUM_BASE_N_FIELDS   5  // Number of fields defined in RFC 6350
 #define VCARD_NUM_BASE_ADR_FIELDS 7  // Number of fields defined in RFC 6350
 
-extern struct vparse_card *vcard_parse_string(const char *str);
-extern struct vparse_card *vcard_parse_buf(const struct buf *buf);
-extern struct buf *vcard_as_buf(struct vparse_card *vcard);
+extern vcardcomponent *vcard_parse_string(const char *str);
+extern vcardcomponent *vcard_parse_buf(const struct buf *buf);
+extern struct buf *vcard_as_buf(vcardcomponent *vcard);
 
-extern struct vparse_card *record_to_vcard(struct mailbox *mailbox,
-                                           const struct index_record *record);
-
-extern size_t vcard_prop_decode_value(struct vparse_entry *prop,
-                                      struct buf *value,
-                                      char **content_type,
-                                      struct message_guid *guid);
-
-extern void vcard_to_v3(struct vparse_card *vcard);
-extern void vcard_to_v4(struct vparse_card *vcard);
-
-
-extern vcardcomponent *vcard_parse_string_x(const char *str);
-extern vcardcomponent *vcard_parse_buf_x(const struct buf *buf);
-extern struct buf *vcard_as_buf_x(vcardcomponent *vcard);
-
-extern vcardcomponent *record_to_vcard_x(struct mailbox *mailbox,
+extern vcardcomponent *record_to_vcard(struct mailbox *mailbox,
                                          const struct index_record *record);
 
-extern size_t vcard_prop_decode_value_x(vcardproperty *prop,
+extern size_t vcard_prop_decode_value(vcardproperty *prop,
                                         struct buf *value,
                                         char **content_type,
                                         struct message_guid *guid);

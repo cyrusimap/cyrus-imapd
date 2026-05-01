@@ -44,7 +44,6 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "times.h"
-#include "vparse.h"
 #include "vcard_support.h"
 
 #include "conversations.h"

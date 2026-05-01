@@ -21,12 +21,12 @@ sub test_misc_categories
 
 
     xlog $self, "create a contact with two categories";
-    my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
-    my $href = "Default/$id.vcf";
+    my $uid = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
+    my $href = "Default/$uid.vcf";
     my $card = <<EOF;
 BEGIN:VCARD
 VERSION:3.0
-UID:$id
+UID:$uid
 N:Gump;Forrest;;Mr.
 FN:Forrest Gump
 ORG:Bubba Gump Shrimp Co.
@@ -41,17 +41,18 @@ EOF
     my $data = $carddav->Request('GET', $href);
     $self->assert_matches(qr/cat1,cat2/, $data->{content});
 
-    my $fetch = $jmap->CallMethods([['Contact/get', {ids => [$id]}, "R2"]]);
+    my $fetch = $jmap->CallMethods([['ContactCard/get', {}, "R2"]]);
     $self->assert_not_null($fetch);
-    $self->assert_str_equals('Contact/get', $fetch->[0][0]);
+    $self->assert_str_equals('ContactCard/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
-    $self->assert_str_equals('Forrest', $fetch->[0][1]{list}[0]{firstName});
+    $self->assert_str_equals('Forrest Gump', $fetch->[0][1]{list}[0]{name}{full});
+    my $id = $fetch->[0][1]{list}[0]{id};
 
-    my $res = $jmap->CallMethods([['Contact/set', {
-                    update => {$id => {firstName => "foo"}}
+    my $res = $jmap->CallMethods([['ContactCard/set', {
+                    update => {$id => {'name/full' => "foo"}}
                 }, "R1"]]);
     $self->assert_not_null($res);
-    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('ContactCard/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
     $data = $carddav->Request('GET', $href);
