@@ -286,8 +286,8 @@ First beta
 
 This work mostly happens on the new branch.
 
-1. Check through `lib/imapoptions` for options with `"UNRELEASED"` in any of
-   their version fields.
+1. Check through the files in `lib/imapoptions/` for options with
+   `UNRELEASED` in their `Last-Modified` or `Deprecated-Since` fields.
 
    - Replace these with the version number of the eventual actual (non-beta)
      release.  For example, if we're starting the 3.8 series, this will be
