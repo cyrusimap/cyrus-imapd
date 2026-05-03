@@ -294,7 +294,7 @@ EXPORTED const char *sync_get_config(const char *channel, enum imapopt opt)
     return response;
 }
 
-EXPORTED int sync_get_durationconfig(const char *channel, enum imapopt opt, int defunit)
+EXPORTED int sync_get_durationconfig(const char *channel, enum imapopt opt)
 {
     int response = -1;
 
@@ -308,11 +308,11 @@ EXPORTED int sync_get_durationconfig(const char *channel, enum imapopt opt, int 
                  channel, imapopts[opt].optname);
         result = config_getoverflowstring(name, NULL);
         if (result)
-            config_parseduration(result, defunit, &response);
+            config_parseduration(result, imapopts[opt].defunit, &response);
     }
 
     if (response == -1) {
-        response = config_getduration(opt, defunit);
+        response = config_getduration(opt);
     }
 
     return response;
@@ -8476,7 +8476,7 @@ connected:
     }
 
     /* Set inactivity timer */
-    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT);
     if (timeout < 3) timeout = 3;
     prot_settimeout(backend->in, timeout);
 

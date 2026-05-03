@@ -281,7 +281,7 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 
     ptrarray_append(&settings->getblob_handlers, jmap_emailheader_getblob);
 
-    emailquery_cache_max_age = config_getduration(IMAPOPT_JMAP_QUERYCACHE_MAX_AGE, 'm');
+    emailquery_cache_max_age = config_getduration(IMAPOPT_JMAP_QUERYCACHE_MAX_AGE);
     if (emailquery_cache_max_age) {
         struct jmap_handler *h = xzmalloc(sizeof(struct jmap_handler));
         h->eventmask = JMAP_HANDLE_BEFORE_METHOD|

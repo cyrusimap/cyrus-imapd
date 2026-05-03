@@ -270,23 +270,21 @@ done:
     return r;
 }
 
-/* Get a duration value, converted to seconds.
- *
- * defunit is one of 'd', 'h', 'm', 's' and determines how
- * unitless values are parsed.
- */
-EXPORTED int config_getduration(enum imapopt opt, int defunit)
+/* Get a duration value, converted to seconds. */
+EXPORTED int config_getduration(enum imapopt opt)
 {
     int duration;
 
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_DURATION);
     assert_not_deprecated(opt);
-    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
     if (imapopts[opt].val.s == NULL) return 0;
 
-    if (config_parseduration(imapopts[opt].val.s, defunit, &duration)) {
+    if (config_parseduration(imapopts[opt].val.s,
+                             imapopts[opt].defunit,
+                             &duration))
+    {
         /* should have been rejected by config_read_file, but just in case */
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),

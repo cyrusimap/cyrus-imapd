@@ -5223,7 +5223,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
                                          const struct index_record *record,
                                          void *rock)
 {
-    int archive_after = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    int archive_after = config_getduration(IMAPOPT_ARCHIVE_AFTER);
     time_t cutoff = time(0) - archive_after;
     if (rock) cutoff = *((time_t *)rock);
 

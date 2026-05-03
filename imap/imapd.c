@@ -1194,7 +1194,7 @@ int service_main(int argc __attribute__((unused)),
     proc_settitle(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
-    imapd_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    imapd_timeout = config_getduration(IMAPOPT_TIMEOUT);
     if (imapd_timeout < 30 * 60) imapd_timeout = 30 * 60;
     prot_settimeout(imapd_in, imapd_timeout);
     prot_setflushonread(imapd_in, imapd_out);
@@ -3113,7 +3113,7 @@ static void cmd_login(char *tag, char *user)
         loginlog_bad(imapd_clienthost, canon_user, "plaintext", NULL,
                      sasl_errdetail(imapd_saslconn));
 
-        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -3157,7 +3157,7 @@ static void cmd_login(char *tag, char *user)
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
-            int plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
+            int plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE);
             if (plaintextloginpause) {
                 sleep(plaintextloginpause);
             }
@@ -3224,7 +3224,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
                          sasl_errdetail(imapd_saslconn));
 
             prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
-            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
@@ -3606,15 +3606,15 @@ static void cmd_idle(char *tag)
 
     /* get idle timeout */
     if (idle_timeout == -1) {
-        idle_timeout = config_getduration(IMAPOPT_IMAPIDLETIMEOUT, 'm');
+        idle_timeout = config_getduration(IMAPOPT_IMAPIDLETIMEOUT);
         if (idle_timeout <= 0) {
-            idle_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+            idle_timeout = config_getduration(IMAPOPT_TIMEOUT);
         }
     }
 
     /* get polling period */
     if (idle_period == -1) {
-        idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
+        idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL);
     }
 
     if (CAPA(backend_current, CAPA_IDLE)) {
@@ -6126,7 +6126,7 @@ static void progress_cb(unsigned count, unsigned total, void *rock)
     time_t now;
 
     if (interval == -1) {
-        interval = config_getduration(IMAPOPT_IMAP_INPROGRESS_INTERVAL, 's');
+        interval = config_getduration(IMAPOPT_IMAP_INPROGRESS_INTERVAL);
         if (interval < 0) interval = 0;
     }
 

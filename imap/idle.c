@@ -98,7 +98,7 @@ EXPORTED int idle_init(void)
 
 EXPORTED int idle_enabled(void)
 {
-    int idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
+    int idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL);
 
     /* only enabled if a positive period */
     return (idle_period > 0);
@@ -130,7 +130,7 @@ EXPORTED int idle_start(unsigned long events, time_t timeout,
     json_decref(msg);
 
     if (r) {
-        int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
+        int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL);
         syslog(LOG_ERR, "IDLE: error sending message "
                         "INIT to idled for pid %d: %s. "
                         "Falling back to polling every %d seconds.",

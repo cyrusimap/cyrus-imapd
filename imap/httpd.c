@@ -876,7 +876,7 @@ int service_init(int argc __attribute__((unused)),
     const char *jwtdir = config_getstring(IMAPOPT_HTTP_JWT_KEY_DIR);
     if (jwtdir) {
         r = http_jwt_init(jwtdir,
-                config_getduration(IMAPOPT_HTTP_JWT_MAX_AGE, 's'));
+                config_getduration(IMAPOPT_HTTP_JWT_MAX_AGE));
     }
 
     return r;
@@ -999,7 +999,7 @@ int service_main(int argc __attribute__((unused)),
     httpd_altsvc = buf_releasenull(&buf);
 
     /* Set inactivity timer */
-    httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT, 'm');
+    httpd_timeout = config_getduration(IMAPOPT_HTTPTIMEOUT);
     if (httpd_timeout < 0) httpd_timeout = 0;
     prot_settimeout(httpd_in, httpd_timeout);
     prot_setflushonread(httpd_in, httpd_out);
@@ -1024,7 +1024,7 @@ int service_main(int argc __attribute__((unused)),
         fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
 
     /* Setup the signal handler for keepalive heartbeat */
-    httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE, 's');
+    httpd_keepalive = config_getduration(IMAPOPT_HTTPKEEPALIVE);
     if (httpd_keepalive < 0) httpd_keepalive = 0;
     if (httpd_keepalive) {
         struct sigaction action;
@@ -4826,7 +4826,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 
             /* Adjust inactivity timer */
             prot_settimeout(httpd_in,
-                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT));
         }
         return ret;
     }

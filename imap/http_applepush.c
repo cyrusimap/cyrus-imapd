@@ -132,7 +132,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     struct mboxevent *mboxevent = mboxevent_new(EVENT_APPLEPUSHSERVICE_DAV);
     mboxevent_set_applepushservice_dav(mboxevent, aps_topic, token, httpd_userid,
                                        mailbox_userid, mailbox_uniqueid, mbtype,
-                                       config_getduration(IMAPOPT_APS_EXPIRY, 'd'));
+                                       config_getduration(IMAPOPT_APS_EXPIRY));
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 

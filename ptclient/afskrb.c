@@ -277,7 +277,7 @@ static struct auth_state *myauthstate(const char *identifier,
        authentication problem, and cache only for a minute.
        Should negative cache time be configurable? */
     if (rc == PRPERM) {
-        int ptscache_timeout = config_getduration(IMAPOPT_PTSCACHE_TIMEOUT, 's');
+        int ptscache_timeout = config_getduration(IMAPOPT_PTSCACHE_TIMEOUT);
         if (ptscache_timeout < 60)
             ptscache_timeout = 60;
         newstate->mark = time(0) + 60 - ptscache_timeout;

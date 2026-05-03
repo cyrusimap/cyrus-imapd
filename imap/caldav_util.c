@@ -1824,7 +1824,7 @@ HIDDEN int caldav_init_jmapcalendar(const char *userid, struct mailbox *mailbox)
 
 EXPORTED icaltimetype caldav_get_historical_cutoff()
 {
-    int age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
+    int age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE);
     icaltimetype cutoff;
 
     if (age < 0) return icaltime_null_time();

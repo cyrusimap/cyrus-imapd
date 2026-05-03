@@ -487,7 +487,7 @@ int service_main(int argc __attribute__((unused)),
     nntp_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     /* Set inactivity timer */
-    nntp_timeout = config_getduration(IMAPOPT_NNTPTIMEOUT, 'm');
+    nntp_timeout = config_getduration(IMAPOPT_NNTPTIMEOUT);
     if (nntp_timeout < 3 * 60) nntp_timeout = 3 * 60;
     prot_settimeout(nntp_in, nntp_timeout);
     prot_setflushonread(nntp_in, nntp_out);
@@ -1974,7 +1974,7 @@ static void cmd_authinfo_pass(char *pass)
                             strlen(pass))!=SASL_OK) {
         loginlog_bad(nntp_clienthost, nntp_userid, "plaintext", NULL,
                      sasl_errdetail(nntp_saslconn));
-        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -2115,7 +2115,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
             loginlog_bad(nntp_clienthost, userid, mech, NULL,
                          sasl_errdetail(nntp_saslconn));
 
-            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
