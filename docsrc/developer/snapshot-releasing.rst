@@ -105,8 +105,8 @@ not.
 
 If we do do this:
 
-Check through `lib/imapoptions` for options with `"UNRELEASED"` in any of
-their version fields.
+Check through the files in `lib/imapoptions/` for options with
+`UNRELEASED` in their `Last-Modified` or `Deprecated-Since` fields.
 
 1. Replace these with the version number that this snapshot will be tagged
    as.
