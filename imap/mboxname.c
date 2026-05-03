@@ -959,7 +959,7 @@ EXPORTED const char *mbname_intname(const mbname_t *mbname)
         sep = 1;
     }
 
-    if (mbname->localpart) {
+    if (mbname->localpart && *mbname->localpart) {
         if (sep) buf_putc(&buf, '.');
         buf_appendcstr(&buf, "user.");
         _append_intbuf(&buf, mbname->localpart);
