@@ -367,7 +367,7 @@ EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
 static inline unsigned is_cached_header(const char *hdr)
 {
     size_t len;
-    struct mailbox_header_cache *thdr;
+    const struct mailbox_header_cache *thdr;
 
     len = strlen(hdr);
     if (len >= MAX_CACHED_HEADER_SIZE)

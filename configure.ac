@@ -1757,11 +1757,9 @@ AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
 AC_SUBST(COM_ERR_CPPFLAGS)
 
-if test "$USE_MAINTAINER_MODE" = "yes" ; then
-    AC_CHECK_PROG(GPERF,gperf,yes,no)
-    if test "$GPERF" != "yes"; then
-        AC_MSG_ERROR([gperf is not installed on this system, but is required for maintainer mode build rules])
-    fi
+AC_CHECK_PROG(GPERF,gperf,yes,no)
+if test "$GPERF" != "yes"; then
+    AC_MSG_ERROR([gperf is not installed on this system, but is required])
 fi
 
 AC_MSG_CHECKING(for modern syslog)

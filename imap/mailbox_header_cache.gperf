@@ -3,13 +3,27 @@
                              the cyrus.cache file */
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
- /* Command-line: gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$ mailbox_header_cache.gperf */
-#include "util.h"
+
+#include "lib/util.h"
+
 %}
+
+%7bit
+%enum
+%ignore-case
+%readonly-tables
+%compare-lengths
+%struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,0
+%define lookup-function-name  mailbox_header_cache_lookup
+
 struct mailbox_header_cache {
     const char *name;
     bit32 min_cache_version;
 };
+
 %%
 "priority", 0
 "references", 0
@@ -60,3 +74,4 @@ struct mailbox_header_cache {
 "listbox-message-date", BIT32_MAX
 "topicbox-message-uuid", BIT32_MAX
 "topicbox-policy-reasoning", BIT32_MAX
+%%
