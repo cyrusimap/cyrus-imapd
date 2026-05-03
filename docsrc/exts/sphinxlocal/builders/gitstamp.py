@@ -90,3 +90,8 @@ def what_build_am_i(app):
 # know what the build output format is.
 def setup(app):
     app.connect('builder-inited', what_build_am_i)
+    return {
+        # XXX Are we parallel r/w safe? Dunno! Say we're not, just in case.
+        'parallel_read_safe': False,
+        'parallel_write_safe': False,
+    }

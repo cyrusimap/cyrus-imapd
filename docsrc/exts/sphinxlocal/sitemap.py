@@ -69,3 +69,8 @@ def what_build_am_i(app):
 def setup(app):
     app.add_config_value("sitemap_website", None, '')
     app.connect('builder-inited', what_build_am_i)
+    return {
+        # XXX Are we parallel r/w safe? Dunno! Say we're not, just in case.
+        'parallel_read_safe': False,
+        'parallel_write_safe': False,
+    }
