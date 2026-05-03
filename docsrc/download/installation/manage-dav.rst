@@ -46,21 +46,15 @@ General configuration
 
 The Cyrus httpd service is configured using options in :cyrusman:`imapd.conf(5)`.
 
-.. sidebar:: httpmodules
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob httpmodules
-       :end-before: endblob httpmodules
-
 The support for RSS, CalDAV, and CardDAV is divided into separate modules which
 run as part of the Cyrus httpd service. Selection of which module(s) are enabled
-is done by setting the ``httpmodules`` option. **By default, no modules
+is done by setting the :imapdconf:`httpmodules` option. **By default, no modules
 are enabled.**
 
 Cyrus httpd also can serve static content, the location of which is set by the
-``httpdocroot`` option. Any content contained in the specified directory (including
-sub-directories) will be served as static content only. Cyrus httpd does NOT
-have the ability to execute any server-side scripts.
+:imapdconf:`httpdocroot` option. Any content contained in the specified
+directory (including sub-directories) will be served as static content only.
+Cyrus httpd does NOT have the ability to execute any server-side scripts.
 
 
 Authentication
@@ -69,19 +63,11 @@ Authentication
 As with other Cyrus services, the Cyrus httpd service uses
 :cyrus-sasl:`Cyrus SASL </>` to perform its authentication.
 
-.. sidebar:: allowplaintext
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob allowplaintext
-       :end-before: endblob allowplaintext
-
 Similar to plaintext login commands supported by the other Cyrus services (IMAP
 LOGIN, POP3 USER/PASS), the Cyrus httpd service determines whether to advertise
-the HTTP Basic authentication scheme based on the ``allowplaintext`` option and
-whether the client has connected over a TLS protected connection (HTTPS). BASIC
-authentication does not depend on a Cyrus SASL plugin.
+the HTTP Basic authentication scheme based on the :imapdconf:`allowplaintext`
+option and whether the client has connected over a TLS protected connection
+(HTTPS). BASIC authentication does not depend on a Cyrus SASL plugin.
 
 The advertisement of the other HTTP authentication schemes is controlled by the
 :cyrus-sasl:`SASL mech_list option </options>` option. For Cyrus httpd

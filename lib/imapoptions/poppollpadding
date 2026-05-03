@@ -5,10 +5,10 @@ Last-Modified: 2.3.17
 
 Create a softer minimum poll restriction.  Allows *poppollpadding*
 connections before the minpoll restriction is triggered.  Additionally, one
-padding entry is recovered every *popminpoll* minutes.  This allows for the
-occasional polling rate faster than popminpoll, (i.e., for clients that
-require a send/receive to send mail) but still enforces the rate long-term.
-Default is 1 (disabled).
+padding entry is recovered every :imapdconf:`popminpoll` minutes.  This
+allows for the occasional polling rate faster than popminpoll, (i.e., for
+clients that require a send/receive to send mail) but still enforces the
+rate long-term.  Default is 1 (disabled).
 
 The easiest way to think of it is a queue of past connections, with one
 slot being filled for every connection, and one slot being cleared every

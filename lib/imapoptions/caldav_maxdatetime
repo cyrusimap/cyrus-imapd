@@ -7,5 +7,5 @@ The latest date and time accepted by the server (ISO format).  This value
 is also used for expanding non-terminating recurrence rules.
 
 Note that increasing this value will require the DAV databases for
-calendars to be reconstructed with the **dav_reconstruct** utility in order
-to see its effect on serer-side time-based queries.
+calendars to be reconstructed with the :cyrusman:`dav_reconstruct(1)`
+utility in order to see its effect on serer-side time-based queries.

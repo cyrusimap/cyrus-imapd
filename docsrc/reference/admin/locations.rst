@@ -92,16 +92,11 @@ Mail Spool Partitions
 ---------------------
 
 While Cyrus itself has no default values for these settings, most
-distributions use ``default`` and ``/var/spool/cyrus`` or
-``/var/spool/cyrus``:
+distributions use ``defaultpartition: default`` and
+``partition-default: /var/spool/cyrus``.
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob defaultpartition
-        :end-before: endblob defaultpartition
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition-name
-        :end-before: endblob partition-name
+    * :imapdconf:`defaultpartition`
+    * :imapdconf:`partition-name`
 
 Metadata Partitions
 -------------------
@@ -110,13 +105,8 @@ Metadata is information used to process the mailbox data, rather than
 the contents of the messages withing the mailbox.  Examples include
 headers, caches, indexes, etc.
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob metapartition-name
-        :end-before: endblob metapartition-name
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob metapartition_files
-        :end-before: endblob metapartition_files
+    * :imapdconf:`metapartition-name`
+    * :imapdconf:`metapartition_files`
 
 Archive Partitions
 ------------------
@@ -128,9 +118,7 @@ such as recent messages, on fast drives, such as SSDs, and migrate
 "cold" data, such as older or large messages, to slower but cheaper
 media.
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob archivepartition-name
-        :end-before: endblob archivepartition-name
+    * :imapdconf:`archivepartition-name`
 
 Search Partitions
 -----------------
@@ -140,12 +128,7 @@ server-side search support.  Index data are stored in search "tiers"
 which are themselves related to search partitions.  There are two key
 settings for search tiers:
 
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob defaultsearchtier
-        :end-before: endblob defaultsearchtier
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob searchpartition-name
-        :end-before: endblob searchpartition-name
+    * :imapdconf:`defaultsearchtier`
+    * :imapdconf:`searchpartition-name`
 
 Back to :ref:`imap-admin`

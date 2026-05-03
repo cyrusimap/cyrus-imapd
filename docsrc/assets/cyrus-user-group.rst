@@ -21,16 +21,7 @@ Example group and user creation commands for GNU/Linux::
     useradd -c "Cyrus IMAP Server" -d /var/lib/imap -g mail -s /bin/bash -r cyrus
 
 The ``var/lib/imap`` directory above is an example. Use the same directory
-specified in the ``configdirectory`` option in :cyrusman:`imapd.conf(5)`.
-
-.. sidebar:: configdirectory
-
-    |change-default-config|
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob configdirectory
-        :end-before: endblob configdirectory
-
+specified in the :imapdconf:`configdirectory` option.
 
 If your installation uses system locations for things like SSL
 certificates (i.e. ``/etc/ssl/certs /etc/ssl/private``), then you should

@@ -7,19 +7,11 @@ WebDAV
 Configuration
 =============
 
-.. sidebar:: davdriveprefix
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob davdriveprefix
-       :end-before: endblob davdriveprefix
-
 When enabled, the WebDAV module allows Cyrus to function as a storage server.
 This module uses a subset of the mailbox hierarchy as collections, the toplevel
-of which is specified by the ``davdriveprefix`` option. The public storage hierarchy
-lives at the toplevel of the shared mailbox namespace. A user's personal
-storage hierarchy will be a child of their Inbox.
+of which is specified by the :imapdconf:`davdriveprefix` option. The public
+storage hierarchy lives at the toplevel of the shared mailbox namespace. A
+user's personal storage hierarchy will be a child of their Inbox.
 
 For example, using the default value for davdriveprefix, a collection named photos
 for user "murch" would reside in the mailbox named ``user.murch.#drive.photos``.

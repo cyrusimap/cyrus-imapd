@@ -28,12 +28,8 @@ ensure messages remain available for inclusion in the next backup cycle.
 Configuring Cyrus IMAP for Delayed Expunge
 ------------------------------------------
 
-To enable or disable Delayed Expunge, please check the following
-settings in :cyrusman:`imapd.conf(5)`.
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob expunge_mode
-        :end-before: endblob expunge_mode
+To enable or disable Delayed Expunge, use the :imapdconf:`expunge_mode`
+setting.
 
 .. seealso::
 

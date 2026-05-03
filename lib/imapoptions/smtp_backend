@@ -6,13 +6,13 @@ Last-Modified: 3.1.4
 
 The SMTP backend to use for sending email.
 
-The \"host\" backend sends message submissions via a TCP socket to the SMTP
-host defined in the config option smtp_host.
+The *host* backend sends message submissions via a TCP socket to the SMTP
+host defined in the config option :imapdconf:`smtp_host`.
 
-The \"sendmail\" backend forks the Cyrus process into the executable
-defined in the config option sendmail.  The executable must accept \"-bs\"
-as command line argument, read from stdin and must implement the minimum
-SMTP protocol as defined in section 4.5.1 of :rfc:`5321`.
+The *sendmail* backend forks the Cyrus process into the executable
+defined in the config option :imapdconf:`sendmail`.  The executable must
+accept \"-bs\" as command line argument, read from stdin and must implement
+the minimum SMTP protocol as defined in section 4.5.1 of :rfc:`5321`.
 
 If the SMTP EHLO command reports AUTH (:rfc:`4954`) as a supported
 extension, then the MAIL FROM command includes the AUTH parameter, with its

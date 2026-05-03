@@ -27,33 +27,13 @@ Configuration options
 
 These need to be set in :cyrusman:`imapd.conf(5)`.
 
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_content_inclusion_mode
-        :end-before: endblob event_content_inclusion_mode
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_content_size
-        :end-before: endblob event_content_size
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_exclude_flags
-        :end-before: endblob event_exclude_flags
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_exclude_specialuse
-        :end-before: endblob event_exclude_specialuse
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_extra_params
-        :end-before: endblob event_extra_params
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_groups
-        :end-before: endblob event_groups
-
-.. include:: ../manpages/configs/imapd.conf.rst
-        :start-after: startblob event_notifier
-        :end-before: endblob event_notifier
+    * :imapdconf:`event_content_inclusion_mode`
+    * :imapdconf:`event_content_size`
+    * :imapdconf:`event_exclude_flags`
+    * :imapdconf:`event_exclude_specialuse`
+    * :imapdconf:`event_extra_params`
+    * :imapdconf:`event_groups`
+    * :imapdconf:`event_notifier`
 
 Event Types
 ===========
