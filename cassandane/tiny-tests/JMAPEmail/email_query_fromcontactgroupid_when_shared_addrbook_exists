@@ -122,4 +122,18 @@ sub test_email_query_fromcontactgroupid_when_shared_addrbook_exists
     ], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+
+    # Also filter using shared/ prefix
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => "shared/$contactGroupId1"
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
 }
