@@ -3251,8 +3251,8 @@ static int _email_read_querystate(jmap_req_t *req, const char *s,
 
 static int emailsearch_is_mutable(struct emailsearch *search)
 {
-    /* can calculate changes for mutable sort, but not mutable search */
-    return search->is_mutable > 1 ? 0 : 1;
+    // see search_is_mutable(): bit 0 indicates mutability of sort
+    return search->is_mutable > 1 ? 1 : 0;
 }
 
 // GUID search
@@ -4930,7 +4930,7 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     q->cstate = req->cstate;
     emailquery_buildresult(q, &emailquery_cache, errp);
     if (*errp) goto done;
-    q->super.can_calculate_changes = emailquery_cache.qr.is_mutable;
+    q->super.can_calculate_changes = !emailquery_cache.qr.is_mutable;
     q->super.query_state = xstrdupnull(querystate);
 
     if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
@@ -5103,7 +5103,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
                       /*ignore_timer*/0, err);
     if (*err) goto done;
 
-    if (!emailsearch_is_mutable(&search)) {
+    if (emailsearch_is_mutable(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "mutable search");
         goto done;
@@ -5320,7 +5320,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
                       /*ignore_timer*/0, err);
     if (*err) goto done;
 
-    if (!emailsearch_is_mutable(&search)) {
+    if (emailsearch_is_mutable(&search)) {
         *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                       "description", "mutable search");
         goto done;
