@@ -294,9 +294,9 @@ EXPORTED const char *sync_get_config(const char *channel, enum imapopt opt)
     return response;
 }
 
-EXPORTED int sync_get_durationconfig(const char *channel, enum imapopt opt)
+EXPORTED int32_t sync_get_durationconfig(const char *channel, enum imapopt opt)
 {
-    int response = -1;
+    int32_t response = -1;
 
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].type == OPT_DURATION);

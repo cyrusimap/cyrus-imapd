@@ -243,7 +243,7 @@ static void test_bitfield_invalid(void)
 
 static void test_duration_value_days(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -256,7 +256,7 @@ static void test_duration_value_days(void)
 
 static void test_duration_value_hours(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -269,7 +269,7 @@ static void test_duration_value_hours(void)
 
 static void test_duration_value_minutes(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -282,7 +282,7 @@ static void test_duration_value_minutes(void)
 
 static void test_duration_value_seconds(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -295,7 +295,7 @@ static void test_duration_value_seconds(void)
 
 static void test_duration_value_combined(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -328,7 +328,7 @@ static void test_duration_value_nounits(void)
     );
 
     for (i = 0; i < n_tests; i++) {
-        int duration = -1;
+        int32_t duration = -1;
 
         duration = config_getduration(tests[i].opt);
         CU_ASSERT_EQUAL(duration, 13 * tests[i].multiplier);
@@ -337,7 +337,7 @@ static void test_duration_value_nounits(void)
 
 static void test_duration_value_negative(void)
 {
-    int caldav_historical_age = 0xdeadbeef;
+    int32_t caldav_historical_age = 0xdeadbeef;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -350,7 +350,7 @@ static void test_duration_value_negative(void)
 
 static void test_duration_default(void)
 {
-    int timeout = -1;
+    int32_t timeout = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -363,7 +363,7 @@ static void test_duration_default(void)
 
 static void test_duration_nodefault(void)
 {
-    int plaintextloginpause = -1;
+    int32_t plaintextloginpause = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -1007,7 +1007,7 @@ static void test_deprecated_duration(void)
 {
     /* { "archive_days", "7d", DURATION, "3.1.8", "archive_after" } */
     /* { "archive_after", "7d", DURATION } */
-    int val;
+    int32_t val;
 
     /* set the deprecated name only */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
