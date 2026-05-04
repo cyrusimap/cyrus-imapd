@@ -2279,7 +2279,7 @@ static void caldav_rewrite_attachprop_to_binary(struct mailbox *attachments,
     if (!buf_len(b64val)) goto done;
 
     int64_t max_size = config_getbytesize(
-        IMAPOPT_WEBDAV_ATTACHMENTS_MAX_BINARY_ATTACH_SIZE, 'K');
+        IMAPOPT_WEBDAV_ATTACHMENTS_MAX_BINARY_ATTACH_SIZE);
     if (max_size > 0 && buf_len(b64val) > (size_t) max_size) goto done;
 
     // Rewrite ATTACH property

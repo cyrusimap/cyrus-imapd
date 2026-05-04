@@ -308,7 +308,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     /* Configure HTTP */
     config_httpprettytelemetry = config_getswitch(IMAPOPT_HTTPPRETTYTELEMETRY);
 
-    config_search_maxsize = config_getbytesize(IMAPOPT_SEARCH_MAXSIZE, 'K');
+    config_search_maxsize = config_getbytesize(IMAPOPT_SEARCH_MAXSIZE);
 
     if (!cyrus_init_nodb) {
         /* lookup the database backends */
