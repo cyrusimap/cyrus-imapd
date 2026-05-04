@@ -272,75 +272,71 @@ static struct mboxlock *sync_lock(struct sync_client_state *sync_cs,
 
 /* channel-based configuration */
 
-EXPORTED const char *sync_get_config(const char *channel, const char *val)
+EXPORTED const char *sync_get_config(const char *channel, enum imapopt opt)
 {
     const char *response = NULL;
 
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert((imapopts[opt].t == OPT_STRING) ||
+           (imapopts[opt].t == OPT_STRINGLIST));
+
     if (channel) {
         char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
-        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+        snprintf(name, MAX_MAILBOX_NAME, "%s_%s",
+                 channel, imapopts[opt].optname);
         response = config_getoverflowstring(name, NULL);
     }
 
     if (!response) {
-        /* get the core value */
-        if (!strcmp(val, "sync_host"))
-            response = config_getstring(IMAPOPT_SYNC_HOST);
-        else if (!strcmp(val, "sync_authname"))
-            response = config_getstring(IMAPOPT_SYNC_AUTHNAME);
-        else if (!strcmp(val, "sync_password"))
-            response = config_getstring(IMAPOPT_SYNC_PASSWORD);
-        else if (!strcmp(val, "sync_realm"))
-            response = config_getstring(IMAPOPT_SYNC_REALM);
-        else if (!strcmp(val, "sync_port"))
-            response = config_getstring(IMAPOPT_SYNC_PORT);
-        else if (!strcmp(val, "sync_shutdown_file"))
-            response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
-        else if (!strcmp(val, "sync_cache_db_path"))
-            response = config_getstring(IMAPOPT_SYNC_CACHE_DB_PATH);
-        else
-            fatal("unknown config variable requested", EX_SOFTWARE);
+        response = config_getstring(opt);
     }
 
     return response;
 }
 
-EXPORTED int sync_get_durationconfig(const char *channel, const char *val, int defunit)
+EXPORTED int sync_get_durationconfig(const char *channel, enum imapopt opt, int defunit)
 {
     int response = -1;
+
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_DURATION);
 
     if (channel) {
         const char *result = NULL;
         char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
-        snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+        snprintf(name, MAX_MAILBOX_NAME, "%s_%s",
+                 channel, imapopts[opt].optname);
         result = config_getoverflowstring(name, NULL);
         if (result)
             config_parseduration(result, defunit, &response);
     }
 
     if (response == -1) {
-        if (!strcmp(val, "sync_repeat_interval"))
-            response = config_getduration(IMAPOPT_SYNC_REPEAT_INTERVAL, defunit);
+        response = config_getduration(opt, defunit);
     }
 
     return response;
 }
 
-static int sync_get_switchconfig(const char *channel, const char *val)
+static int sync_get_switchconfig(const char *channel, enum imapopt opt)
 {
     int response = -1;
+
+    assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert(imapopts[opt].t == OPT_SWITCH);
 
     if (channel) {
         const char *result = NULL;
         char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
-        snprintf(name, sizeof(name), "%s_%s", channel, val);
+        snprintf(name, sizeof(name), "%s_%s",
+                 channel, imapopts[opt].optname);
         result = config_getoverflowstring(name, NULL);
+        /* XXX switch type, but doesn't handle "yes" etc, only 1/0! */
         if (result) response = atoi(result);
     }
 
     if (response == -1) {
-        if (!strcmp(val, "sync_try_imap"))
-            response = config_getswitch(IMAPOPT_SYNC_TRY_IMAP);
+        response = config_getswitch(opt);
     }
 
     return response;
@@ -5076,7 +5072,7 @@ static struct db *sync_getcachedb(struct sync_client_state *sync_cs)
     const char *dbtype = config_getstring(IMAPOPT_SYNC_CACHE_DB);
     if (!dbtype) return NULL;
 
-    const char *dbpath = sync_get_config(sync_cs->channel, "sync_cache_db_path");
+    const char *dbpath = sync_get_config(sync_cs->channel, IMAPOPT_SYNC_CACHE_DB_PATH);
     if (!dbpath) return NULL;
 
     int flags = CYRUSDB_CREATE;
@@ -8379,18 +8375,18 @@ EXPORTED int sync_connect(struct sync_client_state *sync_cs)
     buf_free(&sync_cs->tagbuf);
 
     cb = mysasl_callbacks(NULL,
-                          sync_get_config(sync_cs->channel, "sync_authname"),
-                          sync_get_config(sync_cs->channel, "sync_realm"),
-                          sync_get_config(sync_cs->channel, "sync_password"));
+                          sync_get_config(sync_cs->channel, IMAPOPT_SYNC_AUTHNAME),
+                          sync_get_config(sync_cs->channel, IMAPOPT_SYNC_REALM),
+                          sync_get_config(sync_cs->channel, IMAPOPT_SYNC_PASSWORD));
 
     /* get the right port */
-    port = sync_get_config(sync_cs->channel, "sync_port");
+    port = sync_get_config(sync_cs->channel, IMAPOPT_SYNC_PORT);
     if (port) {
         imap_csync_protocol.service = port;
         csync_protocol.service = port;
     }
 
-    try_imap = sync_get_switchconfig(sync_cs->channel, "sync_try_imap");
+    try_imap = sync_get_switchconfig(sync_cs->channel, IMAPOPT_SYNC_TRY_IMAP);
 
     if (try_imap) {
         backend = backend_connect(backend, sync_cs->servername,
@@ -8538,7 +8534,8 @@ EXPORTED int sync_checkpoint(struct protstream *clientin)
         const char *conf = config_getstring(IMAPOPT_SYNC_RIGHTNOW_CHANNEL);
         if (conf && strcmp(conf, "\"\""))
             rightnow_sync_cs.channel = conf;
-        rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel, "sync_host");
+        rightnow_sync_cs.servername = sync_get_config(rightnow_sync_cs.channel,
+                                                      IMAPOPT_SYNC_HOST);
         rightnow_sync_cs.flags = SYNC_FLAG_LOGGING;
         syslog(LOG_DEBUG, "sync_rightnow_connect(%s)", rightnow_sync_cs.servername);
         sync_connect(&rightnow_sync_cs);
