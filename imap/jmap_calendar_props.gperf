@@ -51,7 +51,7 @@ jmap_property_t;
 "freeBusyUrl",      JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_EXTERNAL
 "calDavUrl",        JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_EXTERNAL
 "mailboxUniqueId",  JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET
-"x-href",           JMAP_DEBUG_EXTENSION,     JMAP_PROP_SERVER_SET
+"x-href",           JMAP_CALENDARS_EXTENSION, JMAP_PROP_SERVER_SET
 %%
 
 const jmap_prop_hash_table_t jmap_calendar_props_map = {

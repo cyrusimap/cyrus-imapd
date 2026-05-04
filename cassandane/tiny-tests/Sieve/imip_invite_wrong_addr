@@ -12,7 +12,8 @@ sub test_imip_invite_wrong_addr
 
     xlog $self, "Create calendar user";
     my $CalDAV = $self->{caldav};
-    my $CalendarId = $self->default_user->calendars->default->id;
+    my $CalendarHref =
+        $self->default_user->calendars->default->properties->{'x-href'};
     my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
 
     xlog $self, "Install a sieve script to process iMIP";
@@ -63,7 +64,7 @@ EOF
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 
     xlog $self, "Check that the event made it to calendar";
-    my $events = $CalDAV->GetEvents($CalendarId);
+    my $events = $CalDAV->GetEvents($CalendarHref);
     $self->assert_equals(1, scalar @$events);
     $self->assert_str_equals($uuid, $events->[0]{uid});
 }

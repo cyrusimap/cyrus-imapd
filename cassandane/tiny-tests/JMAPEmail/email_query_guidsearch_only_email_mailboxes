@@ -8,6 +8,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
 {
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
+    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $using = [
         'urn:ietf:params:jmap:core',
@@ -53,7 +54,7 @@ sub test_email_query_guidsearch_only_email_mailboxes
             create => {
                 '2' => {
                     calendarIds => {
-                        Default => JSON::true
+                        $default_cal_id => JSON::true
                     },
                     start => '2020-02-25T11:00:00',
                     timeZone => 'Australia/Melbourne',

@@ -6,7 +6,6 @@ sub test_calendarevent_query_deleted_calendar
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
 
@@ -25,6 +24,7 @@ sub test_calendarevent_query_deleted_calendar
     my $calidA = $res->[0][1]{created}{"1"}{id};
     my $calidB = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
+    my $hrefA = $res->[0][1]{created}{"1"}{'x-href'};
 
     xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
@@ -68,7 +68,7 @@ sub test_calendarevent_query_deleted_calendar
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog $self, "CalDAV delete calendar as cassandane";
-    $caldav->DeleteCalendar("/dav/calendars/user/cassandane/$calidA");
+    $caldav->DeleteCalendar($hrefA);
 
     xlog $self, "get filtered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
