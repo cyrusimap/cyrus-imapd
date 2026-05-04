@@ -5227,7 +5227,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
     time_t cutoff = time(0) - archive_after;
     if (rock) cutoff = *((time_t *)rock);
 
-    int64_t archive_size = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    int64_t archive_size = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     if (archive_size < 0) archive_size = 0;
     size_t maxsize = archive_size;
 

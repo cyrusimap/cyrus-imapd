@@ -20,7 +20,7 @@ extern int config_getswitch(enum imapopt opt);
 extern enum enum_value config_getenum(enum imapopt opt);
 extern uint64_t config_getbitfield(enum imapopt opt);
 extern int config_getduration(enum imapopt opt);
-extern int64_t config_getbytesize(enum imapopt opt, int defunit);
+extern int64_t config_getbytesize(enum imapopt opt);
 
 /* these work on additional strings that are not defined in the
  * imapoptions table */

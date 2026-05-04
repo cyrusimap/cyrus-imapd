@@ -147,7 +147,7 @@ HIDDEN void jmap_sieve_init(jmap_settings_t *settings)
     }
 
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
-    maxscriptsize = config_getbytesize(IMAPOPT_SIEVE_MAXSCRIPTSIZE, 'K');
+    maxscriptsize = config_getbytesize(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
 }
 
 HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)

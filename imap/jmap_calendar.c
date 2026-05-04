@@ -4320,7 +4320,7 @@ static int createevent_store(jmap_req_t *req,
 
     static int64_t icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
-        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
+        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE);
         if (icalendar_max_size <= 0) icalendar_max_size = BYTESIZE_UNLIMITED;
     }
 
@@ -5239,7 +5239,7 @@ static void setcalendarevents_update(jmap_req_t *req,
 
     static int64_t icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
-        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
+        icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE);
         if (icalendar_max_size <= 0) icalendar_max_size = BYTESIZE_UNLIMITED;
     }
 

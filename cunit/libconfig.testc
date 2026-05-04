@@ -496,7 +496,7 @@ static void test_bytesize_value_gibibytes(void)
         "archive_maxsize: 1G\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     CU_ASSERT_EQUAL(archive_maxsize, 1LL * 1024 * 1024 * 1024);
 }
 
@@ -509,7 +509,7 @@ static void test_bytesize_value_mebibytes(void)
         "archive_maxsize: 3M\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     CU_ASSERT_EQUAL(archive_maxsize, 3LL * 1024 * 1024);
 }
 
@@ -522,7 +522,7 @@ static void test_bytesize_value_kibibytes(void)
         "archive_maxsize: 45K\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     CU_ASSERT_EQUAL(archive_maxsize, 45LL * 1024);
 }
 
@@ -535,52 +535,62 @@ static void test_bytesize_value_bytes(void)
         "archive_maxsize: 25B\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     CU_ASSERT_EQUAL(archive_maxsize, 25LL);
 }
 
 static void test_bytesize_value_nounits(void)
 {
-    int64_t archive_maxsize = -1LL;
+    static const struct {
+        enum imapopt opt;
+        int64_t multiplier;
+    } tests[] = {
+        { IMAPOPT_MAXMESSAGESIZE, 1 }, /* implicitly seconds */
+        { IMAPOPT_ARCHIVE_MAXSIZE, 1024 }, /* Default-Unit: K */
+        /* we don't have BYTESIZE options with Default-Unit: M or G */
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
+        "maxmessagesize: 13\n"
         "archive_maxsize: 13\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
-    CU_ASSERT_EQUAL(archive_maxsize, 13LL);
+    for (i = 0; i < n_tests; i++) {
+        int64_t bytesize = -1;
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
-    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024);
-
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
-    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024);
-
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
-    CU_ASSERT_EQUAL(archive_maxsize, 13LL * 1024 * 1024 * 1024);
+        bytesize = config_getbytesize(tests[i].opt);
+        CU_ASSERT_EQUAL(bytesize, 13 * tests[i].multiplier);
+    }
 }
 
 static void test_bytesize_value_negative(void)
 {
-    int64_t archive_maxsize = 0xdeadbeef;
+    static const struct {
+        enum imapopt opt;
+        int64_t multiplier;
+    } tests[] = {
+        { IMAPOPT_MAXMESSAGESIZE, 1 }, /* implicitly seconds */
+        { IMAPOPT_ARCHIVE_MAXSIZE, 1024 }, /* Default-Unit: K */
+        /* we don't have BYTESIZE options with Default-Unit: M or G */
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
+        "maxmessagesize: -1\n"
         "archive_maxsize: -1\n"
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'B');
-    CU_ASSERT_EQUAL(archive_maxsize, -1LL);
+    for (i = 0; i < n_tests; i++) {
+        int64_t bytesize = -1;
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
-    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024);
-
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'M');
-    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024);
-
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'G');
-    CU_ASSERT_EQUAL(archive_maxsize, -1LL * 1024 * 1024 * 1024);
+        bytesize = config_getbytesize(tests[i].opt);
+        CU_ASSERT_EQUAL(bytesize, -1 * tests[i].multiplier);
+    }
 }
 
 static void test_bytesize_default(void)
@@ -592,7 +602,7 @@ static void test_bytesize_default(void)
         /* archive_maxsize: 1024 K (default) */
     );
 
-    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE, 'K');
+    archive_maxsize = config_getbytesize(IMAPOPT_ARCHIVE_MAXSIZE);
     CU_ASSERT_EQUAL(archive_maxsize, 1024LL * 1024);
 }
 
@@ -1060,13 +1070,13 @@ static void test_deprecated_bytesize(void)
 
     /* should not be able to read the deprecated name */
     CU_EXPECT_CYRFATAL_BEGIN;
-    val = config_getbytesize(IMAPOPT_AUTOCREATEQUOTA, 'K');
+    val = config_getbytesize(IMAPOPT_AUTOCREATEQUOTA);
     CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
         "Option 'autocreatequota' is deprecated in favor of "
         "'autocreate_quota' since version 2.5.0.");
 
     /* should be able to read it at the new name */
-    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA);
     CU_ASSERT_EQUAL(val, 8LL * 1024);
 
     /* set the new name */
@@ -1078,7 +1088,7 @@ static void test_deprecated_bytesize(void)
     CU_ASSERT_SYSLOG(/*all*/0, 0);
 
     /* should be able to read it at the new name */
-    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA);
     CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
 
     /* set both names to different values */
@@ -1091,7 +1101,7 @@ static void test_deprecated_bytesize(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should read new value at the new name */
-    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+    val = config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA);
     CU_ASSERT_EQUAL(val, 12LL * 1024 * 1024);
 }
 

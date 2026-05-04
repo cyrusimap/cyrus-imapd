@@ -738,7 +738,7 @@ static void my_caldav_init(struct buf *serverinfo)
 
     utc_zone = icaltimezone_get_utc_timezone();
 
-    icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE, 'B');
+    icalendar_max_size = config_getbytesize(IMAPOPT_ICALENDAR_MAX_SIZE);
     if (icalendar_max_size <= 0) icalendar_max_size = BYTESIZE_UNLIMITED;
 }
 

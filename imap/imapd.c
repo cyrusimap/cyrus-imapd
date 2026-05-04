@@ -1105,10 +1105,10 @@ int service_init(int argc, char **argv, char **envp)
 
     prometheus_increment(CYRUS_IMAP_READY_LISTENERS);
 
-    maxmsgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    maxmsgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
     if (maxmsgsize <= 0) maxmsgsize = BYTESIZE_UNLIMITED;
 
-    maxargssize = config_getbytesize(IMAPOPT_MAXARGSSIZE, 'B');
+    maxargssize = config_getbytesize(IMAPOPT_MAXARGSSIZE);
     if (maxargssize <= 0) maxargssize = BYTESIZE_UNLIMITED;
 
     return 0;
@@ -2916,7 +2916,7 @@ static void autocreate_inbox(void)
     if (imapd_userisadmin) return;
     if (imapd_userisproxyadmin) return;
 
-    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') >= 0) {
+    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA) >= 0) {
         char *inboxname = mboxname_user_mbox(imapd_userid, NULL);
         int r = mboxlist_lookup(inboxname, NULL, NULL);
         free(inboxname);
@@ -4658,9 +4658,9 @@ static void warn_about_quota(const char *quotaroot)
         goto out;           /* failed to read */
 
     memset(thresholds, 0, sizeof(thresholds));
-    thresholds[QUOTA_STORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
+    thresholds[QUOTA_STORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE) / 1024;
     thresholds[QUOTA_MESSAGE] = config_getint(IMAPOPT_QUOTAWARNMSG);
-    thresholds[QUOTA_ANNOTSTORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE, 'K') / 1024;
+    thresholds[QUOTA_ANNOTSTORAGE] = config_getbytesize(IMAPOPT_QUOTAWARNSIZE) / 1024;
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
         if (q.limits[res] < 0)
@@ -7285,7 +7285,7 @@ localcreate:
     if (r == IMAP_PERMISSION_DENIED) {
         if (!strarray_size(mbname_boxes(mbname)) && !strcmpsafe(imapd_userid, mbname_userid(mbname))) {
             int64_t autocreatequotastorage =
-                config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K');
+                config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA);
 
             if (autocreatequotastorage > 0) {
                 mbentry.uniqueid = NULL;

@@ -903,7 +903,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.tls_conn = NULL;
     cd.starttls_done = 0;
 
-    max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+    max_msgsize = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
 
     /* 0 means "unlimited", which really means our internally-defined limit */
     if (max_msgsize <= 0) max_msgsize = BYTESIZE_UNLIMITED;

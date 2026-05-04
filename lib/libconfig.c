@@ -407,7 +407,7 @@ done:
 }
 
 /* Get a size value, converted to bytes. */
-EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
+EXPORTED int64_t config_getbytesize(enum imapopt opt)
 {
     int64_t bytesize;
 
@@ -415,11 +415,13 @@ EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_BYTESIZE);
     assert_not_deprecated(opt);
-    assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
 
     if (imapopts[opt].val.s == NULL) return 0;
 
-    if (config_parsebytesize(imapopts[opt].val.s, defunit, &bytesize)) {
+    if (config_parsebytesize(imapopts[opt].val.s,
+                             imapopts[opt].defunit,
+                             &bytesize))
+    {
         /* should have been rejected by config_read_file, but just in case */
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
@@ -823,17 +825,17 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     tok_fini(&tok);
 
     /* set some limits */
-    i64val = config_getbytesize(IMAPOPT_MAXLITERAL, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXLITERAL);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
     config_maxliteral = i64val;
-    i64val = config_getbytesize(IMAPOPT_MAXQUOTED, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXQUOTED);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
     config_maxquoted = i64val;
-    i64val = config_getbytesize(IMAPOPT_MAXWORD, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXWORD);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
