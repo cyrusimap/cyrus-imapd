@@ -230,7 +230,7 @@ static void replica_connect(void)
     int wait;
 
     if (!maxwait)
-        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT, 's');
+        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT);
 
     for (wait = 15;; wait *= 2) {
         int r = sync_connect(&sync_cs);
@@ -613,7 +613,7 @@ int main(int argc, char **argv)
 
     /* get the server name if not specified */
     if (!servername)
-        servername = sync_get_config(channel, "sync_host");
+        servername = sync_get_config(channel, IMAPOPT_SYNC_HOST);
 
     if (!servername)
         fatal("sync_host not defined", EX_SOFTWARE);
@@ -769,10 +769,10 @@ int main(int argc, char **argv)
         else {
             /* rolling replication */
             if (!sync_shutdown_file)
-                sync_shutdown_file = sync_get_config(channel, "sync_shutdown_file");
+                sync_shutdown_file = sync_get_config(channel, IMAPOPT_SYNC_SHUTDOWN_FILE);
 
             if (!min_delta)
-                min_delta = sync_get_durationconfig(channel, "sync_repeat_interval", 's');
+                min_delta = sync_get_durationconfig(channel, IMAPOPT_SYNC_REPEAT_INTERVAL);
 
             flags |= SYNC_FLAG_BATCH;
 

@@ -733,7 +733,7 @@ int main(int argc, char **argv)
                                 NULL);
 
         if (reports[i].frequency <= 0)
-            reports[i].frequency = config_getduration(reports[i].freq_opt, 's');
+            reports[i].frequency = config_getduration(reports[i].freq_opt);
         if (reports[i].frequency <= 0)
             reports[i].frequency = reports[i].default_frequency;
 

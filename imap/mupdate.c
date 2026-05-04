@@ -1455,7 +1455,7 @@ static void cmd_authenticate(struct conn *C,
                         tag, errorstring ? errorstring : "");
             break;
         default:
-            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }

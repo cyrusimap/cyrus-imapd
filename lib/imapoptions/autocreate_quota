@@ -1,6 +1,7 @@
 Name: autocreate_quota
 Type: BYTESIZE
 Default-Value: -1
+Default-Unit: K
 Last-Modified: 3.8.0
 
 If set to a value of zero or higher, users have their INBOX folders created
@@ -13,5 +14,3 @@ the user has unlimited quota.
 
 Note that quota has kibibyte granularity.  Values specified here will be
 truncated to the nearest whole kibibyte.
-
-For backward compatibility, if no unit is specified, kibibytes is assumed.

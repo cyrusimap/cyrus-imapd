@@ -161,7 +161,7 @@ static void jmap_init(struct buf *serverinfo)
 #endif
     jmap_admin_init(&my_jmap_settings);
 
-    jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL, 's');
+    jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL);
     if (jmap_push_poll < 0) jmap_push_poll = 0;
 
     if (ws_enabled) {
@@ -357,7 +357,7 @@ static int meth_get(struct transaction_t *txn,
 
             /* Adjust inactivity timer */
             prot_settimeout(httpd_in,
-                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm'));
+                            2 + config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT));
         }
         return r;
     }

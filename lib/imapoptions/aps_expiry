@@ -1,6 +1,7 @@
 Name: aps_expiry
 Type: DURATION
 Default-Value: 1d
+Default-Unit: d
 Last-Modified: 3.10.0
 
 Time after which a CalDAV/CardDAV push subscription will expire.  A client

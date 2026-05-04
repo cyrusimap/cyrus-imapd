@@ -694,7 +694,7 @@ static void deliver_remote(message_data_t *msgdata,
         remote = proxy_findserver(d->server, &lmtp_protocol, "",
                                   &backend_cached, NULL, NULL, NULL);
         if (remote) {
-            int txn_timeout = config_getduration(IMAPOPT_LMTPTXN_TIMEOUT, 's');
+            int txn_timeout = config_getduration(IMAPOPT_LMTPTXN_TIMEOUT);
             if (txn_timeout)
                 prot_settimeout(remote->in, txn_timeout);
             lmtp_runtxn(remote, lt);
@@ -1116,7 +1116,7 @@ int autocreate_inbox(const mbname_t *mbname)
     /*
      * Check for autocreatequota and createonpost
      */
-    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA, 'K') < 0)
+    if (config_getbytesize(IMAPOPT_AUTOCREATE_QUOTA) < 0)
         return IMAP_MAILBOX_NONEXISTENT;
 
     if (!config_getswitch(IMAPOPT_AUTOCREATE_POST))

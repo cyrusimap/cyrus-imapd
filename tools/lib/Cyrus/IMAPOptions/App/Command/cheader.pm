@@ -102,8 +102,8 @@ sub footer
 
     union config_value {
         $dummy_field
-        const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
-        long i;             /* OPT_INT */
+        const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_BYTESIZE */
+        long i;             /* OPT_INT, OPT_DURATION */
         long b;             /* OPT_SWITCH */
         enum enum_value e;  /* OPT_ENUM */
         uint64_t x;         /* OPT_BITFIELD */
@@ -125,6 +125,7 @@ sub footer
         const enum imapopt preferred_opt;
         union config_value val;
         const union config_value def;
+        const int defunit;
         const struct enum_option_s enum_options[MAX_ENUM_OPTS+1];
     };
 

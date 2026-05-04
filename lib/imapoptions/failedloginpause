@@ -4,5 +4,3 @@ Default-Value: 3s
 Last-Modified: 3.1.8
 
 Time to pause after a failed login.
-
-For backward compatibility, if no unit is specified, seconds is assumed.

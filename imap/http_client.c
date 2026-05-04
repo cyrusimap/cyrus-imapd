@@ -59,7 +59,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     const char **hdr;
 
     if (max_msgsize == 0) {
-        int64_t val = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+        int64_t val = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
 
         /* 0 means "unlimited", which really means our internally-defined limit */
         if (val <= 0) val = BYTESIZE_UNLIMITED;

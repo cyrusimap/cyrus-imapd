@@ -7,5 +7,3 @@ Time to pause after a successful plaintext login.  For systems that support
 strong authentication, this permits users to perceive a cost of using
 plaintext passwords.  (This does not affect the use of PLAIN in SASL
 authentications.)
-
-For backward compatibility, if no unit is specified, seconds is assumed.

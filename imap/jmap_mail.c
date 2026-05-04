@@ -281,7 +281,7 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 
     ptrarray_append(&settings->getblob_handlers, jmap_emailheader_getblob);
 
-    emailquery_cache_max_age = config_getduration(IMAPOPT_JMAP_QUERYCACHE_MAX_AGE, 'm');
+    emailquery_cache_max_age = config_getduration(IMAPOPT_JMAP_QUERYCACHE_MAX_AGE);
     if (emailquery_cache_max_age) {
         struct jmap_handler *h = xzmalloc(sizeof(struct jmap_handler));
         h->eventmask = JMAP_HANDLE_BEFORE_METHOD|
@@ -312,7 +312,7 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
     }
 
     int64_t max_size_attachments_per_email =
-        config_getbytesize(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL, 'K');
+        config_getbytesize(IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL);
 
     if (max_size_attachments_per_email <= 0) {
         syslog(LOG_ERR, "jmap: invalid property value: %s",
@@ -8247,7 +8247,7 @@ static int _email_get_bodies(jmap_req_t *req,
                 free(html);
             }
             if (text) {
-                int64_t len = config_getbytesize(IMAPOPT_JMAP_PREVIEW_LENGTH, 'B');
+                int64_t len = config_getbytesize(IMAPOPT_JMAP_PREVIEW_LENGTH);
                 if (len < 0) len = 0;
                 struct buf preview = BUF_INITIALIZER;
                 buf_initmcstr(&preview, text);

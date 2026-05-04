@@ -270,32 +270,37 @@ done:
     return r;
 }
 
-/* Get a duration value, converted to seconds.
- *
- * defunit is one of 'd', 'h', 'm', 's' and determines how
- * unitless values are parsed.
- */
-EXPORTED int config_getduration(enum imapopt opt, int defunit)
+/* Get a duration value, converted to seconds. */
+EXPORTED int config_getduration(enum imapopt opt)
 {
-    int duration;
-
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_DURATION);
     assert_not_deprecated(opt);
-    assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
-    if (imapopts[opt].val.s == NULL) return 0;
+    if (!imapopts[opt].seen) {
+        /* wasn't set in file; parse and cache the default value */
+        int duration;
 
-    if (config_parseduration(imapopts[opt].val.s, defunit, &duration)) {
-        /* should have been rejected by config_read_file, but just in case */
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "%s: %s: couldn't parse duration '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
-        fatal(errbuf, EX_CONFIG);
+        if (imapopts[opt].def.s == NULL) {
+            duration = 0;
+        }
+        else if (config_parseduration(imapopts[opt].def.s,
+                                      imapopts[opt].defunit,
+                                      &duration))
+        {
+            /* uh-oh, we've got a bogus Default-Value */
+            char errbuf[1024];
+            snprintf(errbuf, sizeof(errbuf),
+                     "%s: %s: couldn't parse default duration '%s'",
+                     __func__, imapopts[opt].optname, imapopts[opt].def.s);
+            fatal(errbuf, EX_SOFTWARE);
+        }
+
+        imapopts[opt].val.i = duration;
+        imapopts[opt].seen = 1;
     }
 
-    return duration;
+    return imapopts[opt].val.i;
 }
 
 /* Parse a size value, converted to bytes.
@@ -409,7 +414,7 @@ done:
 }
 
 /* Get a size value, converted to bytes. */
-EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
+EXPORTED int64_t config_getbytesize(enum imapopt opt)
 {
     int64_t bytesize;
 
@@ -417,11 +422,13 @@ EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_BYTESIZE);
     assert_not_deprecated(opt);
-    assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
 
     if (imapopts[opt].val.s == NULL) return 0;
 
-    if (config_parsebytesize(imapopts[opt].val.s, defunit, &bytesize)) {
+    if (config_parsebytesize(imapopts[opt].val.s,
+                             imapopts[opt].defunit,
+                             &bytesize))
+    {
         /* should have been rejected by config_read_file, but just in case */
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
@@ -621,7 +628,6 @@ EXPORTED void config_reset(void)
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
         if ((imapopts[opt].t == OPT_STRING ||
-             imapopts[opt].t == OPT_DURATION ||
              imapopts[opt].t == OPT_BYTESIZE) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
@@ -825,17 +831,17 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     tok_fini(&tok);
 
     /* set some limits */
-    i64val = config_getbytesize(IMAPOPT_MAXLITERAL, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXLITERAL);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
     config_maxliteral = i64val;
-    i64val = config_getbytesize(IMAPOPT_MAXQUOTED, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXQUOTED);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
     config_maxquoted = i64val;
-    i64val = config_getbytesize(IMAPOPT_MAXWORD, 'B');
+    i64val = config_getbytesize(IMAPOPT_MAXWORD);
     if (i64val <= 0 || i64val > BYTESIZE_UNLIMITED) {
         i64val = BYTESIZE_UNLIMITED;
     }
@@ -1080,7 +1086,6 @@ static void config_read_file(const char *filename)
              * to free the current string if there is one */
             if (imapopts[opt].seen
                 && (imapopts[opt].t == OPT_STRING
-                    || imapopts[opt].t == OPT_DURATION
                     || imapopts[opt].t == OPT_BYTESIZE))
                 free((char *)imapopts[opt].val.s);
 
@@ -1216,8 +1221,10 @@ static void config_read_file(const char *filename)
             }
             case OPT_DURATION:
             {
-                /* make sure it's parseable, though we don't know the default units */
-                if (config_parseduration(p, '\0', NULL)) {
+                int duration = 0;
+
+                if (config_parseduration(p, imapopts[opt].defunit, &duration))
+                {
                     imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
@@ -1226,10 +1233,7 @@ static void config_read_file(const char *filename)
                     fatal(errbuf, EX_CONFIG);
                 }
 
-                /* but then store it unparsed, it will be parsed again by
-                 * config_getduration() where the caller knows the appropriate
-                 * default units */
-                imapopts[opt].val.s = xstrdup(p);
+                imapopts[opt].val.i = duration;
                 break;
             }
             case OPT_BYTESIZE:

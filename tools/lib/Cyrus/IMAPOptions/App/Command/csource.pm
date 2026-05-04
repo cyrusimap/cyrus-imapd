@@ -68,7 +68,7 @@ sub header
 
     EXPORTED struct imapopt_s imapopts[] =
     {
-      { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
+      { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, 0, { { NULL, IMAP_ENUM_ZERO } } },
     END_HEADER
 
     print $c;
@@ -79,7 +79,7 @@ sub footer
     my ($self) = @_;
 
     my $c = <<~'END_FOOTER';
-      { IMAPOPT_LAST, NULL, 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } }
+      { IMAPOPT_LAST, NULL, 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, 0, { { NULL, IMAP_ENUM_ZERO } } }
     };
 
     /* c code goes here */
@@ -95,6 +95,7 @@ sub _print_option
 
     return if $option->for_documentation_only;
 
+    # XXX fix whitespace now that we no longer need to match previous
     print '  { ';
     print join(', ',
                $option->c_name,
@@ -122,6 +123,7 @@ sub _print_option
             print "    {(void*)($default_value)},\n";
         }
     }
+    print '    ', $option->c_default_unit, ",\n";
 
     print "    {";
     foreach my $pair ($option->c_allowed_values) {

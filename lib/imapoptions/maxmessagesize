@@ -9,5 +9,3 @@ be rejected.
 
 If set to 0 (the default), a large internally-defined limit will be
 applied.
-
-If no unit is specified, bytes is assumed.

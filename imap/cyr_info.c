@@ -116,7 +116,6 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 break;
 
             case OPT_BYTESIZE:
-            case OPT_DURATION:
                 if (only_changed) {
                     if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
                         break;
@@ -124,6 +123,28 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
                 printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s);
+                break;
+
+            case OPT_DURATION:
+                if (only_changed) {
+                    int def_duration = 0;
+
+                    if (imapopts[i].def.s != NULL) {
+                        config_parseduration(imapopts[i].def.s,
+                                             imapopts[i].defunit,
+                                             &def_duration);
+                    }
+
+                    if (def_duration == imapopts[i].val.i)
+                        break;
+                }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
+                /* XXX if this option wasn't set in the file we read, then
+                 * XXX then imapopts[i].val.i is invalid (union is still
+                 * XXX the string!)
+                 */
+                printf("%s: %d\n", imapopts[i].optname, imapopts[i].val.i);
                 break;
 
             case OPT_ENUM:

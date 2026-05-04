@@ -1,6 +1,7 @@
 Name: quotawarnkb
 Type: BYTESIZE
 Default-Value: NULL
+Default-Unit: K
 Last-Modified: 3.8.0
 Deprecated-Since: 3.8.0
 Replaced-By: quotawarnsize

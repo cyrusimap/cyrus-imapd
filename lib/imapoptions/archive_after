@@ -1,9 +1,8 @@
 Name: archive_after
 Type: DURATION
 Default-Value: 7d
+Default-Unit: d
 Last-Modified: 3.1.8
 
 The duration after which to move messages to the archive partition if
 archiving is enabled.
-
-For backward compatibility, if no unit is specified, days is assumed.

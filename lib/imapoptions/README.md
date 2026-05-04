@@ -70,6 +70,24 @@ For SWITCH, this must be either 1 (enabled) or 0 (not enabled).
 
 This header is required.
 
+## Default-Unit
+For DURATION and BYTESIZE, this is the unit that Cyrus will assume when
+the configured value has no units.
+
+This header is optional, and should only be set when something other than
+the defaults of 's' (seconds) or 'B' (bytes) are required.  That should
+only happen for the sake of backwards compatibility, and since all such
+backwards-compatible options have already been defined, you should not set
+this header in new options.
+
+For DURATION, valid values are 's' (seconds), 'm' (minutes), 'h' (hours),
+and 'd' (days).
+
+For BYTESIZE, valid values are 'B' (bytes), 'K' (kibibytes), 'M'
+(mebibytes), and 'G' (gibibytes)
+
+For other types, this header is forbidden.
+
 ## Last-Modified
 Set this to UNRELEASED if you add a new option, or change the behaviour of
 an existing one.

@@ -59,8 +59,8 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     } \
 } while (0)
 
-#define _read_bytesize_opt(val, optkey, defunit) do { \
-    val = config_getbytesize(optkey, defunit); \
+#define _read_bytesize_opt(val, optkey) do { \
+    val = config_getbytesize(optkey); \
     if (val <= 0) { \
         syslog(LOG_ERR, "jmap: invalid property value: %s", \
                imapopts[optkey].optname); \
@@ -71,11 +71,11 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     int64_t *limits = settings->limits;
 
     _read_bytesize_opt(limits[MAX_SIZE_UPLOAD],
-                       IMAPOPT_JMAP_MAX_SIZE_UPLOAD, 'K');
+                       IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
     _read_int_opt(limits[MAX_CONCURRENT_UPLOAD],
                   IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
     _read_bytesize_opt(limits[MAX_SIZE_REQUEST],
-                       IMAPOPT_JMAP_MAX_SIZE_REQUEST, 'K');
+                       IMAPOPT_JMAP_MAX_SIZE_REQUEST);
     _read_int_opt(limits[MAX_CONCURRENT_REQUESTS],
                   IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
     _read_int_opt(limits[MAX_CALLS_IN_REQUEST],
@@ -85,7 +85,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     _read_int_opt(limits[MAX_OBJECTS_IN_SET],
                   IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
     _read_bytesize_opt(limits[MAX_SIZE_BLOB_SET],
-                       IMAPOPT_JMAP_MAX_SIZE_BLOB_SET, 'K');
+                       IMAPOPT_JMAP_MAX_SIZE_BLOB_SET);
     _read_int_opt(limits[MAX_CATENATE_ITEMS],
                   IMAPOPT_JMAP_MAX_CATENATE_ITEMS);
 

@@ -11,5 +11,3 @@ between retries.
 
 If this is zero or negative, the backoff duration will be allowed to
 increase indefinitely (not recommended).
-
-If no unit is specified, seconds is assumed.

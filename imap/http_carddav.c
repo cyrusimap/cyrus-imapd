@@ -390,7 +390,7 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
 
-    vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
+    vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE);
     if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
 }
 

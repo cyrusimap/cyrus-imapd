@@ -7,9 +7,10 @@
 
 #include "backend.h"
 #include "dlist.h"
+#include "libconfig.h"
+#include "mailbox.h"
 #include "prot.h"
 #include "seen.h"
-#include "mailbox.h"
 #include "sync_log.h"
 
 extern struct protocol_t imap_csync_protocol;
@@ -19,8 +20,8 @@ extern struct protocol_t csync_protocol;
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
-const char *sync_get_config(const char *channel, const char *val);
-int sync_get_durationconfig(const char *channel, const char *val, int defunit);
+const char *sync_get_config(const char *channel, enum imapopt opt);
+int sync_get_durationconfig(const char *channel, enum imapopt opt);
 
 /* ====================================================================== */
 
