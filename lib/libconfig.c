@@ -273,27 +273,34 @@ done:
 /* Get a duration value, converted to seconds. */
 EXPORTED int config_getduration(enum imapopt opt)
 {
-    int duration;
-
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_DURATION);
     assert_not_deprecated(opt);
 
-    if (imapopts[opt].val.s == NULL) return 0;
+    if (!imapopts[opt].seen) {
+        /* wasn't set in file; parse and cache the default value */
+        int duration;
 
-    if (config_parseduration(imapopts[opt].val.s,
-                             imapopts[opt].defunit,
-                             &duration))
-    {
-        /* should have been rejected by config_read_file, but just in case */
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "%s: %s: couldn't parse duration '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
-        fatal(errbuf, EX_CONFIG);
+        if (imapopts[opt].def.s == NULL) {
+            duration = 0;
+        }
+        else if (config_parseduration(imapopts[opt].def.s,
+                                      imapopts[opt].defunit,
+                                      &duration))
+        {
+            /* uh-oh, we've got a bogus Default-Value */
+            char errbuf[1024];
+            snprintf(errbuf, sizeof(errbuf),
+                     "%s: %s: couldn't parse default duration '%s'",
+                     __func__, imapopts[opt].optname, imapopts[opt].def.s);
+            fatal(errbuf, EX_SOFTWARE);
+        }
+
+        imapopts[opt].val.i = duration;
+        imapopts[opt].seen = 1;
     }
 
-    return duration;
+    return imapopts[opt].val.i;
 }
 
 /* Parse a size value, converted to bytes.
@@ -621,7 +628,6 @@ EXPORTED void config_reset(void)
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
         if ((imapopts[opt].t == OPT_STRING ||
-             imapopts[opt].t == OPT_DURATION ||
              imapopts[opt].t == OPT_BYTESIZE) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
@@ -1080,7 +1086,6 @@ static void config_read_file(const char *filename)
              * to free the current string if there is one */
             if (imapopts[opt].seen
                 && (imapopts[opt].t == OPT_STRING
-                    || imapopts[opt].t == OPT_DURATION
                     || imapopts[opt].t == OPT_BYTESIZE))
                 free((char *)imapopts[opt].val.s);
 
@@ -1216,8 +1221,10 @@ static void config_read_file(const char *filename)
             }
             case OPT_DURATION:
             {
-                /* make sure it's parseable, though we don't know the default units */
-                if (config_parseduration(p, '\0', NULL)) {
+                int duration = 0;
+
+                if (config_parseduration(p, imapopts[opt].defunit, &duration))
+                {
                     imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
@@ -1226,10 +1233,7 @@ static void config_read_file(const char *filename)
                     fatal(errbuf, EX_CONFIG);
                 }
 
-                /* but then store it unparsed, it will be parsed again by
-                 * config_getduration() where the caller knows the appropriate
-                 * default units */
-                imapopts[opt].val.s = xstrdup(p);
+                imapopts[opt].val.i = duration;
                 break;
             }
             case OPT_BYTESIZE:
