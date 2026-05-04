@@ -82,6 +82,7 @@ EOF
         }, 'R1'],
     ]);
 
+    my $eventId = $res->[0][1]{list}[0]{id};
     my %alerts = %{$res->[0][1]{list}[0]{alerts}};
     my %alertIds = map { $alerts{$_}{trigger}{offset} => $_ } keys %alerts;
     $self->assert_num_equals(2, scalar keys %alertIds);
@@ -107,8 +108,7 @@ EOF
         $events[0]{userId}); # accountId
     $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
         $events[0]{uid});
-    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
-        $events[0]{calendarEventId});
+    $self->assert_str_equals($eventId, $events[0]{calendarEventId});
     $self->assert_str_equals('', $events[0]{recurrenceId});
     $self->assert_str_equals($alertIds{'PT0S'}, $events[0]{alertId});
 
@@ -133,8 +133,7 @@ EOF
         $events[0]{userId}); # accountId
     $self->assert_str_equals('574E2CD0-2D2A-4554-8B63-C7504481D3A9',
         $events[0]{uid});
-    $self->assert_str_equals(encode_eventid('574E2CD0-2D2A-4554-8B63-C7504481D3A9'),
-        $events[0]{calendarEventId});
+    $self->assert_str_equals($eventId, $events[0]{calendarEventId});
     $self->assert_str_equals('', $events[0]{recurrenceId});
     $self->assert_str_equals($alertIds{'PT1H'}, $events[0]{alertId});
 }

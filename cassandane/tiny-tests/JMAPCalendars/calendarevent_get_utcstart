@@ -65,7 +65,7 @@ sub test_calendarevent_get_utcstart
     # Assert utcStart for regular recurrence instance.
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
-            ids => [encode_eventid('eventuid1local', '20191208T112101')],
+            ids => [encode_eventid($eventId1, '20191208T112101')],
             properties => ['utcStart', 'utcEnd'],
         }, 'R2']
     ]);
