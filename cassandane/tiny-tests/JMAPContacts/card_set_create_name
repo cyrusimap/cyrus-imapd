@@ -72,4 +72,53 @@ sub test_card_set_create_name
     $self->assert_matches(qr/N;JSCOMPS=";1;2;0;5";SORT-AS=Pau Shou Chang,Robert:Shou,Chang;Robert;Pau;;;Chang;/, $card);
     $self->assert_matches(qr/FN;DERIVED=TRUE:Robert Pau Shou Chang/, $card);
     $self->assert_does_not_match(qr|JSPROP|, $card);
+
+    # Test unordered name components: derived FN should use display order
+    # (prefix given given2 family suffix), not N field order (family first)
+    my $id2 = 'ae2640cc-234a-4dd9-95cc-3106258445ba';
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                "2" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $id2,
+                    name => {
+                        '@type' => 'Name',
+                        components => [
+                            {
+                                kind => 'title',
+                                value => 'Dr.'
+                            },
+                            {
+                                kind => 'given',
+                                value => 'Bertrand'
+                            },
+                            {
+                                kind => 'credential',
+                                value => 'Jr.'
+                            },
+                            {
+                                kind => 'surname',
+                                value => 'Drouvot'
+                            }
+                        ]
+                    }
+                }
+            }
+        }, 'R2']
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{2});
+
+    $href = $res->[0][1]{created}{2}{'cyrusimap.org:href'};
+    $res = $carddav->Request('GET', $href, '',
+                             'Accept' => 'text/vcard; version=4.0');
+
+    $card = $res->{content};
+    $card =~ s/\r?\n[ \t]+//gs;  # unfold long properties
+
+    $self->assert_matches(qr/N:Drouvot;Bertrand;;Dr\.;Jr\./, $card);
+    $self->assert_matches(qr/FN;DERIVED=TRUE:Dr\. Bertrand Drouvot Jr\./, $card);
 }
