@@ -3640,3 +3640,14 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
                             json_pack("{s:b}", "isDefault", isdef));
     }
 }
+
+EXPORTED bool jmap_state_matches(struct conversations_state *cstate,
+                                 const char *if_in_state, modseq_t modseq)
+{
+    if (USER_COMPACT_EMAILIDS(cstate) &&  // check for mandatory prefix
+        *if_in_state++ != JMAP_STATE_STRING_PREFIX) {
+        return false;
+    }
+
+    return (atomodseq_t(if_in_state) == modseq);
+}
