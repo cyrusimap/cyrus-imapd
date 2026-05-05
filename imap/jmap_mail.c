@@ -13627,14 +13627,10 @@ static int jmap_email_set(jmap_req_t *req)
     }
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    if (set.if_in_state) {
-        const char *if_in_state = set.if_in_state;
-        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
-             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
-            atomodseq_t(if_in_state) != old_modseq) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            goto done;
-        }
+    if (set.if_in_state &&
+        !jmap_state_matches(req->cstate, set.if_in_state, old_modseq)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
     }
 
     set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
@@ -13980,13 +13976,10 @@ static int jmap_email_import(jmap_req_t *req)
     }
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    if (if_in_state) {
-        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
-             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
-            atomodseq_t(if_in_state) != old_modseq) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            goto done;
-        }
+    if (if_in_state &&
+        !jmap_state_matches(req->cstate, if_in_state, old_modseq)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
     }
 
     old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
@@ -14412,24 +14405,18 @@ static int jmap_email_copy(jmap_req_t *req)
         struct mboxname_counters counters;
         assert (!mboxname_read_counters(srcinbox, &counters));
 
-        const char *if_from_in_state = copy.if_from_in_state;
-        if ((USER_COMPACT_EMAILIDS(from_cstate) &&  // check for mandatory prefix
-             *if_from_in_state++ != JMAP_STATE_STRING_PREFIX) ||
-            atomodseq_t(if_from_in_state) != counters.mailmodseq) {
+        if (!jmap_state_matches(from_cstate,
+                                copy.if_from_in_state, counters.mailmodseq)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
             goto done;
         }
     }
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    if (copy.if_in_state) {
-        const char *if_in_state = copy.if_in_state;
-        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
-             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
-            atomodseq_t(if_in_state) != old_modseq) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            goto done;
-        }
+    if (copy.if_in_state &&
+        !jmap_state_matches(req->cstate, copy.if_in_state, old_modseq)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
     }
 
     copy.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
