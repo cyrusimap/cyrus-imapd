@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     static const char short_options[] = "7AC:DMSUajlmpqsu";
 
     static const struct option long_options[] = {
-        { "no-utf8", no_argument, NULL, '7' }, /* XXX undocumented */
+        { "no-utf8", no_argument, NULL, '7' },
         { "archive", no_argument, NULL, 'A' },
         /* n.b. no long option for -C */
         { "data", no_argument, NULL, 'D' },
@@ -209,7 +209,7 @@ int main(int argc, char **argv)
         { "sieve", no_argument, NULL, 'S' },
         { "user-files", no_argument, NULL, 'U' },
         { "all", no_argument, NULL, 'a' },
-        { "json", no_argument, NULL, 'j' }, /* XXX undocumented */
+        { "json", no_argument, NULL, 'j' },
         { "local-only", no_argument, NULL, 'l' },
         { "paths", no_argument, NULL, 'p' },
         { "quiet", no_argument, NULL, 'q' },
