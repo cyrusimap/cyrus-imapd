@@ -983,6 +983,18 @@ draft-thomson-hybi-http-timeout
 
     Hypertext Transfer Protocol (HTTP) Keep-Alive Header
 
+draft-ietf-calext-jscalendarbis
+
+    JSCalendar 2.0: A JSON Representation of Calendar Data
+
+draft-ietf-calext-icalendar-jscalendar-extensions
+
+    iCalendar Format Extensions for JSCalendar
+
+draft-ietf-calext-jscalendar-icalendar
+
+    JSCalendar: Converting from and to iCalendar
+
 ..
 
     caldav-ctag     Calendar Collection Entity Tag (CTag) in CalDAV
