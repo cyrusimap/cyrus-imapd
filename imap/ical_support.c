@@ -82,6 +82,9 @@ EXPORTED void ical_support_init(void)
 #endif /* HAVE_LIBICALVCARD_XPROP_VALUE */
     icalproperty_set_allow_empty_properties(true);
 
+    /* Instruct libical to not drop unknown IANA elements */
+    ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
+
     initialized = 1;
 }
 
