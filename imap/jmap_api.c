@@ -1318,8 +1318,19 @@ static char *_state_string(int prefixed_state, modseq_t modseq)
 EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
                                  int mbtype, int flags)
 {
-    int prefixed_state =
-        (mbtype == MBTYPE_EMAIL) && USER_COMPACT_EMAILIDS(req->cstate);
+    int prefixed_state = 0;
+
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        switch (mbtype) {
+        case MBTYPE_EMAIL:
+        case MBTYPE_CALENDAR:
+            prefixed_state = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
 
     // if we were not given a modseq, look it up by mbtype
     if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
