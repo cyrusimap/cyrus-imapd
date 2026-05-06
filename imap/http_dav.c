@@ -7425,6 +7425,13 @@ int report_multiget(struct transaction_t *txn, struct meth_params *rparams,
 
             fctx->mbentry = tgt.mbentry;
 
+            /* Check ACL for multiget URL */
+            int rights = httpd_myrights(httpd_authstate, tgt.mbentry);
+            if ((rights & fctx->reqd_privs) != fctx->reqd_privs) {
+                xml_add_response(fctx, HTTP_FORBIDDEN, 0, NULL, NULL);
+                goto next;
+            }
+
             /* Check if we already have this mailbox open */
             if (!mailbox || strcmp(mailbox_name(mailbox), tgt.mbentry->name)) {
                 if (mailbox) mailbox_close(&mailbox);
