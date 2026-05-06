@@ -3601,7 +3601,7 @@ static int _blob_to_card(struct jmap_req *req,
         buf_free(&buf);
         return HTTP_BAD_REQUEST;
     }
-    
+
     blobid = jmap_id_string_value(req, jblobId);
 
     accountid = json_string_value(json_object_get(file, "accountId"));
@@ -7099,7 +7099,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
         if (!kind) kind = "death";
 
         const char *comp = "full";
-            
+
         param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
         if (param && vcardparameter_get_value(param) == VCARD_VALUE_URI) {
             if (!strncmp(prop_value, "geo", 4)) {
@@ -7643,7 +7643,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             char *param_str = vcardparameter_as_vcard_string(param);
             char *param_value = strchr(param_str, '=') + 1;
 
-            if (param_kind == VCARD_X_PARAMETER) 
+            if (param_kind == VCARD_X_PARAMETER)
                 buf_setcstr(crock->buf, vcardparameter_get_xname(param));
             else
                 buf_setcstr(crock->buf, vcardparameter_kind_to_string(param_kind));
@@ -7655,7 +7655,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
                 int is_multivalued = 0;  /* XXX  Create JSON array? */
                 json_t *val;
 
-                vcardvalue_kind param_vkind = 
+                vcardvalue_kind param_vkind =
                     vcardparameter_kind_value_kind(param_kind, &is_multivalued);
 
                 switch (param_vkind) {
@@ -7689,7 +7689,7 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
             case VCARD_NO_VALUE:
                 type = "unknown";
                 break;
-                    
+
             case VCARD_TZ_VALUE:
             case VCARD_GEO_VALUE:
             case VCARD_KIND_VALUE:
@@ -9138,7 +9138,7 @@ static void _jsunknown_to_vcard(struct jmap_parser *parser,
                                    NULL);
 
     vcardcomponent_add_property(card, prop);
-    
+
     if (key) jmap_parser_pop(parser);
     free(val);
 }
@@ -9536,7 +9536,7 @@ static unsigned _jsl10n_to_vcard(struct jmap_parser *parser, json_t *obj,
         struct buf buf = BUF_INITIALIZER;
         const char *lang;
         json_t *jpatch;
-        
+
         json_object_foreach(patches, lang, jpatch) {
             json_t *altobj = json_object_get(jpatch, "");
             json_t *invalid = NULL, *patched = NULL;
@@ -9874,8 +9874,8 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                         vcardstructured_num_fields(jscomps), entry);
             }
 
-            if (args->derived) {
-                /* Create derived value from fields */
+            if (args->derived && isordered) {
+                /* Create derived value from ordered fields */
                 if (i) buf_appendcstr(args->derived, sep ? sep : defsep);
                 buf_appendcstr(args->derived, val);
                 sep = NULL;
@@ -9904,6 +9904,27 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
         jmap_parser_pop(parser);
         goto fail;
     }
+
+    if (args->derived && !isordered) {
+        /* Build derived FN in display order: prefix given given2 family suffix */
+        static const unsigned fn_order[] = {
+            VCARD_N_PREFIX, VCARD_N_GIVEN, VCARD_N_ADDITIONAL,
+            VCARD_N_FAMILY, VCARD_N_SUFFIX
+        };
+
+        for (size_t f = 0; f < sizeof(fn_order)/sizeof(fn_order[0]); f++) {
+            vcardstrarray *sa = vcardstructured_field_at(vals, fn_order[f]);
+            for (size_t v = 0; sa && v < vcardstrarray_size(sa); v++) {
+                const char *val = vcardstrarray_element_at(sa, v);
+                if (val && *val) {
+                    if (buf_len(args->derived))
+                        buf_putc(args->derived, ' ');
+                    buf_appendcstr(args->derived, val);
+                }
+            }
+        }
+    }
+
     if (!needs_extended) {
         /* Shrink number of fields being used */
         vcardstructured_set_num_fields(vals, args->min_num_comps);
@@ -10161,7 +10182,7 @@ static vcardproperty *_jsorg_to_vcard(struct jmap_parser *parser, json_t *obj,
             vcardstrarray_append(units, "");
         }
 
-        for (i = 0; i < size; i++) { 
+        for (i = 0; i < size; i++) {
             const char *myprops[] = { "@type", "name", "sortAs", NULL };
            json_t *unit = json_array_get(jprop, i);
             const char *key, *val;
