@@ -65,10 +65,21 @@ sub header
     #define U_CFG_V (union config_value)
     #endif
 
-
     EXPORTED struct imapopt_s imapopts[] =
     {
-      { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
+        {   .opt = IMAPOPT_ZERO,
+            .optname = "",
+            .seen = 0,
+            .t = OPT_NOTOPT,
+            .last_modified = 0,
+            .deprecated_since = NULL,
+            .preferred_opt = IMAPOPT_ZERO,
+            .val = { NULL },
+            .def = { NULL },
+            .enum_options = {
+                { NULL, IMAP_ENUM_ZERO },
+            },
+        },
     END_HEADER
 
     print $c;
@@ -79,14 +90,29 @@ sub footer
     my ($self) = @_;
 
     my $c = <<~'END_FOOTER';
-      { IMAPOPT_LAST, NULL, 0, OPT_NOTOPT, 0, NULL, IMAPOPT_ZERO, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } }
+        {   .opt = IMAPOPT_LAST,
+            .optname = NULL,
+            .seen = 0,
+            .t = OPT_NOTOPT,
+            .last_modified = 0,
+            .deprecated_since = NULL,
+            .preferred_opt = IMAPOPT_ZERO,
+            .val = { NULL },
+            .def = { NULL },
+            .enum_options = { { NULL, IMAP_ENUM_ZERO } }
+        },
     };
-
-    /* c code goes here */
 
     END_FOOTER
 
     print $c;
+}
+
+sub _print_struct_field
+{
+    my ($key, $value) = @_;
+
+    print "        .$key = $value,\n";
 }
 
 sub _print_option
@@ -95,40 +121,36 @@ sub _print_option
 
     return if $option->for_documentation_only;
 
-    print '  { ';
-    print join(', ',
-               $option->c_name,
-               '"' . $option->name . '"',
-               '0',
-               'OPT_' . $option->type,
-          ), ",\n";
-    print '    ';
-    print join(', ',
-               $option->c_last_modified,
-               $option->c_deprecated_since,
-               $option->c_replaced_by,
-          ), ",\n";
+    print '    {   .opt = ' . $option->c_name . ",\n";
+    _print_struct_field('optname', '"' . $option->name . '"');
+    _print_struct_field('seen', '0');
+    _print_struct_field('t', 'OPT_' . $option->type);
+    _print_struct_field('last_modified', $option->c_last_modified);
+    _print_struct_field('deprecated_since', $option->c_deprecated_since);
+    _print_struct_field('preferred_opt', $option->c_replaced_by);
 
     # We write the default value twice:
     # The first initialises the 'val' field of the struct, which is what makes
     # this the default value.  The second sets the 'def' field of the struct,
     # which libconfig uses to see when val has been changed from the default.
     my ($ctype, $default_value) = $option->c_default_value;
-    for (1..2) {
+    foreach my $k ('val', 'def') {
         if ($opt->cc eq 'gcc') {
-            print "    U_CFG_V(($ctype) $default_value),\n";
+            _print_struct_field($k, "U_CFG_V(($ctype) $default_value)");
         }
         else {
-            print "    {(void*)($default_value)},\n";
+            _print_struct_field($k, "{(void*)($default_value)}");
         }
     }
 
-    print "    {";
+    print "        .enum_options = {\n";
     foreach my $pair ($option->c_allowed_values) {
         my ($v, $e) = @$pair;
-        print " { \"$v\", $e },\n     ";
+        print "            { \"$v\", $e },\n";
     }
-    print " { NULL, IMAP_ENUM_ZERO } } },\n";
+    print "            { NULL, IMAP_ENUM_ZERO },\n";
+    print "        },\n";
+    print "    },\n";
 }
 
 1;
