@@ -15,7 +15,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-p** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
+    **mbpath** [ **-C** *config-file* ] [ **-7** ] [ **-j** ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** | **-p** ] [ **-a** | **-A** | **-D** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
 
 Description
 ===========
@@ -36,6 +36,14 @@ Options
 .. option:: -C config-file
 
     |cli-dash-c-text|
+
+.. option:: -7, --no-utf8
+
+    Mailbox arguments are in modified UTF7 rather than UTF8
+
+.. option:: -j, --json
+
+    Print all values as a JSON object
 
 .. option:: -l, --local-only
 
