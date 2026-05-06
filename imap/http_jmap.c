@@ -1510,7 +1510,28 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
 
                 if (val &&
                     strarray_contains_case(httpd_log_headers, hdrname)) {
-                    buf_printf(logbuf, "; %s=\"%s\"", hdrname, val);
+                    /* Escape control characters and quote/backslash so a
+                     * client-supplied value can't inject forged log lines
+                     * or break out of the surrounding quoting.
+                     * -- claude, 2026-05-06 */
+                    struct buf vbuf = BUF_INITIALIZER;
+                    const char *p;
+                    for (p = val; *p; p++) {
+                        unsigned char c = (unsigned char) *p;
+                        if (c < 0x20 || c == 0x7f) {
+                            buf_printf(&vbuf, "\\x%02x", c);
+                        }
+                        else if (c == '"' || c == '\\') {
+                            buf_putc(&vbuf, '\\');
+                            buf_putc(&vbuf, c);
+                        }
+                        else {
+                            buf_putc(&vbuf, c);
+                        }
+                    }
+                    buf_printf(logbuf, "; %s=\"%s\"",
+                               hdrname, buf_cstring(&vbuf));
+                    buf_free(&vbuf);
                 }
             }
         }

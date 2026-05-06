@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_loginject_via_logheaders
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    :needs_dependency_wslay
+    ($self)
+{
+    eval { require Cassandane::JMAPTesterWS; 1 } or do {
+        xlog $self, "Cassandane::JMAPTesterWS not available; skipping";
+        return;
+    };
+
+    # Configure cyrus to log this header from each request.
+    $self->{instance}->{config}->set('httplogheaders' => 'x-cassandane-test');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    if (!$self->{instance}->{have_syslog_replacement}) {
+        xlog $self, "no syslog replacement; cannot examine log output";
+        return;
+    }
+
+    # Drain syslog lines emitted while the instance was starting up, so what we
+    # read after the WS request is just the request's log.
+    $self->{instance}->getsyslog();
+
+    my $ws = $self->{default_user}->new_jmaptester_ws;
+
+    # Produce a "http header" that includes a newline, which could make log
+    # output weird.
+    my $forged  = '2026-05-06 13:14:15 CRITICAL forged log entry';
+    my $payload = "valid\n$forged";
+
+    $ws->request({
+        using       => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { hello => 'world' }, '0']],
+        logHeaders  => { 'X-Cassandane-Test' => $payload },
+    });
+
+    my @lines = $self->{instance}->getsyslog();
+    my @hits  = grep { /X-Cassandane-Test="/i } @lines;
+
+    # We must see exactly one access log line containing the header, and
+    # that line must contain BOTH the leading "valid" and the trailing
+    # forged-looking suffix -- i.e., the two halves did not get split
+    # into two log lines by an unescaped newline.
+    $self->assert_num_equals(1, scalar @hits);
+    $self->assert_matches(qr/X-Cassandane-Test="valid\\x0a/i, $hits[0]);
+    $self->assert_matches(qr/CRITICAL forged log entry/, $hits[0]);
+}
