@@ -1512,22 +1512,38 @@ EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 {
     buf_reset(idbuf);
     const char *id = NULL;
-
     icalproperty *prop;
-    for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
 
-        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+    // Look for jscalendarbis id.
+    for (prop = icalcomponent_get_first_property(valarm, ICAL_IANA_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(valarm, ICAL_IANA_PROPERTY)) {
+
+        if (!strcasecmp(icalproperty_get_iana_name(prop), "JSID")) {
             id = icalproperty_get_value_as_string(prop);
             break;
         }
     }
 
+    // Fall back to legacy implementation id.
+    if (!id) {
+        for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
+
+            if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+                id = icalproperty_get_value_as_string(prop);
+                break;
+            }
+        }
+    }
+
+    // Fall back to UID property value.
     if (!id) {
         id = icalcomponent_get_uid(valarm);
     }
 
+    // Fall back to generated id.
     char keybuf[2*SHA1_DIGEST_LENGTH+1];
     if (!id) {
         unsigned char dest[SHA1_DIGEST_LENGTH];
