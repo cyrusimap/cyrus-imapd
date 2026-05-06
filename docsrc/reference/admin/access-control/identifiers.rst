@@ -48,13 +48,8 @@ other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
     discussed in the :ref:`imap-concepts-login-authentication` part of
     this document.
 
-The authorization mechanism in use is determined by the ``auth_mech``
-:cyrusman:`imapd.conf(5)` option:
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob auth_mech
-        :end-before: endblob auth_mech
-
+The authorization mechanism in use is determined by the :imapdconf:`auth_mech`
+:cyrusman:`imapd.conf(5)` option.
 
 Unix Authorization
 ------------------
@@ -154,11 +149,7 @@ PTS Authorization
     auth_mech: pts
 
 The PTS authorization mechanism is modular, with the module selected by the
-``pts_module`` :cyrusman:`imapd.conf(5)` option:
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob pts_module
-        :end-before: endblob pts_module
+:imapdconf:`pts_module` option.
 
 The meaning of identifiers depends on the PTS module being used.
 

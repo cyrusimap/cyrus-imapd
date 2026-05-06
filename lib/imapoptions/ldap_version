@@ -3,5 +3,6 @@ Type: INT
 Default-Value: 3
 Last-Modified: 2.3.17
 
-Specify the LDAP protocol version.  If ldap_start_tls and/or ldap_use_sasl
-are enabled, ldap_version will be automatically set to 3.
+Specify the LDAP protocol version.  If :imapdconf:`ldap_start_tls` and/or
+:imapdconf:`ldap_sasl` are enabled, ldap_version will be automatically
+set to 3.

@@ -21,25 +21,17 @@ Configuration
 List of mailboxes: rss_feeds
 ----------------------------
 
-.. sidebar:: rss_feeds
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob rss_feeds
-       :end-before: endblob rss_feeds
-
 The list of available RSS feeds can be obtained by clients by accessing the
 ``/rss/`` URL on the Cyrus server.
 
-The rss_feeds option uses the "wildmat" (:rfc:`3977#section-4`) format to specify
-which mailboxes/folders will be made available via RSS. This list is further
-limited to only those mailboxes and folders that the authenticated user has
-permissions to see.
+The :imapdconf:`rss_feeds` option uses the "wildmat" (:rfc:`3977#section-4`)
+format to specify which mailboxes/folders will be made available via RSS. This
+list is further limited to only those mailboxes and folders that the
+authenticated user has permissions to see.
 
-The rss_feeds option uses the
+The ``rss_feeds`` option uses the
 :ref:`internal namespace <mailbox-namespaces>`, which uses "." as a hierarchy
-separator, regardless of what ``unixhierarchysep`` is set to.
+separator, regardless of what :imapdconf:`unixhierarchysep` is set to.
 
 Examples:
 
@@ -53,22 +45,12 @@ Examples:
 Display of mailbox list: rss_feedlist_template
 ----------------------------------------------
 
-.. sidebar:: rss_feedlist_template
-
-    |change-default-config|
-
-   .. include:: /reference/manpages/configs/imapd.conf.rst
-       :start-after: startblob rss_feedlist_template
-       :end-before: endblob rss_feedlist_template
-
-
 By default, the server will present the list as a
 simple unordered list in an HTML document. To customize the look and feel of the
-feed list, the ``rss_feedlist_template`` option can be used to point to a HTML
-template file. This file can use Cascading Style Sheets, JavaScript, etc.
-All content that the template uses **must** reside under the
-``httpdocroot``. Consult :cyrusman:`imapd.conf(5)` for specifics on the
-required contents of this custom file.
+feed list, the :imapdconf:`rss_feedlist_template` option can be used to point
+to a HTML template file. This file can use Cascading Style Sheets, JavaScript,
+etc.  All content that the template uses **must** reside under the
+:imapdconf:`httpdocroot`.
 
 Note that for sites running Cyrus Murder, ``rss_feedlist_template`` only needs
 to be set on frontend servers, since only those servers have the complete

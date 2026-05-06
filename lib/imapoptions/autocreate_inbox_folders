@@ -8,15 +8,17 @@ create the list of folders in this setting as well.
 *autocreate_inbox_folders* is a list of INBOX's subfolders separated by a
 "|", that are automatically created by the server under the following two
 scenarios. Leading and trailing whitespace is stripped, so "Junk | Trash"
-results in two folders: "Junk" and "Trash".  See also the *xlist-flag*
-option, for setting special-use flags on autocreated folders.
+results in two folders: "Junk" and "Trash".  See also the
+:imapdconf:`xlist-flag` option, for setting special-use flags on
+autocreated folders.
 
 INBOX folders are created under both the following conditions:
 
 1.
-    The user logins via the IMAP or the POP3 protocol.  *autocreate_quota*
-    option must have a value of zero or greater.
+    The user logins via the IMAP or the POP3 protocol.
+    :imapdconf:`autocreate_quota` option must have a value of zero or
+    greater.
 
 2.
-    A message arrives for the user through the *lmtpd(8)*.
-    *autocreate_post* option must be enabled.
+    A message arrives for the user through the :cyrusman:`lmtpd(8)`.
+    :imapdconf:`autocreate_post` option must be enabled.

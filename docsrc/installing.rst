@@ -111,7 +111,8 @@ example:
 
 .. literalinclude:: /../doc/examples/imapd_conf/normal.conf
 
-Note that **configdirectory** and **partition-default** are set to the
+Note that :imapdconf:`configdirectory` and
+:imapdconf:`partition-default <partition-name>` are set to the
 folders we just created.
 
 .. note::
@@ -140,8 +141,8 @@ Obtain a certificate, e.g. from
 the full chain and a private key in
 `X.509 <https://en.wikipedia.org/wiki/X.509>`_ format.  Adjust the file
 owner on these files with ``sudo chown cyrus:mail``.  Set the options
-``tls_server_cert`` and ``tls_server_key`` in :cyrusman:`imapd.conf(5)`
-to point to these files.
+:imapdconf:`tls_server_cert` and :imapdconf:`tls_server_key` in
+:cyrusman:`imapd.conf(5)` to point to these files.
 
 Open ``/etc/cyrus.conf`` and in the **SERVICES** section, add (or
 uncomment) this line:
@@ -276,10 +277,9 @@ fact, Cyrus understands this to be a user called ``example@localhost``.
 As usual, adjust the password via the ``-w`` option to the password you
 set above.
 
-If you have explicitly disabled ``unixhierarchysep`` in
-``/etc/imapd.conf`` (it is enabled by default in 3.0+), you should
-replace ``user/example@localhost`` with ``user.example@localhost``. You
-can read more about ``unixhierarchysep`` in :cyrusman:`imapd.conf(5)`.
+If you have explicitly disabled :imapdconf:`unixhierarchysep`
+(it is enabled by default in 3.0+), you should
+replace ``user/example@localhost`` with ``user.example@localhost``.
 
 The command will produce the following output:
 

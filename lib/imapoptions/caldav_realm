@@ -4,4 +4,5 @@ Default-Value: NULL
 Last-Modified: 2.5.0
 
 The realm to present for HTTP authentication of CalDAV resources.  If not
-set (the default), the value of the "servername" option will be used.
+set (the default), the value of the :imapdconf:`servername` option will be
+used.

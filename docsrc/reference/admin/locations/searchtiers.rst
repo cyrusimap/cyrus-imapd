@@ -6,23 +6,20 @@ Search Tiers
 The Xapian search engine supports searching from multiple databases at
 once, creating a tiered database structure.  To use Xapian, these tiers
 must be defined in :cyrusman:`imapd.conf(5)` with the
-`defaultsearchtier` and `searchpartition-name` settings.
+:imapdconf:`defaultsearchtier` and :imapdconf:`searchpartition-name`
+options.
 
 Default Search Tier Name
 ------------------------
 
-Specify the name of the default search tier using the `defaultsearchtier`
-setting:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob defaultsearchtier
-        :end-before: endblob defaultsearchtier
+Specify the name of the default search tier using the
+:imapdconf:`defaultsearchtier` setting.
 
 Search Tier Partition Location
 ------------------------------
 
 Each search tier to be used requires a partition location be specified
-via a `searchpartition-name` setting, wherein "name" is replaced
+via a :imapdconf:`searchpartition-name` setting, wherein "name" is replaced
 with the name of the mail spool for which this search partition is to
 be used, and prepended by the name of the tier with which it is
 associated::
@@ -54,9 +51,3 @@ will be adding three search partitions.
     tempsearchpartition-am: /var/spool/search/am
     tempsearchpartition-nz: /var/spool/search/nz
     tempsearchpartition-shared: /var/spool/search/shared
-
-These settings are in :cyrusman:`imapd.conf(5)`:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob searchpartition-name
-        :end-before: endblob searchpartition-name

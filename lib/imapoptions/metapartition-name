@@ -5,9 +5,10 @@ Last-Modified: 2.3.17
 For-Documentation-Only: 1
 
 The pathname of the metadata partition *name*, corresponding to spool
-partition **partition-name**.  For any mailbox residing in a directory on
-**partition-name**, the metadata files listed in *metapartition_files* will
-be stored in a corresponding directory on **metapartition-name**.   Note
-that not every **partition-name** option is required to have a
-corresponding **metapartition-name** option, so that you can selectively
-choose which spool partitions will have separate metadata partitions.
+partition :imapdconf:`partition-name`.  For any mailbox residing in a
+directory on **partition-name**, the metadata files listed in
+:imapdconf:`metapartition_files` will be stored in a corresponding
+directory on **metapartition-name**.   Note that not every
+**partition-name** option is required to have a corresponding
+**metapartition-name** option, so that you can selectively choose which
+spool partitions will have separate metadata partitions.

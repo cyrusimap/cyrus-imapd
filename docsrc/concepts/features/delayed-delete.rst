@@ -39,13 +39,8 @@ Configuring Cyrus IMAP for Delayed Delete
 To enable or disable Delayed Delete, please check the following settings
 in :cyrusman:`imapd.conf(5)`.
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob delete_mode
-        :end-before: endblob delete_mode
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob deletedprefix
-        :end-before: endblob deletedprefix
+    * :imapdconf:`delete_mode`
+    * :imapdconf:`deletedprefix`
 
 .. seealso::
 

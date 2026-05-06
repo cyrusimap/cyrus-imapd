@@ -1,8 +1,8 @@
 # XXX backported and included in 3.12.2, so it's no longer "new since 3.12"
 Description:
 
-Adds configure ``--with-zoneinfo-dir`` option to set zoneinfo_dir at compile
-time
+Adds configure ``--with-zoneinfo-dir`` option to set
+:imapdopt:`zoneinfo_dir` at compile time
 
 
 Documentation:

@@ -3,6 +3,6 @@ Type: SWITCH
 Default-Value: 0
 Last-Modified: 2.5.0
 
-If enabled, when *lmtpd(8)* receives an incoming mail for an INBOX that
-does not exist, then the INBOX is automatically created by *lmtpd(8)* and
-delivery of the message continues.
+If enabled, when :cyrusman:`lmtpd(8)` receives an incoming mail for an
+INBOX that does not exist, then the INBOX is automatically created by
+lmtpd and delivery of the message continues.

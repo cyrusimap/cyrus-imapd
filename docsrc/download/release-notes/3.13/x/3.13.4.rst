@@ -22,33 +22,31 @@ Major changes since the 3.12 series
 ===================================
 
 * The annotator is now called only on items added to email-type mailboxes.
-* ``ctl_conversationsdb`` now has ``-U`` for version upgrades.
-* ``lmtpd`` now provides a capability called ``TRACE`` and a new ``TRACE``
-  command for setting an interal trace-id, which will be logged.
-* The ``admins_get_internal_seen`` :cyrusman:`imapd.conf(5)` option has been
-  added.  If set, the admin users will always get and set the same ``\Seen``
-  flags as the mailbox owner.
+* :cyrusman:`ctl_conversationsdb(8)` now has ``-U`` for version upgrades.
+* :cyrusman:`lmtpd(8)` now provides a capability called ``TRACE`` and a new
+  ``TRACE`` command for setting an interal trace-id, which will be logged.
+* The :imapdconf:`admins_get_internal_seen` option has been added.  If set, the
+  admin users will always get and set the same ``\Seen`` flags as the mailbox
+  owner.
 * ``master(8)`` will refuse to start if multiple partitions appear to be
   identical or overlap. (:issue:`5573`:)
 * Cyrus syslogs are in the process of being converted to ``logfmt``, a
   structured logging format.  So far, this affects primarily the login logs and
   auditlog.
-* The ``backupcyrusd`` protocol daemon has been added to facilitate rolling
-  backups.
-* The ``expire_by_savedate`` and ``expire_keep_flagged``
-  :cyrusman:`imapd.conf(5)` options have been added to control the behavior of
-  ``cyr_expire``.
+* The :cyrusman:`backupcyrusd(8)` protocol daemon has been added to facilitate
+  rolling backups.
+* The :imapdconf:`expire_by_savedate` and :imapdconf:`expire_keep_flagged`
+  options have been added to control the behavior of :cyrusman:`cyr_expire(8)`.
 * Time zone data is no longer included in iTIP messages.
-* The IMAP PREVIEW extension will now only be advertised if
-  the ``jmap_preview_annot`` :cyrusman:`imapd.conf(5)` option is set and begins
-  with ``/shared/``.
+* The IMAP PREVIEW extension will now only be advertised if the
+  :imapdconf:`jmap_preview_annot` option is set and begins with ``/shared/``.
 * Support for the IMAP ``UIDBATCHES`` extension has been added.
-* ``cyrus.conf`` can now schedule ``EVENTS`` with cron-like syntax.
-* The new ``sieve_mdn_original_recipient_header`` :cyrusman:`imapd.conf(5)`
-  option allows an install to get the original recipient from a header other
-  than Original-Recipient.
-* The new ``sieve_mdn_private`` :cyrusman:`imapd.conf(5)` option helps prevent
-  leaking usernames.
+* :cyrusman:`cyrus.conf(5)` can now schedule ``EVENTS`` with cron-like syntax.
+* The new :imapdconf:`sieve_mdn_original_recipient_header` option allows an
+  install to get the original recipient from a header other than
+  Original-Recipient.
+* The new :imapdconf:`sieve_mdn_private` option helps prevent leaking
+  usernames.
 * A new database backend called ``twom`` has been added.
 * Adds support for the Sieve 'vnd.cyrus.redirect-multiple' extension
   which allows the 'redirect' action to accept a stringlist of email
@@ -71,7 +69,6 @@ Major changes since the 3.12 series
 * Content for the documentation site (cyrusimap.org) can now be
   written in Markdown.  Building the documentation, therefore, will
   now require ``myst_parser``, which is what makes this possible.
-
 
 Updates to default configuration
 ================================
@@ -112,5 +109,5 @@ Significant bugfixes
 ====================
 
 * :cyrusman:`lmtpd(8)` will no longer reset the session id after ``LHLO``.
-* ``implicit_owner_rights`` are now respected on HTTP-based protocols, like
-  JMAP.
+* :imapdconf:`implicit_owner_rights` are now respected on HTTP-based protocols,
+  like JMAP.

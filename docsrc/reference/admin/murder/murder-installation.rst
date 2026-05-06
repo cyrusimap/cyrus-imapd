@@ -91,11 +91,11 @@ the MUPDATE Master.
 Depending on the authentication mechanisms used, some or all of the
 following settings in :cyrusman:`imapd.conf(5)` may be required:
 
-    * mupdate_username
-    * mupdate_authname
-    * mupdate_realm
-    * mupdate_password
-    * servername
+    * :imapdconf:`mupdate_username`
+    * :imapdconf:`mupdate_authname`
+    * :imapdconf:`mupdate_realm`
+    * :imapdconf:`mupdate_password`
+    * :imapdconf:`servername`
     
 Once these settings are made, any mailbox operation on the backend will
 be sent to the mupdate master for confirmation and entry into the
@@ -318,38 +318,14 @@ Several options exist within :cyrusman:`imapd.conf(5)` to aid in the
 distribution of new users and mailboxes within a murder; across servers
 and partitions.  We recommend exploring these:
 
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition_select_mode
-        :end-before: endblob partition_select_mode
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition_select_exclude
-        :end-before: endblob partition_select_exclude
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition_select_usage_reinit
-        :end-before: endblob partition_select_usage_reinit
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob partition_select_soft_usage_limit
-        :end-before: endblob partition_select_soft_usage_limit
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob serverlist
-        :end-before: endblob serverlist
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob serverlist_select_mode
-        :end-before: endblob serverlist_select_mode
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob serverlist_select_usage_reinit
-        :end-before: endblob serverlist_select_usage_reinit
-
-    .. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob serverlist_select_soft_usage_limit
-        :end-before: endblob serverlist_select_soft_usage_limit
-
+    * :imapdconf:`partition_select_mode`
+    * :imapdconf:`partition_select_exclude`
+    * :imapdconf:`partition_select_usage_reinit`
+    * :imapdconf:`partition_select_soft_usage_limit`
+    * :imapdconf:`serverlist`
+    * :imapdconf:`serverlist_select_mode`
+    * :imapdconf:`serverlist_select_usage_reinit`
+    * :imapdconf:`serverlist_select_soft_usage_limit`
 
 Backups
 -------

@@ -96,11 +96,7 @@ Sync Chains
 
 Cyrus supports chained replication, in which one replica replicates to
 another.  I.e. A replicates to B; B replicates to C.  If you wish to
-use this approach, please see the ``sync_log_chain`` setting:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_log_chain
-        :end-before: endblob sync_log_chain
+use this approach, please see the :imapdconf:`sync_log_chain` setting.
 
 Note that sync_log_chain is to be set on the middle server(s) in a
 chain, not on the first or last.
@@ -116,12 +112,7 @@ necessary.
 From v3.0 forward, the :cyrusman:`sync_client(8)` will default to using
 IMAP protocol for transport, and an IMAP instance on the replica will
 process the synchronization instructions.  If you wish, you may
-override this by setting the ``sync_try_imap`` setting in
-:cyrusman:`imapd.conf(5)` to False.
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_try_imap
-        :end-before: endblob sync_try_imap
+override this by setting the :imapdconf:`sync_try_imap` setting to False.
 
 Installation
 ============
@@ -334,11 +325,7 @@ Tweaking Replication
 --------------------
 
 You may control the number of messages replicated in each batch, via
-the ``sync_batchsize`` setting:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_batchsize
-        :end-before: endblob sync_batchsize
+the :imapdconf:`sync_batchsize` setting.
 
 .. _replication-channels:
 
@@ -413,16 +400,12 @@ Other Considerations
     are impacted by these considerations, please check back with each
     release and follow the mailing list.
 
-The infrastructure provided by ``sync_log`` has now been leveraged by
-the Rolling Indexing capability introduced in v3.0.  See
+The infrastructure provided by :imapdconf:`sync_log` has now been leveraged
+by the Rolling Indexing capability introduced in v3.0.  See
 :cyrusman:`squatter(8)` for more details (see the fourth mode synopsis).
 
-Specifically, the following new settings have been added to
-:cyrusman:`imapd.conf(5)` in support of this new use of ``sync_log``:
-
-.. include:: /reference/manpages/configs/imapd.conf.rst
-        :start-after: startblob sync_log_unsuppressable_channels
-        :end-before: endblob sync_log_unsuppressable_channels
+Specifically, the :imapdconf:`sync_log_unsuppressable_channels` option
+has been added in support of this new use of ``sync_log``.
 
 Administration
 ==============

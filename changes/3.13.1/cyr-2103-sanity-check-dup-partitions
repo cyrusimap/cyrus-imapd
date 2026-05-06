@@ -14,8 +14,7 @@ Documentation:
 
 Config changes:
 
-``*partition-*`` entries in :cyrusman:`imapd.conf(5)` are now checked against
-one another.
+:imapdconf:`partition-name` entries in are now checked against one another.
 
 
 Upgrade instructions:

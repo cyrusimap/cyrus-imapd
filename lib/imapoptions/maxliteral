@@ -10,8 +10,8 @@ If set to 0, a large internally-defined limit will be applied.
 If no unit is specified, bytes is assumed.
 
 Literals used for message [part] data in APPEND are only limited by the
-'maxmessagesize' option.
+:imapdconf:`maxmessagesize` option.
 
-If the 'literalminus' option is enabled, non-synchonizing literals will be
-limited to the lesser of 4K and either 'maxliteral' or 'maxmessagesize',
-depending on the use-case.
+If the :imapdconf:`literalminus` option is enabled, non-synchonizing
+literals will be limited to the lesser of 4K and either *maxliteral* or
+:imapdconf:`maxmessagesize`, depending on the use-case.

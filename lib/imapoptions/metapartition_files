@@ -5,5 +5,6 @@ Allowed-Values: header index cache expunge squat annotations lock dav
 Default-Value:
 Last-Modified: 3.0.0
 
-Space-separated list of metadata files to be stored on a *metapartition*
-rather than in the mailbox directory on a spool partition.
+Space-separated list of metadata files to be stored on a
+:imapdconf:`metapartition <metapartition-name>` rather than in the mailbox
+directory on a spool partition.

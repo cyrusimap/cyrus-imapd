@@ -5,7 +5,7 @@ Last-Modified: 3.0.0
 
 Name of the service (or port number) of the replication service on replica
 host.  Prefix with a channel name to only apply for that channel.  If not
-specified, and if sync_try_imap is set to "yes" (the default), then the
-replication client will first try "imap" (port 143) to check if imapd
-supports replication.  Otherwise it will default to "csync" (usually port
-2005).
+specified, and if :imapdconf:`sync_try_imap` is set to "yes" (the default),
+then the replication client will first try "imap" (port 143) to check if
+imapd supports replication.  Otherwise it will default to "csync" (usually
+port 2005).
