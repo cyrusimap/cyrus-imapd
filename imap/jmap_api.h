@@ -49,6 +49,7 @@
 #define JMAP_SIEVE_EXTENSION         "https://cyrusimap.org/ns/jmap/sieve"
 #define JMAP_USERCOUNTERS_EXTENSION  "https://cyrusimap.org/ns/jmap/usercounters"
 #define JMAP_ADMIN_EXTENSION         "https://cyrusimap.org/ns/jmap/admin"
+#define JMAP_JSCALENDARBIS_EXTENSION "https://cyrusimap.org/ns/jmap/jscalendarbis"
 
 enum {
     MAX_SIZE_REQUEST = 0,
