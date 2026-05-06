@@ -1053,7 +1053,7 @@ icalcomponent *xcal_string_as_icalcomponent(const struct buf *buf)
     ctxt = xmlNewParserCtxt();
     if (ctxt) {
         doc = xmlCtxtReadMemory(ctxt, buf_base(buf), buf_len(buf), NULL, NULL,
-                                XML_PARSE_NOWARNING);
+                                XML_PARSE_NOWARNING | XML_PARSE_NONET);
         xmlFreeParserCtxt(ctxt);
     }
     if (!doc) {

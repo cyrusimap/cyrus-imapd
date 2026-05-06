@@ -10146,7 +10146,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
         xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
         if (ctxt) {
             doc = xmlCtxtReadMemory(ctxt, buf_base(&buf), buf_len(&buf),
-                    NULL, NULL, XML_PARSE_NOWARNING);
+                    NULL, NULL, XML_PARSE_NOWARNING | XML_PARSE_NONET);
             xmlFreeParserCtxt(ctxt);
         }
         buf_reset(&buf);

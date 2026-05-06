@@ -83,7 +83,8 @@ static size_t _prop_decode_value(const char *data,
         if (!*content_type) {
             xmlDocPtr doc = xmlReadMemory(decbuf, size, NULL, NULL,
                                           XML_PARSE_NOERROR |
-                                          XML_PARSE_NOWARNING);
+                                          XML_PARSE_NOWARNING |
+                                          XML_PARSE_NONET);
             if (doc) {
                 xmlNodePtr root = xmlDocGetRootElement(doc);
                 if (!xmlStrcmp(root->name, BAD_CAST "svg")) {

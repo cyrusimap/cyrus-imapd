@@ -3794,7 +3794,8 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
     /* Parse the XML request */
     doc = xmlCtxtReadMemory(txn->conn->xml, buf_cstring(&txn->req_body.payload),
                             buf_len(&txn->req_body.payload), NULL, NULL,
-                            XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
+                            XML_PARSE_NOERROR | XML_PARSE_NOWARNING |
+                            XML_PARSE_NONET);
     if (!doc) {
         txn->error.desc = "Unable to parse XML body";
         return HTTP_BAD_REQUEST;
