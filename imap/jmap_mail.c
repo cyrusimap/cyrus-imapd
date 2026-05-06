@@ -15482,12 +15482,18 @@ static int _decode_emailheader_blobid(const char *blobid,
 
     /* Decode hdrname */
     if (*base == '\0') goto done;
-    unsigned index;
+    unsigned long index;
     char *endptr = NULL;
     errno = 0;
     index = strtoul(base, &endptr, 10);
     if (errno == ERANGE || *endptr) goto done;
     base = endptr;
+
+    /* blob_headers is NULL-terminated; reject any index that lands on
+     * the sentinel (or past it). */
+    unsigned long max_index =
+        sizeof(blob_headers) / sizeof(blob_headers[0]) - 1;
+    if (index >= max_index) goto done;
 
     /* All done */
     *blobidptr = email_blobid;
