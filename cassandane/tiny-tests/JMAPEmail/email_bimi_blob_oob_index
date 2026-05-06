@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_bimi_blob_oob_index
+    :min_version_3_3 :needs_component_sieve
+    :JMAPExtensions
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # bimiBlobId property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $binary = slurp_file(abs_path('data/FM_BIMI.svg'));
+
+    $self->make_message("foo",
+        mime_type => 'text/plain',
+        extra_headers => [
+            ['BIMI-Indicator', encode_base64($binary, '')],
+        ],
+        body => 'foo',
+    ) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name     => 'Email/query',
+                path     => '/ids',
+            },
+            properties => ['bimiBlobId'],
+        }, "R2"],
+    ]);
+    my $blobid = $res->[1][1]{list}[0]{bimiBlobId};
+    $self->assert_not_null($blobid);
+
+    # The legitimate blobid format is "H<emailid>-<index>" where <index>
+    # is a position in the internal blob_headers array.  Only one index
+    # is valid; the rest of the array is a {NULL, NULL} sentinel.
+    #
+    # Pre-fix, _decode_emailheader_blobid in jmap_mail.c parsed the
+    # attacker-supplied integer with strtoul and used it as a direct
+    # array index with no bounds check, returning out-of-array data
+    # for any index beyond zero.
+
+    my ($prefix) = $blobid =~ /^(H.+-)\d+\z/
+      or die "unexpected bimiBlobId format: $blobid";
+
+    for my $index (1, 99, '4294967295') {
+        my $bad = "$prefix$index";
+        my $resp = $jmap->Download(
+            { accept => '*/*' },
+            'cassandane',
+            $bad,
+        );
+        $self->assert_num_equals(400, $resp->{status});
+    }
+}
