@@ -37,6 +37,7 @@ jmap_property_t;
 "accountId",          NULL, JMAP_PROP_SERVER_SET
 "account",            NULL, JMAP_PROP_SERVER_SET
 "sendTo",             NULL, JMAP_PROP_SERVER_SET
+"calendarAddress",    NULL, JMAP_PROP_SERVER_SET
 %%
 
 const jmap_prop_hash_table_t jmap_calendarprincipal_props_map = {
