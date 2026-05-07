@@ -6,7 +6,6 @@ sub test_calendarevent_changes_issue2558
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog $self, "get calendar event updates with bad state";
     my $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => 'nonsense' }, "R1"]]);

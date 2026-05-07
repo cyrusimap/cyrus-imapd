@@ -6,7 +6,6 @@ sub test_calendarevent_debugblobid
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     xlog $self, "create other user";
 
@@ -16,6 +15,7 @@ sub test_calendarevent_debugblobid
     $admintalk->setacl("user.other", other => 'lrswipkxtecdn') or die;
 
     my $other_user = $self->{instance}->create_user_without_setup('other');
+    my $default_cal_id = $other_user->calendars->default->id;
     my $otherJmap = $other_user->jmap;
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
