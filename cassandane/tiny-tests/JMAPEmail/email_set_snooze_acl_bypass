@@ -1,0 +1,136 @@
+#!perl
+use Cassandane::Tiny;
+
+# If "sharer" shares \Snoozed with "cassandane", that still isn't enough to
+# really use snooze: cassandane also needs to have +i for the eventual target
+# mailbox.  Otherwise, this is a back door to append to any mailbox, at least
+# if you know the mailboxId.
+sub test_email_set_snooze_acl_bypass
+    :min_version_3_5 :needs_component_calalarmd
+    :needs_component_sieve :JMAPExtensions :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client;
+
+    xlog $self, "create sharer account";
+    $admin->create("user.sharer") or die;
+
+    my $sharer_user = $self->{instance}->create_user_without_setup('sharer');
+    my $sharer_jmap = $sharer_user->new_jmaptester;
+
+    xlog $self, "sharer creates a Snoozed mailbox with role=snoozed";
+    my $res = $sharer_jmap->request([
+        ['Mailbox/set', {
+            create => {
+                snoozed => {
+                    name => 'Snoozed',
+                    parentId => undef,
+                    role => 'snoozed',
+                },
+            },
+        }],
+    ]);
+    my $snoozedId = $res->single_sentence('Mailbox/set')
+        ->arguments->{created}{snoozed}{id};
+    $self->assert_not_null($snoozedId);
+
+    xlog $self, "sharer creates a non-snoozed mailbox to be a forbidden target";
+    $res = $sharer_jmap->request([
+        ['Mailbox/set', {
+            create => {
+                forbidden => {
+                    name => 'Forbidden',
+                    parentId => undef,
+                },
+            },
+        }],
+    ]);
+    my $forbidden_id = $res->single_sentence('Mailbox/set')
+                           ->arguments->{created}{forbidden}{id};
+    $self->assert_not_null($forbidden_id);
+
+    xlog $self, "grant cassandane lookup on sharer, insert on Snoozed only";
+    # cassandane gets lrs on user.sharer (the inbox itself) and one other
+    # mailbox -- enough to see their ids but not enough to add messages
+    $admin->setacl("user.sharer", cassandane => 'lrs') or die;
+    $admin->setacl("user.sharer.Forbidden", cassandane => 'l') or die;
+
+    # cassandane gets full add-message rights on Snoozed.
+    $admin->setacl("user.sharer.Snoozed", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "sanity: cassandane cannot create directly into sharer's Inbox";
+    $res = $jmap->request([
+        ['Mailbox/get', { accountId => 'sharer' }],
+    ]);
+
+    my %mbox_by_role = map { $_->{role} ? ($_->{role} => $_->{id}) : () }
+                       $res->single_sentence('Mailbox/get')->arguments->{list}->@*;
+    my $sharer_inbox_id = $mbox_by_role{inbox};
+    $self->assert_not_null($sharer_inbox_id);
+
+    $res = $jmap->request([
+        ['Email/set', {
+            accountId => 'sharer',
+            create => {
+                direct => {
+                    mailboxIds => { $sharer_inbox_id => JSON::true },
+                    from => [{ email => 'rando@example.com' }],
+                    to   => [{ email => 'sharer@example.com' }],
+                    subject => 'direct attempt',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'p1',
+                    },
+                    bodyValues => {
+                        p1 => { value => 'direct write should fail' },
+                    },
+                },
+            },
+        }],
+    ]);
+
+    my $direct_args = $res->single_sentence('Email/set')->arguments;
+    $self->assert_null($direct_args->{created}{direct});
+    $self->assert_not_null($direct_args->{notCreated}{direct});
+
+    my $time_str = DateTime->now->strftime('%Y-%m-%dT%TZ');
+
+    # Both shapes of the bug: omitting moveToMailboxId (fall back to the
+    # owner's Inbox) and naming an explicit destination cassandane has no
+    # insert rights
+    for my $target_id (undef, $forbidden_id) {
+        my $snoozed = { until => $time_str };
+        $snoozed->{moveToMailboxId} = $target_id if defined $target_id;
+
+        xlog $self, "cassandane snoozes a message" .
+            (defined $target_id
+                ? " with moveToMailboxId=$target_id"
+                : " without moveToMailboxId");
+
+        $res = $jmap->request([
+            ['Email/set', {
+                accountId => 'sharer',
+                create => {
+                    planted => {
+                        mailboxIds => { '$snoozed' => JSON::true },
+                        from => [{ email => 'rando@example.com' }],
+                        to   => [{ email => 'sharer@example.com' }],
+                        subject => 'snooze planted',
+                        snoozed => $snoozed,
+                        bodyStructure => {
+                            type => 'text/plain',
+                            partId => 'p1',
+                        },
+                        bodyValues => {
+                            p1 => { value => 'planted via snooze' },
+                        },
+                    },
+                },
+            }],
+        ]);
+        my $planted_args = $res->single_sentence('Email/set')->arguments;
+        $self->assert_null($planted_args->{created}{planted});
+        $self->assert_not_null($planted_args->{notCreated}{planted});
+    }
+}
