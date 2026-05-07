@@ -8,4 +8,7 @@ def setup(app):
                           'imapdconf',
                           'single: %s',
                           docutils.nodes.literal)
-    return
+    return {
+        'parallel_read_safe': True,
+        'parallel_write_safe': True,
+    }
