@@ -10389,11 +10389,14 @@ static void _email_parse_bodies(jmap_req_t *req,
     }
 }
 
-static void _email_snoozed_parse(json_t *snoozed,
+static void _email_snoozed_parse(jmap_req_t *req,
+                                 json_t *snoozed,
                                  struct jmap_parser *parser)
 {
     const char *field;
     json_t *jval;
+    json_t *jmove = NULL;
+    int saw_move = 0;
 
     jmap_parser_push(parser, "snoozed");
     json_object_foreach(snoozed, field, jval) {
@@ -10415,8 +10418,39 @@ static void _email_snoozed_parse(json_t *snoozed,
             }
             jmap_parser_pop(parser);
         }
-        else if (strcmp(field, "moveToMailboxId")) {
+        else if (!strcmp(field, "moveToMailboxId")) {
+            saw_move = 1;
+            jmove = jval;
+        }
+        else {
             jmap_parser_invalid(parser, field);
+        }
+    }
+
+    /* The caller must have JACL_ADDITEMS on the eventual destination, since
+     * the deferred move at awaken time runs under the *owner's* authority. */
+    int need_rights = JACL_LOOKUP|JACL_ADDITEMS;
+    if (saw_move && JNOTNULL(jmove)) {
+        const mbentry_t *mbentry = NULL;
+        const char *destid = json_string_value(jmove);
+        if (!destid) {
+            jmap_parser_invalid(parser, "moveToMailboxId");
+        }
+        else {
+            mbentry = jmap_mbentry_by_uniqueid(req, destid);
+            if (!mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+                mboxname_isdeletedmailbox(mbentry->name, NULL) ||
+                !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
+                jmap_parser_invalid(parser, "moveToMailboxId");
+            }
+        }
+    }
+    else {
+        const mbentry_t *inbox_mbe = NULL;
+        if (jmap_findmbox_role(req, "inbox", &inbox_mbe) ||
+            !inbox_mbe ||
+            !jmap_hasrights_mbentry(req, inbox_mbe, need_rights)) {
+            jmap_parser_invalid(parser, "moveToMailboxId");
         }
     }
     jmap_parser_pop(parser);
@@ -10638,7 +10672,7 @@ static void _parse_email(jmap_req_t *req,
     /* Is snoozed being set? */
     json_t *snoozed = json_object_get(jemail, "snoozed");
     if (json_is_object(snoozed)) {
-        _email_snoozed_parse(snoozed, parser);
+        _email_snoozed_parse(req, snoozed, parser);
     }
     else if (JNOTNULL(snoozed)) {
         jmap_parser_invalid(parser, "snoozed");
@@ -11687,7 +11721,8 @@ struct email_bulkupdate {
     NULL, \
 }
 
-static void _email_update_parse(json_t *jemail,
+static void _email_update_parse(jmap_req_t *req,
+                                json_t *jemail,
                                 struct jmap_parser *parser,
                                 struct email_update *update)
 {
@@ -11821,7 +11856,25 @@ static void _email_update_parse(json_t *jemail,
                     !jmap_email_keyword_is_valid(keyword)) invalid = 1;
             }
             else if (!strcmp(subfield, "moveToMailboxId")) {
-                if (!json_is_string(jval)) invalid = 1;
+                if (!json_is_string(jval)) {
+                    invalid = 1;
+                }
+                else {
+                    /* Same destination ACL check the create path
+                     * performs in _email_snoozed_parse: the deferred
+                     * move runs as the *owner* of the source
+                     * mailbox, so without this check a sharee can
+                     * land messages in mailboxes they cannot write.
+                     * -- claude, 2026-05-07 */
+                    int need_rights = JACL_LOOKUP|JACL_ADDITEMS;
+                    const mbentry_t *mbentry =
+                        jmap_mbentry_by_uniqueid(req, json_string_value(jval));
+                    if (!mbentry || (mbentry->mbtype & MBTYPE_DELETED) ||
+                        mboxname_isdeletedmailbox(mbentry->name, NULL) ||
+                        !jmap_hasrights_mbentry(req, mbentry, need_rights)) {
+                        invalid = 1;
+                    }
+                }
             }
             else invalid = 1;
 
@@ -11840,7 +11893,7 @@ static void _email_update_parse(json_t *jemail,
         }
     }
     else if (json_is_object(snoozed)) {
-        _email_snoozed_parse(snoozed, parser);
+        _email_snoozed_parse(req, snoozed, parser);
     }
     else if (JNOTNULL(snoozed)) {
         jmap_parser_invalid(parser, "snoozed");
@@ -13475,7 +13528,7 @@ static void _email_update_bulk(jmap_req_t *req,
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
-        _email_update_parse(jval, &parser, update);
+        _email_update_parse(req, jval, &parser, update);
 
         /* Validate patched mailbox ids */
         if (update->patch_mailboxids && !json_array_size(parser.invalid)) {
@@ -14042,12 +14095,22 @@ static int jmap_email_import(jmap_req_t *req)
             jmap_parser_invalid(&parser, "mailboxIds");
         }
 
-        /* Validate snoozed + mailboxIds */
+        /* Validate snoozed + mailboxIds.  Run the same destination
+         * ACL check the create/update paths do, since the deferred
+         * move at wake time runs as the *owner* of the source
+         * mailbox -- a sharee with insert rights on Snoozed could
+         * otherwise land messages anywhere in the owner's namespace.
+         * -- claude, 2026-05-07 */
         json_t *snoozed = json_object_get(jemail_import, "snoozed");
-        if (JNOTNULL(snoozed) &&
-            !(json_is_utcdate(json_object_get(snoozed, "until")) &&
-              have_snoozed_mboxid)) {
-            jmap_parser_invalid(&parser, "snoozed");
+        if (JNOTNULL(snoozed)) {
+            if (!(json_is_object(snoozed) &&
+                  json_is_utcdate(json_object_get(snoozed, "until")) &&
+                  have_snoozed_mboxid)) {
+                jmap_parser_invalid(&parser, "snoozed");
+            }
+            else {
+                _email_snoozed_parse(req, snoozed, &parser);
+            }
         }
 
         json_t *invalid = json_incref(parser.invalid);

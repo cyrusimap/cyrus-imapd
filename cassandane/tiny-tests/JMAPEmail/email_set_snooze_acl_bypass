@@ -1,0 +1,162 @@
+#!perl
+use Cassandane::Tiny;
+
+# If "sharer" shares \Snoozed with "cassandane", that still isn't enough to
+# really use snooze: cassandane also needs to have +i for the eventual target
+# mailbox.  Otherwise, this is a back door to append to any mailbox, at least
+# if you know the mailboxId.
+sub test_email_set_snooze_acl_bypass
+    :min_version_3_5 :needs_component_calalarmd
+    :needs_component_sieve :JMAPExtensions :NoAltNameSpace
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $admin = $self->{adminstore}->get_client;
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    xlog $self, "create sharer account";
+    $admin->create("user.sharer") or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $sharer_jmap = Mail::JMAPTalk->new(
+        user => 'sharer',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+
+    @using = @{ $sharer_jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $sharer_jmap->DefaultUsing(\@using);
+
+    xlog $self, "sharer creates a Snoozed mailbox with role=snoozed";
+    my $res = $sharer_jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                snoozed => {
+                    name => 'Snoozed',
+                    parentId => undef,
+                    role => 'snoozed',
+                },
+            },
+        }, "R1"],
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $snoozedId = $res->[0][1]{created}{snoozed}{id};
+    $self->assert_not_null($snoozedId);
+
+    xlog $self, "sharer creates a non-snoozed mailbox to be a forbidden target";
+    $res = $sharer_jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                forbidden => {
+                    name => 'Forbidden',
+                    parentId => undef,
+                },
+            },
+        }, "R2"],
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $forbidden_id = $res->[0][1]{created}{forbidden}{id};
+    $self->assert_not_null($forbidden_id);
+
+    xlog $self, "grant cassandane lookup on sharer, insert on Snoozed only";
+    # cassandane gets lrs on user.sharer (the inbox itself) and one other
+    # mailbox -- enough to see their ids but not enough to add messages
+    $admin->setacl("user.sharer", cassandane => 'lrs') or die;
+    $admin->setacl("user.sharer.Forbidden", cassandane => 'l') or die;
+
+    # cassandane gets full add-message rights on Snoozed.
+    $admin->setacl("user.sharer.Snoozed", cassandane => 'lrswipkxtecdn') or die;
+
+    xlog $self, "sanity: cassandane cannot create directly into sharer's Inbox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { accountId => 'sharer' }, "R3"],
+    ]);
+    $self->assert_str_equals('Mailbox/get', $res->[0][0]);
+    $self->assert_str_equals('R3', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{list});
+
+    my %mbox_by_role = map { $_->{role} ? ($_->{role} => $_->{id}) : () }
+                       @{$res->[0][1]{list}};
+    my $sharer_inbox_id = $mbox_by_role{inbox};
+    $self->assert_not_null($sharer_inbox_id);
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            accountId => 'sharer',
+            create => {
+                direct => {
+                    mailboxIds => { $sharer_inbox_id => JSON::true },
+                    from => [{ email => 'rando@example.com' }],
+                    to   => [{ email => 'sharer@example.com' }],
+                    subject => 'direct attempt',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'p1',
+                    },
+                    bodyValues => {
+                        p1 => { value => 'direct write should fail' },
+                    },
+                },
+            },
+        }, "R4"],
+    ]);
+    $self->assert_str_equals('Email/set', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    $self->assert_null($res->[0][1]{created}{direct});
+    $self->assert_not_null($res->[0][1]{notCreated}{direct});
+
+    my $time_str = DateTime->now->strftime('%Y-%m-%dT%TZ');
+
+    # Both shapes of the bug: omitting moveToMailboxId (fall back to the
+    # owner's Inbox) and naming an explicit destination cassandane has no
+    # insert rights
+    for my $target_id (undef, $forbidden_id) {
+        my $snoozed = { until => $time_str };
+        $snoozed->{moveToMailboxId} = $target_id if defined $target_id;
+
+        xlog $self, "cassandane snoozes a message" .
+            (defined $target_id
+                ? " with moveToMailboxId=$target_id"
+                : " without moveToMailboxId");
+
+        $res = $jmap->CallMethods([
+            ['Email/set', {
+                accountId => 'sharer',
+                create => {
+                    planted => {
+                        mailboxIds => { '$snoozed' => JSON::true },
+                        from => [{ email => 'rando@example.com' }],
+                        to   => [{ email => 'sharer@example.com' }],
+                        subject => 'snooze planted',
+                        snoozed => $snoozed,
+                        bodyStructure => {
+                            type => 'text/plain',
+                            partId => 'p1',
+                        },
+                        bodyValues => {
+                            p1 => { value => 'planted via snooze' },
+                        },
+                    },
+                },
+            }, "R5"],
+        ]);
+
+        $self->assert_str_equals('Email/set', $res->[0][0]);
+        $self->assert_str_equals('R5', $res->[0][2]);
+        $self->assert_null($res->[0][1]{created}{planted});
+        $self->assert_not_null($res->[0][1]{notCreated}{planted});
+    }
+}
