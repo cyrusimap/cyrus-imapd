@@ -17,9 +17,10 @@
 */
 
 typedef struct bucket {
-    char *key;
     void *data;
     struct bucket *next;
+    uint32_t hash;
+    char key[];
 } bucket;
 
 /*

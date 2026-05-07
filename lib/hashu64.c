@@ -37,11 +37,6 @@
 ** of the table to 0.
 */
 
-static inline int u64cmp(uint64_t a, uint64_t b)
-{
-    return (a < b ? -1 : (a > b ? 1 : 0));
-}
-
 EXPORTED hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size, int use_mpool)
 {
       assert(table);
@@ -78,63 +73,26 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
 {
       unsigned val = key % table->size;
       bucketu64 *ptr, *newptr;
-      bucketu64 **prev;
 
       /*
-      ** NULL means this bucket hasn't been used yet.  We'll simply
-      ** allocate space for our new bucket and put our data there, with
-      ** the table pointing at it.
+      ** See if the current string has already been inserted, and if so,
+      ** increment its count.
       */
-      if (!((table->table)[val]))
-      {
-          if(table->pool) {
-              (table->table)[val] =
-                  (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
-              (table->table)[val] -> key = key;
-          } else {
-              (table->table)[val] = (bucketu64 *)xmalloc(sizeof(bucketu64));
-              (table->table)[val] -> key = key;
-          }
-          (table->table)[val] -> next = NULL;
-          (table->table)[val] -> data = data;
-          return (table->table)[val] -> data;
-      }
-
-      /*
-      ** This spot in the table is already in use.  See if the current string
-      ** has already been inserted, and if so, increment its count.
-      */
-      for (prev = &((table->table)[val]), ptr=(table->table)[val];
+      for (ptr=(table->table)[val];
            ptr;
-           prev=&(ptr->next),ptr=ptr->next) {
-          int cmpresult = u64cmp(key, ptr->key);
-          if (!cmpresult) {
+           ptr=ptr->next) {
+          if (key == ptr->key) {
               /* Match! Replace this value and return the old */
               void *old_data;
 
               old_data = ptr->data;
               ptr -> data = data;
               return old_data;
-          } else if (cmpresult < 0) {
-              /* The new key is smaller than the current key--
-               * insert a node and return this data */
-              if(table->pool) {
-                  newptr = (bucketu64 *)mpool_malloc(table->pool, sizeof(bucketu64));
-                  newptr->key = key;
-              } else {
-                  newptr = (bucketu64 *)xmalloc(sizeof(bucketu64));
-                  newptr->key = key;
-              }
-              newptr->data = data;
-              newptr->next = ptr;
-              *prev = newptr;
-              return data;
           }
       }
 
       /*
-      ** This key is the largest one so far.  Add it to the end
-      ** of the list (*prev should be correct)
+      ** Add new keys to the start of the list (which might be empty)
       */
       if(table->pool) {
           newptr=(bucketu64 *)mpool_malloc(table->pool,sizeof(bucketu64));
@@ -144,8 +102,8 @@ EXPORTED void *hashu64_insert(uint64_t key, void *data, hashu64_table *table)
           newptr->key = key;
       }
       newptr->data = data;
-      newptr->next = NULL;
-      *prev = newptr;
+      newptr->next = (table->table)[val];
+      (table->table)[val] = newptr;
       return data;
 }
 
@@ -168,11 +126,8 @@ EXPORTED void *hashu64_lookup(uint64_t key, hashu64_table *table)
 
       for ( ptr = (table->table)[val];NULL != ptr; ptr = ptr->next )
       {
-          int cmpresult = u64cmp(key, ptr->key);
-          if (!cmpresult)
+          if (key == ptr->key)
               return ptr->data;
-          else if(cmpresult < 0) /* key < ptr->key -- we passed it */
-              return NULL;
       }
       return NULL;
 }
@@ -204,8 +159,7 @@ EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
             NULL != ptr;
             last = ptr, ptr = ptr->next)
       {
-          int cmpresult = u64cmp(key, ptr->key);
-          if (!cmpresult)
+          if (key == ptr->key)
           {
               if (last != NULL)
               {
@@ -234,9 +188,6 @@ EXPORTED void *hashu64_del(uint64_t key, hashu64_table *table)
                   }
                   return data;
               }
-          } else if (cmpresult < 0) {
-              /* its not here! */
-              return NULL;
           }
       }
 
