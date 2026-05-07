@@ -258,6 +258,8 @@ static int compare_properties(icalproperty *propa, icalproperty *propb)
 
         icalproperty_remove_parameter_by_name(mypropa, "X-JMAP-ID");
         icalproperty_remove_parameter_by_name(mypropb, "X-JMAP-ID");
+        icalproperty_remove_parameter_by_name(mypropa, "JSID");
+        icalproperty_remove_parameter_by_name(mypropb, "JSID");
         cmp = strcmp(icalproperty_as_ical_string(mypropa),
                      icalproperty_as_ical_string(mypropb));
 
@@ -321,7 +323,7 @@ static int validate_mayinvite(icalproperty *prop,
 /*
  * Compare two components and extract per-user data (alarms, transparency).
  *
- * NOTE: This function assumes that both components has been normalized
+ * NOTE: This function assumes that both components have been normalized
  */
 static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                                int personalize,
@@ -373,6 +375,12 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 oldxname = icalproperty_get_x_name(oldprop);
                 r = strcmp(xname, oldxname);
             }
+            if (kind == ICAL_IANA_PROPERTY) {
+                /* Compare property names alphabetically */
+                xname = icalproperty_get_iana_name(prop);
+                oldxname = icalproperty_get_iana_name(oldprop);
+                r = strcmp(xname, oldxname);
+            }
             else if (kind == ICAL_ATTENDEE_PROPERTY) {
                 /* Compare ATTENDEE by calendar address */
                 r = strcmpnull(icalproperty_get_attendee(prop),
@@ -381,9 +389,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
             else r = 0;
         }
         else {
-            /* Compare property names alphabetically */
-            r = strcmp(icalproperty_kind_to_string(kind),
-                       icalproperty_kind_to_string(oldkind));
+            /* Compare property kinds (matches icalcomponent_normalize) */
+            r = (int)kind - (int)oldkind;
         }
 
         if (r == 0) {
@@ -547,9 +554,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
             else r = 0;
         }
         else {
-            /* Compare component names alphabetically */
-            r = strcmp(icalcomponent_kind_to_string(kind),
-                       icalcomponent_kind_to_string(oldkind));
+            /* Compare component kinds (matches icalcomponent_normalize) */
+            r = (int)kind - (int)oldkind;
         }
 
         if (r == 0) {
