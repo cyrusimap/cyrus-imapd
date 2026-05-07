@@ -350,22 +350,23 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                    prop ? icalproperty_get_value_as_string(prop) : "M");
     }
 
+    // Compare properties.
+    prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
     if (oldical) {
         oldprop = icalcomponent_get_first_property(oldical, ICAL_ANY_PROPERTY);
-        oldcomp = icalcomponent_get_first_component(oldical, ICAL_ANY_COMPONENT);
     }
 
-    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
-         prop; prop = nextprop) {
+    while (prop) {
         const char *xname = NULL, *oldxname;
         icalproperty_kind kind = icalproperty_isa(prop);
         icalproperty_kind oldkind =
             oldprop ? icalproperty_isa(oldprop) : ICAL_NO_PROPERTY;
+        bool advance_prop = false, advance_oldprop = false;
 
         nextprop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY);
 
         if (oldkind == ICAL_NO_PROPERTY) {
-            /* No more components in old component */
+            /* No more properties in old component */
             r = -1;
         }
         else if (kind == oldkind) {
@@ -444,6 +445,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                     break;
                 }
             }
+            advance_prop = true;
+            advance_oldprop = true;
         }
         else if (r < 0) {
             /* Property has been added to ical */
@@ -508,8 +511,7 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 if (num_changes) (*num_changes)++;
                 break;
             }
-
-            continue;  /* Do NOT increment to next old property */
+            advance_prop = true;
         }
         else {
             /* Property has been removed from ical */
@@ -527,16 +529,29 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 if (num_changes) (*num_changes)++;
                 break;
             }
+            advance_oldprop = true;
         }
 
-        oldprop = icalcomponent_get_next_property(oldical, ICAL_ANY_PROPERTY);
+        if (advance_prop) {
+            prop = nextprop;
+        }
+        if (advance_oldprop) {
+            oldprop = icalcomponent_get_next_property(oldical, ICAL_ANY_PROPERTY);
+        }
     }
 
-    for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
-         comp; comp = nextcomp) {
+    // Compare components.
+    comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+    if (oldical) {
+        oldcomp =
+            icalcomponent_get_first_component(oldical, ICAL_ANY_COMPONENT);
+    }
+
+    while (comp) {
         icalcomponent_kind kind = icalcomponent_isa(comp);
         icalcomponent_kind oldkind =
             oldcomp ? icalcomponent_isa(oldcomp) : ICAL_NO_COMPONENT;
+        bool advance_comp = false, advance_oldcomp = false;
 
         nextcomp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT);
 
@@ -564,6 +579,8 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                                       path, allow_propupdates,
                                       sched_addrs, num_changes);
             if (r) return r;
+            advance_comp = true;
+            advance_oldcomp = true;
         }
         else if (r < 0) {
             /* Component has been added to ical */
@@ -596,8 +613,7 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
                 if (r) return r;
                 break;
             }
-
-            continue;  /* Do NOT increment to next old component */
+            advance_comp = true;
         }
         else if (!(allow_propupdates & propupdate_shared)) {
             return HTTP_FORBIDDEN;
@@ -605,9 +621,16 @@ static int validate_propupdates(icalcomponent *ical, icalcomponent *oldical,
         else {
             /* Component has been removed from ical */
             if (num_changes) (*num_changes)++;
+            advance_oldcomp = true;
         }
 
-        oldcomp = icalcomponent_get_next_component(oldical, ICAL_ANY_COMPONENT);
+        if (advance_comp) {
+            comp = nextcomp;
+        }
+        if (advance_oldcomp) {
+            oldcomp =
+                icalcomponent_get_next_component(oldical, ICAL_ANY_COMPONENT);
+        }
     }
 
     /* Trim this component from path */
