@@ -145,3 +145,90 @@ static void test_icalrecurrenceset_get_utc_timespan(void)
 
     free(eternitystr);
 }
+
+/* Regression test for CYR-2965.
+ *
+ * apply_property_updates() in imap/ical_support.c parses a quoted
+ * PATCH-ACTION="BYPARAM@..." once before iterating each existing
+ * property of the matched kind, but free()s the parsed selector
+ * strings *inside* the loop without nulling the pointers.  When the
+ * patch target has two or more properties of the matched kind, the
+ * second iteration reads (use-after-free) and then frees again
+ * (double-free) the same selector strings.
+ *
+ * This test feeds a VCALENDAR containing a VEVENT with two ATTENDEE
+ * properties, plus a VPATCH whose update uses
+ * PATCH-ACTION="BYPARAM@CN=Alice", to icalcomponent_apply_vpatch().
+ * Pre-fix this aborts under glibc malloc detection or ASAN.
+ */
+static void test_icalcomponent_apply_vpatch_byparam_double_free(void)
+{
+    init_caldav();
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//CYR-2965//EN\r\n"
+            "CALSCALE:GREGORIAN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:cyr-2965-event\r\n"
+            "DTSTAMP:20260101T120000Z\r\n"
+            "DTSTART:20260901T150000Z\r\n"
+            "DTEND:20260901T160000Z\r\n"
+            "SUMMARY:two attendees\r\n"
+            "ORGANIZER;CN=Org:MAILTO:org@example.com\r\n"
+            "ATTENDEE;CN=Alice:MAILTO:alice@example.com\r\n"
+            "ATTENDEE;CN=Bob:MAILTO:bob@example.com\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n");
+
+    icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(ical);
+
+    /* Note: PATCH-ACTION="BYPARAM@CN=Alice" -- the DQUOTEd value is
+     * what libical surfaces as an X-action with xvalue, which
+     * apply_property_updates() decodes into byparam.prop.{param,value}.
+     */
+    buf_setcstr(&buf,
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//CYR-2965//EN\r\n"
+            "BEGIN:VPATCH\r\n"
+            "VERSION:1\r\n"
+            "PATCH-VERSION:1\r\n"
+            "UID:cyr-2965-vpatch\r\n"
+            "DTSTAMP:20260101T120100Z\r\n"
+            "BEGIN:PATCH\r\n"
+            "PATCH-TARGET:/VCALENDAR/VEVENT[UID=cyr-2965-event]\r\n"
+            "ATTENDEE;PATCH-ACTION=\"BYPARAM@CN=Alice\";"
+                "PARTSTAT=ACCEPTED:MAILTO:replacement@example.com\r\n"
+            "END:PATCH\r\n"
+            "END:VPATCH\r\n"
+            "END:VCALENDAR\r\n");
+
+    /* icalcomponent_apply_vpatch expects the VPATCH component, not
+     * the wrapping VCALENDAR.  caldav_patch() pulls it out the same
+     * way before calling apply_vpatch. */
+    icalcomponent *pdoc = ical_string_as_icalcomponent(&buf);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(pdoc);
+    icalcomponent *vpatch = icalcomponent_get_first_real_component(pdoc);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(vpatch);
+
+    int num_changes = 0;
+    const char *errstr = NULL;
+
+    /* The bug: this call double-frees the BYPARAM selector strings
+     * when the second ATTENDEE iteration runs.  Under glibc malloc
+     * detection or ASAN, the process aborts here.  Post-fix it
+     * returns cleanly.
+     */
+    int r = icalcomponent_apply_vpatch(ical, vpatch, &num_changes, &errstr);
+    CU_ASSERT_EQUAL(r, 0);
+
+    icalcomponent_free(ical);
+    icalcomponent_free(pdoc);
+    buf_free(&buf);
+}
+
+/* vim: set ft=c: */
