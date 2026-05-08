@@ -792,8 +792,8 @@ static void print_imapopt(struct imapopt_s *imapopt,
                               "name=\"%s\" value=\"%s\" %s>",
                               imapopt->optname,
                               imapopts->enum_options[i].name,
-                              (val->x & (1<<i)) ? "checked" : "");
-            if (imapopt->def.x & (1<<i)) {
+                              (val->u64 & (1<<i)) ? "checked" : "");
+            if (imapopt->def.u64 & (1<<i)) {
                 buf_printf_markup(resp, level--, "<b>%s</b>",
                                   imapopt->enum_options[i].name);
             }
@@ -827,12 +827,12 @@ static void print_imapopt(struct imapopt_s *imapopt,
         break;
 
     case OPT_INT:
-        if (val->i == imapopt->def.i) {
-            buf_printf_markup(resp, level, "<b>%ld</b>", val->i);
+        if (val->i32 == imapopt->def.i32) {
+            buf_printf_markup(resp, level, "<b>%" PRIi32 "</b>", val->i32);
         }
         else {
-            buf_printf_markup(resp, level, "%ld <sub><b>%ld</b></sub>",
-                              val->i, imapopt->def.i);
+            buf_printf_markup(resp, level, "%" PRIi32 " <sub><b>%" PRIi32 "</b></sub>",
+                              val->i32, imapopt->def.i32);
         }
         break;
 

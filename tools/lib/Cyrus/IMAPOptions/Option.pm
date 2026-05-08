@@ -334,13 +334,13 @@ sub c_default_value
                           $self->default_value->@*
                       ), 0);
 
-        return ('x', $dv);
+        return ('u64', $dv);
     }
     elsif ($type eq 'ENUM') {
         return ('e', _c_enum_name($self->name, $self->default_value));
     }
     elsif ($type eq 'INT') {
-        return ('i', $self->default_value);
+        return ('i32', $self->default_value);
     }
     elsif ($type eq 'SWITCH') {
         return ('b', $self->default_value);

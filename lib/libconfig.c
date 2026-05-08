@@ -96,35 +96,23 @@ EXPORTED const char *config_getstring(enum imapopt opt)
     return imapopts[opt].val.s;
 }
 
-EXPORTED int config_getint(enum imapopt opt)
+EXPORTED int32_t config_getint(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_INT);
-#if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.i > 0x7fffffff)||
-        (imapopts[opt].val.i < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getint: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.i);
-    }
-#endif
-    return imapopts[opt].val.i;
+
+    return imapopts[opt].val.i32;
 }
 
-EXPORTED int config_getswitch(enum imapopt opt)
+EXPORTED bool config_getswitch(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_SWITCH);
-#if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.b > 0x7fffffff)||
-        (imapopts[opt].val.b < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getswitch: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.b);
-    }
-#endif
+
     return imapopts[opt].val.b;
 }
 
@@ -145,7 +133,7 @@ EXPORTED uint64_t config_getbitfield(enum imapopt opt)
     assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_BITFIELD);
 
-    return imapopts[opt].val.x;
+    return imapopts[opt].val.u64;
 }
 
 static inline int accumulate(int *val, int mult, int nextchar,
@@ -552,7 +540,7 @@ static void config_option_deprecate(const int dopt)
 
     switch (imapopts[dopt].t) {
     case OPT_BITFIELD:
-        imapopts[opt].val.x = imapopts[dopt].val.x;
+        imapopts[opt].val.u64 = imapopts[dopt].val.u64;
         break;
 
     case OPT_ENUM:
@@ -564,7 +552,7 @@ static void config_option_deprecate(const int dopt)
         break;
 
     case OPT_INT:
-        imapopts[opt].val.i = imapopts[dopt].val.i;
+        imapopts[opt].val.i32 = imapopts[dopt].val.i32;
         break;
 
     case OPT_STRINGLIST:
@@ -883,11 +871,11 @@ EXPORTED int config_parse_switch(const char *p)
 {
     if (*p == '0' || *p == 'n' ||
             (*p == 'o' && p[1] == 'f') || *p == 'f') {
-        return 0;
+        return false;
     }
     else if (*p == '1' || *p == 'y' ||
             (*p == 'o' && p[1] == 'n') || *p == 't') {
-        return 1;
+        return true;
     }
     return -1;
 }
@@ -1110,7 +1098,7 @@ static void config_read_file(const char *filename)
             }
             case OPT_INT:
             {
-                long val;
+                int32_t val;
                 char *ptr;
 
                 val = strtol(p, &ptr, 0);
@@ -1123,7 +1111,7 @@ static void config_read_file(const char *filename)
                     fatal(errbuf, EX_CONFIG);
                 }
 
-                imapopts[opt].val.i = val;
+                imapopts[opt].val.i32 = val;
                 break;
             }
             case OPT_SWITCH:
@@ -1137,7 +1125,7 @@ static void config_read_file(const char *filename)
                     free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
-                imapopts[opt].val.b = b;
+                imapopts[opt].val.b = !!b;
                 break;
             }
             case OPT_ENUM:
@@ -1204,7 +1192,7 @@ static void config_read_file(const char *filename)
                                    e->name, imapopts[opt].optname, pref->name);
                         }
 
-                        imapopts[opt].val.x |= e->val;
+                        imapopts[opt].val.u64 |= e->val;
                     }
 
                     /* find the start of the next value */

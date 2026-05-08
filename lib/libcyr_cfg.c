@@ -33,15 +33,15 @@ static struct cyrusopt_s cyrus_options[] =
     { .opt = CYRUSOPT_ZERO, .val.s = NULL, .t = CYRUS_OPT_NOTOPT },
 
     { .opt = CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-      .val.b = 1,
+      .val.b = true,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_USERNAME_TOLOWER,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_SKIPLIST_UNSAFE,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_TEMP_PATH,
@@ -49,7 +49,7 @@ static struct cyrusopt_s cyrus_options[] =
       .t = CYRUS_OPT_STRING },
 
     { .opt = CYRUSOPT_PTS_CACHE_TIMEOUT,
-      .val.i = 3 * 60 * 60, /* 3 hours */
+      .val.i32 = 3 * 60 * 60, /* 3 hours */
       .t = CYRUS_OPT_INT },
 
     { .opt = CYRUSOPT_CONFIG_DIR,
@@ -57,11 +57,11 @@ static struct cyrusopt_s cyrus_options[] =
       .t = CYRUS_OPT_STRING },
 
     { .opt = CYRUSOPT_DB_INIT_FLAGS,
-      .val.i = 0,
+      .val.i32 = 0,
       .t = CYRUS_OPT_INT },
 
     { .opt = CYRUSOPT_FULLDIRHASH,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_PTSCACHE_DB,
@@ -77,7 +77,7 @@ static struct cyrusopt_s cyrus_options[] =
       .t = CYRUS_OPT_STRING },
 
     { .opt = CYRUSOPT_VIRTDOMAINS,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_AUTH_MECH,
@@ -109,19 +109,19 @@ static struct cyrusopt_s cyrus_options[] =
       .t = CYRUS_OPT_STRING },
 
     { .opt = CYRUSOPT_SQL_USESSL,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
-      .val.b = 1,
+      .val.b = true,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_CYRUSDB_AUTOCONVERT,
-      .val.b = 0,
+      .val.b = false,
       .t = CYRUS_OPT_SWITCH },
 
     { .opt = CYRUSOPT_LAST, .val.s = NULL, .t = CYRUS_OPT_NOTOPT }
@@ -136,29 +136,21 @@ HIDDEN const char *libcyrus_config_getstring(enum cyrus_opt opt)
     return cyrus_options[opt].val.s;
 }
 
-HIDDEN int libcyrus_config_getint(enum cyrus_opt opt)
+HIDDEN int32_t libcyrus_config_getint(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_INT);
-#if (SIZEOF_LONG != 4)
-    if ((cyrus_options[opt].val.i > 0x7fffffff)||(cyrus_options[opt].val.i < -0x7fffffff)) {
-        syslog(LOG_ERR, "libcyrus_config_getint: option %d: %ld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.i);
-    }
-#endif
-    return cyrus_options[opt].val.i;
+
+    return cyrus_options[opt].val.i32;
 }
 
-EXPORTED int libcyrus_config_getswitch(enum cyrus_opt opt)
+EXPORTED bool libcyrus_config_getswitch(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_SWITCH);
-#if (SIZEOF_LONG != 4)
-    if ((cyrus_options[opt].val.b > 0x7fffffff)||(cyrus_options[opt].val.b < -0x7fffffff)) {
-        syslog(LOG_ERR, "libcyrus_config_getswitch: option %d: %ld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.b);
-    }
-#endif
+
     return cyrus_options[opt].val.b;
 }
 
@@ -171,16 +163,16 @@ EXPORTED void libcyrus_config_setstring(enum cyrus_opt  opt, const char *val)
     cyrus_options[opt].val.s = val;
 }
 
-EXPORTED void libcyrus_config_setint(enum cyrus_opt opt, int val)
+EXPORTED void libcyrus_config_setint(enum cyrus_opt opt, int32_t val)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
     assert(cyrus_options[opt].t == CYRUS_OPT_INT);
 
-    cyrus_options[opt].val.i = val;
+    cyrus_options[opt].val.i32 = val;
 }
 
-EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
+EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, bool val)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);

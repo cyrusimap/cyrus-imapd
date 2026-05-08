@@ -70,6 +70,7 @@ sub header
     #ifndef INCLUDED_IMAPOPTS_H
     #define INCLUDED_IMAPOPTS_H
 
+    #include <stdbool.h>
     #include <stdint.h>
 
     enum opttype {
@@ -97,10 +98,10 @@ sub footer
 
     union config_value {
         const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
-        long i;             /* OPT_INT */
-        long b;             /* OPT_SWITCH */
+        int32_t i32;        /* OPT_INT */
+        bool b;             /* OPT_SWITCH */
         enum enum_value e;  /* OPT_ENUM */
-        uint64_t x;         /* OPT_BITFIELD */
+        uint64_t u64;       /* OPT_BITFIELD */
     };
 
     struct enum_option_s {

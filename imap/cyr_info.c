@@ -99,7 +99,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
         switch (imapopts[i].t) {
             case OPT_BITFIELD:
                 if (only_changed) {
-                    if (imapopts[i].def.x == imapopts[i].val.x) break;
+                    if (imapopts[i].def.u64 == imapopts[i].val.u64) break;
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
@@ -108,7 +108,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                     /* multiple names? Use only the non-legacy (first) one */
                     if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
                         continue;
-                    if (imapopts[i].val.x & imapopts[i].enum_options[j].val) {
+                    if (imapopts[i].val.u64 & imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
                     }
                 }
@@ -144,11 +144,11 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
 
             case OPT_INT:
                 if (only_changed) {
-                    if (imapopts[i].def.i == imapopts[i].val.i) break;
+                    if (imapopts[i].def.i32 == imapopts[i].val.i32) break;
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
+                printf("%s: %" PRIi32 "\n", imapopts[i].optname, imapopts[i].val.i32);
                 break;
 
             case OPT_STRING:
@@ -210,7 +210,7 @@ static void do_defconf(int want_since, uint32_t since)
                     /* multiple names? Use only the non-legacy (first) one */
                     if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
                         continue;
-                    if (imapopts[i].def.x & imapopts[i].enum_options[j].val) {
+                    if (imapopts[i].def.u64 & imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
                     }
                 }
@@ -230,7 +230,7 @@ static void do_defconf(int want_since, uint32_t since)
 
 
             case OPT_INT:
-                printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
+                printf("%s: %" PRIi32 "\n", imapopts[i].optname, imapopts[i].def.i32);
                 break;
 
             case OPT_BYTESIZE:
