@@ -329,29 +329,28 @@ sub c_default_value
     my $type = $self->type;
 
     if ($type eq 'BITFIELD') {
-        my $dv = join("\n\t\t\t | ",
+        my $dv = join("\n            | ",
                       (map { _c_enum_name($self->name, $_) }
                           $self->default_value->@*
                       ), 0);
 
-        return ('uint64_t', $dv);
+        return ('x', $dv);
     }
     elsif ($type eq 'ENUM') {
-        return ('enum enum_value',
-                _c_enum_name($self->name, $self->default_value));
+        return ('e', _c_enum_name($self->name, $self->default_value));
     }
     elsif ($type eq 'INT') {
-        return ('long', $self->default_value);
+        return ('i', $self->default_value);
     }
     elsif ($type eq 'SWITCH') {
-        return ('long', $self->default_value);
+        return ('b', $self->default_value);
     }
     elsif (_type_allows_null($type)) {
         # BYTESIZE, DURATION, STRING, STRINGLIST
         my $dv = defined $self->default_value
                  ? '"' . $self->default_value . '"'
                  : 'NULL';
-        return ('const char *', $dv);
+        return ('s', $dv);
     }
     else {
         die "uh oh, i don't recognise type=$type";

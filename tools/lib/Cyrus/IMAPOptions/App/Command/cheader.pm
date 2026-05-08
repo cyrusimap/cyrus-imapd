@@ -49,11 +49,6 @@ sub execute
     $imapoptions->iterate(sub { $self->_print_enum_defs(@_) });
     print "};\n";
 
-    my $dummy_field = 'void *dummy;';
-    if ($opt->cc eq 'gcc') {
-        $dummy_field = '';
-    }
-
     my $max_enum_opts = 0;
     $imapoptions->iterate(sub {
         my (undef, $option) = @_;
@@ -63,7 +58,7 @@ sub execute
         }
     });
 
-    $self->footer($dummy_field, $max_enum_opts);
+    $self->footer($max_enum_opts);
 }
 
 sub header
@@ -96,12 +91,11 @@ sub header
 
 sub footer
 {
-    my ($self, $dummy_field, $max_enum_opts) = @_;
+    my ($self, $max_enum_opts) = @_;
 
     my $c = <<~"END_FOOTER";
 
     union config_value {
-        $dummy_field
         const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
         long i;             /* OPT_INT */
         long b;             /* OPT_SWITCH */
