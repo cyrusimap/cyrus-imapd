@@ -15,13 +15,6 @@
 #include "xmalloc.h"
 #include "util.h"
 
-#if defined(__GNUC__) && __GNUC__ > 1
-/* We can use the GCC union constructor extension */
-#define CFGVAL(t,v)     (union cyrus_config_value)((t)(v))
-#else
-#define CFGVAL(t,v)     {(void *)(v)}
-#endif
-
 struct delayed_action {
     struct delayed_action *next;
     char *key;
@@ -32,102 +25,106 @@ struct delayed_action {
 
 static struct delayed_action *delayed_actions;
 
-static struct cyrusopt_s cyrus_options[] = {
-    { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
+/* XXX audit this struct for equivalence to imapopts, or
+ * XXX generate it from lib/imapoptions properly!
+ */
+static struct cyrusopt_s cyrus_options[] =
+{
+    { .opt = CYRUSOPT_ZERO, .val.s = NULL, .t = CYRUS_OPT_NOTOPT },
 
-    { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
-      CFGVAL(long, 1),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,
+      .val.b = 1,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_USERNAME_TOLOWER,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_USERNAME_TOLOWER,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_SKIPLIST_UNSAFE,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_SKIPLIST_UNSAFE,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_TEMP_PATH,
-      CFGVAL(const char *, "/tmp"),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_TEMP_PATH,
+      .val.s = "/tmp",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_PTS_CACHE_TIMEOUT,
-      CFGVAL(long, 3 * 60 * 60), /* 3 hours */
-      CYRUS_OPT_INT },
+    { .opt = CYRUSOPT_PTS_CACHE_TIMEOUT,
+      .val.i = 3 * 60 * 60, /* 3 hours */
+      .t = CYRUS_OPT_INT },
 
-    { CYRUSOPT_CONFIG_DIR,
-      CFGVAL(const char *, "/var/imap"),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_CONFIG_DIR,
+      .val.s = "/var/imap",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_DB_INIT_FLAGS,
-      CFGVAL(long, 0),
-      CYRUS_OPT_INT },
+    { .opt = CYRUSOPT_DB_INIT_FLAGS,
+      .val.i = 0,
+      .t = CYRUS_OPT_INT },
 
-    { CYRUSOPT_FULLDIRHASH,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_FULLDIRHASH,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_PTSCACHE_DB,
-      CFGVAL(const char *, "skiplist"),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_PTSCACHE_DB,
+      .val.s = "skiplist",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_PTSCACHE_DB_PATH,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_PTSCACHE_DB_PATH,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_PTLOADER_SOCK,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_PTLOADER_SOCK,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_VIRTDOMAINS,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_VIRTDOMAINS,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_AUTH_MECH,
-      CFGVAL(const char *, "unix"),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_AUTH_MECH,
+      .val.s = "unix",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_DELETERIGHT,
-      CFGVAL(const char *, "c"),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_DELETERIGHT,
+      .val.s = "c",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_DATABASE,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_SQL_DATABASE,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_ENGINE,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_SQL_ENGINE,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_HOSTNAMES,
-      CFGVAL(const char *, ""),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_SQL_HOSTNAMES,
+      .val.s = "",
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_USER,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_SQL_USER,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_PASSWD,
-      CFGVAL(const char *, NULL),
-      CYRUS_OPT_STRING },
+    { .opt = CYRUSOPT_SQL_PASSWD,
+      .val.s = NULL,
+      .t = CYRUS_OPT_STRING },
 
-    { CYRUSOPT_SQL_USESSL,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_SQL_USESSL,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
-      CFGVAL(long, 1),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+      .val.b = 1,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_ACL_ADMIN_IMPLIES_WRITE,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_CYRUSDB_AUTOCONVERT,
-      CFGVAL(long, 0),
-      CYRUS_OPT_SWITCH },
+    { .opt = CYRUSOPT_CYRUSDB_AUTOCONVERT,
+      .val.b = 0,
+      .t = CYRUS_OPT_SWITCH },
 
-    { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
+    { .opt = CYRUSOPT_LAST, .val.s = NULL, .t = CYRUS_OPT_NOTOPT }
 };
 
 HIDDEN const char *libcyrus_config_getstring(enum cyrus_opt opt)
