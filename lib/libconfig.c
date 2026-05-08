@@ -383,28 +383,12 @@ done:
 /* Get a size value, converted to bytes. */
 EXPORTED int64_t config_getbytesize(enum imapopt opt)
 {
-    int64_t bytesize;
-
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].type == OPT_BYTESIZE);
     assert_not_deprecated(opt);
 
-    if (imapopts[opt].val.s == NULL) return 0;
-
-    if (config_parsebytesize(imapopts[opt].val.s,
-                             imapopts[opt].defunit,
-                             &bytesize))
-    {
-        /* should have been rejected by config_read_file, but just in case */
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "%s: %s: couldn't parse byte size '%s'",
-                 __func__, imapopts[opt].name, imapopts[opt].val.s);
-        fatal(errbuf, EX_CONFIG);
-    }
-
-    return bytesize;
+    return imapopts[opt].val.i64;
 }
 
 EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
@@ -545,9 +529,12 @@ static void config_option_deprecate(const int dopt)
         imapopts[opt].val.i32 = imapopts[dopt].val.i32;
         break;
 
+    case OPT_BYTESIZE:
+        imapopts[opt].val.i64 = imapopts[dopt].val.i64;
+        break;
+
     case OPT_STRINGLIST:
     case OPT_STRING:
-    case OPT_BYTESIZE:
         imapopts[opt].val.s = imapopts[dopt].val.s;
         imapopts[dopt].val.s = NULL;
         break;
@@ -597,8 +584,7 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if ((imapopts[opt].type == OPT_STRING ||
-             imapopts[opt].type == OPT_BYTESIZE) &&
+        if (imapopts[opt].type == OPT_STRING &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
               imapopts[opt].val.s != imapopts[opt].def.s &&
@@ -711,8 +697,30 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if (imapopts[opt].type == OPT_DURATION && !imapopts[opt].seen) {
-            /* not in config, need to parse default string */
+        /* type-specific post-processing of defaults */
+        if (imapopts[opt].seen) continue;
+
+        if (imapopts[opt].type == OPT_BYTESIZE) {
+            int64_t bytesize;
+
+            if (imapopts[opt].def.s == NULL) {
+                bytesize = 0;
+            }
+            else if (config_parsebytesize(imapopts[opt].def.s,
+                                         imapopts[opt].defunit,
+                                         &bytesize))
+            {
+                /* uh-oh, we've got a bogus Default-Value */
+                char errbuf[1024];
+                snprintf(errbuf, sizeof(errbuf),
+                         "%s: %s: couldn't parse default bytesize '%s'",
+                         __func__, imapopts[opt].name, imapopts[opt].def.s);
+                fatal(errbuf, EX_SOFTWARE);
+            }
+
+            imapopts[opt].val.i64 = bytesize;
+        }
+        else if (imapopts[opt].type == OPT_DURATION) {
             int32_t duration;
 
             if (imapopts[opt].def.s == NULL) {
@@ -1081,9 +1089,7 @@ static void config_read_file(const char *filename)
 
             /* If we've seen it already, we're replacing it, so we need
              * to free the current string if there is one */
-            if (imapopts[opt].seen
-                && (imapopts[opt].type == OPT_STRING
-                    || imapopts[opt].type == OPT_BYTESIZE))
+            if (imapopts[opt].seen && imapopts[opt].type == OPT_STRING)
                 free((char *)imapopts[opt].val.s);
 
             if (service_specific)
@@ -1235,8 +1241,9 @@ static void config_read_file(const char *filename)
             }
             case OPT_BYTESIZE:
             {
-                /* make sure it's parseable, though we don't know the default units */
-                if (config_parsebytesize(p, '\0', NULL)) {
+                int64_t bytesize = 0;
+
+                if (config_parsebytesize(p, imapopts[opt].defunit, &bytesize)) {
                     imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable byte size '%s' for %s in line %d",
@@ -1245,10 +1252,7 @@ static void config_read_file(const char *filename)
                     fatal(errbuf, EX_CONFIG);
                 }
 
-                /* but then store it unparsed, it will be parsed again by
-                 * config_getbytesize() where the caller knows the appropriate
-                 * default units */
-                imapopts[opt].val.s = xstrdup(p);
+                imapopts[opt].val.i64 = bytesize;
                 break;
             }
             case OPT_NOTOPT:

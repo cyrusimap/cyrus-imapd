@@ -97,10 +97,11 @@ sub footer
     my $c = <<~"END_FOOTER";
 
     union config_value {
-        const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_BYTESIZE */
+        const char *s;      /* OPT_STRING, OPT_STRINGLIST */
         int32_t i32;        /* OPT_INT, OPT_DURATION */
         bool b;             /* OPT_SWITCH */
         enum enum_value e;  /* OPT_ENUM */
+        int64_t i64;        /* OPT_BYTESIZE */
         uint64_t u64;       /* OPT_BITFIELD */
     };
 

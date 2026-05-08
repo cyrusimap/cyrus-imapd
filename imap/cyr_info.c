@@ -117,12 +117,20 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
 
             case OPT_BYTESIZE:
                 if (only_changed) {
-                    if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
+                    int64_t def_bytesize = 0LL;
+
+                    if (imapopts[i].def.s != NULL) {
+                        config_parsebytesize(imapopts[i].def.s,
+                                             imapopts[i].defunit,
+                                             &def_bytesize);
+                    }
+
+                    if (def_bytesize == imapopts[i].val.i64)
                         break;
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %s\n", imapopts[i].name, imapopts[i].val.s);
+                printf("%s: %" PRIi64 "\n", imapopts[i].name, imapopts[i].val.i64);
                 break;
 
             case OPT_DURATION:
