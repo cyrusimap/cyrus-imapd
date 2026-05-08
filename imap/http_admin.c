@@ -695,7 +695,7 @@ static int known_regular(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (!strcmp(imapopts[i].optname, key))
+        if (!strcmp(imapopts[i].name, key))
             return 1;
     }
 
@@ -781,16 +781,16 @@ static void print_imapopt(struct imapopt_s *imapopt,
     int i;
     
     buf_printf_markup(resp, level++, "<tr>");
-    buf_printf_markup(resp, level, "<td>%s</td>", imapopt->optname);
+    buf_printf_markup(resp, level, "<td>%s</td>", imapopt->name);
     buf_printf_markup(resp, level++, "<td>");
     
-    switch (imapopt->t) {
+    switch (imapopt->type) {
     case OPT_BITFIELD:
         for (i = 0; imapopt->enum_options[i].name; i++) {
             buf_printf_markup(resp, level++,
                               "<input disabled type=checkbox "
                               "name=\"%s\" value=\"%s\" %s>",
-                              imapopt->optname,
+                              imapopt->name,
                               imapopts->enum_options[i].name,
                               (val->u64 & (1<<i)) ? "checked" : "");
             if (imapopt->def.u64 & (1<<i)) {
@@ -811,7 +811,7 @@ static void print_imapopt(struct imapopt_s *imapopt,
             buf_printf_markup(resp, level++,
                               "<input disabled type=radio "
                               "name=\"%s\" value=\"%s\" %s>",
-                              imapopt->optname,
+                              imapopt->name,
                               imapopt->enum_options[i].name,
                               (val->e == imapopt->enum_options[i].val) ?
                               "checked" : "");
@@ -871,7 +871,7 @@ static void print_imapopt(struct imapopt_s *imapopt,
             buf_printf_markup(resp, level++,
                               "<input disabled type=radio "
                               "name=\"%s\" value=\"%s\" %s>",
-                              imapopt->optname,
+                              imapopt->name,
                               imapopt->enum_options[i].name,
                               (val->s &&
                                !strcasecmp(val->s,
@@ -894,7 +894,7 @@ static void print_imapopt(struct imapopt_s *imapopt,
         buf_printf_markup(resp, level,
                           "<input disabled type=checkbox "
                           "name=\"%s\" value=\"on\" %s> %s",
-                          imapopt->optname, val->b ? "checked" : "",
+                          imapopt->name, val->b ? "checked" : "",
                           imapopt->def.b ? "<b>on</b>" : "on");
         break;
 
@@ -1079,13 +1079,13 @@ static int action_conf(struct transaction_t *txn)
 
                 buf_printf_markup(&resp, level++, "<tr>");
                 buf_printf_markup(&resp, level, "<td>%s</td>",
-                                  imapopt->optname);
+                                  imapopt->name);
                 buf_printf_markup(&resp, level++, "<td>");
                 buf_printf_markup(&resp, level, "Since %s",
                                   imapopt->deprecated_since);
-                if (imapopt->preferred_opt != IMAPOPT_ZERO) {
+                if (imapopt->replaced_by != IMAPOPT_ZERO) {
                     buf_printf_markup(&resp, level, " in favor of <b>%s</b>",
-                                      imapopts[imapopt->preferred_opt].optname);
+                                      imapopts[imapopt->replaced_by].name);
                 }
 
                 buf_printf_markup(&resp, --level, "</td>");

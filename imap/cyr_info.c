@@ -96,14 +96,14 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
     /* XXX: this is semi-sorted, but the overflow strings aren't sorted at all */
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        switch (imapopts[i].t) {
+        switch (imapopts[i].type) {
             case OPT_BITFIELD:
                 if (only_changed) {
                     if (imapopts[i].def.u64 == imapopts[i].val.u64) break;
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s:", imapopts[i].optname);
+                printf("%s:", imapopts[i].name);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     /* multiple names? Use only the non-legacy (first) one */
                     if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
@@ -123,7 +123,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s);
+                printf("%s: %s\n", imapopts[i].name, imapopts[i].val.s);
                 break;
 
             case OPT_ENUM:
@@ -132,7 +132,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s:", imapopts[i].optname);
+                printf("%s:", imapopts[i].name);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
@@ -148,7 +148,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %" PRIi32 "\n", imapopts[i].optname, imapopts[i].val.i32);
+                printf("%s: %" PRIi32 "\n", imapopts[i].name, imapopts[i].val.i32);
                 break;
 
             case OPT_STRING:
@@ -172,7 +172,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
+                printf("%s: %s\n", imapopts[i].name, imapopts[i].val.s ? imapopts[i].val.s : "");
                 break;
 
             case OPT_SWITCH:
@@ -181,7 +181,7 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
+                printf("%s: %s\n", imapopts[i].name, imapopts[i].val.b ? "yes" : "no");
                 break;
 
             default:
@@ -203,9 +203,9 @@ static void do_defconf(int want_since, uint32_t since)
     for (i = 1; i < IMAPOPT_LAST; i++) {
         if (want_since && since < imapopts[i].last_modified)
             highlight(imapopts[i].last_modified);
-        switch (imapopts[i].t) {
+        switch (imapopts[i].type) {
             case OPT_BITFIELD:
-                printf("%s:", imapopts[i].optname);
+                printf("%s:", imapopts[i].name);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     /* multiple names? Use only the non-legacy (first) one */
                     if (j && imapopts[i].enum_options[j].val == imapopts[i].enum_options[j-1].val)
@@ -218,7 +218,7 @@ static void do_defconf(int want_since, uint32_t since)
                 break;
 
             case OPT_ENUM:
-                printf("%s:", imapopts[i].optname);
+                printf("%s:", imapopts[i].name);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
                         printf(" %s", imapopts[i].enum_options[j].name);
@@ -230,18 +230,18 @@ static void do_defconf(int want_since, uint32_t since)
 
 
             case OPT_INT:
-                printf("%s: %" PRIi32 "\n", imapopts[i].optname, imapopts[i].def.i32);
+                printf("%s: %" PRIi32 "\n", imapopts[i].name, imapopts[i].def.i32);
                 break;
 
             case OPT_BYTESIZE:
             case OPT_DURATION:
             case OPT_STRING:
             case OPT_STRINGLIST:
-                printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
+                printf("%s: %s\n", imapopts[i].name, imapopts[i].def.s ? imapopts[i].def.s : "");
                 break;
 
             case OPT_SWITCH:
-                printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.b ? "yes" : "no");
+                printf("%s: %s\n", imapopts[i].name, imapopts[i].def.b ? "yes" : "no");
                 break;
 
             default:
@@ -286,7 +286,7 @@ static int known_regularkey(const char *key)
     int i;
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
-        if (!strcmp(imapopts[i].optname, key))
+        if (!strcmp(imapopts[i].name, key))
             return 1;
     }
 

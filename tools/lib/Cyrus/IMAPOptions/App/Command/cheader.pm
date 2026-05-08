@@ -112,12 +112,12 @@ sub footer
     #define MAX_ENUM_OPTS $max_enum_opts
     struct imapopt_s {
         const enum imapopt opt;
-        const char *optname;
+        const char *name;
         int seen;
-        const enum opttype t;
+        const enum opttype type;
         uint32_t last_modified;
         const char *deprecated_since;
-        const enum imapopt preferred_opt;
+        const enum imapopt replaced_by;
         union config_value val;
         const union config_value def;
         const struct enum_option_s enum_options[MAX_ENUM_OPTS+1];

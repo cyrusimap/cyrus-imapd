@@ -57,12 +57,12 @@ sub header
     EXPORTED struct imapopt_s imapopts[] =
     {
         {   .opt = IMAPOPT_ZERO,
-            .optname = "",
+            .name = "",
             .seen = 0,
-            .t = OPT_NOTOPT,
+            .type = OPT_NOTOPT,
             .last_modified = 0,
             .deprecated_since = NULL,
-            .preferred_opt = IMAPOPT_ZERO,
+            .replaced_by = IMAPOPT_ZERO,
             .val.s = NULL,
             .def.s = NULL,
             .enum_options = {
@@ -80,12 +80,12 @@ sub footer
 
     my $c = <<~'END_FOOTER';
         {   .opt = IMAPOPT_LAST,
-            .optname = NULL,
+            .name = NULL,
             .seen = 0,
-            .t = OPT_NOTOPT,
+            .type = OPT_NOTOPT,
             .last_modified = 0,
             .deprecated_since = NULL,
-            .preferred_opt = IMAPOPT_ZERO,
+            .replaced_by = IMAPOPT_ZERO,
             .val.s = NULL,
             .def.s = NULL,
             .enum_options = {
@@ -113,12 +113,12 @@ sub _print_option
     return if $option->for_documentation_only;
 
     print '    {   .opt = ' . $option->c_name . ",\n";
-    _print_struct_field('optname', '"' . $option->name . '"');
+    _print_struct_field('name', '"' . $option->name . '"');
     _print_struct_field('seen', '0');
-    _print_struct_field('t', 'OPT_' . $option->type);
+    _print_struct_field('type', 'OPT_' . $option->type);
     _print_struct_field('last_modified', $option->c_last_modified);
     _print_struct_field('deprecated_since', $option->c_deprecated_since);
-    _print_struct_field('preferred_opt', $option->c_replaced_by);
+    _print_struct_field('replaced_by', $option->c_replaced_by);
 
     # We write the default value twice:
     # The first initialises the 'val' field of the struct, which is what makes

@@ -54,7 +54,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     val = config_getint(optkey); \
     if (val <= 0) { \
         syslog(LOG_ERR, "jmap: invalid property value: %s", \
-                imapopts[optkey].optname); \
+                imapopts[optkey].name); \
         val = 0; \
     } \
 } while (0)
@@ -63,7 +63,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     val = config_getbytesize(optkey, defunit); \
     if (val <= 0) { \
         syslog(LOG_ERR, "jmap: invalid property value: %s", \
-               imapopts[optkey].optname); \
+               imapopts[optkey].name); \
         val = 0; \
     } \
 } while (0)
