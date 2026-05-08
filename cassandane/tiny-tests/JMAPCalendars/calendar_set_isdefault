@@ -167,4 +167,69 @@ sub test_calendar_set_isdefault
     ]])->single_sentence("Calendar/set")->arguments;
 
     $self->assert_equals(JSON::null, $res->{updated});
+    $state = $res->{newState};
+
+    xlog $self, "change the default along with a name change";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            update => {
+                $id2 => { name => 'foo2' },
+            },
+            onSuccessSetIsDefault => $id2
+        }
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => {                   
+                $id2 => {isDefault => JSON::true},
+                $id3 => {isDefault => JSON::false},
+            },
+        }),
+        $res
+    );
+
+    $res = $jmap->request([[
+        'Calendar/changes' => {
+            sinceState => $state
+        },
+    ]])->single_sentence("Calendar/changes")->arguments;
+
+    $self->assert_cmp_deeply(
+        bag($id2, $id3),
+        $res->{updated}
+    );
+    $state = $res->{newState};
+
+    xlog $self, "change the default along with empty updates";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            update => {
+                $id2 => { },
+                $id3 => { },
+            },
+            onSuccessSetIsDefault => $id3
+        }
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => {                   
+                $id2 => {isDefault => JSON::false},
+                $id3 => {isDefault => JSON::true},
+            },
+        }),
+        $res
+    );
+
+    $res = $jmap->request([[
+        'Calendar/changes' => {
+            sinceState => $state
+        },
+    ]])->single_sentence("Calendar/changes")->arguments;
+
+    $self->assert_cmp_deeply(
+        bag($id2, $id3),
+        $res->{updated}
+    );
 }

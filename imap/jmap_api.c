@@ -3618,18 +3618,21 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
     else
         obj = json_object_get(set->updated, id);
 
-    if (obj) {
+    if (json_is_object(obj)) {
         json_object_set_new(obj, "isDefault", json_boolean(isdef));
     }
     else {
-        /* Bump modseq so the mailbox shows up in /changes */
-        struct mailbox *mailbox = NULL;
+        /* Did we make any other updates to the mailbox? */
+        if (!json_object_size(json_object_get(set->update, id))) {
+            /* Bump modseq so the mailbox shows up in /changes */
+            struct mailbox *mailbox = NULL;
 
-        mailbox_open_iwl(name, &mailbox);
-        if (mailbox) {
-            mboxlist_update_foldermodseq(name,
-                                         mailbox_modseq_dirty(mailbox));
-            mailbox_close(&mailbox);
+            mailbox_open_iwl(name, &mailbox);
+            if (mailbox) {
+                mboxlist_update_foldermodseq(name,
+                                             mailbox_modseq_dirty(mailbox));
+                mailbox_close(&mailbox);
+            }
         }
 
         json_object_set_new(set->updated, id,
