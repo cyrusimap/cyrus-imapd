@@ -106,10 +106,13 @@ BUILT_SOURCES = \
 CLEANFILES = \
     tools/mkimap \
     tools/rehash \
-    imap/css3_color_array.h \
     lib/chartable.c \
+    lib/htmlchar.h \
     lib/imapopts.c \
-    lib/imapopts.h
+    lib/imapopts.h \
+    imap/css3_color_array.h \
+    imap/rfc822_header.h \
+    imap/mailbox_header_cache.h
 
 DISTCLEANFILES = \
     com_err/et/compile_et \
@@ -175,10 +178,8 @@ BUILT_SOURCES += \
     imap/mupdate_err.h \
     imap/promdata.c \
     imap/promdata.h \
-    lib/htmlchar.c \
     lib/htmlchar.h \
     imap/css3_color_array.h \
-    imap/rfc822_header.c \
     imap/rfc822_header.h \
     imap/mailbox_header_cache.h
 
@@ -364,13 +365,13 @@ EXTRA_DIST = \
     imap/mupdate_err.et \
     imap/nntp_err.et \
     imap/promdata.p \
-    imap/rfc822_header.st \
+    imap/rfc822_header.gperf \
     imap/tz_err.et \
     lib/charset/aliases.txt \
     lib/charset/UnicodeData.txt \
     lib/charset/unifix.txt \
     lib/charset/us-ascii.t \
-    lib/htmlchar.st \
+    lib/htmlchar.gperf \
     lib/imapoptions \
     man/arbitronsort.pl.1 \
     man/masssievec.8 \
@@ -517,7 +518,6 @@ dist_noinst_SCRIPTS = \
     lib/mkchartable.pl \
     perl/sieve/scripts/sieveshell.pl \
     tools/arbitronsort.pl \
-    tools/compile_st.pl \
     tools/fixsearchpath.pl \
     tools/git-version.sh \
     tools/gperf-build-prop-set.pl \
@@ -1075,9 +1075,7 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/prometheus.h \
     imap/protocol.h \
     imap/quota_db.c \
-    imap/rfc822_header.c \
     imap/rfc822_header.h \
-    imap/mailbox_header_cache.h \
     imap/saslclient.c \
     imap/saslclient.h \
     imap/saslserver.c \
@@ -1534,7 +1532,11 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 %_err.h %_err.c: %_err.et $(COMPILE_ET_DEP)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
-imap/css3_color_array.h: imap/css3_color_array.gperf
+# Build specific *.h from *.gperf
+gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h \
+	imap/rfc822_header.h lib/htmlchar.h
+
+$(gperf_tables): %.h: %.gperf
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
 
 # Build jmap_*_props.[ch] from jmap_*_props.gperf
@@ -1552,23 +1554,6 @@ if HAVE_XXD
 # CDPATH echoing the path change on stdout and consequently into the .h file
 %_js.h: %.js
 	$(AM_V_GEN)(cd $(<D) > /dev/null && $(XXD) -i $(<F)|sed 's/unsigned char/static const char/') > $@.NEW && mv $@.NEW $@
-endif
-
-if MAINTAINER_MODE
-imap/rfc822_header.c: imap/rfc822_header.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
-
-imap/rfc822_header.h: imap/rfc822_header.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
-
-lib/htmlchar.c: lib/htmlchar.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
-
-lib/htmlchar.h: lib/htmlchar.st
-	$(AM_V_GEN)$(PERL) ${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
-
-imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
-	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
@@ -1599,7 +1584,6 @@ lib_libcyrus_la_SOURCES = \
     lib/cyrusdb_twoskip.c \
     lib/cyrusdb_twom.c \
     lib/glob.c \
-    lib/htmlchar.c \
     lib/htmlchar.h \
     lib/imapurl.c \
     lib/imclient.c \

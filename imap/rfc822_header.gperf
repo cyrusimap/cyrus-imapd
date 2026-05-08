@@ -1,0 +1,79 @@
+%{
+/* rfc822_header.h -- Lookup function for RFC 822 header fields */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+enum rfc822_header {
+    RFC822_UNKNOWN = -2,
+    RFC822_BAD     = -1,
+    RFC822_BCC     =  0,
+    RFC822_CC,
+    RFC822_CONTENT_DESCRIPTION,
+    RFC822_CONTENT_DISPOSITION,
+    RFC822_CONTENT_ID,
+    RFC822_CONTENT_LANGUAGE,
+    RFC822_CONTENT_LOCATION,
+    RFC822_CONTENT_MD5,
+    RFC822_CONTENT_TRANSFER_ENCODING,
+    RFC822_CONTENT_TYPE,
+    RFC822_DATE,
+    RFC822_FROM,
+    RFC822_IN_REPLY_TO,
+    RFC822_MESSAGE_ID,
+    RFC822_RECEIVED,
+    RFC822_REFERENCES,
+    RFC822_REPLY_TO,
+    RFC822_SENDER,
+    RFC822_SUBJECT,
+    RFC822_TO,
+    RFC822_X_DELIVEREDINTERNALDATE,
+    RFC822_X_ME_MESSAGE_ID,
+};
+
+%}
+
+%enum
+%readonly-tables
+%compare-lengths
+%compare-strncmp
+%ignore-case
+%struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,RFC822_UNKNOWN
+%define lookup-function-name __rfc822_header_lookup
+
+struct rfc822_header_desc { const char *name; enum rfc822_header value; };
+
+%%
+"Bcc",                       RFC822_BCC
+"Cc",                        RFC822_CC
+"Content-Description",       RFC822_CONTENT_DESCRIPTION
+"Content-Disposition",       RFC822_CONTENT_DISPOSITION
+"Content-Id",                RFC822_CONTENT_ID
+"Content-Language",          RFC822_CONTENT_LANGUAGE
+"Content-Location",          RFC822_CONTENT_LOCATION
+"Content-MD5",               RFC822_CONTENT_MD5
+"Content-Transfer-Encoding", RFC822_CONTENT_TRANSFER_ENCODING
+"Content-Type",              RFC822_CONTENT_TYPE
+"Date",                      RFC822_DATE
+"From",                      RFC822_FROM
+"In-Reply-To",               RFC822_IN_REPLY_TO
+"Message-ID",                RFC822_MESSAGE_ID
+"Received",                  RFC822_RECEIVED
+"References",                RFC822_REFERENCES
+"Reply-To",                  RFC822_REPLY_TO
+"Sender",                    RFC822_SENDER
+"Subject",                   RFC822_SUBJECT
+"To",                        RFC822_TO
+"X-Deliveredinternaldate",   RFC822_X_DELIVEREDINTERNALDATE
+"X-ME-Message-ID",           RFC822_X_ME_MESSAGE_ID
+%%
+
+#define rfc822_header_from_string(s) rfc822_header_from_string_len(s, strlen(s))
+
+enum rfc822_header rfc822_header_from_string_len(const char *s, size_t len)
+{
+    const struct rfc822_header_desc *d = __rfc822_header_lookup(s, len);
+    return (d == NULL ? RFC822_BAD : d->value);
+}

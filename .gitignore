@@ -122,6 +122,7 @@ imap/jmap_err.h
 imap/lmtp_err.c
 imap/lmtp_err.h
 imap/lmtpd
+imap/mailbox_header_cache.h
 imap/mbexamine
 imap/mbpath
 imap/mbtool
@@ -139,6 +140,7 @@ imap/promstatsd
 imap/quota
 imap/reconstruct
 imap/relocate_by_id
+imap/rfc822_header.h
 imap/search_test
 imap/smmapd
 imap/squatter
@@ -158,6 +160,7 @@ lib/cron-parse.c
 lib/cron-parse.h
 lib/imapopts.c
 lib/imapopts.h
+lib/htmlchar.h
 lib/mkchartable
 libcyrus.pc
 libcyrus_imap.pc
