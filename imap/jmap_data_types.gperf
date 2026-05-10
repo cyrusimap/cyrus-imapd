@@ -1,0 +1,66 @@
+%{
+/* jmap_data_types.h -- Lookup function for JMAP Data Types */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include "imap/jmap_api.h"
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,UINT32_MAX
+%define word-array-name       jmap_data_types
+%define lookup-function-name  jmap_data_types_lookup
+
+jmap_data_type_t;
+
+%%
+# RFC 8620
+"Core",                      JMAP_TYPE_CORE
+"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION
+# RFC 8621
+"Mailbox",                   JMAP_TYPE_MAILBOX
+"Thread",                    JMAP_TYPE_THREAD
+"Email",                     JMAP_TYPE_EMAIL
+"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY
+"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET
+"Identity",                  JMAP_TYPE_IDENTITY
+"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION
+"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE
+# RFC 9007
+"MDN",                       JMAP_TYPE_MDN
+# RFC 9425
+"Quota",                     JMAP_TYPE_QUOTA
+# RFC 9661
+"SieveScript",               JMAP_TYPE_SIEVESCRIPT
+# RFC 9670
+"Principal",                 JMAP_TYPE_PRINCIPAL
+"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION
+# RFC 9610
+"AddressBook",               JMAP_TYPE_ADDRESSBOOK
+"ContactCard",               JMAP_TYPE_CONTACTCARD
+# draft-ietf-jmap-calendars
+"Calendar",                  JMAP_TYPE_CALENDAR
+"CalendarEvent",             JMAP_TYPE_CALENDAREVENT
+"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION
+"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY
+%%
+
+
+void jmap_data_types_foreach(void (*cb)(const jmap_data_type_t *, void *),
+                             void *rock)
+{
+    for (unsigned i = MIN_HASH_VALUE; i <= MAX_HASH_VALUE; i++) {
+        const jmap_data_type_t *jtype = &jmap_data_types[i];
+
+        if (jtype->name) cb(jtype, rock);
+    }
+}

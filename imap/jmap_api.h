@@ -64,6 +64,50 @@ enum {
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 
+/* JMAP Data Types */
+enum {
+    /* RFC 8620 */
+    JMAP_TYPE_CORE = 0,
+    JMAP_TYPE_PUSHSUBSCRIPTION,
+    /* RFC 8621 */
+    JMAP_TYPE_MAILBOX,
+    JMAP_TYPE_THREAD,
+    JMAP_TYPE_EMAIL,
+    JMAP_TYPE_EMAILDELIVERY,
+    JMAP_TYPE_SEARCHSNIPPET,
+    JMAP_TYPE_IDENTITY,
+    JMAP_TYPE_EMAILSUBMISSION,
+    JMAP_TYPE_VACATIONRESPONSE,
+    /* RFC 9007 */
+    JMAP_TYPE_MDN,
+    /* RFC 9425 */
+    JMAP_TYPE_QUOTA,
+    /* RFC 9661 */
+    JMAP_TYPE_SIEVESCRIPT,
+    /* RFC 9670 */
+    JMAP_TYPE_PRINCIPAL,
+    JMAP_TYPE_SHARENOTIFICATION,
+    /* RFC 9610 */
+    JMAP_TYPE_ADDRESSBOOK,
+    JMAP_TYPE_CONTACTCARD,
+    /* draft-ietf-jmap-calendars */
+    JMAP_TYPE_CALENDAR,
+    JMAP_TYPE_CALENDAREVENT,
+    JMAP_TYPE_CALENDAREVENTNOTIFICATION,
+    JMAP_TYPE_PARTICIPANTIDENTITY,
+    JMAP_NUM_TYPES  /* MUST always be last */
+};
+
+typedef struct {
+    const char *name;
+    uint32_t kind;
+} jmap_data_type_t;
+
+const jmap_data_type_t *jmap_data_types_lookup(register const char *str,
+                                               register size_t len);
+void jmap_data_types_foreach(void (*cb)(const jmap_data_type_t *, void *),
+                             void *rock);
+
 /* JMAP Mail (RFC 8621) privileges */
 #define JACL_READITEMS      (ACL_READ|ACL_LOOKUP)
 #define JACL_ADDITEMS       ACL_INSERT

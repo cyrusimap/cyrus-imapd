@@ -111,6 +111,7 @@ CLEANFILES = \
     lib/imapopts.c \
     lib/imapopts.h \
     imap/css3_color_array.h \
+    imap/jmap_data_types.h \
     imap/rfc822_header.h \
     imap/mailbox_header_cache.h
 
@@ -360,6 +361,7 @@ EXTRA_DIST = \
     imap/http_err.et \
     imap/imap_err.et \
     imap/jmap_err.et \
+    imap/jmap_data_types.gperf \
     imap/lmtp_err.et \
     imap/mailbox_header_cache.gperf \
     imap/mupdate_err.et \
@@ -1308,6 +1310,7 @@ imap_httpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
 
 if JMAP
 BUILT_SOURCES += \
+    imap/jmap_data_types.h \
     imap/jmap_err.c \
     imap/jmap_err.h
 
@@ -1430,6 +1433,7 @@ imap_libcyrus_jmap_props_la_SOURCES += \
 endif
 
 nodist_imap_httpd_SOURCES += \
+    imap/jmap_data_types.h \
     imap/jmap_err.c \
     imap/jmap_err.h
 
@@ -1525,8 +1529,8 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 	$(AM_V_GEN)(cd $(@D) && $(COMPILE_ET) $(realpath $<))
 
 # Build specific *.h from *.gperf
-gperf_tables = imap/css3_color_array.h imap/mailbox_header_cache.h \
-	imap/rfc822_header.h lib/htmlchar.h
+gperf_tables = imap/css3_color_array.h imap/jmap_data_types.h \
+	imap/mailbox_header_cache.h imap/rfc822_header.h lib/htmlchar.h
 
 $(gperf_tables): %.h: %.gperf
 	$(AM_V_GEN)gperf $< > $@.NEW && mv $@.NEW $@
