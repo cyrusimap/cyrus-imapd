@@ -32,17 +32,39 @@ sub new
                  jmap_max_size_request => '4k',
                  jmap_mail_max_size_attachments_per_email => '1m',
                  jmap_nonstandard_extensions => 'yes',
+                 notesmailbox => 'Notes',
                  httpallowcompress => 'no');
 
     my $self = $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
-        services => [ 'imap', 'http' ]
+        smtpdaemon => 1,
+        services => [ 'imap', 'http', 'sieve' ]
     }, @args);
 
     $self->needs('component', 'jmap');
+    $self->needs('component', 'sieve');
     return $self;
+}
+
+sub set_up
+{
+    my ($self) = @_;
+    $self->SUPER::set_up();
+
+    if ($self->{jmap}) {
+        $self->{jmap}->DefaultUsing([
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:mail',
+            'urn:ietf:params:jmap:submission',
+            'urn:ietf:params:jmap:vacationresponse',
+            'urn:ietf:params:jmap:calendars',
+            'urn:ietf:params:jmap:contacts',
+            'urn:ietf:params:jmap:sieve',
+            'https://cyrusimap.org/ns/jmap/notes',
+        ]);
+    }
 }
 
 use Cassandane::Tiny::Loader;

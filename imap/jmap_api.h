@@ -95,6 +95,8 @@ enum {
     JMAP_TYPE_CALENDAREVENT,
     JMAP_TYPE_CALENDAREVENTNOTIFICATION,
     JMAP_TYPE_PARTICIPANTIDENTITY,
+    JMAP_TYPE_NOTE,
+    /* Non-standard */
     JMAP_NUM_TYPES  /* MUST always be last */
 };
 
@@ -102,6 +104,8 @@ typedef struct {
     const char *name;
     uint32_t kind;
     bool has_quota;
+    uint32_t mbtype;
+    off_t modseq_offset;
 } jmap_data_type_t;
 
 const jmap_data_type_t *jmap_data_types_lookup(register const char *str,
