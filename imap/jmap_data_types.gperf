@@ -16,7 +16,7 @@
 %omit-struct-type
 
 %define slot-name             name
-%define initializer-suffix    ,UINT32_MAX
+%define initializer-suffix    ,UINT32_MAX,false
 %define word-array-name       jmap_data_types
 %define lookup-function-name  jmap_data_types_lookup
 
@@ -24,34 +24,34 @@ jmap_data_type_t;
 
 %%
 # RFC 8620
-"Core",                      JMAP_TYPE_CORE
-"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION
+"Core",                      JMAP_TYPE_CORE,                      false
+"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          false
 # RFC 8621
-"Mailbox",                   JMAP_TYPE_MAILBOX
-"Thread",                    JMAP_TYPE_THREAD
-"Email",                     JMAP_TYPE_EMAIL
-"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY
-"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET
-"Identity",                  JMAP_TYPE_IDENTITY
-"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION
-"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE
+"Mailbox",                   JMAP_TYPE_MAILBOX,                   true
+"Thread",                    JMAP_TYPE_THREAD,                    false
+"Email",                     JMAP_TYPE_EMAIL,                     true
+"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY,             false
+"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET,             false
+"Identity",                  JMAP_TYPE_IDENTITY,                  false
+"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION,           true
+"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE,          true
 # RFC 9007
-"MDN",                       JMAP_TYPE_MDN
+"MDN",                       JMAP_TYPE_MDN,                       false
 # RFC 9425
-"Quota",                     JMAP_TYPE_QUOTA
+"Quota",                     JMAP_TYPE_QUOTA,                     false
 # RFC 9661
-"SieveScript",               JMAP_TYPE_SIEVESCRIPT
+"SieveScript",               JMAP_TYPE_SIEVESCRIPT,               true
 # RFC 9670
-"Principal",                 JMAP_TYPE_PRINCIPAL
-"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION
+"Principal",                 JMAP_TYPE_PRINCIPAL,                 false
+"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION,         false
 # RFC 9610
-"AddressBook",               JMAP_TYPE_ADDRESSBOOK
-"ContactCard",               JMAP_TYPE_CONTACTCARD
+"AddressBook",               JMAP_TYPE_ADDRESSBOOK,               true
+"ContactCard",               JMAP_TYPE_CONTACTCARD,               true
 # draft-ietf-jmap-calendars
-"Calendar",                  JMAP_TYPE_CALENDAR
-"CalendarEvent",             JMAP_TYPE_CALENDAREVENT
-"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION
-"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY
+"Calendar",                  JMAP_TYPE_CALENDAR,                  true
+"CalendarEvent",             JMAP_TYPE_CALENDAREVENT,             true
+"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION, false
+"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY,       false
 %%
 
 

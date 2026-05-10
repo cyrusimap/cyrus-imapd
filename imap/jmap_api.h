@@ -101,6 +101,7 @@ enum {
 typedef struct {
     const char *name;
     uint32_t kind;
+    bool has_quota;
 } jmap_data_type_t;
 
 const jmap_data_type_t *jmap_data_types_lookup(register const char *str,
