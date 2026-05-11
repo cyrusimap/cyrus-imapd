@@ -134,9 +134,17 @@ sub footer
     SEE ALSO
     ========
 
-    **imapd(8)**, **pop3d(8)**, **nntpd(8)**, **lmtpd(8)**,
-    **httpd(8)**, **timsieved(8)**, **idled(8)**, **notifyd(8)**,
-    **deliver(8)**, **master(8)**, **ciphers(1)**
+    :cyrusman:`imapd(8)`,
+    :cyrusman:`pop3d(8)`,
+    :cyrusman:`nntpd(8)`,
+    :cyrusman:`lmtpd(8)`,
+    :cyrusman:`httpd(8)`,
+    :cyrusman:`timsieved(8)`,
+    :cyrusman:`idled(8)`,
+    :cyrusman:`notifyd(8)`,
+    :cyrusman:`deliver(8)`,
+    :cyrusman:`master(8)`,
+    :manpage:`ciphers(1)`
     END_FOOTER
 
     print $rst;
