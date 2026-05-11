@@ -69,6 +69,7 @@ jmap_property_t;
 "cyrusimap.org:blobId",     JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
 "cyrusimap.org:size",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET
 "cyrusimap.org:href",       JMAP_CONTACTS_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+"cyrusimap.org:vCardVersion",       JMAP_DEBUG_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
 #
 # Allow vendor properties (prefix ':' name)
 "*:*", NULL, JMAP_PROP_SKIP_GET
