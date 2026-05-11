@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_vcardversion
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create vCards with versions 3.0 and 4.0";
+    my $card = <<~"EOF";
+    BEGIN:VCARD
+    VERSION:3.0
+    UID:574E6CCF-BAE4-4005-B478-222DD257224A
+    N:;;;;
+    FN:version3
+    END:VCARD
+    EOF
+    $card =~ s/\r?\n/\r\n/gs;
+    $user->carddav->Request('PUT', 'Default/testv3.vcf',
+        $card, 'Content-Type' => 'text/vcard');
+
+    $card = <<~"EOF";
+    BEGIN:VCARD
+    VERSION:4.0
+    UID:03191135-EF19-459B-985F-B2E5129BCFCE
+    N:;;;;
+    FN:version4
+    END:VCARD
+    EOF
+    $card =~ s/\r?\n/\r\n/gs;
+    $user->carddav->Request('PUT', 'Default/testv4.vcf',
+        $card, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "Request vCardVersion property without JMAP debug extension";
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:contacts',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['ContactCard/query', { }, 'R1'],
+        ['ContactCard/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'ContactCard/query',
+                path => '/ids',
+            },
+            properties => [ 'cyrusimap.org:vCardVersion', 'name' ],
+        }, 'R2']
+    ], $using);
+
+    $self->assert_cmp_deeply({
+        type => 'invalidArguments',
+        arguments => [ 'properties[0:cyrusimap.org:vCardVersion]' ],
+    }, $res->[1][1]);
+
+    xlog $self, "Request vCardVersion property with JMAP debug extension";
+    push @$using, 'https://cyrusimap.org/ns/jmap/debug';
+    $res = $jmap->CallMethods([
+        ['ContactCard/query', { }, 'R1'],
+        ['ContactCard/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'ContactCard/query',
+                path => '/ids',
+            },
+            properties => [ 'cyrusimap.org:vCardVersion', 'name' ],
+        }, 'R2']
+    ], $using);
+
+    my %cardversion_by_name = map {
+        $_->{name}{full} => $_->{'cyrusimap.org:vCardVersion'}
+    } @{$res->[1][1]{list}};
+
+    $self->assert_cmp_deeply({
+        'version3' => '3.0',
+        'version4' => '4.0',
+    }, \%cardversion_by_name);
+}

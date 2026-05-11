@@ -4935,6 +4935,15 @@ static int getcards_cb(void *rock, struct carddav_data *cdata)
     /* Cache contact */
     hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
 
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        /* Set vCard version for debugging. */
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%d.0", cdata->version);
+        json_object_set_new(obj, "cyrusimap.org:vCardVersion",
+                json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+    }
+
   gotvalue:
 
     jmap_filterprops(obj, crock->get->props);
