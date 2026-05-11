@@ -8,7 +8,7 @@ sub test_email_query_multiple_to_cross_domain
 {
     my $jmap = $self->{jmap};
 
-    my $account = undef;
+    my $account = 'cassandane';
     my $store = $self->{store};
     my $mboxprefix = "INBOX";
     my $talk = $store->get_client();

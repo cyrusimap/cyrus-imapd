@@ -15,6 +15,13 @@ use MIME::Base64 ();
 
 with 'Cassandane::Role::JMAPTester';
 
+has '+default_arguments' => (
+  lazy    => 1,
+  default => sub ($self) {
+    return { accountId => $self->fallback_account_id };
+  },
+);
+
 around set_scheme_and_host_and_port => sub ($orig, $self, $scheme, $host, $port) {
     $self->$orig($scheme, $host, $port);
 
