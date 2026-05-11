@@ -16,10 +16,11 @@ extern bool session_have_id(void);
 extern void session_clear_id(void);
 extern void parse_sessionid(const char *str, char *sessionid);
 
-/* This is the base64jmap set, which for this purpose is the same as the
- * base64url set without the optional padding character.
+/* The base64jmap set (base64url without the optional padding character),
+ * plus '.' so that dotted identifiers used by some clients (e.g. FastMTA)
+ * are accepted verbatim.
  */
-#define TRACE_ID_GOODCHARS "-0123456789"                    \
+#define TRACE_ID_GOODCHARS ".-0123456789"                   \
                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"     \
                            "_abcdefghijklmnopqrstuvwxyz"
 

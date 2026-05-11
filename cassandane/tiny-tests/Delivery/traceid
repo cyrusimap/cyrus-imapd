@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_traceid ($self)
 {
-    my $good_traceid = "01234567890abcdefghijklmnopqrstuvwxyz";
+    my $good_traceid = "01234567890.abcdefghijklmnopqrstuvwxyz";
     my $bad_traceid = "spaces and quotes aren't valid";
 
     my %msgs;
