@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_media_from_deleted_card
+    :min_version_3_9
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "upload photo blob";
+    my $res = $jmap->Upload("some photo", "image/jpeg");
+    my $blobId = $res->{blobId};
+
+    xlog $self, "create initial card with photo";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'First Card' },
+                    media => {
+                        photo => {
+                            '@type'     => 'Media',
+                            kind        => 'photo',
+                            mediaType   => 'image/jpeg',
+                            blobId      => $blobId,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+    my $photoBlobId = $res->[0][1]{created}{1}{media}{photo}{blobId};
+    $self->assert_not_null($photoBlobId);
+
+    xlog $self, "delete the initial card";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            destroy => [ $id ],
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{destroyed});
+
+    xlog $self, "create new card referencing blob from deleted card";
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => {
+                2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Second Card' },
+                    media => {
+                        photo => {
+                            '@type'     => 'Media',
+                            kind        => 'photo',
+                            mediaType   => 'image/jpeg',
+                            blobId      => $photoBlobId,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $newId = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($newId);
+    my $newBlobId = $res->[0][1]{created}{2}{media}{photo}{blobId};
+    $self->assert_not_null($newBlobId);
+
+    xlog $self, "download and verify photo content";
+    my $blob = $jmap->Download('cassandane', $newBlobId);
+    $self->assert_str_equals('image/jpeg', $blob->{headers}->{'content-type'});
+    $self->assert_str_equals('some photo', $blob->{content});
+}

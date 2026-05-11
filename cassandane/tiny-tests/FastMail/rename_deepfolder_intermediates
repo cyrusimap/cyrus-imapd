@@ -23,12 +23,9 @@ sub test_rename_deepfolder_intermediates
         },
     );
 
-    $self->_fmjmap_ok('Contact/set',
-        create => {
-            "1" => {firstName => "first", lastName => "last"},
-            "2" => {firstName => "second", lastName => "last"},
-        },
-    );
+    my $user = $self->default_user;
+    $user->contacts->create;
+    $user->contacts->create;
 
     $self->_fmjmap_ok('Mailbox/set',
         create => {

@@ -8,8 +8,8 @@ use Data::GUID qw(guid_string);
 #
 # This test file generates many tests, with multiple combinations of how cards
 # can be written and read.  The tests will all *start* with
-# "test_contact_member_uid_matrix_", and the rest combine the keys from the
-# hashes below.  The individual assigments to these hashes explain the keys.
+# "test_card_member_uid_matrix_", and the rest combine the keys from the
+# hashes below.  The individual assignments to these hashes explain the keys.
 #
 # For more details, search for "UPDATE TESTS" and "CREATE TESTS" in the source
 # below.
@@ -23,7 +23,7 @@ my %GET_VIA;          # ($test_case, $group_uid) -> (\@uids) -- get group member
 # with no urn:uuid: prefix.
 $MAKE_TARGET_UID{ON} = sub ($test_case)
 {
-    my $user = $test_case->default_user;
+    my $user  = $test_case->default_user;
     my $abook = $user->addressbooks->create;
 
     my $uid = guid_string();
@@ -38,7 +38,7 @@ $MAKE_TARGET_UID{ON} = sub ($test_case)
 # with a urn:uuid: prefix.
 $MAKE_TARGET_UID{OP} = sub ($test_case)
 {
-    my $user = $test_case->default_user;
+    my $user  = $test_case->default_user;
     my $abook = $user->addressbooks->create;
 
     my $uid = "urn:uuid:" . guid_string();
@@ -53,10 +53,9 @@ $MAKE_TARGET_UID{OP} = sub ($test_case)
 # urn:uuid: prefix.
 $MAKE_TARGET_UID{SN} = sub ($test_case)
 {
-    my $user = $test_case->default_user;
-
+    my $user   = $test_case->default_user;
     my $sharer = $test_case->{instance}->create_user('other');
-    my $abook = $sharer->addressbooks->create;
+    my $abook  = $sharer->addressbooks->create;
     $abook->share_with($user => [ qw( mayRead ) ]);
 
     my $uid = guid_string();
@@ -71,10 +70,9 @@ $MAKE_TARGET_UID{SN} = sub ($test_case)
 # urn:uuid: prefix.
 $MAKE_TARGET_UID{SP} = sub ($test_case)
 {
-    my $user = $test_case->default_user;
-
+    my $user   = $test_case->default_user;
     my $sharer = $test_case->{instance}->create_user('other');
-    my $abook = $sharer->addressbooks->create;
+    my $abook  = $sharer->addressbooks->create;
     $abook->share_with($user => [ qw( mayRead ) ]);
 
     my $uid = "urn:uuid:" . guid_string();
@@ -94,8 +92,8 @@ $MAKE_TARGET_UID{VP} = sub { return "urn:uuid:" . guid_string() };
 # Create the group with CardDAV, creating a 3.0 Apple-style group
 $CREATE_VIA{CD3} = sub ($test_case, $uid)
 {
-    my $user = $test_case->default_user;
-    my $carddav = $user->carddav;
+    my $user      = $test_case->default_user;
+    my $carddav   = $user->carddav;
     my $group_uid = guid_string();
 
     my $encoded_uid = $uid =~ /:/
@@ -123,8 +121,8 @@ $CREATE_VIA{CD3} = sub ($test_case, $uid)
 # Create the group with CardDAV, creating a 4.0 standard group
 $CREATE_VIA{CD4} = sub ($test_case, $uid)
 {
-    my $user = $test_case->default_user;
-    my $carddav = $user->carddav;
+    my $user      = $test_case->default_user;
+    my $carddav   = $user->carddav;
     my $group_uid = guid_string();
 
     my $href = "Default/$group_uid.vcf";
@@ -152,8 +150,8 @@ $CREATE_VIA{JCC} = sub ($test_case, $uid)
         {
             create => {
                 new => {
-                    kind => 'group',
-                    name => { full => 'Example ContactCard Group' },
+                    kind    => 'group',
+                    name    => { full => 'Example ContactCard Group' },
                     members => { $uid => \1 },
                     version => '1.0',
                     '@type' => 'Card',
@@ -165,30 +163,6 @@ $CREATE_VIA{JCC} = sub ($test_case, $uid)
     $res->assert_successful;
 
     my $group_uid = $res->single_sentence('ContactCard/set')
-                         ->arguments
-                         ->{created}{new}{uid};
-
-    return "$group_uid";
-};
-
-# Create the group with JMAP, ContactGroup/set
-$CREATE_VIA{JCG} = sub ($test_case, $uid)
-{
-    my $res = $test_case->default_user->jmap->request([[
-        'ContactGroup/set',
-        {
-            create => {
-                new => {
-                    name => 'Example ContactGroup',
-                    contactIds => [ $uid ],
-                },
-            },
-        },
-    ]]);
-
-    $res->assert_successful;
-
-    my $group_uid = $res->single_sentence('ContactGroup/set')
                         ->arguments
                         ->{created}{new}{uid};
 
@@ -224,10 +198,10 @@ my sub _get_carddav ($user, $group_uid, $version) {
     push @ids, map {; $_->{value} }
                $card->{properties}{'member'}->@*;
 
-
     return \@ids;
 }
 
+# Update the group membership with ContactCard/set, patching a single member in.
 $UPDATE_VIA{JCC} = sub ($test_case, $group_uid, $member_uid)
 {
     my $user = $test_case->default_user;
@@ -247,9 +221,8 @@ $UPDATE_VIA{JCC} = sub ($test_case, $group_uid, $member_uid)
     return;
 };
 
-# This updates the group membership with ContactCard/set, but instead of
-# patching the group with { "members/$member_uid": true }, it will replace the
-# entire members property.
+# Update the group membership with ContactCard/set, replacing the entire
+# members property rather than patching a single entry.
 $UPDATE_VIA{JCE} = sub ($test_case, $group_uid, $member_uid)
 {
     my $user = $test_case->default_user;
@@ -268,36 +241,6 @@ $UPDATE_VIA{JCE} = sub ($test_case, $group_uid, $member_uid)
 
     my $set_res = $user->jmap->request([[ 'ContactCard/set' => {
         update => { $group->{id} => { members => $new_members } }
-    } ]]);
-
-    $set_res->assert_successful;
-    return;
-};
-
-$UPDATE_VIA{JCG} = sub ($test_case, $group_uid, $member_uid)
-{
-    my $user = $test_case->default_user;
-
-    my $get_res = $user->jmap->request([[ 'ContactGroup/get', {
-        ids => [ $group_uid ],
-    } ]]);
-
-    $get_res->assert_successful;
-
-    my ($group) = $get_res->single_sentence('ContactGroup/get')->arguments->{list}[0];
-
-    $group || die "couldn't ContactGroup/get group $group_uid!?";
-
-    my @contact_ids = $group->{contactIds}->@*;
-
-    # Already in there?  Weird.  Since we have no cases that *should* trigger
-    # this, it's fatal. -- rjbs, 2026-02-06
-    if (grep {; $_ eq $member_uid } @contact_ids) {
-        die "Unexpected case: trying to add member, but they're already there";
-    }
-
-    my $set_res = $user->jmap->request([[ 'ContactGroup/set' => {
-        update => { $group_uid => { contactIds => [ @contact_ids, $member_uid ] } }
     } ]]);
 
     $set_res->assert_successful;
@@ -329,21 +272,6 @@ $GET_VIA{JCC} = sub ($test_case, $group_uid)
     return [ keys $group->{members}->%* ];
 };
 
-# Get the group with JMAP, using ContactGroup/get
-$GET_VIA{JCG} = sub ($test_case, $group_uid)
-{
-    my $res = $test_case->default_user->jmap->request([[ 'ContactGroup/get', {} ]]);
-
-    $res->assert_successful;
-
-    my ($group) = grep {; $_->{uid} eq $group_uid }
-                  $res->single_sentence('ContactGroup/get')->arguments->{list}->@*;
-
-    $test_case->assert_not_null($group, "group not found via ContactGroup/get");
-
-    return $group->{contactIds};
-};
-
 # CREATE TESTS
 #
 # These tests will, in order:
@@ -356,28 +284,13 @@ $GET_VIA{JCG} = sub ($test_case, $group_uid)
 # Each test will have its own name, so it can be run individually, and it will
 # be in the form:
 #
-#   test_Contact_member_uid_matrix_tXXX_cYYY_gZZZ
+#   test_card_member_uid_matrix_tXXX_cYYY_gZZZ
 #
 # Where t, c, and g prefix the "uid type", "create group" and "get group" keys.
 for my $uid_type (sort keys %MAKE_TARGET_UID) {
     for my $create (sort keys %CREATE_VIA) {
-        CASE: for my $get (sort keys %GET_VIA) {
-            if ($create eq 'JCG' && $uid_type =~ /P$/) {
-              # The (doomed) ContactGroup API will not properly re-prefix
-              # already-prefixed UIDs when writing a member-ish property.  Skip
-              # these tests, because the API will go away.
-              next CASE;
-            }
-
-            if ($create eq 'CD3' && $get eq 'JCG' && $uid_type =~ /P$/) {
-              # Right now, ContactGroup/get will not fully 6868-decode
-              # Apple-encoded X-ABS-M properties.  This API is doomed, and I
-              # believe this has long been broken, so we're not going to fix
-              # it.
-              next CASE;
-            }
-
-            my $name = "test_contact_member_uid_matrix_t${uid_type}_c${create}_g${get}";
+        for my $get (sort keys %GET_VIA) {
+            my $name = "test_card_member_uid_matrix_t${uid_type}_c${create}_g${get}";
 
             Sub::Install::install_sub({
                 code => sub :min_version_3_12 :JMAPExtensions ($self, @)
@@ -392,10 +305,8 @@ for my $uid_type (sort keys %MAKE_TARGET_UID) {
 
 sub _do_create_test ($self, $uid_type, $create, $get)
 {
-    my $user = $self->default_user;
-
-    my $member_uid  = q{} . $MAKE_TARGET_UID{$uid_type}->($self);
-    my $group_uid   = $CREATE_VIA{$create}->($self, $member_uid);
+    my $member_uid = q{} . $MAKE_TARGET_UID{$uid_type}->($self);
+    my $group_uid  = $CREATE_VIA{$create}->($self, $member_uid);
 
     my $got = $GET_VIA{$get}->($self, $group_uid);
 
@@ -420,22 +331,15 @@ sub _do_create_test ($self, $uid_type, $create, $get)
 # Each test will have its own name, so it can be run individually, and it will
 # be in the form:
 #
-#   test_Contact_member_uid_matrix_tWWW_cXXX_uYYY_gZZZ
+#   test_card_member_uid_matrix_tWWW_cXXX_uYYY_gZZZ
 #
 # Where t, c, u, and g prefix the "uid type", "create group", "update group",
 # and "get group" keys.
 for my $uid_type (sort keys %MAKE_TARGET_UID) {
     for my $create (sort keys %CREATE_VIA) {
         for my $update (sort keys %UPDATE_VIA) {
-            CASE: for my $get (sort keys %GET_VIA) {
-                if (($create eq 'JCG' || $update eq 'JCG') && $uid_type =~ /P$/) {
-                  # The (doomed) ContactGroup API will not properly re-prefix
-                  # already-prefixed UIDs when writing a member-ish property.  Skip
-                  # these tests, because the API will go away.
-                  next CASE;
-                }
-
-                my $name = "test_contact_member_uid_matrix_t${uid_type}_c${create}_u${update}_g${get}";
+            for my $get (sort keys %GET_VIA) {
+                my $name = "test_card_member_uid_matrix_t${uid_type}_c${create}_u${update}_g${get}";
 
                 Sub::Install::install_sub({
                     code => sub :min_version_3_12 :JMAPExtensions ($self, @)
@@ -451,8 +355,6 @@ for my $uid_type (sort keys %MAKE_TARGET_UID) {
 
 sub _do_update_test ($self, $uid_type, $create, $update, $get)
 {
-    my $user = $self->default_user;
-
     # This UID is just so we can create a group to which we'll add the
     # $member_uid afterward via the UPDATE_VIA callback.
     my $starter_uid = guid_string();

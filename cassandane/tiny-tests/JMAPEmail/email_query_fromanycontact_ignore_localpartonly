@@ -13,18 +13,23 @@ sub test_email_query_fromanycontact_ignore_localpartonly
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:contacts',
         'https://cyrusimap.org/ns/jmap/mail',
         'https://cyrusimap.org/ns/jmap/contacts',
     ];
 
     my $res = $jmap->CallMethods([
-        ['Contact/set', {
+        ['ContactCard/set', {
             create => {
                 contact1 => {
-                    emails => [{
-                        type => 'personal',
-                        value => 'email',
-                    }],
+                    '@type' => 'Card',
+                    version => '1.0',
+                    emails => {
+                        personal => {
+                            contexts => { private => JSON::true },
+                            address => 'email'
+                        }
+                    },
                 },
             }
         }, 'R1'],

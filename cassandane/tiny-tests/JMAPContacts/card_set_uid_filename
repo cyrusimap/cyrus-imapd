@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_uid_filename
+    :min_version_3_9
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "create card with no uid - should get auto-generated uid";
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Card One' },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->single_sentence->as_set->created_id(1));
+
+    xlog $self, "create card with path-safe uid - uid should match dav filename";
+    my $uid2 = '1234-56789-01234-56789';
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $uid2,
+                    name => { full => 'Card Two' },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $created = $res->single_sentence->as_set->created->{2};
+    $self->assert_not_null($created);
+    my ($filename) = ($created->{'cyrusimap.org:href'} =~ m{([^/]+)\.vcf$});
+    $self->assert_str_equals($uid2, $filename);
+
+    xlog $self, "create card with non-path-safe uid - filename should differ";
+    my $uid3 = 'a/bogus/path#uid';
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                3 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid => $uid3,
+                    name => { full => 'Card Three' },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $created = $res->single_sentence->as_set->created->{3};
+    $self->assert_not_null($created);
+    ($filename) = ($created->{'cyrusimap.org:href'} =~ m{([^/]+)\.vcf$});
+    $self->assert_str_not_equals('path#uid', $filename);
+}

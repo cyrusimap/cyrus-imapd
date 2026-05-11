@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_toolarge
+    :min_version_3_9
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "attempt to create cards; one too large, one fine";
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Too Big' },
+                    notes => {
+                        n1 => { note => ('x' x 100000) },
+                    },
+                },
+                2 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Just Fine' },
+                    notes => {
+                        n1 => { note => ('x' x 10000) },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    my $set = $res->single_sentence('ContactCard/set')->as_set;
+    $self->assert_str_equals('tooLarge', $set->create_errors->{1}{type});
+    $self->assert_not_null($set->created->{2});
+    my $id = $set->created_id("2");
+
+    xlog $self, "attempt to update card to be too large";
+    $res = $jmap->request([
+        ['ContactCard/set', {
+            update => {
+                $id => {
+                    'notes/n1/note' => ('x' x 100000),
+                },
+            },
+        }, 'R1'],
+    ]);
+    $set = $res->single_sentence('ContactCard/set')->as_set;
+    $self->assert_str_equals('tooLarge', $set->update_errors->{$id}{type});
+}

@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_get_ids_null_empty
+    :min_version_3_9
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    xlog $self, "create card";
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Test Card' },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null(
+        $res->single_sentence('ContactCard/set')->as_set->created_id('1'),
+    );
+
+    xlog $self, "get with no ids returns all";
+    $res = $jmap->request([
+        ['ContactCard/get', { }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, 0+$res->single_sentence->arguments->{list}->@*);
+
+    xlog $self, "get with null ids returns all";
+    $res = $jmap->request([
+        ['ContactCard/get', { ids => undef }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, 0+$res->single_sentence->arguments->{list}->@*);
+
+    xlog $self, "get with empty ids returns empty list";
+    $res = $jmap->request([
+        ['ContactCard/get', { ids => [] }, 'R1'],
+    ]);
+    $self->assert_num_equals(0, 0+$res->single_sentence->arguments->{list}->@*);
+    $self->assert_deep_equals([], $res->single_sentence->arguments->{notFound});
+}
