@@ -520,7 +520,7 @@ HIDDEN int ws_init(struct http_connection *conn __attribute__((unused)),
 {
     buf_printf(serverinfo, " Wslay/%s", WSLAY_VERSION);
 
-    ws_timeout = config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT, 'm');
+    ws_timeout = config_getduration(IMAPOPT_WEBSOCKET_TIMEOUT);
 
     return (ws_timeout > 0);
 }

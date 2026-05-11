@@ -21,7 +21,7 @@ extern struct protocol_t csync_protocol;
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
 const char *sync_get_config(const char *channel, enum imapopt opt);
-int sync_get_durationconfig(const char *channel, enum imapopt opt, int defunit);
+int sync_get_durationconfig(const char *channel, enum imapopt opt);
 
 /* ====================================================================== */
 

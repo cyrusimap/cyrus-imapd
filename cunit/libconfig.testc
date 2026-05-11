@@ -250,7 +250,7 @@ static void test_duration_value_days(void)
         "timeout: 3d\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 3 * 24 * 60 * 60);
 }
 
@@ -263,7 +263,7 @@ static void test_duration_value_hours(void)
         "timeout: 3h\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 3 * 60 * 60);
 }
 
@@ -276,7 +276,7 @@ static void test_duration_value_minutes(void)
         "timeout: 45m\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 45 * 60);
 }
 
@@ -289,7 +289,7 @@ static void test_duration_value_seconds(void)
         "timeout: 25s\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 25);
 }
 
@@ -302,30 +302,37 @@ static void test_duration_value_combined(void)
         "timeout: 1h30m\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 1.5 * 60 * 60);
 }
 
 static void test_duration_value_nounits(void)
 {
-    int timeout = -1;
+    static const struct {
+        enum imapopt opt;
+        int multiplier;
+    } tests[] = {
+        { IMAPOPT_IMAPIDLEPOLL, 1 }, /* implicitly seconds */
+        { IMAPOPT_TIMEOUT, 60 }, /* Default-Unit: m */
+        /* we don't have a DURATION option with Default-Unit: h */
+        { IMAPOPT_ARCHIVE_AFTER, 60 * 60 * 24 }, /* Default-Unit: d */
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
+        "imapidlepoll: 13\n"
         "timeout: 13\n"
+        "archive_after: 13\n"
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
-    CU_ASSERT_EQUAL(timeout, 13);
+    for (i = 0; i < n_tests; i++) {
+        int duration = -1;
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
-    CU_ASSERT_EQUAL(timeout, 13 * 60);
-
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 'h');
-    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60);
-
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 'd');
-    CU_ASSERT_EQUAL(timeout, 13 * 60 * 60 * 24);
+        duration = config_getduration(tests[i].opt);
+        CU_ASSERT_EQUAL(duration, 13 * tests[i].multiplier);
+    }
 }
 
 static void test_duration_value_negative(void)
@@ -337,7 +344,7 @@ static void test_duration_value_negative(void)
         "caldav_historical_age: -1\n"
     );
 
-    caldav_historical_age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
+    caldav_historical_age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE);
     CU_ASSERT_EQUAL(caldav_historical_age, -1 * 60 * 60 * 24);
 }
 
@@ -350,7 +357,7 @@ static void test_duration_default(void)
         /* timeout: 32m (default) */
     );
 
-    timeout = config_getduration(IMAPOPT_TIMEOUT, 's');
+    timeout = config_getduration(IMAPOPT_TIMEOUT);
     CU_ASSERT_EQUAL(timeout, 32 * 60);
 }
 
@@ -363,7 +370,7 @@ static void test_duration_nodefault(void)
         /* plaintextloginpause: <none> (default) */
     );
 
-    plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
+    plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE);
     CU_ASSERT_EQUAL(plaintextloginpause, 0);
 }
 
@@ -1002,13 +1009,13 @@ static void test_deprecated_duration(void)
 
     /* should not be able to read the deprecated name */
     CU_EXPECT_CYRFATAL_BEGIN;
-    val = config_getduration(IMAPOPT_ARCHIVE_DAYS, 'd');
+    val = config_getduration(IMAPOPT_ARCHIVE_DAYS);
     CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
         "Option 'archive_days' is deprecated in favor of "
         "'archive_after' since version 3.1.8.");
 
     /* should be able to read it at the new name */
-    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER);
     CU_ASSERT_EQUAL(val, 8 * 24 * 60 * 60);
 
     /* set the new name */
@@ -1020,7 +1027,7 @@ static void test_deprecated_duration(void)
     CU_ASSERT_SYSLOG(/*all*/0, 0);
 
     /* should be able to read it at the new name */
-    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER);
     CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
 
     /* set both names to different values */
@@ -1033,7 +1040,7 @@ static void test_deprecated_duration(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 
     /* should read new value at the new name */
-    val = config_getduration(IMAPOPT_ARCHIVE_AFTER, 'd');
+    val = config_getduration(IMAPOPT_ARCHIVE_AFTER);
     CU_ASSERT_EQUAL(val, 12 * 24 * 60 * 60);
 }
 

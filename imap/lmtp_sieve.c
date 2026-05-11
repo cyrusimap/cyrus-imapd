@@ -2338,7 +2338,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     }
 
     duplicate.max_expiration =
-        config_getduration(IMAPOPT_SIEVE_DUPLICATE_MAX_EXPIRATION, 's');
+        config_getduration(IMAPOPT_SIEVE_DUPLICATE_MAX_EXPIRATION);
     res = sieve_register_duplicate(interp, &duplicate);
     if (res != SIEVE_OK) {
         xsyslog(LOG_ERR, "sieve_register_duplicate failed", "return=<%d>", res);

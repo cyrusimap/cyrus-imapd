@@ -694,7 +694,7 @@ static void deliver_remote(message_data_t *msgdata,
         remote = proxy_findserver(d->server, &lmtp_protocol, "",
                                   &backend_cached, NULL, NULL, NULL);
         if (remote) {
-            int txn_timeout = config_getduration(IMAPOPT_LMTPTXN_TIMEOUT, 's');
+            int txn_timeout = config_getduration(IMAPOPT_LMTPTXN_TIMEOUT);
             if (txn_timeout)
                 prot_settimeout(remote->in, txn_timeout);
             lmtp_runtxn(remote, lt);

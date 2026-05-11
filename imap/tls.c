@@ -940,7 +940,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                                    SSL_SESS_CACHE_NO_INTERNAL);
 
     /* Get the session timeout from the config file */
-    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT, 'm');
+    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT);
     if (timeout < 0) timeout = 0;
     if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
 

@@ -230,7 +230,7 @@ static void replica_connect(void)
     int wait;
 
     if (!maxwait)
-        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT, 's');
+        maxwait = config_getduration(IMAPOPT_SYNC_RECONNECT_MAXWAIT);
 
     for (wait = 15;; wait *= 2) {
         int r = sync_connect(&sync_cs);
@@ -772,7 +772,7 @@ int main(int argc, char **argv)
                 sync_shutdown_file = sync_get_config(channel, IMAPOPT_SYNC_SHUTDOWN_FILE);
 
             if (!min_delta)
-                min_delta = sync_get_durationconfig(channel, IMAPOPT_SYNC_REPEAT_INTERVAL, 's');
+                min_delta = sync_get_durationconfig(channel, IMAPOPT_SYNC_REPEAT_INTERVAL);
 
             flags |= SYNC_FLAG_BATCH;
 
