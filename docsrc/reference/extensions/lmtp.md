@@ -47,8 +47,8 @@ TRACE <traceid>
 ```
 
 `<traceid>` must be at most 255 bytes and consist only of characters from the
-base64url alphabet without padding -- that is, ASCII letters, digits, `-`,
-and `_`.  Other characters or an over-length value yield:
+base64url alphabet without padding, plus `.` -- that is, ASCII letters,
+digits, `-`, `_`, and `.`.  Other characters or an over-length value yield:
 
 ```
 501 5.5.4 Invalid TRACE id.
