@@ -35,7 +35,14 @@
 
 #define SHARED_COLLECTION_DELIM '.'
 
-/* Index into known namespace array */
+/* Index into known namespace array.
+ *
+ * Keep NUM_NAMESPACE in sync with the size of known_namespaces[] in
+ * http_dav.c -- callers stack-allocate xmlNsPtr ns[NUM_NAMESPACE] and the
+ * dead-property PROPPATCH path then indexes that array by the matching
+ * known_namespaces[] slot, so a short array means an out-of-bounds read
+ * and a worker crash.  A _Static_assert in http_dav.c enforces this.
+ */
 enum {
     NS_REQ_ROOT = -1,   /* special case: ns of request root (not an index) */
     NS_DAV,
@@ -49,9 +56,9 @@ enum {
     NS_CYRUS,
     NS_JMAPCAL,
     NS_USERFLAG,
-    NS_SYSFLAG
+    NS_SYSFLAG,
+    NUM_NAMESPACE  /* MUST be last */
 };
-#define NUM_NAMESPACE 10
 
 /* Cyrus-specific privileges */
 #define DACL_PROPCOL    ACL_WRITE       /* CY:write-properties-collection */

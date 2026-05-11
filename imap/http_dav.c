@@ -78,6 +78,13 @@ static const struct dav_namespace_t {
 #define NUM_KNOWN_NAMESPACES                                    \
     (sizeof(known_namespaces) / sizeof(struct dav_namespace_t))
 
+/* Stack arrays of xmlNsPtr are sized NUM_NAMESPACE but indexed by
+ * known_namespaces[] slots, so the two must match.  See comment on the
+ * NS_* enum in http_dav.h.
+ */
+_Static_assert(NUM_NAMESPACE == NUM_KNOWN_NAMESPACES,
+               "NUM_NAMESPACE must match known_namespaces[]");
+
 static const struct match_type_t {
     const char *name;
     unsigned value;
@@ -1298,46 +1305,25 @@ static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
             xmlNsPtr nsDef;
 
             for (nsDef = req->nsDef; nsDef; nsDef = nsDef->next) {
-                if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_DAV))
-                    ensure_ns(respNs, NS_DAV, root,
+                /* Is is one of our known namespaces? */
+                unsigned ns_idx;
+                for (ns_idx = 0; ns_idx < NUM_KNOWN_NAMESPACES; ns_idx++) {
+                    if (!xmlStrcmp(nsDef->href,
+                                   BAD_CAST known_namespaces[ns_idx].href)) {
+                        break;
+                    }
+                }
+
+                if (ns_idx < NUM_KNOWN_NAMESPACES) {
+                    ensure_ns(respNs, ns_idx, root,
                               (const char *) nsDef->href,
                               (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CALDAV))
-                    ensure_ns(respNs, NS_CALDAV, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CARDDAV))
-                    ensure_ns(respNs, NS_CARDDAV, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
-                    ensure_ns(respNs, NS_CS, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_APPLE))
-                    ensure_ns(respNs, NS_APPLE, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MECOM))
-                    ensure_ns(respNs, NS_MECOM, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_MOBME))
-                    ensure_ns(respNs, NS_MOBME, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
-                    ensure_ns(respNs, NS_CYRUS, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
-                else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_JMAPCAL))
-                    ensure_ns(respNs, NS_JMAPCAL, root,
-                              (const char *) nsDef->href,
-                              (const char *) nsDef->prefix);
+                }
                 else if (!xmlNewNs(root, nsDef->href, nsDef->prefix)) {
                     /* namespace prefix already in use */
                     char myprefix[20];
-                    snprintf(myprefix, sizeof(myprefix), "X%X", strhash((const char *) nsDef->href) & 0xffff);
+                    snprintf(myprefix, sizeof(myprefix), "X%X",
+                             strhash((const char *) nsDef->href) & 0xffff);
                     xmlFree((char *) nsDef->prefix);
                     nsDef->prefix = xmlStrdup(BAD_CAST myprefix);
                     xmlNewNs(root, nsDef->href, BAD_CAST myprefix); // could again return NULL
