@@ -6968,6 +6968,22 @@ static int do_folders(struct sync_client_state *sync_cs,
             }
         }
         else if (sync_cs->flags & SYNC_FLAG_NO_COPYBACK) {
+            /* When syncing user X, name_history can pull in former names from
+             * a different user's namespace (e.g. user Y was once named X).
+             * If rfolder->name belongs to a different user than the one being
+             * synced, it is a foreign mailbox that snuck in via name_history —
+             * do not delete it on the replica. */
+            if (sync_cs->userid) {
+                char *rfolder_userid = mboxname_to_userid(rfolder->name);
+                int foreign = rfolder_userid && strcmp(rfolder_userid, sync_cs->userid) != 0;
+                free(rfolder_userid);
+                if (foreign) {
+                    syslog(LOG_NOTICE, "SYNCNOTICE: skipping delete of %s (foreign user, syncing %s)",
+                           rfolder->name, sync_cs->userid);
+                    r = 0;
+                    continue;
+                }
+            }
             /* we're forcing a delete */
             syslog(LOG_NOTICE, "SYNCNOTICE: forcing delete of remote folder despite no tombstone %s",
                    rfolder->name);
@@ -7096,7 +7112,6 @@ static int do_folders(struct sync_client_state *sync_cs,
 int sync_do_mailboxes(struct sync_client_state *sync_cs,
                       struct sync_name_list *mboxname_list,
                       const char *topart, int flags)
-
 {
     struct sync_name *mbox, *next, *prev = NULL;
     struct sync_folder_list *replica_folders = sync_folder_list_create();
@@ -7354,9 +7369,11 @@ static int do_user_main(struct sync_client_state *sync_cs,
         sync_name_list_add(info.mboxlist, rfolder->name);
     }
 
+    sync_cs->userid = userid;
     int flags = sync_cs->flags;
     if (!r) r = sync_do_mailboxes(sync_cs, info.mboxlist, topart, flags);
     if (!r) r = sync_do_user_quota(sync_cs, info.quotalist, replica_quota);
+    sync_cs->userid = NULL;
 
     sync_name_list_free(&info.mboxlist);
     sync_name_list_free(&info.quotalist);

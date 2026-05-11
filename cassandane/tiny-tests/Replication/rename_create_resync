@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test: user "victim" renamed to "mover" on a second server (simulating a
+# user move), while a new user "victim" is created on the first server and
+# synced to the replica.  Syncing "mover" from the second server with -O
+# (no_copyback) must NOT wipe "victim"'s inbox on the replica.
+#
+# Bug: sync_client -u mover walks the name_history of mover's mailbox
+# (which includes "victim"'s old mailbox name), queries the replica for
+# that name, finds the new victim's inbox there, and since that UUID is
+# unknown on the second server, the NO_COPYBACK path sends UNMAILBOX for
+# victim's name -- wiping victim's inbox on the replica.
+#
+sub test_rename_create_resync
+    :NoAltNameSpace :AllowMoves :Replication :DelayedDelete
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # OldStore = $self->{instance}, Replica = $self->{replica}
+    # NewStore = a fresh instance that syncs to the same Replica.
+
+    xlog $self, "Create and start NewStore instance pointing at Replica";
+    my $replica_sync_port = $self->{replica}->get_service('sync')->port();
+    my $replica_sync_host = $self->{replica}->get_service('sync')->host();
+
+    my $newstore_conf = $self->{_config}->clone();
+    $newstore_conf->set(
+        sync_host     => $replica_sync_host,
+        sync_port     => $replica_sync_port,
+        sync_authname => 'repluser',
+        sync_password => 'replpass',
+    );
+    my $newstore = Cassandane::Instance->new(
+        config        => $newstore_conf,
+        description   => "newstore for test rename_create_resync",
+        setup_mailbox => 0,
+    );
+    $newstore->add_service(name => 'imap');
+    $newstore->start();
+    $self->{backend2} = $newstore;  # handed to tear_down for cleanup
+
+    xlog $self, "NewStore: create user.victim then rename to user.mover";
+    xlog $self, "(gives mover a name_history containing user.victim)";
+    my $newstore_imap = $newstore->get_service('imap');
+    my $newstore_admin = $newstore_imap->create_store(username => 'admin');
+    my $newstore_admintalk = $newstore_admin->get_client();
+    $newstore_admintalk->create("user.victim");
+    $self->assert_str_equals('ok', $newstore_admintalk->get_last_completion_response());
+    $newstore_admintalk->rename("user.victim", "user.mover");
+    $self->assert_str_equals('ok', $newstore_admintalk->get_last_completion_response());
+    $newstore_admin->disconnect();
+
+    xlog $self, "OldStore: create user.victim and deliver messages";
+    $admintalk->create("user.victim");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $victim_store = $mastersvc->create_store(username => 'victim');
+    $victim_store->set_fetch_attributes('uid');
+    my %msgs;
+    $msgs{A} = $self->make_message("Message A", store => $victim_store);
+    $msgs{B} = $self->make_message("Message B", store => $victim_store);
+
+    xlog $self, "Sync user.victim from OldStore to Replica";
+    $self->run_replication(user => 'victim');
+
+    xlog $self, "Verify Replica has victim's messages before syncing mover";
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replica_victim = $replicasvc->create_store(username => 'victim');
+    $replica_victim->set_fetch_attributes('uid');
+    $self->check_messages(\%msgs, store => $replica_victim);
+
+    xlog $self, "Sync user.mover from NewStore to Replica with -O (no_copyback)";
+    xlog $self, "This MUST NOT send UNMAILBOX user.victim to the Replica";
+    $self->_disconnect_all();
+    $newstore->run_command({cyrus => 1},
+        'sync_client', '-v', '-v', '-o', '-O', '-u', 'mover');
+
+    xlog $self, "Check victim's replica inbox still has its messages";
+    $replica_victim = $replicasvc->create_store(username => 'victim');
+    $replica_victim->set_fetch_attributes('uid');
+    $self->check_messages(\%msgs, store => $replica_victim);
+}
