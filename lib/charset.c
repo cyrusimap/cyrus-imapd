@@ -4661,7 +4661,7 @@ EXPORTED int charset_decode_percent(struct buf *dst, const char *val)
 }
 
 // clang-format: off
-const char QSTRINGCHAR[256] = {
+static const char QSTRINGCHAR[256] = {
 /* control chars 9 (TAB), 10 (LF), 13 (CR) and space (32)
  * are not permitted, all other control characters obsolete */
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
