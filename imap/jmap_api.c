@@ -3652,7 +3652,7 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
     }
 }
 
-EXPORTED bool jmap_state_matches(struct conversations_state *cstate,
+HIDDEN bool jmap_state_matches(struct conversations_state *cstate,
                                  const char *if_in_state, modseq_t modseq)
 {
     if (USER_COMPACT_EMAILIDS(cstate) &&  // check for mandatory prefix
@@ -3660,5 +3660,5 @@ EXPORTED bool jmap_state_matches(struct conversations_state *cstate,
         return false;
     }
 
-    return (atomodseq_t(if_in_state) == modseq);
+    return atomodseq_t(if_in_state) == modseq;
 }
