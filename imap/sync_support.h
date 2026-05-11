@@ -266,8 +266,9 @@ struct sync_client_state {
     struct db *cachedb;
     struct buf tagbuf;
     unsigned flags;
+    const char *userid;  /* set during user-sync operations; NULL otherwise */
 };
-#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0 }
+#define SYNC_CLIENT_STATE_INITIALIZER { NULL, NULL, NULL, NULL, NULL, BUF_INITIALIZER, 0, NULL }
 
 /* =====================  server-side sync  ============================= */
 
