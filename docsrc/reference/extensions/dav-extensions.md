@@ -70,7 +70,6 @@ in different IMAP constructs with different ACL bits.
 | Privilege            | Description                        | IMAP ACL bit |
 |----------------------|------------------------------------|--------------|
 | `CY:make-collection` | Create a new sub-collection        | k            |
-| `CY:add-resource`    | Add a new resource to a collection | p            |
 
 ### Under `DAV:unbind`
 
