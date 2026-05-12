@@ -15,8 +15,8 @@
 extern void config_reset(void);
 extern void config_read(const char *alt_config, const int config_need_data);
 extern const char *config_getstring(enum imapopt opt);
-extern int config_getint(enum imapopt opt);
-extern int config_getswitch(enum imapopt opt);
+extern int32_t config_getint(enum imapopt opt);
+extern bool config_getswitch(enum imapopt opt);
 extern enum enum_value config_getenum(enum imapopt opt);
 extern uint64_t config_getbitfield(enum imapopt opt);
 extern int config_getduration(enum imapopt opt, int defunit);

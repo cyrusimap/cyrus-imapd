@@ -69,17 +69,17 @@ static void assert_not_deprecated(enum imapopt opt)
 {
     if (imapopts[opt].deprecated_since) {
         char errbuf[1024];
-        enum imapopt popt = imapopts[opt].preferred_opt;
-        if (popt != IMAPOPT_ZERO) {
+        enum imapopt repl = imapopts[opt].replaced_by;
+        if (repl != IMAPOPT_ZERO) {
             snprintf(errbuf, sizeof(errbuf),
                     "Option '%s' is deprecated in favor of '%s' since version %s.",
-                    imapopts[opt].optname, imapopts[popt].optname,
+                    imapopts[opt].name, imapopts[repl].name,
                     imapopts[opt].deprecated_since);
         }
         else {
             snprintf(errbuf, sizeof(errbuf),
                     "Option '%s' is deprecated in version %s.",
-                    imapopts[opt].optname, imapopts[opt].deprecated_since);
+                    imapopts[opt].name, imapopts[opt].deprecated_since);
         }
         fatal(errbuf, EX_SOFTWARE);
     }
@@ -90,41 +90,29 @@ EXPORTED const char *config_getstring(enum imapopt opt)
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert((imapopts[opt].t == OPT_STRING) ||
-           (imapopts[opt].t == OPT_STRINGLIST));
+    assert((imapopts[opt].type == OPT_STRING) ||
+           (imapopts[opt].type == OPT_STRINGLIST));
 
     return imapopts[opt].val.s;
 }
 
-EXPORTED int config_getint(enum imapopt opt)
+EXPORTED int32_t config_getint(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert(imapopts[opt].t == OPT_INT);
-#if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.i > 0x7fffffff)||
-        (imapopts[opt].val.i < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getint: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.i);
-    }
-#endif
-    return imapopts[opt].val.i;
+    assert(imapopts[opt].type == OPT_INT);
+
+    return imapopts[opt].val.i32;
 }
 
-EXPORTED int config_getswitch(enum imapopt opt)
+EXPORTED bool config_getswitch(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert(imapopts[opt].t == OPT_SWITCH);
-#if (SIZEOF_LONG != 4)
-    if ((imapopts[opt].val.b > 0x7fffffff)||
-        (imapopts[opt].val.b < -0x7fffffff)) {
-        syslog(LOG_ERR, "config_getswitch: %s: %ld too large for type",
-               imapopts[opt].optname, imapopts[opt].val.b);
-    }
-#endif
+    assert(imapopts[opt].type == OPT_SWITCH);
+
     return imapopts[opt].val.b;
 }
 
@@ -133,7 +121,7 @@ EXPORTED enum enum_value config_getenum(enum imapopt opt)
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert(imapopts[opt].t == OPT_ENUM);
+    assert(imapopts[opt].type == OPT_ENUM);
 
     return imapopts[opt].val.e;
 }
@@ -143,9 +131,9 @@ EXPORTED uint64_t config_getbitfield(enum imapopt opt)
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert_not_deprecated(opt);
-    assert(imapopts[opt].t == OPT_BITFIELD);
+    assert(imapopts[opt].type == OPT_BITFIELD);
 
-    return imapopts[opt].val.x;
+    return imapopts[opt].val.u64;
 }
 
 static inline int accumulate(int *val, int mult, int nextchar,
@@ -280,7 +268,7 @@ EXPORTED int config_getduration(enum imapopt opt, int defunit)
     int duration;
 
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert(imapopts[opt].t == OPT_DURATION);
+    assert(imapopts[opt].type == OPT_DURATION);
     assert_not_deprecated(opt);
     assert(strchr("dhms", defunit) != NULL); /* n.b. also permits \0 */
 
@@ -291,7 +279,7 @@ EXPORTED int config_getduration(enum imapopt opt, int defunit)
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                  "%s: %s: couldn't parse duration '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+                 __func__, imapopts[opt].name, imapopts[opt].val.s);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -415,7 +403,7 @@ EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
 
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
-    assert(imapopts[opt].t == OPT_BYTESIZE);
+    assert(imapopts[opt].type == OPT_BYTESIZE);
     assert_not_deprecated(opt);
     assert(strchr("BKMG", defunit) != NULL); /* n.b. also permits \0 */
 
@@ -426,7 +414,7 @@ EXPORTED int64_t config_getbytesize(enum imapopt opt, int defunit)
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                  "%s: %s: couldn't parse byte size '%s'",
-                 __func__, imapopts[opt].optname, imapopts[opt].val.s);
+                 __func__, imapopts[opt].name, imapopts[opt].val.s);
         fatal(errbuf, EX_CONFIG);
     }
 
@@ -532,27 +520,27 @@ static void config_ispartition(const char *key,
 
 static void config_option_deprecate(const int dopt)
 {
-    const int opt = imapopts[dopt].preferred_opt;
+    const int opt = imapopts[dopt].replaced_by;
     const char *since = imapopts[dopt].deprecated_since;
 
     if (opt == IMAPOPT_ZERO) {
         syslog(LOG_WARNING, "Option '%s' is deprecated in version %s.",
-               imapopts[dopt].optname, since);
+               imapopts[dopt].name, since);
         return;
     }
 
     syslog(LOG_WARNING,
            "Option '%s' is deprecated in favor of '%s' since version %s.",
-           imapopts[dopt].optname, imapopts[opt].optname, since);
+           imapopts[dopt].name, imapopts[opt].name, since);
 
     /* Don't override values if the preferred option has been seen */
     if (imapopts[opt].seen) return;
 
     imapopts[opt].seen = imapopts[dopt].seen;
 
-    switch (imapopts[dopt].t) {
+    switch (imapopts[dopt].type) {
     case OPT_BITFIELD:
-        imapopts[opt].val.x = imapopts[dopt].val.x;
+        imapopts[opt].val.u64 = imapopts[dopt].val.u64;
         break;
 
     case OPT_ENUM:
@@ -564,7 +552,7 @@ static void config_option_deprecate(const int dopt)
         break;
 
     case OPT_INT:
-        imapopts[opt].val.i = imapopts[dopt].val.i;
+        imapopts[opt].val.i32 = imapopts[dopt].val.i32;
         break;
 
     case OPT_STRINGLIST:
@@ -620,9 +608,9 @@ EXPORTED void config_reset(void)
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-        if ((imapopts[opt].t == OPT_STRING ||
-             imapopts[opt].t == OPT_DURATION ||
-             imapopts[opt].t == OPT_BYTESIZE) &&
+        if ((imapopts[opt].type == OPT_STRING ||
+             imapopts[opt].type == OPT_DURATION ||
+             imapopts[opt].type == OPT_BYTESIZE) &&
             (imapopts[opt].seen ||
              (imapopts[opt].def.s &&
               imapopts[opt].val.s != imapopts[opt].def.s &&
@@ -701,7 +689,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
          * are the configdirectory option */
         if (
                 !imapopts[opt].val.s ||
-                imapopts[opt].t != OPT_STRING ||
+                imapopts[opt].type != OPT_STRING ||
                 opt == IMAPOPT_CONFIGDIRECTORY
             ) {
 
@@ -883,11 +871,11 @@ EXPORTED int config_parse_switch(const char *p)
 {
     if (*p == '0' || *p == 'n' ||
             (*p == 'o' && p[1] == 'f') || *p == 'f') {
-        return 0;
+        return false;
     }
     else if (*p == '1' || *p == 'y' ||
             (*p == 'o' && p[1] == 'n') || *p == 't') {
-        return 1;
+        return true;
     }
     return -1;
 }
@@ -1030,7 +1018,7 @@ static void config_read_file(const char *filename)
         /* look for a service_ prefix match in imapopts */
         if (srvkey) {
             for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-                if (!strcasecmp(imapopts[opt].optname, srvkey)) {
+                if (!strcasecmp(imapopts[opt].name, srvkey)) {
                     key = srvkey;
                     service_specific = 1;
                     break;
@@ -1042,7 +1030,7 @@ static void config_read_file(const char *filename)
          * exact match */
         if (!service_specific) {
             for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
-                if (!strcasecmp(imapopts[opt].optname, key)) {
+                if (!strcasecmp(imapopts[opt].name, key)) {
                     break;
                 }
             }
@@ -1079,9 +1067,9 @@ static void config_read_file(const char *filename)
             /* If we've seen it already, we're replacing it, so we need
              * to free the current string if there is one */
             if (imapopts[opt].seen
-                && (imapopts[opt].t == OPT_STRING
-                    || imapopts[opt].t == OPT_DURATION
-                    || imapopts[opt].t == OPT_BYTESIZE))
+                && (imapopts[opt].type == OPT_STRING
+                    || imapopts[opt].type == OPT_DURATION
+                    || imapopts[opt].type == OPT_BYTESIZE))
                 free((char *)imapopts[opt].val.s);
 
             if (service_specific)
@@ -1098,7 +1086,7 @@ static void config_read_file(const char *filename)
             }
 
             /* this is a known option */
-            switch (imapopts[opt].t) {
+            switch (imapopts[opt].type) {
             case OPT_STRING:
             {
                 imapopts[opt].val.s = xstrdup(p);
@@ -1110,7 +1098,7 @@ static void config_read_file(const char *filename)
             }
             case OPT_INT:
             {
-                long val;
+                int32_t val;
                 char *ptr;
 
                 val = strtol(p, &ptr, 0);
@@ -1118,12 +1106,12 @@ static void config_read_file(const char *filename)
                     /* error during conversion */
                     snprintf(errbuf, sizeof(errbuf),
                              "non-integer value for %s in line %d",
-                             imapopts[opt].optname, lineno);
+                             imapopts[opt].name, lineno);
                     free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
 
-                imapopts[opt].val.i = val;
+                imapopts[opt].val.i32 = val;
                 break;
             }
             case OPT_SWITCH:
@@ -1133,11 +1121,11 @@ static void config_read_file(const char *filename)
                     /* error during conversion */
                     snprintf(errbuf, sizeof(errbuf),
                              "non-switch value for %s in line %d",
-                             imapopts[opt].optname, lineno);
+                             imapopts[opt].name, lineno);
                     free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
-                imapopts[opt].val.b = b;
+                imapopts[opt].val.b = !!b;
                 break;
             }
             case OPT_ENUM:
@@ -1152,7 +1140,7 @@ static void config_read_file(const char *filename)
                 /* q is already at EOS so we'll process entire the string
                    as one value unless told otherwise */
 
-                if (imapopts[opt].t == OPT_ENUM) {
+                if (imapopts[opt].type == OPT_ENUM) {
                     /* normalize on/off values
                      * we don't write to p in this section of the parser, so
                      * this is safe, but if that ever changes it'll crash!
@@ -1167,7 +1155,7 @@ static void config_read_file(const char *filename)
                     {
                         p = (char *) "off";
                     }
-                } else if (imapopts[opt].t == OPT_BITFIELD) {
+                } else if (imapopts[opt].type == OPT_BITFIELD) {
                     /* split the string into separate values */
                     q = p;
                 }
@@ -1185,13 +1173,13 @@ static void config_read_file(const char *filename)
                         /* error during conversion */
                         snprintf(errbuf, sizeof(errbuf),
                                  "invalid value '%s' for %s in line %d",
-                                 p, imapopts[opt].optname, lineno);
+                                 p, imapopts[opt].name, lineno);
                         free(buf);
                         fatal(errbuf, EX_CONFIG);
                     }
-                    else if (imapopts[opt].t == OPT_STRINGLIST)
+                    else if (imapopts[opt].type == OPT_STRINGLIST)
                         imapopts[opt].val.s = e->name;
-                    else if (imapopts[opt].t == OPT_ENUM)
+                    else if (imapopts[opt].type == OPT_ENUM)
                         imapopts[opt].val.e = e->val;
                     else {
                         const struct enum_option_s *pref = e;
@@ -1201,10 +1189,10 @@ static void config_read_file(const char *filename)
                             syslog(LOG_WARNING,
                                    "Value '%s' for option '%s'"
                                    " is deprecated in favor of value '%s'",
-                                   e->name, imapopts[opt].optname, pref->name);
+                                   e->name, imapopts[opt].name, pref->name);
                         }
 
-                        imapopts[opt].val.x |= e->val;
+                        imapopts[opt].val.u64 |= e->val;
                     }
 
                     /* find the start of the next value */
@@ -1221,7 +1209,7 @@ static void config_read_file(const char *filename)
                     imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable duration '%s' for %s in line %d",
-                             p, imapopts[opt].optname, lineno);
+                             p, imapopts[opt].name, lineno);
                     free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }
@@ -1239,7 +1227,7 @@ static void config_read_file(const char *filename)
                     imapopts[opt].seen = 0; /* not seen after all */
                     snprintf(errbuf, sizeof(errbuf),
                              "unparsable byte size '%s' for %s in line %d",
-                             p, imapopts[opt].optname, lineno);
+                             p, imapopts[opt].name, lineno);
                     free(buf);
                     fatal(errbuf, EX_CONFIG);
                 }

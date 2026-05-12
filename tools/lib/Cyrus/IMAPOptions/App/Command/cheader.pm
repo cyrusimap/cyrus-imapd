@@ -49,11 +49,6 @@ sub execute
     $imapoptions->iterate(sub { $self->_print_enum_defs(@_) });
     print "};\n";
 
-    my $dummy_field = 'void *dummy;';
-    if ($opt->cc eq 'gcc') {
-        $dummy_field = '';
-    }
-
     my $max_enum_opts = 0;
     $imapoptions->iterate(sub {
         my (undef, $option) = @_;
@@ -63,7 +58,7 @@ sub execute
         }
     });
 
-    $self->footer($dummy_field, $max_enum_opts);
+    $self->footer($max_enum_opts);
 }
 
 sub header
@@ -75,6 +70,7 @@ sub header
     #ifndef INCLUDED_IMAPOPTS_H
     #define INCLUDED_IMAPOPTS_H
 
+    #include <stdbool.h>
     #include <stdint.h>
 
     enum opttype {
@@ -96,17 +92,16 @@ sub header
 
 sub footer
 {
-    my ($self, $dummy_field, $max_enum_opts) = @_;
+    my ($self, $max_enum_opts) = @_;
 
     my $c = <<~"END_FOOTER";
 
     union config_value {
-        $dummy_field
         const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
-        long i;             /* OPT_INT */
-        long b;             /* OPT_SWITCH */
+        int32_t i32;        /* OPT_INT */
+        bool b;             /* OPT_SWITCH */
         enum enum_value e;  /* OPT_ENUM */
-        uint64_t x;         /* OPT_BITFIELD */
+        uint64_t u64;       /* OPT_BITFIELD */
     };
 
     struct enum_option_s {
@@ -117,12 +112,12 @@ sub footer
     #define MAX_ENUM_OPTS $max_enum_opts
     struct imapopt_s {
         const enum imapopt opt;
-        const char *optname;
+        const char *name;
         int seen;
-        const enum opttype t;
+        const enum opttype type;
         uint32_t last_modified;
         const char *deprecated_since;
-        const enum imapopt preferred_opt;
+        const enum imapopt replaced_by;
         union config_value val;
         const union config_value def;
         const struct enum_option_s enum_options[MAX_ENUM_OPTS+1];

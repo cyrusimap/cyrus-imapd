@@ -5,9 +5,11 @@
 #ifndef INCLUDED_LIBCYR_CFG_H
 #define INCLUDED_LIBCYR_CFG_H
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -78,8 +80,8 @@ enum cyrus_opt {
 
 union cyrus_config_value {
     const char *s; /* string */
-    long i; /* int */
-    long b; /* switch */
+    int32_t i32; /* int */
+    bool b; /* switch */
 };
 
 struct cyrusopt_s {
@@ -91,12 +93,12 @@ struct cyrusopt_s {
 /* these will assert() if they're called on the wrong type of
    option (imapopt.c) */
 extern const char *libcyrus_config_getstring(enum cyrus_opt opt);
-extern int libcyrus_config_getint(enum cyrus_opt opt);
-extern int libcyrus_config_getswitch(enum cyrus_opt opt);
+extern int32_t libcyrus_config_getint(enum cyrus_opt opt);
+extern bool libcyrus_config_getswitch(enum cyrus_opt opt);
 
 void libcyrus_config_setstring(enum cyrus_opt opt, const char *val);
-void libcyrus_config_setint(enum cyrus_opt opt, int val);
-void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
+void libcyrus_config_setint(enum cyrus_opt opt, int32_t val);
+void libcyrus_config_setswitch(enum cyrus_opt opt, bool val);
 
 extern void libcyrus_delayed_action(const char *key, void (*cb)(void *), void (*free)(void *), void *rock);
 extern void libcyrus_run_delayed(void);

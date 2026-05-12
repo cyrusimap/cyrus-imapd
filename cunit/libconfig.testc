@@ -33,8 +33,8 @@ static int tear_down(void)
 
 static void test_int(void)
 {
-    int boundary_limit = -1;
-    int conversations_max_thread = -1;
+    int32_t boundary_limit = -1;
+    int32_t conversations_max_thread = -1;
 
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
@@ -94,15 +94,15 @@ static void test_switch(void)
 
     /* test a value that has been set */
     allowanonymouslogin = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
-    CU_ASSERT_EQUAL(allowanonymouslogin, 1);
+    CU_ASSERT_EQUAL(allowanonymouslogin, true);
 
     /* test a value that has been defaulted to 1 */
     allowapop = config_getswitch(IMAPOPT_ALLOWAPOP);
-    CU_ASSERT_EQUAL(allowapop, 1);
+    CU_ASSERT_EQUAL(allowapop, true);
 
     /* test a value that has been defaulted to 0 */
     allownewnews = config_getswitch(IMAPOPT_ALLOWNEWNEWS);
-    CU_ASSERT_EQUAL(allownewnews, 0);
+    CU_ASSERT_EQUAL(allownewnews, false);
 }
 
 static void test_stringlist_value(void)
@@ -830,7 +830,7 @@ static void test_configdirectory_missing(void)
 static void test_deprecated_int(void)
 {
     /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
-    int val;
+    int32_t val;
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");

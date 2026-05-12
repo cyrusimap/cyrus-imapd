@@ -316,7 +316,7 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities,
 
     if (max_size_attachments_per_email <= 0) {
         syslog(LOG_ERR, "jmap: invalid property value: %s",
-                imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].optname);
+                imapopts[IMAPOPT_JMAP_MAIL_MAX_SIZE_ATTACHMENTS_PER_EMAIL].name);
         max_size_attachments_per_email = 0;
     }
 
