@@ -3613,6 +3613,8 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
 {
     json_t *obj;
 
+    if (!(id && name)) return;
+
     if (*id == '#')
         obj = json_object_get(set->created, id+1);
     else
