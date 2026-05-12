@@ -2195,6 +2195,20 @@ static void setcalendars_update(jmap_req_t *req,
             jmap_parser_invalid(&parser, "shareWith");
         }
     }
+
+    /* schedulingEnabled writes a shared annotation, unlike the rest of
+     * setcalendar_writeprops() which writes per-user annotations.  Don't let a
+     * sharee with only JACL_READITEMS disable scheduling on the sharer's
+     * calendar!
+     */
+    if (props.schedulingEnabled >= 0) {
+        if (!jmap_hasrights(req, mboxname, ACL_ADMIN)) {
+            /* Probably should be "forbidden", but that isn't how this function
+             * works (yet?) */
+            jmap_parser_invalid(&parser, "schedulingEnabled");
+        }
+    }
+
     if (json_array_size(parser.invalid)) {
         *err = json_pack("{s:s, s:O}",
                 "type", "invalidProperties",

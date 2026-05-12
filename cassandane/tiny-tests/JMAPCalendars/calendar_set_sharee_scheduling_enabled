@@ -1,0 +1,81 @@
+#!perl
+use Cassandane::Tiny;
+
+# Don't allow a read-only user of a shared calendar to write schedulingEnabled.
+sub test_calendar_set_sharee_scheduling_enabled ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service('http');
+
+    xlog $self, 'create owner account "victim"';
+
+    my $victim = $self->{instance}->create_user('victim');
+
+    xlog $self, 'manifold creates a calendar';
+    my $victim_cal = $victim->calendars->create({ name => 'Victim Calendar' });
+    $victim_cal->share_with('cassandane' => [ qw( mayReadItems ) ]);
+
+    xlog $self, 'sharee Calendar/get confirms scheduling is on (default)';
+    my $res = $jmap->request([
+        ['Calendar/get', {
+            accountId  => 'victim',
+            ids        => [ $victim_cal->id ],
+            properties => [ 'id', 'schedulingEnabled', 'myRights' ],
+        } ],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            accountId => 'victim',
+            list => [ superhashof({
+                schedulingEnabled => jtrue(),
+                myRights          => superhashof({
+                    mayReadItems => jtrue(),
+                    mayWriteAll  => jfalse(),
+                }),
+            }) ],
+        }),
+        $res->sentence_named('Calendar/get')->arguments,
+        "re-gotten calendar looks as expected",
+    );
+
+    xlog $self, 'sharee Calendar/set tries to disable scheduling';
+    $res = $jmap->request([
+        ['Calendar/set', {
+            accountId => 'victim',
+            update => {
+                $victim_cal->id => {
+                    schedulingEnabled => JSON::false,
+                },
+            },
+        } ],
+    ]);
+
+    # The write must be rejected -- if the calendar appears in {updated},
+    # the sharee has flipped a shared annotation across the auth boundary.
+    $self->assert(
+        ! exists $res->sentence_named('Calendar/set')->arguments->{updated}{$victim_cal->id},
+        "read-only sharee must not be allowed to update schedulingEnabled on the owner's calendar",
+    );
+
+    $self->assert(
+        exists $res->sentence_named('Calendar/set')->arguments->{notUpdated}{$victim_cal->id},
+        'expected the calendar in notUpdated',
+    );
+
+    xlog $self, 'shared annotation is unchanged: Calendar/get still true';
+    $res = $jmap->request([
+        ['Calendar/get', {
+            accountId  => 'victim',
+            ids        => [$victim_cal->id],
+            properties => [ 'schedulingEnabled' ],
+        }],
+    ]);
+
+    $self->assert_equals(
+        JSON::true,
+        $res->sentence_named('Calendar/get')->arguments->{list}[0]{schedulingEnabled},
+        "sharee's attempted Calendar/set must not have changed the calendar-wide scheduling-enabled annotation",
+    );
+}
