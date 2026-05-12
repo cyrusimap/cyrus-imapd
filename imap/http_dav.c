@@ -3133,45 +3133,60 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
     annotate_state_t *astate = NULL;
     struct buf value = BUF_INITIALIZER;
     int r = 1; /* default to error */
+    const char *ns_href = (const char *) prop->ns->href;
 
-    /* flags only store "exists" */
+    if (!httpd_userisadmin &&
+        (!strcmp(ns_href, XML_NS_SYSFLAG) ||
+         !strcmp(ns_href, XML_NS_USERFLAG))) {
+        int rights = httpd_myrights(httpd_authstate,
+                                    pctx->txn->req_tgt.mbentry);
+        if (!(rights & DACL_WRITECONT)) {
+            xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                         &propstat[PROPSTAT_FORBID],
+                         prop->name, prop->ns, NULL,
+                         DAV_NEED_PRIVS);
+            *pctx->ret = HTTP_FORBIDDEN;
+            return 0;
+        }
 
-    if (!strcmp((const char *)prop->ns->href, XML_NS_SYSFLAG)) {
-        struct flaggedresources *frp;
-        int isset;
-        for (frp = fres; frp->name; frp++) {
-            if (strcasecmp((const char *)prop->name, frp->name)) continue;
-            r = 0; /* ok to do nothing */
-            isset = pctx->record->system_flags & frp->flag;
+        /* flags only store "exists" */
+
+        if (!strcmp(ns_href, XML_NS_SYSFLAG)) {
+            struct flaggedresources *frp;
+            int isset;
+            for (frp = fres; frp->name; frp++) {
+                if (strcasecmp((const char *)prop->name, frp->name)) continue;
+                r = 0; /* ok to do nothing */
+                isset = pctx->record->system_flags & frp->flag;
+                if (set) {
+                    if (isset) goto done;
+                    pctx->record->system_flags |= frp->flag;
+                }
+                else {
+                    if (!isset) goto done;
+                    pctx->record->system_flags &= ~frp->flag;
+                }
+                r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
+                break;
+            }
+        }
+        else {
+            int userflag = 0;
+            int isset;
+            r = mailbox_user_flag(pctx->mailbox,
+                                  (const char *)prop->name, &userflag, 1);
+            if (r) goto done;
+            isset = pctx->record->user_flags[userflag/32] & (1U<<(userflag&31));
             if (set) {
                 if (isset) goto done;
-                pctx->record->system_flags |= frp->flag;
+                pctx->record->user_flags[userflag/32] |= (1U<<(userflag&31));
             }
             else {
                 if (!isset) goto done;
-                pctx->record->system_flags &= ~frp->flag;
+                pctx->record->user_flags[userflag/32] &= ~(1U<<(userflag&31));
             }
             r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
-            goto done;
         }
-        goto done;
-    }
-
-    if (!strcmp((const char *)prop->ns->href, XML_NS_USERFLAG)) {
-        int userflag = 0;
-        int isset;
-        r = mailbox_user_flag(pctx->mailbox, (const char *)prop->name, &userflag, 1);
-        if (r) goto done;
-        isset = pctx->record->user_flags[userflag/32] & (1U<<(userflag&31));
-        if (set) {
-            if (isset) goto done;
-            pctx->record->user_flags[userflag/32] |= (1U<<(userflag&31));
-        }
-        else {
-            if (!isset) goto done;
-            pctx->record->user_flags[userflag/32] &= ~(1U<<(userflag&31));
-        }
-        r = mailbox_rewrite_index_record(pctx->mailbox, pctx->record);
         goto done;
     }
 

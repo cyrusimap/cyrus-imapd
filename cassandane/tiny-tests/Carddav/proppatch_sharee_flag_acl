@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+# CYR-2982: a CardDAV sharee with read-only access to a contact must not be
+# able to mutate the resource's sysflag (FLAG_FLAGGED, FLAG_ANSWERED,
+# FLAG_SEEN) or userflag bits via PROPPATCH.  The live-property path in
+# do_proppatch() checks DACL_PROPCOL/DACL_READ; the dead-property path
+# falls straight through to proppatch_toresource(), which writes
+# record->system_flags / record->user_flags with no rights check.  The
+# net effect: PUT to a shared contact is correctly rejected, but
+# PROPPATCH naming a Cyrus-internal sysflag/userflag property succeeds
+# and the owner sees the change.
+
+sub test_proppatch_sharee_flag_acl
+    :NoVirtDomains
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create('user.manifold');
+    $admintalk->setacl('user.manifold', admin    => 'lrswipkxtecdan');
+    $admintalk->setacl('user.manifold', manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service('http');
+    my $mantalk = Net::CardDAVTalk->new(
+        user      => 'manifold',
+        password  => 'pass',
+        host      => $service->host(),
+        port      => $service->port(),
+        scheme    => 'http',
+        url       => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, 'manifold creates an addressbook and a contact';
+    my $bookId = $mantalk->NewAddressBook('shared', name => 'Manifold Shared');
+    $self->assert_str_equals('shared', $bookId);
+
+    my $uid   = guid_string();
+    my $vcard = <<~EOF;
+        BEGIN:VCARD
+        VERSION:3.0
+        UID:$uid
+        FN:Read Only Contact
+        N:Contact;Read Only;;;
+        END:VCARD
+        EOF
+
+    my $owner_href = $mantalk->NewContact($bookId, vcard_to_jscontact($vcard));
+
+    xlog $self, 'admin grants cassandane read-only access to the addressbook';
+    $admintalk->setacl("user.manifold.#addressbooks.$bookId",
+                       cassandane => 'lrsn');
+
+    my $sharee_carddav = $self->{carddav};
+    my $sharee_href = "manifold.$bookId/$uid.vcf";
+
+    xlog $self, 'sanity: sharee direct PUT must be rejected';
+    my $resp = $sharee_carddav->SafeRequest('PUT', $sharee_href, $vcard,
+                                            'Content-Type' => 'text/vcard');
+    $self->assert($resp->{http_response}{status} == 403,
+                  "direct PUT by read-only sharee should fail, got "
+                  . "$resp->{status} $resp->{reason}");
+
+    my @attempts = (
+        [ sysflag  => 'http://cyrusimap.org/ns/sysflag/',  'flagged'  ],
+        [ userflag => 'http://cyrusimap.org/ns/userflag/', 'casstest' ],
+    );
+
+    for my $attempt (@attempts) {
+        my ($name, $ns_url, $prop) = @$attempt;
+
+        xlog $self, "sharee PROPPATCH set $name:$prop on manifold's contact";
+
+        my $xml = <<~"EOF";
+            <D:propertyupdate xmlns:D="DAV:" xmlns:X="$ns_url">
+              <D:set>
+                <D:prop>
+                  <X:$prop/>
+                </D:prop>
+              </D:set>
+            </D:propertyupdate>
+            EOF
+
+        # The bug doesn't crash the worker here -- it silently accepts the
+        # write -- but we still want to know if anything else goes wrong, so
+        # eval and report.
+        my $ok = eval {
+            $sharee_carddav->Request('PROPPATCH', $sharee_href, $xml,
+                                     'Content-Type' => 'text/xml');
+            1;
+        };
+        $self->assert($ok,
+            "PROPPATCH attempt for $name:$prop should at least produce a "
+            . "response (got error: $@)");
+    }
+
+    xlog $self, "owner verifies the sysflag flagged bit is still unset";
+    {
+        my $propfind = <<~"EOF";
+            <D:propfind xmlns:D="DAV:"
+                        xmlns:SF="http://cyrusimap.org/ns/sysflag/">
+              <D:prop><SF:flagged/></D:prop>
+            </D:propfind>
+            EOF
+        my $owner_path = "/dav/addressbooks/user/manifold/$bookId/$uid.vcf";
+        my $res = $mantalk->Request('PROPFIND', $owner_path, $propfind,
+                                    'Content-Type' => 'text/xml',
+                                    'Depth'        => 0);
+
+        my $propstats = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'};
+        $self->assert_not_null($propstats,
+            'expected propstat entries on PROPFIND response');
+
+        # PROPFIND of an unset sysflag property is reported in a "404 Not
+        # Found" propstat -- success of the ACL means we should see exactly
+        # that, not a 200 OK with a flagged element.
+        my $flagged_status;
+        for my $ps (@$propstats) {
+            my $prop = $ps->{'{DAV:}prop'} // {};
+            next unless exists $prop->{
+                '{http://cyrusimap.org/ns/sysflag/}flagged'};
+            $flagged_status = $ps->{'{DAV:}status'}{content};
+            last;
+        }
+
+        $self->assert_not_null($flagged_status,
+            'expected a propstat entry for sysflag:flagged');
+        $self->assert_matches(qr/\b404\b/, $flagged_status,
+            "sharee must not be able to flip sysflag:flagged on the "
+            . "owner's contact (propstat status: $flagged_status)");
+    }
+}
