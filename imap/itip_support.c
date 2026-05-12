@@ -110,6 +110,7 @@ HIDDEN int organizer_changed(icalcomponent *oldcomp, icalcomponent *newcomp)
 
 struct pick_scheddefault_rock {
     strarray_t ignore;
+    modseq_t createdmodseq;
     char *collname;
 };
 
@@ -132,9 +133,11 @@ static int pick_scheddefault_cb(const mbentry_t *mbentry, void *vrock)
                     if (!strcmp(userid, ownerid) || !strcmp(userid, "anyone")) {
                         int rights = 0;
                         cyrus_acl_strtomask(strarray_nth(acl, i+1), &rights);
-                        if (rights & ACL_INSERT) {
+                        if ((rights & ACL_INSERT) &&
+                            mbentry->createdmodseq < rock->createdmodseq) {
+                            rock->createdmodseq = mbentry->createdmodseq;
+                            free(rock->collname);
                             rock->collname = xstrdup(collname);
-                            r = CYRUSDB_DONE;
                         }
                     }
                 }
@@ -168,7 +171,7 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
         if (mboxlist_lookup(mboxname, &mbentry, NULL)) {
             // attempt to pick any other calendar
             xzfree(collname);
-            struct pick_scheddefault_rock rock = { 0 };
+            struct pick_scheddefault_rock rock = { .createdmodseq = UINT64_MAX };
 
             buf_setcstr(&buf, SCHED_INBOX);
             if (buf.len && buf.s[buf.len-1] == '/')
