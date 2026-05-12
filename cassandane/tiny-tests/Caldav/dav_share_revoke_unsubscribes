@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+
+# When a calendar owner revokes a CalDAV share, Cyrus drops the sharee's ACL
+# but never calls mboxlist_changesub, so the sharee's subscription persists.
+# At time of test-writing, calalarmd's per-user-alarm code checks subscription,
+# not current ACL, so the former sharee keeps receiving alarm notifications
+# carrying current event data.
+#
+# This test asserts that if the user revokes sharing, the subscription is
+# removed.
+
+sub test_dav_share_revoke_unsubscribes
+    :MagicPlus :min_version_3_0 :NoVirtDomains :NoAltNameSpace
+    ($self)
+{
+    my $cass_caldav = $self->default_user->caldav;
+
+    my $sharer = $self->{instance}->create_user('sharer');
+
+    my $sharer_caldav = $sharer->caldav;
+
+    xlog $self, 'sharer creates a shared calendar';
+    my $cal_id = $sharer_caldav->NewCalendar({ name => 'Shared Calendar' });
+    $self->assert_not_null($cal_id);
+
+    my $share = <<~'EOF';
+        <?xml version="1.0" encoding="utf-8" ?>
+        <D:share-resource xmlns:D="DAV:">
+          <D:sharee>
+            <D:href>mailto:cassandane@example.com</D:href>
+            <D:share-access><D:read /></D:share-access>
+          </D:sharee>
+        </D:share-resource>
+        EOF
+
+    my $revoke = <<~'EOF';
+        <?xml version="1.0" encoding="utf-8" ?>
+        <D:share-resource xmlns:D="DAV:">
+          <D:sharee>
+            <D:href>mailto:cassandane@example.com</D:href>
+            <D:share-access><D:no-access /></D:share-access>
+          </D:sharee>
+        </D:share-resource>
+        EOF
+
+    my $reply = <<~'EOF';
+        <?xml version="1.0" encoding="utf-8" ?>
+        <D:invite-reply xmlns:D="DAV:">
+          <D:invite-accepted />
+          <D:create-in><D:href>/dav/calendars/user/cassandane/</D:href></D:create-in>
+        </D:invite-reply>
+        EOF
+
+    xlog $self, 'sharer offers a read-only share to cassandane';
+    $sharer_caldav->Request('POST', $cal_id, $share,
+                            'Content-Type' => 'application/davsharing+xml');
+
+    xlog $self, 'cassandane accepts the share';
+    my ($adds) = $cass_caldav->SyncEventLinks('/dav/notifications/user/cassandane');
+    $self->assert_equals(1, scalar keys %$adds);
+    my ($notification) = keys %$adds;
+    $cass_caldav->Request('POST', $notification, $reply,
+                          'Content-Type' => 'application/davsharing+xml');
+
+    my $shared_mbox = "user.sharer.#calendars.$cal_id";
+
+    my $plusstore = $self->{instance}->get_service('imap')
+                                     ->create_store(username => 'cassandane+dav');
+    my $cas_imap = $plusstore->get_client();
+
+    xlog $self, 'cassandane is subscribed to the shared calendar';
+    {
+        my $lsub = $cas_imap->lsub('', '*');
+        my $found = grep { $_->[2] eq $shared_mbox } @$lsub;
+        $self->assert($found,
+                      "expected cassandane to be subscribed to $shared_mbox; "
+                      . "got LSUB: " . Dumper($lsub));
+    }
+
+    xlog $self, 'sharer revokes the share';
+    $sharer_caldav->Request('POST', $cal_id, $revoke,
+                            'Content-Type' => 'application/davsharing+xml');
+
+    xlog $self, 'cassandane no longer has access (ACL revoked)';
+    {
+        my $selected = $cas_imap->select($shared_mbox);
+        $self->assert(! $selected,
+            'after revocation cassandane must not be able to SELECT '
+            . "$shared_mbox; got: $selected"
+            . ($@ ? " err=$@" : ''));
+    }
+
+    xlog $self, 'subscription must be cleaned up on revoke';
+    {
+        my $lsub = $cas_imap->lsub('', '*');
+        my $still = grep { $_->[2] eq $shared_mbox } @$lsub;
+        $self->assert(! $still,
+            "after revocation cassandane must not be subscribed to "
+            . "$shared_mbox; got LSUB: " . Dumper($lsub));
+    }
+}
