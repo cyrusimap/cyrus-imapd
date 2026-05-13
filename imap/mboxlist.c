@@ -4588,8 +4588,6 @@ EXPORTED int mboxlist_findallmulti_withp(struct namespace *namespace,
                                    const char *userid, const struct auth_state *auth_state,
                                    findall_p *p, findall_cb *cb, void *rock)
 {
-    int r = 0;
-
     init_internal();
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
@@ -4610,9 +4608,7 @@ EXPORTED int mboxlist_findallmulti_withp(struct namespace *namespace,
         if (domp) cbrock.domain = domp + 1;
     }
 
-    r = mboxlist_do_find(&cbrock, patterns);
-
-    return r;
+    return mboxlist_do_find(&cbrock, patterns);
 }
 
 EXPORTED int mboxlist_findall(struct namespace *namespace,
