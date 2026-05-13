@@ -14,7 +14,7 @@ use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
 use URI;
 
-use base qw(Cassandane::Cyrus::TestCase);
+use base qw(Cassandane::Cyrus::TestCase Cassandane::Mixin::QuotaHelper);
 use Cassandane::Util::Log;
 
 use charnames ':full';

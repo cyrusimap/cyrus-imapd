@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+# A futurerelease EmailSubmission stages a full copy of the message into the
+# submission collection.  That append must be charged against the user's
+# storage quota; otherwise an over-quota user can bypass the limit by
+# scheduling sends.
+sub test_emailsubmission_futurerelease_quota_storage
+    :min_version_3_1 :needs_component_calalarmd
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Land a >1 KiB message in cassandane's INBOX (quota unset)";
+    $self->make_message("foo", body => 'X' x 4096) or die;
+
+    xlog $self, "Discover the identity and email ids";
+    my $res = $jmap->CallMethods([
+        ['Identity/get', {}, 'R0'],
+        ['Email/query',  {}, 'R1'],
+    ]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $emailid    = $res->[1][1]->{ids}[0];
+    $self->assert_not_null($identityid);
+    $self->assert_not_null($emailid);
+
+    xlog $self, "Tighten cassandane's storage quota to 1 KiB";
+    $self->set_quotaroot('user.cassandane');
+    $self->set_quotalimits(storage => 1);  # 1 * 1024 bytes
+
+    xlog $self, "Schedule a futurerelease submission (over quota)";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            create => {
+                'sub1' => {
+                    identityId => $identityid,
+                    emailId    => $emailid,
+                    envelope   => {
+                        mailFrom => {
+                            email => 'cassandane@local',
+                            parameters => {
+                                holdfor => "30",
+                            },
+                        },
+                        rcptTo => [ { email => 'rcpt@local' } ],
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_cmp_deeply(
+      superhashof({
+        created    => any(undef, {}),
+        notCreated => {
+          sub1 => superhashof({ type => 'overQuota' }),
+        },
+      }),
+      $res->[0][1],
+      "futurerelease submission was rejected with overQuota",
+    );
+}
