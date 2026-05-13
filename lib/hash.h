@@ -16,12 +16,7 @@
 ** if there was one.
 */
 
-typedef struct bucket {
-    void *data;
-    struct bucket *next;
-    uint32_t hash;
-    char key[];
-} bucket;
+typedef struct bucket bucket;
 
 /*
 ** This is what you actually declare an instance of to create a table.

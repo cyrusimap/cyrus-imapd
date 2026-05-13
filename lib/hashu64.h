@@ -13,11 +13,7 @@
 ** if there was one.
 */
 
-typedef struct bucketu64 {
-    uint64_t key;
-    void *data;
-    struct bucketu64 *next;
-} bucketu64;
+typedef struct bucketu64 bucketu64;
 
 /*
 ** This is what you actually declare an instance of to create a table.
