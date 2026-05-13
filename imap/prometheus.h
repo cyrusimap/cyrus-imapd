@@ -18,7 +18,6 @@
 #define FNAME_PROM_MASTER_REPORT "master.txt"
 #define FNAME_PROM_USAGE_REPORT "usage.txt"
 #define FNAME_PROM_DONEPROCS "doneprocs"
-#define FNAME_PROM_STATS_DIR "/stats"
 
 extern const char *prometheus_stats_dir(void);
 
