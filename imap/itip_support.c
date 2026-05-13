@@ -156,8 +156,7 @@ HIDDEN char *caldav_scheddefault(const char *userid, int fallback)
     char *collname = NULL;
     struct buf buf = BUF_INITIALIZER;
 
-    int r = annotatemore_lookupmask(calhomename, annotname, userid, &buf);
-    if (!r && buf.len) {
+    if (!annotatemore_lookupmask(calhomename, annotname, userid, &buf) && buf.len) {
         // use scheduling default
         collname = buf_release(&buf);
     }
