@@ -3447,7 +3447,7 @@ EXPORTED int conversations_jmapid_guidrep_lookup(struct conversations_state *sta
         return CYRUSDB_NOTFOUND;
     }
 
-    strcat(key, jidrep);
+    strlcat(key, jidrep, sizeof(key));
 
     r = cyrusdb_fetch(state->db, key, CONV_JMAPID_SIZE+1,
                       &data, &datalen, &state->txn);
@@ -3517,7 +3517,7 @@ EXPORTED void conversations_adjust_internaldate(struct conversations_state *csta
     if (!cstate) return;  // can't look up anything
 
     char my_guid[2*MESSAGE_GUID_SIZE+1];
-    strcpy(my_guid, message_guid_encode(guid));
+    strlcpy(my_guid, message_guid_encode(guid), sizeof(my_guid));
     // is there an existing timestamp for this GUID?
     struct timespec existing = { 0, 0 };
     conversations_guid_foreach(cstate, my_guid, find_internaldate_cb, &existing);
