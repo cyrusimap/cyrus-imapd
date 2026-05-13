@@ -11,6 +11,12 @@
 #include "mpool.h"
 #include "xmalloc.h"
 
+struct bucketu64 {
+    uint64_t key;
+    void *data;
+    struct bucketu64 *next;
+};
+
 /*
 ** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
 **

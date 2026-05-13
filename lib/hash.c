@@ -14,6 +14,13 @@
 #include "util.h"
 #include "xmalloc.h"
 
+struct bucket {
+    void *data;
+    struct bucket *next;
+    uint32_t hash;
+    char key[];
+};
+
 /*
 ** public domain code by Jerry Coffin, with improvements by HenkJan Wolthuis.
 **
