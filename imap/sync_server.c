@@ -701,13 +701,13 @@ static void cmd_authenticate(char *mech, char *resp)
             break;
         default:
             /* failed authentication */
-            errorstring = sasl_errstring(sasl_result, NULL, NULL);
+            errorstring = cyrus_sasl_errmsg(sync_saslconn, sasl_result, /*for_client*/1);
 
             if (r != SASL_NOUSER)
                 sasl_getprop(sync_saslconn, SASL_USERNAME, (const void **) &userid);
 
             loginlog_bad(sync_clienthost, userid, mech, NULL,
-                         sasl_errdetail(sync_saslconn));
+                         cyrus_sasl_errmsg(sync_saslconn, sasl_result, /*for_client*/0));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {

@@ -17,6 +17,7 @@
 
 #include "httpd.h"
 #include "http_proxy.h"
+#include "global.h"
 #include "http_ws.h"
 #include "iptostring.h"
 #include "mupdate-client.h"
@@ -440,7 +441,8 @@ static int login(struct backend *s, const char *userid,
     free(sid);
     if (hdrs) spool_free_hdrcache(hdrs);
 
-    if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);
+    if (r && status && !*status)
+        *status = cyrus_sasl_errmsg(s->saslconn, r, /*for_client*/1);
 
     return r;
 }

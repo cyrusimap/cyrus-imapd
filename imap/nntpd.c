@@ -1934,6 +1934,7 @@ static void cmd_authinfo_pass(char *pass)
 {
     int failedloginpause;
     int r;
+    int auth_rc;
 
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
@@ -1967,18 +1968,21 @@ static void cmd_authinfo_pass(char *pass)
             return;
         }
     }
-    else if (sasl_checkpass(nntp_saslconn,
+    else if ((auth_rc = sasl_checkpass(nntp_saslconn,
                             nntp_userid,
                             strlen(nntp_userid),
                             pass,
-                            strlen(pass))!=SASL_OK) {
+                            strlen(pass)))!=SASL_OK) {
+        const char *reply;
+
         loginlog_bad(nntp_clienthost, nntp_userid, "plaintext", NULL,
-                     sasl_errdetail(nntp_saslconn));
+                     cyrus_sasl_errmsg(nntp_saslconn, auth_rc, /*for_client*/0));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
-        prot_printf(nntp_out, "481 Invalid login\r\n");
+        reply = cyrus_sasl_errmsg(nntp_saslconn, auth_rc, /*for_client*/1);
+        prot_printf(nntp_out, "481 %s\r\n", reply ? reply : "Invalid login");
         free(nntp_userid);
         nntp_userid = 0;
 
@@ -2113,17 +2117,14 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
                 sasl_getprop(nntp_saslconn, SASL_USERNAME, (const void **) &userid);
 
             loginlog_bad(nntp_clienthost, userid, mech, NULL,
-                         sasl_errdetail(nntp_saslconn));
+                         cyrus_sasl_errmsg(nntp_saslconn, sasl_result, /*for_client*/0));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
 
-            /* Don't allow user probing */
-            if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
-
-            errorstring = sasl_errstring(sasl_result, NULL, NULL);
+            errorstring = cyrus_sasl_errmsg(nntp_saslconn, sasl_result, /*for_client*/1);
             if (errorstring) {
                 prot_printf(nntp_out, "%d %s\r\n", code, errorstring);
             } else {

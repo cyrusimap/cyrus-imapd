@@ -663,6 +663,34 @@ static int acl_ok(const char *userid, struct auth_state *authstate)
     return r;
 }
 
+/*
+ * Return a SASL error message appropriate for the caller.
+ *
+ * For clients: SASL_NOUSER is remapped to SASL_BADAUTH to avoid leaking user
+ * existence. For SASL_DISABLED (userdeny), sasl_errdetail() is returned so the
+ * admin-supplied deny message reaches the client. All other client errors fall
+ * back to sasl_errstring().
+ *
+ * For operators/logging: sasl_errdetail() is preferred (includes plugin and
+ * callback text, e.g. user deny from user_deny.db set via sasl_seterror());
+ * falls back to sasl_errstring() if errdetail is empty.
+ */
+EXPORTED const char *cyrus_sasl_errmsg(sasl_conn_t *conn, int sasl_err_code, int for_client)
+{
+    /* Hide user existence from clients */
+    if (for_client && sasl_err_code == SASL_NOUSER)
+        sasl_err_code = SASL_BADAUTH;
+
+    /* Operators always get detail; clients only for SASL_DISABLED (userdeny) */
+    if (!for_client || sasl_err_code == SASL_DISABLED) {
+        const char *errstr = sasl_errdetail(conn);
+        if (errstr && *errstr) return errstr;
+    }
+
+    /* Otherwise use the generic error string */
+    return sasl_errstring(sasl_err_code, NULL, NULL);
+}
+
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
 EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
@@ -675,6 +703,7 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 {
     struct proxy_context *ctx = (struct proxy_context *) context;
     const char *val = config_getstring(IMAPOPT_LOGINREALMS);
+    char denymsg[4096];
     struct auth_state *authstate;
     int userisadmin = 0;
     char *realm;
@@ -718,16 +747,14 @@ EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
     }
 
     /* is requested_user denied access?  authenticated admins are exempt */
-    if (!userisadmin && userdeny(requested_user, config_ident, NULL, 0)) {
-        syslog(LOG_ERR, "user '%s' denied access to service '%s'",
-               requested_user, config_ident);
-        sasl_seterror(conn, SASL_NOLOG,
-                      "user '%s' is denied access to service '%s'",
-                      requested_user, config_ident);
+    if (!userisadmin && userdeny(requested_user, config_ident, denymsg, sizeof(denymsg))) {
+        syslog(LOG_ERR, "user '%s' denied access to service '%s': %s",
+               requested_user, config_ident, denymsg);
+        sasl_seterror(conn, SASL_NOLOG, "%s", denymsg);
 
         auth_freestate(authstate);
 
-        return SASL_NOAUTHZ;
+        return SASL_DISABLED;
     }
 
     if (alen != rlen || strncmp(auth_identity, requested_user, alen)) {

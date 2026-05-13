@@ -1211,18 +1211,15 @@ static void cmd_apop(char *response)
          * XXX could parse it out, or it might be available from sasl_getprop
          */
         loginlog_bad(popd_clienthost, NULL, NULL, NULL,
-                     sasl_errdetail(popd_saslconn));
+                     cyrus_sasl_errmsg(popd_saslconn, sasl_result, /*for_client*/0));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
 
-        /* Don't allow user probing */
-        if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
-
         prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
-                    sasl_errstring(sasl_result, NULL, NULL));
+                    cyrus_sasl_errmsg(popd_saslconn, sasl_result, /*for_client*/1));
 
         free(popd_subfolder);
         popd_subfolder = NULL;
@@ -1298,6 +1295,7 @@ static void cmd_user(char *user)
 static void cmd_pass(char *pass)
 {
     int failedloginpause;
+    int pr;
 
     if (!popd_userid) {
         prot_printf(popd_out, "-ERR [AUTH] Must give USER command\r\n");
@@ -1316,20 +1314,24 @@ static void cmd_pass(char *pass)
             return;
         }
     }
-    else if (SASL_OK != sasl_checkpass(popd_saslconn,
+    else if ((pr = sasl_checkpass(popd_saslconn,
                                        popd_userid,
                                        strlen(popd_userid),
                                        pass,
-                                       strlen(pass)))
+                                       strlen(pass))) != SASL_OK)
     {
+        const char *reply;
+
         loginlog_bad(popd_clienthost, popd_userid, "plaintext", NULL,
-                     sasl_errdetail(popd_saslconn));
+                     cyrus_sasl_errmsg(popd_saslconn, pr, /*for_client*/0));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
-        prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
+        reply = cyrus_sasl_errmsg(popd_saslconn, pr, /*for_client*/1);
+        prot_printf(popd_out, "-ERR [AUTH] %s\r\n",
+                    reply ? reply : "Invalid login");
         free(popd_userid);
         popd_userid = NULL;
         free(popd_subfolder);
@@ -1520,18 +1522,15 @@ static void cmd_auth(char *arg)
             }
 
             loginlog_bad(popd_clienthost, userid, authtype, NULL,
-                         sasl_errstring(sasl_result, NULL, NULL));
+                         cyrus_sasl_errmsg(popd_saslconn, sasl_result, /*for_client*/0));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
 
-            /* Don't allow user probing */
-            if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
-
             prot_printf(popd_out, "-ERR [AUTH] authenticating: %s\r\n",
-                        sasl_errstring(sasl_result, NULL, NULL));
+                        cyrus_sasl_errmsg(popd_saslconn, sasl_result, /*for_client*/1));
         }
 
         free(popd_subfolder);
