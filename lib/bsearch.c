@@ -159,31 +159,6 @@ HIDDEN int bsearch_ncompare_mbox(const char *s1, size_t l1, const char *s2, size
     }
 }
 
-HIDDEN int bsearch_memtree_mbox(const unsigned char *s1, size_t l1,
-                                const unsigned char *s2, size_t l2)
-{
-    size_t min = l1 < l2 ? l1 : l2;
-    int cmp = 0;
-
-    while ((min-- >0) &&
-           (cmp = (TOCOMPARE(*s1) - TOCOMPARE(*s2))) == 0) {
-        s1++;
-        s2++;
-    }
-
-    /* found a mismatch */
-    if (cmp) return cmp;
-
-    /* Walked off the end of one (or both strings), in which case one
-     * (or both) of these will be zero, and the string with bytes remaining
-     * is the greater.
-     * XXX Arguably we don't need to TOCOMPARE() them here cause it's
-     * always a comparison against zero, but if this turns into a perf
-     * problem we can always optimise it then!
-     */
-    return TOCOMPARE(*s1) - TOCOMPARE(*s2);
-}
-
 /* direct from the qsort manpage */
 EXPORTED int cmpstringp_raw(const void *p1, const void *p2)
 {
