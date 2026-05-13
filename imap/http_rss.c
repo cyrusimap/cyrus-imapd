@@ -365,7 +365,7 @@ static int is_feed(const char *mbox)
     /* if we don't have a match, or its a negative match, don't use it */
     if (!wild->pat || wild->not) return 0;
 
-    /* otherwise, its usable */
+    /* otherwise, it is usable */
     return 1;
 }
 
