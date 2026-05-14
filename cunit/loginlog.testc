@@ -11,9 +11,7 @@
 static int set_up(void)
 {
     /* need basic configuration for session_new_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     session_clear_id();
     trace_set_id(NULL, 0);

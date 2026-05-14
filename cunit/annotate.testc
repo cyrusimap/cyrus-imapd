@@ -2190,8 +2190,7 @@ static int set_up(void)
         }
     }
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "defaultpartition: "PARTITION"\n"
         "partition-"PARTITION": "DBDIR"/data\n"
     );
