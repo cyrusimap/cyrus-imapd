@@ -1,0 +1,143 @@
+#!perl
+use Cassandane::Tiny;
+
+# The envelope email value reaches smtpclient wrapped in "<...>" on the
+# wire, so anything that lets a downstream agent read either new SMTP
+# commands (via smuggled CRLF) or ESMTP parameters (via syntax the
+# wrapping can't contain unambiguously) has to be rejected at the JMAP
+# boundary.  Valid RFC 5321 Mailbox forms -- including quoted-string
+# local-parts -- are accepted and re-emitted in canonical form.
+sub test_emailsubmission_set_envelope_injection ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->request([[ 'Identity/get' ]]);
+    my $identityid =
+        $res->sentence_named('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "stage a benign email to submit";
+    $self->make_message('subject', body => "body\r\n") or die;
+    $res = $jmap->request([[ 'Email/query' ]]);
+    my $emailid = $res->sentence_named('Email/query')->arguments->{ids}[0];
+    $self->assert_not_null($emailid);
+
+    my sub submit ($field, $value) {
+        my $envelope = {
+            mailFrom =>   { email => $field eq 'mailFrom' ? $value : 'from@localhost' },
+            rcptTo   => [ { email => $field eq 'rcptTo'   ? $value : 'rcpt@localhost' } ],
+        };
+
+        my $res = $jmap->request([[
+            'EmailSubmission/set', {
+                create => {
+                    sub => {
+                        identityId => $identityid,
+                        emailId    => $emailid,
+                        envelope   => $envelope,
+                    },
+                },
+            },
+        ]]);
+        return $res->sentence_named('EmailSubmission/set')->arguments;
+    }
+
+    # A bad rcptTo is reported as invalidRecipients, which is the more
+    # specific SetError; everything else in the envelope is a plain
+    # invalidProperties.
+    my sub rejection_type ($field) {
+        return $field eq 'rcptTo' ? 'invalidRecipients' : 'invalidProperties';
+    }
+
+    my sub expect_rejection ($field, $value) {
+        my $args = submit($field, $value);
+        $self->assert_null($args->{created}{sub});
+        $self->assert_not_null($args->{notCreated}{sub});
+        $self->assert_str_equals(
+            rejection_type($field),
+            $args->{notCreated}{sub}{type}
+        );
+
+        # The rejected address is echoed back as the client sent it, not in
+        # the canonical form we'd have stored had we accepted it.
+        if ($field eq 'rcptTo') {
+            $self->assert_deep_equals(
+                [ $value ],
+                $args->{notCreated}{sub}{invalidRecipients}
+            );
+        }
+    }
+
+    my sub expect_acceptance ($field, $value) {
+        my $args = submit($field, $value);
+        $self->assert_null($args->{notCreated}{sub});
+        $self->assert_not_null($args->{created}{sub}{id});
+    }
+
+    # A weaker check for addresses fakesmtpd can't parse (see below): all we
+    # can say is that whatever went wrong, it wasn't our validator.  On
+    # mailFrom an SMTP-level refusal is a forbiddenToSend, so this really does
+    # distinguish the two.  On rcptTo it wouldn't -- fakesmtpd's refusal and
+    # our validator's both come back as invalidRecipients -- so don't use this
+    # for rcptTo.
+    my sub expect_jmap_acceptance ($field, $value) {
+        my $args = submit($field, $value);
+        if (my $err = $args->{notCreated}{sub}) {
+            $self->assert_str_not_equals(rejection_type($field), $err->{type});
+        } else {
+            $self->assert_not_null($args->{created}{sub}{id});
+        }
+    }
+
+    my @bad_addresses = (
+        # CRLF smuggles a fresh SMTP command past the wrapping '>'
+        "smuggle\@example.com>\r\nNOOP\r\nRCPT TO:<other\@example.com",
+
+        # unquoted local-part can't contain '>'
+        q{foo>bar@example.com},
+
+        # unquoted local-part can't contain whitespace
+        q{foo bar@example.com},
+    );
+
+    my @ok_addresses = (
+        # plain dot-atom
+        q{foo@localhost},
+        q{foo+tag@localhost},
+
+        # angle-addr gets stripped to bare addr-spec -- probably this should
+        # not be an "ok address", but fixing this will require we change our
+        # parser more!
+        q{<foo@localhost>},
+    );
+
+    # Quoted-string local-parts survive parseaddr's un-quoting and get
+    # re-emitted as quoted-string on the wire, so '>' and whitespace inside
+    # the quotes are inert -- our validator accepts all of these.  We can't
+    # follow them all the way through to a delivery, though: fakesmtpd is
+    # built on Net::Server::Mail, whose command parser doesn't understand
+    # quoted local-parts, and it splits "MAIL FROM:<"foo>bar"@localhost>" at
+    # the inner '>'.  So these get the weaker JMAP-only check, on mailFrom
+    # alone.
+    my @ok_addresses_fakesmtpd_mangles = (
+        q{"foo bar"@localhost},
+        q{"foo>bar"@localhost},
+        q{"<foo>"@localhost},
+    );
+
+    for my $field (qw(mailFrom rcptTo)) {
+        for my $bad (@bad_addresses) {
+            xlog $self, "$field = $bad must be rejected";
+            expect_rejection($field, $bad);
+        }
+        for my $ok (@ok_addresses) {
+            xlog $self, "$field = $ok must be accepted";
+            expect_acceptance($field, $ok);
+        }
+    }
+
+    for my $ok (@ok_addresses_fakesmtpd_mangles) {
+        xlog $self, "mailFrom = $ok must get past the JMAP validator";
+        expect_jmap_acceptance('mailFrom', $ok);
+    }
+}
