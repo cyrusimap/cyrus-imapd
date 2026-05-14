@@ -113,13 +113,11 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
                 if (peek == '\r' || peek == '\n') {
                     /* just reached the end of message */
-                    r = 0;
                     goto ph_error;
                 }
             }
             if (c == '\r' || c == '\n') {
                 /* just reached the end of headers */
-                r = 0;
                 goto ph_error;
             }
             /* field-name      =       1*ftext
