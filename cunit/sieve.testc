@@ -553,8 +553,7 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
 
 static int set_up(void)
 {
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "defaultpartition: "PARTITION"\n"
         "partition-"PARTITION": "DBDIR"/data\n"
         "sievenotifier: mailto\n"

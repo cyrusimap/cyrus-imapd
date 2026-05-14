@@ -331,9 +331,7 @@ static void test_session_id(void)
     char match[32 + MAX_SESSIONID_SIZE];
 
     /* need basic configuration for session_new_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     session_new_id();
     snprintf(match, sizeof(match), " r.sessionid=%s ", session_id());

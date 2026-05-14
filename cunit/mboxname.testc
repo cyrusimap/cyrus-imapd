@@ -1065,9 +1065,7 @@ static const char *old_config_defdomain;
 static int set_up(void)
 {
     /* need basic configuration */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     /*
      * TODO: this is pretty hacky.  There should be some

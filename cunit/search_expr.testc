@@ -1382,8 +1382,7 @@ static int set_up(void)
     /* n.b. initalising like this skips the on-shutdown cleanup... */
     search_attr_init();
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "conversations: yes\n"
     );
 

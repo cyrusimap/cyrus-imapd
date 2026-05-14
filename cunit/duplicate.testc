@@ -278,9 +278,7 @@ static int set_up(void)
         }
     }
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     cyrusdb_init();
     config_duplicate_db = "skiplist";
