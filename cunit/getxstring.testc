@@ -9,9 +9,7 @@
 static int set_up(void)
 {
     /* need basic configuration for getxstring */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     return 0;
 }

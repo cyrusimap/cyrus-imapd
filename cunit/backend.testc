@@ -1815,18 +1815,16 @@ static int set_up(void)
         return -1;
     }
 
-    /* we need config for these tests */
-    buf_printf(&myconfig, "configdirectory: %s/conf\n", DBDIR);
-
-    /* certs are in current directory */
-    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pem\n", cwd);
+    /* we need config for these tests:
+     * -> certs are in current directory
+     * -> disable SSL session caching
+     */
+    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pm\n", cwd);
     buf_printf(&myconfig, "tls_server_cert: %s/cert.pem\n", cwd);
     buf_printf(&myconfig, "tls_server_key: %s/key.pem\n", cwd);
-
-    /* disable SSL session caching */
     buf_printf(&myconfig, "tls_session_timeout: 0\n");
 
-    config_read_string(buf_cstring(&myconfig));
+    config_read_string(DBDIR"/conf", buf_cstring(&myconfig));
     buf_free(&myconfig);
 
     rend_sock = create_server_socket(&port);

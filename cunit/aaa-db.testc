@@ -1910,8 +1910,8 @@ static int set_up(void)
     if (!basedir)
         return -1;
 
-    snprintf(buf, sizeof(buf), "configdirectory: %s/conf\n", basedir);
-    config_read_string(buf);
+    snprintf(buf, sizeof(buf), "%s/conf", basedir);
+    config_read_string(buf, NULL);
 
     cyrusdb_init();
 

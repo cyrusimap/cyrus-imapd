@@ -15,7 +15,7 @@
 
 static int set_up(void)
 {
-    config_read_string("configdirectory: "DBDIR"/conf\n");
+    config_read_string(DBDIR"/conf", NULL);
     session_clear_id();
     trace_set_id(NULL, 0);
     return 0;
