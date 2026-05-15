@@ -819,6 +819,40 @@ static void test_configdirectory_missing(void)
     );
 }
 
+static void test_configdirectory_relative(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(NULL,
+        "configdirectory: "DBDIR"/conf\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "configdirectory must be fully qualified"
+    );
+}
+
+static void test_configdirectory_root(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string("/", NULL);
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "configdirectory must not be '/'"
+    );
+}
+
+static void test_configdirectory_empty(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(NULL,
+        "configdirectory: \n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "empty option value on line 1 of configuration file"
+    );
+}
+
 static void test_deprecated_int(void)
 {
     /* { "autocreatequotamsg", -1, INT, "2.5.0", "2.5.0", "autocreate_quota_messages" } */
