@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Invariant: syncing one user must never delete another user's mailboxes,
+# even when that user's name_history references the other user's namespace
+# (e.g. mover was once renamed from/to victim) and the sync runs with -O
+# (no_copyback).
+#
+sub test_rename_move_resync
+    :NoAltNameSpace :AllowMoves :Replication :DelayedDelete :Conversations
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $replicasvc = $self->{replica}->get_service('imap');
+
+    my $mover_store = $mastersvc->create_store(username => 'mover');
+    $mover_store->set_fetch_attributes('uid');
+
+    xlog $self, "OldStore: create user.mover and give it some data";
+    $admintalk->create("user.mover");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.mover", "admin", "lrswipkxteacdn");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->create("user.mover.SeparateFolder");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->create("user.mover.Trash");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->make_message("Message A", store => $mover_store);
+    $self->make_message("Message B", store => $mover_store);
+
+    xlog $self, "rename user.mover to user.victim and back again";
+    $admintalk->rename("user.mover", "user.victim");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->rename("user.victim", "user.mover");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "OldStore: create fresh user.victim and deliver messages";
+    $admintalk->create("user.victim");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.victim", "admin", "lrswipkxteacdn");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->create("user.victim.Trash");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->create("user.victim.OwnFolder");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $victim_store = $mastersvc->create_store(username => 'victim');
+    $victim_store->set_fetch_attributes('uid');
+    my %msgs;
+    $msgs{A} = $self->make_message("Message A", store => $victim_store);
+    $msgs{B} = $self->make_message("Message B", store => $victim_store);
+
+    xlog $self, "Sync user.victim from OldStore to Replica (simulating victim's move)";
+    $self->{instance}->run_command({cyrus => 1},
+        'sync_client', '-v', '-v', '-o', '-u', 'victim');
+
+    xlog $self, "Verify Replica has victim's messages";
+    my $replica_victim = $replicasvc->create_store(username => 'victim');
+    $replica_victim->set_fetch_attributes('uid');
+    $self->check_messages(\%msgs, store => $replica_victim);
+
+    xlog $self, "Delete user.victim from OldStore (completing victim's move)";
+    $self->{instance}->run_command({cyrus => 1}, 'sync_reset', '-f', 'victim');
+
+    xlog $self, "Sync user.mover from OldStore to Replica with -O (no_copyback)";
+    xlog $self, "This MUST NOT send UNMAILBOX user.victim to the Replica";
+    $self->_disconnect_all();
+    $self->{instance}->run_command({cyrus => 1},
+        'sync_client', '-v', '-v', '-o', '-O', '-u', 'mover');
+
+    xlog $self, "Verify victim's messages still exist on Replica";
+    $replica_victim = $replicasvc->create_store(username => 'victim');
+    $replica_victim->set_fetch_attributes('uid');
+    $self->check_messages(\%msgs, store => $replica_victim);
+}
