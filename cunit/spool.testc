@@ -5,7 +5,6 @@
 #include "retry.h"
 #include "xmalloc.h"
 #include "lib/libconfig.h"
-#include "lib/libcyr_cfg.h"
 #include "imap/spool.h"
 #include "xunlink.h"
 
@@ -29,7 +28,6 @@
 static int set_up(void)
 {
     /* need basic configuration for parseheader */
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
     );

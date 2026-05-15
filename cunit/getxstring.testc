@@ -2,7 +2,6 @@
 #include "config.h"
 #include "cunit/unit.h"
 #include "prot.h"
-#include "lib/libcyr_cfg.h"
 #include "imap/global.h"
 
 #define DBDIR           "test-getxstring-dbdir"
@@ -10,7 +9,6 @@
 static int set_up(void)
 {
     /* need basic configuration for getxstring */
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
     );

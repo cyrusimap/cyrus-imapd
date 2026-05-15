@@ -15,7 +15,6 @@
 #include "imap/backend.h"
 
 #include "lib/libconfig.h"
-#include "lib/libcyr_cfg.h"
 #include "lib/util.h"
 #include "lib/xstrlcpy.h"
 
@@ -1817,7 +1816,6 @@ static int set_up(void)
     }
 
     /* we need config for these tests */
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     buf_printf(&myconfig, "configdirectory: %s/conf\n", DBDIR);
 
     /* certs are in current directory */

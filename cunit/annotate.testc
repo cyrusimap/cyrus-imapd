@@ -8,7 +8,6 @@
 #include "util.h"
 #include "xunlink.h"
 #include "imap/global.h"
-#include "libcyr_cfg.h"
 #include "imap/annotate.h"
 #include "imap/append.h"
 #include "imap/mboxlist.h"
@@ -2191,7 +2190,6 @@ static int set_up(void)
         }
     }
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "defaultpartition: "PARTITION"\n"

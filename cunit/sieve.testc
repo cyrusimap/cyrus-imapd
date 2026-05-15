@@ -20,8 +20,8 @@
 #include "map.h"
 #include "util.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "libconfig.h"
+#include "libcyr_cfg.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
@@ -553,7 +553,6 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
 
 static int set_up(void)
 {
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "defaultpartition: "PARTITION"\n"

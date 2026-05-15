@@ -20,6 +20,7 @@
 #include "cunit/unit-timeout.h"
 
 #include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "lib/retry.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
@@ -288,6 +289,9 @@ EXPORTED void config_read_string(const char *s)
     config_read(fname, 0);
     xunlink(fname);
     close(fd);
+
+    /* make sure libcyrus configdirectory is properly initialised */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
 }
 
 static void run_tests(void)
