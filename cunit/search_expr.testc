@@ -5,7 +5,6 @@
 #include "cunit/unit-timeofday.h"
 
 #include "lib/libconfig.h"
-#include "lib/libcyr_cfg.h"
 #include "lib/prot.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
@@ -1383,7 +1382,6 @@ static int set_up(void)
     /* n.b. initalising like this skips the on-shutdown cleanup... */
     search_attr_init();
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     config_read_string(
         "configdirectory: "DBDIR"/conf\n"
         "conversations: yes\n"
