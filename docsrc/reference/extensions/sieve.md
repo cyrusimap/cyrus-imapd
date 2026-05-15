@@ -1,7 +1,8 @@
 # Sieve extensions
 
 This document lists Cyrus's nonstandard extensions to Cyrus IMAP's
-Sieve implementation, found in the `sieve/` directory.
+Sieve implementation, found in the `sieve/` directory. More extensions are
+described at [Cyrus IMAP Specific Extensions](../admin/sieve.rst#cyrus-imap-specific-extensions).
 
 ## `snooze`
 

@@ -28,11 +28,11 @@ as a .sieve file.
 Installing Sieve
 ================
 
-This section assumes that you :ref:`compiled Cyrus <compiling>` with sieve
+This section assumes that you :ref:`compiled Cyrus <compiling>` with Sieve
 support. If you specified ``--disable-sieve`` when running ``./configure``,
 you did NOT compile the server with sieve support.
 
-Configure sieve
+Configure Sieve
 ---------------
 
 Depending on what's in your ``/etc/services`` file, sieve will usually be set
@@ -240,6 +240,8 @@ Cyrus supports a subset of these:
 
 Cyrus IMAP Specific Extensions
 ------------------------------
+
+More extensions are described at :doc:`/reference/extensions/sieve`.
 
 .. _vnd.cyrus.log:
 
