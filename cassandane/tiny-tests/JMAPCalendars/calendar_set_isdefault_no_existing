@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_isdefault_no_existing
+    :CalDAVNoDefaultCalendar
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "confirm that no calendars exist yet";
+    my $res = $jmap->request([[
+        'Calendar/get' => { },
+    ]])->single_sentence("Calendar/get")->arguments;
+
+    $self->assert_deep_equals([], $res->{list});
+
+    xlog $self, "create a calendar and mark it default in one call";
+    $res = $jmap->request([[
+        'Calendar/set', {
+            create => {
+                1 => {
+                    name => "foo",
+                    description => "My foo",
+                }
+            },
+            onSuccessSetIsDefault => '#1',
+        },
+    ]])->single_sentence("Calendar/set")->arguments;
+
+    my $id = $res->{created}{1}{id};
+    $self->assert_not_null($id);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => {
+                1 => superhashof({
+                    isDefault => JSON::true,
+                }),
+            },
+        }),
+        $res,
+    );
+
+    xlog $self, "confirm that the new calendar is the default";
+    $res = $jmap->request([[
+        'Calendar/get' => { ids => [ $id ] },
+    ]])->single_sentence("Calendar/get")->arguments;
+
+    $self->assert_cmp_deeply(
+        [
+            superhashof({
+                id => $id,
+                isDefault => JSON::true,
+            }),
+        ],
+        $res->{list},
+    );
+}
