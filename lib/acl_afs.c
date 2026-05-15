@@ -29,10 +29,8 @@ EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char 
     char *acl = xstrdupsafe(origacl);
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
-    long *acl_ptr;
 
     for (thisid = acl; *thisid; thisid = nextid) {
-        acl_ptr = &acl_positive;
         rights = strchr(thisid, '\t');
         if (!rights) {
             break;
@@ -46,10 +44,13 @@ EXPORTED int cyrus_acl_myrights(const struct auth_state *auth_state, const char 
         }
         *nextid++ = '\0';
 
+        long *acl_ptr;
         if (*thisid == '-') {
             acl_ptr = &acl_negative;
             thisid++;
-        }
+        } else
+            acl_ptr = &acl_positive;
+
         if (auth_memberof(auth_state, thisid)) {
             int mask;
             cyrus_acl_strtomask(rights, &mask);
