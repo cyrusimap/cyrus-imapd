@@ -106,7 +106,9 @@ The tables below show how the access controls are used by the CalDAV module.
       <tr>
         <td>w - write
           <br>n - write shared annotation</td>
-        <td colspan=2>DAV:write-properties</td>
+        <td>DAV:write-properties</td>
+        <td>CYRUS:write-properties-collection
+          <br>CYRUS:write-properties-resource</td>
         <td>PROPPATCH
           <br>COPY/MOVE <small>(on destination)</small></td>
       </tr>
