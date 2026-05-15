@@ -71,7 +71,6 @@ extern char *cyrus_acl_masktostr(int acl, char *str);
 
 /*  cyrus_acl_myrights(acl)
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
- * 'acl' must be writable, but is restored to its original condition.
  */
 extern int cyrus_acl_myrights(const struct auth_state *auth_state, const char *acl);
 
