@@ -123,10 +123,10 @@ IMAPTest_ is a testing suite which uses libraries from the Dovecot installation.
     * The ``--with-dovecot=<path>`` parameter is used to specify path to Dovecot v2.2 sources' root directory.
 
 This is not quite the same IMAPTest that CI uses.  The CI system uses
-a docker image, which among other things has Dovecot and IMAPTest already
+an OCI image, which among other things has Dovecot and IMAPTest already
 built in so that they don't need to be rebuilt every time CI runs.
 
-The docker image is built from Dockerfile_ in the cyrus-docker repo.  If you
+The OCI image is built from Dockerfile_ in the cyrus-docker repo.  If you
 want to locally reproduce the same testing that CI runs, you can search it
 for "dovecot.git" and "imaptest.git" to see how these two components
 are fetched and built, and do the same yourself.  Briefly, Dovecot is built

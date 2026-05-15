@@ -11,18 +11,18 @@ your changes to the community.
 cyrus-docker, cyd, and dar
 ==========================
 
-The simplest way to hack on Cyrus IMAP is to use the Cyrus IMAP Docker image
+The simplest way to hack on Cyrus IMAP is to use the Cyrus IMAP OCI image
 and the related development tools.  It's possible to develop and test without
 Docker, of course, but it's a more tedious process.  If you want to do that,
 you should probably read this document, then go read the source code for all
 the tools described.  For now, here's the easy way!
 
 The Cyrus team maintains
-`cyrus-docker <https://github.com/cyrusimap/cyrus-docker>`_, a Docker image
+`cyrus-docker <https://github.com/cyrusimap/cyrus-docker>`_, an OCI image
 meant to make Cyrus development easy.  It's what we use for automated test runs
 and it's also useful for local development.  In general, you won't need to
 build your own image.  We produce a new image nightly, and the ``dar`` tool
-will pull it down for you.  The Docker image contains everything you should
+will pull it down for you.  The OCI image contains everything you should
 need for building and testing Cyrus.  It's based on Debian, but has
 pre-installed versions of libraries that Debian doesn't provide, or that aren't
 recent enough in Debian.
@@ -31,7 +31,7 @@ The image is published to the GitHub Container Repository, *not* Docker Hub.
 You can find it at
 `<https://github.com/cyrusimap/cyrus-docker/pkgs/container/cyrus-docker>`_.
 
-The Docker image also includes ``cyd``, the inside-the-container development
+The OCI image also includes ``cyd``, the inside-the-container development
 tool.  ``cyd`` provides commands to run *inside* the container.  In day to day
 development, you'll probably want to work *outside* the container, and that's
 what ``dar`` is for.  For the sake of clarity, we're going to explain ``cyd``
@@ -41,17 +41,17 @@ cyd
 ---
 
 ``cyd`` is short for "Cyrus Development".  It's a program inside the Cyrus
-docker image, and you can run it with ``docker run``.  It's got a number of
+OCI image, and you can run it with ``docker run``.  It's got a number of
 subcommand, like ``git``, and you'll always want to specify which one you want
 to run.  For example, this command line will start a container using the Cyrus
-docker image and running an interactive shell::
+OCI image and running an interactive shell::
 
     docker run -ti cyd sh
 
 The shell command runs a shell, but also prints a menu of (some) available
 commands, something like this::
 
-              /////  |||| Cyrus IMAP docker image
+              /////  |||| Cyrus IMAP OCI image
             /////    |||| Run cyrus-docker (or "cyd") as:
           /////      ||||
         /////        ||||  • cyd clone  - clone cyrus-imapd.git from GitHub
@@ -101,10 +101,10 @@ To get started with ``dar`` you'll want to:
     the tests
 
 If you try this, though, it won't work.  First, you'll be told to run ``dar
-pull``, which will pull the Docker image for your platform.  You *need* to run
+pull``, which will pull the OCI image for your platform.  You *need* to run
 this at least once, unless you've already fetched the image by hand.  You *can*
 run it more often, to check that you're up to date.  In general, there's a new
-build of the Cyrus Docker image daily.
+build of the Cyrus OCI image daily.
 
 After pulling the image, the smoke command will still fail, this time because
 you don't have a running container.  The error will tell you to run ``dar
