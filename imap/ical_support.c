@@ -3117,7 +3117,7 @@ EXPORTED int ical_categories_is_color(icalproperty *cprop)
 
     if (!categories) return 0;
 
-    return ical_is_valid_color(categories);
+    return ical_is_valid_color(categories, false /*allow_alpha*/);
 }
 
 EXPORTED void icalcomponent_normalize_x(icalcomponent *ical)
@@ -3248,6 +3248,20 @@ EXPORTED icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val)
     if (rt) icalrecurrencetype_ref(rt);
 
     return rt;
+}
+
+EXPORTED bool ical_is_valid_color(const char *val, bool allow_alpha)
+{
+    if (!val) return false;
+
+    if (val[0] == '#') {
+        size_t len = strspn(val+1, "0123456789abcdefABCDEF");
+
+        /* 6- or 8-digit hex */
+        return ((len == 6 || (allow_alpha && len == 8)) && val[len+1] == '\0');
+    }
+
+    return is_css3_color(val);
 }
 
 #endif /* HAVE_ICAL */

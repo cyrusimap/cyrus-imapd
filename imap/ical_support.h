@@ -43,14 +43,6 @@ extern icalrecurrencetype_t *icalvalue_get_recurrence(const icalvalue *val);
 #define icalrecur_byrule_size(rt, rule)      (rt->by[rule].size)
 #define icalrecur_byrule_data(rt, rule)      (rt->by[rule].data)
 
-#define ical_is_valid_color(val)                                        \
-    (val &&                                                             \
-     (is_css3_color(val) ||                                             \
-      /* 6-digit hex */                                                 \
-      (val[0] == '#' &&                                                 \
-       strspn(val+1, "0123456789abcdefABCDEF") == 6 &&                  \
-       val[7] == '\0')))
-
 
 #ifdef HAVE_PARTTYPE_VOTER
 #define HAVE_VPOLL_SUPPORT
@@ -254,6 +246,8 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 #define icalproperty_get_schedulestatus_parameter(prop) \
     icalproperty_get_first_parameter(prop, ICAL_SCHEDULESTATUS_PARAMETER)
+
+extern bool ical_is_valid_color(const char *val, bool allow_alpha);
 
 #endif /* HAVE_ICAL */
 
