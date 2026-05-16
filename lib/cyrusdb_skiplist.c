@@ -1864,6 +1864,15 @@ static int mycheckpoint(struct dbengine *db)
         db->map_ino = sbuf.st_ino;
         map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
                     db->fname, 0);
+        if (!db->map_base) {
+            xsyslog(LOG_ERR, "DBERROR: checkpoint file is empty after rename",
+                             "filename=<%s> fd=<%d>"
+                             " st_size=<%lld> st_ino=<%llu>",
+                             db->fname, db->fd,
+                             (long long)sbuf.st_size,
+                             (unsigned long long)sbuf.st_ino);
+            return CYRUSDB_IOERROR;
+        }
     }
 
     if ((r = myconsistent(db, NULL, 1)) < 0) {
@@ -1955,6 +1964,12 @@ static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
     uint32_t offset;
 
     assert(db->current_txn == tid); /* could both be null */
+
+    if (!db->map_base) {
+        xsyslog(LOG_ERR, "DBERROR: consistency check on unmapped database",
+                         "filename=<%s>", db->fname);
+        return CYRUSDB_IOERROR;
+    }
 
     if (!locked) read_lock(db);
     else if (tid) update_lock(db, tid);
