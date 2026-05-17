@@ -112,11 +112,7 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "sieve", json_false());
 #endif
-#ifdef USE_CALALARMD
     json_object_set_new(component, "calalarmd", json_true());
-#else
-    json_object_set_new(component, "calalarmd", json_false());
-#endif
 #ifdef WITH_JMAP
     json_object_set_new(component, "jmap", json_true());
 #else
