@@ -16,11 +16,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-#ifdef USE_HTTPD
 /* For iCalendar indexing */
 #include <libical/ical.h>
 #include "vcard_support.h"
-#endif
 
 #include "acl.h"
 #include "annotate.h"
@@ -4527,7 +4525,6 @@ static int extract_cb(const struct buf *text, void *rock)
     return str->receiver->append_text(str->receiver, text);
 }
 
-#ifdef USE_HTTPD
 static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
                            struct getsearchtext_rock *str)
 {
@@ -4756,8 +4753,6 @@ done:
     return r;
 }
 
-#endif /* USE_HTTPD */
-
 EXPORTED int index_want_attachextract(const char *type, const char *subtype)
 {
     return ((!strcasecmpsafe(type, "APPLICATION") &&
@@ -4872,14 +4867,10 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         if (str->snippet_iteration >= 2) goto done;
 
         if (!strcmpsafe(subtype, "CALENDAR")) {
-#ifdef USE_HTTPD
             extract_icalbuf(data, charset, encoding, str);
-#endif /* USE_HTTPD */
         }
         else if (!strcmpsafe(subtype, "VCARD")) {
-#ifdef USE_HTTPD
             extract_vcardbuf(data, charset, encoding, str);
-#endif /* USE_HTTPD */
         }
         else {
             /* body-like */
@@ -4901,12 +4892,10 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             str->receiver->end_part(str->receiver);
         }
     }
-#ifdef USE_HTTPD
     else if (isbody && (!strcmpsafe(type, "APPLICATION") && !strcmpsafe(subtype, "ICS"))) {
         // application/ics is an alias for text/icalendar
         extract_icalbuf(data, charset, encoding, str);
     }
-#endif /* USE_HTTPD */
     else if (isbody && index_want_attachextract(type, subtype)) {
 
         /* Ignore attachments in first snippet generation pass */
