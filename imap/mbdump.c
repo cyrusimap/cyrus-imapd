@@ -22,9 +22,7 @@
 #include <utime.h>
 
 #include "annotate.h"
-#ifdef WITH_DAV
 #include "dav_db.h"
-#endif
 #include "global.h"
 #include "map.h"
 #include "mappedfile.h"
@@ -425,9 +423,7 @@ static struct data_file data_files[] = {
     { META_INDEX,   "cyrus.index"   },
     { META_CACHE,   "cyrus.cache"   },
     { META_EXPUNGE, "cyrus.expunge" },
-#ifdef WITH_DAV
     { META_DAV,     "cyrus.dav"     },
-#endif
     { 0, NULL }
 };
 
@@ -601,15 +597,11 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
                 ftag = "MBOXKEY";
                 break;
             case DAV_DB: {
-#ifdef WITH_DAV
                 struct buf dav_file = BUF_INITIALIZER;
 
                 dav_getpath_byuserid(&dav_file, userid);
                 fname = (char *) buf_cstring(&dav_file);
                 ftag = "DAV";
-#else
-                continue;
-#endif
                 break;
             }
             default:
@@ -1055,14 +1047,12 @@ EXPORTED int undump_mailbox(const char *mbname,
             char *s = user_hash_subs(userid);
             strlcpy(fnamebuf, s, sizeof(fnamebuf));
             free(s);
-#ifdef WITH_DAV
         } else if (userid && !strcmp(file.s, "DAV")) {
             /* overwriting this outright is absolutely what we want to do */
             struct buf dav_file = BUF_INITIALIZER;
             dav_getpath_byuserid(&dav_file, userid);
             strlcpy(fnamebuf, buf_cstring(&dav_file), sizeof(fnamebuf));
             buf_free(&dav_file);
-#endif
         } else if (userid && !strcmp(file.s, "SEEN")) {
             seen_file = seen_getpath(userid);
 

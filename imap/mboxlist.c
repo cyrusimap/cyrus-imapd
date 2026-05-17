@@ -3193,10 +3193,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 #ifdef USE_SIEVE
                 mailbox_add_sieve(newmailbox, NULL);
 #endif
-#ifdef WITH_DAV
             } else {
                 mailbox_add_dav(newmailbox, NULL);
-#endif
             }
 
             mailbox_close(&newmailbox);
@@ -3242,12 +3240,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                 mboxevent_set_access(mboxevent, NULL, NULL, userid, newname, 1);
             }
 
-#ifdef WITH_DAV
             /* Remove DAV DB records for a delayed delete mailbox */
             if (mboxname_isdeletedmailbox(newname, NULL)) {
                 mailbox_delete_dav(oldmailbox);
             }
-#endif
 
             /* log the rename before we close either mailbox, so that
              * we never nuke the mailbox from the replica before realising

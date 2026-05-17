@@ -43,7 +43,6 @@
 #include "assert.h"
 #include "auditlog.h"
 #include "bsearch.h"
-#ifdef WITH_DAV
 #include "caldav_db.h"
 #include "caldav_alarm.h"
 #include "carddav_db.h"
@@ -51,7 +50,6 @@
 #include "ical_support.h"
 #include "jmap_util.h"
 #include "vcard_support.h"
-#endif /* WITH_DAV */
 #ifdef USE_SIEVE
 #include "sieve_db.h"
 #include "sievedir.h"
@@ -161,11 +159,9 @@ static void cleanup_stale_expunged(struct mailbox *mailbox);
 static bit32 mailbox_index_record_to_buf(struct index_record *record, int version,
                                          unsigned char *buf);
 
-#ifdef WITH_DAV
 EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *);
 static int mailbox_commit_dav(struct mailbox *mailbox);
 static int mailbox_abort_dav(struct mailbox *mailbox);
-#endif
 
 #ifdef USE_SIEVE
 static int mailbox_commit_sieve(struct mailbox *mailbox);
@@ -2233,7 +2229,6 @@ EXPORTED int mailbox_has_conversations_full(struct mailbox *mailbox, int allow_d
     return 1;
 }
 
-#ifdef WITH_DAV
 HIDDEN struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
 {
     if (!mailbox->local_caldav) {
@@ -2275,7 +2270,6 @@ EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
     }
     return mailbox->local_webdav;
 }
-#endif
 
 static uint32_t mailbox_getuid(struct mailbox *mailbox, uint32_t recno)
 {
@@ -2768,10 +2762,8 @@ EXPORTED int mailbox_abort(struct mailbox *mailbox)
 {
     int r;
 
-#ifdef WITH_DAV
     r = mailbox_abort_dav(mailbox);
     if (r) return r;
-#endif
 
 #ifdef USE_SIEVE
     r = mailbox_abort_sieve(mailbox);
@@ -2827,10 +2819,8 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
     int n, r;
 
     /* try to commit sub parts first */
-#ifdef WITH_DAV
     r = mailbox_commit_dav(mailbox);
     if (r) return r;
-#endif
 
 #ifdef USE_SIEVE
     r = mailbox_commit_sieve(mailbox);
@@ -3361,7 +3351,6 @@ out:
     return r;
 }
 
-#ifdef WITH_DAV
 static int mailbox_update_carddav(struct mailbox *mailbox,
                                   const struct index_record *new)
 {
@@ -3772,7 +3761,6 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
     return 0;
 }
 
-#endif // WITH_DAV
 
 #ifdef WITH_JMAP
 #include "jmap_util.h"
@@ -4216,10 +4204,8 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     r = mailbox_update_conversations(mailbox, old, new);
     if (r) return r;
 
-#ifdef WITH_DAV
     r = mailbox_update_dav(mailbox, old, new);
     if (r && r != IMAP_NO_MSGGONE) return r;
-#endif
 
 #ifdef WITH_JMAP
     r = mailbox_update_email_alarms(mailbox, old, new);
@@ -5929,7 +5915,6 @@ static int chkchildren(const mbentry_t *mbentry,
     return 0;
 }
 
-#ifdef WITH_DAV
 EXPORTED int mailbox_add_dav(struct mailbox *mailbox, hashu64_table *cmodseqs)
 {
     const message_t *msg;
@@ -6016,7 +6001,6 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox, hashu64_table *cmodseqs)
     return r;
 }
 
-#endif /* WITH_DAV */
 
 EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
 {
@@ -6115,11 +6099,9 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     mailbox_index_dirty(mailbox);
     mailbox->i.options |= OPT_MAILBOX_DELETED;
 
-#ifdef WITH_DAV
     /* remove any DAV records */
     r = mailbox_delete_dav(mailbox);
     if (r) return r;
-#endif
 
 #ifdef USE_SIEVE
     /* remove any Sieve records */
@@ -6165,7 +6147,6 @@ static int mailbox_delete_alarms(struct mailbox *mailbox)
 }
 #endif /* WITH_JMAP */
 
-#ifdef WITH_DAV
 static int mailbox_delete_caldav(struct mailbox *mailbox)
 {
     struct caldav_db *caldavdb = NULL;
@@ -6230,7 +6211,6 @@ EXPORTED int mailbox_delete_dav(struct mailbox *mailbox)
 
     return 0;
 }
-#endif /* WITH_DAV */
 
 /*
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
@@ -6249,10 +6229,8 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     if (r) return r;
 #endif /* WITH_JMAP */
 
-#ifdef WITH_DAV
     r = mailbox_delete_dav(mailbox);
     if (r) return r;
-#endif /* WITH_DAV */
 
 #ifdef USE_SIEVE
     r = mailbox_delete_sieve(mailbox);
