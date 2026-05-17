@@ -7,9 +7,10 @@ CardDAV
 Configuration
 =============
 
-When enabled, the CardDAV module allows Cyrus to function as a contacts server.
-This module uses a subset of the mailbox hierarchy as addressbook collections,
-the toplevel of which is specified by the :imapdconf:`addressbookprefix`
+When ``carddav`` is included in the :imapdconf:`httpmodules` option, the
+CardDAV module allows Cyrus to function as a contacts server.  This module
+uses a subset of the mailbox hierarchy as addressbook collections, the
+toplevel of which is specified by the :imapdconf:`addressbookprefix`
 option. The public addressbook hierarchy will reside at the toplevel of the
 shared mailbox namespace. A user's personal addressbook hierarchy will be a
 child of their Inbox.

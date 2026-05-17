@@ -12,9 +12,9 @@ Cyrus administration
 Compile JMAP support into Cyrus
 -------------------------------
 
-1. Enable JMAP (and DAV) in Cyrus:
+1. Enable JMAP in Cyrus:
 
-    * ``./configure --enable-http --enable-jmap --enable-xapian`` along with your other configuration options.
+    * ``./configure --enable-jmap --enable-xapian`` along with your other configuration options.
 
 2. Enable :ref:`conversation support <imap-concepts-deployment-db-conversations>`
 
