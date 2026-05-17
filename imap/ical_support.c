@@ -28,8 +28,6 @@
 
 #include "imap/imap_err.h"
 
-#ifdef HAVE_ICAL
-
 static int initialized = 0;
 
 #ifdef HAVE_LIBICALVCARD_XPROP_VALUE
@@ -3267,5 +3265,3 @@ EXPORTED bool ical_is_valid_color(const char *val, bool allow_alpha)
 
     return is_css3_color(val);
 }
-
-#endif /* HAVE_ICAL */

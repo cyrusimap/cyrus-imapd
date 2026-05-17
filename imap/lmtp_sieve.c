@@ -1176,7 +1176,6 @@ done:
     return ret;
 }
 
-#ifdef HAVE_ICAL
 #include <jansson.h>
 #include "ical_support.h"
 
@@ -1757,7 +1756,6 @@ static int sieve_processcal(void *ac, void *ic, void *sc, void *mc,
     return ret;
 }
 #endif /* WITH_DAV */
-#endif /* HAVE_ICAL */
 
 static int sieve_keep(void *ac,
                       void *ic __attribute__((unused)),
@@ -2375,7 +2373,6 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 #ifdef WITH_JMAP
     sieve_register_jmapquery(interp, &jmapquery);
 #endif
-#ifdef HAVE_ICAL
     /* need timezones for sieve snooze and stripping in processcal */
     zoneinfo_open(NULL);
     ical_support_init();
@@ -2383,7 +2380,6 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 #ifdef WITH_DAV
     sieve_register_processcal(interp, &sieve_processcal);
 #endif
-#endif /* HAVE_ICAL */
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);
 
