@@ -1,0 +1,39 @@
+Description:
+
+HTTP support, *DAV (CalDAV, CardDAV, WebDAV) and the calendar alarm daemon
+are now mandatory parts of every Cyrus IMAP build.  The ``--enable-http``
+and ``--enable-calalarmd`` configure options have been removed; the httpd
+binary and calalarmd are always built.  libical, libxml2 and SQLite3 are
+now required build dependencies.
+
+The runtime ``httpmodules`` option is unchanged: administrators continue
+to select which modules a given httpd serves, and may still run multiple
+httpd instances each serving a different subset.
+
+
+Documentation:
+
+docsrc/download/installation/manage-dav.rst
+docsrc/developer/compiling.rst
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+If you build Cyrus IMAP from source, make sure libical (>= 4.0.0),
+libxml2, SQLite3 and the xxd utility are installed, along with their
+development headers and pkg-config files.
+
+Any build scripts that pass ``--enable-http`` or ``--enable-calalarmd``
+to configure should drop those options.  ``--disable-http`` and
+``--disable-calalarmd`` are no longer accepted; the corresponding
+functionality cannot be turned off at build time.
+
+
+GitHub issue:
+
+None
