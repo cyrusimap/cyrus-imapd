@@ -192,6 +192,7 @@ libexec_PROGRAMS += \
     imap/lmtpd \
     imap/pop3d \
     imap/backupcyrusd \
+		imap/calalarmd \
     imap/promstatsd \
     imap/smmapd \
     ptclient/ptloader
@@ -261,12 +262,6 @@ if MURDER
 libexec_PROGRAMS += imap/mupdate
 endif # MURDER
 
-if CALALARMD
-libexec_PROGRAMS += imap/calalarmd
-endif
-
-if HTTPD
-
 AM_CPPFLAGS += $(HTTP_CPPFLAGS)
 
 AM_LDFLAGS += $(HTTP_LIBS)
@@ -281,8 +276,6 @@ noinst_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
     imap/ctl_zoneinfo \
     imap/dav_reconstruct
-
-endif # HTTPD
 
 if REPLICATION
 libexec_PROGRAMS += imap/sync_server
@@ -689,11 +682,8 @@ cunit_TESTS += \
     cunit/tok.testc \
     cunit/dynarray.testc \
     cunit/util.testc \
+    cunit/ical_support.testc \
     cunit/xsha1.testc
-
-if HTTPD
-cunit_TESTS += cunit/ical_support.testc
-endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
@@ -1133,7 +1123,6 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/squat_internal.h
 endif
 
-if HTTPD
 imap_libcyrus_imap_la_SOURCES += \
     imap/caldav_alarm.c \
     imap/caldav_alarm.h \
@@ -1162,9 +1151,6 @@ cunit_TESTS += cunit/http_jwt.testc
 cunit_unit_SOURCES += imap/http_jwt.c
 
 endif # CUNIT
-
-
-endif # HTTPD
 
 if USE_XAPIAN
 imap_libcyrus_imap_la_SOURCES += \
@@ -1206,7 +1192,6 @@ endif # AUTOCREATE
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c \
                       imap/zoneinfo_db.c
-if HTTPD
 imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/defaultalarms.c imap/itip_support.c
 
 if JMAP
@@ -1214,8 +1199,6 @@ imap_lmtpd_SOURCES += \
     imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
     imap/dav_util.c imap/jmap_notif.c imap/jmap_ical.c imap/jcal.c imap/xcal.c
 endif # JMAP
-
-endif # HTTPD
 
 endif # SIEVE
 

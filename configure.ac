@@ -1437,8 +1437,6 @@ dnl
 dnl HTTP support (and CalDAV, CardDAV, WebDAV) is mandatory as of Cyrus 3.13.5
 dnl libical, libxml2, sqlite3 and xxd are required build dependencies.
 dnl
-AM_CONDITIONAL([HTTPD], [true])
-AC_DEFINE(USE_HTTPD,[],[Build with HTTP functionality])
 
 HTTP_CPPFLAGS=
 HTTP_LIBS=
@@ -1447,13 +1445,11 @@ if test "x$HAVE_SQLITE" != x1; then
     AC_MSG_ERROR([Need sqlite3 for http])
 else
     use_sqlite="yes"
-    AC_DEFINE(WITH_DAV,[],[Build *DAV support into httpd?])
 fi
 
 AS_IF([test -z "$XXD"], [AC_MSG_ERROR([Need xxd for http])])
 
 PKG_CHECK_MODULES([XML2], [libxml-2.0], [
-        AC_DEFINE(HAVE_XML2, [], [Build with libxml support])
         LIBS="$LIBS ${XML2_LIBS}"
         with_xml2=yes
         ],
@@ -1469,7 +1465,6 @@ AC_CHECK_LIB(xml2, xmlFirstElementChild, [
         ])
 
 PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
-        AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
         LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
         with_ical=yes
         ],
@@ -1597,8 +1592,6 @@ AS_IF([test "x$with_zoneinfo_dir" != "x"],
 dnl
 dnl Calendar alarm support is mandatory as of Cyrus 3.13.5
 dnl
-AC_DEFINE(USE_CALALARMD,[],[Build with calendar alarm functionality])
-AM_CONDITIONAL([CALALARMD], [true])
 
 dnl
 dnl see if we're compiling with JMAP support
