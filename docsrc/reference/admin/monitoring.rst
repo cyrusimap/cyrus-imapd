@@ -6,9 +6,6 @@ Monitoring
 
 Cyrus IMAP supports monitoring using Prometheus_.
 
-To use this functionality, Cyrus IMAP must have been built with the
-``--enable-http`` configure option enabled.
-
 .. _imap-admin-monitoring-setup:
 
 Setup

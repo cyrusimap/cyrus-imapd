@@ -11,6 +11,16 @@ This assumes you already have the relevant modules enabled in your Cyrus
 :ref:`installation <setup>`, either via packages, or through a
 manual installation.
 
+.. note::
+
+    As of Cyrus IMAP 3.13.7, HTTP support, CalDAV, CardDAV, WebDAV, and the
+    calendar alarm daemon (``calalarmd``) are mandatory parts of every
+    build; libical, libxml2, and SQLite3 are required build dependencies.
+    The former ``--enable-http`` and ``--enable-calalarmd`` configure
+    options have been removed. Selecting which HTTP modules a given
+    ``httpd`` instance serves continues to be controlled at runtime by the
+    :imapdconf:`httpmodules` option.
+
 CalDAV, CardDAV and WebDAV all provide their functionality through an http
 server. Cyrus HTTP is NOT a general purpose HTTP server (such as Apache httpd).
 Its feature set is limited to:
