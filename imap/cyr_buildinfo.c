@@ -169,11 +169,7 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "brotli", json_false());
 #endif
     json_object_set_new(dependency, "xml2", json_true());
-#ifdef HAVE_ICAL
     json_object_set_new(dependency, "ical", json_true());
-#else
-    json_object_set_new(dependency, "ical", json_false());
-#endif
 #ifdef HAVE_ICU
     json_object_set_new(dependency, "icu4c", json_true());
 #else

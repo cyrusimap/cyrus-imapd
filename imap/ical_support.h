@@ -7,8 +7,6 @@
 
 #include <config.h>
 
-#ifdef HAVE_ICAL
-
 #include <libical/ical.h>
 #include <libical/vcard.h>
 
@@ -264,7 +262,5 @@ extern bool ical_is_valid_color(const char *val, bool allow_alpha);
  */
 extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                            const char *name);
-
-#endif /* HAVE_ICAL */
 
 #endif /* ICAL_SUPPORT_H */

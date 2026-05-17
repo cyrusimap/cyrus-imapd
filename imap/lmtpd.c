@@ -1061,7 +1061,7 @@ static void shut_down(int code)
 
     libcyrus_run_delayed();
 
-#if defined USE_SIEVE && defined HAVE_ICAL
+#ifdef USE_SIEVE
     zoneinfo_close(NULL);
 #endif
     /* close backend connections */
