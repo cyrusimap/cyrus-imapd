@@ -1,0 +1,56 @@
+#!perl
+use Cassandane::Tiny;
+
+# Asserts that an HTTP request carrying X-Trace-Id flows through to every
+# mboxevent emitted while servicing that request.  We're just using CalDAV so
+# we can use HTTP to trigger an email event.
+
+sub test_http_trace_id ($self) {
+    my $trace_id = "01234567890.abcdefghijklmnopqrstuvwxyz";
+
+    my $caldav = $self->default_user->caldav;
+    my $cal_id = $caldav->NewCalendar({ name => 'TraceTest' });
+    $self->assert_not_null($cal_id);
+
+    # discard events emitted by calendar setup; only the PUT below should
+    # be carrying our trace id
+    $self->{instance}->getnotify();
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$cal_id/$uuid.ics";
+    my $ical = <<~"EOF";
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Cassandane//Trace Test//EN
+        BEGIN:VEVENT
+        CREATED:20260518T120000Z
+        UID:$uuid
+        DTSTAMP:20260518T120000Z
+        DTSTART:20260601T120000Z
+        DTEND:20260601T130000Z
+        SUMMARY:Trace
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    $caldav->Request(
+        'PUT', $href, $ical,
+        'Content-Type' => 'text/calendar',
+        'X-Trace-Id'   => $trace_id,
+    );
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                     $self->{instance}->getnotify->@*;
+
+    # We expect at least one event for the PUT; whatever events fired,
+    # they better all have our trace id.
+    $self->assert(0+@events, "PUT should have generated at least one event");
+
+    for my $e (@events) {
+        $self->assert_str_equals(
+            $trace_id,
+            $e->{'vnd.fastmail.traceId'} // '',
+            "event $e->{event} is missing or has wrong vnd.fastmail.traceId",
+        );
+    }
+}
