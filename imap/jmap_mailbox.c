@@ -2339,6 +2339,13 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+    /* Setting shareWith requires admin on the parent. */
+    if (args->shareWith &&
+            !jmap_hasrights_mbentry(req, mbparent, JACL_ADMIN_MAILBOX)) {
+        jmap_parser_invalid(&parser, "shareWith");
+        goto done;
+    }
+
     if (args->is_toplevel && !strcasecmp(args->name, "inbox")) {
         // you can't write a top-level mailbox called "INBOX" in any case
         jmap_parser_invalid(&parser, "name");
@@ -2927,6 +2934,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0, 0);
+    }
+    if (!r && args->shareWith &&
+            !jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_MAILBOX)) {
+        result->err = json_pack("{s:s}", "type", "forbidden");
+        goto done;
     }
     if (!r && (args->shareWith || args->is_seenshared >= 0 || args->has_ext_props)) {
         struct mailbox *mbox = NULL;
