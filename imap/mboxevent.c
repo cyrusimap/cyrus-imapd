@@ -106,6 +106,7 @@ static struct mboxevent event_template =
     /* 28 */ { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 29 */ { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, { 0 }, 0 },
     /* 30 */ { EVENT_SESSION_ID, "vnd.fastmail.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_TRACE_ID, "vnd.fastmail.traceId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -343,6 +344,11 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
         FILL_STRING_PARAM(mboxevent, EVENT_SESSION_ID, xstrdup(session_id()));
     }
 
+    if (mboxevent_expected_param(type, EVENT_TRACE_ID)) {
+        /* expected_param() already gated on trace_id() being non-NULL */
+        FILL_STRING_PARAM(mboxevent, EVENT_TRACE_ID, xstrdup(trace_id()));
+    }
+
     return mboxevent;
 }
 
@@ -536,6 +542,11 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CLIENTID;
     case EVENT_SESSION_ID:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SESSIONID;
+    case EVENT_TRACE_ID:
+        /* Unlike session_id, this just might not be set.  If we don't have it,
+         * we won't log it. */
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_TRACEID)
+               && trace_id() != NULL;
     case EVENT_MAILBOX_ID:
     case EVENT_MAILBOX_UNIQUEID:
     case EVENT_MBTYPE:
