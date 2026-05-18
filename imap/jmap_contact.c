@@ -2758,12 +2758,13 @@ static int jmap_addressbook_set(struct jmap_req *req)
             if (jobj) newid = json_string_value(json_object_get(jobj, "id"));
         }
 
-        /* make sure new default addressbook exists
-           and we have rights to change the default */
+        /* Make sure the new default addressbook exists, and that the caller
+         * has admin rights on the addressbook home: for changing per-account
+         * state, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
         abookid_to_mbentry(req, newid, &mbentry);
         if (mbentry &&
-            jmap_hasrights_mbentry(req, mbentry, JACL_ADMIN_ADDRBOOK)) {
+            jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
             /* set jmap-default-addressbook annotation */
             struct buf buf = BUF_INITIALIZER;
             buf_init_ro_cstr(&buf, mbentry->name);

@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_set_isdefault_requires_admin ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog $self, "create sharer with a second non-default addressbook shared to cassandane";
+    my $sharer = $self->{instance}->create_user('sharer');
+
+    my $orig_default = $sharer->addressbooks->default;
+    my $shared_ab    = $sharer->addressbooks->create({ name => 'Attack Target' });
+
+    $orig_default->share_with(cassandane => [ qw( mayRead mayWrite ) ]);
+
+    # Granting mayShare on a single shared addressbook must not be enough to
+    # flip the account's default addressbook -- that's per-account state and
+    # requires admin on the addressbook home.
+    $shared_ab->share_with(cassandane => [ qw( mayRead mayWrite mayShare ) ]);
+
+    xlog $self, "as cassandane, attempt to flip sharer's default via onSuccessSetIsDefault";
+    $jmap->CallMethods([
+        [ 'AddressBook/set' => {
+            accountId => 'sharer',
+            onSuccessSetIsDefault => $shared_ab->id,
+        }, "R1" ],
+    ]);
+
+    xlog $self, "re-read the default; it must not have changed";
+    my $res = $sharer->jmap->CallMethods([
+        [ 'AddressBook/get' => { accountId => 'sharer' }, "R1" ],
+    ]);
+    my ($current_default) = grep { $_->{isDefault} } @{ $res->[0][1]{list} };
+    $self->assert_str_equals($orig_default->{id}, $current_default->{id});
+}
