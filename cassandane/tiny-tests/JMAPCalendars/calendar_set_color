@@ -44,7 +44,7 @@ EOF
     $self->assert_str_equals('SteelBlue',
                              $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'}{content});
 
-    xlog $self, "update event with hex color value";
+    xlog $self, "update calendar with hex color value";
     $res = $jmap->CallMethods([
         ['Calendar/set', {
             update => {
@@ -111,4 +111,30 @@ EOF
         }
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:A="http://apple.com/ns/ical/">
+  <D:set>
+    <D:prop>
+      <A:calendar-color>#2952A37F</A:calendar-color>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    xlog $self, "update calendar with hex color + alpha value";
+    $res = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $id,
+                            $proppatchXml, 'Content-Type' => 'text/xml');
+
+    xlog $self, "assert alpha channel is stripped via JMAP";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [ $id ],
+            properties => [ 'color' ]
+         },
+         "R2"],
+    ]);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('#2952A3', $res->[0][1]{list}[0]{color});
 }

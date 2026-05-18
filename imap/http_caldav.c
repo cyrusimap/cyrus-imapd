@@ -6889,7 +6889,7 @@ static int proppatch_color(xmlNodePtr prop, unsigned set,
             color = (const char *) freeme;
 
             /* Verify we have a valid color name or 6-digit hex value */
-            if (!color || !ical_is_valid_color(color)) {
+            if (!color || !ical_is_valid_color(color, true /*allow_alpha*/)) {
                 xmlFree(freeme);
                 valid = false;
             }

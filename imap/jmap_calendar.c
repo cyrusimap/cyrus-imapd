@@ -661,9 +661,20 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotatemore_lookupmask_mbe(mbentry, color_annot,
                                         req->userid, &attrib);
-        /* Verify we have a valid color name or 6-digit hex value */
-        if (!r && ical_is_valid_color(buf_cstring(&attrib)))
-            json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
+        if (!r) {
+            /* Verify we have a valid color name, or 6- or 8-digit hex value */
+            const char *color = buf_base(&attrib);
+
+            if (ical_is_valid_color(color, true /*allow_alpha*/)) {
+                if (*color == '#' && buf_len(&attrib) == 9) {
+                    /* Trim the alpha channel off of 8-digit hex */
+                    buf_truncate(&attrib, 7);
+                    color = buf_cstring(&attrib);
+                }
+
+                json_object_set_new(obj, "color", json_string(color));
+            }
+        }
         buf_free(&attrib);
     }
 
@@ -1171,7 +1182,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
     if (json_is_string(jprop)) {
         props->color = json_string_value(jprop);
         /* Verify we have a valid color name or 6-digit hex value */
-        if (!ical_is_valid_color(props->color)) {
+        if (!ical_is_valid_color(props->color, false /*allow_alpha*/)) {
             jmap_parser_invalid(parser, "color");
         }
     }
