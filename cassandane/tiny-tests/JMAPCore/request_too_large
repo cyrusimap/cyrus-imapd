@@ -12,7 +12,7 @@ sub test_request_too_large ($self)
             'Content-Type' => 'application/json',
             $jmap->_maybe_auth_header,
         ],
-        'X' x 1025,
+        'X' x 4097,
     );
 
     my $http_res = $jmap->http_request($http_req);

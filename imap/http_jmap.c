@@ -1353,7 +1353,7 @@ static struct prot_waitevent *ws_push(struct protstream *s __attribute__((unused
     if (jstate) {
         /* Add pushState */
         buf_reset(buf);
-        buf_printf(buf, MODSEQ_FMT, jpush->counters.highestmodseq);
+        buf_printf(buf, MODSEQ_FMT, jpush->highestmodseq);
 
         json_object_set_new(jstate, "pushState", json_string(buf_cstring(buf)));
 
@@ -1568,7 +1568,7 @@ static struct prot_waitevent *es_push(struct protstream *s __attribute__((unused
             /* 'state' event */
             event = "state";
             buf_reset(buf);
-            buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->counters.highestmodseq);
+            buf_printf(buf, "id: " MODSEQ_FMT "\n", jpush->highestmodseq);
 
             if (jpush->closeafter) {
                 do_close = 1;

@@ -1,0 +1,68 @@
+%{
+/* jmap_data_types.h -- Lookup function for JMAP Data Types */
+/* SPDX-License-Identifier: BSD-3-Clause-CMU */
+/* See COPYING file at the root of the distribution for more details. */
+
+#include "imap/jmap_api.h"
+
+%}
+
+%enum
+%null-strings
+%global-table
+%readonly-tables
+%compare-lengths
+%struct-type
+%omit-struct-type
+
+%define slot-name             name
+%define initializer-suffix    ,UINT32_MAX,false,MBTYPE_UNKNOWN,-1
+%define word-array-name       jmap_data_types
+%define lookup-function-name  jmap_data_types_lookup
+
+jmap_data_type_t;
+
+%%
+# RFC 8620
+"Core",                      JMAP_TYPE_CORE,                      false, MBTYPE_UNKNOWN,     -1
+"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          false, MBTYPE_UNKNOWN,     -1
+# RFC 8621
+"Mailbox",                   JMAP_TYPE_MAILBOX,                   true,  MBTYPE_EMAIL,       offsetof(struct mboxname_counters, mailmodseq)
+"Thread",                    JMAP_TYPE_THREAD,                    false, MBTYPE_UNKNOWN,     -1
+"Email",                     JMAP_TYPE_EMAIL,                     true,  MBTYPE_EMAIL,       offsetof(struct mboxname_counters, mailmodseq)
+"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY,             false, MBTYPE_UNKNOWN,     -1
+"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET,             false, MBTYPE_UNKNOWN,     -1
+"Identity",                  JMAP_TYPE_IDENTITY,                  false, MBTYPE_UNKNOWN,     -1
+"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION,           true,  MBTYPE_JMAPSUBMIT,  offsetof(struct mboxname_counters, submissionmodseq)
+"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE,          true,  MBTYPE_SIEVE,       offsetof(struct mboxname_counters, sievemodseq)
+# RFC 9007
+"MDN",                       JMAP_TYPE_MDN,                       false, MBTYPE_UNKNOWN,     -1
+# RFC 9425
+"Quota",                     JMAP_TYPE_QUOTA,                     false, MBTYPE_UNKNOWN,     -1
+# RFC 9661
+"SieveScript",               JMAP_TYPE_SIEVESCRIPT,               true,  MBTYPE_SIEVE,       offsetof(struct mboxname_counters, sievemodseq)
+# RFC 9670
+"Principal",                 JMAP_TYPE_PRINCIPAL,                 false, MBTYPE_UNKNOWN,     -1
+"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION,         false, MBTYPE_UNKNOWN,     -1
+# RFC 9610
+"AddressBook",               JMAP_TYPE_ADDRESSBOOK,               true,  MBTYPE_ADDRESSBOOK, offsetof(struct mboxname_counters, carddavmodseq)
+"ContactCard",               JMAP_TYPE_CONTACTCARD,               true,  MBTYPE_ADDRESSBOOK, offsetof(struct mboxname_counters, carddavmodseq)
+# draft-ietf-jmap-calendars
+"Calendar",                  JMAP_TYPE_CALENDAR,                  true,  MBTYPE_CALENDAR,    offsetof(struct mboxname_counters, caldavmodseq)
+"CalendarEvent",             JMAP_TYPE_CALENDAREVENT,             true,  MBTYPE_CALENDAR,    offsetof(struct mboxname_counters, caldavmodseq)
+"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION, false, MBTYPE_UNKNOWN,     -1
+"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY,       false, MBTYPE_UNKNOWN,     -1
+# Non-standard
+"Note",                      JMAP_TYPE_NOTE,                      false, MBTYPE_COLLECTION,  offsetof(struct mboxname_counters, notesmodseq)
+%%
+
+
+void jmap_data_types_foreach(void (*cb)(const jmap_data_type_t *, void *),
+                             void *rock)
+{
+    for (unsigned i = MIN_HASH_VALUE; i <= MAX_HASH_VALUE; i++) {
+        const jmap_data_type_t *jtype = &jmap_data_types[i];
+
+        if (jtype->name) cb(jtype, rock);
+    }
+}

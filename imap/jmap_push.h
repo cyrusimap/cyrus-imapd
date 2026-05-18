@@ -15,6 +15,7 @@
 extern int jmap_push_poll;
 
 typedef struct jmap_push_ctx {
+    jmap_req_t req;
     char *accountid;
     char *inboxname;
     int ping;
@@ -22,7 +23,8 @@ typedef struct jmap_push_ctx {
     time_t next_poll;
     unsigned closeafter : 1;
     struct prot_waitevent *wait;
-    struct mboxname_counters counters;
+    modseq_t highestmodseq;
+    ptrarray_t type_states;
     struct buf buf;
 } jmap_push_ctx_t;
 

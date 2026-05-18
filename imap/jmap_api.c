@@ -17,6 +17,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
+#include "jmap_data_types.h"
 #include "imparse.h"
 #include "mboxname.h"
 #include "msgrecord.h"

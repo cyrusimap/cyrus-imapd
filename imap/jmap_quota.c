@@ -148,38 +148,6 @@ done:
     return 0;
 }
 
-/*
- * RFC 9425 methods
- */
-#define JMAP_TYPE_EMAIL            (1<<0)
-#define JMAP_TYPE_MAILBOX          (1<<1)
-#define JMAP_TYPE_EMAILSUBMISSION  (1<<2)
-#define JMAP_TYPE_VACATIONRESPONSE (1<<3)
-#define JMAP_TYPE_SIEVESCRIPT      (1<<4)
-#define JMAP_TYPE_CALENDAR         (1<<5)
-#define JMAP_TYPE_CALENDAREVENT    (1<<6)
-#define JMAP_TYPE_ADDRESSBOOK      (1<<7)
-#define JMAP_TYPE_CONTACT          (1<<8)
-#define JMAP_TYPE_CONTACTGROUP     (1<<9)
-
-static const struct jtype_t {
-    unsigned long bit;
-    const char *name;
-
-} jtypes[] = {
-    { JMAP_TYPE_EMAIL,            "Email"            },
-    { JMAP_TYPE_MAILBOX,          "Mailbox"          },
-    { JMAP_TYPE_EMAILSUBMISSION,  "EmailSubmission"  },
-    { JMAP_TYPE_VACATIONRESPONSE, "VacationResponse" },
-    { JMAP_TYPE_SIEVESCRIPT,      "SieveScript"      },
-    { JMAP_TYPE_CALENDAR,         "Calendar"         },
-    { JMAP_TYPE_CALENDAREVENT,    "CalendarEvent"    },
-    { JMAP_TYPE_ADDRESSBOOK,      "AddressBook"      },
-    { JMAP_TYPE_CONTACT,          "Contact"          },
-    { JMAP_TYPE_CONTACTGROUP,     "ContactGroup"     },
-    { 0,                          NULL               }
-};
-
 static const struct jquota_type_t {
     const char idkey;
     const char *junits;
@@ -198,8 +166,10 @@ struct jquota_root_t {
     quota_t used;
     quota_t limit;
     modseq_t modseq;
-    unsigned long type_mask;
+    uint32_t type_mask;
 };
+
+#define QMASK_BIT(kind) (1 << kind)
 
 struct qrock_t {
     jmap_req_t *req;
@@ -212,7 +182,7 @@ struct qrock_t {
 static int fetch_quotas_cb(struct quota *q, void *rock)
 {
     struct qrock_t *qrock = rock;
-    unsigned long type_masks[QUOTA_NUMRESOURCES] = { 0 };
+    uint32_t type_masks[QUOTA_NUMRESOURCES] = { 0 };
     enum quota_resource qres;
     struct buf buf = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
@@ -231,33 +201,31 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (strcmp(mbentry->name, qrock->inboxname)) goto done;
 
         name = "root";
-        type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_EMAIL;
-        type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_EMAIL;
-        type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_MAILBOX;
+        type_masks[QUOTA_STORAGE]    |= QMASK_BIT(JMAP_TYPE_EMAIL);
+        type_masks[QUOTA_MESSAGE]    |= QMASK_BIT(JMAP_TYPE_EMAIL);
+        type_masks[QUOTA_NUMFOLDERS] |= QMASK_BIT(JMAP_TYPE_MAILBOX);
 
         /* Add all other requests types
            and remove them if we find a type-specific quotaroot */
         if (jmap_is_using(qrock->req, JMAP_URN_SUBMISSION)) {
-            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_EMAILSUBMISSION;
-            type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_EMAILSUBMISSION;
+            type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_EMAILSUBMISSION);
+            type_masks[QUOTA_MESSAGE] |= QMASK_BIT(JMAP_TYPE_EMAILSUBMISSION);
         }
         if (jmap_is_using(qrock->req, JMAP_URN_VACATION)) {
-            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_VACATIONRESPONSE;
+            type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_VACATIONRESPONSE);
         }
         if (jmap_is_using(qrock->req, JMAP_URN_SIEVE)) {
-            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_SIEVESCRIPT;
+            type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_SIEVESCRIPT);
         }
         if (jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) {
-            type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CALENDAREVENT;
-            type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CALENDAREVENT;
-            type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_CALENDAR;
+            type_masks[QUOTA_STORAGE]    |= QMASK_BIT(JMAP_TYPE_CALENDAREVENT);
+            type_masks[QUOTA_MESSAGE]    |= QMASK_BIT(JMAP_TYPE_CALENDAREVENT);
+            type_masks[QUOTA_NUMFOLDERS] |= QMASK_BIT(JMAP_TYPE_CALENDAR);
         }
         if (jmap_is_using(qrock->req, JMAP_CONTACTS_EXTENSION)) {
-            type_masks[QUOTA_STORAGE] |=
-                JMAP_TYPE_CONTACT | JMAP_TYPE_CONTACTGROUP;
-            type_masks[QUOTA_MESSAGE] |=
-                JMAP_TYPE_CONTACT | JMAP_TYPE_CONTACTGROUP;
-            type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_ADDRESSBOOK;
+            type_masks[QUOTA_STORAGE]    |= QMASK_BIT(JMAP_TYPE_CONTACTCARD);
+            type_masks[QUOTA_MESSAGE]    |= QMASK_BIT(JMAP_TYPE_CONTACTCARD);
+            type_masks[QUOTA_NUMFOLDERS] |= QMASK_BIT(JMAP_TYPE_ADDRESSBOOK);
         }
         break;
 
@@ -265,8 +233,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (!jmap_is_using(qrock->req, JMAP_URN_MAIL)) goto done;
 
         name = "submission";
-        type_masks[QUOTA_STORAGE] |= JMAP_TYPE_EMAILSUBMISSION;
-        type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_EMAILSUBMISSION;
+        type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_EMAILSUBMISSION);
+        type_masks[QUOTA_MESSAGE] |= QMASK_BIT(JMAP_TYPE_EMAILSUBMISSION);
         break;
 
     case MBTYPE_SIEVE:
@@ -275,11 +243,11 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
 
         name = "sieve";
         if (jmap_is_using(qrock->req, JMAP_URN_VACATION)) {
-            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_VACATIONRESPONSE;
+            type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_VACATIONRESPONSE);
         }
         if (jmap_is_using(qrock->req, JMAP_URN_SIEVE)) {
-            type_masks[QUOTA_STORAGE] |= JMAP_TYPE_SIEVESCRIPT;
-            type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_SIEVESCRIPT;
+            type_masks[QUOTA_STORAGE] |= QMASK_BIT(JMAP_TYPE_SIEVESCRIPT);
+            type_masks[QUOTA_MESSAGE] |= QMASK_BIT(JMAP_TYPE_SIEVESCRIPT);
         }
         break;
 
@@ -288,9 +256,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (!jmap_is_using(qrock->req, JMAP_URN_CALENDARS)) goto done;
 
         name = "calendars";
-        type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CALENDAREVENT;
-        type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CALENDAREVENT;
-        type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_CALENDAR;
+        type_masks[QUOTA_STORAGE]    |= QMASK_BIT(JMAP_TYPE_CALENDAREVENT);
+        type_masks[QUOTA_MESSAGE]    |= QMASK_BIT(JMAP_TYPE_CALENDAREVENT);
+        type_masks[QUOTA_NUMFOLDERS] |= QMASK_BIT(JMAP_TYPE_CALENDAR);
         break;
 
     case MBTYPE_ADDRESSBOOK:
@@ -298,9 +266,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (!jmap_is_using(qrock->req, JMAP_CONTACTS_EXTENSION)) goto done;
 
         name = "addressbooks";
-        type_masks[QUOTA_STORAGE] |= JMAP_TYPE_CONTACT | JMAP_TYPE_CONTACTGROUP;
-        type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_CONTACT | JMAP_TYPE_CONTACTGROUP;
-        type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_ADDRESSBOOK;
+        type_masks[QUOTA_STORAGE]    |= QMASK_BIT(JMAP_TYPE_CONTACTCARD);
+        type_masks[QUOTA_MESSAGE]    |= QMASK_BIT(JMAP_TYPE_CONTACTCARD);
+        type_masks[QUOTA_NUMFOLDERS] |= QMASK_BIT(JMAP_TYPE_ADDRESSBOOK);
         break;
     }
 
@@ -378,7 +346,7 @@ static void fetch_quotas(struct qrock_t *qrock)
                             qrock->sieve_count, &qrock->quotas);
 
                 qrock->sieve_count->name = "sieve";
-                qrock->sieve_count->type_mask = JMAP_TYPE_SIEVESCRIPT;
+                qrock->sieve_count->type_mask = QMASK_BIT(JMAP_TYPE_SIEVESCRIPT);
                 qrock->sieve_count->junits = jquota_types[QUOTA_MESSAGE].junits;
 
                 mboxlist_entry_free(&mbentry);
@@ -401,6 +369,21 @@ static void fetch_quotas(struct qrock_t *qrock)
             /* Set limit */
             qrock->sieve_count->limit = maxscripts;
         }
+    }
+}
+
+struct list_types_rock {
+    uint32_t type_mask;
+    json_t *jtypes;
+};
+
+static void list_types_cb(const jmap_data_type_t *dtype, void *rock)
+{
+    struct list_types_rock *trock = rock;
+
+    if (dtype->has_quota &&
+        (trock->type_mask & QMASK_BIT(dtype->kind))) {
+        json_array_append_new(trock->jtypes, json_string(dtype->name));
     }
 }
 
@@ -449,13 +432,9 @@ static void getquota(const char *id, void *val, void *rock)
 
     if (jmap_wantprop(get->props, "types")) {
         json_t *types = json_array();
-        const struct jtype_t *jtype;
+        struct list_types_rock trock = { jroot->type_mask, types };
 
-        for (jtype = jtypes; jtype->name; jtype++) {
-            if (jroot->type_mask & jtype->bit) {
-                json_array_append_new(types, json_string(jtype->name));
-            }
-        }
+        jmap_data_types_foreach(&list_types_cb, &trock);
 
         json_object_set_new(jquota, "types", types);
     }
@@ -669,18 +648,17 @@ static int filter_match(void *vf, void *rock)
     if (f->scope && !strstr("account", f->scope)) return 0;
 
     /* resourceType */
-    if (f->resourceType && !strstr(jroot->junits, f->resourceType)) return 0;
+    if (f->resourceType && strcmp(f->resourceType, jroot->junits)) return 0;
 
     /* type */
     if (f->type) {
-        const struct jtype_t *jtype;
+        const jmap_data_type_t *dtype =
+            jmap_data_types_lookup(f->type, strlen(f->type));
 
-        for (jtype = jtypes; jtype->name; jtype++) {
-            if ((jroot->type_mask & jtype->bit) && strstr(jtype->name, f->type)) {
-                break;
-            }
+        if (!(dtype && dtype->has_quota &&
+              (jroot->type_mask & QMASK_BIT(dtype->kind)))) {
+            return 0;
         }
-        if (!jtype->name) return 0;
     }
 
     /* All matched. */

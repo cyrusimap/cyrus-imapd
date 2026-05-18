@@ -2,17 +2,19 @@
 use Cassandane::Tiny;
 
 sub test_eventsource
-    :min_version_3_5 :JMAPExtensions :NoAltNameSpace
+    :JMAPExtensions :NoAltNameSpace
     ($self)
 {
     my $jmap = $self->{jmap};
 
+    xlog $self, "get StateChange object for certain types";
     my $session = $jmap->get_client_session->client_session;
     $self->assert_not_null($session);
     my $event_relative = $session->{eventSourceUrl};
     $self->assert_not_null($event_relative);
 
-    $self->assert_num_equals(1, $event_relative =~ s/\{types\}/Mailbox,Email,Calendar,CalendarEvent,AddressBook,ContactCard/g);
+    my $types = 'Mailbox,Email,Calendar,CalendarEvent,AddressBook,ContactCard';
+    $self->assert_num_equals(1, $event_relative =~ s/\{types\}/$types/g);
     $self->assert_num_equals(1, $event_relative =~ s/\{closeafter\}/state/g);
     $self->assert_num_equals(1, $event_relative =~ s/\{ping\}/0/g);
 
@@ -47,4 +49,115 @@ sub test_eventsource
     $self->assert_not_null($data->{changed}->{cassandane}->{CalendarEvent});
     $self->assert_not_null($data->{changed}->{cassandane}->{AddressBook});
     $self->assert_not_null($data->{changed}->{cassandane}->{ContactCard});
+
+    xlog $self, "create new resources and get states";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo@bar} }],
+                    to => [{ email => q{bar@foo} }],
+                    sentAt => '2019-05-02T03:15:00+07:00',
+                    subject => "test",
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "A text body",
+                        },
+                    },
+                }
+            },
+        }, 'R0'],
+        ['EmailSubmission/set', {
+            create => {
+                submit => {
+                    emailId  => '#email',
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                        },
+                        rcptTo => [
+                            { email => 'rcpt2@localhost' }
+                        ],
+                    },
+                }
+            }
+        }, 'R1'],
+        ['VacationResponse/set', {
+            update => {
+                "singleton" => {
+                    isEnabled=> JSON::true,
+                    textBody => "Gone fishing"
+                }
+            }
+        }, 'R2'],
+        ['CalendarEvent/set', {
+            create => {
+                event => {
+                    title=> "foo",
+                    start=> "2015-11-07T09:00:00",
+                    duration=> "PT5M",
+                }
+            }
+        }, 'R3'],
+        ['ContactCard/set', {
+            create => {
+                "1" => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'foo' }
+                }
+            }
+        }, 'R4'],
+        ['Note/set', {
+            create => {
+                note => {
+                    title  => 'Hello',
+                    body   => 'Hello World',
+                    isHTML => JSON::false,
+                },
+            }
+        }, 'R5'],
+        [ 'Mailbox/get', { }, 'R6' ],
+        [ 'Calendar/get', { }, 'R7' ],
+        [ 'AddressBook/get', { }, 'R8' ],
+        [ 'SieveScript/get', { }, 'R9' ],
+    ]);
+
+    xlog $self, "get StateChange object for ALL types";
+    $event_uri =~ s/\?types=$types/\?types=\*/;
+    $es_request->uri($event_uri);
+    $http_res = $jmap->http_request($es_request);
+    $self->assert_str_equals('200', $http_res->code);
+    $self->assert_str_equals('text/event-stream',
+                             $http_res->header('content-type'));
+    $self->assert_null($http_res->header('content-length'));
+
+    %event = $http_res->decoded_content(charset => undef) =~ /^(\w+): ?(.*)$/mg;
+    $self->assert_not_null($event{id});
+    $self->assert_str_equals('state', $event{event});
+
+    $data = eval { decode_json($event{data}) };
+
+    xlog $self, "verify that states for each object match";
+    $self->assert_cmp_deeply(
+        superhashof({
+            Email => $res->[0][1]->{newState},
+            EmailSubmission => $res->[1][1]->{newState},
+            VacationResponse => $res->[2][1]->{newState},
+            CalendarEvent => $res->[3][1]->{newState},
+            ContactCard => $res->[4][1]->{newState},
+            Note => $res->[5][1]->{newState},
+            Mailbox => $res->[6][1]->{'state'},
+            Calendar => $res->[7][1]->{'state'},
+            AddressBook => $res->[8][1]->{'state'},
+            SieveScript => $res->[9][1]->{'state'},
+        }),
+        $data->{changed}{cassandane}
+    );
 }
