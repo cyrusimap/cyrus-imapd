@@ -211,7 +211,7 @@ int service_init(int argc __attribute__((unused)),
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
 
-    while ((opt = getopt(argc, argv, "p:f")) != EOF) {
+    while ((opt = getopt(argc, argv, "p:")) != EOF) {
         switch(opt) {
         case 'p': /* external protection */
             extprops_ssf = atoi(optarg);
