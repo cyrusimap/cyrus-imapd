@@ -335,9 +335,9 @@ EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v
     }
 
     if (v->min_response == 0)
-        v->min_response = config_getduration(IMAPOPT_SIEVE_VACATION_MIN_RESPONSE, 's');
+        v->min_response = config_getduration(IMAPOPT_SIEVE_VACATION_MIN_RESPONSE);
     if (v->max_response == 0)
-        v->max_response = config_getduration(IMAPOPT_SIEVE_VACATION_MAX_RESPONSE, 's');
+        v->max_response = config_getduration(IMAPOPT_SIEVE_VACATION_MAX_RESPONSE);
     if (v->min_response < 0 || v->max_response < 7 * DAY2SEC || !v->autorespond
         || !v->send_response) {
         return SIEVE_FAIL;

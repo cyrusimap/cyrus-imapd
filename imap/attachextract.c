@@ -529,10 +529,10 @@ EXPORTED void attachextract_init(struct protstream *clientin)
 
     /* Read config */
     attachextract_idle_timeout =
-        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_IDLE_TIMEOUT, 's');
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_IDLE_TIMEOUT);
 
     attachextract_request_timeout =
-        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT, 's');
+        config_getduration(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_REQUEST_TIMEOUT);
 
     if (attachextract_idle_timeout < attachextract_request_timeout)
         attachextract_idle_timeout = attachextract_request_timeout;

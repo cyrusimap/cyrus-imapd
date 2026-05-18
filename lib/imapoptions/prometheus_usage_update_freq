@@ -9,5 +9,3 @@ set, usage statistics are not reported.
 
 Best to make this a multiple of
 :imapdconf:`prometheus_service_update_freq`.
-
-If no unit is specified, seconds is assumed.

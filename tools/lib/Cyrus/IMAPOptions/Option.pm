@@ -11,6 +11,26 @@ use Types::Standard qw(ArrayRef Bool Enum InstanceOf Int Maybe Split Str);
 my @option_types = qw(BITFIELD BYTESIZE DURATION ENUM INT
                       STRING STRINGLIST SWITCH);
 
+my %units = (
+    'DURATION' => {
+        'd' => 'days',
+        'h' => 'hours',
+        'm' => 'minutes',
+        's' => 'seconds',
+    },
+    'BYTESIZE' => {
+        'B' => 'bytes',
+        'K' => 'kibibytes',
+        'M' => 'mebibytes',
+        'G' => 'gibibytes',
+    },
+);
+
+my %default_unit = (
+    'DURATION' => 's',
+    'BYTESIZE' => 'B',
+);
+
 has name => (
     isa => Str,
     is => 'ro',
@@ -33,6 +53,12 @@ has default_value => (
     isa => Maybe[Str] | ArrayRef[Str],
     is => 'ro',
     required => 1,
+);
+
+has default_unit => (
+    isa => Enum[map { keys $_->%* } values %units],
+    is => 'ro',
+    predicate => 1,
 );
 
 has last_modified => (
@@ -186,6 +212,18 @@ sub BUILD
             if $self->has_allowed_values;
     }
 
+    if ($self->has_default_unit) {
+        my $du = $self->default_unit;
+
+        if (exists $units{$type}) {
+            die "default_unit '$du' not allowed for $type"
+                if not $units{$type}->{$du};
+        }
+        else {
+            die "$type can not have default_unit";
+        }
+    }
+
     # Last-Modified must be a version number or UNRELEASED
     _parse_version('last_modified', $self->last_modified);
 
@@ -230,6 +268,13 @@ sub is_unreleased
     return $is_unreleased;
 }
 
+sub can_have_units
+{
+    my ($self) = @_;
+
+    return exists $units{$self->type};
+}
+
 sub _parse_version
 {
     my ($field, $version) = @_;
@@ -270,6 +315,35 @@ sub docs_default_value
     }
     else {
         return $dv;
+    }
+}
+
+sub docs_default_unit
+{
+    my ($self) = @_;
+
+    my $type = $self->type;
+
+    die "no default unit for $type" if not $self->can_have_units;
+
+    my $k = $self->has_default_unit
+          ? $self->default_unit
+          : $default_unit{$type};
+
+    return $units{$type}->{$k};
+}
+
+sub c_default_unit
+{
+    my ($self) = @_;
+
+    if ($self->can_have_units) {
+        return $self->has_default_unit
+               ? "'" . $self->default_unit . "'"
+               : "'" . $default_unit{$self->type} . "'";
+    }
+    else {
+        return '0';
     }
 }
 

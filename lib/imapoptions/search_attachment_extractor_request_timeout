@@ -5,5 +5,3 @@ Last-Modified: 3.10.0
 
 Defines the duration after which to cancel non-responding requests to the
 search attachment extractor service.
-
-If no unit is specified, seconds is assumed.

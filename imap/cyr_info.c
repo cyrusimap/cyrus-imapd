@@ -116,14 +116,39 @@ static void do_conf(int only_changed, int want_since, uint32_t since)
                 break;
 
             case OPT_BYTESIZE:
-            case OPT_DURATION:
                 if (only_changed) {
-                    if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
+                    int64_t def_bytesize = 0LL;
+
+                    if (imapopts[i].def.s != NULL) {
+                        config_parsebytesize(imapopts[i].def.s,
+                                             imapopts[i].defunit,
+                                             &def_bytesize);
+                    }
+
+                    if (def_bytesize == imapopts[i].val.i64)
                         break;
                 }
                 if (want_since && since < imapopts[i].last_modified)
                     highlight(imapopts[i].last_modified);
-                printf("%s: %s\n", imapopts[i].name, imapopts[i].val.s);
+                printf("%s: %" PRIi64 "\n", imapopts[i].name, imapopts[i].val.i64);
+                break;
+
+            case OPT_DURATION:
+                if (only_changed) {
+                    int32_t def_duration = 0;
+
+                    if (imapopts[i].def.s != NULL) {
+                        config_parseduration(imapopts[i].def.s,
+                                             imapopts[i].defunit,
+                                             &def_duration);
+                    }
+
+                    if (def_duration == imapopts[i].val.i32)
+                        break;
+                }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
+                printf("%s: %" PRIi32 "\n", imapopts[i].name, imapopts[i].val.i32);
                 break;
 
             case OPT_ENUM:

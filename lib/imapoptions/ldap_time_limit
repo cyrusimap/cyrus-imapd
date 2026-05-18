@@ -4,5 +4,3 @@ Default-Value: 5s
 Last-Modified: 3.1.8
 
 How long to wait for a search request to complete.
-
-For backward compatibility, if no unit is specified, seconds is assumed.

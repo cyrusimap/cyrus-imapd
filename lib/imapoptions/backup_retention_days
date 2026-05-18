@@ -1,5 +1,6 @@
 Name: backup_retention_days
 Type: DURATION
 Default-Value: NULL
+Default-Unit: d
 Last-Modified: 3.12.0
 Deprecated-Since: 3.12.0

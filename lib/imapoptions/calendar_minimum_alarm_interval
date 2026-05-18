@@ -1,6 +1,7 @@
 Name: calendar_minimum_alarm_interval
 Type: DURATION
 Default-Value: 5m
+Default-Unit: m
 Last-Modified: 3.8.0
 
 The minimum allowed interval between alarms for a recurring event.

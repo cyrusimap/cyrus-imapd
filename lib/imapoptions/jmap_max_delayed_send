@@ -6,5 +6,3 @@ Last-Modified: 3.1.8
 The value to return for the maxDelayedSend property of the JMAP
 \"urn:ietf:params:jmap:emailsubmission\" capabilities object.  The Cyrus
 JMAP implementation does not enforce this limit.
-
-For backward compatibility, if no unit is specified, seconds is assumed.

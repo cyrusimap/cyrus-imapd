@@ -96,7 +96,7 @@ void lex_setrecovering(void)
 
 void lex_init(void)
 {
-  maxscriptsize = config_getbytesize(IMAPOPT_SIEVE_MAXSCRIPTSIZE, 'K');
+  maxscriptsize = config_getbytesize(IMAPOPT_SIEVE_MAXSCRIPTSIZE);
 
   buffer = (char *) xmalloc(maxscriptsize);
 }

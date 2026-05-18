@@ -65,6 +65,7 @@ sub header
             .replaced_by = IMAPOPT_ZERO,
             .val.s = NULL,
             .def.s = NULL,
+            .defunit = 0,
             .enum_options = {
                 { NULL, IMAP_ENUM_ZERO },
             },
@@ -88,6 +89,7 @@ sub footer
             .replaced_by = IMAPOPT_ZERO,
             .val.s = NULL,
             .def.s = NULL,
+            .defunit = 0,
             .enum_options = {
                 { NULL, IMAP_ENUM_ZERO },
             },
@@ -128,6 +130,7 @@ sub _print_option
     foreach my $k ('val', 'def') {
         _print_struct_field("$k.$union_field", $default_value);
     }
+    _print_struct_field('defunit', $option->c_default_unit);
 
     print "        .enum_options = {\n";
     foreach my $pair ($option->c_allowed_values) {

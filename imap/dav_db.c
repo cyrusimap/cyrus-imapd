@@ -307,7 +307,7 @@ EXPORTED sqldb_t *dav_open_userid(const char *userid)
     struct buf fname = BUF_INITIALIZER;
     dav_getpath_byuserid(&fname, userid);
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
+                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
     buf_free(&fname);
     return db;
 }
@@ -320,7 +320,7 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
     struct buf fname = BUF_INITIALIZER;
     dav_getpath(&fname, mailbox);
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
+                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
     buf_free(&fname);
     return db;
 }
@@ -476,7 +476,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
     r = IMAP_IOERROR;
     reconstruct_db = sqldb_open(buf_cstring(&newfname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                                config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
+                                config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
     if (reconstruct_db) {
         r = sqldb_begin(reconstruct_db, "reconstruct");
 #ifdef WITH_DAV

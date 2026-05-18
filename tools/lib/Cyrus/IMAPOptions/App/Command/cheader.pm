@@ -97,10 +97,11 @@ sub footer
     my $c = <<~"END_FOOTER";
 
     union config_value {
-        const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION, OPT_BYTESIZE */
-        int32_t i32;        /* OPT_INT */
+        const char *s;      /* OPT_STRING, OPT_STRINGLIST */
+        int32_t i32;        /* OPT_INT, OPT_DURATION */
         bool b;             /* OPT_SWITCH */
         enum enum_value e;  /* OPT_ENUM */
+        int64_t i64;        /* OPT_BYTESIZE */
         uint64_t u64;       /* OPT_BITFIELD */
     };
 
@@ -120,6 +121,7 @@ sub footer
         const enum imapopt replaced_by;
         union config_value val;
         const union config_value def;
+        const int defunit;
         const struct enum_option_s enum_options[MAX_ENUM_OPTS+1];
     };
 

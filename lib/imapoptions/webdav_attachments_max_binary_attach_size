@@ -1,6 +1,7 @@
 Name: webdav_attachments_max_binary_attach_size
 Type: BYTESIZE
 Default-Value: 1024K
+Default-Unit: K
 Last-Modified: 3.8.0
 
 The maximum byte length of an ATTACH property value when managed attachment

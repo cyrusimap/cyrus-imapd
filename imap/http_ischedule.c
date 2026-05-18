@@ -314,7 +314,7 @@ static int meth_get_isched(struct transaction_t *txn,
             }
         }
 
-        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE, 'B');
+        maxlen = config_getbytesize(IMAPOPT_MAXMESSAGESIZE);
         if (maxlen <= 0) maxlen = BYTESIZE_UNLIMITED;
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%" PRIi64, maxlen);

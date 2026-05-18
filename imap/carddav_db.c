@@ -1141,7 +1141,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, vcardcomponent *vcard,
     struct buf *buf = vcard_as_buf(vcard);
 
     if (vcard_max_size < 0) {
-        vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE, 'B');
+        vcard_max_size = config_getbytesize(IMAPOPT_VCARD_MAX_SIZE);
         if (vcard_max_size <= 0) vcard_max_size = BYTESIZE_UNLIMITED;
     }
 

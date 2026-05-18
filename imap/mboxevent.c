@@ -1456,7 +1456,7 @@ void mboxevent_extract_content_msgrec(struct mboxevent *event,
         return;
     }
 
-    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE);
     if (truncate < 0) truncate = 0;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
@@ -1521,7 +1521,7 @@ void mboxevent_extract_content(struct mboxevent *event,
     if (!mboxevent_expected_param(event->type, EVENT_MESSAGE_CONTENT))
         return;
 
-    config_truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE, 'B');
+    config_truncate = config_getbytesize(IMAPOPT_EVENT_CONTENT_SIZE);
     truncate = (config_truncate < 0) ? 0 : config_truncate;
 
     switch (config_getenum(IMAPOPT_EVENT_CONTENT_INCLUSION_MODE)) {
