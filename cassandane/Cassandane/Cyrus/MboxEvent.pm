@@ -32,8 +32,13 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(event_groups => join(' ', @event_groups));
 
+    # The default value of event_extra_params is just 'timestamp'; opt in
+    # to the parameters individual tests want to inspect.
+    $config->set(event_extra_params => 'timestamp vnd.fastmail.traceId');
+
     return $class->SUPER::new({
         config => $config,
+        deliver => 1,
     }, @args);
 }
 
