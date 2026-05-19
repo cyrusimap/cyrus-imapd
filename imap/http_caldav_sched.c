@@ -691,7 +691,7 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
 
     json_error_t jerr;
     json_t *val = json_pack_ex(&jerr, 0,
-                               "{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s}",
+                               "{s:s s:s s:s s:s s:o s:s s:o s:o s:b s:s s:s}",
                                "calendarOwner", cal_ownerid,
                                "recipient", buf_cstring(&recipient),
                                "sender", sender,
@@ -702,7 +702,8 @@ static int imip_send(const char *cal_ownerid, const char *sched_userid,
                                "patch", patch,
                                "is_update", SCHED_IS_UPDATE(sched_data),
                                "schedulingMechanism",
-                               sched_mechanisms[sched_data->mech]);
+                               sched_mechanisms[sched_data->mech],
+                               "actorCyrusName", httpd_userid);
     if (!val) {
         xsyslog(LOG_ERR, "failed to create iMIP notification message",
                 "ownerid=<%s> sender=<%s> recipient=<%s> err=<%s>",
