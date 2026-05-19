@@ -1477,7 +1477,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
                              strcmp(right, "mayDelete"))) {
 
                         jmap_parser_push(parser, "shareWith");
-                        jmap_parser_push(parser, "sharee");
+                        jmap_parser_push(parser, sharee);
                         jmap_parser_invalid(parser, right);
                         jmap_parser_pop(parser);
                         jmap_parser_pop(parser);
