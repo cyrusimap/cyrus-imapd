@@ -24,7 +24,7 @@ Major changes since the 3.12 series
 * The annotator is now called only on items added to email-type mailboxes.
 * :cyrusman:`ctl_conversationsdb(8)` now has ``-U`` for version upgrades.
 * :cyrusman:`lmtpd(8)` now provides a capability called ``TRACE`` and a new
-  ``TRACE`` command for setting an interal trace-id, which will be logged.
+  ``TRACE`` command for setting an internal trace-id, which will be logged.
 * The :imapdconf:`admins_get_internal_seen` option has been added.  If set, the
   admin users will always get and set the same ``\Seen`` flags as the mailbox
   owner.

@@ -88,7 +88,7 @@ The second line of the initial response begins with ``* AUTH`` and is followed b
 Commands
 ========
 
-The following are the valid commands that a client may send to the MUPDATE server: AUTHENTICATE, ACTIVATE, DELETE, FIND, LIST, LOGOUT, NOOP, RESERVE, and UPDATE. Only AUTHENTICATE and LOGOUT may be issued before a successful authentication has occured. Only LOGOUT and NOOP may be issued after UPDATE has been successfully issued. Only one successful AUTHENTICATE command may be issued per session.
+The following are the valid commands that a client may send to the MUPDATE server: AUTHENTICATE, ACTIVATE, DELETE, FIND, LIST, LOGOUT, NOOP, RESERVE, and UPDATE. Only AUTHENTICATE and LOGOUT may be issued before a successful authentication has occurred. Only LOGOUT and NOOP may be issued after UPDATE has been successfully issued. Only one successful AUTHENTICATE command may be issued per session.
 
 AUTHENTICATE
 ------------
@@ -109,7 +109,7 @@ The ACTIVATE command takes three parameters:
     2. a location in ``server!partition`` format, 
     3. and an ACL for the mailbox.
 
-It will tell the server to insert into its database the given mailbox in the given location with the given ACL. An OK response indicates success, a NO response indicates some sort of failure occured. This is not a valid command to issue to a slave.
+It will tell the server to insert into its database the given mailbox in the given location with the given ACL. An OK response indicates success, a NO response indicates some sort of failure occurred. This is not a valid command to issue to a slave.
 
 DELETE
 ------

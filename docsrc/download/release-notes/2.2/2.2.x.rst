@@ -5,7 +5,7 @@ Cyrus IMAP 2.2 Releases
 Changes to the Cyrus IMAP Server since 2.2.13
 
 *   ctl_mboxlist now dumps/undumps the mailbox type flags, making it useful for remote mailboxes.
-*   Added sieve_allowreferrals option to control whether timsieved issues referrals or proxys traffic to backends.
+*   Added sieve_allowreferrals option to control whether timsieved issues referrals or proxies traffic to backends.
 
 Changes to the Cyrus IMAP Server since 2.2.12
 
@@ -74,7 +74,7 @@ Changes to the Cyrus IMAP Server since 2.2.5
 *   Fix segfault in APPEND code
 *   Fix a bug with an interaction between sieve and unixhierarchysep
 *   Fix a file descriptor leak in the quotadb code
-*   Fix a triggered assertation in service-thread services
+*   Fix a triggered assertion in service-thread services
 *   Add a number of internal consistency checks to the skiplist code
 *   Allow mbpath to handle virtual domains
 *   Fix various MANAGESIEVE client authentication issues
@@ -102,7 +102,7 @@ Changes to the Cyrus IMAP Server since 2.2.3
 
 Changes to the Cyrus IMAP Server since 2.2.2
 
-*   Berkeley DB 4.2 Support - note that the Cyrus Berkeley enviroment needs to be reset (db_recover) before a Berkeley DB version upgrade or you need to remove all berkeley dbs. Special care needs to be taken when berkley db is used for mboxlist.
+*   Berkeley DB 4.2 Support - note that the Cyrus Berkeley environment needs to be reset (db_recover) before a Berkeley DB version upgrade or you need to remove all berkeley dbs. Special care needs to be taken when berkeley db is used for mboxlist.
 *   Runtime configuration of the Cyrus databases. The cyrudb backend used for each database can be specified with an imapd.conf option. NOTE: You MUST convert the database using cvt_cyrusdb BEFORE changing the backend in imapd.conf.
 *   Sendmail socket map support (smmapd) for verifying that mailboxes exist and are deliverable before accepting the message and sending it to Cyrus.
 *   New userid mode for virtual domains, which does NOT do reverse lookups of the IP address.
@@ -143,11 +143,11 @@ Changes to the Cyrus IMAP Server since 2.2.0
 
 Changes to the Cyrus IMAP Server since 2.1.x
 
-*   There have been extensive performance and consistency changes to the configuration subsystem. This will both ensure greater consistency between the documentation and the code, as well as a more standard format for specifing service-specific configuration options in imapd.conf. Important changes are detailed here:
+*   There have been extensive performance and consistency changes to the configuration subsystem. This will both ensure greater consistency between the documentation and the code, as well as a more standard format for specifying service-specific configuration options in imapd.conf. Important changes are detailed here:
 *       The tls_[service]_* configuration options have been removed. Now use [servicename]_tls_*, where servicename is the service identifier from cyrus.conf for that particular process.
 *       Administrative groups (e.g. admins and lmtp_admins) no longer union, service groups completely override the generic group.
 *       lmtp_allowplaintext is no longer a defined parameter and must be specified using the service name of your lmtp process if you require a specific value
-*   libcyrus has been split into libcyrus_min and libcyrus, so as to allow sensative applications (such as master) include the least amount of code necessary for operation
+*   libcyrus has been split into libcyrus_min and libcyrus, so as to allow sensitive applications (such as master) include the least amount of code necessary for operation
 *   Virtual domain support. See the virtual domains document for details.
 *   Users can now be renamed (even across domains). Note that this is not atomic and weirdness may occur if the user is logged in during the rename. See the allowusermoves option in imapd.conf(5) for details.
 *   The db3 and db3-nosync database backends have been renamed to berkeley and berkeley-nosync respectively (to avoid confusion over whether or not db4 is supported).

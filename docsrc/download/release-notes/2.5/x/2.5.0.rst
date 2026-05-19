@@ -176,7 +176,7 @@ to set message annotations.
 Event Notifications
 -------------------
 
-Various events occuring in Cyrus IMAP, among which mailbox, message and
+Various events occurring in Cyrus IMAP, among which mailbox, message and
 access events, can now be pushed out through a side-channel and notify
 client applications or provide other infrastructure with detailed
 information.
@@ -247,7 +247,7 @@ Catchall Mailbox for LMTP
 
 Thanks to the work by Carsten Hoeger and Ralf Haferkamp, this new
 feature enables administrators to configure a target mailbox for mail
-delivered through LMTP to targetted mailboxes that do not exist.
+delivered through LMTP to targeted mailboxes that do not exist.
 
 For example, a mail that LMTP would deliver to ``user/bovik``, which
 for the sake of argument does not exist in this example, setting
@@ -265,7 +265,7 @@ Does this impact lmtp_fuzzy_mailbox_match?
 ++++++++++++++++++++++++++++++++++++++++++
 
 Environments that have ``lmtp_fuzzy_mailbox_match`` enabled, in order
-to have LMTP seek from the targetted, non-existent mailbox sub-folder
+to have LMTP seek from the targeted, non-existent mailbox sub-folder
 (example: ``user/bovik/spam/probably``) all the way to the toplevel
 mailbox folder (i.e. ``user/bovik``) until it finds a mailbox
 (sub-)folder that does exist (example: ``user/bovik/spam``), are not
@@ -397,7 +397,7 @@ The default for the :cyrusman:`imapd.conf(5)` configuration option
 ``delete_mode`` has changed from ``immediate`` to ``delayed``.
 
 This causes mail folders that are deleted by a client to not
-immediately dissappear from the filesystem. Instead, they are renamed
+immediately disappear from the filesystem. Instead, they are renamed
 to a deleted namespace that is visible only to administrators.
 
 A separate job ``cyr_expire -D $x`` is to be included in the master

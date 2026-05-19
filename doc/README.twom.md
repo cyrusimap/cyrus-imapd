@@ -6,7 +6,7 @@ skip over multiple records, approximating a binary search.  The lowest "level"
 linked list always visits every record in the database's sort order.
 
 The twom database format is a serialised representation of a skiplist data
-structure, repesenting an ordered list of key/value pairs in a single mmaped
+structure, representing an ordered list of key/value pairs in a single mmaped
 file.  Links between records are stored as offsets within the file.  When new
 records are added, the offsets on the previous records in the link are updated
 by overwriting their location in the file.
@@ -63,7 +63,7 @@ The header is packed directly into the first 96 bytes of the file.  All numbers 
 * Repack Size: 8 bytes - a 64 bit number which is the offset at which all the records were repacked in exactly the correct order.  After this point there may be replaces or deletes.
 * Current Size: 8 bytes - a 64 bit number which is the offset of the end of last commit which is persisted to disk.
 * Max Level: 4 bytes - a 32 bit number (though maximum value is 31) of the highest level of any record in the file other than the DUMMY record.
-* Checksum: 4 bytes - a 32 bit checksum over the preceeding 92 bytes.
+* Checksum: 4 bytes - a 32 bit checksum over the preceding 92 bytes.
 
 ### The Dummy Record
 
@@ -97,7 +97,7 @@ Structures named `twom_` are public, `tm_` are entirely internal.
     - If this is an exclusive transaction (not TWOM_SHARED) then you can write to the file and either abort or commit.  A transaction dirties the file on first write.  An exclusive transaction forces the file to remain locked exclusively for the duration of the transaction.
     - If this is read-only transaction, it can be either MVCC or not.  If it is MVCC, then it never changes file, it always reads from the same file, though it may still need to refresh the length if the lock has been released.  Read-only transactions can release the lock, either explicitly using `twom_db_yield` or implicitly every N transactions to avoid starving other database users.
     - Has a reference counted on the file into which it points, to ensure it isn’t released if this is an MVCC transaction.
-- `struct tm_loc` - a location in the database.  This contains an offset for the current record, the locations of the immediately preceeding record at every level, and the length of the file when it was calculated (a change in file length means that back pointers may have been changed and the location is no longer valid).  If the current record has a DELETE before it, will also contain a `deleted_offset` value.
+- `struct tm_loc` - a location in the database.  This contains an offset for the current record, the locations of the immediately preceding record at every level, and the length of the file when it was calculated (a change in file length means that back pointers may have been changed and the location is no longer valid).  If the current record has a DELETE before it, will also contain a `deleted_offset` value.
     - Has a reference counted on the file into which it points, which is required to allow relocation without having to copy the key content.
 - `struct tm_file` an mmaped file.  Has the file handle and tracks the lock on it.  Also has a parsed version of the header of the file, which is updated every time it’s locked.  (strictly this isn’t necessary, we could do it all with MMAP reads directly from the file).
     - Also contains pointers to the checksum and comparison functions for this file.  These CANNOT BE CHANGED after file creation, but can either use the ones built into twom, or you can pass external functions at file creation time.
@@ -111,7 +111,7 @@ Twom uses fcntl for locking, specifically a two-phase locking system, as describ
 Copying the key parts here:
 
 <blockquote>
-Assume that two arbitraty lock-files are already opened into descriptors fd_sh and fd_ex. Then to gain shared access:
+Assume that two arbitrary lock-files are already opened into descriptors fd_sh and fd_ex. Then to gain shared access:
 
     flock(fd_ex, LOCK_SH) - allow multiple readers to pass through this lock but block writers
     flock(fd_sh, LOCK_SH) - used to block activated writer while readers are working
@@ -143,7 +143,7 @@ We also have a third range lock which is held by any process doing a repack.  Ow
 
 ## Navigating the code - functions
 
-I’ll just describe the key functions, all the basic refcounting and low level pointer checking is pretty self explanitory, but:
+I’ll just describe the key functions, all the basic refcounting and low level pointer checking is pretty self explanatory, but:
 
 `_setloc`
 
@@ -161,7 +161,7 @@ It starts at the DUMMY record, and for every level from the highest down, walks 
 
 If it matches exactly, `offset` will be set to the record and `is_exactmatch` will be 1, otherwise `offset`  will be the record before the gap where it should be, and `is_exactmatch` will be zero.
 
-At the lowest level, it also tracks whether the current item was preceeded by a DELETE record and ancestor pair, and in that case also sets `deleted_offset` to the prior delete record.  This is only useful when `is_exactmatch` is true,
+At the lowest level, it also tracks whether the current item was preceded by a DELETE record and ancestor pair, and in that case also sets `deleted_offset` to the prior delete record.  This is only useful when `is_exactmatch` is true,
 which is suppresses returning the value and is used for some other checks.
 
 `relocate()`
@@ -202,7 +202,7 @@ Will run recovery if the file is DIRTY.
 
 The wimpier cousin of write_lock.  If the file is empty or dirty, it will try for a `write_lock` to fix it, or just error if the database is readonly.
 
-Still takes a writeable mmap unless the database was opened readonly, since that avoids having to unmap and remap later if the caller then takes a write_lock later.
+Still takes a writable mmap unless the database was opened readonly, since that avoids having to unmap and remap later if the caller then takes a write_lock later.
 
 `opendb()` 
 

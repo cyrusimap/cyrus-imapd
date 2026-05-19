@@ -107,7 +107,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5.19
 *   Fix brain fart in auth_krb_pts.c where a CLOSE() was done to a DB handle BEFORE we access the data read from the DB database. This means we were copying free'd memory into the groups list. Note this only affects people using DB, AFS and ptloader.
 *   Committed minor syslog log level changes in ptloader and deliver.
 *   make distclean now does what it's supposed to.
-*   Possibly misnamed experimental --enable-static-libraries switch that tries to do a good job of building binaries with whatever static libraries are availible. If you use this, you do so at your own risk, and if it fails, we will disavow all knowledge of you and your team. Good luck, Jim.
+*   Possibly misnamed experimental --enable-static-libraries switch that tries to do a good job of building binaries with whatever static libraries are available. If you use this, you do so at your own risk, and if it fails, we will disavow all knowledge of you and your team. Good luck, Jim.
 *   Add optional third argument to imtest for it to take input from a file. This is a gross hack.
 
 Changes to the Cyrus IMAP Server Since Version 1.5.14
@@ -127,12 +127,12 @@ Changes to the Cyrus IMAP Server Since Version 1.5.14
 *       Split out duplicate delivery elimination to multiple files. This should help reduce the lock contention that normally occurs with this file. To not clutter config_dir, the files will be located in a subdirectory named deliverdb, for example /var/imap/deliverdb. If you don't make this directory, nothing bad will happen (other than duplicate delivery elimination will not work).
 *       The time value is now stored as an integer in native byte order as opposed to converting it to a string before it is stored in the database.
 *       checkdelivered() now obtains a read lock instead of a write lock when trying to check for duplicates. Only markdelivered() grabs a write lock.
-*   Added logic to cause cyradm to abort more cleanly if not given command line arguments in an interactive session. This gets rid of the dreaded application-specific intialization failed messages.
+*   Added logic to cause cyradm to abort more cleanly if not given command line arguments in an interactive session. This gets rid of the dreaded application-specific initialization failed messages.
 
 Changes to the Cyrus IMAP Server Since Version 1.5.11
 
 *   The CREATE command now ignores a trailing hierarchy delimiter instead of ignoring the CREATE command.
-*   UIDPLUS is now always advertised in CAPABILITY and is always availible. The UIDPLUS extension is a set of optimizations using UID values instead of sequence numbers and is described in RFC 2359.
+*   UIDPLUS is now always advertised in CAPABILITY and is always available. The UIDPLUS extension is a set of optimizations using UID values instead of sequence numbers and is described in RFC 2359.
 *   Cyrus no longer rejects messages with 8-bit characters in the headers. Rather than reject the message, characters with the 8th bit set are changed to 'X'. Internationalization in headers is supported by the mechanism specified in RFC 2047 (and RFC 1342).
 
 Changes to the Cyrus IMAP Server Since Version 1.5.10
@@ -142,7 +142,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5.10
 *   The checks for com_err in configure are a little smarter and look to see if all the pieces are there before trying to use them.
 *   Added support for the NAMESPACE extension (if --enable-experiment is supplied).
 *   Added a "reject8bit" switch to imapd.conf. If set to "true", messages containing 8-bit-set characters in the headers are rejected (the previous behavior); if set to "false" or left to the default value, messages containing 8-bit-set characters have these characters changed to a constant character ('X').
-*   Added the "fud" program. This is an interm hack designed to allow allow finger information to be retrieved for cyrus users. This is experimental and it is not recommend that services be built arround this feature, since it is likely to be removed in a future release of the IMAP server.
+*   Added the "fud" program. This is an interim hack designed to allow finger information to be retrieved for cyrus users. This is experimental and it is not recommend that services be built around this feature, since it is likely to be removed in a future release of the IMAP server.
 *   Bug fix: User defined flags now work properly.
 
 Changes to the Cyrus IMAP Server Since Version 1.5.2
@@ -180,7 +180,7 @@ Changes to the Cyrus IMAP Server Since Version 1.5
 *   Bug fix: imclient_authenticate now does resolution on the hostname before authenticating to it. This caused problems when authenticating to an address that was a CNAME.
 *   Bug fix: LIST %.% (and other multiple hierarchy delimiter matches) works properly. Several other glob.c fixes are included as well.
 *   Bug fix: a fetch of exclusively BODY[HEADER.FIELDS...] should now work properly.
-*   Bug fix: reconstruct now considers a nonexistant INN news directory to be empty; this makes reconstruct fix the cyrus.* files in the imap news partition.
+*   Bug fix: reconstruct now considers a nonexistent INN news directory to be empty; this makes reconstruct fix the cyrus.* files in the imap news partition.
 *   Added a manpage for imclient.
 *   Fixed a few other minor bugs.
 
@@ -255,7 +255,7 @@ Changes to the Cyrus IMAP Server Since Version 1.3
 *   Had to remove the declaration of tcl_RcFileName for the latest version of Tcl.
 *   Make much more extensive use of memory mapping. Replace the binary search module with one that searches a memory mapped area.
 *   Replaced the yacc-based RFC822 address parser with a hand-coded one.
-*   Replaced the et (error table) libary with a version that doesn't require lex or yacc. Remove the lex/yacc checking from Configure.
+*   Replaced the et (error table) library with a version that doesn't require lex or yacc. Remove the lex/yacc checking from Configure.
 *   Safety feature: most programs now refuse to run as root.
 *   Bug fix: Issue [TRYCREATE] tag on COPY command when appropriate.
 *   Bug fix: The quoted-printable decoder wasn't ignoring trailing whitespace, as required by MIME.

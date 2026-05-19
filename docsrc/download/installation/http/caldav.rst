@@ -358,7 +358,7 @@ The TZID property can have a vendor prefix, that is fixed when compiling vzic by
 IMAP requires that the vendor prefix is the empty string.
 
 The `cyrus-timezones package <https://github.com/cyrusimap/cyrus-timezones>`_ provides
-a vzic, which sets TZID_PREFIX to the emtpy string.
+a vzic, which sets TZID_PREFIX to the empty string.
 
 The steps to populate the :imapdconf:`zoneinfo_dir` directory are:
 

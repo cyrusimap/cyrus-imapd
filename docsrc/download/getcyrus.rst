@@ -9,7 +9,7 @@ Where and how do you want to get Cyrus?
 Distribution Package
 ====================
 
-Cyrus IMAP packages are packaged by several Linux distrbution.
+Cyrus IMAP packages are packaged by several Linux distribution.
 
 * Debian provides a "cyrus-imapd" package
 * Fedora provides a "cyrus-imapd" package

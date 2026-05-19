@@ -13,7 +13,7 @@ Intro
 The Mailbox API is implemented in ``imap/mailbox.h`` and
 ``imap/mailbox.c``. It wraps the data structures of the
 ``cyrus.header``, ``cyrus.index`` and ``cyrus.cache`` files in a
-psuedo-object-oriented way, allowing easy changes to the mailbox while
+pseudo-object-oriented way, allowing easy changes to the mailbox while
 keeping the internal cached data structures consistent.
 
 Opening and closing
@@ -254,7 +254,7 @@ Committing
 ~~~~~~~~~~
 
 When you have finished making any changes, you need to "commit". This
-will write the updated values for any index header fields, rewite the
+will write the updated values for any index header fields, rewrite the
 ``cyrus.header`` file if needed and fsync all changes to disk.
 
 It is a fatal error to unlock (or close) a mailbox that has had changes

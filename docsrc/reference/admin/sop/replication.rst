@@ -281,7 +281,7 @@ Terminating Rolling Replication
 
 To be able to stop rolling replication at any time, configure the
 ``sync_shutdown_file`` option in :cyrusman:`imapd.conf(5)` to point to
-a non-existant file, the appearance of this file will trigger a
+a nonexistent file, the appearance of this file will trigger a
 shutdown of a :cyrusman:`sync_client(8)` instance::
 
     sync_shutdown_file: /var/lib/imap/syncstop

@@ -259,7 +259,7 @@ The overall format looks sort of like this:
 The basic idea being that there is one header, and then all the message
 records are evenly spaced throughout the file. All of the message
 records are at well-known offsets, making any part of the file
-accessable at roughly equal speed.
+accessible at roughly equal speed.
 
 Locking Considerations
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -316,7 +316,7 @@ POP3 Last Login (4 bytes)
     (time\_t) of the last pop3 login to this INBOX, used to enforce the
     "poptimeout" ``imapd.conf`` option.
 UIDvalidity (4 bytes)
-    The UID validitiy of this mailbox. Cyrus currently uses the
+    The UID validity of this mailbox. Cyrus currently uses the
     ``time()`` when this mailbox was created.
 Deleted, Answered, and Flagged (4 bytes each)
     Counts of how many messages have each flag.
@@ -490,7 +490,7 @@ Future considerations
 -  Reformat cache file to use a
    (size)(size)(size)(size)(data)(data)(data) format. This makes
    accesses anywhere in the cache file equally fast, as opposed to
-   having to iterate through all the entires for a given message to get
+   having to iterate through all the entries for a given message to get
    to the last one. Note that either way is still O(1) so maybe it
    doesn't matter much.
 -  It would be useful to store a uniqueid -> mailbox name index, so that

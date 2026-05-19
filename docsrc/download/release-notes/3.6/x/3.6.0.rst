@@ -18,7 +18,7 @@ Major changes since the 3.4 series
   mailboxes.  In other words, when creating mailbox user.foo.A.B.C, both
   user.foo.A and user.foo.A.B will also be created as real mailboxes.
 * XFER will no longer move individual mailboxes that would leave unselectable
-  mailboxes behind in the user heirarchy.
+  mailboxes behind in the user hierarchy.
 * Update IMAP PREVIEW extension from
   :draft:`draft-ietf-extra-imap-fetch-preview-07` to :rfc:`8970`.
 * Update IMAP SAVEDATE extension from
