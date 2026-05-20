@@ -1795,7 +1795,7 @@ static void count_cb(const char *key __attribute__((unused)),
     (*np)++;
 }
 
-static unsigned int hash_count(hash_table *ht)
+static unsigned int hash_count_slow(hash_table *ht)
 {
     unsigned int n = 0;
     hash_enumerate(ht, count_cb, &n);
@@ -1815,12 +1815,12 @@ static unsigned int hash_count(hash_table *ht)
         } \
     } \
     CU_ASSERT_EQUAL(nsubset, expcount); \
-    CU_ASSERT_EQUAL(hash_count(&exphash), nsubset); \
+    CU_ASSERT_EQUAL(hash_count_slow(&exphash), nsubset); \
 }
 
 #define FOREACH_POSTCONDITION() \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
-    CU_ASSERT_EQUAL(hash_count(&exphash), 0);
+    CU_ASSERT_EQUAL(hash_count_slow(&exphash), 0);
 
 #define FOREACH_TEST(prefix, prefixlen, good, condition, expcount) \
     FOREACH_PRECONDITION(condition, expcount); \

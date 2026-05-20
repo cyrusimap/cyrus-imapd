@@ -6,6 +6,7 @@
 #define SIEVE_H
 
 #include <stdio.h>
+#include <config.h>
 
 #define SIEVE_VERSION "CMU Sieve 3.0"
 

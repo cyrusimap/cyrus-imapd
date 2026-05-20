@@ -8157,7 +8157,7 @@ static int _email_get_bodies(jmap_req_t *req,
         }
 
         json_t *events = json_null();
-        if (hash_numrecords(&icsbody_by_partid)) {
+        if (hash_count(&icsbody_by_partid)) {
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
             struct mailbox *mbox = NULL;
@@ -12128,7 +12128,7 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
 {
     /* Validate mailbox counts per email */
     hash_table mbox_ids_by_email_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mbox_ids_by_email_id, hash_numrecords(&bulk->uidrecs_by_email_id)+1, 0);
+    construct_hash_table(&mbox_ids_by_email_id, hash_count(&bulk->uidrecs_by_email_id)+1, 0);
 
     /* Collect current mailboxes per email */
     hash_iter *iter = hash_table_iter(&bulk->uidrecs_by_email_id);
@@ -12317,7 +12317,7 @@ static int _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarr
     }
 
     hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&seenseq_by_mbox_id, hash_numrecords(&bulk->plans_by_mbox_id)+1, 0);
+    construct_hash_table(&seenseq_by_mbox_id, hash_count(&bulk->plans_by_mbox_id)+1, 0);
 
     /* Plan keyword updates per mailbox */
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
@@ -12633,7 +12633,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
     /* Validate plans */
     hash_table erroneous_plans = HASH_TABLE_INITIALIZER;
     construct_hash_table(&erroneous_plans,
-            hash_numrecords(&bulk->plans_by_mbox_id) + 1, 0);
+            hash_count(&bulk->plans_by_mbox_id) + 1, 0);
 
     /* Check permissions and quota */
     int check_quota = !ignorequota && !config_getswitch(IMAPOPT_QUOTA_USE_CONVERSATIONS);
@@ -12661,7 +12661,7 @@ static int _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *upd
             }
         }
     }
-    if (hash_numrecords(&erroneous_plans)) {
+    if (hash_count(&erroneous_plans)) {
         /* Fail any update where the email is an erroneous mailbox plan */
         hash_iter_reset(plan_iter);
         while (hash_iter_next(plan_iter)) {

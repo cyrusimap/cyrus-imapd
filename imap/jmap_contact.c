@@ -4779,7 +4779,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         goto done;
 
     /* Don't combine geographical props unless at least one ADR has GROUP set */
-    if (hash_numrecords(&adrs) == 1 && hash_lookup("", &adrs)) {
+    if (hash_count(&adrs) == 1 && hash_lookup("", &adrs)) {
         strarray_free(hash_del("", &adrs));
     }
 

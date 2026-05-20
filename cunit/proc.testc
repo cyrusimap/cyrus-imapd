@@ -390,7 +390,7 @@ static void test_proc_foreach(void)
     construct_hash_table(&results, n_tests, 0);
     r = proc_foreach(&collect_procs_cb, &results);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_EQUAL(hash_numrecords(&results), 0);
+    CU_ASSERT_EQUAL(hash_count(&results), 0);
 
     /* and we're finished */
     free_hash_table(&results, &free_procdata_fields);

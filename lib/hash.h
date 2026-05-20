@@ -8,6 +8,10 @@
 
 #define HASH_TABLE_INITIALIZER {0, 0, 0, 0, NULL, NULL}
 
+#ifndef EXPORTED
+#define EXPORTED __attribute__((visibility("default")))
+#endif
+
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
 ** holds a copy of the key, a pointer to the data associated with the
@@ -86,7 +90,10 @@ strarray_t *hash_keys(const hash_table *table);
 
 /* counts the number of nodes in the hash table */
 
-int hash_numrecords(hash_table *table);
+EXPORTED inline size_t hash_count(const hash_table *table)
+{
+    return table->count;
+}
 
 /*
 ** Frees a hash table.  For each node that was inserted in the table,

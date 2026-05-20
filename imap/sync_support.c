@@ -8192,7 +8192,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
 
     /* And then run tasks. */
 
-    if (hash_numrecords(&user_mailboxes)) {
+    if (hash_count(&user_mailboxes)) {
         struct split_user_mailboxes_rock smrock;
         smrock.sync_cs = sync_cs;
         smrock.user_list = user_list;

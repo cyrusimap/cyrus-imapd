@@ -89,7 +89,7 @@ EXPORTED void strip_vtimezones(icalcomponent *ical)
         }
     }
 
-    if (hash_numrecords(&tzid_table)) {
+    if (hash_count(&tzid_table)) {
         /* Replace all TZID aliases with actual TZIDs.
            Note: This NEEDS to be done, otherwise looking up the
            builtin timezone will fail on a TZID mismatch. */

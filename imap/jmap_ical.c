@@ -5747,7 +5747,7 @@ participant_to_ical(icalcomponent *comp,
          * original data already only contained an ORGANIZER. */
         json_t *jorga = participant_from_ical(orga, NULL, orga, NULL);
         if (participant_equals(jorga, jpart) &&
-                (hash_numrecords(caladdress_by_participant_id) > 1 ||
+                (hash_count(caladdress_by_participant_id) > 1 ||
                  allow_organizer_attendee_only)) {
             icalproperty_free(prop);
             prop = NULL;

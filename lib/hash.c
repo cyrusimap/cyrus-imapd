@@ -13,6 +13,38 @@
 #include "util.h"
 #include "xmalloc.h"
 
+/* What we're aiming at is that the header has the definition:
+ * inline size_t hash_count(...) { ... };
+ * and this C file has a decaration with `extern`, causing one implementation to
+ * be compiled into this object file, and available to the linker for all the
+ * cases that can't be inlined.
+ *
+ * However...
+ * We set the default for our visibility to be hidden. Hence we need to mark
+ * this definition as EXPORTED so that it's visible to the linker to use in
+ * other files. (Without this an unoptimised build immediately breaks)
+ * gcc is forgiving, but clang insists that the first declaration it sees for
+ * the function is marked EXPORTED, so if the declaration implied by the
+ * definition (in the header) is seen first, that needs EXPORTED
+ * If we don't include config.h then EXPORTED isn't defined as anything, so it's
+ * left in place as-is, and it's a syntax error.
+ * sieve-lex.o transitively includes hash.h, but doesn't itself include config.h
+ * so we try to fix that by including config.h in hash.h
+ * We can make that work, but then example_libcyrus_min.c (and the test for it)
+ * break because that uses installed headers, and we don't install config.h
+ *
+ * One solution that clang and gcc both are happy with is to move the
+ * declaration ahead of the definition, by moving it before the header include
+ * here. However, to make that work, we also need a forward definition of
+ * hash_table.
+ *
+ * We opted not to go with this as it's not a natural order to the human reader.
+ * Given that Cyrus removed support for compilers without __attribute__(...) in
+ * 2015 (without complaints) instead we simply define EXPORTED in hash.h
+ */
+
+extern inline size_t hash_count(const hash_table *table);
+
 struct bucket {
     void *data;
     struct bucket *next;
@@ -164,7 +196,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       bucket *ptr;
 
-      if (!table->size)
+      if (!table->size || !table->count)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
@@ -332,12 +364,6 @@ EXPORTED strarray_t *hash_keys(const hash_table *table)
     }
 
     return sa;
-}
-
-EXPORTED int hash_numrecords(hash_table *table)
-{
-    /* XXX macro or inline this if we keep the count field long term */
-    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),

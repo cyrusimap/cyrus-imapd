@@ -11332,7 +11332,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                                              const char *mboxid,
                                              uint32_t uid,
                                              hash_table *icsbody_by_partid,
-                                             unsigned allow_max_uids,
+                                             size_t allow_max_uids,
                                              const struct buf *mime)
 {
     json_t *jsevents_by_partid = json_object();
@@ -11365,7 +11365,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
             construct_hash_table(&seen_uids, allow_max_uids + 1, 0);
 
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-            while (comp && (unsigned)hash_numrecords(&seen_uids) <= allow_max_uids) {
+            while (comp && hash_count(&seen_uids) <= allow_max_uids) {
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
                 const char *uid = icalcomponent_get_uid(comp);
@@ -11375,7 +11375,7 @@ HIDDEN json_t *jmap_calendar_events_from_msg(jmap_req_t *req,
                 comp = icalcomponent_get_next_component(ical, kind);
             }
 
-            unsigned nseen_uids = hash_numrecords(&seen_uids);
+            size_t nseen_uids = hash_count(&seen_uids);
             free_hash_table(&seen_uids, NULL);
 
             if (nseen_uids > allow_max_uids) {
