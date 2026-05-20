@@ -80,4 +80,30 @@ EOF
             isHTML => JSON::false
         }),
     ], $res->[0][1]{list});
+
+    my $id4 = $id2 =~ tr/0-9/5-90-4/r;
+    my $id5 = $id3 =~ tr/0-9/5-90-4/r;
+    $res = $jmap->CallMethods([['Note/get',
+                                { ids => [$id4, $id1, $id5] },
+                                "R2"]]);
+    $self->assert_cmp_deeply(
+        bag($id4, $id5),
+        $res->[0][1]{notFound},
+    );
+    $self->assert_cmp_deeply([
+        superhashof({
+            id     => $id1,
+            title  => 'snowman',
+            body   => "☃\n\n",
+            isHTML => JSON::false
+        })],
+        $res->[0][1]{list},
+    );
+
+    $res = $jmap->CallMethods([['Note/get',
+                                { ids => [] },
+                                "R2"]]);
+    $self->assert_cmp_deeply([],
+        $res->[0][1]{list},
+    );
 }
