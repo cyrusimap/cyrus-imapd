@@ -79,6 +79,10 @@ HIDDEN void jmap_email_contactfilter_init(const char *accountid,
                                           const struct namespace *namespace,
                                           struct email_contactfilter *cfilter)
 {
+    /* This memset() effectively assigns HASH_TABLE_INITIALIZER to the member
+     * .contactgroups. The later lazy initialisation of this hash table works
+     * because that macro expands to all zeros, identical to this memset().
+     */
     memset(cfilter, 0, sizeof(struct email_contactfilter));
     cfilter->accountid = accountid;
     cfilter->authstate = authstate;
@@ -249,6 +253,10 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
         havefield = 1;
         break;
     }
+
+    /* (Observe that the loop above has the same json_*() API calls as the
+     * loop below - the test above is "will the loop below find anything")
+     */
     if (!havefield) goto done;
 
     /* ensure we have preconditions for lookups */
@@ -260,6 +268,8 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
     /* Open CardDAV db for accountid */
     struct carddav_db *carddavdb = carddav_open_userid(cfilter->accountid);
     if (!carddavdb) {
+        /* This code is reachable by lmtpd, tested by deliver_corrupt_dav_db */
+
         syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
                cfilter->accountid);
         r = CYRUSDB_INTERNAL;
@@ -679,23 +689,27 @@ static xapian_query_t *_matchmime_query_new_contactgroup(const char *groupid,
 {
     xapian_query_t *xq = NULL;
 
-    if (cfilter->contactgroups.size) {
-        strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
-        if (members && strarray_size(members)) {
-            ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
-            int i;
-            for (i = 0; i < strarray_size(members); i++) {
-                const char *member = strarray_nth(members, i);
-                if (!strchr(member, '@')) continue;
-                xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
-                if (xsubq) ptrarray_append(&xsubqs, xsubq);
-            }
-            if (ptrarray_size(&xsubqs)) {
-                xq = xapian_query_new_compound(db, /*is_or*/1,
-                        (xapian_query_t **) xsubqs.data, xsubqs.count);
-            }
-            ptrarray_fini(&xsubqs);
+    /* If this code is reached, then cfilter->contactgroups has always been
+     * initialised. If jmap_email_contactfilter_from_filtercondition() above
+     * fails to open dav.db then its error return is correctly handled by
+     * jmap_email_matchmime(), meaning that the latter does not call
+     * _matchmime_buildquery() and in turn that does not call this function.
+     */
+    strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
+    if (members && strarray_size(members)) {
+        ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
+        int i;
+        for (i = 0; i < strarray_size(members); i++) {
+            const char *member = strarray_nth(members, i);
+            if (!strchr(member, '@')) continue;
+            xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
+            if (xsubq) ptrarray_append(&xsubqs, xsubq);
         }
+        if (ptrarray_size(&xsubqs)) {
+            xq = xapian_query_new_compound(db, /*is_or*/1,
+                    (xapian_query_t **) xsubqs.data, xsubqs.count);
+        }
+        ptrarray_fini(&xsubqs);
     }
     if (!xq) {
         xq = xapian_query_new_not(db, xapian_query_new_matchall(db));

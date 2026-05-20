@@ -1919,7 +1919,38 @@ static void _email_search_contactgroup(search_expr_t *parent,
                                        const char *attrname,
                                        hash_table *contactgroups)
 {
-    if (!contactgroups || !contactgroups->size) return;
+    if (!contactgroups) return;
+
+    /* At this point contactgroups must have entries - we can only get here if
+     * jmap_email_contactfilter_from_filtercondition() has been called,
+     * it called construct_hash_table(), and made one or more calls to
+     * hash_insert()
+     * The previous code assumed that it was possible for contactgroups to be
+     * non-NULL but point to an uninitialised hash table, and returned early
+     * in that case. That choice seemed conceptually buggy, because it's not
+     * consistent with the "hard false" SEOP_FALSE return just below - if the
+     * user is asking to filter on a groupid, and there are *no* group IDs, then
+     * the filter should return zero results, not return all results.
+     *
+     * It's actually already handled this way (failure) -
+     * _email_parse_filter_cb() correctly checks and propagates the error
+     * returned from jmap_email_contactfilter_from_filtercondition() and the
+     * search fails. In that function, for carddav_open_userid() to return NULL
+     * dav_open_userid() must fail - the user's SQLite DB on disk must be
+     * present AND corrupt. However, before we even reach that code path Cyrus
+     * has called my_dav_auth() in http_dav_sharing.c
+     * That calls webdav_open_userid(userid), which also calls
+     * dav_open_userid(userid). The failure path there is:
+     * if (!auth_webdavdb) {
+     *     syslog(LOG_ERR, "Unable to open WebDAV DB for userid: %s", userid);
+     *     return HTTP_UNAVAILABLE;
+     * }
+     * Hence that failure isn't even possible via the functions this source file
+     * - the only path that might cause contactgroups not be initialised is
+     * unreachable, because Cyrus will have already returned a 503 status
+     * response if the dav.db exists but can't be read.
+     * (Hence I can't write a test for it)
+     */
 
     strarray_t *members = hash_lookup(groupid, contactgroups);
     if (!members || !strarray_size(members)) {
@@ -4894,7 +4925,11 @@ static json_t *emailquery_run(jmap_req_t *req, struct emailquery *q,
     int r = 0;
 
     modseq_t modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    modseq_t addrbook_modseq = contactgroups->size ?
+    /* This ternary tests whether the hash initialisation code in
+     * jmap_email_contactfilter_from_filtercondition() was called
+     * "ensure we have preconditions for lookups"
+     */
+    modseq_t addrbook_modseq = hash_constructed(contactgroups) ?
         jmap_modseq(req, MBTYPE_ADDRESSBOOK, 0) : 0;
     char *querystate = _email_make_querystate(req, modseq, 0, addrbook_modseq);
 
