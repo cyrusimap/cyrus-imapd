@@ -3,6 +3,7 @@
 
 #include <stddef.h>           /* For size_t     */
 #include <stdint.h>
+#include <stdbool.h>
 #include "mpool.h"
 #include "strarray.h"
 
@@ -93,6 +94,26 @@ strarray_t *hash_keys(const hash_table *table);
 EXPORTED inline size_t hash_count(const hash_table *table)
 {
     return table->count;
+}
+
+/* true if construct_hash_table() has been called on this hash table
+ * false if the memory has only been initialized with HASH_TABLE_INITIALIZER
+ * As free_hash_table() resets the memory to that same state, will be true after
+ * it has been called
+ * Encapsulates an idiom used by lots of Cyrus code to defer expensive
+ * initialization of hash tables until the first time they are actually needed
+ */
+
+EXPORTED inline bool hash_constructed(const hash_table *table)
+{
+    /* Currently this tests whether .table is non-NULL, but in future we might
+     * change the implementation further such that table isn't even allocated
+     * until the first hash_insert(), so we hide this lookup in a trivial named
+     * function, instead of exposing implementation details that might change
+     * everywhere in the main codebase.
+     */
+
+    return table->table;
 }
 
 /*

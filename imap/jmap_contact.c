@@ -998,7 +998,7 @@ static int contact_textfilter_match(struct contact_textfilter *f, const char *te
     }
 
     /* Validate loose term search */
-    if (!termset->size) {
+    if (!hash_constructed(termset)) {
         /* Extract terms from text and store result in termset */
         xapian_doc_t *doc = xapian_doc_new();
         xapian_doc_index_text(doc, text, strlen(text));

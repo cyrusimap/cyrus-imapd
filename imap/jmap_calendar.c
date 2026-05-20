@@ -3404,7 +3404,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
     }
 
     if (jscal->ical_recurid[0]) {
-        if (!rock->ical_instances_by_recurid.size) {
+        if (!hash_constructed(&rock->ical_instances_by_recurid)) {
             // first time we see a recurrence instance for this ical data.
             // prepare for any further callback calls for the same UID
 

@@ -602,7 +602,7 @@ static struct header_prop *_header_parseprop(const char *s)
      * Any header not found in this map is allowed to be requested
      * in any form. */
     static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
-    if (allowed_header_forms.size == 0) {
+    if (!hash_constructed(&allowed_header_forms)) {
         /* TODO initialize with all headers in RFC 5322 and RFC 2369 */
         construct_hash_table(&allowed_header_forms, 32, 0);
         hash_insert("bcc",
@@ -6723,7 +6723,7 @@ static int _email_get_keywords(jmap_req_t *req,
         int r = seen_open(req->userid, SEEN_CREATE, &ctx->seendb);
         if (r) return r;
     }
-    if (ctx->seenseq_by_mbox_id.size == 0) {
+    if (!hash_constructed(&ctx->seenseq_by_mbox_id)) {
         construct_hash_table(&ctx->seenseq_by_mbox_id, 128, 0);
     }
     /* Gather keywords for all message records */
@@ -8145,7 +8145,7 @@ static int _email_get_bodies(jmap_req_t *req,
             }
 
             if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
-                if (!icsbody_by_partid.size) {
+                if (!hash_constructed(&icsbody_by_partid)) {
                     construct_hash_table(&icsbody_by_partid, 32, 0);
                 }
                 hash_insert(part->part_id, part, &icsbody_by_partid);
@@ -8527,7 +8527,7 @@ static int jmap_email_get(jmap_req_t *req)
     if (args.bodyprops == NULL) {
         args.bodyprops = &_email_get_default_bodyprops;
 
-        if (args.bodyprops->size == 0) {
+        if (!hash_constructed(args.bodyprops)) {
             _email_init_default_props(args.bodyprops);
         }
     }
@@ -8610,7 +8610,7 @@ static int jmap_email_parse(jmap_req_t *req)
     if (getargs.props == NULL) {
         getargs.props = &_email_parse_default_props;
 
-        if (getargs.props->size == 0) {
+        if (!hash_constructed(getargs.props)) {
             _email_init_default_props(getargs.props);
         }
     }
@@ -8619,7 +8619,7 @@ static int jmap_email_parse(jmap_req_t *req)
     if (getargs.bodyprops == NULL) {
         getargs.bodyprops = &_email_get_default_bodyprops;
 
-        if (getargs.bodyprops->size == 0) {
+        if (!getargs.bodyprops->table) {
             _email_init_default_props(getargs.bodyprops);
         }
     }

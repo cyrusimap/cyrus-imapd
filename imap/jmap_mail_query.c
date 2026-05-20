@@ -252,7 +252,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
     if (!havefield) goto done;
 
     /* ensure we have preconditions for lookups */
-    if (!cfilter->contactgroups.size) {
+    if (!hash_constructed(&cfilter->contactgroups)) {
         /* Initialize groups lookup table */
         construct_hash_table(&cfilter->contactgroups, 32, 0);
     }
