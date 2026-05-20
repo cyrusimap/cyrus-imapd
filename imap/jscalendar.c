@@ -349,7 +349,7 @@ static void guess_timezones(jscal_ctx_t *ctx, icalcomponent *ical)
         }
     }
 
-    if (!ctx->iana_tzid_by_custom_tzid.size) {
+    if (!hash_constructed(&ctx->iana_tzid_by_custom_tzid)) {
         construct_hash_table(&ctx->iana_tzid_by_custom_tzid,
                 ptrarray_size(&custom_vtzs), 0);
     }

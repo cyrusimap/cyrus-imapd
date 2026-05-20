@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
+#include <stdbool.h>
 
 #include "assert.h"
 #include "hash.h"
@@ -19,6 +20,7 @@
  * See the commit message for attempted approaches that failed. */
 
 EXPORTED extern inline size_t hash_count(const hash_table *table);
+EXPORTED extern inline bool hash_constructed(const hash_table *table);
 
 struct bucket {
     void *data;
