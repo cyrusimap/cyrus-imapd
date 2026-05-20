@@ -3931,9 +3931,7 @@ static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
     rock->imap_uid = 0;
     rock->is_draft = 0;
     message_guid_set_null(&rock->guid);
-    if (rock->ical_instances_by_recurid.size)
-        free_hash_table(&rock->ical_instances_by_recurid,
-                        _icalcomponent_free_cb);
+    free_hash_table(&rock->ical_instances_by_recurid, _icalcomponent_free_cb);
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
@@ -4507,8 +4505,7 @@ done:
     mboxlist_entry_free(&rock.mbentry);
     mbname_free(&rock.mbname);
     if (rock.ical) icalcomponent_free(rock.ical);
-    if (rock.ical_instances_by_recurid.size)
-        free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
+    free_hash_table(&rock.ical_instances_by_recurid, _icalcomponent_free_cb);
     free_hashu64_table(&rock.cache_jsevents, (void(*)(void*))json_decref);
     free_hash_table(&rock.floatingtz_by_mboxid, NULL); /* values owned by libical */
     if (ptrarray_size(&rock.malloced_fallbacktzs)) {
@@ -9403,8 +9400,7 @@ static void principalfilter_finiexpr(struct principalfilter_expr *expr)
 
 static void principalfilter_fini(struct principalfilter *filter)
 {
-    if (filter->props.size)
-        free_hash_table(&filter->props, NULL);
+    free_hash_table(&filter->props, NULL);
     if (filter->db)
         xapian_db_close(filter->db);
     if (filter->dbw)
@@ -11858,7 +11854,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     jmap_ok(req, res);
 
 done:
-    if (eventids.size) free_hash_table(&eventids, NULL);
+    free_hash_table(&eventids, NULL);
     mailbox_close(&notifmbox);
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
