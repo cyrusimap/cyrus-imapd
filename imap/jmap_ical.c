@@ -168,7 +168,7 @@ static icalcomponent *icalcomps_by_uidrecurid(struct icalcomps *comps,
 
 static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
 {
-    if (!comps || !comps->by_uid.size) {
+    if (!comps) {
         return NULL;
     }
     return hash_lookup(uid, &comps->by_uid);
