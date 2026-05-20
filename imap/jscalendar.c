@@ -290,7 +290,7 @@ static icaltimezone *get_icaltimezone_for_tzid(jscal_ctx_t *ctx, const char *tzi
     if (!tzid) return NULL;
 
     icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
-    if (!tz && ctx->iana_tzid_by_custom_tzid.size) {
+    if (!tz) {
         const char *iana_tzid =
             hash_lookup(tzid, &ctx->iana_tzid_by_custom_tzid);
         if (iana_tzid) {
