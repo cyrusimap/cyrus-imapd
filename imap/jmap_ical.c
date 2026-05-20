@@ -147,13 +147,7 @@ static void icalcomps_init(struct icalcomps *comps, icalcomponent *ical)
 static void icalcomps_fini(struct icalcomps *comps)
 {
     if (comps->by_uid.size) {
-        hash_iter *hit = hash_table_iter(&comps->by_uid);
-        while (hash_iter_next(hit)) {
-            ptrarray_t *complist = hash_iter_val(hit);
-            ptrarray_free(complist);
-        }
-        hash_iter_free(&hit);
-        free_hash_table(&comps->by_uid, NULL);
+        free_hash_table(&comps->by_uid, (void (*)(void *)) &ptrarray_free);
     }
     if (comps->by_uidrecurid.size) {
         free_hash_table(&comps->by_uidrecurid, NULL);
