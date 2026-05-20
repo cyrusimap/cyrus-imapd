@@ -1,4 +1,3 @@
-/* +++Date last modified: 05-Jul-1997 */
 /*
 ** Designation:  StriStr
 **

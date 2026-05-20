@@ -1,4 +1,3 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifndef HASH__H
 #define HASH__H
 
@@ -20,7 +19,7 @@ typedef struct bucket bucket;
 
 /*
 ** This is what you actually declare an instance of to create a table.
-** You then call 'construct_table' with the address of this structure,
+** You then call 'construct_hash_table' with the address of this structure,
 ** and a guess at the size of the table.  Note that more nodes than this
 ** can be inserted in the table, but performance degrades as this
 ** happens.  Performance should still be quite adequate until 2 or 3
@@ -37,8 +36,8 @@ typedef struct hash_table {
 } hash_table;
 
 /*
-** This is used to construct the table.  If it doesn't succeed, it sets
-** the table's size to 0, and the pointer to the table to NULL.
+** This is used to construct the table.  If it can't allocate sufficient memory
+** it will terminate the program with the diagnostic "Virtual memory exhausted".
 */
 
 hash_table *construct_hash_table(hash_table *table, size_t size,
@@ -94,9 +93,9 @@ int hash_numrecords(hash_table *table);
 ** it calls the function whose address it was passed, with a pointer
 ** to the data that was in the table.  The function is expected to
 ** free the data.  Typical usage would be:
-** free_table(&table, free);
+** free_hash_table(&table, free);
 ** if the data placed in the table was dynamically allocated, or:
-** free_table(&table, NULL);
+** free_hash_table(&table, NULL);
 ** if not.  ( If the parameter passed is NULL, it knows not to call
 ** any function with the data. )
 */
