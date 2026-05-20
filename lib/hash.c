@@ -1,4 +1,3 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -43,8 +42,8 @@ struct bucket {
 
 /* Initialize the hash_table to the size asked for.  Allocates space
 ** for the correct number of pointers and sets them to NULL.  If it
-** can't allocate sufficient memory, signals error by setting the size
-** of the table to 0.
+** can't allocate sufficient memory it will terminate the program with the
+** diagnostic "Virtual memory exhausted"
 */
 
 EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
