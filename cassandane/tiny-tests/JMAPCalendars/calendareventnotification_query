@@ -143,4 +143,35 @@ sub test_calendareventnotification_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_not_equals($notif1->{id}, $res->[0][1]{ids}[0]);
     $self->assert_str_not_equals($notif2->{id}, $res->[0][1]{ids}[0]);
+    my $notif3_id = $res->[0][1]{ids}[0];
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                calendarEventIds => ['entwives'],
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+                calendarEventIds => [],
+            },
+        }, 'R3'],
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
+
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/query', {
+            accountId => 'cassandane',
+            filter => {
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_cmp_deeply(bag($notif1->{id}, $notif2->{id}, $notif3_id),
+                             $res->[0][1]{ids});
 }
