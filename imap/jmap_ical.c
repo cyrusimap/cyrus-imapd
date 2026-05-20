@@ -154,7 +154,7 @@ static void icalcomps_fini(struct icalcomps *comps)
 static icalcomponent *icalcomps_by_uidrecurid(struct icalcomps *comps,
                                               icalcomponent *ofcomp)
 {
-    if (!comps || !comps->by_uidrecurid.size) {
+    if (!comps || !hash_count(&comps->by_uidrecurid)) {
         return NULL;
     }
 
