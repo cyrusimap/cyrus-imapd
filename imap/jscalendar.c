@@ -285,9 +285,7 @@ static void jscal_ctx_fini(jscal_ctx_t *ctx)
     guesstz_close(&ctx->gtz);
 #endif
 
-    if (ctx->iana_tzid_by_custom_tzid.size) {
-        free_hash_table(&ctx->iana_tzid_by_custom_tzid, free);
-    }
+    free_hash_table(&ctx->iana_tzid_by_custom_tzid, free);
 
     // VTIMEZONE pointers are owned by iCalendar object.
     ptrarray_fini(&ctx->unguessable_vtimezones);
