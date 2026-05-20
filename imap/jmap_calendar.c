@@ -10925,6 +10925,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     struct jmap_query query = JMAP_QUERY_INITIALIZER;
     struct mailbox *notifmbox = NULL;
     hash_table eventids = HASH_TABLE_INITIALIZER;
+    bool has_eventids = false;
 
     /* Parse request */
     json_t *err = NULL;
@@ -10972,6 +10973,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
     }
     jval = json_object_get(query.filter, "calendarEventIds");
     if (json_is_array(jval)) {
+        has_eventids = true;
         construct_hash_table(&eventids, json_array_size(jval)+1, 0);
         json_t *jid;
         size_t i;
@@ -11013,7 +11015,7 @@ static int jmap_calendareventnotification_query(struct jmap_req *req)
             before,
             after,
             type,
-            eventids.size ? &eventids : NULL
+            has_eventids ? &eventids : NULL
         };
         struct notifsearch search = {
             JMAP_NOTIF_CALENDAREVENT,
