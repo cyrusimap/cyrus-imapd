@@ -120,8 +120,8 @@ static void test_empty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -152,8 +152,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(1, hash_count(&ht));
 
     /* re-insert into the hash table */
     d = hash_insert(KEY0, VALUE1, &ht);
@@ -169,8 +169,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(1, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(1, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(1, hash_count(&ht));
 
     /* delete from the hash table */
     d = hash_del(KEY0, &ht);
@@ -185,8 +185,8 @@ static void test_reinsert(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     free_hash_table(&ht, NULL);
@@ -254,8 +254,8 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(N, hash_count(&ht));
 
     /* delete from the hash table */
     for (i = 0 ; i < N ; i++) {
@@ -274,8 +274,8 @@ static void test_many(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(0, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(0, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(0, hash_count(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -307,8 +307,8 @@ static void test_freeing_nonempty(void)
     hash_enumerate(&ht, count_cb, &count);
     CU_ASSERT_EQUAL(N, count);
 
-    /* check hash_numrecords */
-    CU_ASSERT_EQUAL(N, hash_numrecords(&ht));
+    /* check hash_count */
+    CU_ASSERT_EQUAL(N, hash_count(&ht));
 
     /* free the hash table */
     freed_count = 0;
@@ -399,7 +399,7 @@ static void test_load_factor_warning(void)
     for (i = 0; i < n_words; i++) {
         hash_insert(words[i], NULL, &ht);
     }
-    CU_ASSERT_EQUAL(n_words, hash_numrecords(&ht));
+    CU_ASSERT_EQUAL(n_words, hash_count(&ht));
     CU_ASSERT_SYSLOG(syslog_index, 2);
 
     free_hash_table(&ht, NULL);

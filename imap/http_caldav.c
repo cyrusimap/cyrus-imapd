@@ -1407,7 +1407,7 @@ HIDDEN int caldav_manage_attachments(const char *userid,
         }
     }
 
-    if (hash_numrecords(&mattach_table)) {
+    if (hash_count(&mattach_table)) {
         if (!attachments) {
             /* Open attachments collection and its DAV DB for writing */
             ret = open_attachments(userid, &attachments, &webdavdb);
