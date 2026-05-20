@@ -3901,7 +3901,15 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
         }
     }
 
-    assert(id);
+    /* A #sieve message without a Content-Disposition FILENAME ending in
+     * .sieve is malformed */
+    if (!id) {
+        xsyslog(LOG_ERR, "sieve message missing filename",
+                "mailbox=<%s> uid=<%u>",
+                mailbox_name(mailbox), new->uid);
+        r = IMAP_INVALID_IDENTIFIER;
+        goto done;
+    }
 
     /* Get script name from Subject */
     name = charset_decode_mimeheader(body->subject,
