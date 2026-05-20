@@ -60,31 +60,24 @@ EOF
     $imap->append('INBOX.Notes', $note3) || die $@;
 
     my $res = $jmap->CallMethods([['Note/get', { }, "R1"]]);
-    $self->assert_cmp_deeply(
+    $self->assert_cmp_deeply([
         superhashof({
             id     => $id1,
             title  => 'snowman',
             body   => "☃\n\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[0],
-    );
-    $self->assert_cmp_deeply(
         superhashof({
             id     => $id2,
             title  => 'bad charset',
             body   => "foo bar\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[1],
-    );
-    $self->assert_cmp_deeply(
         superhashof({
             id     => $id3,
             title  => 'bad encoding',
             body   => "foo bar\n",
             isHTML => JSON::false
         }),
-        $res->[0][1]{list}[2],
-    );
+    ], $res->[0][1]{list});
 }
