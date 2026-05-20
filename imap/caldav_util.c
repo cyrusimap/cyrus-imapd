@@ -1435,7 +1435,7 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
             }
             else {
                 r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                                    ACL_ALL | DACL_READFB, DACL_READFB, NULL,
+                                    DACL_ALL | DACL_READFB, DACL_READFB, NULL,
                                     namespace, authstate, 0, &user_nslock);
             }
         }
@@ -1455,7 +1455,7 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
 
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, comp_types,
-                            ACL_ALL | DACL_READFB, DACL_READFB,
+                            DACL_ALL | DACL_READFB, DACL_READFB,
                             config_getstring(IMAPOPT_CALENDAR_DEFAULT_DISPLAYNAME),
                             namespace, authstate, 1, &user_nslock);
         free(mailboxname);
@@ -1467,7 +1467,7 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
         /* Scheduling Inbox */
         mailboxname = caldav_mboxname(userid, SCHED_INBOX);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                            ACL_ALL | DACL_SCHED, DACL_SCHED, NULL,
+                            DACL_ALL | DACL_SCHED, DACL_SCHED, NULL,
                             namespace, authstate, 0, &user_nslock);
         free(mailboxname);
         if (r) goto done;
@@ -1475,7 +1475,7 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
         /* Scheduling Outbox */
         mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                            ACL_ALL | DACL_SCHED, 0, NULL,
+                            DACL_ALL | DACL_SCHED, 0, NULL,
                             namespace, authstate, 0, &user_nslock);
         free(mailboxname);
         if (r) goto done;
@@ -1486,7 +1486,7 @@ EXPORTED int caldav_create_defaultcalendars(const char *userid,
         /* Managed Attachment Collection */
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
         r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION, 0,
-                            ACL_ALL, ACL_READ, NULL,
+                            DACL_ALL, ACL_READ, NULL,
                             namespace, authstate, 0, &user_nslock);
         free(mailboxname);
         if (r) goto done;
