@@ -5,6 +5,7 @@ sub test_calendar_set_color
     ($self)
 {
     my $jmap = $self->default_user->jmap;
+    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/debug'); # for x-href
 
     my $cal =  {
         name=> "foo",
@@ -19,12 +20,13 @@ sub test_calendar_set_color
          "R1"],
         ['Calendar/get', {
             ids => [ '#1' ],
-            properties => [ 'color' ]
+            properties => [ 'color', 'x-href' ]
          },
          "R2"],
     ]);
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
+    my $href = $res->[1][1]{list}[0]{'x-href'};
     $self->assert_str_equals('SteelBlue', $res->[1][1]{list}[0]{color});
 
     xlog $self, "assert color is visible via CalDAV";
@@ -38,7 +40,7 @@ sub test_calendar_set_color
 EOF
 
     my $CalDAV = $self->{caldav};
-    $res = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $id,
+    $res = $CalDAV->Request('PROPFIND', $href,
                             $propfindXml, 'Content-Type' => 'text/xml');
     my $propstat = $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
     $self->assert_str_equals('SteelBlue',
@@ -124,7 +126,7 @@ EOF
 EOF
 
     xlog $self, "update calendar with hex color + alpha value";
-    $res = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $id,
+    $res = $CalDAV->Request('PROPPATCH', $href,
                             $proppatchXml, 'Content-Type' => 'text/xml');
 
     xlog $self, "assert alpha channel is stripped via JMAP";
