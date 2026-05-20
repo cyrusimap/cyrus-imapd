@@ -118,9 +118,7 @@ sub test_email_query_fromcontactcarduid
             ],
         }, 'R1']
     ], $using);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
+    $self->assert_deep_equals([$emailId1, $emailId2], $res->[0][1]{ids});
 
     # Filter by fromAnyContact
     $res = $jmap->CallMethods([
@@ -133,9 +131,7 @@ sub test_email_query_fromcontactcarduid
             ],
         }, 'R1']
     ], $using);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
+    $self->assert_deep_equals([$emailId1, $emailId2], $res->[0][1]{ids});
 
     # Negate filter by contact group.
     $res = $jmap->CallMethods([
@@ -151,8 +147,7 @@ sub test_email_query_fromcontactcarduid
             ],
         }, 'R1']
     ], $using);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId3, $res->[0][1]{ids}[0]);
+    $self->assert_deep_equals([$emailId3], $res->[0][1]{ids});
 
     # Unknown contact group should return an empty set.
     $res = $jmap->CallMethods([
@@ -234,12 +229,9 @@ sub test_email_query_fromcontactcarduid
             },
         }, 'R3']
     ], $using);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId4, $res->[0][1]{ids}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
-    $self->assert_str_equals($emailId5, $res->[1][1]{ids}[0]);
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
-    $self->assert_str_equals($emailId6, $res->[2][1]{ids}[0]);
+    $self->assert_deep_equals([$emailId4], $res->[0][1]{ids});
+    $self->assert_deep_equals([$emailId5], $res->[1][1]{ids});
+    $self->assert_deep_equals([$emailId6], $res->[2][1]{ids});
 
     # Support individual cards
     $res = $jmap->CallMethods([
@@ -287,7 +279,5 @@ sub test_email_query_fromcontactcarduid
             sort => [{ property => "subject" }],
         }, 'R1'],
     ], $using);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
-    $self->assert_str_equals($emailId7, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($emailId8, $res->[0][1]{ids}[1]);
+    $self->assert_deep_equals([$emailId7, $emailId8], $res->[0][1]{ids});
 }
