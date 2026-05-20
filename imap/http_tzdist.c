@@ -1098,7 +1098,7 @@ static int action_list(struct transaction_t *txn)
             changedsince = 0;
         }
     }
-    else if (hash_numrecords(&txn->req_qparams)) {
+    else if (hash_count(&txn->req_qparams)) {
         return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
     }
 

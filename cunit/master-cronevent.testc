@@ -334,7 +334,7 @@ static void test_fullday(void)
         hash_del(tests[i].name, &spawn_counts);
     }
 
-    CU_ASSERT_EQUAL(hash_numrecords(&spawn_counts), 0);
+    CU_ASSERT_EQUAL(hash_count(&spawn_counts), 0);
     free_hash_table(&spawn_counts, NULL);
 }
 

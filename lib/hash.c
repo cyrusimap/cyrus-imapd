@@ -13,6 +13,13 @@
 #include "util.h"
 #include "xmalloc.h"
 
+/* Ideally having this declaration with EXPORTED would be sufficient, and we
+ * could remove it from the definition in the header. gcc is fine with this,
+ * but clang treats it as an error.
+ * See the commit message for attempted approaches that failed. */
+
+EXPORTED extern inline size_t hash_count(const hash_table *table);
+
 struct bucket {
     void *data;
     struct bucket *next;
@@ -164,7 +171,7 @@ EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       bucket *ptr;
 
-      if (!table->size)
+      if (!table->size || !table->count)
           return NULL;
 
       uint32_t hash = strhash_seeded(table->seed, key);
@@ -332,12 +339,6 @@ EXPORTED strarray_t *hash_keys(const hash_table *table)
     }
 
     return sa;
-}
-
-EXPORTED int hash_numrecords(hash_table *table)
-{
-    /* XXX macro or inline this if we keep the count field long term */
-    return table->count;
 }
 
 EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),
