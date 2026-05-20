@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+use Data::GUID qw(guid_string);
+
+# The iMIP notification payload includes an actorCyrusName field naming the
+# authenticated Cyrus user who triggered scheduling.  For a "team calendar"
+# (a shared calendar where the organizer's address belongs to the calendar's
+# owning account), this lets the iMIP delivery side tell which team member
+# actually made the change, distinct from the organizer.
+sub test_imip_actor_cyrus_name
+    :min_version_3_13 :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client;
+
+    # Build a second user, "teammate", and give them write access to
+    # cassandane's Default calendar.  cassandane is the team account here;
+    # teammate is a team member acting on the team calendar.
+    my $teammate = $self->{instance}->create_user('teammate');
+
+    # We aren't using the JMAP module in these tests, so back to setacl!
+    $admintalk->setacl("user.cassandane.#calendars.Default",
+                       teammate => "lrswipcdn");
+
+    my $http = $self->{instance}->get_service("http");
+    my $teammate_dav = $teammate->caldav;
+
+    # Each scenario: an authenticated user PUTs an event with
+    # cassandane@example.com as ORGANIZER and friend@example.com as a remote
+    # attendee.  The iMIP REQUEST should be emitted and actorCyrusName should
+    # name whoever made the HTTP request.
+    $self->_assert_imip_actor_is(
+        actor          => $self->{caldav},
+        cal_path       => "Default",
+        uuid           => guid_string(),
+        expected_actor => 'cassandane',
+    );
+
+    # Send Schedule-Address: so the server treats cassandane@example.com as the
+    # scheduling identity for this request and fires the REQUEST path.
+    $self->_assert_imip_actor_is(
+        actor          => $teammate_dav,
+        cal_path       => "/dav/calendars/user/teammate/cassandane.Default",
+        uuid           => guid_string(),
+        expected_actor => 'teammate',
+        sched_address  => 'mailto:cassandane@example.com',
+    );
+}
+
+sub _assert_imip_actor_is
+{
+    my ($self, %arg) = @_;
+
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cyrus//Cassandane//EN
+BEGIN:VEVENT
+CREATED:20260519T120000Z
+UID:$arg{uuid}
+DTSTART;TZID=Australia/Melbourne:20260901T153000
+DTEND;TZID=Australia/Melbourne:20260901T183000
+DTSTAMP:20260519T120000Z
+SEQUENCE:0
+SUMMARY:scheduled event
+ORGANIZER;CN=Cassandane:MAILTO:cassandane\@example.com
+ATTENDEE;CN=Cassandane;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my @hdrs = (
+      'Content-Type' => 'text/calendar',
+      ($arg{sched_address} ? ('Schedule-Address' => $arg{sched_address}) : ()),
+    );
+
+    # Drop any notifications queued by setup or by the previous scenario, so
+    # the assertion only sees what this PUT emits.
+    $self->{instance}->getnotify;
+
+    $arg{actor}->Request('PUT', "$arg{cal_path}/$arg{uuid}.ics", $card, @hdrs);
+
+    $self->assert_caldav_notified({
+        recipient      => 'friend@example.com',
+        method         => 'REQUEST',
+        is_update      => JSON::false,
+        actorCyrusName => $arg{expected_actor},
+    });
+}
