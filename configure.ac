@@ -129,7 +129,6 @@ AC_SYS_LONG_FILE_NAMES
 if test $ac_cv_sys_long_file_names = no; then
         AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
-AC_C_INLINE
 
 dnl check for libm -- sets LIBM
 dnl LT_LIB_M breaks under -Werror, so work around that
