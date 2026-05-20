@@ -146,12 +146,8 @@ static void icalcomps_init(struct icalcomps *comps, icalcomponent *ical)
 
 static void icalcomps_fini(struct icalcomps *comps)
 {
-    if (comps->by_uid.size) {
-        free_hash_table(&comps->by_uid, (void (*)(void *)) &ptrarray_free);
-    }
-    if (comps->by_uidrecurid.size) {
-        free_hash_table(&comps->by_uidrecurid, NULL);
-    }
+    free_hash_table(&comps->by_uid, (void (*)(void *)) &ptrarray_free);
+    free_hash_table(&comps->by_uidrecurid, NULL);
     buf_free(&comps->buf);
 }
 
@@ -1151,12 +1147,8 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
 
 static void jstimezones_fini(jstimezones_t *jstzones)
 {
-    if (jstzones->byjstzid.size) {
-        free_hash_table(&jstzones->byjstzid, NULL);
-    }
-    if (jstzones->bytzid.size) {
-        free_hash_table(&jstzones->bytzid, NULL);
-    }
+    free_hash_table(&jstzones->byjstzid, NULL);
+    free_hash_table(&jstzones->bytzid, NULL);
 
     jstimezones_entry_t *jstz;
     while ((jstz = ptrarray_pop(&jstzones->entries))) {

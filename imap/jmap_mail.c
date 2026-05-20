@@ -4407,10 +4407,8 @@ static void emailquery_uidsearch_result_free(void *rock)
         hashset_free(&rrock->savedates);
     if (rrock->seen_emails)
         hashset_free(&rrock->seen_emails);
-    if (rrock->partid_bynum.size)
-        free_hashu64_table(&rrock->partid_bynum, free);
-    if (rrock->partnum_byid.size)
-        free_hash_table(&rrock->partnum_byid, NULL);
+    free_hashu64_table(&rrock->partid_bynum, free);
+    free_hash_table(&rrock->partnum_byid, NULL);
 
     free(rrock);
 }
@@ -4565,9 +4563,7 @@ static void emailquery_cache_reset(struct emailquery_cache *qc)
         qc->qr.free(qc->qr.rock);
     }
     free(qc->nextinthread);
-    if (qc->firstinthread.size) {
-        free_hashu64_table(&qc->firstinthread, NULL);
-    }
+    free_hashu64_table(&qc->firstinthread, NULL);
     memset(qc, 0, sizeof(struct emailquery_cache));
 }
 
@@ -8172,7 +8168,7 @@ static int _email_get_bodies(jmap_req_t *req,
         }
         json_object_set_new(email, "calendarEvents", events);
 
-        if (icsbody_by_partid.size) free_hash_table(&icsbody_by_partid, NULL);
+        free_hash_table(&icsbody_by_partid, NULL);
         hashset_free(&icsguids);
     }
 
