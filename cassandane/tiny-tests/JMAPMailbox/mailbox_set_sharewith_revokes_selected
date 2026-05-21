@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+# Unsharing a mailbox through JMAP takes effect on a sharee's IMAP session
+# that already has it selected.
+sub test_mailbox_set_sharewith_revokes_selected
+    :NoAltNameSpace :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $jmap->default_using([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+
+    xlog $self, "cassandane shares a mailbox with sharee";
+    my $res = $jmap->request([
+        [ 'Mailbox/set' => {
+            create => { 1 => {
+                name => 'shared',
+                shareWith => { sharee => { mayRead => JSON::true } },
+            } },
+        } ],
+    ]);
+    my $mboxid = $res->single_sentence('Mailbox/set')->as_set->created_id(1);
+    $self->assert_not_null($mboxid);
+
+    $self->{instance}->create_user('sharee');
+    $self->{adminstore}->set_folder('user.cassandane.shared');
+    $self->make_message('Message A', store => $self->{adminstore}) or die;
+
+    my $sharee = $self->{instance}->get_service('imap')
+                      ->create_store(username => 'sharee')->get_client();
+    $sharee->examine('user.cassandane.shared');
+    $self->assert_str_equals('ok', $sharee->get_last_completion_response());
+    $sharee->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $sharee->get_last_completion_response());
+
+    xlog $self, "cassandane unshares it through JMAP";
+    $res = $jmap->request([
+        [ 'Mailbox/set' => {
+            update => { $mboxid => { shareWith => undef } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ "$mboxid" ],
+        [ $res->single_sentence('Mailbox/set')->as_set->updated_ids ],
+    );
+
+    xlog $self, "the sharee's selected session can no longer read it";
+    $sharee->fetch('1', '(flags)');
+    $self->assert_str_equals('no', $sharee->get_last_completion_response());
+    $self->assert_matches(qr/permission denied/i, $sharee->get_last_error());
+}

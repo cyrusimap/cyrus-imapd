@@ -1,0 +1,27 @@
+#!perl
+use Cassandane::Tiny;
+
+# XRUNANNOTATOR is refused once the write and annotate rights are gone
+sub test_revoke_annotator
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+    my $folder = 'user.archive.cassandane.sent';
+
+    $self->{adminstore}->set_folder($folder);
+    $self->make_message("Message A", store => $self->{adminstore});
+    $admintalk->setacl($folder, cassandane => 'lrswipkxtean');
+
+    $self->assert_str_equals('read-write', $talk->select($folder));
+
+    $talk->_imap_cmd('XRUNANNOTATOR', 0, {}, '1');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "revoke the write and annotate rights, then XRUNANNOTATOR";
+    $admintalk->setacl($folder, cassandane => 'lrsipkxtea');
+    $talk->_imap_cmd('XRUNANNOTATOR', 0, {}, '1');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
+}

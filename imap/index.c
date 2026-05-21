@@ -265,6 +265,24 @@ EXPORTED void index_close(struct index_state **stateptr)
     *stateptr = NULL;
 }
 
+EXPORTED void index_calc_myrights(struct index_state *state,
+                                  struct auth_state *authstate, const char *acl)
+{
+    state->myrights = cyrus_acl_myrights(authstate, acl);
+
+    if (state->examining)
+        state->myrights &= ~ACL_READ_WRITE;
+
+    /* Only allow setting flags on \Scheduled mailbox */
+    if (state->mailbox &&
+        mboxname_isscheduledmailbox(mailbox_name(state->mailbox),
+                                    mailbox_mbtype(state->mailbox))) {
+        state->myrights &= ~(ACL_INSERT | ACL_POST |
+                             ACL_CREATE | ACL_DELETEMBOX |
+                             ACL_DELETEMSG | ACL_EXPUNGE);
+    }
+}
+
 /*
  * A new mailbox has been selected and already opened, map it into
  * memory and do the initial CHECK.
@@ -296,19 +314,9 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
         state->want_mbtype = init->want_mbtype;
         state->want_expunged = init->want_expunged;
         state->want_annotations = init->want_annotations;
+        state->track_rights = init->track_rights;
 
-        state->myrights = cyrus_acl_myrights(init->authstate,
-                                             mailbox_acl(state->mailbox));
-        if (state->examining)
-            state->myrights &= ~ACL_READ_WRITE;
-
-        /* Only allow setting flags on \Scheduled mailbox */
-        if (mboxname_isscheduledmailbox(mailbox_name(state->mailbox),
-                                        mailbox_mbtype(state->mailbox))) {
-            state->myrights &= ~(ACL_INSERT | ACL_POST |
-                                 ACL_CREATE | ACL_DELETEMBOX |
-                                 ACL_DELETEMSG | ACL_EXPUNGE);
-        }
+        index_calc_myrights(state, init->authstate, mailbox_acl(state->mailbox));
 
         state->internalseen = mailbox_internal_seen(state->mailbox,
                                                     state->userid);
@@ -384,6 +392,11 @@ EXPORTED int index_expunge(struct index_state *state, const char *sequence,
 
     r = index_lock_write(state);
     if (r) return r;
+
+    if (state->track_rights && !(state->myrights & ACL_EXPUNGE)) {
+        index_unlock(state);
+        return IMAP_PERMISSION_DENIED;
+    }
 
     /* Make sure there is something to expunge */
     if (!sequence && !(state->mailbox->i.deleted > 0 && need_deleted)) {
@@ -1343,6 +1356,10 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
     struct index_modified_flags modified_flags;
     struct index_record record;
 
+    r = index_lock_write(state);
+    if (r) return r;
+
+    /* check rights under the lock, which refreshes them */
     if (storeargs->operation == STORE_ADD_FLAGS
         || storeargs->operation == STORE_REMOVE_FLAGS)
     {
@@ -1386,6 +1403,7 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
             && !flags->count)
         {
             xsyslog_ev(LOG_DEBUG, "imap.store.rejected");
+            index_unlock(state);
             return IMAP_PERMISSION_DENIED;
         }
     }
@@ -1395,12 +1413,10 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
             !(state->myrights & ACL_DELETEMSG)) ||
             (((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
             !(state->myrights & ACL_WRITE))) {
+            index_unlock(state);
             return IMAP_PERMISSION_DENIED;
         }
     }
-
-    r = index_lock_write(state);
-    if (r) return r;
 
     mailbox = state->mailbox;
 
@@ -1600,17 +1616,21 @@ EXPORTED int index_run_annotator(struct index_state *state,
     msgrecord_t *msgrec = NULL;
     int r = 0;
 
-    /* We do the acl check here rather than in append_setup_mbox()
-     * to account for the EXAMINE command where state->myrights has
-     * fewer rights than the ACL actually grants */
-    if (!(state->myrights & (ACL_WRITE|ACL_ANNOTATEMSG)))
-        return IMAP_PERMISSION_DENIED;
-
-    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
-        return 0;
-
     r = index_lock_write(state);
     if (r) return r;
+
+    /* We do the acl check here, under the lock that refreshes the rights,
+     * rather than in append_setup_mbox() to account for the EXAMINE command
+     * where state->myrights has fewer rights than the ACL actually grants */
+    if (!(state->myrights & (ACL_WRITE|ACL_ANNOTATEMSG))) {
+        index_unlock(state);
+        return IMAP_PERMISSION_DENIED;
+    }
+
+    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
+        index_unlock(state);
+        return 0;
+    }
 
     r = append_setup_mbox(&as, state->mailbox,
                           state->userid, state->authstate,
@@ -1762,6 +1782,7 @@ out:
 
 static int index_lock(struct index_state *state, int readonly)
 {
+    bool reopened = false;
     int r;
 
     if (state->mailbox) {
@@ -1783,6 +1804,7 @@ static int index_lock(struct index_state *state, int readonly)
             r = mailbox_open_iwl(state->mboxname, &state->mailbox);
             if (r) return r;
         }
+        reopened = true;
     }
 
     /* if the UIDVALIDITY has changed, treat as a delete */
@@ -1793,6 +1815,26 @@ static int index_lock(struct index_state *state, int readonly)
 
     if (!readonly && !state->examining)
         state->replicaonly = index_isreplicaonly(state);
+
+    if (state->track_rights) {
+        /* A reopen read a fresh mbentry, so pick up any ACL change */
+        if (reopened) {
+            bool was_rw = state->myrights & ACL_READ_WRITE;
+
+            index_calc_myrights(state, state->authstate,
+                                mailbox_acl(state->mailbox));
+
+            if (state->out && was_rw != !!(state->myrights & ACL_READ_WRITE)) {
+                prot_printf(state->out, "* OK [READ-%s] Ok\r\n",
+                            was_rw ? "ONLY" : "WRITE");
+            }
+        }
+
+        if (!(state->myrights & ACL_READ)) {
+            mailbox_close(&state->mailbox);
+            return IMAP_PERMISSION_DENIED;
+        }
+    }
 
     /* if highestmodseq has changed or file is repacked, read updates */
     if (state->highestmodseq != state->mailbox->i.highestmodseq
@@ -2394,6 +2436,10 @@ EXPORTED int index_copy(struct index_state *state,
 
     /* don't copy messages that the MOVE then can't expunge */
     if (ismove && state->replicaonly) return IMAP_MAILBOX_REPLICAONLY;
+
+    /* check under the lock, which refreshes the rights */
+    if (state->track_rights && ismove && !(state->myrights & ACL_EXPUNGE))
+        return IMAP_PERMISSION_DENIED;
 
     srcmailbox = state->mailbox;
 
@@ -7405,6 +7451,11 @@ EXPORTED const char *index_mailboxid(const struct index_state *state)
 EXPORTED int index_hasrights(const struct index_state *state, int rights)
 {
     return state->myrights & rights;
+}
+
+EXPORTED void index_refresh_rights(struct index_state *state)
+{
+    if (!index_lock(state, /*readonly*/1)) index_unlock(state);
 }
 
 /*

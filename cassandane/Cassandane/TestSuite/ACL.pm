@@ -16,7 +16,13 @@ use Cassandane::Instance;
 sub new
 {
     my $class = shift;
-    return  $class->SUPER::new({adminstore => 1}, @_);
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(imapidlepoll => 1);
+    return $class->SUPER::new({
+        config => $config,
+        deliver => 1,
+        adminstore => 1,
+    }, @_);
 }
 
 sub set_up

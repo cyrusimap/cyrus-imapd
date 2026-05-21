@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+# MOVE out of the selected mailbox is refused once the expunge right is gone
+sub test_revoke_move
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+    my $folder = 'user.archive.cassandane.sent';
+
+    $self->{adminstore}->set_folder($folder);
+    $self->make_message("Message A", store => $self->{adminstore});
+    $admintalk->setacl($folder, cassandane => 'lrswipkxtean');
+
+    $self->assert_str_equals('read-write', $talk->select($folder));
+
+    xlog $self, "revoke the expunge right, then MOVE";
+    $admintalk->setacl($folder, cassandane => 'lrswipkxtan');
+    $talk->move('1', 'INBOX');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
+
+    xlog $self, "the message is still in the source, and wasn't copied";
+    my $status = $admintalk->status($folder, ['messages']);
+    $self->assert_num_equals(1, $status->{messages});
+    $status = $admintalk->status('user.cassandane', ['messages']);
+    $self->assert_num_equals(0, $status->{messages});
+}
