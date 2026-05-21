@@ -5389,6 +5389,83 @@ static void setcalendarevents_update(jmap_req_t *req,
                 cdata->dav.imap_uid, error_message(r));
         goto done;
     }
+
+    /* Fast path trivial moves: if the patch only changes calendarIds,
+     * move the index record instead of converting the iCalendar data */
+    if (dstmbox && !eid->ical_recurid &&
+            json_object_size(update.event_patch) == 1 &&
+            json_object_get(update.event_patch, "calendarIds")) {
+
+        /* Setup append state */
+        struct appendstate as;
+        r = append_setup_mbox(&as, dstmbox, req->userid, req->authstate,
+                              JACL_ADDITEMS, NULL, &jmap_namespace, 0,
+                              EVENT_MESSAGE_MOVE);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "append_setup_mbox failed",
+                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
+                    lf_s("error", error_message(r)));
+            goto done;
+        }
+
+        /* Copy index record */
+        msgrecord_t *src_mr = msgrecord_from_index_record(mbox, &record);
+        ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
+        ptrarray_append(&msgrecs, src_mr);
+        r = append_copy(mbox, &as, &msgrecs,
+                        /*nolink*/0, /*is_same_user*/1, NULL);
+        msgrecord_unref(&src_mr);
+        ptrarray_fini(&msgrecs);
+        if (r) {
+            append_abort(&as);
+            xsyslog_ev(LOG_ERR, "append_copy failed",
+                    lf_s("src_mboxid", mailbox_uniqueid(mbox)),
+                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
+                    lf_s("error", error_message(r)));
+            goto done;
+        }
+
+        /* Finish append */
+        r = append_commit(&as);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "append_commit failed",
+                    lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)),
+                    lf_s("error", error_message(r)));
+            goto done;
+        }
+
+        /* Expunge record from source mailbox. */
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+        r = mailbox_rewrite_index_record(mbox, &record);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "mailbox_rewrite_index_record failed: %s",
+                    lf_s("src_mboxid", mailbox_uniqueid(mbox)),
+                    lf_u("imap_uid", record.uid),
+                    lf_s("error", error_message(r)));
+            mailbox_close(&mbox);
+            goto done;
+        }
+        mboxevent_extract_record(mboxevent, mbox, &record);
+        mboxevent_extract_mailbox(mboxevent, mbox);
+        mboxevent_set_numunseen(mboxevent, mbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL,
+                             req->userid, cdata->dav.mailbox, 0);
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
+
+        /* Successfully moved, all done! */
+        xsyslog_ev(LOG_DEBUG, "moved calendar event via fast path",
+                lf_s("ical_uid", eid->ical_uid),
+                lf_u("src_imap_uid", record.uid),
+                lf_s("src_mboxid", mailbox_uniqueid(mbox)),
+                lf_s("dst_mboxid", mailbox_uniqueid(dstmbox)));
+        r = 0;
+        goto done;
+    }
+
+    /* Slow path: change is not a trivial move */
+
     /* Load VEVENT from record, personalizing as needed. */
     update.oldical = caldav_record_to_ical(mbox, cdata, req->userid, NULL);
     if (!update.oldical) {
