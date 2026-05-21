@@ -53,6 +53,7 @@ struct index_init {
     int want_expunged;
     bool want_annotations;
     int stay_locked;
+    bool track_rights; /* refresh myrights on each lock, deny without r */
     struct vanished_params vanished;
     seqset_t *vanishedlist;
 };
@@ -89,6 +90,7 @@ struct index_state {
     int examining;
     bool replicaonly;   /* refuse writes, but don't advertise read-only */
     int myrights;
+    bool track_rights;
     unsigned numrecent;
     unsigned numunseen;
     unsigned firstnotseen;
@@ -335,6 +337,12 @@ extern const char *index_uniqueid(const struct index_state *state);
 extern const char *index_mailboxid(const struct index_state *state);
 extern int index_hasrights(const struct index_state *state, int rights);
 
+/**
+ * Re-read the rights of a mailbox opened with track_rights, which otherwise
+ * happens only as a side effect of locking its index.
+ */
+extern void index_refresh_rights(struct index_state *state);
+
 extern int index_reload_record(struct index_state *state,
                                uint32_t msgno,
                                struct index_record *record);
@@ -372,5 +380,8 @@ extern void index_print_objectid_ok(struct protstream *pout,
                                     bool compound,
                                     const char *mailboxid,
                                     const char *accountid);
+
+extern void index_calc_myrights(struct index_state *state,
+                                struct auth_state *authstate, const char *acl);
 
 #endif /* INDEX_H */
