@@ -813,14 +813,24 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             if (buf_len(&attrib)) {
                 icalcomponent *ical, *vtz;
                 icalproperty *tzid;
+                const char *tzidstr = NULL;
 
                 ical = icalparser_parse_string(buf_cstring(&attrib));
-                vtz = icalcomponent_get_first_component(ical,
-                                                        ICAL_VTIMEZONE_COMPONENT);
-                tzid = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+                /* The annotation is normally validated on PROPPATCH, but it
+                 * can also be written via SETMETADATA, which bypasses that
+                 * check.  Defensively guard each step. */
+                if (ical) {
+                    vtz = icalcomponent_get_first_component(ical,
+                                                            ICAL_VTIMEZONE_COMPONENT);
+                    if (vtz) {
+                        tzid = icalcomponent_get_first_property(vtz,
+                                                                ICAL_TZID_PROPERTY);
+                        if (tzid) tzidstr = icalproperty_get_tzid(tzid);
+                    }
+                }
                 json_object_set_new(obj, "timeZone",
-                                    json_string(icalproperty_get_tzid(tzid)));
-                icalcomponent_free(ical);
+                                    tzidstr ? json_string(tzidstr) : json_null());
+                if (ical) icalcomponent_free(ical);
             }
             else {
                 json_object_set_new(obj, "timeZone", json_null());
@@ -10136,7 +10146,7 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
         xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
         if (ctxt) {
             doc = xmlCtxtReadMemory(ctxt, buf_base(&buf), buf_len(&buf),
-                    NULL, NULL, XML_PARSE_NOWARNING);
+                    NULL, NULL, XML_PARSE_NOWARNING | XML_PARSE_NONET);
             xmlFreeParserCtxt(ctxt);
         }
         buf_reset(&buf);
