@@ -98,6 +98,11 @@ void lmtpmode(struct lmtp_func *func,
               struct protstream *pout,
               int fd);
 
+/* strip the surrounding <> (and any trailing whitespace) from a return
+ * path; exposed here primarily so the cunit suite can exercise it
+ */
+void clean_retpath(char *rpath);
+
 /************** client-side LMTP ****************/
 
 #include "backend.h"

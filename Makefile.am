@@ -648,6 +648,7 @@ cunit_TESTS = \
     cunit/imparse.testc \
     cunit/index_file.testc \
     cunit/libconfig.testc \
+    cunit/lmtpengine.testc \
     cunit/loginlog.testc \
     cunit/logfmt.testc \
     cunit/mailbox.testc \
@@ -696,7 +697,8 @@ cunit_TESTS += cunit/ical_support.testc
 endif
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-    imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
+    imap/css3_color.c imap/lmtpengine.c imap/mutex_fake.c imap/spool.c \
+    imap/search_expr.c \
     master/event.c master/cronevent.c
 nodist_cunit_unit_SOURCES = cunit/unit-registry.c
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
