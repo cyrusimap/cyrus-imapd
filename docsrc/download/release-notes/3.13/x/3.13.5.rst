@@ -1,7 +1,7 @@
 :tocdepth: 3
 
 ===========================
-Cyrus IMAP 3.13.4 Tag Notes
+Cyrus IMAP 3.13.5 Tag Notes
 ===========================
 
 Unavailable for download as this is a development branch only.
@@ -16,7 +16,7 @@ Access is via git.
     generally be **large breaking changes** occurring between releases in this
     series.
 
-.. _relnotes-3.13.4-changes:
+.. _relnotes-3.13.5-changes:
 
 Major changes since the 3.12 series
 ===================================
@@ -69,6 +69,10 @@ Major changes since the 3.12 series
 * Content for the documentation site (cyrusimap.org) can now be
   written in Markdown.  Building the documentation, therefore, will
   now require ``myst_parser``, which is what makes this possible.
+* The hash table code has been refactored to reduce memory usage and improve
+  performance.
+* `IMIP` notifications sent to the notify socket now include the username of the
+  authenticated user who triggered the change.
 
 Updates to default configuration
 ================================
@@ -87,6 +91,8 @@ Removed features
 * Support for the obscure "objectstore" feature has been removed.
 * The long deprecated ``installsieve`` program has been removed. Please use
   :cyrusman:`sieveshell(1)` instead.
+* The legacy JMAP Contacts API has been removed (``Contact/*`` and
+  ``ContactGroup/*``) - use ``ContactCard/*`` instead.
 * The following options are now deprecated:
 
  * caringo_hostname
