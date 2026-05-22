@@ -3,9 +3,10 @@
 package Cyrus::IMAPOptions::App;
 use warnings;
 use strict;
+use experimental 'signatures';
 use App::Cmd::Setup -app;
 
-sub common_opt_spec
+sub common_opt_spec ()
 {
     return (
         [ 'forbid-unreleased', 'forbid imapoptions marked UNRELEASED' ],
