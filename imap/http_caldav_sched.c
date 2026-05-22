@@ -1154,6 +1154,16 @@ static void sched_deliver_remote(const char *cal_ownerid, const char *sched_user
                         status = xmlNodeGetContent(node);
                 }
 
+                /* A bogus response may omit <request-status>, or provide it as
+                 * an empty element (in which case xmlNodeGetContent can return
+                 * NULL).  Treat it as tempfail rather than NULL deref. */
+                if (!status) {
+                    SCHED_STATUS(sched_data,
+                                 REQSTAT_TEMPFAIL, SCHEDSTAT_TEMPFAIL);
+                    xmlFree(recip);
+                    continue;
+                }
+
                 if (!strncmp((const char *) status, "2.0", 3)) {
                     SCHED_STATUS(sched_data,
                                  REQSTAT_DELIVERED, SCHEDSTAT_DELIVERED);
