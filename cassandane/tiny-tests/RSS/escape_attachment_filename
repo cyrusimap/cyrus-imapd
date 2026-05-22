@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_escape_attachment_filename ($self)
+{
+    # MIME parameter values can carry quoted-string content with
+    # arbitrary bytes; display_part() in http_rss.c renders the filename
+    # parameter both as anchor text and as alt="..." on an <img>.
+    my $raw = <<'EOF';
+From: sender@example.org
+To: cassandane@example.com
+Subject: Filename XSS
+Message-ID: <rss-xss-filename@example.org>
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+MIME-Version: 1.0
+Content-Type: image/png; name="<script>alert(3)</script>.png"
+Content-Disposition: attachment; filename="<script>alert(3)</script>.png"
+Content-Transfer-Encoding: base64
+
+aGVsbG8K
+EOF
+
+    $self->_assert_rss_does_not_contain(
+        raw      => $raw,
+        sentinel => '<script>alert(3)</script>',
+        path     => '/rss/INBOX/1.',
+        label    => 'attachment filename in per-message HTML',
+    );
+}
