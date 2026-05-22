@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+# A POST to a calendar with an empty <share-access/> element used to crash the
+# httpd worker.  Test that this does not regress.
+sub test_davsharing_empty_share_access
+    :min_version_3_0 :NoVirtDomains
+    ($self)
+{
+    my $caldav = $self->{caldav};
+
+    my $calid = $caldav->NewCalendar({name => 'shared'});
+    $self->assert_not_null($calid);
+
+    # An otherwise valid share-resource body, but with an empty <share-access/>
+    # where the spec expects a child element naming the access level.
+    my $body = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:friend\@example.com</D:href>
+    <D:share-access/>
+  </D:sharee>
+</D:share-resource>
+EOF
+
+    my $res = $caldav->{ua}->request('POST', $caldav->request_url($calid), {
+        content => $body,
+        headers => {
+            'Authorization' => $caldav->auth_header(),
+            'Content-Type'  => 'application/davsharing+xml',
+        },
+    });
+
+    # Status 599 from HTTP::Tiny signals a transport-level failure -- which
+    # is what we see if the worker has crashed mid-request.  Anything in the
+    # 2xx/4xx range means the server stayed up and answered.
+    $self->assert_num_not_equals(599, $res->{status});
+    $self->assert_matches(qr/\A[24]\d\d\z/, $res->{status});
+}
