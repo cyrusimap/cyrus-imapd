@@ -765,8 +765,7 @@ static int annotate_commit(annotate_db_t *d)
 #if DEBUG
         syslog(LOG_ERR, "Committing annotations db %s", d->filename);
 #endif
-        r = cyrusdb_commit(d->db, d->txn);
-        if (r)
+        if (cyrusdb_commit(d->db, d->txn))
             r = IMAP_IOERROR;
         d->txn = NULL;
     }
