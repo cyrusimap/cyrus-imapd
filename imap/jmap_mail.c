@@ -10800,7 +10800,6 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
     size_t src_len = 0;
     int src_encoding = ENCODING_UNKNOWN;
     strarray_t freeme = STRARRAY_INITIALIZER;
-    charset_t cs = CHARSET_UNKNOWN_CHARSET;
 
     // Determine source content and encoding
     if (part->blob_id) {
@@ -10874,42 +10873,20 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
             }
             body_encoding = ENCODING_NONE;
 
-            unsigned body_flags = get_mimebody_flags(body, body_len);
-
-            // Set charset for plain text EmailBodyValues if required
-            if (!part->charset && part->part_id &&
-                // XXX !strcasecmp(media_subtype, "plain") &&
-                (body_flags & MIMEBODY_HAS_NON_ASCII)) {
-                part->charset = xstrdup("utf-8");
-            }
-
-            // Validate inline text charset
-            if (part->charset)
-                cs = charset_lookupname(part->charset);
-            else if (!strcasecmp("plain", media_subtype))
-                cs = charset_lookupname("US-ASCII");
-            else
-                cs = CHARSET_UNKNOWN_CHARSET;
-
-            if (!strcasecmp(charset_canon_name(cs), "US-ASCII")) {
-                if (body_flags & MIMEBODY_HAS_NON_ASCII) {
-                    jmap_parser_invalid(parser, "charset");
-                    goto done;
-                }
-            }
-            else if (!strcasecmp(charset_canon_name(cs), "UTF-8")) {
-                struct char_counts utf8_counts =
-                    charset_count_validutf8(body, body_len);
-                if (utf8_counts.invalid) {
-                    jmap_parser_invalid(parser, "charset");
-                    goto done;
-                }
-            }
-
             // Rewrite inline plain text
             if (!strcasecmp("plain", media_subtype)) {
                 expand_bare_cr_lf(&body, &body_len, &freeme);
-                body_flags = get_mimebody_flags(body, body_len);
+            }
+
+            unsigned body_flags = get_mimebody_flags(body, body_len);
+
+            // Guess UTF-8 charset for text bodies, if no charset is given.
+            if (!part->charset && (body_flags & MIMEBODY_HAS_NON_ASCII)) {
+                struct char_counts utf8_counts =
+                    charset_count_validutf8(body, body_len);
+                if (!utf8_counts.invalid) {
+                    part->charset = xstrdup("utf-8");
+                }
             }
 
             if (body_flags == MIMEBODY_HAS_ASCII_OR_NONE) {
@@ -11059,7 +11036,6 @@ static void _emailpart_body_to_mime(jmap_req_t *req, struct jmap_parser *parser,
 done:
     jmap_getblob_ctx_fini(&blob);
     strarray_fini(&freeme);
-    charset_free(&cs);
 }
 
 static void _emailpart_to_mime(jmap_req_t *req, struct jmap_parser *parser,

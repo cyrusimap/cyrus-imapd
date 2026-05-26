@@ -48,7 +48,8 @@ sub test_email_set_create_encoding ($self)
         bodyStructure => {
             type => 'text/plain',
         },
-        wantInvalidProperties => ['bodyStructure/charset'],
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8',
     }, {
         desc => 'text/plain UTF-8 without charset from EmailBodyValue',
         bodyValue => "some \N{TOMATO} utf-8",
@@ -58,7 +59,7 @@ sub test_email_set_create_encoding ($self)
         wantEncoding => 'quoted-printable',
         wantContentType => 'text/plain; charset=utf-8'
     }, {
-        desc => 'text/plain UTF-8 with charset',
+        desc => 'text/plain UTF-8 with charset from blob',
         blob => encode('utf-8', "some \N{TOMATO} utf-8"),
         bodyStructure => {
             type => 'text/plain',
@@ -66,6 +67,14 @@ sub test_email_set_create_encoding ($self)
         },
         wantEncoding => 'quoted-printable',
         wantContentType => 'text/plain; charset=utf-8'
+    }, {
+        desc => 'text/plain UTF-8 with charset from EmailBodyValue',
+        bodyValue => encode('utf-8', "some \N{TOMATO} utf-8"),
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'utf-8',
+        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     }, {
         desc => 'text/xml without charset from blob',
         blob => '<?xml version="1.0"?><hello/>',
@@ -144,22 +153,24 @@ sub test_email_set_create_encoding ($self)
         wantEncoding => 'quoted-printable',
         wantContentType => 'text/plain; charset=utf-8',
     }, {
-        desc => 'text/plain with multi-byte UTF-8 and no charset',
+        desc => 'text/plain with multi-byte UTF-8 blob and no charset',
         blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
         },
-        wantInvalidProperties => ['bodyStructure/charset'],
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8',
     }, {
-        desc => 'text/plain with multi-byte UTF-8 and us-ascii charset',
+        desc => 'text/plain with multi-byte UTF-8 blob and us-ascii charset',
         blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
             charset => 'us-ascii',
         },
-        wantInvalidProperties => ['bodyStructure/charset'],
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=us-ascii',
     }, {
-        desc => 'text/plain with multi-byte UTF-8 as attachment',
+        desc => 'text/plain with multi-byte UTF-8 blob as attachment',
         blob => "\$ to \xc2\xa3",
         bodyStructure => {
             type => 'text/plain',
@@ -183,7 +194,8 @@ sub test_email_set_create_encoding ($self)
             type => 'text/plain',
             charset => 'utf-8',
         },
-        wantInvalidProperties => ['bodyStructure/charset'],
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=utf-8',
     }, {
         desc => 'text/plain with invalid UTF-8 as attachment',
         blob => "bogus \xe2\x28\xa1 data",
@@ -290,6 +302,23 @@ sub test_email_set_create_encoding ($self)
         },
         wantEncoding => 'quoted-printable',
         wantContentType => 'text/html; charset=utf-8'
+    }, {
+        desc => 'text/plain UTF-8 with wrong charset from blob',
+        blob => encode('utf-8', "hi \N{WAVING HAND SIGN}"),
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'latin1',
+        },
+        wantEncoding => 'quoted-printable',
+        wantContentType => 'text/plain; charset=latin1'
+    }, {
+        desc => 'text/plain UTF-8 with wrong charset from EmailBodyValue',
+        bodyValue => "hi \N{WAVING HAND SIGN}",
+        bodyStructure => {
+            type => 'text/plain',
+            charset => 'latin1',
+        },
+        wantInvalidProperties => ['bodyStructure/charset'],
     });
 
     my @rfc822Tests = ({
@@ -664,7 +693,7 @@ sub test_email_set_create_encoding ($self)
             }, 'createEmail'],
             ['Email/get', {
                 ids => [ "#$emailCreationId" ],
-                properties => [ 'bodyStructure' ],
+                properties => [ 'bodyStructure', 'subject' ],
                 bodyProperties => [
                     'header:content-transfer-encoding:asText',
                     'header:content-type:asText',
