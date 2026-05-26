@@ -474,11 +474,6 @@ enum {
     MATCH_TYPE_SUFFIX
 };
 
-struct match_type_t {
-    const char *name;
-    unsigned value;
-};
-
 enum {
     COLLATION_UNICODE = 0,
     COLLATION_ASCII,
