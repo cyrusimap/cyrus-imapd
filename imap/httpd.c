@@ -1965,6 +1965,12 @@ EXPORTED int process_request(struct transaction_t *txn)
 
 static void transaction_reset(struct transaction_t *txn)
 {
+    /* The trace id is per-request and only meaningful while we're actively
+     * servicing one.  Clearing it here also means HTTP/2 connections never
+     * carry one, since apply_trace_id() is only called from the HTTP/1.1
+     * path. */
+    trace_set_id(NULL, 0);
+
     txn->meth = METH_UNKNOWN;
 
     memset(&txn->flags, 0, sizeof(struct txn_flags_t));
@@ -2027,6 +2033,22 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     buf_free(&txn->buf);
 }
 
+/* If the request carries an X-Trace-Id header that passes trace_set_id()
+ * validation, make it the active trace id for the rest of this request.
+ * Otherwise this request has no trace id.
+ *
+ * Only called from the HTTP/1.1 path: HTTP/2 stream interleaving would
+ * require following the trace id per-stream rather than as a process
+ * global, and we have no HTTP/2 use case for trace ids today. */
+static void apply_trace_id(const struct transaction_t *txn)
+{
+    const char **hdr = txn->req_hdrs
+        ? spool_getheader(txn->req_hdrs, "X-Trace-Id")
+        : NULL;
+
+    if (trace_set_id(hdr ? hdr[0] : NULL, 0) == -1)
+        trace_set_id(NULL, 0);
+}
 
 static int http1_input(struct transaction_t *txn)
 {
@@ -2073,6 +2095,8 @@ static int http1_input(struct transaction_t *txn)
         txn->flags.conn = CONN_CLOSE;
         goto done;
     }
+
+    apply_trace_id(txn);
 
     /* Examine request */
     syslog(LOG_DEBUG, "examine request");

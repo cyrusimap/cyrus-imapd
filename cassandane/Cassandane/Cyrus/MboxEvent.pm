@@ -32,8 +32,19 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(event_groups => join(' ', @event_groups));
 
+    # The default value of event_extra_params is just 'timestamp'; opt in
+    # to the parameters individual tests want to inspect.
+    $config->set(event_extra_params => 'timestamp vnd.fastmail.traceId');
+
+    # Enable enough HTTP to drive CalDAV requests from tests that want to
+    # exercise the http engine's contribution to events (e.g. X-Trace-Id).
+    $config->set(httpmodules => 'caldav');
+    $config->set(caldav_realm => 'Cassandane');
+
     return $class->SUPER::new({
         config => $config,
+        deliver => 1,
+        services => ['imap', 'http'],
     }, @args);
 }
 

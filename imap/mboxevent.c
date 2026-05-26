@@ -71,41 +71,42 @@ static struct mboxevent event_template =
 { 0,
   /* ordered to optimize the parsing of the notification message */
   {
-    /*  0 */ { EVENT_TIMESTAMP, "timestamp", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  1 */ { EVENT_SERVICE, "service", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  2 */ { EVENT_SERVER_ADDRESS, "serverAddress", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  3 */ { EVENT_CLIENT_ADDRESS, "clientAddress", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  4 */ { EVENT_OLD_MAILBOX_ID, "oldMailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  5 */ { EVENT_OLD_UIDSET, "vnd.cmu.oldUidset", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  6 */ { EVENT_MAILBOX_ID, "mailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
-             { EVENT_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  7 */ { EVENT_URI, "uri", EVENT_PARAM_STRING, { 0 }, 0 },
-    /*  8 */ { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, { 0 }, 0 },
-    /*  9 */ { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 10 */ { EVENT_DISK_USED, "diskUsed", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 11 */ { EVENT_QUOTA_MESSAGES, "maxMessages", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 12 */ { EVENT_MESSAGES, "messages", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 13 */ { EVENT_UNSEEN_MESSAGES, "vnd.cmu.unseenMessages", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 14 */ { EVENT_UIDNEXT, "uidnext", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 15 */ { EVENT_UIDSET, "uidset", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 16 */ { EVENT_MIDSET, "vnd.cmu.midset", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 17 */ { EVENT_FLAG_NAMES, "flagNames", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 18 */ { EVENT_PID, "pid", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 19 */ { EVENT_ACL_SUBJECT, "aclSubject", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 20 */ { EVENT_ACL_RIGHTS, "aclRights", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 21 */ { EVENT_USER, "user", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 22 */ { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, { 0 }, 0 },
-    /* 23 */ { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_TIMESTAMP, "timestamp", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_SERVICE, "service", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_SERVER_ADDRESS, "serverAddress", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CLIENT_ADDRESS, "clientAddress", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_MAILBOX_ID, "oldMailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_OLD_UIDSET, "vnd.cmu.oldUidset", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MAILBOX_ID, "mailboxID", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MAILBOX_UNIQUEID, "mailboxUniqueId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_URI, "uri", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MODSEQ, "modseq", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_QUOTA_STORAGE, "diskQuota", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_DISK_USED, "diskUsed", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_QUOTA_MESSAGES, "maxMessages", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_MESSAGES, "messages", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_UNSEEN_MESSAGES, "vnd.cmu.unseenMessages", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_UIDNEXT, "uidnext", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_UIDSET, "uidset", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MIDSET, "vnd.cmu.midset", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_FLAG_NAMES, "flagNames", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_PID, "pid", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_ACL_SUBJECT, "aclSubject", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_ACL_RIGHTS, "aclRights", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_USER, "user", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MESSAGE_SIZE, "messageSize", EVENT_PARAM_INT, { 0 }, 0 },
+    { EVENT_MBTYPE, "vnd.cmu.mbtype", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_SERVERFQDN, "serverFQDN", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MAILBOX_ACL, "vnd.cmu.mailboxACL", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_VISIBLE_USERS, "vnd.cmu.visibleUsers", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 24 */ { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 25 */ { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 26 */ { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 27 */ { EVENT_SESSIONID, "vnd.cmu.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 28 */ { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 29 */ { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, { 0 }, 0 },
-    /* 30 */ { EVENT_SESSION_ID, "vnd.fastmail.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_DAV_FILENAME, "vnd.cmu.davFilename", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_DAV_UID, "vnd.cmu.davUid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_ENVELOPE, "vnd.cmu.envelope", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_SESSIONID, "vnd.cmu.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_BODYSTRUCTURE, "bodyStructure", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CLIENT_ID, "vnd.fastmail.clientId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_SESSION_ID, "vnd.fastmail.sessionId", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_TRACE_ID, "vnd.fastmail.traceId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CONVEXISTS, "vnd.fastmail.convExists", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -159,7 +160,7 @@ static struct mboxevent event_template =
     { EVENT_MESSAGES_UNSCHEDULED_COUNT,  "count",  EVENT_PARAM_INT,    { 0 }, 0 },
 
     /* always at end to let the parser to easily truncate this part */
-    /* 31 */ { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
+    { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
   STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
 };
@@ -341,6 +342,11 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 
     if (mboxevent_expected_param(type, EVENT_SESSION_ID)) {
         FILL_STRING_PARAM(mboxevent, EVENT_SESSION_ID, xstrdup(session_id()));
+    }
+
+    if (mboxevent_expected_param(type, EVENT_TRACE_ID)) {
+        /* expected_param() already gated on trace_id() being non-NULL */
+        FILL_STRING_PARAM(mboxevent, EVENT_TRACE_ID, xstrdup(trace_id()));
     }
 
     return mboxevent;
@@ -536,6 +542,11 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CLIENTID;
     case EVENT_SESSION_ID:
         return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_SESSIONID;
+    case EVENT_TRACE_ID:
+        /* Unlike session_id, this just might not be set.  If we don't have it,
+         * we won't log it. */
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_TRACEID)
+               && trace_id() != NULL;
     case EVENT_MAILBOX_ID:
     case EVENT_MAILBOX_UNIQUEID:
     case EVENT_MBTYPE:

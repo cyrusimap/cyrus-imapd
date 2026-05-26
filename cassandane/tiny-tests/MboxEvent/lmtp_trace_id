@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+# Assert that when LMTP delivery carries an upstream trace id, the resulting
+# mboxevent notifications include vnd.fastmail.traceId.
+
+sub test_lmtp_trace_id ($self) {
+    my $trace_id = "01234567890.abcdefghijklmnopqrstuvwxyz";
+
+    # discard unwanted events from setup_mailbox
+    $self->{instance}->getnotify();
+
+    my $msg = $self->{gen}->generate(subject => "trace me", uid => 1);
+    my $ret = $self->{instance}->deliver(
+        $msg,
+        user => "cassandane",
+        trace_id => $trace_id,
+    );
+    $self->assert_num_equals(0, $ret);
+
+    my @events = map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+
+    # We expect at least one MessageNew event for the delivery; every event
+    # emitted while trace_id is active should carry our trace id.
+    my @new_events = grep { $_->{event} eq 'MessageNew' } @events;
+    $self->assert_num_equals(1, scalar @new_events);
+
+    for my $e (@events) {
+        $self->assert_str_equals(
+            $trace_id,
+            $e->{'vnd.fastmail.traceId'} // '',
+            "event $e->{event} is missing or has wrong vnd.fastmail.traceId",
+        );
+    }
+}
