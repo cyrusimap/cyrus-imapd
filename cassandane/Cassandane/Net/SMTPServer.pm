@@ -31,8 +31,22 @@ sub override {
     my $stage = shift;
     if ($Self->{server}{control_file} and -e $Self->{server}{control_file}) {
         my $data = decode_json(slurp_file($Self->{server}{control_file}));
-        if ($data->{$stage}) {
-            $Self->send_client_resp(@{$data->{$stage}});
+        if (my $resp = $data->{$stage}) {
+            # A "drop" directive simulates the peer vanishing mid-conversation
+            # (e.g. our sendmail wrapper dying), so the client sees EOF/broken
+            # pipe rather than a reply.
+            if (@$resp && $resp->[0] eq 'drop') {
+                $Self->mylog("SMTP: dropping connection at stage '$stage'");
+                my $client = $Self->{server}{client};
+                $client->close() if $client;
+                close(STDIN);
+                close(STDOUT);
+
+                # Exit this prefork child so the connection is fully torn down;
+                # the parent forks a replacement.
+                exit(0);
+            }
+            $Self->send_client_resp(@$resp);
             return 1;
         }
     }
