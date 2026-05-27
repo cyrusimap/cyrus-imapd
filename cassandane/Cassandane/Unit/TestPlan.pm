@@ -741,24 +741,26 @@ sub check_sanity
         },
     }, 'tiny-tests') if -d 'tiny-tests';
 
+    my @tt_errors;
+
     # whinge about bad test modules
     while (my ($tt, $modules) = each %used_tt_dirs) {
         # XXX this one might not be an error if we start doing this
         # XXX intentionally, perhaps to run the same group of tests under
         # XXX different setups or configurations
-        die "@{$modules} share tiny-tests directory $tt"
+        push @tt_errors, "@{$modules} share tiny-tests directory $tt"
             if scalar @{$modules} > 1;
 
-        die "$modules->[0] uses nonexistent tiny-tests directory $tt"
+        push @tt_errors, "$modules->[0] uses nonexistent tiny-tests directory $tt"
             if not exists $real_tt_dirs{$tt};
     }
 
     # whinge about orphaned directories
     while (my ($tt, $ntests) = each %real_tt_dirs) {
-        die "$tt directory is not used by any tests"
+        push @tt_errors, "$tt directory is not used by any tests"
             if not $used_tt_dirs{$tt};
 
-        die "$tt directory contains no tests"
+        push @tt_errors, "$tt directory contains no tests"
             if not $ntests;
     }
 
@@ -769,8 +771,13 @@ sub check_sanity
         chomp;
         $_ ne '../cassandane/tiny-tests';
     } qx{find .. -type d -name tiny-tests};
-    die "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
+    push @tt_errors, "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
         if @unexpected_tt_dirs;
+
+    if (@tt_errors) {
+        print STDERR "$_\n" for @tt_errors;
+        die 'bad tiny-tests detected';
+    }
 }
 
 #
