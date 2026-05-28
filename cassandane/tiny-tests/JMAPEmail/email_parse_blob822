@@ -29,9 +29,11 @@ EOF
     push @props, "bodyStructure";
     push @props, "bodyValues";
 
+    my @metadata_props = qw( id mailboxIds receivedAt keywords );
+
     my $res = $jmap->CallMethods([['Email/parse', {
         blobIds => [ $blobId ],
-        properties => \@props,
+        properties => [ @props, @metadata_props ],
         fetchAllBodyValues => JSON::true,
     }, 'R1']]);
     my $email = $res->[0][1]{parsed}{$blobId};
@@ -41,4 +43,8 @@ EOF
 
     my $bodyValue = $email->{bodyValues}{$email->{bodyStructure}{partId}};
     $self->assert_str_equals("This is a test email.\n", $bodyValue->{value});
+
+    for my $prop (@metadata_props) {
+        $self->assert_null($email->{$prop}, "expect null $prop in Email/parse");
+    }
 }
