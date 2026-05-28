@@ -657,12 +657,16 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
         if (single)
             printf("mailbox %s\n", mboxname);
 
-        bx = search_begin_search(mailbox, opts);
-        if (bx) {
-            r = squatter_build_query(bx, query);
-            if (!r)
-                bx->run(bx, print_search_hit, &single);
-            search_end_search(bx);
+        search_session_t *session = search_begin_session(mailbox, opts);
+        if (session) {
+            bx = search_begin_search(session);
+            if (bx) {
+                r = squatter_build_query(bx, query);
+                if (!r)
+                    bx->run(bx, print_search_hit, &single);
+                search_end_search(bx);
+            }
+            search_end_session(session);
         }
 
         mailbox_close(&mailbox);

@@ -48,7 +48,9 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
-    NULL
+    NULL,
+    NULL,
+    NULL,
 };
 
 EXPORTED const struct search_engine *search_engine(void)
@@ -144,19 +146,35 @@ EXPORTED int search_part_is_header(enum search_part part)
     return 0;
 }
 
-EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
+EXPORTED search_builder_t *search_begin_search(search_session_t *session)
 {
-    if (!mailbox) return NULL;
+    if (!session) return NULL;
 
     const struct search_engine *se = search_engine();
-    return (se->begin_search ?
-            se->begin_search(mailbox, opts) : NULL);
+    return (se->begin_search ? se->begin_search(session) : NULL);
 }
 
 EXPORTED void search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = search_engine();
     if (se->end_search) se->end_search(bx);
+}
+
+EXPORTED search_session_t *search_begin_session(struct mailbox *mailbox,
+                                                int opts)
+{
+    if (!mailbox) return NULL;
+
+    const struct search_engine *se = search_engine();
+    return (se->begin_session ?
+            se->begin_session(mailbox, opts) : NULL);
+}
+
+EXPORTED void search_end_session(search_session_t *session)
+{
+    if (!session) return;
+    const struct search_engine *se = search_engine();
+    if (se->end_session) se->end_session(session);
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
