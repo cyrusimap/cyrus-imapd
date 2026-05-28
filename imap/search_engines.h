@@ -32,6 +32,14 @@ typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
                                    const char *bodypartid,
                                    const char *snippet, void *rock);
 
+/*
+ * A search session provides the context for search queries. Every query
+ * within a search session is guaranteed to run on the same index revision.
+ * Obtaining a search session may take a shared lock on the search index,
+ * so sessions should only be held temporarily.
+ */
+typedef struct search_session search_session_t;
+
 typedef struct search_builder search_builder_t;
 struct search_builder {
 /* These values are carefully chosen a) not to clash with the
@@ -140,7 +148,9 @@ struct search_engine {
 #define SEARCH_ATTACHMENTS_IN_ANY (1<<10) /* search attachments in ANY part */
 #define SEARCH_COMPACT_ALLOW_PARTIALS (1<<11) /* allow partially indexed messages */
 #define SEARCH_COMPACT_NONBLOCKING (1<<12) /* skip if locked */
-    search_builder_t *(*begin_search)(struct mailbox *, int opts);
+    search_session_t *(*begin_session)(struct mailbox *, int opts);
+    void (*end_session)(search_session_t *);
+    search_builder_t *(*begin_search)(search_session_t *session);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
@@ -167,13 +177,19 @@ struct search_engine {
 extern const struct search_engine *search_engine();
 
 /*
- * Search for messages which could match the query built with the
- * search_builder_t.  Calls 'proc' once for each hit found.  If 'single'
- * is true, only hits in 'mailbox' are reported; otherwise hits in any
- * folder in the same conversation scope (i.e. the same user) as
- * reported.
+ * Open a search session for the given mailbox and opts. All
+ * search_begin_search() calls made with this session observe the same
+ * index revision. Returns NULL if no engine is configured or on error.
+ * Close the session with search_end_session().
  */
-extern search_builder_t *search_begin_search(struct mailbox *, int opts);
+extern search_session_t *search_begin_session(struct mailbox *, int opts);
+extern void search_end_session(search_session_t *);
+
+/*
+ * Create a search_builder for a query in the given session.
+ * Close the builder with search_end_search().
+ */
+extern search_builder_t *search_begin_search(search_session_t *);
 extern void search_end_search(search_builder_t *);
 
 #define SEARCH_UPDATE_INCREMENTAL (1<<0)
