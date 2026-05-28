@@ -1,5 +1,5 @@
 Name: restore_realm
 Type: STRING
 Default-Value: NULL
-Deprecated-Since: UNRELEASED
-Last-Modified: UNRELEASED
+Deprecated-Since: 3.13.5
+Last-Modified: 3.13.5
