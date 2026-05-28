@@ -453,8 +453,7 @@ static int purge_me(char *name, time_t when)
         spew(1, "%s exists %d deleted %d",
              name, current_mbox_exists, uidlist.size);
     } else {
-        spew(1, "%s exists %d (skipped)",
-             name, current_mbox_exists, uidlist.size);
+        spew(1, "%s exists %d (skipped)", name, current_mbox_exists);
     }
 
     return 0;
