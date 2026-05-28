@@ -94,6 +94,7 @@ static int begin_headers_cb(nghttp2_session *session,
     /* Create header cache */
     if (!(txn->req_hdrs = spool_new_hdrcache())) {
         syslog(LOG_ERR, "Unable to create header cache");
+        free(txn);
         return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
 
