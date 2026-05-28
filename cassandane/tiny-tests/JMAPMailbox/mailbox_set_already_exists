@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_already_exists
+    :min_version_3_1
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog "create the first mailbox; it should succeed";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mbox1 => {
+                    name => 'Duplicate Name Test',
+                    parentId => undef,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{mbox1}{id});
+
+    xlog "creating a second mailbox with the same name under the same parent";
+    xlog "must yield SetError 'alreadyExists' (RFC 8621 S2.5)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mbox2 => {
+                    name => 'Duplicate Name Test',
+                    parentId => undef,
+                },
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('alreadyExists',
+        $res->[0][1]{notCreated}{mbox2}{type});
+
+    xlog "renaming a different mailbox onto an existing name must also fail";
+    xlog "with 'alreadyExists' rather than 'invalidProperties'";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                mbox3 => {
+                    name => 'Will Be Renamed',
+                    parentId => undef,
+                },
+            },
+        }, 'R3'],
+    ]);
+    my $renameId = $res->[0][1]{created}{mbox3}{id};
+    $self->assert_not_null($renameId);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $renameId => { name => 'Duplicate Name Test' },
+            },
+        }, 'R4'],
+    ]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_str_equals('alreadyExists',
+        $res->[0][1]{notUpdated}{$renameId}{type});
+}
