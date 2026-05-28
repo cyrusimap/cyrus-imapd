@@ -1361,13 +1361,21 @@ struct opnode
     struct opnode *children;
 };
 
+/*
+ * A search session takes a shared lock on the activefile. Within
+ * a session, all Xapian and indexeddb databases for tiers of that
+ * activefile are guaranteed to not change.
+ */
+struct search_session {
+    struct xapiandb_lock lock;
+    struct mailbox *mailbox;
+    int opts;
+};
+
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
-    struct xapiandb_lock lock;
-    seqset_t *indexed;
-    struct mailbox *mailbox;
-    int opts;
+    search_session_t *session;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
     int (*proc)(const char *, uint32_t, uint32_t, const char *, void *);
@@ -1749,8 +1757,8 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *vrock)
     struct xapian_run_guid_rock *rock = vrock;
     xapian_builder_t *bb = rock->bb;
 
-    if (!(bb->opts & SEARCH_MULTIPLE)) {
-        if (conv_guidrec_mboxcmp(rec, bb->mailbox))
+    if (!(bb->session->opts & SEARCH_MULTIPLE)) {
+        if (conv_guidrec_mboxcmp(rec, bb->session->mailbox))
             return 0;
     }
 
@@ -1774,10 +1782,10 @@ static int xapian_run_cb(void *data, size_t nmemb, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-               mailbox_name(bb->mailbox));
+               mailbox_name(bb->session->mailbox));
         return IMAP_NOTFOUND;
     }
 
@@ -1812,7 +1820,7 @@ static int xapian_run_guidsearch_cb(void *data, size_t nmemb, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) return r;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) return IMAP_NOTFOUND;
 
     qsort(data, nmemb, 41, memcmp40); // byte 41 is always zero
@@ -1841,14 +1849,14 @@ static int run_query(xapian_builder_t *bb)
     int r = 0;
 
     /* Validate query for this db */
-    r = validate_query(bb->lock.db, bb->root);
+    r = validate_query(bb->session->lock.db, bb->root);
     if (r) return r;
 
     if (bb->proc_guidsearch) {
-        xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
+        xq = opnode_to_query(bb->session->lock.db, bb->root, bb->session->opts);
         if (!xq) goto out;
 
-        r = xapian_query_run(bb->lock.db, xq, xapian_run_guidsearch_cb, bb);
+        r = xapian_query_run(bb->session->lock.db, xq, xapian_run_guidsearch_cb, bb);
         goto out;
     }
 
@@ -1903,18 +1911,18 @@ static int run_query(xapian_builder_t *bb)
         goto out;
     }
 
-    xq = opnode_to_query(bb->lock.db, root, bb->opts);
+    xq = opnode_to_query(bb->session->lock.db, root, bb->session->opts);
     if (!xq) goto out;
 
-    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->session->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                mailbox_name(bb->mailbox));
+                mailbox_name(bb->session->mailbox));
         r = IMAP_NOTFOUND;
         goto out;
     }
     // sort the response by GUID for more efficient later handling
-    r = xapian_query_run(bb->lock.db, xq, xapian_run_cb, bb);
+    r = xapian_query_run(bb->session->lock.db, xq, xapian_run_cb, bb);
 
 out:
     if (root && root != bb->root) opnode_delete(root);
@@ -1945,7 +1953,7 @@ static int run_internal(xapian_builder_t *bb)
     /* Sanity check builder */
     assert((bb->proc == NULL) != (bb->proc_guidsearch == NULL));
 
-    if (!bb->lock.db) return 0; // no index for this user
+    if (!bb->session->lock.db) return 0; // no index for this user
 
     /* Validate config */
     r = check_config(NULL);
@@ -1954,7 +1962,7 @@ static int run_internal(xapian_builder_t *bb)
     if (bb->root) optimise_nodes(NULL, bb->root);
 
     /* Stem using any languages explicitly requested by the user. */
-    add_stemmers(bb->lock.db, bb->root);
+    add_stemmers(bb->session->lock.db, bb->root);
 
     return run_query(bb);
 }
@@ -1972,7 +1980,7 @@ static int run_guidsearch(search_builder_t *bx, search_hitguid_cb_t proc, void *
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     bb->proc_guidsearch = proc;
     bb->rock = rock;
-    if (!bb->lock.db) return IMAP_SEARCH_NOT_SUPPORTED;
+    if (!bb->session->lock.db) return IMAP_SEARCH_NOT_SUPPORTED;
     return run_internal(bb);
 }
 
@@ -1986,14 +1994,14 @@ static void begin_boolean(search_builder_t *bx, int op)
     else
         bb->root = on;
     ptrarray_push(&bb->stack, on);
-    if (SEARCH_VERBOSE(bb->opts))
+    if (SEARCH_VERBOSE(bb->session->opts))
         syslog(LOG_INFO, "begin_boolean(op=%s)", search_op_as_string(op));
 }
 
 static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
-    if (SEARCH_VERBOSE(bb->opts))
+    if (SEARCH_VERBOSE(bb->session->opts))
         syslog(LOG_INFO, "end_boolean");
     ptrarray_pop(&bb->stack);
 }
@@ -2005,7 +2013,7 @@ static void matchlist(search_builder_t *bx, enum search_part part, const strarra
     struct opnode *on;
 
     if (!vals) return;
-    if (SEARCH_VERBOSE(bb->opts)) {
+    if (SEARCH_VERBOSE(bb->session->opts)) {
         char *item = strarray_join(vals, ",");
         syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
                search_part_as_string(part), item);
@@ -2050,16 +2058,50 @@ static void free_internalised(void *internalised)
 static unsigned min_index_version(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
-    if (!bb->lock.db) return 0;
-    return xapian_db_min_index_version(bb->lock.db);
+    if (!bb->session->lock.db) return 0;
+    return xapian_db_min_index_version(bb->session->lock.db);
 }
 
-static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
+static search_session_t *begin_session(struct mailbox *mailbox, int opts)
 {
     int r = check_config(NULL);
     if (r) return NULL;
 
     if (!mailbox) return NULL;
+
+    /* make sure conversations.db is open before we take any xapiandb
+     * locks, to avoid deadlocking */
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+    if (!cstate) {
+        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
+                mailbox_name(mailbox));
+        return NULL;
+    }
+
+    search_session_t *session = xzmalloc(sizeof(*session));
+    session->mailbox = mailbox;
+    session->opts = opts;
+
+    r = xapiandb_lock_open(mailbox, &session->lock);
+    if (r) {
+        xapiandb_lock_release(&session->lock);
+        free(session);
+        return NULL;
+    }
+
+    return session;
+}
+
+static void end_session(search_session_t *session)
+{
+    if (!session) return;
+    xapiandb_lock_release(&session->lock);
+    free(session);
+}
+
+static search_builder_t *begin_search(search_session_t *session)
+{
+    if (!session) return NULL;
 
     xapian_builder_t *bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -2070,37 +2112,8 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.run = run;
     bb->super.run_guidsearch = run_guidsearch;
     bb->super.min_index_version = min_index_version;
+    bb->session = session;
 
-    bb->mailbox = mailbox;
-    bb->opts = opts;
-
-    /* make sure the conversations are open before we start indexing
-     * to avoid deadlocking against the search state */
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    if (!cstate) {
-        xsyslog(LOG_ERR, "can't open conversations", "mailbox=<%s>",
-                mailbox_name(mailbox));
-        r = IMAP_MAILBOX_NOTSUPPORTED;
-        goto out;
-    }
-
-    r = xapiandb_lock_open(mailbox, &bb->lock);
-    if (r) goto out;
-    if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
-
-    /* read the list of all indexed messages to allow (optional) false positives
-     * for unindexed messages */
-    // TODO also handle for guidsearch
-    bb->indexed = seqset_init(0, SEQ_MERGE);
-    mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
-    r = read_indexed(mbname_userid(mbname),
-            bb->lock.activedirs, bb->lock.activetiers,
-            mailbox_uniqueid(mailbox), bb->indexed, /*do_cache*/0, /*verbose*/0);
-    mbname_free(&mbname);
-    if (r) goto out;
-
-out:
-    /* XXX - error return? */
     return &bb->super;
 }
 
@@ -2108,12 +2121,8 @@ static void end_search(search_builder_t *bx)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
 
-    seqset_free(&bb->indexed);
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
-
-    xapiandb_lock_release(&bb->lock);
-
     free(bx);
 }
 
@@ -4286,6 +4295,8 @@ static int can_match(enum search_op matchop, enum search_part partnum)
 const struct search_engine xapian_search_engine = {
     "Xapian",
     SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
+    begin_session,
+    end_session,
     begin_search,
     end_search,
     begin_update,

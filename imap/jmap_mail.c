@@ -4040,6 +4040,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     }
 
     search_builder_t *bx = NULL;
+    search_session_t *session = NULL;
     struct mailbox *mbox = NULL;
     mbname_t *mbname = mbname_from_userid(req->accountid);
 
@@ -4051,7 +4052,8 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
     }
     if (r) goto done;
 
-    bx = search_begin_search(mbox, 0);
+    session = search_begin_session(mbox, 0);
+    bx = search_begin_search(session);
     if (!bx) {
         syslog(LOG_ERR, "jmap: %s: can't begin search for %s",
                 __func__,  mailbox_name(mbox));
@@ -4210,6 +4212,7 @@ done:
     mailbox_close(&mbox);
     mbname_free(&mbname);
     if (bx) search_end_search(bx);
+    search_end_session(session);
     return r;
 }
 
@@ -6032,19 +6035,26 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     free(qmboxname);
     if (r) goto done;
 
-    bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);
+    search_session_t *session =
+        search_begin_session(state->mailbox, SEARCH_MULTIPLE);
+    bx = search_begin_search(session);
     if (!bx) {
         r = IMAP_INTERNAL;
+        search_end_session(session);
         goto done;
     }
 
     search_build_query(bx, searchargs->root);
     if (!bx->get_internalised) {
         r = IMAP_INTERNAL;
+        search_end_search(bx);
+        search_end_session(session);
         goto done;
     }
     intquery = bx->get_internalised(bx);
     search_end_search(bx);
+    bx = NULL;
+    search_end_session(session);
     if (!intquery) {
         r = IMAP_INTERNAL;
         goto done;
