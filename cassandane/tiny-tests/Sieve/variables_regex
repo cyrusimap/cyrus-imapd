@@ -12,7 +12,7 @@ sub test_variables_regex
     $imaptalk->create("INBOX.target.Folder1");
     $imaptalk->create("INBOX.target.Folder2");
 
-    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistent folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "variables", "regex"];
 set "folder" "target";

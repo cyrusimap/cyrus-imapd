@@ -7,7 +7,7 @@ sub test_duplicate_suppression_on_badmbox
 {
     xlog $self, "Testing behaviour with duplicate suppression on";
     xlog $self, "interaction with attempted delivery to a";
-    xlog $self, "non-existant mailbox";
+    xlog $self, "non-existent mailbox";
 
     my $folder = "INBOX.nonesuch";
     # DO NOT create the target folder

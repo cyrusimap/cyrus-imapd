@@ -71,31 +71,31 @@ sub test_basic
 
     my $cassini = $self->new_cassini;
 
-    # Don't find non-existant param in non-existant section
+    # Don't find non-existent param in non-existent section
     $self->assert_null($cassini->val('swag', 'quinoa'));
     # or return the default
     $self->assert_str_equals('whatever',
                              $cassini->val('swag', 'quinoa', 'whatever'));
 
-    # Don't find non-existant param in existant section
+    # Don't find non-existent param in existent section
     $self->assert_null($cassini->val('helvetica', 'quinoa'));
     # or return the default
     $self->assert_str_equals('whatever',
                              $cassini->val('helvetica', 'quinoa', 'whatever'));
 
-    # Don't find param in non-existant section where the
+    # Don't find param in non-existent section where the
     # param does exist in another section
     $self->assert_null($cassini->val('swag', 'blog'));
     # or return the default
     $self->assert_str_equals('whatever',
                              $cassini->val('swag', 'blog', 'whatever'));
 
-    # Don't find case aliases for existant param
+    # Don't find case aliases for existent param
     $self->assert_null($cassini->val('Helvetica', 'blog'));
     $self->assert_null($cassini->val('helvetica', 'Blog'));
     $self->assert_null($cassini->val('HELvEtIca', 'blOG'));
 
-    # Do find exact match for existant param
+    # Do find exact match for existent param
     $self->assert_str_equals('ethical', $cassini->val('helvetica', 'blog'));
 }
 

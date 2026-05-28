@@ -5,7 +5,7 @@ sub test_double_require ($self)
 {
     my $target = "INBOX.target";
 
-    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistent folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 require ["imap4flags"];
