@@ -150,7 +150,7 @@ EXPORTED json_t *jmap_push_get_state(jmap_push_ctx_t *jpush)
     json_t *changed = json_object();
     ptrarray_t *states = &jpush->type_states;
     for (int i = 0; i < ptrarray_size(states); i++) {
-        jmap_type_state_t *tstate = ptrarray_nth(states, i);;
+        jmap_type_state_t *tstate = ptrarray_nth(states, i);
         modseq_t *cur_modseq =
             (modseq_t *)((off_t) &cur_counters + tstate->data_type->modseq_offset);
 

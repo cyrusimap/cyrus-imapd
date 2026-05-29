@@ -6506,7 +6506,7 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
     size_t i, size = json_array_size(comps);
     vcardstructuredtype *jscomps = NULL;
     vcardproperty *prop = NULL;
-    const char *defsep = " ", *sep = NULL, *ph_system = NULL;;
+    const char *defsep = " ", *sep = NULL, *ph_system = NULL;
     struct buf buf = BUF_INITIALIZER;
     vcardstrarray *entry;
     json_t *jprop;
@@ -8133,7 +8133,7 @@ static unsigned _vcardprops_to_card(struct jmap_parser *parser, json_t *jprops,
         if ((unsigned) val_type == VCARD_TYPE_TEXT)
             val_type = VCARD_VALUE_TEXT;
         else if ((unsigned) val_type == VCARD_TYPE_DATE)
-            val_type = VCARD_VALUE_DATE;;
+            val_type = VCARD_VALUE_DATE;
 
         if (val_type)
           vcardproperty_add_parameter(prop, vcardparameter_new_value(val_type));

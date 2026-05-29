@@ -1407,7 +1407,7 @@ static bool _matchmime_eval_convkeyword(matchmime_query_t *q,
         return q->op == MATCHMIME_OP_CONVKEYWORD_NONE;
     }
 
-    bool matches = q->op == MATCHMIME_OP_CONVKEYWORD_NONE ? 1 : 0;;
+    bool matches = q->op == MATCHMIME_OP_CONVKEYWORD_NONE ? 1 : 0;
     int i;
     for (i = 0; i < dynarray_size(&convmatch->convs); i++) {
         conversation_t *conv = dynarray_nth(&convmatch->convs, i);
