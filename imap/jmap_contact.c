@@ -3892,12 +3892,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
         param = vcardproperty_get_first_parameter(prop, VCARD_VALUE_PARAMETER);
         if (param && vcardparameter_get_value(param) == VCARD_VALUE_URI) {
-            if (!strncmp(prop_value, "geo", 4)) {
-                comp = "coordinates";
-            }
-            else {
-                goto unmapped;
-            }
+            if (strncmp(prop_value, "geo:", 4)) goto unmapped;
+            comp = "coordinates";
         }
 
         subprop.key = "place";
