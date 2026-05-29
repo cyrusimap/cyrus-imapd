@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_no_sharing
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.other");
+    $admin->setacl("user.cassandane", other => 'lrsp') or die;
+
+    my $service = $self->{instance}->get_service("http");
+    my $other_user = $self->{instance}->create_user_without_setup('other');
+    my $otherJmap = $other_user->new_jmaptester;
+
+    $otherJmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:sieve',
+    ]);
+
+    xlog "create script";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{'data:asText' => "keep;"}] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => {
+                    name => JSON::null,
+                    blobId => "#A"
+                }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+
+    xlog "check capabilities for other user";
+    my $session = $otherJmap->get_client_session->client_session;
+    $self->assert_not_null($session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:mail'});
+    $self->assert_null($session->{accounts}{cassandane}{accountCapabilities}{'urn:ietf:params:jmap:sieve'});
+    $self->assert_not_null($session->{accounts}{other}{accountCapabilities}{'urn:ietf:params:jmap:sieve'});
+
+    xlog "attempt to deactivate cassandane script as other user";
+    $res = $otherJmap->CallMethods([
+        ['SieveScript/set', {
+            accountId => 'cassandane',
+            onSuccessDeactivatescript => JSON::true
+         }, "R2"],
+    ]);
+    $self->assert_deep_equals([
+        'error',
+        {
+            type => 'accountNotSupportedByMethod'
+        },
+        'R2'
+        ], $res->[0]
+    );
+}
