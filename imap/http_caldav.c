@@ -118,7 +118,8 @@ static modseq_t caldav_get_modseq(struct mailbox *mailbox,
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
                                 struct mailbox *mailbox, const void *data,
-                                const char *etag, time_t lastmod);
+                                const char *etag, time_t lastmod,
+                                const char *dest_path, bool *dest_islocked);
 
 static int caldav_acl(struct transaction_t *txn, xmlNodePtr priv, int *rights);
 static int caldav_copy(struct transaction_t *txn, void *obj,
@@ -1025,7 +1026,8 @@ static int proppatch_scheddefault(xmlNodePtr prop, unsigned set,
 static int caldav_check_precond(struct transaction_t *txn,
                                 struct meth_params *params,
                                 struct mailbox *mailbox, const void *data,
-                                const char *etag, time_t lastmod)
+                                const char *etag, time_t lastmod,
+                                const char *dest_path, bool *dest_islocked)
 {
     const struct caldav_data *cdata = (const struct caldav_data *) data;
     const char *stag = cdata && cdata->organizer ? cdata->sched_tag : NULL;
@@ -1069,7 +1071,8 @@ static int caldav_check_precond(struct transaction_t *txn,
     }
 
     /* Do normal WebDAV/HTTP checks (primarily for lock-token via If header) */
-    precond = dav_check_precond(txn, params, mailbox, data, etag, lastmod);
+    precond = dav_check_precond(txn, params, mailbox, data, etag, lastmod,
+                                dest_path, dest_islocked);
     if (precond == HTTP_PRECOND_FAILED && cdata &&
         cdata->comp_flags.tzbyref && !cdata->organizer && cdata->sched_tag) {
         /* Resource has just had VTIMEZONEs stripped -
@@ -2925,7 +2928,8 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Check any preconditions */
     precond = caldav_check_precond(txn, &caldav_params,
-                                   calendar, cdata, etag, lastmod);
+                                   calendar, cdata, etag, lastmod,
+                                   NULL, NULL);
 
     switch (precond) {
     case HTTP_OK:

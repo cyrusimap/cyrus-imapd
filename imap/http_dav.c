@@ -853,7 +853,7 @@ EXPORTED modseq_t dav_get_modseq(struct mailbox *mailbox __attribute__((unused))
 /* Evaluate If header.  Note that we can't short-circuit any of the tests
    because we need to check for a lock-token anywhere in the header */
 static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
-                     const char *lock_token, unsigned *locked)
+                     const char *lock_token, bool *islocked)
 {
     unsigned ret = 1;
     tok_t tok;
@@ -878,7 +878,7 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
             r = !strcmpnull(cond, lock_token);
             if (r) {
                 /* Correct lock-token has been provided */
-                (*locked)--;
+                if (islocked) *islocked = false;
             }
             else if (mailbox) {
                 struct buf buf = BUF_INITIALIZER;
@@ -903,9 +903,10 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
 
 static int eval_if(const char *hdr, struct meth_params *params,
                    const struct namespace_t *namespace,
-                   struct mailbox *tgt_mailbox, const char *tgt_resource,
+                   struct mailbox *tgt_mailbox, const char *tgt_path,
                    const char *tgt_etag, const char *tgt_lock_token,
-                   unsigned *locked)
+                   bool *tgt_islocked,
+                   const char *dest_path, bool *dest_islocked)
 {
     unsigned ret = 0;
     tok_t tok;
@@ -920,6 +921,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
         struct index_record record;
         struct dav_data *ddata;
         void *davdb = NULL;
+        bool *islocked = NULL;
 
         if (*list == '<') {
             /* Tagged-list */
@@ -943,79 +945,89 @@ static int eval_if(const char *hdr, struct meth_params *params,
 
                 if (!params->parse_path(uri->path, &tag_tgt, &err)) {
                     if (tag_tgt.mbentry && !tag_tgt.mbentry->server) {
-                        if (tgt_mailbox &&
-                            !strcmp(mailbox_name(tgt_mailbox), tag_tgt.mbentry->name)) {
-                            /* Use target mailbox */
+                        if (!strcmp(tag_tgt.path, tgt_path)) {
+                            /* Tag IS target resource */
                             mailbox = tgt_mailbox;
+                            etag = tgt_etag;
+                            lock_token = tgt_lock_token;
+                            islocked = tgt_islocked;
                         }
                         else {
-                            /* Open new mailbox */
-                            r = mailbox_open_irl(tag_tgt.mbentry->name,
-                                                 &my_mailbox);
-                            if (r) {
-                                syslog(LOG_NOTICE,
-                                       "failed to open mailbox '%s'"
-                                       " in tagged If header: %s",
-                                       tag_tgt.mbentry->name, error_message(r));
-                            }
-                            mailbox = my_mailbox;
-                        }
-                        if (mailbox) {
-                            if (!strcmpnull(tgt_resource, tag_tgt.resource)) {
-                                /* Tag IS target resource */
-                                etag = tgt_etag;
-                                lock_token = tgt_lock_token;
-                            }
-                            else if (tag_tgt.resource) {
-                                /* Open DAV DB corresponding to the mailbox */
-                                davdb = params->davdb.open_db(mailbox);
-
-                                /* Find message UID for the resource */
-                                params->davdb.lookup_resource(davdb,
-                                                              tag_tgt.mbentry,
-                                                              tag_tgt.resource,
-                                                              (void **) &ddata,
-                                                              0);
-                                if (ddata->rowid) {
-                                    if (ddata->lock_expire > time(NULL)) {
-                                        lock_token = ddata->lock_token;
-                                        (*locked)++;
-                                    }
-
-                                    memset(&record, 0,
-                                           sizeof(struct index_record));
-                                    if (ddata->imap_uid) {
-                                        /* Mapped URL - Fetch index record */
-                                        r = mailbox_find_index_record(mailbox,
-                                                                      ddata->imap_uid,
-                                                                      &record);
-                                        if (r) {
-                                            syslog(LOG_NOTICE,
-                                                   "failed to fetch record for"
-                                                   " '%s':%u in tagged"
-                                                   " If header: %s",
-                                                   mailbox_name(mailbox),
-                                                   ddata->imap_uid,
-                                                   error_message(r));
-                                        }
-                                        else {
-                                            etag =
-                                                message_guid_encode(&record.guid);
-                                        }
-                                    }
-                                    else {
-                                        /* Unmapped URL (empty resource) */
-                                        etag = NULL;
-                                    }
-                                }
+                            if (tgt_mailbox &&
+                                !strcmp(mailbox_name(tgt_mailbox),
+                                        tag_tgt.mbentry->name)) {
+                                /* Use target mailbox */
+                                mailbox = tgt_mailbox;
                             }
                             else {
-                                /* Collection */
-                                buf_printf(&buf, "%u-%u-%u",
-                                           mailbox->i.uidvalidity,
-                                           mailbox->i.last_uid,
-                                           mailbox->i.exists);
-                                etag = buf_cstring(&buf);
+                                /* Open new mailbox */
+                                r = mailbox_open_irl(tag_tgt.mbentry->name,
+                                                     &my_mailbox);
+                                if (r) {
+                                    syslog(LOG_NOTICE,
+                                           "failed to open mailbox '%s'"
+                                           " in tagged If header: %s",
+                                           tag_tgt.mbentry->name,
+                                           error_message(r));
+                                }
+                                mailbox = my_mailbox;
+                            }
+                            if (mailbox) {
+                                if (tag_tgt.resource) {
+                                    /* Open DAV DB corresponding to the mailbox */
+                                    davdb = params->davdb.open_db(mailbox);
+
+                                    /* Find message UID for the resource */
+                                    params->davdb.lookup_resource(davdb,
+                                                                  tag_tgt.mbentry,
+                                                                  tag_tgt.resource,
+                                                                  (void **) &ddata,
+                                                                  0);
+                                    if (ddata->rowid) {
+                                        if (ddata->lock_expire > time(NULL)) {
+                                            lock_token = ddata->lock_token;
+
+                                            if (!strcmpnull(tag_tgt.path, dest_path)) {
+                                                /* Tag IS destination resource */
+                                                islocked = dest_islocked;
+                                            }
+                                        }
+
+                                        memset(&record, 0,
+                                               sizeof(struct index_record));
+                                        if (ddata->imap_uid) {
+                                            /* Mapped URL - Fetch index record */
+                                            r = mailbox_find_index_record(mailbox,
+                                                                          ddata->imap_uid,
+                                                                          &record);
+                                            if (r) {
+                                                syslog(LOG_NOTICE,
+                                                       "failed to fetch record for"
+                                                       " '%s':%u in tagged"
+                                                       " If header: %s",
+                                                       mailbox_name(mailbox),
+                                                       ddata->imap_uid,
+                                                       error_message(r));
+                                            }
+                                            else {
+                                                etag =
+                                                    message_guid_encode(&record.guid);
+                                            }
+                                        }
+                                        else {
+                                            /* Unmapped URL (empty resource) */
+                                            etag = NULL;
+                                        }
+                                    }
+                                }
+                                else {
+                                    /* Collection */
+                                    buf_printf(&buf, "%u-%u-%u",
+                                               mailbox->i.uidvalidity,
+                                               mailbox->i.last_uid,
+                                               mailbox->i.exists);
+                                    etag = buf_cstring(&buf);
+                                }
                             }
                         }
                     }
@@ -1032,11 +1044,12 @@ static int eval_if(const char *hdr, struct meth_params *params,
             mailbox = tgt_mailbox;
             etag = tgt_etag;
             lock_token = tgt_lock_token;
+            islocked = tgt_islocked;
         }
 
         list = strchr(list, '(');
 
-        ret |= eval_list(list, mailbox, etag, lock_token, locked);
+        ret |= eval_list(list, mailbox, etag, lock_token, islocked);
 
         if (davdb) params->davdb.close_db(davdb);
         mailbox_close(&my_mailbox);
@@ -1045,7 +1058,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
 
     tok_fini(&tok);
 
-    return (ret || *locked);
+    return ret;
 }
 
 
@@ -1053,13 +1066,14 @@ static int eval_if(const char *hdr, struct meth_params *params,
 EXPORTED int dav_check_precond(struct transaction_t *txn,
                                struct meth_params *params,
                                struct mailbox *mailbox, const void *data,
-                               const char *etag, time_t lastmod)
+                               const char *etag, time_t lastmod,
+                               const char *dest_path, bool *dest_islocked)
 {
     const struct dav_data *ddata = (const struct dav_data *) data;
     hdrcache_t hdrcache = txn->req_hdrs;
     const char **hdr;
     const char *lock_token = NULL;
-    unsigned locked = 0;
+    bool tgt_islocked = false;
 
     /* Check for a write-lock on the source */
     if (ddata && ddata->lock_expire > time(NULL)) {
@@ -1076,7 +1090,7 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
                and MUST provide the correct lock-token in an If header */
             if (strcmp(ddata->lock_ownerid, httpd_userid)) return HTTP_LOCKED;
 
-            locked = 1;
+            tgt_islocked = true;
             break;
 
         case METH_UNLOCK:
@@ -1101,12 +1115,13 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
     if ((hdr = spool_getheader(hdrcache, "If"))) {
         /* State tokens (sync-token, lock-token) and Etags */
         if (!eval_if(hdr[0], params, txn->req_tgt.namespace,
-                     mailbox, txn->req_tgt.resource,
-                     etag, lock_token, &locked))
+                     mailbox, txn->req_tgt.path,
+                     etag, lock_token, &tgt_islocked,
+                     dest_path, dest_islocked))
             return HTTP_PRECOND_FAILED;
     }
 
-    if (locked) {
+    if (tgt_islocked) {
         /* Correct lock-token was not provided in If header */
         return HTTP_LOCKED;
     }
@@ -4510,6 +4525,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     struct buf msg_buf = BUF_INITIALIZER;
     struct buf body_buf = BUF_INITIALIZER;
     user_nslock_t *user_nslock = NULL;
+    bool dest_islocked = false;
 
     memset(&dest_tgt, 0, sizeof(struct request_target_t));
 
@@ -4666,34 +4682,66 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Local source and destination mailboxes */
 
-    user_nslock = user_nslock_bymboxname(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name, LOCK_EXCLUSIVE);
+    user_nslock = user_nslock_bymboxname(txn->req_tgt.mbentry->name,
+                                         dest_tgt.mbentry->name, LOCK_EXCLUSIVE);
 
-    if (!strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) {
-        /* Same source and destination - Open source mailbox for writing */
-        r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
-        dest_mbox = src_mbox;
-    }
-    else if (meth_move) {
-        /* Open source mailbox for writing */
-        r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
-    }
-    else {
-        /* Open source mailbox for reading */
-        r = mailbox_open_irl(txn->req_tgt.mbentry->name, &src_mbox);
-    }
+    /* Open dest mailbox for writing */
+    r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
-               (meth_move ||
-                !strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) ?
-               'w' : 'r',
-               txn->req_tgt.mbentry->name, error_message(r));
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+               dest_tgt.mbentry->name, error_message(r));
         txn->error.desc = error_message(r);
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
 
-    /* Open the DAV DB corresponding to the src mailbox */
-    src_davdb = cparams->davdb.open_db(src_mbox);
+    /* Open the DAV DB corresponding to the dest mailbox */
+    dest_davdb = cparams->davdb.open_db(dest_mbox);
+
+    /* Find message UID for the dest resource, if exists */
+    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry,
+                                   dest_tgt.resource, (void **) &ddata, 0);
+    /* XXX  Check errors */
+
+    /* Check any preconditions on destination */
+    if (ddata->rowid) {
+        if (!overwrite) {
+            /* Don't overwrite the destination resource */
+            ret = HTTP_PRECOND_FAILED;
+            goto done;
+        }
+
+        if (ddata->lock_expire > time(NULL)) {
+            dest_islocked = true;
+        }
+    }
+
+    if (!strcmp(txn->req_tgt.mbentry->name, dest_tgt.mbentry->name)) {
+        /* Same source and destination */
+        src_mbox = dest_mbox;
+        src_davdb = dest_davdb;
+    }
+    else {
+        if (meth_move) {
+            /* Open source mailbox for writing */
+            r = mailbox_open_iwl(txn->req_tgt.mbentry->name, &src_mbox);
+        }
+        else {
+            /* Open source mailbox for reading */
+            r = mailbox_open_irl(txn->req_tgt.mbentry->name, &src_mbox);
+        }
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_i%cl(%s) failed: %s",
+                   meth_move  ? 'w' : 'r',
+                   txn->req_tgt.mbentry->name, error_message(r));
+            txn->error.desc = error_message(r);
+            ret = HTTP_SERVER_ERROR;
+            goto done;
+        }
+
+        /* Open the DAV DB corresponding to the src mailbox */
+        src_davdb = cparams->davdb.open_db(src_mbox);
+    }
 
     /* Find message UID for the source resource */
     cparams->davdb.lookup_resource(src_davdb, txn->req_tgt.mbentry,
@@ -4713,17 +4761,22 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         goto done;
     }
 
-    /* Check any preconditions on source */
+    /* Check any preconditions on source and/or destination */
     precond = cparams->check_precond(txn, params, src_mbox,
-                                     (void *) ddata, etag, lastmod);
+                                     (void *) ddata, etag, lastmod,
+                                     dest_tgt.path, &dest_islocked);
 
     switch (precond) {
     case HTTP_OK:
-        break;
+        if (!dest_islocked) break;
+
+        precond = HTTP_LOCKED;
+
+        GCC_FALLTHROUGH
 
     case HTTP_LOCKED:
         txn->error.precond = DAV_NEED_LOCK_TOKEN;
-        txn->error.resource = txn->req_tgt.path;
+        txn->error.resource = dest_islocked ? dest_tgt.path : txn->req_tgt.path;
 
         GCC_FALLTHROUGH
 
@@ -4747,39 +4800,9 @@ int meth_copy_move(struct transaction_t *txn, void *params)
         src_rec.recno = ddata->rowid; /* For deleting DAV record */
     }
 
-    if (dest_mbox != src_mbox) {
-        if (!meth_move) {
-            /* Done with source mailbox */
-            mailbox_unlock_index(src_mbox, NULL);
-        }
-
-        /* Open dest mailbox for writing */
-        r = mailbox_open_iwl(dest_tgt.mbentry->name, &dest_mbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   dest_tgt.mbentry->name, error_message(r));
-            txn->error.desc = error_message(r);
-            ret = HTTP_SERVER_ERROR;
-            goto done;
-        }
-
-        /* Open the DAV DB corresponding to the dest mailbox */
-        dest_davdb = cparams->davdb.open_db(dest_mbox);
-    }
-    else {
-        dest_davdb = src_davdb;
-    }
-
-    /* Find message UID for the dest resource, if exists */
-    cparams->davdb.lookup_resource(dest_davdb, dest_tgt.mbentry,
-                                   dest_tgt.resource, (void **) &ddata, 0);
-    /* XXX  Check errors */
-
-    /* Check any preconditions on destination */
-    if (ddata->rowid && !overwrite) {
-        /* Don't overwrite the destination resource */
-        ret = HTTP_PRECOND_FAILED;
-        goto done;
+    if (!meth_move && src_mbox != dest_mbox) {
+        /* Done with source mailbox */
+        mailbox_unlock_index(src_mbox, NULL);
     }
 
     /* Store the resource at destination */
@@ -4825,12 +4848,12 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     if (obj && cparams->mime_types[0].free) cparams->mime_types[0].free(obj);
-    if (dest_mbox != src_mbox) {
-        if (dest_davdb) cparams->davdb.close_db(dest_davdb);
-        if (dest_mbox) mailbox_close(&dest_mbox);
+    if (src_mbox != dest_mbox) {
+        if (src_davdb) cparams->davdb.close_db(src_davdb);
+        if (src_mbox) mailbox_close(&src_mbox);
     }
-    if (src_davdb) cparams->davdb.close_db(src_davdb);
-    if (src_mbox) mailbox_close(&src_mbox);
+    if (dest_davdb) cparams->davdb.close_db(dest_davdb);
+    if (dest_mbox) mailbox_close(&dest_mbox);
 
     user_nslock_release(&user_nslock);
 
@@ -5004,7 +5027,8 @@ static int meth_delete_collection(struct transaction_t *txn,
     }
 
     /* Check any preconditions */
-    precond = dparams->check_precond(txn, dparams, mailbox, NULL, NULL, 0);
+    precond = dparams->check_precond(txn, dparams, mailbox, NULL, NULL, 0,
+                                     NULL, NULL);
 
     switch (precond) {
     case HTTP_OK:
@@ -5155,7 +5179,8 @@ static int meth_delete_resource(struct transaction_t *txn,
 
     /* Check any preconditions */
     precond = dparams->check_precond(txn, dparams, mailbox,
-                                     (void *) ddata, etag, lastmod);
+                                     (void *) ddata, etag, lastmod,
+                                     NULL, NULL);
 
     switch (precond) {
     case HTTP_OK:
@@ -5336,7 +5361,8 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
     /* Check any preconditions, including range request */
     precond = gparams->check_precond(txn, params, mailbox,
-                                     (void *) ddata, etag, lastmod);
+                                     (void *) ddata, etag, lastmod,
+                                     NULL, NULL);
 
     switch (precond) {
     case HTTP_OK:
@@ -5521,7 +5547,8 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Check any preconditions */
     precond = lparams->check_precond(txn, params, mailbox,
-                                     (void *) ddata, etag, lastmod);
+                                     (void *) ddata, etag, lastmod,
+                                     NULL, NULL);
 
     switch (precond) {
     case HTTP_OK:
@@ -5644,7 +5671,7 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     txn->resp_body.lock = ddata->lock_token;
 
-    if (!ddata->rowid) {
+    if (!ddata->imap_uid) {
         ret = HTTP_CREATED;
 
         /* Tell client where to find the new resource */
@@ -6732,7 +6759,8 @@ static int dav_post_import(struct transaction_t *txn,
                mailbox->i.last_uid, mailbox->i.exists);
     ret = precond = pparams->check_precond(txn, pparams, mailbox, NULL,
                                            buf_cstring(&txn->buf),
-                                           mailbox->index_mtime);
+                                           mailbox->index_mtime,
+                                           NULL, NULL);
     buf_reset(&txn->buf);
 
     switch (precond) {
@@ -6996,7 +7024,8 @@ int meth_patch(struct transaction_t *txn, void *params)
 
     /* Check any preconditions */
     ret = precond = pparams->check_precond(txn, params, mailbox,
-                                           (void *) ddata, etag, lastmod);
+                                           (void *) ddata, etag, lastmod,
+                                           NULL, NULL);
 
     switch (precond) {
     case HTTP_PRECOND_FAILED:
@@ -7270,12 +7299,14 @@ int meth_put(struct transaction_t *txn, void *params)
                    mailbox->i.last_uid, mailbox->i.exists);
         ret = precond = pparams->check_precond(txn, params, mailbox, NULL,
                                                buf_cstring(&txn->buf),
-                                               mailbox->index_mtime);
+                                               mailbox->index_mtime,
+                                               NULL, NULL);
         buf_reset(&txn->buf);
     }
     else {
         ret = precond = pparams->check_precond(txn, params, mailbox,
-                                               (void *) ddata, etag, lastmod);
+                                               (void *) ddata, etag, lastmod,
+                                               NULL, NULL);
     }
 
     switch (precond) {
@@ -8546,7 +8577,8 @@ int meth_unlock(struct transaction_t *txn, void *params)
 
     /* Check any preconditions */
     precond = lparams->check_precond(txn, params, mailbox,
-                                     (void *) ddata, etag, lastmod);
+                                     (void *) ddata, etag, lastmod,
+                                     NULL, NULL);
 
     if (precond != HTTP_OK) {
         /* We failed a precondition - don't perform the request */
