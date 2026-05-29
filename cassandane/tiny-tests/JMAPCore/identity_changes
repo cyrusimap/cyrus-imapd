@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_identity_changes ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    xlog "Identity/get to pick up the current state";
+    my $res = $jmap->request([['Identity/get', { ids => [] } ]]);
+    my $state = $res->single_sentence->arguments->{state};
+    $self->assert_not_null($state);
+
+    xlog "Identity/changes with sinceState == current state must return empty";
+    $res = $jmap->request([['Identity/changes', { sinceState => $state } ]]);
+
+    $self->assert_cmp_deeply(
+      superhashof({
+        oldState => $state,
+        newState => $state,
+        created  => [],
+        updated  => [],
+        destroyed => [],
+        hasMoreChanges => bool(0),
+      }),
+      $res->single_sentence('Identity/changes')->arguments,
+    );
+
+    xlog "Identity/changes with an unknown sinceState must yield";
+    xlog "cannotCalculateChanges, not unknownMethod";
+
+    $res = $jmap->request([['Identity/changes', { sinceState => '999' } ]]);
+    $self->assert_str_equals('error', $res->single_sentence->name);
+    $self->assert_str_equals(
+      'cannotCalculateChanges',
+      $res->single_sentence->arguments->{type},
+    );
+}
