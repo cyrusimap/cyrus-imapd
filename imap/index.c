@@ -1650,8 +1650,6 @@ EXPORTED int index_warmup(const struct mboxlist_entry *mbentry,
             fname = tofree = conversations_getmboxpath(mbentry->name);
             r = warmup_file(fname, 0, 0);
             if (r) goto out;
-            free(tofree);
-            tofree = NULL;
         }
     }
     if (warmup_flags & WARMUP_SEARCH) {
