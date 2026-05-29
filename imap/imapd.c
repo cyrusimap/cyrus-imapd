@@ -8452,7 +8452,10 @@ static void cmd_getacl(const char *tag, const char *name)
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
 
     r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) return;
+    if (r == IMAP_MAILBOX_MOVED) {
+        free(intname);
+        return;
+    }
 
     if (!r) {
         access = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
@@ -8516,7 +8519,10 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
 
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) return;
+    if (r == IMAP_MAILBOX_MOVED) {
+        free(intname);
+        return;
+    }
 
     if (!r) {
         rights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
@@ -8533,6 +8539,8 @@ static void cmd_listrights(char *tag, char *name, char *identifier)
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+
+        free(intname);
         return;
     }
 
