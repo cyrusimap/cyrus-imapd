@@ -254,6 +254,16 @@
 #define CMD_DBUPGRADEv17                                                \
     "CREATE INDEX IF NOT EXISTS idx_vcard_objs ON vcard_emails ( objid );"
 
+/* Repair main-event jscal rows whose createdmodseq was stamped with the
+ * resource's current modseq by a pre-fix rebuild (dav_reconstruct or
+ * relocate_by_id), rather than its true createdmodseq.  This re-applies the
+ * mapping the v15 backfill already used. */
+#define CMD_DBUPGRADEv18                                                \
+    "UPDATE jscal_objs SET createdmodseq ="                             \
+    "  (SELECT createdmodseq FROM ical_objs"                            \
+    "    WHERE ical_objs.rowid = jscal_objs.rowid)"                     \
+    " WHERE ical_recurid = '';"
+
 static int sievedb_upgrade(sqldb_t *db);
 
 static const struct sqldb_upgrade davdb_upgrade[] = {
@@ -273,10 +283,11 @@ static const struct sqldb_upgrade davdb_upgrade[] = {
   { 15, CMD_DBUPGRADEv15, NULL },
   { 16, CMD_DBUPGRADEv16, NULL },
   { 17, CMD_DBUPGRADEv17, NULL },
+  { 18, CMD_DBUPGRADEv18, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 17
+#define DB_VERSION 18
 
 static sqldb_t *reconstruct_db;
 
