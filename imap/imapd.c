@@ -5901,6 +5901,10 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior_mask |= CB_ANNOTATE;
 
+    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID)) {
+        client_behavior_mask |= CB_OBJECTID;
+    }
+
     if (fetchargs.fetchitems & FETCH_OBJECTID) {
         client_behavior_mask |= CB_OBJECTID;
         objectidplus_enabled("FETCH OBJECTID");
