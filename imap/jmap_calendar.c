@@ -7046,7 +7046,7 @@ static int eventquery_cb(void *vrock, struct caldav_jscal *jscal)
     if (!rights) goto done;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
-    match->createdmodseq = jscal->createdmodseq;
+    match->createdmodseq = jscal->cdata.dav.createdmodseq;
     match->ical_uid = xstrdup(jscal->cdata.ical_uid);
     match->utcstart = xstrdup(jscal->dtstart);
     if (jscal->ical_recurid[0]) {
@@ -7195,7 +7195,7 @@ static int eventquery_textsearch_cb(void *vrock, struct caldav_jscal *jscal)
         return 0;
 
     struct eventquery_match *match = xzmalloc(sizeof(struct eventquery_match));
-    match->createdmodseq = jscal->createdmodseq;
+    match->createdmodseq = jscal->cdata.dav.createdmodseq;
     match->ical_uid = xstrdup(jscal->cdata.ical_uid);
     match->utcstart = xstrdup(jscal->dtstart);
     if (jscal->ical_recurid[0]) {
@@ -7402,7 +7402,7 @@ static int eventquery_fastpath_cb(void *vrock, struct caldav_jscal *jscal)
         goto done;
 
     struct jmap_caleventid eid = {
-        .createdmodseq = jscal->createdmodseq,
+        .createdmodseq = jscal->cdata.dav.createdmodseq,
         .ical_uid = jscal->cdata.ical_uid,
         .ical_recurid = jscal->ical_recurid,
     };
