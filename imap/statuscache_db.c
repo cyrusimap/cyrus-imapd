@@ -416,7 +416,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
         strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
-    // ACCOUNTID_NEEDS_FIXING
+    /* userid as ACCOUNTID - see prot_print_objectids() */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
     if (userid) {
         strncpy(static_accountid, userid, UUID_STR_LEN-1);

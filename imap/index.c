@@ -798,6 +798,38 @@ EXPORTED modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
+/* Callers pass the mailbox owner's userid as ACCOUNTID.  That is not yet a
+ * legal ObjectID: the draft allows only 1*255 of a-z A-Z 0-9 _ - , so any
+ * userid carrying a domain or a dot needs mapping to something else first.
+ */
+EXPORTED void prot_print_objectids(struct protstream *pout,
+                                   bool compound, const char *sep,
+                                   const char *mailboxid, const char *accountid)
+{
+    /* SP and ( are separators for STATUS items and not legal tag chars */
+    bool is_ok_resp = !strspn(sep, " (");
+
+    prot_puts(pout, sep);
+
+    if (is_ok_resp) prot_puts(pout, " OK [");
+
+    if (compound) {
+        /* draft-ietf-mailmaint-imap-objectid-bis */
+        prot_puts(pout, "OBJECTID (");
+        if (accountid) prot_printf(pout, "ACCOUNTID %s ", accountid);
+        prot_printf(pout, "MAILBOXID %s)", mailboxid);
+    }
+    else {
+        /* RFC 8474 */
+        prot_printf(pout, "MAILBOXID (%s)", mailboxid);
+    }
+
+    if (is_ok_resp) {
+        prot_printf(pout, "] %s\r\n",
+                    *sep == '*' ? "Ok" : error_message(IMAP_OK_COMPLETED));
+    }
+}
+
 EXPORTED void index_select(struct index_state *state, struct index_init *init)
 {
     index_tellexists(state);
@@ -818,23 +850,11 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 / draft-ietf-mailmaint-imap-objectid-bis */
-    if (client_capa & CAPA_OBJECTIDPLUS) {
-        // ACCOUNTID_NEEDS_FIXING
-        char *accountid = mboxname_to_userid(state->mboxname);
-        if (accountid) {
-            prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Ok\r\n",
-                        state->mailboxid, accountid);
-            free(accountid);
-        }
-        else {
-            // shared mailbox - no ACCOUNTID
-            prot_printf(state->out, "* OK [OBJECTID (MAILBOXID %s)] Ok\r\n",
-                        state->mailboxid);
-        }
-    }
-    else {
-        prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
-    }
+    /* userid as ACCOUNTID - see prot_print_objectids() */
+    char *accountid = mboxname_to_userid(state->mboxname);
+    prot_print_objectids(state->out, !!(client_capa & CAPA_OBJECTIDPLUS),
+                         "*", state->mailboxid, accountid);
+    free(accountid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
