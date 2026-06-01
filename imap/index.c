@@ -948,6 +948,9 @@ seqset_t *index_vanished(struct index_state *state,
     seqset_t *seq;
 
     /* check uidvalidity match */
+    /* XXX Seems like uidvalidity_is_max never gets set to anything but zero.
+     * XXX What was its purpose?  Can we get rid of it?
+     */
     if (params->uidvalidity_is_max) {
         if (params->uidvalidity < mailbox->i.uidvalidity) return NULL;
     }
@@ -1254,7 +1257,7 @@ EXPORTED int index_fetch(struct index_state *state,
     }
 
     if (fetchargs->vanished) {
-        struct vanished_params v;
+        struct vanished_params v = {0};
         v.sequence = sequence;
         v.uidvalidity = state->mailbox->i.uidvalidity;
         v.modseq = fetchargs->changedsince;
