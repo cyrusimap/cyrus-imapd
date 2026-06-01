@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+# Reproduces a CalendarEvent/get notFound for an id that CalendarEvent/query
+# just returned.
+#
+# The original bug happened when ical_objs and jscal_objs had diverging
+# createdmodseq properties.  Here we force the divergence by adding a
+# standalone instance in a later write.
+sub test_calendarevent_query_get_standalone_added_later
+    :min_version_3_5
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    # First write: a single standalone instance.  Its createdmodseq is the
+    # resource's creation modseq, so both tables agree for this row.
+    my $ical1 = <<~'EOF';
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+    CALSCALE:GREGORIAN
+    BEGIN:VEVENT
+    RECURRENCE-ID;TZID=America/New_York:20210101T060000
+    DTSTART;TZID=Europe/Berlin:20210101T120000
+    DURATION:PT1H
+    UID:2a358cee-6489-4f14-a57f-c104db4dc357
+    DTSTAMP:20150928T132434Z
+    CREATED:20150928T125212Z
+    SUMMARY:instance1
+    SEQUENCE:0
+    LAST-MODIFIED:20150928T132434Z
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical1,
+        'Content-Type' => 'text/calendar');
+
+    # Second write: instance1 byte-identical, plus a newly added standalone
+    # instance2.  instance2 is created at this write's (higher) modseq, while
+    # the resource's createdmodseq stays at the first write.
+    my $ical2 = <<~'EOF';
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+    CALSCALE:GREGORIAN
+    BEGIN:VEVENT
+    RECURRENCE-ID;TZID=America/New_York:20210101T060000
+    DTSTART;TZID=Europe/Berlin:20210101T120000
+    DURATION:PT1H
+    UID:2a358cee-6489-4f14-a57f-c104db4dc357
+    DTSTAMP:20150928T132434Z
+    CREATED:20150928T125212Z
+    SUMMARY:instance1
+    SEQUENCE:0
+    LAST-MODIFIED:20150928T132434Z
+    END:VEVENT
+    BEGIN:VEVENT
+    RECURRENCE-ID;TZID=America/New_York:20210301T060000
+    DTSTART;TZID=America/New_York:20210301T080000
+    DURATION:PT1H
+    UID:2a358cee-6489-4f14-a57f-c104db4dc357
+    DTSTAMP:20150928T132434Z
+    CREATED:20150928T125212Z
+    SUMMARY:instance2
+    SEQUENCE:0
+    LAST-MODIFIED:20150928T132434Z
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    $caldav->Request('PUT', 'Default/test.ics', $ical2,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {}, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['id', 'title', 'uid', 'recurrenceId'],
+        }, 'R2'],
+    ]);
+
+    # Every id /query returned must be resolvable by /get: nothing in notFound.
+    my @queried = sort $res->[0][1]{ids}->@*;
+    $self->assert_num_equals(2, scalar @queried);
+    $self->assert_deep_equals([], $res->[1][1]{notFound});
+
+    my %events = map { $_->{title} => $_ } $res->[1][1]{list}->@*;
+    $self->assert_num_equals(2, scalar keys %events);
+    $self->assert_not_null($events{instance1});
+    $self->assert_not_null($events{instance2});
+
+    # While we're here, make sure that the ids in the /get match the ids in the
+    # /query!
+    my @gotten = sort map { $_->{id} } $res->[1][1]{list}->@*;
+    $self->assert_deep_equals(\@queried, \@gotten);
+}
