@@ -1225,6 +1225,10 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     qsort(new_jscals.data, new_jscals.count,
             sizeof(struct caldav_jscal), jscal_cmp_ical_recurid);
 
+    /* An empty old set means we're (re)building this resource's jscal rows
+     * from scratch -- a dav_reconstruct or the jscalendar-bis backfill. */
+    int rebuilding = dynarray_size(&old_jscals) == 0;
+
     /* Determine which rows to insert and update. We never delete here. */
     int old_i = 0;
     int new_i = 0;
@@ -1279,7 +1283,9 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     for ( ; new_i < dynarray_size(&new_jscals); new_i++) {
         // any new entry for which no old entry exists it newly created
         struct caldav_jscal *new_jscal = dynarray_nth(&new_jscals, new_i);
-        new_jscal->createdmodseq = cdata->dav.modseq;
+        new_jscal->createdmodseq = (rebuilding && !new_jscal->ical_recurid[0])
+                                 ? cdata->dav.createdmodseq
+                                 : cdata->dav.modseq;
         ptrarray_append(&upsert, new_jscal);
     }
 
