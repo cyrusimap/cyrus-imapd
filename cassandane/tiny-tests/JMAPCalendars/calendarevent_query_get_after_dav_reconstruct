@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+# Another path to the bug tested by
+# calendarevent_query_get_standalone_added_later.
+#
+# dav_reconstruct rebuilds dav.db from empty, so every record is re-derived
+# with an empty old jscal set: caldav_writeical_jmap stamps the new jscal
+# row's createdmodseq with the record's *current* modseq rather than its
+# createdmodseq.  For an event edited since creation (modseq > createdmodseq)
+# the two diverge, which is how the jscalendar-bis migration backfill left
+# previously-edited events unresolvable by /get.
+sub test_calendarevent_query_get_after_dav_reconstruct ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    my $uuid = '0d0f6e0f-9e3a-4f3a-8b1a-2b3c4d5e6f70';
+    my $href = "Default/$uuid.ics";
+
+    # Create the event: modseq == createdmodseq at this point.
+    my $ical = <<~"EOF";
+    BEGIN:VCALENDAR
+    VERSION:2.0
+    PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+    CALSCALE:GREGORIAN
+    BEGIN:VEVENT
+    UID:$uuid
+    DTSTART;TZID=Europe/Berlin:20260201T120000
+    DURATION:PT1H
+    DTSTAMP:20150928T132434Z
+    CREATED:20150928T125212Z
+    SUMMARY:original
+    SEQUENCE:0
+    END:VEVENT
+    END:VCALENDAR
+    EOF
+
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    # Edit it so modseq advances past the (preserved) createdmodseq.
+    my $edited = $ical =~ s/SUMMARY:original/SUMMARY:edited/r;
+    $edited =~ s/SEQUENCE:0/SEQUENCE:1/;
+    $caldav->Request('PUT', $href, $edited, 'Content-Type' => 'text/calendar');
+
+    # Rebuild dav.db from scratch: jscal_objs is repopulated from an empty old
+    # set, reproducing the migration backfill that diverged createdmodseq.
+    $self->{instance}->run_command({ cyrus => 1 }, 'dav_reconstruct', 'cassandane');
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {}, 'R1'],
+        ['CalendarEvent/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'CalendarEvent/query',
+                path => '/ids'
+            },
+            properties => ['id', 'title', 'uid'],
+        }, 'R2'],
+    ]);
+
+    my @queried = sort $res->[0][1]{ids}->@*;
+    $self->assert_num_equals(1, scalar @queried);
+
+    # Every id /query returned must resolve in /get, and the id /get mints
+    # (from its own createdmodseq) must match the one /query produced.
+    $self->assert_deep_equals([], $res->[1][1]{notFound});
+    my @gotten = sort map { $_->{id} } @{$res->[1][1]{list}};
+    $self->assert_deep_equals(\@queried, \@gotten);
+
+    $self->assert_str_equals('edited', $res->[1][1]{list}[0]{title});
+    $self->assert_str_equals($uuid, $res->[1][1]{list}[0]{uid});
+}
