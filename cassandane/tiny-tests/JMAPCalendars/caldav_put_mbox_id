@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+# The imip mboxevent id field should match the compact id of the created
+# event, but for some reason with a CalDAV PUT creating an imip, the id is
+# EM-- which is a modseq of 0...
+
+sub test_caldav_put_mbox_id
+    :min_version_3_7
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+    my $caldav = $self->{caldav};
+
+    xlog "Clear notifications";
+    $self->{instance}->getnotify();
+
+    xlog "Generate an imip with CalDAV PUT";
+
+    my $ical = <<~'EOF';
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        BEGIN:VEVENT
+        DTSTART;TZID=Europe/Vienna:20160928T160000
+        DURATION:PT1H
+        UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+        DTSTAMP:20150928T132434Z
+        CREATED:20150928T125212Z
+        SUMMARY:test
+        ORGANIZER;CN=cassandane@example.com:mailto:cassandane@example.com
+        ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED
+         ;RSVP=TRUE;CN=cassandane@example.com;X-NUM-GUESTS=0:
+         mailto:cassandane@example.com
+        ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION
+         ;RSVP=TRUE;CN=foo@example.com;X-NUM-GUESTS=0:mailto:foo\@example.com
+        END:VEVENT
+        END:VCALENDAR
+        EOF
+
+    my $res = $caldav->Request(
+        'PUT',
+        '/dav/calendars/user/cassandane/Default/test.ics',
+        $ical,
+        'Content-Type' => 'text/calendar'
+    );
+
+    my $data = $self->{instance}->getnotify();
+    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($notif);
+
+    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $got_id = $notif_payload->{id};
+    $self->assert_not_null($got_id);
+
+    # Figure out our event's actual id
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->request([
+        [ "CalendarEvent/query" => {
+            filter => {
+                uid => '40d6fe3c-6a51-489e-823e-3ea22f427a3e',
+            },
+        }, "a", ],
+        [ "CalendarEvent/get" => {
+            '#ids' => {
+                resultOf => 'a',
+                name     => 'CalendarEvent/query',
+                path     => '/ids',
+            },
+        }, "b", ],
+    ]);
+
+    my $cyr_id = $res->sentence_named('CalendarEvent/get')->arguments
+                                                          ->{list}[0]{id};
+
+    $self->assert_not_null($cyr_id);
+
+    $self->assert_equals($cyr_id, $got_id);
+}
