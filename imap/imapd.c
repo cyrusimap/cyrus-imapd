@@ -4806,22 +4806,20 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                         /* parse key-value pairs */
                         for (;;) {
                             c = getword(imapd_in, &arg);
-                            if (!arg.s[0]) break;
-                            ucase(arg.s);
                             if (c != ' ') break;
-                            struct buf val = BUF_INITIALIZER;
-                            c = getword(imapd_in, &val);
+                            if (!arg.s[0]) break;
+                            c = getword(imapd_in, &parm1);
+                            if (c != ' ') break;
+                            ucase(arg.s);
                             if (!strcmp(arg.s, "MAILBOXID")) {
                                 free(objid->mailboxid);
-                                objid->mailboxid = buf_release(&val);
+                                objid->mailboxid = buf_release(&parm1);
                             }
                             else if (!strcmp(arg.s, "ACCOUNTID")) {
                                 free(objid->accountid);
-                                objid->accountid = buf_release(&val);
+                                objid->accountid = buf_release(&parm1);
                             }
                             /* ignore unrecognised keys per spec */
-                            buf_free(&val);
-                            if (c != ' ') break;
                         }
                         if (c != ')') {
                             prot_printf(imapd_out,
