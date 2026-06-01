@@ -1434,11 +1434,13 @@ static int ptsmodule_make_authstate_group(
             (*newstate)->groups[j].hash = strhash((*newstate)->groups[j].id);
             j++;
         }
+        ldap_value_free(uvals);
     }
 
     rc = PTSM_OK;
 
 done:;
+    ldap_value_free(vals);
 
     if (res)
         ldap_msgfree(res);
