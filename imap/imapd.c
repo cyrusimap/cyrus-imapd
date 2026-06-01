@@ -7477,22 +7477,10 @@ localcreate:
         list_data(&listargs);
     }
 
-    if (client_capa & CAPA_OBJECTIDPLUS) {
-        // ACCOUNTID_NEEDS_FIXING
-        const char *userid = mbname_userid(mbname);
-        if (userid) {
-            prot_printf(imapd_out, "%s OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] Completed\r\n",
-                        tag, mailboxid, userid);
-        }
-        else {
-            // shared mailbox - no ACCOUNTID
-            prot_printf(imapd_out, "%s OK [OBJECTID (MAILBOXID %s)] Completed\r\n",
-                        tag, mailboxid);
-        }
-    }
-    else {
-        prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
-    }
+    // ACCOUNTID_NEEDS_FIXING
+    const char *userid = mbname_userid(mbname);
+    prot_print_objectids(imapd_out, !!(client_capa & CAPA_OBJECTIDPLUS),
+                         tag, mailboxid, userid);
 
     imapd_check(NULL, 0);
 
@@ -8419,23 +8407,12 @@ respond:
                 char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
                 // ACCOUNTID_NEEDS_FIXING
                 char *userid = mboxname_to_userid(newmailboxname);
-                if (userid) {
-                    struct conversations_state *cstate = conversations_get_user(imapd_userid);
-                    jmap_set_mailboxid(cstate, renamedmbentry, mailboxid);
-                    prot_printf(imapd_out,
-                        "%s OK [OBJECTID (MAILBOXID %s ACCOUNTID %s)] %s\r\n",
-                        tag, mailboxid, userid,
-                        error_message(IMAP_OK_COMPLETED));
-                    free(userid);
-                }
-                else {
-                    // shared mailbox - no ACCOUNTID, use uniqueid for MAILBOXID
-                    strlcpy(mailboxid, renamedmbentry->uniqueid, JMAP_MAX_MAILBOXID_SIZE);
-                    prot_printf(imapd_out,
-                        "%s OK [OBJECTID (MAILBOXID %s)] %s\r\n",
-                        tag, mailboxid,
-                        error_message(IMAP_OK_COMPLETED));
-                }
+                struct conversations_state *cstate =
+                    conversations_get_user(imapd_userid);
+                jmap_set_mailboxid(cstate, renamedmbentry, mailboxid);
+                prot_print_objectids(imapd_out, true /*compound*/,
+                                     tag, mailboxid, userid);
+                free(userid);
                 mboxlist_entry_free(&renamedmbentry);
             }
             else {
@@ -9896,14 +9873,10 @@ static int print_statusline(const char *extname, unsigned statusitems,
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
         sepchar = ' ';
     }
-    if (statusitems & STATUS_OBJECTID) {        /* draft-ietf-mailmaint-imap-objectid-bis */
-        if (sd->accountid) {
-            prot_printf(imapd_out, "%cOBJECTID (MAILBOXID %s ACCOUNTID %s)", sepchar, sd->mailboxid, sd->accountid);
-        }
-        else {
-            // shared mailbox - no ACCOUNTID
-            prot_printf(imapd_out, "%cOBJECTID (MAILBOXID %s)", sepchar, sd->mailboxid);
-        }
+    if (statusitems & STATUS_OBJECTID) {         /* draft-ietf-mailmaint-imap-objectid-bis */
+        char sepstr[2] = { sepchar, '\0' };
+        prot_print_objectids(imapd_out, true /*compound*/,
+                             sepstr, sd->mailboxid, sd->accountid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
