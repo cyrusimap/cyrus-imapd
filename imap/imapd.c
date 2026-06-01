@@ -4945,14 +4945,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
      * optionally scoped by ACCOUNTID */
     char *intname = NULL;
     if (objid.mailboxid) {
-        mbentry_t *id_mbentry = NULL;
         if (mboxlist_lookup_by_jmapid(imapd_userid, objid.mailboxid,
-                                      &id_mbentry, NULL) == 0
+                                      &mbentry, NULL) == 0
             || mboxlist_lookup_by_uniqueid(objid.mailboxid,
-                                           &id_mbentry, NULL) == 0) {
+                                           &mbentry, NULL) == 0) {
             int accountid_ok = 1;
             if (objid.accountid) {
-                char *found_userid = mboxname_to_userid(id_mbentry->name);
+                char *found_userid = mboxname_to_userid(mbentry->name);
                 if (found_userid) {
                     accountid_ok = !strcmp(found_userid, objid.accountid);
                     free(found_userid);
@@ -4962,19 +4961,22 @@ static void cmd_select(char *tag, char *cmd, char *name)
                 }
             }
             if (accountid_ok) {
-                intname = xstrdup(id_mbentry->name);
+                intname = xstrdup(mbentry->name);
             }
-            mboxlist_entry_free(&id_mbentry);
+            else {
+                mboxlist_entry_free(&mbentry);
+            }
         }
     }
     free(objid.mailboxid);
     free(objid.accountid);
 
-    if (!intname)
+    if (!mbentry) {
         intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) {
-        goto done;
+        r = mlookup(tag, name, intname, &mbentry);
+        if (r == IMAP_MAILBOX_MOVED) {
+            goto done;
+        }
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
