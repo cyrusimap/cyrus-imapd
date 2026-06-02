@@ -1281,11 +1281,14 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
     }
     for ( ; new_i < dynarray_size(&new_jscals); new_i++) {
-        // any new entry for which no old entry exists it newly created
+        /* A new entry with no old counterpart is new in this write -- unless
+         * we're rebuilding, when every row is pre-existing and takes the
+         * resource createdmodseq, which is exactly right for the main event,
+         * and a safe lower bound for standalone instances, whose true
+         * createdmodseq can't be recovered. */
         struct caldav_jscal *new_jscal = dynarray_nth(&new_jscals, new_i);
-        new_jscal->createdmodseq = (rebuilding && !new_jscal->ical_recurid[0])
-                                 ? cdata->dav.createdmodseq
-                                 : cdata->dav.modseq;
+        new_jscal->createdmodseq = rebuilding ? cdata->dav.createdmodseq
+                                              : cdata->dav.modseq;
         ptrarray_append(&upsert, new_jscal);
     }
 
