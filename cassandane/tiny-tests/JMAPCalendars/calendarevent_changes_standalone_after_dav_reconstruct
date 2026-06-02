@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+# Two standalone instances of one recurring event survive a dav_reconstruct in
+# CalendarEvent/changes: neither vanishes, and both keep the id assigned at
+# /set time.  reconstruct rewrites every jscal row's modseq to the resource's
+# current modseq, so both rows would be covered by a /changes from earlier.
+#
+# This does mean over-reporting:  we may report an item as updated when it
+# wasn't, but fetching will solve that.  So, this test isn't testing the ideal
+# case, it's testing that we're doing something acceptable rathre than lossy.
+
+sub test_calendarevent_changes_standalone_after_dav_reconstruct ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    xlog $self, "baseline state, before any instance exists";
+    my $res = $jmap->CallMethods([['CalendarEvent/get', { ids => [] }, 'R1']]);
+    my $state0 = $res->[0][1]{state};
+
+    xlog $self, "create the first standalone instance";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+        i1 => {
+            calendarIds => { $calid => JSON::true },
+            uid => 'event1uid',
+            title => 'instance1',
+            start => '2026-01-01T11:11:11',
+            timeZone => 'Europe/Berlin',
+            duration => 'PT1H',
+            recurrenceId => '2026-01-01T11:11:11',
+            recurrenceIdTimeZone => 'Europe/Berlin',
+        },
+    }}, 'R1']]);
+    my $id1 = $res->[0][1]{created}{i1}{id};
+    $self->assert_not_null($id1);
+
+    xlog $self, "create a second standalone instance with the same uid";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+        i2 => {
+            calendarIds => { $calid => JSON::true },
+            uid => 'event1uid',
+            title => 'instance2',
+            start => '2026-02-02T22:22:22',
+            timeZone => 'Europe/Berlin',
+            duration => 'PT1H',
+            recurrenceId => '2026-02-02T22:22:22',
+            recurrenceIdTimeZone => 'Europe/Berlin',
+        },
+    }}, 'R1']]);
+    my $id2 = $res->[0][1]{created}{i2}{id};
+    $self->assert_not_null($id2);
+
+    xlog $self, "rebuild dav.db from scratch";
+    $self->{instance}->run_command({ cyrus => 1 }, 'dav_reconstruct', 'cassandane');
+
+    xlog $self, "both instances are reported as created since the baseline";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $state0,
+    }, 'R1']]);
+    $self->assert_deep_equals([sort($id1, $id2)],
+        [sort $res->[0][1]{created}->@*]);
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+}
