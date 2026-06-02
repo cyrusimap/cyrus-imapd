@@ -445,7 +445,7 @@ done:
 #define DATATYPE_THREAD          (1<<1)
 #define DATATYPE_EMAIL           (1<<2)
 #define DATATYPE_ADDRESSBOOK     (1<<3)
-#define DATATYPE_CONTACT         (1<<4)
+#define DATATYPE_CONTACTCARD     (1<<4)
 #define DATATYPE_CALENDAR        (1<<5)
 #define DATATYPE_CALENDAREVENT   (1<<6)
 
@@ -462,7 +462,7 @@ struct datatype_name known_datatypes[] = {
     { "Thread", DATATYPE_THREAD, MBTYPE_EMAIL },
     { "Email", DATATYPE_EMAIL, MBTYPE_EMAIL },
     { "Addressbook", DATATYPE_ADDRESSBOOK, MBTYPE_ADDRESSBOOK },
-    { "Contact", DATATYPE_CONTACT, MBTYPE_ADDRESSBOOK },
+    { "ContactCard", DATATYPE_CONTACTCARD, MBTYPE_ADDRESSBOOK },
     { "Calendar", DATATYPE_CALENDAR, MBTYPE_CALENDAR },
     { "CalendarEvent", DATATYPE_CALENDAREVENT, MBTYPE_CALENDAR },
     { NULL, 0, 0 }
@@ -642,7 +642,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
             caldav_db = caldav_open_mailbox(mbox);
 
         struct carddav_db *carddav_db = NULL;
-        if (datatypes & DATATYPE_CONTACT)
+        if (datatypes & DATATYPE_CONTACTCARD)
             carddav_db = carddav_open_mailbox(mbox);
 
         int j;
@@ -710,10 +710,15 @@ static int jmap_blob_lookup(jmap_req_t *req)
                     strarray_add(ids, strarray_nth(boxes, -1));
                     break;
 
-                case DATATYPE_CONTACT: {
+                case DATATYPE_CONTACTCARD: {
                     struct carddav_data *cdata = NULL;
                     carddav_lookup_imapuid(carddav_db, mbentry, getblob->uid, &cdata, 0);
-                    if (cdata) strarray_add(ids, cdata->vcard_uid);
+                    if (cdata) {
+                        struct buf cardid = BUF_INITIALIZER;
+                        jmap_set_contactid(req->cstate, cdata, &cardid);
+                        strarray_add(ids, buf_cstring(&cardid));
+                        buf_free(&cardid);
+                    }
                     break;
                     }
 
