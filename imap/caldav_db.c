@@ -671,16 +671,16 @@ static void check_mattach_cb(icalcomponent *comp, void *rock)
 
 #define CMD_UPSERT_JSCALOBJS                                            \
     "INSERT INTO jscal_objs ("                                          \
-    "  rowid, ical_recurid, alive, modseq, createdmodseq,"              \
+    "  rowid, ical_recurid, alive, modseq, added_at_modseq,"            \
     "  dtstart, dtend, ical_guid )"                                     \
     " VALUES ("                                                         \
-    "  :rowid, :ical_recurid, :alive, :modseq, :createdmodseq,"         \
+    "  :rowid, :ical_recurid, :alive, :modseq, :added_at_modseq,"       \
     "  :dtstart, :dtend, :ical_guid )"                                  \
     " ON CONFLICT (rowid, ical_recurid) DO"                             \
     " UPDATE SET"                                                       \
     "  alive        = :alive,"                                          \
     "  modseq       = :modseq,"                                         \
-    "  createdmodseq = :createdmodseq,"                                 \
+    "  added_at_modseq = :added_at_modseq,"                             \
     "  dtstart      = :dtstart,"                                        \
     "  dtend        = :dtend,"                                          \
     "  ical_guid    = :ical_guid;"                                      \
@@ -693,7 +693,7 @@ static int caldav_upsert_jscal(struct caldav_db *caldavdb,
         { ":ical_recurid",  SQLITE_TEXT,     { .s = jscal->ical_recurid } },
         { ":alive",         SQLITE_INTEGER,  { .i = jscal->alive } },
         { ":modseq",        SQLITE_INTEGER,  { .i = jscal->modseq  } },
-        { ":createdmodseq", SQLITE_INTEGER,  { .i = jscal->createdmodseq } },
+        { ":added_at_modseq", SQLITE_INTEGER,  { .i = jscal->added_at_modseq } },
         { ":dtstart",       SQLITE_TEXT,     { .s = jscal->dtstart } },
         { ":dtend",         SQLITE_TEXT,     { .s = jscal->dtend } },
         { ":ical_guid",     SQLITE_TEXT,     { .s = jscal->ical_guid } },
@@ -703,7 +703,7 @@ static int caldav_upsert_jscal(struct caldav_db *caldavdb,
 }
 
 #define CMD_SELJSCALOBJS                                          \
-    "SELECT rowid, ical_recurid, alive, modseq, createdmodseq,"   \
+    "SELECT rowid, ical_recurid, alive, modseq, added_at_modseq,"   \
     "  dtstart, dtend, ical_guid "                                \
     "FROM jscal_objs "                                            \
     "WHERE rowid = :rowid ORDER BY ical_recurid ASC;"
@@ -723,7 +723,7 @@ static int read_jscals_cb(sqlite3_stmt *stmt, void *vrock)
     jscal.ical_recurid = strarray_nth(rock->strpool, -1);
     jscal.alive = sqlite3_column_int(stmt, 2);
     jscal.modseq = sqlite3_column_int64(stmt, 3);
-    jscal.createdmodseq = sqlite3_column_int64(stmt, 4);
+    jscal.added_at_modseq = sqlite3_column_int64(stmt, 4);
     strarray_append(rock->strpool, (const char *) sqlite3_column_text(stmt, 5));
     jscal.dtstart = strarray_nth(rock->strpool, -1);
     strarray_append(rock->strpool, (const char *) sqlite3_column_text(stmt, 6));
@@ -739,7 +739,7 @@ static int read_jscals_cb(sqlite3_stmt *stmt, void *vrock)
     " jscal_objs.ical_recurid,"   \
     " jscal_objs.alive,"          \
     " jscal_objs.modseq,"         \
-    " jscal_objs.createdmodseq,"  \
+    " jscal_objs.added_at_modseq,"  \
     " jscal_objs.dtstart,"        \
     " jscal_objs.dtend,"          \
     " jscal_objs.ical_guid,"
@@ -788,7 +788,7 @@ static int read_jscal_cb(sqlite3_stmt *stmt, void *rock)
     jscal->ical_recurid = (const char *) sqlite3_column_text(stmt, 19);
     jscal->alive = sqlite3_column_int(stmt, 20);
     jscal->modseq = sqlite3_column_int64(stmt, 21);
-    jscal->createdmodseq = sqlite3_column_int64(stmt, 22);
+    jscal->added_at_modseq = sqlite3_column_int64(stmt, 22);
     jscal->dtstart = (const char *) sqlite3_column_text(stmt, 23);
     jscal->dtend = (const char *) sqlite3_column_text(stmt, 24);
     jscal->ical_guid = (const char *) sqlite3_column_text(stmt, 25);
@@ -1179,7 +1179,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
                 .dtend = cdata->dtend,
                 .alive = cdata->dav.alive,
                 .modseq = cdata->dav.modseq,
-                .createdmodseq = cdata->dav.createdmodseq,
+                .added_at_modseq = cdata->dav.createdmodseq,
                 .ical_guid = ical_guid,
             };
             dynarray_append(&new_jscals, &jscal);
@@ -1206,7 +1206,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             .cdata.dav.rowid = cdata->dav.rowid,
             .alive = cdata->dav.alive,
             .modseq = cdata->dav.modseq,
-            .createdmodseq = cdata->dav.createdmodseq,
+            .added_at_modseq = cdata->dav.createdmodseq,
             .ical_guid = ical_guid,
         };
 
@@ -1251,7 +1251,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         if (!new_jscal->ical_recurid[0]) {
             // old standalone instances got replaced with main event
-            new_jscal->createdmodseq = cdata->dav.modseq;
+            new_jscal->added_at_modseq = cdata->dav.modseq;
             ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
@@ -1266,7 +1266,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
         else {
             // new standalone instance got added
-            new_jscal->createdmodseq = cdata->dav.modseq;
+            new_jscal->added_at_modseq = cdata->dav.modseq;
             ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
@@ -1287,8 +1287,8 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
          * and a safe lower bound for standalone instances, whose true
          * createdmodseq can't be recovered. */
         struct caldav_jscal *new_jscal = dynarray_nth(&new_jscals, new_i);
-        new_jscal->createdmodseq = rebuilding ? cdata->dav.createdmodseq
-                                              : cdata->dav.modseq;
+        new_jscal->added_at_modseq = rebuilding ? cdata->dav.createdmodseq
+                                                : cdata->dav.modseq;
         ptrarray_append(&upsert, new_jscal);
     }
 
