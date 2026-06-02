@@ -4150,6 +4150,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (ret) goto done;
     }
 
+    /* The createdmodseq for use in notifications (as the JMAP ID)
+     * and the index record is either the createdmodseq of any
+     * existing record, or the next modseq for the calendar data type.
+     */
+    modseq_t cmodseq = cdata->dav.imap_uid ? cdata->dav.createdmodseq :
+        mboxname_nextmodseq(txn->req_tgt.mbentry->name, 0, MBTYPE_CALENDAR, 0);
+
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
@@ -4206,7 +4213,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
                         sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                                      organizer, oldical, ical, 0, SCHED_MECH_CALDAV);
+                                      organizer, oldical, ical,
+                                      cmodseq, SCHED_MECH_CALDAV);
                 }
             }
             else {
@@ -4225,7 +4233,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
                         sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                                    oldical, ical, 0, SCHED_MECH_CALDAV);
+                                    oldical, ical, cmodseq, SCHED_MECH_CALDAV);
                 }
             }
 
@@ -4323,8 +4331,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Store resource at target */
     if (!ret) {
-        ret = caldav_store_resource(txn, ical, mailbox, resource,
-                                    cdata->dav.createdmodseq,
+        ret = caldav_store_resource(txn, ical, mailbox, resource, cmodseq,
                                     db, flags, httpd_userid, NULL, NULL,
                                     &schedule_addresses);
 
@@ -4344,11 +4351,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                         NULL, NULL);
             }
 
-            /* Fetch new index record to get createdmodseq */
-            struct index_record record;
-            mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
             struct jmap_caleventid eid = {
-                .createdmodseq = record.createdmodseq,
+                .createdmodseq = cmodseq,
                 .ical_uid = uid
             };
             int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
