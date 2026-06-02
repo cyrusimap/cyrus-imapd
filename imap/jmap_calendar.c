@@ -6790,12 +6790,12 @@ static int geteventchanges_cb(void *vrock, struct caldav_jscal *jscal)
 
     /* Report item as updated or destroyed. */
     if (jscal->alive) {
-        if (jscal->createdmodseq <= changes->since_modseq)
+        if (jscal->added_at_modseq <= changes->since_modseq)
             json_array_append_new(changes->updated, json_string(id));
         else
             json_array_append_new(changes->created, json_string(id));
     } else {
-        if (jscal->createdmodseq <= changes->since_modseq)
+        if (jscal->added_at_modseq <= changes->since_modseq)
             json_array_append_new(changes->destroyed, json_string(id));
     }
 

@@ -177,7 +177,7 @@ struct caldav_jscal {
     const char *dtend;
     int alive;
     modseq_t modseq;
-    modseq_t createdmodseq;
+    modseq_t added_at_modseq;
     const char *ical_guid;
     int cacheversion;
     const char *cachedata;
