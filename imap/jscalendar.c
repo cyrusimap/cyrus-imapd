@@ -269,9 +269,9 @@ typedef struct {
     jscal_cfg_t cfg;
 #ifdef HAVE_GUESSTZ
     guesstz_t *gtz;
+#endif
     hash_table iana_tzid_by_custom_tzid;
     ptrarray_t unguessable_vtimezones;
-#endif
 } jscal_ctx_t;
 
 static jscal_ctx_t jscal_ctx_init(const jscal_cfg_t *cfg)
