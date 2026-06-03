@@ -568,9 +568,12 @@ static void lookup_blob_cb(const jmap_data_type_t *dtype, void *rock)
         break;
     }
 
-    case JMAP_TYPE_ADDRESSBOOK:
-        strarray_add(ids, strarray_nth(lrock->boxes, -1));
+    case JMAP_TYPE_ADDRESSBOOK: {
+        char abookid[JMAP_MAX_ADDRBOOKID_SIZE];
+        jmap_set_addrbookid(lrock->req->cstate, lrock->mbentry, abookid);
+        strarray_add(ids, abookid);
         break;
+    }
 
     case JMAP_TYPE_CONTACTCARD: {
         struct carddav_data *cdata = NULL;
