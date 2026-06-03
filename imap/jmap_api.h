@@ -67,44 +67,51 @@ enum {
 /* JMAP Data Types */
 enum {
     /* RFC 8620 */
-    JMAP_TYPE_CORE = 0,
-    JMAP_TYPE_PUSHSUBSCRIPTION,
+    JMAP_TYPE_CORE                      = (1<<0),
+    JMAP_TYPE_PUSHSUBSCRIPTION          = (1<<1),
     /* RFC 8621 */
-    JMAP_TYPE_MAILBOX,
-    JMAP_TYPE_THREAD,
-    JMAP_TYPE_EMAIL,
-    JMAP_TYPE_EMAILDELIVERY,
-    JMAP_TYPE_SEARCHSNIPPET,
-    JMAP_TYPE_IDENTITY,
-    JMAP_TYPE_EMAILSUBMISSION,
-    JMAP_TYPE_VACATIONRESPONSE,
+    JMAP_TYPE_MAILBOX                   = (1<<2),
+    JMAP_TYPE_THREAD                    = (1<<3),
+    JMAP_TYPE_EMAIL                     = (1<<4),
+    JMAP_TYPE_EMAILDELIVERY             = (1<<5),
+    JMAP_TYPE_SEARCHSNIPPET             = (1<<6),
+    JMAP_TYPE_IDENTITY                  = (1<<7),
+    JMAP_TYPE_EMAILSUBMISSION           = (1<<8),
+    JMAP_TYPE_VACATIONRESPONSE          = (1<<9),
     /* RFC 9007 */
-    JMAP_TYPE_MDN,
+    JMAP_TYPE_MDN                       = (1<<10),
     /* RFC 9425 */
-    JMAP_TYPE_QUOTA,
+    JMAP_TYPE_QUOTA                     = (1<<11),
     /* RFC 9661 */
-    JMAP_TYPE_SIEVESCRIPT,
+    JMAP_TYPE_SIEVESCRIPT               = (1<<12),
     /* RFC 9670 */
-    JMAP_TYPE_PRINCIPAL,
-    JMAP_TYPE_SHARENOTIFICATION,
+    JMAP_TYPE_PRINCIPAL                 = (1<<13),
+    JMAP_TYPE_SHARENOTIFICATION         = (1<<14),
     /* RFC 9610 */
-    JMAP_TYPE_ADDRESSBOOK,
-    JMAP_TYPE_CONTACTCARD,
+    JMAP_TYPE_ADDRESSBOOK               = (1<<15),
+    JMAP_TYPE_CONTACTCARD               = (1<<16),
     /* draft-ietf-jmap-calendars */
-    JMAP_TYPE_CALENDAR,
-    JMAP_TYPE_CALENDAREVENT,
-    JMAP_TYPE_CALENDAREVENTNOTIFICATION,
-    JMAP_TYPE_PARTICIPANTIDENTITY,
-    JMAP_TYPE_NOTE,
+    JMAP_TYPE_CALENDAR                  = (1<<17),
+    JMAP_TYPE_CALENDAREVENT             = (1<<18),
+    JMAP_TYPE_CALENDAREVENTNOTIFICATION = (1<<19),
+    JMAP_TYPE_PARTICIPANTIDENTITY       = (1<<20),
     /* Non-standard */
-    JMAP_NUM_TYPES  /* MUST always be last */
+    JMAP_TYPE_NOTE                      = (1<<21),
+
+    JMAP_NUM_TYPES                      = 22,
+};
+
+/* JMAP Data Type attributes */
+enum {
+    JMAP_TYPE_HAS_QUOTA = (1<<0),
+    JMAP_TYPE_HAS_BLOB  = (1<<1),
 };
 
 typedef struct {
     const char *name;
     uint32_t kind;
-    bool has_quota;
     uint32_t mbtype;
+    uint32_t attributes;
     off_t modseq_offset;
 } jmap_data_type_t;
 
