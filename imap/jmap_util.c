@@ -20,6 +20,7 @@
 #include "hash.h"
 #include "ical_support.h"
 #include "index.h"
+#include "jmap_api.h"
 #include "jmap_util.h"
 #include "json_support.h"
 #include "search_query.h"
@@ -35,6 +36,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+
+#include "imap/jmap_data_types.h"
 
 EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
                               int mandatory, json_t *invalid, const char *fmt,
@@ -1659,4 +1662,39 @@ EXPORTED void jmap_calendarevent_remove_peruserprops(json_t *jevent)
             json_object_del(joverrides, recurid);
         }
     }
+}
+
+/* These are in the base library so mboxevent.c can build
+ * vnd.fastmail.jmapStates state strings the same way the JMAP API does. */
+EXPORTED char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (prefixed_state) {
+        // add mandatory prefix
+        buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
+    }
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+
+    return buf_release(&buf);
+}
+
+EXPORTED char *jmap_state_string_cstate(struct conversations_state *cstate,
+                                        modseq_t modseq, int mbtype)
+{
+    int prefixed_state = 0;
+
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        switch (mbtype) {
+        case MBTYPE_EMAIL:
+        case MBTYPE_CALENDAR:
+            prefixed_state = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return jmap_state_string_prefixed(prefixed_state, modseq);
 }
