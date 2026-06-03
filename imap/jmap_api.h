@@ -347,6 +347,9 @@ extern modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags);
 #define JMAP_STATE_STRING_PREFIX 'J'
 extern char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
                                int mbtype, int flags);
+extern char *jmap_state_string_cstate(struct conversations_state *cstate,
+                                      modseq_t modseq, int mbtype);
+extern char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq);
 
 /* Helpers for DAV-based JMAP types */
 extern char *jmap_xhref(const char *mboxname, const char *resource);
