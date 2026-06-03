@@ -173,7 +173,8 @@ static int jmap_core_echo(jmap_req_t *req)
 static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
 {
     /* Read script */
-    json_t *res = json_pack("{s:s}", "id", "singleton");
+    json_t *res = json_pack("{s:s s:b}", "id", "singleton",
+                            "compactCalendarIds", false);
 
     if (jmap_wantprop(get->props, "highestModSeq"))
         json_object_set_new(res, "highestModSeq",
