@@ -13,8 +13,19 @@ sub test_card_blob_lookup ($self)
         'https://cyrusimap.org/ns/jmap/contacts',
     ];
 
-    xlog $self, "create a contact card";
+    xlog $self, "fetch default AddressBook id";
     my $res = $jmap->request({
+        using => $using,
+        methodCalls => [['AddressBook/get', {
+            properties => ['id'],
+        }, 'R1']],
+    });
+    my $abookId = $res->sentence_named('AddressBook/get')
+                     ->arguments->{list}[0]{id};
+    $self->assert_not_null($abookId);
+
+    xlog $self, "create a contact card";
+    $res = $jmap->request({
         using => $using,
         methodCalls => [['ContactCard/set', { create => {
             card1 => {
@@ -22,6 +33,7 @@ sub test_card_blob_lookup ($self)
                 version => '1.0',
                 uid => 'card1uid',
                 name => { full => 'Jane Doe' },
+                addressBookIds => { $abookId => JSON::true }
             },
         }}, 'R1']],
     });
@@ -48,11 +60,15 @@ sub test_card_blob_lookup ($self)
             'urn:ietf:params:jmap:blob',
         ],
         methodCalls => [['Blob/lookup', {
-            typeNames => ['ContactCard'],
+            typeNames => ['ContactCard', 'AddressBook'],
             ids => [$blobId],
         }, 'R1']],
     });
-    $self->assert_deep_equals([$cardId],
+    $self->assert_deep_equals(
+        {
+            'ContactCard' => [ $cardId ],
+            'AddressBook' => [ $abookId ]
+        },
         $res->sentence_named('Blob/lookup')
-            ->arguments->{list}[0]{matchedIds}{ContactCard});
+            ->arguments->{list}[0]{matchedIds});
 }
