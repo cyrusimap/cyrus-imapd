@@ -24,36 +24,36 @@ jmap_data_type_t;
 
 %%
 # RFC 8620
-"Core",                      JMAP_TYPE_CORE,                      false, MBTYPE_UNKNOWN,     -1
-"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          false, MBTYPE_UNKNOWN,     -1
+"Core",                      JMAP_TYPE_CORE,                      MBTYPE_UNKNOWN,     0,                                        -1
+"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          MBTYPE_UNKNOWN,     0,                                        -1
 # RFC 8621
-"Mailbox",                   JMAP_TYPE_MAILBOX,                   true,  MBTYPE_EMAIL,       offsetof(struct mboxname_counters, mailmodseq)
-"Thread",                    JMAP_TYPE_THREAD,                    false, MBTYPE_UNKNOWN,     -1
-"Email",                     JMAP_TYPE_EMAIL,                     true,  MBTYPE_EMAIL,       offsetof(struct mboxname_counters, mailmodseq)
-"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY,             false, MBTYPE_UNKNOWN,     -1
-"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET,             false, MBTYPE_UNKNOWN,     -1
-"Identity",                  JMAP_TYPE_IDENTITY,                  false, MBTYPE_UNKNOWN,     -1
-"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION,           true,  MBTYPE_JMAPSUBMIT,  offsetof(struct mboxname_counters, submissionmodseq)
-"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE,          true,  MBTYPE_SIEVE,       offsetof(struct mboxname_counters, sievemodseq)
+"Mailbox",                   JMAP_TYPE_MAILBOX,                   MBTYPE_EMAIL,       JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, mailmodseq)
+"Thread",                    JMAP_TYPE_THREAD,                    MBTYPE_EMAIL,       JMAP_TYPE_HAS_BLOB,                       -1
+"Email",                     JMAP_TYPE_EMAIL,                     MBTYPE_EMAIL,       JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, mailmodseq)
+"EmailDelivery",             JMAP_TYPE_EMAILDELIVERY,             MBTYPE_UNKNOWN,     0,                                        -1
+"SearchSnippet",             JMAP_TYPE_SEARCHSNIPPET,             MBTYPE_UNKNOWN,     0,                                        -1
+"Identity",                  JMAP_TYPE_IDENTITY,                  MBTYPE_UNKNOWN,     0,                                        -1
+"EmailSubmission",           JMAP_TYPE_EMAILSUBMISSION,           MBTYPE_JMAPSUBMIT,  JMAP_TYPE_HAS_QUOTA,                      offsetof(struct mboxname_counters, submissionmodseq)
+"VacationResponse",          JMAP_TYPE_VACATIONRESPONSE,          MBTYPE_SIEVE,       JMAP_TYPE_HAS_QUOTA,                      offsetof(struct mboxname_counters, sievemodseq)
 # RFC 9007
-"MDN",                       JMAP_TYPE_MDN,                       false, MBTYPE_UNKNOWN,     -1
+"MDN",                       JMAP_TYPE_MDN,                       MBTYPE_UNKNOWN,     0,                                        -1
 # RFC 9425
-"Quota",                     JMAP_TYPE_QUOTA,                     false, MBTYPE_UNKNOWN,     -1
+"Quota",                     JMAP_TYPE_QUOTA,                     MBTYPE_UNKNOWN,     0,                                        -1
 # RFC 9661
-"SieveScript",               JMAP_TYPE_SIEVESCRIPT,               true,  MBTYPE_SIEVE,       offsetof(struct mboxname_counters, sievemodseq)
+"SieveScript",               JMAP_TYPE_SIEVESCRIPT,               MBTYPE_SIEVE,       JMAP_TYPE_HAS_QUOTA,                      offsetof(struct mboxname_counters, sievemodseq)
 # RFC 9670
-"Principal",                 JMAP_TYPE_PRINCIPAL,                 false, MBTYPE_UNKNOWN,     -1
-"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION,         false, MBTYPE_UNKNOWN,     -1
+"Principal",                 JMAP_TYPE_PRINCIPAL,                 MBTYPE_UNKNOWN,     0,                                        -1
+"ShareNotification",         JMAP_TYPE_SHARENOTIFICATION,         MBTYPE_UNKNOWN,     0,                                        -1
 # RFC 9610
-"AddressBook",               JMAP_TYPE_ADDRESSBOOK,               true,  MBTYPE_ADDRESSBOOK, offsetof(struct mboxname_counters, carddavmodseq)
-"ContactCard",               JMAP_TYPE_CONTACTCARD,               true,  MBTYPE_ADDRESSBOOK, offsetof(struct mboxname_counters, carddavmodseq)
+"AddressBook",               JMAP_TYPE_ADDRESSBOOK,               MBTYPE_ADDRESSBOOK, JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, carddavmodseq)
+"ContactCard",               JMAP_TYPE_CONTACTCARD,               MBTYPE_ADDRESSBOOK, JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, carddavmodseq)
 # draft-ietf-jmap-calendars
-"Calendar",                  JMAP_TYPE_CALENDAR,                  true,  MBTYPE_CALENDAR,    offsetof(struct mboxname_counters, caldavmodseq)
-"CalendarEvent",             JMAP_TYPE_CALENDAREVENT,             true,  MBTYPE_CALENDAR,    offsetof(struct mboxname_counters, caldavmodseq)
-"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION, false, MBTYPE_UNKNOWN,     -1
-"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY,       false, MBTYPE_UNKNOWN,     -1
+"Calendar",                  JMAP_TYPE_CALENDAR,                  MBTYPE_CALENDAR,    JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, caldavmodseq)
+"CalendarEvent",             JMAP_TYPE_CALENDAREVENT,             MBTYPE_CALENDAR,    JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, caldavmodseq)
+"CalendarEventNotification", JMAP_TYPE_CALENDAREVENTNOTIFICATION, MBTYPE_UNKNOWN,     0,                                        -1
+"ParticipantIdentity",       JMAP_TYPE_PARTICIPANTIDENTITY,       MBTYPE_UNKNOWN,     0,                                        -1
 # Non-standard
-"Note",                      JMAP_TYPE_NOTE,                      false, MBTYPE_COLLECTION,  offsetof(struct mboxname_counters, notesmodseq)
+"Note",                      JMAP_TYPE_NOTE,                      MBTYPE_COLLECTION,  0,                                        offsetof(struct mboxname_counters, notesmodseq)
 %%
 
 
