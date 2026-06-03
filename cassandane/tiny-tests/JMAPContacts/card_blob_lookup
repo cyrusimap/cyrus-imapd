@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+# Blob/lookup must map a contact card's blob to a ContactCard id that
+# ContactCard/get can resolve.
+sub test_card_blob_lookup ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:contacts',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    xlog $self, "create a contact card";
+    my $res = $jmap->request({
+        using => $using,
+        methodCalls => [['ContactCard/set', { create => {
+            card1 => {
+                '@type' => 'Card',
+                version => '1.0',
+                uid => 'card1uid',
+                name => { full => 'Jane Doe' },
+            },
+        }}, 'R1']],
+    });
+    my $cardId = $res->sentence_named('ContactCard/set')
+                     ->arguments->{created}{card1}{id};
+    $self->assert_not_null($cardId);
+
+    xlog $self, "fetch the card's blobId";
+    $res = $jmap->request({
+        using => $using,
+        methodCalls => [['ContactCard/get', {
+            ids => [$cardId],
+            properties => ['cyrusimap.org:blobId'],
+        }, 'R1']],
+    });
+    my $blobId = $res->sentence_named('ContactCard/get')
+                     ->arguments->{list}[0]{'cyrusimap.org:blobId'};
+    $self->assert_not_null($blobId);
+
+    xlog $self, "Blob/lookup must return the id ContactCard/get uses";
+    $res = $jmap->request({
+        using => [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:blob',
+        ],
+        methodCalls => [['Blob/lookup', {
+            typeNames => ['ContactCard'],
+            ids => [$blobId],
+        }, 'R1']],
+    });
+    $self->assert_deep_equals([$cardId],
+        $res->sentence_named('Blob/lookup')
+            ->arguments->{list}[0]{matchedIds}{ContactCard});
+}
