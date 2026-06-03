@@ -17,6 +17,7 @@
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
+#include "jmap_data_types.h"
 #include "imparse.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -32,7 +33,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
-#include "imap/jmap_data_types.h"
 
 
 static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
