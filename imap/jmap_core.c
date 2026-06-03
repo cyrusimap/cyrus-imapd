@@ -23,6 +23,7 @@ static int jmap_core_echo(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_usercounters_get(jmap_req_t *req);
+static int jmap_userstate_get(jmap_req_t *req);
 
 // clang-format off
 static jmap_method_t jmap_core_methods_standard[] = {
@@ -42,6 +43,12 @@ static jmap_method_t jmap_core_methods_nonstandard[] = {
         "UserCounters/get",
         JMAP_USERCOUNTERS_EXTENSION,
         &jmap_usercounters_get,
+        JMAP_NEED_CSTATE
+    },
+    {
+        "UserState/get",
+        JMAP_USERCOUNTERS_EXTENSION,
+        &jmap_userstate_get,
         JMAP_NEED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -299,6 +306,135 @@ static int jmap_usercounters_get(jmap_req_t *req)
         }
     }
     else usercounters_get(req, &get);
+
+    /* Build response */
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, req->counters.highestmodseq);
+    get.state = buf_release(&buf);
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+
+    return 0;
+}
+
+/* UserState/get method */
+
+struct userstate_rock {
+    jmap_req_t *req;
+    struct jmap_get *get;
+    json_t *res;
+};
+
+static void add_userstate_cb(const jmap_data_type_t *dtype, void *rock)
+{
+    struct userstate_rock *srock = rock;
+
+    if (dtype->modseq_offset < 0) return;
+    if (!jmap_wantprop(srock->get->props, dtype->name)) return;
+
+    modseq_t modseq =
+        *(modseq_t *)((off_t) &srock->req->counters + dtype->modseq_offset);
+    char *state =
+        jmap_state_string_cstate(srock->req->cstate, modseq, dtype->mbtype);
+
+    json_object_set_new(srock->res, dtype->name, json_string(state));
+    free(state);
+}
+
+static void userstate_get(jmap_req_t *req, struct jmap_get *get)
+{
+    json_t *res = json_pack("{s:s}", "id", "singleton");
+    struct userstate_rock srock = { req, get, res };
+
+    jmap_data_types_foreach(&add_userstate_cb, &srock);
+
+    json_array_append_new(get->list, res);
+}
+
+static int jmap_userstate_get(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get = JMAP_GET_INITIALIZER;
+    json_t *err = NULL;
+    const char *key;
+    json_t *arg;
+
+    get.list = json_array();
+    get.not_found = json_array();
+
+    /* We can't lean on jmap_get_parse's property validation here: its valid
+     * property set is a gperf perfect-hash table, whereas our valid properties
+     * are the JMAP data type names.  So parse by hand and validate properties
+     * against jmap_data_types_lookup. */
+    json_object_foreach(req->args, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+        else if (!strcmp(key, "ids")) {
+            if (json_is_array(arg)) {
+                get.ids = json_incref(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "ids");
+            }
+        }
+        else if (!strcmp(key, "properties")) {
+            if (json_is_array(arg)) {
+                json_t *val;
+                size_t i;
+
+                get.props = xzmalloc(sizeof(hash_table));
+                construct_hash_table(get.props, json_array_size(arg) + 1, 0);
+
+                json_array_foreach(arg, i, val) {
+                    const char *name = json_string_value(val);
+                    const jmap_data_type_t *dtype = name ?
+                        jmap_data_types_lookup(name, strlen(name)) : NULL;
+
+                    if (dtype && dtype->modseq_offset >= 0) {
+                        hash_insert(name, (void *)1, get.props);
+                    }
+                    else {
+                        jmap_parser_push_index(&parser, "properties", i, name);
+                        jmap_parser_invalid(&parser, NULL);
+                        jmap_parser_pop(&parser);
+                    }
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "properties");
+            }
+        }
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
+    }
+
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                        "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Does the client request specific responses? */
+    if (JNOTNULL(get.ids)) {
+        json_t *jval;
+        size_t i;
+
+        json_array_foreach(get.ids, i, jval) {
+            const char *id = json_string_value(jval);
+
+            if (id && !strcmp(id, "singleton"))
+                userstate_get(req, &get);
+            else
+                json_array_append(get.not_found, jval);
+        }
+    }
+    else userstate_get(req, &get);
 
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
