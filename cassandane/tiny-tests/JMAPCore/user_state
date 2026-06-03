@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+# UserState/get reports, for each JMAP data type, the very same state string
+# that type's own Foo/get returns -- including the "J" prefix that Email and
+# Mailbox carry when the user has compact ids.  Rather than hardcode modseqs,
+# we assert that correspondence directly: fetch every stateful type's state and
+# require UserState to agree.
+sub test_user_state ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'urn:ietf:params:jmap:vacationresponse',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:contacts',
+        'urn:ietf:params:jmap:sieve',
+        'https://cyrusimap.org/ns/jmap/notes',
+        'https://cyrusimap.org/ns/jmap/usercounters',
+    ];
+
+    # Each stateful JMAP data type and the Foo/get that reports its state.
+    my %method_for = (
+        Mailbox          => 'Mailbox/get',
+        Email            => 'Email/get',
+        EmailSubmission  => 'EmailSubmission/get',
+        Calendar         => 'Calendar/get',
+        CalendarEvent    => 'CalendarEvent/get',
+        AddressBook      => 'AddressBook/get',
+        ContactCard      => 'ContactCard/get',
+        Note             => 'Note/get',
+        SieveScript      => 'SieveScript/get',
+        VacationResponse => 'VacationResponse/get',
+    );
+
+    # Some Foo/get (notably Email/get) refuse a null "ids", so pass an empty
+    # list; the reported state is independent of which ids are requested.
+    my @calls = ([ 'UserState/get', {}, 'state' ]);
+    push @calls, [ $method_for{$_}, { ids => [] }, $_ ] for sort keys %method_for;
+
+    my $res = $jmap->request({ methodCalls => \@calls, using => $using });
+
+    my $userstate = $res->sentence_named('UserState/get')->arguments->{list}[0];
+    $self->assert_str_equals('singleton', $userstate->{id});
+
+    # These are the types where (for compact ids, which are on by default in
+    # test users) we have a "J" prefix.
+    my %expect_j = map {; $_ => 1 } qw( Mailbox Email Calendar CalendarEvent );
+
+    for my $type (sort keys %method_for) {
+        my $got = $res->sentence_named($method_for{$type})->arguments;
+        $self->assert_not_null($got->{state}, "$method_for{$type} returned a state");
+        $self->assert_str_equals(
+            $got->{state},
+            $userstate->{$type},
+            "UserState $type matches $method_for{$type} state",
+        );
+
+        my $maybe_j = $expect_j{$type} ? 'J' : q{};
+        $self->assert_matches(qr/\A${maybe_j}\d+\z/, $got->{state}, "$type state looks right");
+    }
+
+    # Contact and ContactGroup were superseded by ContactCard, so UserState
+    # must not report them.
+    $self->assert(! exists $userstate->{Contact});
+    $self->assert(! exists $userstate->{ContactGroup});
+}
