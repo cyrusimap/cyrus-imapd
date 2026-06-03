@@ -28,6 +28,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
+#include "jmap_api.h"
 #include "jmap_util.h"
 #include "mboxevent.h"
 #include "mboxname.h"
@@ -583,7 +584,10 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPEMAIL) &&
                (type & (EVENT_MESSAGE_NEW|EVENT_MESSAGE_APPEND));
     case EVENT_JMAP_STATES:
-        return extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES;
+        /* jmapStates is filled by mboxevent_extract_mailbox, so it is only
+         * available for events that carry a mailbox. */
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_JMAPSTATES) &&
+               (type & (MESSAGE_EVENTS|FLAGS_EVENTS|MAILBOX_EVENTS|SUBS_EVENTS));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -1666,35 +1670,27 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
     }
 }
 
-static struct jmap_state_t
-{
-    const char *type;
-    size_t offset;
-} jmap_states[] = {
-    { "Mailbox",
-      offsetof(struct mboxname_counters, mailfoldersmodseq) },
-    { "Email",
-      offsetof(struct mboxname_counters, mailmodseq) },
-    { "EmailSubmission",
-      offsetof(struct mboxname_counters, submissionmodseq) },
-    { "Calendar",
-      offsetof(struct mboxname_counters, caldavfoldersmodseq) },
-    { "CalendarEvent",
-      offsetof(struct mboxname_counters, caldavmodseq) },
-    { "Contact",
-      offsetof(struct mboxname_counters, carddavmodseq) },
-    { "ContactGroup",
-      offsetof(struct mboxname_counters, carddavmodseq) },
-    { "Note",
-      offsetof(struct mboxname_counters, notesmodseq) },
-    { "SieveScript",
-      offsetof(struct mboxname_counters, sievemodseq) },
-    { "Quota",
-      offsetof(struct mboxname_counters, quotamodseq) },
-    { "Racl",
-      offsetof(struct mboxname_counters, raclmodseq) },
-    { NULL, 0 }
+struct jmap_states_rock {
+    json_t *states;
+    struct conversations_state *cstate;
+    const struct mboxname_counters *counters;
 };
+
+static void add_jmap_state_cb(const jmap_data_type_t *dtype, void *rock)
+{
+    struct jmap_states_rock *jrock = rock;
+
+    /* only types with a backing modseq counter have a JMAP state */
+    if (dtype->modseq_offset < 0) return;
+
+    modseq_t modseq =
+        *(modseq_t *)((off_t) jrock->counters + dtype->modseq_offset);
+    char *state =
+        jmap_state_string_cstate(jrock->cstate, modseq, dtype->mbtype);
+
+    json_object_set_new(jrock->states, dtype->name, json_string(state));
+    free(state);
+}
 
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
                                         struct mailbox *mailbox)
@@ -1822,18 +1818,15 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
         int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
         if (!r) {
-            json_t *states = json_object();
-            struct jmap_state_t *state;
+            struct jmap_states_rock jrock = {
+                json_object(),
+                mailbox_get_cstate(mailbox),
+                &counters
+            };
 
-            for (state = jmap_states; state->type; state++) {
-                modseq_t *modseq = (modseq_t *)(state->offset + (size_t) &counters);
-                char buf[21];  /* unsigned long long is 20 chars */
+            jmap_data_types_foreach(&add_jmap_state_cb, &jrock);
 
-                snprintf(buf, sizeof(buf), MODSEQ_FMT, *modseq);
-                json_object_set_new(states, state->type, json_string(buf));
-            }
-
-            FILL_JSON_PARAM(event, EVENT_JMAP_STATES, states);
+            FILL_JSON_PARAM(event, EVENT_JMAP_STATES, jrock.states);
         }
     }
 }
