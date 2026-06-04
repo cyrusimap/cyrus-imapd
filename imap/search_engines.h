@@ -152,6 +152,8 @@ struct search_engine {
     void (*end_session)(search_session_t *);
     search_builder_t *(*begin_search)(search_session_t *session);
     void (*end_search)(search_builder_t *);
+    modseq_t (*session_get_highest_createdmodseq)(search_session_t *,
+                                                  uint64_t *index_generation);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
     search_text_receiver_t *(*begin_snippets)(void *internalised,
@@ -191,6 +193,22 @@ extern void search_end_session(search_session_t *);
  */
 extern search_builder_t *search_begin_search(search_session_t *);
 extern void search_end_search(search_builder_t *);
+
+/*
+ * Return the highest createdmodseq of all messages indexed in the search
+ * database, or 0 if unknown.
+ *
+ * The optional index_generation argument is set to a generation marker of
+ * the index. The generation stays the same as long as the index only gets
+ * updated with messages having a higher createdmodseq than any in the index.
+ * It changes whenever the index adds or reindexes messages at or below the
+ * highest createdmodseq, or when the index is fully rebuilt.
+ *
+ * The generation is an opaque value, callers must not assume it to strictly
+ * increase.
+ */
+extern modseq_t search_session_get_highest_createdmodseq(search_session_t *,
+                                                         uint64_t *index_generation);
 
 #define SEARCH_UPDATE_INCREMENTAL (1<<0)
 #define SEARCH_UPDATE_NONBLOCKING (1<<1)

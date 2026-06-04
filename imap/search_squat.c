@@ -1046,6 +1046,7 @@ const struct search_engine squat_search_engine = {
     end_session,
     begin_search,
     end_search,
+    /* session_get_highest_createdmodseq */NULL,
     begin_update,
     end_update,
     /* begin_snippets */NULL,
