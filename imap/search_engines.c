@@ -51,6 +51,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
 };
 
 EXPORTED const struct search_engine *search_engine(void)
@@ -175,6 +176,16 @@ EXPORTED void search_end_session(search_session_t *session)
     if (!session) return;
     const struct search_engine *se = search_engine();
     if (se->end_session) se->end_session(session);
+}
+
+EXPORTED modseq_t search_session_get_highest_createdmodseq(search_session_t *session,
+                                                           uint64_t *index_generation)
+{
+    if (index_generation) *index_generation = 0;
+    if (!session) return 0;
+    const struct search_engine *se = search_engine();
+    return se->session_get_highest_createdmodseq ?
+            se->session_get_highest_createdmodseq(session, index_generation) : 0;
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)

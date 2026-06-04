@@ -127,6 +127,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "Experimental options:\n"
             "  --attachextract-cache-dir=DIR  cache extracted attachment text in DIR\n"
             "  --attachextract-cache-only     only extract attachment text from the cache\n"
+            "  --highest-createdmodseq        print index highest createdmodseq and generation (requires -u)\n"
             "\n"
 
             "General options:\n"
@@ -675,6 +676,40 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
     return 0;
 }
 
+static int do_highest_createdmodseq(int nuserids, const char **userids)
+{
+    int opts = SEARCH_VERBOSE(verbose);
+
+    /* For each user, open a session on their inbox and report the
+     * highest createdmodseq and index generation of their index. */
+    for (int i = 0 ; i < nuserids ; i++) {
+        const char *userid = userids[i];
+        char *inboxname = mboxname_user_mbox(userid, NULL);
+
+        struct mailbox *mailbox = NULL;
+        int r = mailbox_open_irl(inboxname, &mailbox);
+        if (r) {
+            fprintf(stderr, "Cannot open inbox for user %s: %s\n",
+                    userid, error_message(r));
+            free(inboxname);
+            continue;
+        }
+
+        search_session_t *session = search_begin_session(mailbox, opts);
+        uint64_t index_generation = 0;
+        modseq_t highest_createdmodseq =
+            search_session_get_highest_createdmodseq(session, &index_generation);
+        printf("%s " MODSEQ_FMT " " UINT64_FMT "\n", userid,
+               highest_createdmodseq, index_generation);
+        search_end_session(session);
+
+        mailbox_close(&mailbox);
+        free(inboxname);
+    }
+
+    return 0;
+}
+
 static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
@@ -934,7 +969,7 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
-           COMPACT, AUDIT, LIST } mode = UNKNOWN;
+           COMPACT, AUDIT, LIST, HIGHEST_CREATEDMODSEQ } mode = UNKNOWN;
     const char *axcachedir = NULL;
     int axcacheonly = 0;
     FILE *waitdaemon_status = NULL;
@@ -947,6 +982,7 @@ int main(int argc, char **argv)
     enum squatter_long_options {
         SQUATTER_ATTACHEXTRACT_CACHE_DIR = 1024,
         SQUATTER_ATTACHEXTRACT_CACHE_ONLY,
+        SQUATTER_HIGHEST_CREATEDMODSEQ,
     };
 
     /* Keep these ordered by mode */
@@ -1001,6 +1037,8 @@ int main(int argc, char **argv)
             SQUATTER_ATTACHEXTRACT_CACHE_DIR },
         {"attachextract-cache-only", no_argument, 0,
             SQUATTER_ATTACHEXTRACT_CACHE_ONLY },
+        {"highest-createdmodseq", no_argument, 0,
+            SQUATTER_HIGHEST_CREATEDMODSEQ },
 
         /* misc */
         {"help", no_argument, 0, 'h' },
@@ -1178,6 +1216,11 @@ int main(int argc, char **argv)
             axcacheonly = 1;
             break;
 
+        case SQUATTER_HIGHEST_CREATEDMODSEQ:
+            if (mode != UNKNOWN) usage(argv[0]);
+            mode = HIGHEST_CREATEDMODSEQ;
+            break;
+
         case 'h':
         default:
             usage("squatter");
@@ -1291,6 +1334,11 @@ int main(int argc, char **argv)
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
         r = do_list(&mboxnames);
+        break;
+    case HIGHEST_CREATEDMODSEQ:
+        /* require -u and at least one user */
+        if (!user_mode || optind == argc) usage(argv[0]);
+        r = do_highest_createdmodseq(argc-optind, (const char **)argv+optind);
         break;
     }
 
