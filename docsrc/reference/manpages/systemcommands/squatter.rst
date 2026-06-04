@@ -187,6 +187,13 @@ Options
 
     Display this usage information.
 
+.. option:: --highest-createdmodseq
+
+    For each of the users named in the arguments, print their user id
+    followed by the highest createdmodseq and the generation of their
+    search index. This option requires the **-u** switch.
+    This option is experimental.
+
 .. option:: -i, --incremental
 
     Incremental updates where indexes already exist.
