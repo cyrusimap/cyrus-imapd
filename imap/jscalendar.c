@@ -3453,7 +3453,6 @@ static bool is_vendorext_key(const char *key)
 
 static bool is_timezone(json_t *jtzid)
 {
-    if (json_is_null(jtzid)) return true;
     const char *tzid = json_string_value(jtzid);
     return tzid && !!icaltimezone_get_builtin_timezone(tzid);
 }
@@ -4521,7 +4520,7 @@ static void validate_entry(jscal_ctx_t *ctx,
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("timeZone", key)) {
-            if (!is_timezone(jval) && !json_is_null(jval))
+            if (!is_timezone(jval))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("title", key)) {
