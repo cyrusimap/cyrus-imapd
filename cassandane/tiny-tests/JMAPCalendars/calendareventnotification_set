@@ -33,7 +33,7 @@ sub test_calendareventnotification_set
                             mayReadItems => JSON::true,
                             mayWriteOwn => JSON::true,
                             mayUpdatePrivate => JSON::true,
-                            mayAdmin => JSON::false
+                            mayShare => JSON::false
                         },
                     },
                 },

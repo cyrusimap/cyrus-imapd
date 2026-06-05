@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+# The CalendarRights property granting admin rights is called mayAdmin in
+# plain JMAP for Calendars, but mayShare under the jscalendarbis extension.
+# Assert that each name works with its own capability and is rejected under
+# the other one.
+#
+# This test can be deleted when we don't support RFC8984 anymore.
+sub _calendar_admin_right_name_check ($self, %arg) {
+    my $jmap = $self->default_user->jmap;
+    my $calId = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calId => {
+                    shareWith => {
+                        sharee => { $arg{valid} => JSON::true },
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Calendar/get', {
+            ids => [$calId],
+            properties => ['shareWith', 'myRights'],
+        }, 'R2'],
+    ], $arg{using});
+
+    $self->assert(exists $res->[0][1]{updated}{$calId});
+
+    my $cal = $res->[1][1]{list}[0];
+    $self->assert_equals(JSON::true, $cal->{shareWith}{sharee}{$arg{valid}});
+    $self->assert(not exists $cal->{shareWith}{sharee}{$arg{invalid}});
+    $self->assert_equals(JSON::true, $cal->{myRights}{$arg{valid}});
+    $self->assert(not exists $cal->{myRights}{$arg{invalid}});
+
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calId => {
+                    shareWith => {
+                        sharee => { $arg{invalid} => JSON::true },
+                    },
+                },
+            },
+        }, 'R1'],
+    ], $arg{using});
+
+    $self->assert_str_equals('invalidProperties',
+        $res->[0][1]{notUpdated}{$calId}{type});
+}
+
+sub test_calendar_set_sharewith_mayshare_bis ($self)
+{
+    $self->create_user('sharee');
+
+    my @using = (
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    );
+
+    $self->_calendar_admin_right_name_check(
+        using   => \@using,
+        valid   => 'mayAdmin',
+        invalid => 'mayShare',
+    );
+
+    $self->_calendar_admin_right_name_check(
+        using   => [ @using, 'https://cyrusimap.org/ns/jmap/jscalendarbis' ],
+        valid   => 'mayShare',
+        invalid => 'mayAdmin',
+    );
+}

@@ -71,7 +71,7 @@ sub test_calendarevent_set_readonly
     $self->assert_equals(JSON::false, $calendar->{myRights}->{mayWriteAll});
     $self->assert_equals(JSON::false, $calendar->{myRights}->{mayWriteOwn});
     $self->assert_equals(JSON::true, $calendar->{myRights}->{mayDelete});
-    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayAdmin});
+    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayShare});
 
     $self->assert_not_null($res->[1][1]{notCreated}{1});
     $self->assert_str_equals("invalidProperties", $res->[1][1]{notCreated}{1}{type});

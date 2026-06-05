@@ -66,7 +66,7 @@ sub test_calendar_set_sharewith_acl
         acl => 'w7',
     }, {
         rights => {
-            mayAdmin => JSON::true,
+            mayShare => JSON::true,
         },
         acl => 'wa',
    }, {
@@ -106,7 +106,7 @@ sub test_calendar_set_sharewith_acl
             mayWriteOwn => JSON::false,
             mayUpdatePrivate => JSON::false,
             mayRSVP => JSON::false,
-            mayAdmin => JSON::false,
+            mayShare => JSON::false,
             mayDelete => JSON::false,
         ), %{$_->{wantRights}});
 
