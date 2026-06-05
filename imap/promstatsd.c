@@ -160,7 +160,7 @@ static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode m
 
     while ((dirent = readdir(dh))) {
         char fname[PATH_MAX];
-        struct prom_stats stats;
+        struct prom_stats stats = PROM_STATS_INITIALIZER;
         struct mappedfile *mf = NULL;
 
         /* skip filenames we don't care about */
@@ -181,6 +181,25 @@ static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode m
             mappedfile_close(&mf);
             continue;
         }
+
+        if (mappedfile_size(mf) != sizeof(stats)) {
+            /* we may have snuck our read lock in before the process that
+             * created the file could lock it and write to it, in which case
+             * it'll be empty, and we should ignore it for now
+             */
+            if (mappedfile_size(mf) != 0) {
+                /* if it's not empty, that's a surprise! */
+                xsyslog(LOG_DEBUG, "unexpected file size",
+                                   "filename=<%s> expected=<" SIZE_T_FMT ">"
+                                   " actual=<" SIZE_T_FMT ">",
+                                   fname, sizeof(stats), mappedfile_size(mf));
+            }
+
+            mappedfile_unlock(mf);
+            mappedfile_close(&mf);
+            continue;
+        }
+
         memcpy(&stats, mappedfile_base(mf), mappedfile_size(mf));
         mappedfile_unlock(mf);
         mappedfile_close(&mf);
