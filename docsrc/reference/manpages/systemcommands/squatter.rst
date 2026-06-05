@@ -141,6 +141,22 @@ Options
     Audits the specified mailboxes (or all), reports any unindexed messages.
     |master-new-feature|
 
+.. option:: --attachextract-cache-dir=directory
+
+    Cache the text extracted from attachments in this directory. Before
+    extracting text from an attachment, squatter first looks it up in the
+    cache and only calls the extractor on a cache miss, storing the newly
+    extracted text in the cache.
+    This option is experimental.
+
+.. option:: --attachextract-cache-only
+
+    Only extract attachment text from the cache (see
+    **--attachextract-cache-dir**). Attachments that have no cached text
+    are handled as if text extraction failed for them (also see
+    **--allow-partials**).
+    This option is experimental.
+
 .. option:: -d, --nodaemon
 
     In rolling mode, don't background and do emit log messages on
