@@ -14503,6 +14503,7 @@ static void cmd_genurlauth(char *tag)
         if (c == IMAP_LITERAL_TOO_LARGE) {
             prot_printf(imapd_out, "%s NO %s in Genurlauth\r\n",
                         tag, error_message(c));
+            mboxkey_close(mboxkey_db);
             return;
         }
         if (c != ' ') {
@@ -14510,6 +14511,7 @@ static void cmd_genurlauth(char *tag)
                         "%s BAD Missing required argument to Genurlauth\r\n",
                         tag);
             eatline(imapd_in, c);
+            mboxkey_close(mboxkey_db);
             return;
         }
         c = getword(imapd_in, &arg2);
@@ -14518,6 +14520,7 @@ static void cmd_genurlauth(char *tag)
                         "%s BAD Unknown auth mechanism to Genurlauth %s\r\n",
                         tag, arg2.s);
             eatline(imapd_in, c);
+            mboxkey_close(mboxkey_db);
             return;
         }
 
@@ -14550,6 +14553,7 @@ static void cmd_genurlauth(char *tag)
             eatline(imapd_in, c);
             free(url.freeme);
             free(intname);
+            mboxkey_close(mboxkey_db);
             return;
         }
 
@@ -14590,6 +14594,7 @@ static void cmd_genurlauth(char *tag)
                         r == IMAP_BADURL ? error_message(r) : cyrusdb_strerror(r));
             free(url.freeme);
             free(intname);
+            mboxkey_close(mboxkey_db);
             return;
         }
 
