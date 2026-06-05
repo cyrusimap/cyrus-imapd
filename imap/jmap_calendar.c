@@ -4563,39 +4563,75 @@ static int createevent_toical(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
 
+    json_t *myjsevent = json_deep_copy(create->jsevent);
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        /* Remove any property with value 'null' from the object.
+         *
+         * JMAP Calendars spec section 5.9 (CalendarEvent/set) states:
+         * "If a property is set to null in a create/update, this is
+         * equivalent to omitting/removing the property from the
+         * JSCalendar Event object."
+         */
+        ptrarray_t jobjs = PTRARRAY_INITIALIZER;
+        json_t *jobj;
+        ptrarray_push(&jobjs, myjsevent);
+        while ((jobj = ptrarray_pop(&jobjs))) {
+            if (json_is_object(jobj)) {
+                const char *propname;
+                json_t *jval;
+                void *tmp;
+                json_object_foreach_safe(jobj, tmp, propname, jval) {
+                    if (json_is_null(jval)) {
+                        json_object_del(jobj, propname);
+                    }
+                    else if (json_is_object(jval)) {
+                        ptrarray_push(&jobjs, jval);
+                    }
+                }
+            }
+            else if (json_is_array(jobj)) {
+                for (size_t i = 0; i < json_array_size(jobj); i++) {
+                    ptrarray_push(&jobjs, json_array_get(jobj, i));
+                }
+            }
+        }
+
+        ptrarray_fini(&jobjs);
+    }
+
     jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = create->serverset;
 
     // Set @type property if not already set.
-    if (!json_object_get(create->jsevent, "@type")) {
-        json_object_set_new(create->jsevent, "@type", json_string("Event"));
+    if (!json_object_get(myjsevent, "@type")) {
+        json_object_set_new(myjsevent, "@type", json_string("Event"));
     }
 
     // Validate extension properties
-    json_t *jval = json_object_get(create->jsevent, "isDraft");
+    json_t *jval = json_object_get(myjsevent, "isDraft");
     if (jval && !json_is_boolean(jval)) {
         jmap_parser_invalid(parser, "isDraft");
     }
 
     // Validate utcStart and utcEnd */
-    if (JNOTNULL(json_object_get(create->jsevent, "utcStart")) ||
-        JNOTNULL(json_object_get(create->jsevent, "utcEnd"))) {
+    if (JNOTNULL(json_object_get(myjsevent, "utcStart")) ||
+        JNOTNULL(json_object_get(myjsevent, "utcEnd"))) {
         /* Ignore calendar timezone - if event does not define its
          * timezone then fall back to Etc/UTC for utcStart/utcEnd */
-        setcalendarevents_set_utctimes(create->jsevent, NULL, parser->invalid);
+        setcalendarevents_set_utctimes(myjsevent, NULL, parser->invalid);
     }
 
     // Validate privacy on shared calendars
     if (strcmp(req->accountid, req->userid)) {
         const char *privacy =
-            json_string_value(json_object_get(create->jsevent, "privacy"));
+            json_string_value(json_object_get(myjsevent, "privacy"));
         if (privacy && strcmp(privacy, "public")) {
             jmap_parser_invalid(parser, "privacy");
         }
     }
 
     // Set iCalendar UID
-    if (!json_object_get(create->jsevent, "uid")) {
+    if (!json_object_get(myjsevent, "uid")) {
         struct caldav_data *cdata = NULL;
         static int maxattempts = 3;
         int i;
@@ -4603,7 +4639,7 @@ static int createevent_toical(jmap_req_t *req,
             buf_setcstr(&buf, makeuuid());
             r = caldav_lookup_uid(create->db, buf_cstring(&buf), &cdata);
             if (r == CYRUSDB_NOTFOUND) {
-                json_object_set_new(create->jsevent, "uid",
+                json_object_set_new(myjsevent, "uid",
                         json_string(buf_cstring(&buf)));
                 r = 0;
                 break;
@@ -4621,41 +4657,41 @@ static int createevent_toical(jmap_req_t *req,
 
     if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
         // Do not allow to set method.
-        if (JNOTNULL(json_object_get(create->jsevent, "method")) && !create->is_copy) {
+        if (JNOTNULL(json_object_get(myjsevent, "method")) && !create->is_copy) {
             jmap_parser_invalid(parser, "method");
         }
 
 
-        if (jsevent_is_origin(create->jsevent, &create->schedule_addresses) && !create->is_copy) {
+        if (jsevent_is_origin(myjsevent, &create->schedule_addresses) && !create->is_copy) {
             // Set updated and created.
             time_t t_now = time(NULL);
             char s[RFC3339_DATETIME_MAX+1] = { 0 };
             time_to_rfc3339(t_now, s, RFC3339_DATETIME_MAX+1);
             json_t *jupdated = json_string(s);
 
-            json_object_set(create->jsevent, "updated", jupdated);
+            json_object_set(myjsevent, "updated", jupdated);
             json_object_set(create->serverset, "updated", jupdated);
 
-            json_t *jcreated = json_object_get(create->jsevent, "created");
+            json_t *jcreated = json_object_get(myjsevent, "created");
             const char *created = json_string_value(jcreated);
             time_t t_created = t_now;
             if (created && time_from_iso8601(created, &t_created) == -1) {
                 t_created = t_now;
             }
             if (JNULL(jcreated) || t_created > t_now) {
-                json_object_set(create->jsevent, "created", jupdated);
+                json_object_set(myjsevent, "created", jupdated);
                 json_object_set(create->serverset, "created", jupdated);
             }
             json_decref(jupdated);
 
             // Set sequence if not already set.
-            if (!json_object_get(create->jsevent, "sequence")) {
-                json_object_set_new(create->jsevent, "sequence", json_integer(0));
+            if (!json_object_get(myjsevent, "sequence")) {
+                json_object_set_new(myjsevent, "sequence", json_integer(0));
             }
 
             // XXX quirk: former implementation set organizer address
-            if (JNULL(json_object_get(create->jsevent, "organizerCalendarAddress"))) {
-                json_t *jparts = json_object_get(create->jsevent, "participants");
+            if (JNULL(json_object_get(myjsevent, "organizerCalendarAddress"))) {
+                json_t *jparts = json_object_get(myjsevent, "participants");
                 json_t *jpart;
                 const char *key;
                 json_object_foreach(jparts, key, jpart) {
@@ -4667,7 +4703,7 @@ static int createevent_toical(jmap_req_t *req,
                             json_string_value(json_object_get(jreplyto, "imip"));
                         if (orga) {
                             json_t *jorga = json_string(orga);
-                            json_object_set(create->jsevent,
+                            json_object_set(myjsevent,
                                     "organizerCalendarAddress", jorga);
                             json_object_set(create->serverset,
                                     "organizerCalendarAddress", jorga);
@@ -4681,19 +4717,19 @@ static int createevent_toical(jmap_req_t *req,
 
         jscal_cfg_t cfg = jmapical_ctx_to_jscalendar_cfg(jmapctx);
         cfg.use_icalendar_convprops = create->is_copy;
-        create->ical = jscal_to_ical(&cfg, create->jsevent, parser);
+        create->ical = jscal_to_ical(&cfg, myjsevent, parser);
         if (create->ical)
             create->comp = icalcomponent_get_first_component(
                 create->ical, ICAL_VEVENT_COMPONENT);
     }
     else {
-        create->ical = jmapical_toical(create->jsevent, NULL, parser->invalid,
+        create->ical = jmapical_toical(myjsevent, NULL, parser->invalid,
                 create->serverset, &create->comp, NULL, jmapctx);
     }
 
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(create->serverset, "isOrigin",
-                json_boolean(jsevent_is_origin(create->jsevent,
+                json_boolean(jsevent_is_origin(myjsevent,
                         &create->schedule_addresses)));
     }
 
@@ -4704,6 +4740,7 @@ done:
         create->ical = NULL;
         create->comp = NULL;
     }
+    json_decref(myjsevent);
     buf_free(&buf);
     return r;
 }
