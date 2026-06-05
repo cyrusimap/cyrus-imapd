@@ -547,7 +547,8 @@ static int getcalendar_defaultalerts(jmap_req_t *req,
     return 0;
 }
 
-static json_t *calendarrights_to_jmap(int rights, int is_owner)
+static json_t *encode_calendarrights(int rights, int is_owner,
+                                     int use_mayshare)
 {
     if (is_owner) rights |= JACL_RSVP;
 
@@ -568,13 +569,25 @@ static json_t *calendarrights_to_jmap(int rights, int is_owner)
             (rights & JACL_RSVP) == JACL_RSVP,
             "mayDelete",
             (rights & JACL_DELETE) == JACL_DELETE,
-            "mayAdmin",
+            use_mayshare ? "mayShare" : "mayAdmin",
             (rights & JACL_ADMIN_CALENDAR) == JACL_ADMIN_CALENDAR);
+}
+
+static json_t *calendarrights_to_jmap(jmap_req_t *req, int rights,
+                                      int is_owner)
+{
+    return encode_calendarrights(rights, is_owner,
+            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION));
 }
 
 static json_t *calendarrights_to_sharewith(int rights)
 {
-    return calendarrights_to_jmap(rights, 0);
+    return encode_calendarrights(rights, 0, 0);
+}
+
+static json_t *calendarrights_to_sharewith_bis(int rights)
+{
+    return encode_calendarrights(rights, 0, 1);
 }
 
 static int calendar_sharewith_to_rights(int rights, json_t *jsharewith)
@@ -606,7 +619,9 @@ calendar_sharewith_to_rights_iter:
             mask = JACL_RSVP;
         else if (!strcmp("mayDelete", name))
             mask = JACL_DELETE;
-        else if (!strcmp("mayAdmin", name))
+        /* safe to accept either only because setcalendar_parseprops has
+         * already rejected the wrong one before we get here. */
+        else if (!strcmp("mayAdmin", name) || !strcmp("mayShare", name))
             mask = JACL_ADMIN_CALENDAR;
         else
             continue;
@@ -898,12 +913,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             rights &= ~JACL_DELETE;
         }
         json_object_set_new(obj, "myRights",
-                calendarrights_to_jmap(rights,
+                calendarrights_to_jmap(req, rights,
                     !strcmp(rock->req->userid, rock->req->accountid)));
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
         json_t *sharewith = jmap_get_sharewith(mbentry,
+                jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
+                calendarrights_to_sharewith_bis :
                 calendarrights_to_sharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
@@ -1425,6 +1442,9 @@ static void setcalendar_parseprops(jmap_req_t *req,
     jprop = json_object_get(arg, "shareWith");
     if (json_object_size(jprop)) {
         // Validate rights
+        const char *admin_right =
+            jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION) ?
+            "mayShare" : "mayAdmin";
         const char *sharee;
         json_t *jrights;
         json_object_foreach(jprop, sharee, jrights) {
@@ -1439,7 +1459,7 @@ static void setcalendar_parseprops(jmap_req_t *req,
                              strcmp(right, "mayWriteOwn") &&
                              strcmp(right, "mayUpdatePrivate") &&
                              strcmp(right, "mayRSVP") &&
-                             strcmp(right, "mayAdmin") &&
+                             strcmp(right, admin_right) &&
                              strcmp(right, "mayDelete"))) {
 
                         jmap_parser_push(parser, "shareWith");
@@ -2109,7 +2129,7 @@ static void setcalendars_create(struct jmap_req *req,
     jmap_set_calendarid(req->cstate, mbentry, id);
     *record = json_pack("{s:s s:o}", "id", id,
                         "myRights",
-                        calendarrights_to_jmap(jmap_myrights_mbentry(req, mbentry),
+                        calendarrights_to_jmap(req, jmap_myrights_mbentry(req, mbentry),
                                                !strcmp(req->userid, req->accountid)));
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(*record, "mailboxUniqueId",
@@ -10812,13 +10832,13 @@ static json_t *sharenotif_tojmap(jmap_req_t *req, message_t *msg, hash_table *pr
             if (dlist_getatom(xl, "OLD", &aclstr) && *aclstr) {
                 int rights;
                 if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
-                    oldrights = calendarrights_to_jmap(rights, is_owner);
+                    oldrights = calendarrights_to_jmap(req, rights, is_owner);
                 }
             }
             if (dlist_getatom(xl, "NEW", &aclstr) && *aclstr) {
                 int rights;
                 if (cyrus_acl_strtomask(aclstr, &rights) == 0) {
-                    newrights = calendarrights_to_jmap(rights, is_owner);
+                    newrights = calendarrights_to_jmap(req, rights, is_owner);
                 }
             }
         }
