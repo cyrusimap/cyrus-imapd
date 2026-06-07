@@ -1848,6 +1848,11 @@ static int mailbox_buf_to_index_header(const unsigned char *buf, size_t len,
     return 0;
 }
 
+static size_t mailbox_record_offset(const struct mailbox *m, uint32_t recno)
+{
+    return (size_t)m->i.start_offset + (size_t)(recno - 1) * m->i.record_size;
+}
+
 static int mailbox_refresh_index_map(struct mailbox *mailbox)
 {
     size_t need_size;
@@ -1855,8 +1860,8 @@ static int mailbox_refresh_index_map(struct mailbox *mailbox)
 
     /* check if we need to extend the mmaped space for the index file
      * (i.e. new records appended since last read) */
-    need_size = mailbox->i.start_offset +
-                mailbox->i.num_records * mailbox->i.record_size;
+    need_size = (size_t)mailbox->i.start_offset +
+                (size_t)mailbox->i.num_records * mailbox->i.record_size;
     if (mailbox->index_size < need_size) {
         if (fstat(mailbox->index_fd, &sbuf) == -1)
             return IMAP_IOERROR;
@@ -2035,7 +2040,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
 
     mailbox_index_record_to_buf(&change->record, mailbox->i.minor_version, buf);
 
-    offset = mailbox->i.start_offset + ((size_t)(recno-1) * mailbox->i.record_size);
+    offset = mailbox_record_offset(mailbox, recno);
 
     /* any failure here is a disaster! */
     if (lseek(mailbox->index_fd, offset, SEEK_SET) == -1) {
@@ -2121,7 +2126,8 @@ static int _commit_changes(struct mailbox *mailbox)
     _cleanup_changes(mailbox);
 
     /* recalculate the size */
-    mailbox->index_size = mailbox->i.start_offset + (mailbox->i.num_records * mailbox->i.record_size);
+    mailbox->index_size = (size_t)mailbox->i.start_offset +
+                          (size_t)mailbox->i.num_records * mailbox->i.record_size;
 
     r = mailbox_refresh_index_map(mailbox);
     if (r) return r;
@@ -2134,7 +2140,7 @@ EXPORTED int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
 {
     uint32_t recno = record->recno;
     assert(recno);
-    size_t offset = mailbox->i.start_offset + (size_t)(recno-1) * mailbox->i.record_size;
+    size_t offset = mailbox_record_offset(mailbox, recno);
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
         xsyslog(LOG_ERR, "IOERROR: index record past end of file",
@@ -2165,7 +2171,7 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
         return 0;
     }
 
-    size_t offset = mailbox->i.start_offset + (size_t)(recno-1) * mailbox->i.record_size;
+    size_t offset = mailbox_record_offset(mailbox, recno);
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
         xsyslog(LOG_ERR, "IOERROR: index record past end of file",
@@ -7587,8 +7593,7 @@ static int mailbox_wipe_index_record(struct mailbox *mailbox,
 
     mailbox_index_record_to_buf(record, mailbox->i.minor_version, buf);
 
-    offset = mailbox->i.start_offset +
-             (size_t)(record->recno-1) * mailbox->i.record_size;
+    offset = mailbox_record_offset(mailbox, record->recno);
 
     off_t p = lseek(mailbox->index_fd, offset, SEEK_SET);
     if (p == -1) {
