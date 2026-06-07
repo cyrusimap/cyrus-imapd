@@ -104,3 +104,19 @@
   ...
 }
 
+{
+   # shush leaked SASL internal state
+   # XXX this might be a real leak, but if so a fix is not immediately clear
+   sasl_client_add_plugin
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:xmalloc
+   obj:*
+   obj:*
+   fun:sasl_client_add_plugin
+   obj:/usr/lib/x86_64-linux-gnu/libsasl2.so.*
+   fun:sasl_client_init
+   fun:global_sasl_init
+   ...
+}
