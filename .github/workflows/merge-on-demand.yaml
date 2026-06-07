@@ -1,27 +1,27 @@
 name: Merge on demand
 
+# SECURITY: this workflow runs on pull_request_target, so it holds a
+# read-write token and secrets while handling untrusted PR content.  That
+# is safe only as long as we never *execute* anything from the PR: no
+# checking out the PR branch to build or test it, no running its scripts.
+# We only fetch, rebase, merge, and push its commits as data.  Do not add
+# steps that run PR code.
 on:
-  issue_comment:
-    types: [created]
+  pull_request_target:
+    types: [labeled]
 
 jobs:
   merge-on-demand:
-    # This is a pre-filter.  This would match "Do not !!merge-this", or
-    # ">"-prefixed quoted form, both of which would be foolish to trigger on.
-    # But it lets us not run an action at all when it can't possibly match.
-    # The more careful checking is down in the steps below.
-    if: >-
-      github.event.issue.pull_request.url != '' &&
-      contains(github.event.comment.body, '!!merge-this')
+    if: github.event.label.name == 'merge-this'
     runs-on: ubuntu-latest
 
-    # Serialize merges repo-wide: two commands racing to push the base
-    # branch would leave the loser with a non-fast-forward rejection. The
-    # base branch isn't in the issue_comment payload, so we can't key on
-    # it; merges are rare and fast, so serializing the whole workflow is
-    # cheap. Never cancel an in-flight merge mid-push.
+    # Serialize merges per base branch: two commands racing to push the
+    # same base would leave the loser with a non-fast-forward rejection.
+    # Unlike issue_comment, this payload carries the base ref, so merges
+    # to different branches can proceed in parallel.  Never cancel an
+    # in-flight merge mid-push.
     concurrency:
-      group: merge-on-demand-${{ github.repository }}
+      group: merge-on-demand-${{ github.repository }}-${{ github.event.pull_request.base.ref }}
       cancel-in-progress: false
 
     permissions:
@@ -34,17 +34,7 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
-            const body = context.payload.comment.body || '';
-            const isCommand = body
-              .split(/\r?\n/)
-              .some(line => line.trim() === '!!merge-this');
-
-            if (!isCommand) {
-              core.info('no !!merge-this command line found; skipping');
-              return;
-            }
-
-            const login = context.payload.comment.user.login;
+            const login = context.payload.sender.login;
 
             const { data: collab } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,
@@ -63,11 +53,11 @@ jobs:
               return;
             }
 
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
+            // The payload is a snapshot of the PR taken when the label was
+            // applied, so pr.head.sha is the commit the labeler approved.
+            // Don't switch to (say) pulls.get, because you'll re-introduce a
+            // race.
+            const pr = context.payload.pull_request;
 
             const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
             const headRepo = pr.head.repo ? pr.head.repo.full_name : null;
@@ -155,7 +145,7 @@ jobs:
           HEAD_SHA:  ${{ steps.info.outputs.head_sha }}
           HEAD_REPO: ${{ steps.info.outputs.head_repo }}
           BASE_REF:  ${{ steps.info.outputs.base_ref }}
-          PR_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           CAN_PUSH_HEAD: ${{ steps.info.outputs.can_push_head }}
         run: |
           FORK_URL="https://github.com/${HEAD_REPO}.git"
@@ -163,12 +153,13 @@ jobs:
           git fetch origin "${BASE_REF}"
           git fetch "${FORK_URL}" "${HEAD_REF}"
 
-          # Refuse if the branch tip moved between the permission check and
-          # now: we wanted to merge what the maintainer reviewed, not whatever
-          # has since been pushed to the fork.
+          # Refuse if the branch tip moved since the label was applied.
+          # HEAD_SHA came from the label event's snapshot, so this anchors
+          # the merge to the commit the labeler approved, not whatever has
+          # since been pushed to the fork.
           FETCHED_SHA=$(git rev-parse FETCH_HEAD)
           if [ "${FETCHED_SHA}" != "${HEAD_SHA}" ]; then
-            echo "PR head moved from ${HEAD_SHA} to ${FETCHED_SHA} since the command was issued; refusing to merge." >&2
+            echo "PR head moved from ${HEAD_SHA} to ${FETCHED_SHA} since the label was applied; refusing to merge." >&2
             exit 1
           fi
 
@@ -282,3 +273,16 @@ jobs:
               issue_number: context.issue.number,
               body: `Merge failed. See the [action log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`,
             });
+
+            // Take the label back off so a retry is a clean re-apply,
+            // which also fires a fresh labeled event with a fresh snapshot.
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: context.payload.label.name,
+              });
+            } catch (e) {
+              core.info(`could not remove label: ${e.message}`);
+            }
