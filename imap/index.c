@@ -167,28 +167,23 @@ EXPORTED int index_reload_record(struct index_state *state,
                                  struct index_record *record)
 {
     struct index_map *im = &state->map[msgno-1];
-    int r = 0;
     int i;
 
     memset(record, 0, sizeof(struct index_record));
-    if (!im->recno) {
-        /* doh, gotta just fill in what we know */
-        record->uid = im->uid;
-    }
-    else {
+    record->uid = im->uid;
+    if (im->recno) {
         record->recno = im->recno;
-        record->uid = im->uid;
-        r = mailbox_reload_index_record_dirty(state->mailbox, record);
+        int r = mailbox_reload_index_record_dirty(state->mailbox, record);
+        /* NOTE: we have released the cyrus.index lock at this point, but are
+         * still holding the mailbox name relock.  This means nobody can rewrite
+         * the file under us - so the offsets are still guaranteed to be correct,
+         * and all the immutable fields are unchanged.  That said, we can get a
+         * read of a partially updated record which contains an invalid checksum
+         * due to incomplete concurrent changes to mutable fields.  That's why we
+         * used the _dirty API which ignores checksums.
+         * but other errors are still bad */
+        if (r) return r;
     }
-    /* NOTE: we have released the cyrus.index lock at this point, but are
-     * still holding the mailbox name relock.  This means nobody can rewrite
-     * the file under us - so the offsets are still guaranteed to be correct,
-     * and all the immutable fields are unchanged.  That said, we can get a
-     * read of a partially updated record which contains an invalid checksum
-     * due to incomplete concurrent changes to mutable fields.  That's why we
-     * used the _dirty API which ignores checksums.
-     * but other errors are still bad */
-    if (r) return r;
 
     /* better be! */
     assert(record->uid == im->uid);
