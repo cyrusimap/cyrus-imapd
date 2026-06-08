@@ -75,7 +75,7 @@ static const struct tls_alpn_t imap_alpn_map[] = {
     { "",     NULL, NULL },
 };
 
-struct protocol_t imap_csync_protocol =
+static struct protocol_t imap_csync_protocol =
 { "imap", "imap", imap_alpn_map, TYPE_STD,
   { { { 1, NULL },
       { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
@@ -103,7 +103,7 @@ struct protocol_t imap_csync_protocol =
       { "Q01 LOGOUT", "* ", "Q01 " } } }
 };
 
-struct protocol_t csync_protocol =
+static struct protocol_t csync_protocol =
 { "csync", "csync", NULL, TYPE_STD,
   { { { 1, "* OK" },
       { NULL, NULL, "* OK", NULL,
