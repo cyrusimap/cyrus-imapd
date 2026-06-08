@@ -50,13 +50,11 @@ details about how Cyrus is implemented.
 .. toctree::
     :maxdepth: 1
 
-    namespaces
     libraries
     Cyrus APIs <API>
     Annotator protocol <annotator-protocol>
     Replication protocol <replication-protocol>
     Thoughts & Notes <thoughts>
-    Guidance for Developers <guidance>
 
 This :download:`diagram <images/master-state-machine.svg>` shows
 the Master State Machine.
