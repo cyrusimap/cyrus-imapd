@@ -20,7 +20,6 @@ Getting Started
     process
     overview
     compiling
-    /installing
     developer-testing
     coverage
     jmap
