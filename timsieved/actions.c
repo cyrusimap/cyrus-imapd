@@ -39,8 +39,6 @@ extern sieve_interp_t *interp;
 static char *sieve_dir_config = NULL;
 static char *sieved_userid = NULL;
 
-static char *sieve_dir = NULL;
-
 static struct mailbox *sieve_mailbox = NULL;
 static struct sieve_db *sievedb = NULL;
 
@@ -69,12 +67,12 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
-    struct buf buf = BUF_INITIALIZER;
-    int result;
+    char *sieve_dir;
 
     sieved_userid = xstrdup(userid);
 
     if (sieved_userisadmin) {
+        struct buf buf = BUF_INITIALIZER;
         char *domain = NULL;
 
         buf_setcstr(&buf, sieve_dir_config);
@@ -85,16 +83,12 @@ int actions_setuser(const char *userid)
         }
 
         buf_appendcstr(&buf, "/global");
-    }
-    else {
-        buf_setcstr(&buf, user_sieve_path(userid));
-    }
-
-    if (sieve_dir) free(sieve_dir);
-    sieve_dir = buf_release(&buf);
+        sieve_dir = buf_release(&buf);
+    } else
+        sieve_dir = xstrdup(user_sieve_path(userid));
 
     struct stat sbuf;
-    result = stat(sieve_dir, &sbuf);
+    int result = stat(sieve_dir, &sbuf);
     if (result && errno == ENOENT) {
         result = cyrus_mkdir(sieve_dir, 0755);
         if (!result) {
@@ -102,6 +96,7 @@ int actions_setuser(const char *userid)
             if (!result) result = stat(sieve_dir, &sbuf);
         }
     }
+    free(sieve_dir);
 
     if (result) return TIMSIEVE_FAIL;
 
