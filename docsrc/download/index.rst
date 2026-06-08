@@ -9,3 +9,5 @@ Download
     getcyrus
     release-notes/index
     packagers
+    /installing
+    upgrade
