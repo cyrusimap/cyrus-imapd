@@ -1,8 +1,8 @@
-.. _imap-developer-snapshot-releasing:
+.. _releasing-developer-snapshot:
 
-==========================================
-Releasing Cyrus IMAP - developer snapshots
-==========================================
+===========================================
+Releasing a new developer snapshot of Cyrus
+===========================================
 
 .. contents::
 
@@ -10,7 +10,7 @@ These instructions describe the process of producing "developer snapshots"
 from the master branch.  These are tag-only releases: no release tarball
 is published.
 
-For normal point releases, see :ref:`imap-developer-releasing`
+For normal point releases, see :ref:`releasing-minor-version`
 
 We haven't been doing this much, or very consistently.  Consider this
 document and process a work in progress, which we'll refine as we go.

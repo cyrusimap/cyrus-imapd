@@ -68,5 +68,3 @@ Releasing
     :maxdepth: 1
 
     releasing
-    major-releasing
-    snapshot-releasing

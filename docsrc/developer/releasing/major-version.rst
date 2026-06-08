@@ -1,15 +1,15 @@
-.. _imap-developer-major-releasing:
+.. _releasing-major-version:
 
-=====================================
-Releasing Cyrus IMAP - major releases
-=====================================
+======================================
+Releasing a new major version of Cyrus
+======================================
 
 .. contents::
 
 These instructions describe the process of turning what was the master
 branch into a new release series, and making the first release from it.
 
-For normal point releases, see :ref:`imap-developer-releasing`
+For normal point releases, see :ref:`releasing-minor-version`
 
 Prerequisites
 =============
@@ -317,7 +317,7 @@ This work mostly happens on the new branch.
    files (except for the template) should be removed -- they are no longer
    changes.  The history is a bit easier to read later if you commit the
    doc updates and the removal of the changes files in the same commit.
-8. Follow the :ref:`imap-developer-releasing` instructions to get
+8. Follow the :ref:`releasing-developer-snapshot` instructions to get
    `cyrus-imapd-<series>.0-beta1` released.
 
 Subsequent betas
@@ -348,7 +348,7 @@ Oh boy, we've come a long way, haven't we!
 
 For this one, we've got a little more housekeeping to do.
 
-1. Follow the :ref:`imap-developer-releasing` normal release process as
+1. Follow the :ref:`releasing-minor-version` normal release process as
    previous, again copy-and-updating the release notes from the last release
    candidate, except this time you're actually doing `<series>.0`, with no
    alpha, beta, or rc qualifiers.  Don't send the announcement email just
