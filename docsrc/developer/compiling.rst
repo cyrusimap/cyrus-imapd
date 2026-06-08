@@ -262,8 +262,7 @@ Optionally install dependencies for :ref:`building the docs <contribute-docs>`.
 Compile Cyrus
 =============
 
-There are additional :ref:`compile and installation steps<imapinstall-xapian>`
-if you are using Xapian for searching, or if you are :ref:`using jmap
+There are additional compile and installation steps if you are :ref:`using jmap
 <developer-jmap>`.
 
 Default build: mail only
