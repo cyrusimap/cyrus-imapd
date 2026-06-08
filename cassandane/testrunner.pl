@@ -174,9 +174,11 @@ while (defined(my $a = shift))
     {
         $cassini_filename = shift;
     }
-    elsif ($a eq '-c' || $a eq '--cleanup')
+    elsif ($a eq '-c' || $a =~ m/^--cleanup(?:=(\w*))?$/)
     {
-        push(@cassini_overrides, ['cassandane', 'cleanup', 'yes']);
+        my $v = $1 // 'yes';
+        usage if not grep { $v eq $_ } qw(yes no pre post);
+        push(@cassini_overrides, ['cassandane', 'cleanup', $v]);
     }
     elsif ($a eq '--no-cleanup')
     {
@@ -283,8 +285,11 @@ while (defined(my $a = shift))
 my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
 
-Cassandane::Instance::cleanup_leftovers()
-    if ($cassini->bool_val('cassandane', 'cleanup'));
+# pre-run cleanup
+my $cleanup = $cassini->val('cassandane', 'cleanup', 'no');
+if ($cleanup eq 'yes' or $cleanup eq 'pre') {
+    Cassandane::Instance::cleanup_leftovers();
+}
 
 my $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
 unless (-e $rootdir) {

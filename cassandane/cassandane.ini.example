@@ -74,9 +74,18 @@
 #    usernames and passwords, but it requires installing the package
 #    containing the saslpasswd2 binary.
 ##pwcheck = alwaystrue
-# Whether to clean up instance directories after their tests have
-# run (also, will remove and old instance directories from earlier
-# runs).  See also the --cleanup option to testrunner.pl.
+# Automatic cleanup of instance directories.  These can take up a lot
+# of disk space!  Value is one of 'yes', 'no', 'pre', or 'post'.
+#
+# pre:  before running tests, removes any instance directories left
+#       behind by previous runs
+# post: after running tests, removes instance directories for tests
+#       that passed (failures are left behind for autopsy)
+# yes:  both pre and post cleanup phases are run
+# no:   (default) neither cleanup phase is run
+#
+# The --cleanup option to testrunner.pl accepts the same values and
+# overrides whatever is set here.
 ##cleanup = no
 # How many worker processes to run.  Overridden by -j argument to
 # testrunner.pl.
