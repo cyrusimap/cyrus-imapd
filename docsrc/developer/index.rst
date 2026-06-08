@@ -36,7 +36,6 @@ Contributing
     :maxdepth: 1
 
     Contributing to the documentation <documentation>
-    Documentation style guide </styles>
     The CUnit (C) test suite <cunit>
     The Cassandane (Perl) test suite <cassandane>
 
