@@ -1754,16 +1754,6 @@ EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
     return 0;
 }
 
-EXPORTED int index_refresh(struct index_state *state)
-{
-    int r;
-
-    r = index_lock(state, /*readonly*/1);  /* calls index_refresh_locked */
-    if (r) return r;
-    index_unlock(state);
-    return 0;
-}
-
 EXPORTED void index_unlock(struct index_state *state)
 {
     // only update seen if we've got a writelocked mailbox
