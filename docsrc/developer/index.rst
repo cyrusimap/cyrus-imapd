@@ -22,7 +22,6 @@ Getting Started
     compiling
     developer-testing
     coverage
-    jmap
 
 Contributing
 ============
