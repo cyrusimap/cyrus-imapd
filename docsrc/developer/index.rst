@@ -50,7 +50,6 @@ details about how Cyrus is implemented.
 .. toctree::
     :maxdepth: 1
 
-    libraries
     Cyrus APIs <API>
     Annotator protocol <annotator-protocol>
     Replication protocol <replication-protocol>
