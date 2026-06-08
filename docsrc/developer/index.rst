@@ -24,11 +24,6 @@ Getting Started
     coverage
     jmap
 
-.. toctree::
-    :hidden:
-
-    install-xapian
-
 Contributing
 ============
 
