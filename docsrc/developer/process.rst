@@ -32,11 +32,6 @@ The Cyrus core team reviews new pull requests regularly, but sometimes there's
 a bit of a backlog, or things slip through the cracks.  If you haven't heard
 back in two weeks, consider contacting us on the ``cyrus-devel`` mailing list.
 
-Useful Developer Information
-============================
-
-Some combined :ref:`tips on developing with Cyrus <imap-developer-guidance>` have been collected.
-
 Community Participation
 =======================
 
