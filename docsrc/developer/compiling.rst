@@ -262,9 +262,6 @@ Optionally install dependencies for :ref:`building the docs <contribute-docs>`.
 Compile Cyrus
 =============
 
-There are additional compile and installation steps if you are :ref:`using jmap
-<developer-jmap>`.
-
 Default build: mail only
 ------------------------
 
