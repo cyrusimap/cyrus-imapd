@@ -766,11 +766,13 @@ sub check_sanity
 
     # whinge about 'tiny-tests' directories in unexpected places
     # start searching in the parent directory so that we're checking the
-    # whole cyrus-imapd repository
+    # whole cyrus-imapd repository -- but not things in dot-dirs, because we
+    # might use them (like cyrus-imapd.git/.claude/worktrees) for in-repo
+    # worktrees.  A worktree will, of course, contain tiny-tests.
     my @unexpected_tt_dirs = grep {
         chomp;
         $_ ne '../cassandane/tiny-tests';
-    } qx{find .. -type d -name tiny-tests};
+    } qx{find .. -path '../.*' -prune -o -type d -name tiny-tests -print};
     push @tt_errors, "unexpected extra tiny-tests directories: @unexpected_tt_dirs"
         if @unexpected_tt_dirs;
 
