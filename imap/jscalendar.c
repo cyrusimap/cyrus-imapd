@@ -3687,29 +3687,20 @@ static void validate_alerts(jscal_ctx_t *ctx,
                 if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
             }
             else if (!strcmp("relatedTo", key)) {
-                if (!json_is_null(jval)) {
-                    jmap_parser_push(parser, key);
-                    validate_relatedto(ctx, parser, jval);
-                    jmap_parser_pop(parser);
-                }
+                jmap_parser_push(parser, key);
+                validate_relatedto(ctx, parser, jval);
+                jmap_parser_pop(parser);
             }
             else if (!strcmp("trigger", key)) {
-                if (!json_is_null(jval)) {
-                    jmap_parser_push(parser, key);
-                    validate_trigger(ctx, parser, jval);
-                    jmap_parser_pop(parser);
-                }
-                else {
-                    jmap_parser_invalid(parser, key);
-                }
+                jmap_parser_push(parser, key);
+                validate_trigger(ctx, parser, jval);
+                jmap_parser_pop(parser);
             }
             // Extension properties
             else if (!strcmp("iCalendar", key)) {
-                if (!json_is_null(jval)) {
-                    jmap_parser_push(parser, key);
-                    validate_jicalcomponent(ctx, parser, jval);
-                    jmap_parser_pop(parser);
-                }
+                jmap_parser_push(parser, key);
+                validate_jicalcomponent(ctx, parser, jval);
+                jmap_parser_pop(parser);
             }
             else if (!is_vendorext_key(key)) {
                 jmap_parser_invalid(parser, key);
@@ -3821,11 +3812,9 @@ static void validate_locations(jscal_ctx_t *ctx,
                 if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
             }
             else if (!strcmp("links", key)) {
-                if (!json_is_null(jval)) {
-                    jmap_parser_push(parser, key);
-                    validate_links(ctx, parser, jval);
-                    jmap_parser_pop(parser);
-                }
+                jmap_parser_push(parser, key);
+                validate_links(ctx, parser, jval);
+                jmap_parser_pop(parser);
             }
             else if (!strcmp("locationTypes", key)) {
                 if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
@@ -3901,11 +3890,9 @@ static void validate_participants(jscal_ctx_t *ctx,
                 if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
             }
             else if (!strcmp("links", key)) {
-                if (!json_is_null(jval)) {
-                    jmap_parser_push(parser, key);
-                    validate_links(ctx, parser, jval);
-                    jmap_parser_pop(parser);
-                }
+                jmap_parser_push(parser, key);
+                validate_links(ctx, parser, jval);
+                jmap_parser_pop(parser);
             }
             else if (!strcmp("memberOf", key)) {
                 if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
@@ -4105,16 +4092,16 @@ static void validate_recurrencerule(jscal_ctx_t *ctx,
                 }
                 if (i < json_array_size(jval)) jmap_parser_invalid(parser, key);
             }
-            else if (!json_is_null(jval)) {
+            else {
                 jmap_parser_invalid(parser, key);
             }
         }
         else if (!strcmp("byHour", key)) {
-            if (!json_is_null(jval) && !is_intarray(jval, 0, 23))
+            if (!is_intarray(jval, 0, 23))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("byMinute", key)) {
-            if (!json_is_null(jval) && !is_intarray(jval, 0, 59))
+            if (!is_intarray(jval, 0, 59))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("byMonth", key)) {
@@ -4133,32 +4120,28 @@ static void validate_recurrencerule(jscal_ctx_t *ctx,
                 }
                 if (i < json_array_size(jval)) jmap_parser_invalid(parser, key);
             }
-            else if (!json_is_null(jval)) {
+            else {
                 jmap_parser_invalid(parser, key);
             }
         }
         else if (!strcmp("byMonthDay", key)) {
-            if (!json_is_null(jval)
-                && !is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
+            if (!is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("byWeekNo", key)) {
-            if (!json_is_null(jval)
-                && !is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
+            if (!is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("bySecond", key)) {
-            if (!json_is_null(jval) && !is_intarray(jval, 0, 60))
+            if (!is_intarray(jval, 0, 60))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("bySetPosition", key)) {
-            if (!json_is_null(jval)
-                && !is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
+            if (!is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("byYearDay", key)) {
-            if (!json_is_null(jval)
-                && !is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
+            if (!is_intarray(jval, JMAP_INT_MIN, JMAP_INT_MAX))
                 jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("count", key)) {
@@ -4368,11 +4351,9 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("alerts", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_alerts(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_alerts(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("categories", key)) {
             if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
@@ -4416,21 +4397,17 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("links", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_links(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_links(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("locale", key)) {
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("locations", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_locations(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_locations(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("mainLocationId", key)) {
             const char *s = json_string_value(jval);
@@ -4449,11 +4426,9 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("participants", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_participants(ctx, parser, entry_type, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_participants(ctx, parser, entry_type, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("percentComplete", key)) {
             json_int_t v = json_integer_value(jval);
@@ -4482,25 +4457,19 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!is_timezone(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("recurrenceOverrides", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_recurrenceoverrides(ctx, parser, jentry, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_recurrenceoverrides(ctx, parser, jentry, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("recurrenceRule", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_recurrencerule(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_recurrencerule(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("relatedTo", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_relatedto(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_relatedto(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("sentBy", key)) {
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
@@ -4537,19 +4506,15 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!is_supported_version(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("virtualLocations", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_virtuallocations(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_virtuallocations(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         // Extension properties
         else if (!strcmp("iCalendar", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_jicalcomponent(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_jicalcomponent(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         // JMAP Calendar properties
         else if (!strcmp("baseEventId", key) ||
@@ -4688,11 +4653,9 @@ static void validate_group(jscal_ctx_t *ctx,
             if (!is_stringset(jval, NULL)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("links", key)) {
-            if (!json_is_null(jval)) {
-                jmap_parser_push(parser, key);
-                validate_links(ctx, parser, jval);
-                jmap_parser_pop(parser);
-            }
+            jmap_parser_push(parser, key);
+            validate_links(ctx, parser, jval);
+            jmap_parser_pop(parser);
         }
         else if (!strcmp("locale", key)) {
             if (!json_is_string(jval)) jmap_parser_invalid(parser, key);
