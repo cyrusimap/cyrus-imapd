@@ -1,4 +1,4 @@
-.. _imap-developer-cassandane:
+.. _developer-cassandane:
 
 The Cassandane test suite
 =========================
