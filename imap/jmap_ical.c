@@ -776,10 +776,20 @@ static void remove_xjmapid(icalcomponent *comp)
     }
 }
 
+/* Look up the JSCalendar id of an iCalendar property. The jscalendarbis
+ * implementation in jscalendar.c sets the JSI" parameter, so prefer that
+ * and fall back to the X-JMAP-ID parameter for backwards compatibility. */
+static const char *jsid_from_icalprop(icalproperty *prop)
+{
+    const char *id = icalproperty_get_xparam_value(prop, "JSID");
+    if (!id) id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+    return id;
+}
+
 static void xjmapid_from_icalm(struct buf *dst, icalproperty *prop)
 {
     buf_reset(dst);
-    const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+    const char *id = jsid_from_icalprop(prop);
     char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
     if (!id) {
         id = sha1hexstr(icalproperty_as_ical_string(prop), keybuf);
@@ -799,7 +809,7 @@ static char *xjmapid_from_ical(icalproperty *prop)
 EXPORTED const char *jmap_partid_from_ical(icalproperty *prop)
 {
     static char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
-    const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+    const char *id = jsid_from_icalprop(prop);
 
     if (!id) {
         char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
@@ -836,7 +846,7 @@ static icalproperty* findprop_byid(icalcomponent *comp, const char *id,
          prop;
          prop = icalcomponent_get_next_property(comp, kind)) {
 
-        const char *oldid = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+        const char *oldid = jsid_from_icalprop(prop);
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!oldid)
             oldid = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
@@ -2316,7 +2326,7 @@ static json_t* linksbyprop_from_ical(icalcomponent *comp,
                 }
             }
 
-            const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+            const char *id = jsid_from_icalprop(prop);
             char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
             if (!id)
                 id = sha1hexstr(icalproperty_get_value_as_string(prop), keybuf);
@@ -2712,7 +2722,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         hash_insert(uri, prop, &attendee_by_uri);
 
         /* Map mailto:URI to ID */
-        const char *id = icalproperty_get_xparam_value(prop, JMAPICAL_XPARAM_ID);
+        const char *id = jsid_from_icalprop(prop);
         char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
         if (!id) id = sha1hexstr(uri, keybuf);
         hash_insert(uri, xstrdup(id), &id_by_uri);
@@ -2782,7 +2792,7 @@ participants_from_ical(icalcomponent *comp, json_t *linksbyparticipant)
         if (uri) {
             if (!hash_lookup(uri, &attendee_by_uri)) {
                 /* Add a default participant for the organizer. */
-                const char *id = icalproperty_get_xparam_value(orga, JMAPICAL_XPARAM_ID);
+                const char *id = jsid_from_icalprop(orga);
                 char keybuf[JMAPICAL_SHA1HEXSTR_LEN];
                 if (!id) id = sha1hexstr(uri, keybuf);
                 json_t *p = participant_from_ical(orga, &id_by_uri, orga,

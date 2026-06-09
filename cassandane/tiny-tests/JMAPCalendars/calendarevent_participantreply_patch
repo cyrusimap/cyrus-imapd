@@ -1,0 +1,125 @@
+#!perl
+use Cassandane::Tiny;
+use Cassandane::Cyrus::JMAPCalendarsRFC8984;
+
+# Create a CalendarEvent, then reply to it via CalendarEvent/participantReply.
+# Verify that independently of replying with or without the jscalendarbis
+# capability, the mboxevent always includes a patch for the old-style RFC8984
+# participant identifiers.
+
+sub get_imip_notification
+{
+    my ($self) = @_;
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+    return decode_json($imip->{MESSAGE});
+}
+
+sub assert_calendarevent_participantreply_patch
+    ($self, %params)
+{
+    my $reply_jscalbis  = $params{reply_jscalbis};
+
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $jscalbis_capability = 'https://cyrusimap.org/ns/jmap/jscalendarbis';
+
+    my @using = (
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'urn:ietf:params:jmap:calendars:preferences',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/debug',
+    );
+
+    my $event = {
+        title => "test",
+        freeBusyStatus => "busy",
+        showWithoutTime => JSON::false,
+        start => "2022-11-23T16:45:00",
+        timeZone => "Australia/Melbourne",
+        duration => "PT1H",
+        replyTo => { imip => 'mailto:cassandane@example.com' },
+        participants => {
+            org => {
+                name => "Cassandane",
+                roles => {
+                    'owner' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:cassandane@example.com',
+                },
+            },
+            att1 => {
+                name => "Bugs Bunny",
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:bugs%2Bcarrot@looneytunes.com',
+                },
+            },
+        },
+    };
+
+    xlog $self, "Create event without jscalendarbis capability";
+
+    $jmap->default_using([ @using ]);
+
+    # Clean notifications
+    $self->{instance}->getnotify();
+
+    my $res = $jmap->request([
+        ['CalendarEvent/set', { create => {
+            1 => {
+                %$event, calendarIds => { $default_cal_id => JSON::true }
+            },
+        }}, "R1"]
+    ]);
+    my $event_id = "" . $res->single_sentence->as_set->created_id('1');
+
+    xlog $self, "Assert CalendarEvent/set imip patch";
+    my $payload = $self->get_imip_notification();
+    $self->assert_str_equals("REQUEST", $payload->{method});
+    $self->Cassandane::Cyrus::JMAPCalendarsRFC8984::assert_normalized_event_equals($event, $payload->{patch});
+
+    xlog $self, "Call /participantReply " .
+        ($reply_jscalbis ? "with" : "without") . " jscalendarbis capability";
+
+    $jmap->default_using([ @using, ($reply_jscalbis ? ($jscalbis_capability) : ()) ]);
+
+    # Clean notifications
+    $self->{instance}->getnotify();
+
+    $res = $jmap->request([
+        ['CalendarEvent/participantReply', {
+            eventId => $event_id,
+            participantEmail => 'bugs%2Bcarrot@looneytunes.com',
+            updates => { participationStatus => "accepted" }
+        }, "R1"]
+    ]);
+
+    xlog $self, "Assert participantReply imip patch";
+    $payload = $self->get_imip_notification();
+    $self->assert_str_equals("REQUEST", $payload->{method});
+    $self->assert_cmp_deeply({
+        'participants/att1/participationStatus' => 'accepted',
+        'participants/att1/scheduleForceSend' => JSON::true,
+        'participants/org/scheduleStatus' => [ '1.2' ],
+    }, $payload->{patch});
+}
+
+sub test_calendarevent_participantreply_patch_rfc8984_jscalbis
+    ($self)
+{
+    $self->assert_calendarevent_participantreply_patch(reply_jscalbis => 1);
+}
+
+sub test_calendarevent_participantreply_patch_rfc8984_rfc8984
+    ($self)
+{
+    $self->assert_calendarevent_participantreply_patch(reply_jscalbis => 0);
+}
