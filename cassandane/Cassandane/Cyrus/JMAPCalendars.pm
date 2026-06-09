@@ -116,272 +116,212 @@ sub normalize_event
 {
     my ($event) = @_;
 
-    if (not exists $event->{q{@type}}) {
-        $event->{q{@type}} = 'Event';
+    # @type
+    $event->{q{@type}} //= 'Event';
+    # calendarIds
+    if (not defined $event->{calendarIds}) {
+        delete($event->{calendarIds});
     }
-    if (not exists $event->{freeBusyStatus}) {
-        $event->{freeBusyStatus} = 'busy';
+    # alerts
+    if (not defined $event->{alerts}) {
+        delete($event->{alerts});
     }
-    if (not exists $event->{priority}) {
-        $event->{priority} = 0;
-    }
-    if (not exists $event->{title}) {
-        $event->{title} = '';
-    }
-    if (not exists $event->{description}) {
-        $event->{description} = '';
-    }
-    if (not exists $event->{duration}) {
-        $event->{duration} = 'PT0S';
-    }
-    if (not exists $event->{descriptionContentType}) {
-        $event->{descriptionContentType} = 'text/plain';
-    }
-    if (not exists $event->{showWithoutTime}) {
-        $event->{showWithoutTime} = JSON::false;
-    }
-    if (not exists $event->{locations}) {
-        $event->{locations} = undef;
-    } elsif (defined $event->{locations}) {
-        foreach my $loc (values %{$event->{locations}}) {
-            if (not exists $loc->{name}) {
-                $loc->{name} = '';
-            }
-            if (not exists $loc->{q{@type}}) {
-                $loc->{q{@type}} = 'Location';
-            }
-            foreach my $link (values %{$loc->{links}}) {
-                if (not exists $link->{q{@type}}) {
-                    $link->{q{@type}} = 'Link';
-                }
-            }
-        }
-    }
-    if (not exists $event->{virtualLocations}) {
-        $event->{virtualLocations} = undef;
-    } elsif (defined $event->{virtualLocations}) {
-        foreach my $loc (values %{$event->{virtualLocations}}) {
-            if (not exists $loc->{name}) {
-                $loc->{name} = ''
-            }
-            if (not exists $loc->{description}) {
-                $loc->{description} = undef;
-            }
-            if (not exists $loc->{uri}) {
-                $loc->{uri} = undef;
-            }
-            if (not exists $loc->{q{@type}}) {
-                $loc->{q{@type}} = 'VirtualLocation';
-            }
-        }
-    }
-    if (not exists $event->{keywords}) {
-        $event->{keywords} = undef;
-    }
-    if (not exists $event->{locale}) {
-        $event->{locale} = undef;
-    }
-    if (not exists $event->{links}) {
-        $event->{links} = undef;
-    } elsif (defined $event->{links}) {
-        foreach my $link (values %{$event->{links}}) {
-            if (not exists $link->{q{@type}}) {
-                $link->{q{@type}} = 'Link';
-            }
-        }
-    }
-    if (not exists $event->{relatedTo}) {
-        $event->{relatedTo} = undef;
-    } elsif (defined $event->{relatedTo}) {
-        foreach my $rel (values %{$event->{relatedTo}}) {
-            if (not exists $rel->{q{@type}}) {
-                $rel->{q{@type}} = 'Relation';
-            }
-        }
-    }
-    if (not exists $event->{participants}) {
-        $event->{participants} = undef;
-    } elsif (defined $event->{participants}) {
-        foreach my $p (values %{$event->{participants}}) {
-            if (not exists $p->{linkIds}) {
-                $p->{linkIds} = undef;
-            }
-            if (not exists $p->{participationStatus}) {
-                $p->{participationStatus} = 'needs-action';
-            }
-            if (not exists $p->{expectReply}) {
-                $p->{expectReply} = JSON::false;
-            }
-            if (not exists $p->{scheduleSequence}) {
-                $p->{scheduleSequence} = 0;
-            }
-            if (not exists $p->{q{@type}}) {
-                $p->{q{@type}} = 'Participant';
-            }
-            foreach my $link (values %{$p->{links}}) {
-                if (not exists $link->{q{@type}}) {
-                    $link->{q{@type}} = 'Link';
-                }
-            }
-        }
-    }
-    if (not exists $event->{replyTo}) {
-        $event->{replyTo} = undef;
-    }
-    if (not exists $event->{recurrenceRule}) {
-        $event->{recurrenceRule} = undef;
-    } elsif (defined $event->{recurrenceRule}) {
-        my $rrule = $event->{recurrenceRule};
-        if (not exists $rrule->{interval}) {
-            $rrule->{interval} = 1;
-        }
-        if (not exists $rrule->{firstDayOfWeek}) {
-            $rrule->{firstDayOfWeek} = 'mo';
-        }
-        if (not exists $rrule->{rscale}) {
-            $rrule->{rscale} = 'gregorian';
-        }
-        if (not exists $rrule->{skip}) {
-            $rrule->{skip} = 'omit';
-        }
-        if (not exists $rrule->{byDay}) {
-            $rrule->{byDay} = undef;
-        } elsif (defined $rrule->{byDay}) {
-            foreach my $nday (@{$rrule->{byDay}}) {
-                if (not exists $nday->{q{@type}}) {
-                    $nday->{q{@type}} = 'NDay';
-                }
-            }
-        }
-        if (not exists $rrule->{q{@type}}) {
-            $rrule->{q{@type}} = 'RecurrenceRule';
-        }
-    }
-    if (not exists $event->{excludedRecurrenceRules}) {
-        $event->{excludedRecurrenceRules} = undef;
-    } elsif (defined $event->{excludedRecurrenceRules}) {
-        foreach my $exrule (@{$event->{excludedRecurrenceRules}}) {
-            if (not exists $exrule->{interval}) {
-                $exrule->{interval} = 1;
-            }
-            if (not exists $exrule->{firstDayOfWeek}) {
-                $exrule->{firstDayOfWeek} = 'mo';
-            }
-            if (not exists $exrule->{rscale}) {
-                $exrule->{rscale} = 'gregorian';
-            }
-            if (not exists $exrule->{skip}) {
-                $exrule->{skip} = 'omit';
-            }
-            if (not exists $exrule->{byDay}) {
-                $exrule->{byDay} = undef;
-            } elsif (defined $exrule->{byDay}) {
-                foreach my $nday (@{$exrule->{byDay}}) {
-                    if (not exists $nday->{q{@type}}) {
-                        $nday->{q{@type}} = 'NDay';
-                    }
-                }
-            }
-            if (not exists $exrule->{q{@type}}) {
-                $exrule->{q{@type}} = 'RecurrenceRule';
-            }
-        }
-    }
-    if (not exists $event->{recurrenceOverrides}) {
-        $event->{recurrenceOverrides} = undef;
-    }
-    if (not exists $event->{alerts}) {
-        $event->{alerts} = undef;
-    }
-    elsif (defined $event->{alerts}) {
+    else {
         foreach my $alert (values %{$event->{alerts}}) {
-            if (not exists $alert->{action}) {
-                $alert->{action} = 'display';
-            }
-            if (not exists $alert->{q{@type}}) {
-                $alert->{q{@type}} = 'Alert';
-            }
-            if (not exists $alert->{relatedTo}) {
-                $alert->{relatedTo} = undef;
-            } elsif (defined $alert->{relatedTo}) {
+            $alert->{action} //= 'display';
+            $alert->{q{@type}} //= 'Alert';
+            if (not defined $alert->{relatedTo}) {
+                delete($alert->{relatedTo});
+            } else {
                 foreach my $rel (values %{$alert->{relatedTo}}) {
-                    if (not exists $rel->{q{@type}}) {
-                        $rel->{q{@type}} = 'Relation';
-                    }
-                    if (not exists $rel->{relation}) {
-                        $rel->{relation} = {};
-                    }
+                    $rel->{q{@type}} //= 'Relation';
+                    $rel->{relation} //= {};
                 }
             }
-            if ($alert->{trigger} and $alert->{trigger}{q{@type}} eq 'OffsetTrigger') {
-                if (not exists $alert->{trigger}{relativeTo}) {
+            if (defined $alert->{trigger}) {
+                $alert->{trigger}{q{@type}} //= 'OffsetTrigger';
+                if ((not defined $alert->{trigger}{relativeTo}) &&
+                    $alert->{trigger}{q{@type}} eq 'OffsetTrigger') {
                     $alert->{trigger}{relativeTo} = 'start';
                 }
             }
         }
     }
-    if (not exists $event->{useDefaultAlerts}) {
-        $event->{useDefaultAlerts} = JSON::false;
+    # categories
+    if (not defined $event->{categories}) {
+        delete($event->{categories});
     }
-    if (not exists $event->{prodId}) {
-        $event->{prodId} = undef;
+    # color
+    if (not defined $event->{color}) {
+        delete($event->{color});
     }
-    if (not exists $event->{links}) {
-        $event->{links} = undef;
-    } elsif (defined $event->{links}) {
+    # description
+    $event->{description} //= '';
+    # descriptionContentType
+    $event->{descriptionContentType} //= 'text/plain';
+    # duration
+    $event->{duration} //= 'PT0S';
+    # endTimeZone
+    if (not defined $event->{endTimeZone}) {
+        delete($event->{endTimeZone});
+    }
+    # freeBusyStatus
+    $event->{freeBusyStatus} //= 'busy';
+    # keywords
+    if (not defined $event->{keywords}) {
+        delete($event->{keywords});
+    }
+    # isDraft
+    $event->{isDraft} //= JSON::false;
+    # links
+    if (not defined $event->{links}) {
+        delete($event->{links});
+    } else {
         foreach my $link (values %{$event->{links}}) {
-            if (not exists $link->{cid}) {
-                $link->{cid} = undef;
+            if (not defined $link->{cid}) {
+                delete($link->{cid});
             }
-            if (not exists $link->{contentType}) {
-                $link->{contentType} = undef;
+            if (not defined $link->{contentType}) {
+                delete($link->{contentType});
             }
-            if (not exists $link->{size}) {
-                $link->{size} = undef;
+            if (not defined $link->{size}) {
+                delete($link->{size});
             }
-            if (not exists $link->{title}) {
-                $link->{title} = undef;
+            if (not defined $link->{title}) {
+                delete($link->{title});
             }
-            if (not exists $link->{q{@type}}) {
-                $link->{q{@type}} = 'Link';
+            $link->{q{@type}} //= 'Link';
+        }
+    }
+    # locale
+    if (not defined $event->{locale}) {
+        delete($event->{locale});
+    }
+    # locations
+    if (not defined $event->{locations}) {
+        delete($event->{locations});
+    } else {
+        foreach my $loc (values %{$event->{locations}}) {
+            $loc->{q{@type}} //= 'Location';
+            foreach my $link (values %{$loc->{links}}) {
+                $link->{q{@type}} //= 'Link';
             }
         }
     }
-    if (not exists $event->{status}) {
-        $event->{status} = "confirmed";
+    # mainLocationId
+    if (not defined $event->{mainLocationId}) {
+        delete($event->{mainLocationId});
     }
-    if (not exists $event->{privacy}) {
-        $event->{privacy} = "public";
+    # method
+    if (not defined $event->{method}) {
+        delete($event->{method});
     }
-    if (not exists $event->{isDraft}) {
-        $event->{isDraft} = JSON::false;
+    # organizerCalendarAddress
+    if (not defined $event->{organizerCalendarAddress}) {
+        delete($event->{organizerCalendarAddress});
     }
-    if (not exists $event->{excluded}) {
-        $event->{excluded} = JSON::false,
+    # participants
+    if (not defined $event->{participants}) {
+        delete($event->{participants});
+    } else {
+        foreach my $p (values %{$event->{participants}}) {
+            if (not defined $p->{linkIds}) {
+                delete($p->{linkIds});
+            }
+            $p->{participationStatus} //= 'needs-action';
+            $p->{expectReply} //= JSON::false;
+            $p->{scheduleSequence} //= 0;
+            $p->{q{@type}} //= 'Participant';
+            foreach my $link (values %{$p->{links}}) {
+                $link->{q{@type}} //= 'Link';
+            }
+        }
+    }
+    # priority
+    $event->{priority} //= 0;
+    # privacy
+    $event->{privacy} //= "public";
+    # recurrenceId
+    if (not defined $event->{recurrenceId}) {
+        delete($event->{recurrenceId});
+    }
+    # recurrenceIdTimeZone
+    if (not defined $event->{recurrenceIdTimeZone}) {
+        delete($event->{recurrenceIdTimeZone});
+    }
+    # recurrenceRule
+    if (not defined $event->{recurrenceRule}) {
+        delete($event->{recurrenceRule});
+    } else {
+        my $rrule = $event->{recurrenceRule};
+        $rrule->{interval} //= 1;
+        $rrule->{firstDayOfWeek} //= 'mo';
+        $rrule->{rscale} //= 'gregorian';
+        $rrule->{skip} //= 'omit';
+        if (not defined $rrule->{byDay}) {
+            delete($rrule->{byDay});
+        } else {
+            foreach my $nday (@{$rrule->{byDay}}) {
+                $nday->{q{@type}} //= 'NDay';
+            }
+        }
+        $rrule->{q{@type}} //= 'RecurrenceRule';
+    }
+    # recurrenceOverrides
+    if (not defined $event->{recurrenceOverrides}) {
+        delete($event->{recurrenceOverrides});
+    }
+    # relatedTo
+    if (not defined $event->{relatedTo}) {
+        delete($event->{relatedTo});
+    } else {
+        foreach my $rel (values %{$event->{relatedTo}}) {
+            $rel->{q{@type}} //= 'Relation';
+        }
+    }
+    # sentBy
+    if (not defined $event->{sentBy}) {
+        delete($event->{sentBy});
+    }
+    # showWithoutTime
+    $event->{showWithoutTime} //= JSON::false;
+    # status
+    $event->{status} //= "confirmed";
+    # title
+    $event->{title} //= '';
+    # timeZone
+    if (not defined $event->{timeZone}) {
+        delete($event->{timeZone});
+    }
+    # useDefaultAlerts
+    $event->{useDefaultAlerts} //= JSON::false;
+    # virtualLocations
+    if (not defined $event->{virtualLocations}) {
+        delete($event->{virtualLocations});
+    } else {
+        foreach my $loc (values %{$event->{virtualLocations}}) {
+            $loc->{name} //= '';
+            if (not defined $loc->{description}) {
+                delete($loc->{description});
+            }
+            if (not defined $loc->{uri}) {
+                delete($loc->{uri});
+            }
+            $loc->{q{@type}} //= 'VirtualLocation';
+        }
     }
 
-    if (not exists $event->{calendarIds}) {
-        $event->{calendarIds} = undef;
-    }
-    if (not exists $event->{timeZone}) {
-        $event->{timeZone} = undef;
-    }
-
-    if (not exists $event->{mayInviteSelf}) {
-        $event->{mayInviteSelf} = JSON::false,
-    }
-
-    # undefine dynamically generated values
-    $event->{created} = undef;
-    $event->{updated} = undef;
-    $event->{uid} = undef;
-    $event->{id} = undef;
-    $event->{"x-href"} = undef;
-    $event->{sequence} = 0;
-    $event->{prodId} = undef;
-    $event->{isOrigin} = undef;
+    # delete dynamically generated values
+    delete($event->{created});
+    delete($event->{updated});
+    delete($event->{uid});
+    delete($event->{id});
+    delete($event->{"x-href"});
+    delete($event->{prodId});
+    delete($event->{isOrigin});
     delete($event->{blobId});
     delete($event->{debugBlobId});
+    $event->{sequence} = 0;
 }
 
 sub assert_normalized_event_equals
@@ -397,7 +337,7 @@ sub assert_normalized_event_equals
 
     normalize_event($copyA);
     normalize_event($copyB);
-    return $self->assert_deep_equals($copyA, $copyB);
+    return $self->assert_cmp_deeply($copyA, $copyB);
 }
 
 sub putandget_vevent
