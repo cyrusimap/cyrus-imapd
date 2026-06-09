@@ -52,7 +52,8 @@
     " alive INTEGER,"                                                   \
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
-    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
+    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"  \
+    "CREATE INDEX IF NOT EXISTS idx_ical_cmodseq ON ical_objs ( createdmodseq );"
 
 #define CMD_CREATE_JSCALOBJS                                            \
     "CREATE TABLE IF NOT EXISTS jscal_objs ("                           \
@@ -90,7 +91,8 @@
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
+    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_cmodseq ON vcard_objs ( createdmodseq );"
 
 #define CMD_CREATE_EM                                                   \
     "CREATE TABLE IF NOT EXISTS vcard_emails ("                         \
@@ -274,6 +276,12 @@
     "    WHERE ical_objs.rowid = jscal_objs.rowid)"                     \
     " WHERE ical_recurid = '';"
 
+/* Compact jmap ids encode createdmodseq, so id lookups query against it.
+ * Without these indexes every lookup is a full table scan. */
+#define CMD_DBUPGRADEv19                                                \
+    "CREATE INDEX IF NOT EXISTS idx_ical_cmodseq ON ical_objs ( createdmodseq );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_cmodseq ON vcard_objs ( createdmodseq );"
+
 static int sievedb_upgrade(sqldb_t *db);
 
 static const struct sqldb_upgrade davdb_upgrade[] = {
@@ -294,10 +302,11 @@ static const struct sqldb_upgrade davdb_upgrade[] = {
   { 16, CMD_DBUPGRADEv16, NULL },
   { 17, CMD_DBUPGRADEv17, NULL },
   { 18, CMD_DBUPGRADEv18, NULL },
+  { 19, CMD_DBUPGRADEv19, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 18
+#define DB_VERSION 19
 
 static sqldb_t *reconstruct_db;
 
