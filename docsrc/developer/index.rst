@@ -18,6 +18,7 @@ Getting Started
     :maxdepth: 1
 
     process
+    quickstart
     overview
     compiling
     developer-testing

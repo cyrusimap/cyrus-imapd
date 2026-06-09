@@ -1,4 +1,4 @@
-.. _imap-developer-cunit:
+.. _developer-cunit:
 
 The CUnit test suite
 ====================
