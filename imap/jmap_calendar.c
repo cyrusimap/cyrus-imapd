@@ -4556,6 +4556,18 @@ static int createevent_toical(jmap_req_t *req,
     jmapctx->jsevent_is_origin_cb = jsevent_is_origin;
     jmapctx->to_ical.serverset = create->serverset;
 
+    if (jmap_is_using(req, JMAP_JSCALENDARBIS_EXTENSION)) {
+        /* Remove any top-level property with value 'null' from the object. */
+        const char *propname;
+        json_t *jval;
+        void *tmp;
+        json_object_foreach_safe(create->jsevent, tmp, propname, jval) {
+            if (json_is_null(jval)) {
+                json_object_del(create->jsevent, propname);
+            }
+        }
+    }
+
     // Set @type property if not already set.
     if (!json_object_get(create->jsevent, "@type")) {
         json_object_set_new(create->jsevent, "@type", json_string("Event"));

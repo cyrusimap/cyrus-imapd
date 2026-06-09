@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_create_null_values
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    # Assert that null values for top-level properties in
+    # CalendarEvent/set{create} are ignored, not rejected.
+
+    my $event_all_optional_null = {
+        # Mandatory properties
+        calendarIds => { $calid => JSON::true },
+        start => '2026-01-02T03:04:05',
+        # Optional properties
+        alerts => undef,
+        categories => undef,
+        color => undef,
+        created => undef,
+        description => undef,
+        descriptionContentType => undef,
+        duration => undef,
+        endTimeZone => undef,
+        freeBusyStatus => undef,
+        keywords => undef,
+        links => undef,
+        locale => undef,
+        locations => undef,
+        mainLocationId => undef,
+        method => undef,
+        organizerCalendarAddress => undef,
+        participants => undef,
+        priority => undef,
+        privacy => undef,
+        prodId => undef,
+        recurrenceId => undef,
+        recurrenceIdTimeZone => undef,
+        recurrenceOverrides => undef,
+        recurrenceRule => undef,
+        relatedTo => undef,
+        sentBy => undef,
+        sequence => undef,
+        showWithoutTime => undef,
+        status => undef,
+        timeZone => undef,
+        title => undef,
+        uid => undef,
+        updated => undef,
+        version => undef,
+        virtualLocations => undef,
+    };
+
+    my @props = keys %$event_all_optional_null;
+
+    my $res = $jmap->request([
+        [ "CalendarEvent/set" => {
+            create => {
+                1 => $event_all_optional_null,
+            },
+        }, "a", ],
+        [ "CalendarEvent/get" => {
+            ids => [ '#1' ],
+            properties => \@props,
+        }, "b", ],
+    ]);
+
+    my $got_event = $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+    $self->assert_normalized_event_equals($event_all_optional_null, $got_event);
+}
