@@ -106,7 +106,7 @@ sub test_calendar_set_sharewith
     my %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
     $self->assert_str_equals('lrw59', $map{manifold});
-    $self->assert_str_equals('lrswitedn79', $map{paraphrase});
+    $self->assert_str_equals('lrwitedn79', $map{paraphrase});
 
     xlog $self, "check Outbox ACL";
     $acl = $admintalk->getacl("user.master.#calendars.Outbox");
@@ -132,7 +132,7 @@ sub test_calendar_set_sharewith
         %map = @$acl;
         $self->assert_str_equals('lrswitedn', $map{cassandane});
         $self->assert_str_equals('lrw', $map{manifold});
-        $self->assert_str_equals('lrswitedn', $map{paraphrase});
+        $self->assert_str_equals('lrwitedn', $map{paraphrase});
     }
 
     xlog $self, "Clear initial syslog";
@@ -158,8 +158,8 @@ sub test_calendar_set_sharewith
         $acl = $admintalk->getacl("user.master.#jmap");
         %map = @$acl;
         $self->assert_str_equals('lrswitedn', $map{cassandane});
-        $self->assert_str_equals('lrswitedn', $map{manifold});
-        $self->assert_str_equals('lrswitedn', $map{paraphrase});
+        $self->assert_str_equals('lrwitedn', $map{manifold});
+        $self->assert_str_equals('lrwitedn', $map{paraphrase});
     }
 
     xlog $self, "Remove the access for paraphrase";
@@ -181,7 +181,7 @@ sub test_calendar_set_sharewith
     $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
     %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
-    $self->assert_str_equals('lrswitedn579', $map{manifold});
+    $self->assert_str_equals('lrwitedn579', $map{manifold});
     $self->assert_null($map{paraphrase});
 
     xlog $self, "check Outbox ACL";
@@ -208,7 +208,7 @@ sub test_calendar_set_sharewith
         $acl = $admintalk->getacl("user.master.#jmap");
         %map = @$acl;
         $self->assert_str_equals('lrswitedn', $map{cassandane});
-        $self->assert_str_equals('lrswitedn', $map{manifold});
+        $self->assert_str_equals('lrwitedn', $map{manifold});
         $self->assert_null($map{paraphrase});
     }
 }

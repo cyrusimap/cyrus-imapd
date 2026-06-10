@@ -92,7 +92,7 @@ sub test_addressbook_set_sharewith
     my %map = @$acl;
     $self->assert_str_equals('lrswitedn', $map{cassandane});
     $self->assert_str_equals('lrw', $map{manifold});
-    $self->assert_str_equals('lrswitedn', $map{paraphrase});
+    $self->assert_str_equals('lrwitedn', $map{paraphrase});
 
     xlog $self, "Update sharewith just for manifold";
     $jmap->CallMethods([
@@ -107,8 +107,8 @@ sub test_addressbook_set_sharewith
     $acl = $admintalk->getacl("user.master.#jmap");
     %map = @$acl;
     $self->assert_str_equals('lrswitedn', $map{cassandane});
-    $self->assert_str_equals('lrswitedn', $map{manifold});
-    $self->assert_str_equals('lrswitedn', $map{paraphrase});
+    $self->assert_str_equals('lrwitedn', $map{manifold});
+    $self->assert_str_equals('lrwitedn', $map{paraphrase});
 
     xlog $self, "Remove the access for paraphrase";
     $res = $jmap->CallMethods([
@@ -129,13 +129,13 @@ sub test_addressbook_set_sharewith
     $acl = $admintalk->getacl("user.master.#addressbooks.$AddressBookId");
     %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan', $map{cassandane});
-    $self->assert_str_equals('lrswitedn', $map{manifold});
+    $self->assert_str_equals('lrwitedn', $map{manifold});
     $self->assert_null($map{paraphrase});
 
     xlog $self, "check ACL on JMAP upload folder";
     $acl = $admintalk->getacl("user.master.#jmap");
     %map = @$acl;
     $self->assert_str_equals('lrswitedn', $map{cassandane});
-    $self->assert_str_equals('lrswitedn', $map{manifold});
+    $self->assert_str_equals('lrwitedn', $map{manifold});
     $self->assert_null($map{paraphrase});
 }
