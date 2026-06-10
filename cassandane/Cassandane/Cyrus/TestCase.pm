@@ -1121,9 +1121,12 @@ sub post_tear_down
 {
     my ($self, $result) = @_;
 
+    my $cassini = Cassandane::Cassini->instance();
+    my $cleanup = $cassini->val('cassandane', 'cleanup', 'no');
+
     if ($result eq 'pass'
         && ref $self->{cleanup_basedirs}
-        && Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup')
+        && ($cleanup eq 'yes' or $cleanup eq 'post')
     ) {
         foreach my $basedir (@{$self->{cleanup_basedirs}}) {
             xlog $self, "Cleaning up basedir " . $basedir;
