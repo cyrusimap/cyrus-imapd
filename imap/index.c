@@ -5374,6 +5374,8 @@ MsgData **index_msgdata_load(struct index_state *state,
 
         /* useful for convupdates */
         cur->modseq = record.modseq;
+        /* required for JMAP Email/queryChanges */
+        cur->createdmodseq = record.createdmodseq;
 
         did_cache = did_env = did_conv = 0;
         tmpenv = NULL;
@@ -6090,9 +6092,6 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     ret = md1->internaldate.tv_sec - md2->internaldate.tv_sec;
     if (ret) return ret;
 
-    ret = md1->createdmodseq - md2->createdmodseq;
-    if (ret) return ret;
-
     ret = md1->uid - md2->uid;
     if (ret) return ret;
 
@@ -6110,9 +6109,6 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     int ret;
 
     ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
-    if (ret) return ret;
-
-    ret = md2->createdmodseq - md1->createdmodseq;
     if (ret) return ret;
 
     ret = md1->uid - md2->uid;
@@ -6135,9 +6131,6 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     if (ret) return ret;
 
     ret = md2->internaldate.tv_sec - md1->internaldate.tv_sec;
-    if (ret) return ret;
-
-    ret = md2->createdmodseq - md1->createdmodseq;
     if (ret) return ret;
 
     ret = md1->uid - md2->uid;

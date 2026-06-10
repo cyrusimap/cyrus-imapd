@@ -137,12 +137,15 @@ EOF
 
     xlog $self, "get email list updates";
     $res = $jmap->CallMethods([['Email/queryChanges', {
+        filter => {
+            from => 'gmail.com',
+        },
         sinceQueryState => $state,
         sort => [{
             property => 'receivedAt',
         }],
     }, "R1"]]);
-    $self->assert_num_equals(5, $res->[0][1]->{total});
+    $self->assert_num_equals(3, $res->[0][1]->{total});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{oldQueryState});
     $self->assert_matches(qr/^[0-9].*/, $res->[0][1]->{newQueryState});
 
