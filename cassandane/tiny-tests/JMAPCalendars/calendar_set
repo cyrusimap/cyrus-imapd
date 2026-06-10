@@ -24,6 +24,16 @@ sub test_calendar_set
     $self->assert_not_null($res->[0][1]{created});
     $self->assert_not_null($res->[0][1]{created}{1}{mailboxUniqueId});
 
+    $self->assert_cmp_deeply(
+      superhashof({
+        mayWriteOwn => jtrue,
+        mayWriteAll => jtrue,
+        mayUpdatePrivate => jtrue,
+      }),
+      $res->[0][1]{created}{1}{myRights},
+      "you may by default write to a calendar you create and own",
+    );
+
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog $self, "get calendar $id";

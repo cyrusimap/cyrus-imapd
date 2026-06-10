@@ -136,7 +136,7 @@ void jmap_data_types_foreach(void (*cb)(const jmap_data_type_t *, void *),
 #define JACL_RSVP           ACL_USER7      /* Keep sync'd with DACL_REPLY */
 #define JACL_WRITEOWN       ACL_USER6
 #define JACL_UPDATEPRIVATE  ACL_USER5
-#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA|JACL_REMOVEITEMS)
+#define JACL_WRITEALL       (JACL_ADDITEMS|JACL_UPDATEITEMS|JACL_SETMETADATA|JACL_REMOVEITEMS)
 
 /* Cyrus-specific privileges */
 #define JACL_LOOKUP         ACL_LOOKUP
