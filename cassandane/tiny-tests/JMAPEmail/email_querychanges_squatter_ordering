@@ -1,0 +1,215 @@
+#!perl
+use Cassandane::Tiny;
+
+# If an email query happens in between a message got delivered and squatter
+# runs, we had returned a query state that included the createdmodseq of
+# the new message but the message itself was not in the result.
+#
+# A following Email/queryChanges did not report this message either because
+# of the lower createdmodseq. As a result, clients never were aware of this
+# message in the result set, and positions of any newly reported messages
+# in the queryChanges responses were off by one.
+#
+# This test asserts Cyrus does not do that anymore. We fixed this by keeping
+# track of the highest createdmodseq of all messages in the search index,
+# and encoding that value in the query state to cap search results to messages
+# up to and including that createdmodseq.
+#
+# Each message is in its own thread, so the query results are the same
+# for the collapsed and uncollapsed variants of the test.
+#
+# Also see the SearchFuzzy.squatter_createdmodseq test.
+
+sub assert_email_querychanges_squatter_ordering($self, $collapse_threads)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $inbox = $user->mailboxes->inbox;
+
+    my %common_query = (
+        collapseThreads => $collapse_threads ? JSON::true : JSON::false,
+        sort => [
+            {
+                isAscending => JSON::false,
+                mailboxId   => $inbox->id,
+                property    => 'snoozedUntil',
+            }, {
+                isAscending => JSON::false,
+                property    => 'receivedAt'
+            },
+        ],
+        filter => {
+            conditions => [
+                { inMailbox => $inbox->id },
+                { text      => 'Garnet'   },
+            ],
+            operator => 'AND',
+        },
+    );
+
+    xlog $self, "Install script to flag messages in inbox";
+    $self->{instance}->install_sieve_script(<<~EOF
+        require ["imap4flags"];
+        addflag "\\Seen";
+        EOF
+    );
+
+    xlog $self, "Make a bunch of messages that match our query";
+    for (1..10) {
+        my $msg = $self->{gen}->generate(subject => "Garnet");
+        $self->{instance}->deliver($msg);
+    }
+
+    xlog $self, "Run squatter to index them";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "Get email ids";
+    my $res = $jmap->request([[
+        "Email/query" => {
+            %common_query,
+            calculateTotal => JSON::true,
+        },
+    ]]);
+
+    my $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            ids                 => [ (jstr()) x 10 ],
+            position            => 0,
+            total               => 10,
+        }),
+        $qres,
+    );
+    my $base_email_ids = $qres->{ids};
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    xlog $self, "Deliver a matching message but don't run squatter";
+    my $msg1 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg1);
+
+    xlog $self, "Get our query state";
+    $res = $jmap->request([[
+        "Email/query" => {
+            %common_query,
+            limit => 5,
+            calculateTotal => JSON::true,
+        },
+    ]]);
+
+    $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_cmp_deeply(
+        superhashof({
+            canCalculateChanges => JSON::true,
+            ids                 => [ (jstr()) x 5 ],
+            position            => 0,
+            total               => 10,
+            queryState          => jstr,
+        }),
+        $qres,
+    );
+
+    xlog $self, "Assert newly delivered but unindexed message is not in result";
+    $self->assert_cmp_deeply([ @{$base_email_ids}[0..4] ], $qres->{ids});
+
+    my $qstate = $qres->{queryState};
+    $self->assert_not_null($qstate);
+
+    my $upto = $qres->{ids}->[-1];
+    $self->assert_not_null($upto);
+
+    xlog $self, "Our query state is $qstate";
+
+    xlog $self, "Assert queryChanges ignores the message squatter has not seen";
+    $res = $jmap->request([[
+        "Email/queryChanges" => {
+            %common_query,
+            sinceQueryState => $qstate,
+            upToId => $upto,
+        },
+    ]]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            added   => [],
+            removed => [],
+        }),
+        $res->sentence_named("Email/queryChanges")->arguments,
+    );
+
+    xlog $self, "Now squatter runs (incremental, as rolling squatter would)...";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Wait a second so new delivery is later";
+    sleep 1;
+
+    xlog $self, "Deliver a new matching message";
+    my $msg2 = $self->{gen}->generate(subject => "Garnet");
+    $self->{instance}->deliver($msg2);
+
+    xlog $self, "Run squatter (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Check Email/queryChanges";
+    $res = $jmap->request([[
+        "Email/queryChanges" => {
+            %common_query,
+            sinceQueryState => $qstate,
+            upToId => $upto,
+        },
+    ]]);
+
+    my $qcres = $res->sentence_named("Email/queryChanges")->arguments;
+    my $newqstate = $qcres->{newQueryState};
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            added               => [ { id => jstr, index => 0 }, { id => jstr, index => 1 } ],
+            removed             => [ jstr, jstr ],
+        }),
+        $qcres,
+    );
+
+    xlog $self, "Check email/query with position 5. Should start one before $upto since two new messages were delivered from the given query state";
+    $res = $jmap->request([[
+        "Email/query" => {
+          %common_query,
+          position => 5,
+        },
+    ]]);
+
+    $qres = $res->sentence_named("Email/query")->arguments;
+    $self->assert_str_equals($upto, $qres->{ids}[1]);
+    $self->assert_cmp_deeply([ @{$base_email_ids}[3..$#{$base_email_ids}] ], $qres->{ids});
+
+    xlog $self, "Compact the search index with reindexing, changing the index generation";
+    $self->assert_not_null($newqstate);
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't2', '-t', 't1', '-T', 't1');
+
+    xlog $self, "Assert queryChanges refuses to calculate changes across a reindex";
+    $res = $jmap->request([[
+        "Email/queryChanges" => {
+            %common_query,
+            sinceQueryState => $newqstate,
+            upToId => $upto,
+        },
+    ]]);
+    my $error = $res->sentence(0);
+    $self->assert_str_equals('error', $error->name);
+    $self->assert_str_equals('cannotCalculateChanges', $error->arguments->{type});
+}
+
+sub test_email_querychanges_squatter_ordering_uncollapsed
+    :needs_component_sieve
+    ($self)
+{
+    $self->assert_email_querychanges_squatter_ordering(0);
+}
+
+sub test_email_querychanges_squatter_ordering_collapsed
+    :needs_component_sieve
+    ($self)
+{
+    $self->assert_email_querychanges_squatter_ordering(1);
+}
