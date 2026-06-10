@@ -441,40 +441,13 @@ done:
     return 0;
 }
 
-#define DATATYPE_MAILBOX         (1<<0)
-#define DATATYPE_THREAD          (1<<1)
-#define DATATYPE_EMAIL           (1<<2)
-#define DATATYPE_ADDRESSBOOK     (1<<3)
-#define DATATYPE_CONTACTCARD     (1<<4)
-#define DATATYPE_CALENDAR        (1<<5)
-#define DATATYPE_CALENDAREVENT   (1<<6)
-
-#define NUM_DATATYPES 7
-
-struct datatype_name {
-    const char *name;
-    uint32_t typenum;
-    uint32_t mbtype;
-};
-
-struct datatype_name known_datatypes[] = {
-    { "Mailbox", DATATYPE_MAILBOX, MBTYPE_EMAIL },
-    { "Thread", DATATYPE_THREAD, MBTYPE_EMAIL },
-    { "Email", DATATYPE_EMAIL, MBTYPE_EMAIL },
-    { "Addressbook", DATATYPE_ADDRESSBOOK, MBTYPE_ADDRESSBOOK },
-    { "ContactCard", DATATYPE_CONTACTCARD, MBTYPE_ADDRESSBOOK },
-    { "Calendar", DATATYPE_CALENDAR, MBTYPE_CALENDAR },
-    { "CalendarEvent", DATATYPE_CALENDAREVENT, MBTYPE_CALENDAR },
-    { NULL, 0, 0 }
-};
-
 static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
                             struct jmap_parser *parser,
                             const char *key,
                             json_t *arg,
                             void *rock)
 {
-    int32_t *datatypesp = rock;
+    uint32_t *datatypesp = rock;
 
     if (!strcmp(key, "typeNames")) {
         if (!json_is_array(arg)) {
@@ -487,17 +460,11 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
         json_t *v;
         json_array_foreach(arg, i, v) {
             const char *val = json_string_value(v);
-            const struct datatype_name *item;
-            int typenum = 0;
-            for (item = known_datatypes; item->name; item++) {
-                if (strcmpsafe(val, item->name))
-                    continue;
-                typenum = item->typenum;
-                break;
-            }
+            const jmap_data_type_t *dtype =
+                val ? jmap_data_types_lookup(val, strlen(val)) : NULL;
 
-            if (typenum) {
-                *datatypesp |= typenum;
+            if (dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)) {
+                *datatypesp |= dtype->kind;
             }
             else {
                 jmap_parser_push_index(parser, key, i, NULL);
@@ -514,12 +481,8 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
 
 static void _free_found(void *data)
 {
-    int i;
-    strarray_t *values = data;
-    for (i = 0; i < NUM_DATATYPES + 1; i++) {
-        strarray_t *ids = values + i;
-        strarray_fini(ids);
-    }
+    hashu64_table *values = data;
+    free_hashu64_table(values, (void (*)(void*)) &strarray_free);
     free(values);
 }
 
@@ -542,11 +505,133 @@ static int caleventid_cb(void *vrock, struct caldav_jscal *jscal)
     return 0;
 }
 
+struct lookup_blob_rock {
+    jmap_req_t *req;
+    uint32_t datatypes;
+    hash_table *found_ids;
+    struct buf *buf;
+    const mbentry_t *mbentry;
+    const strarray_t *boxes;
+    struct caldav_db *caldav_db;
+    struct carddav_db *carddav_db;
+    struct getblob_rec *getblob;
+    struct message_guid guid;
+    struct timespec internaldate;
+    bit64 cid;
+};
+
+static void lookup_blob_cb(const jmap_data_type_t *dtype, void *rock)
+{
+    struct lookup_blob_rock *lrock = rock;
+
+    // if we don't want this datatype, skip
+    if (!(lrock->datatypes & dtype->kind)) return;
+
+    // if this isn't the right type, skip
+    if (mbtype_isa(lrock->mbentry->mbtype) != dtype->mbtype) return;
+
+    /* only create the values store if we have found at least
+     * one item for this blobid */
+    hashu64_table *values =
+        hash_lookup(lrock->getblob->blob_id, lrock->found_ids);
+    if (!values) {
+        values = xzmalloc(sizeof(hashu64_table));
+        construct_hashu64_table(values, JMAP_NUM_TYPES, 0);
+        hash_insert(lrock->getblob->blob_id, values, lrock->found_ids);
+    }
+    strarray_t *ids = hashu64_lookup(dtype->kind, values);
+    if (!ids) {
+        ids = strarray_new();
+        hashu64_insert(dtype->kind, ids, values);
+    }
+
+    switch (dtype->kind) {
+    case JMAP_TYPE_MAILBOX: {
+        char mboxid[JMAP_MAX_MAILBOXID_SIZE];
+        jmap_set_mailboxid(lrock->req->cstate, lrock->mbentry, mboxid);
+        strarray_add(ids, mboxid);
+        break;
+    }
+
+    case JMAP_TYPE_THREAD: {
+        char threadid[JMAP_THREADID_SIZE];
+        jmap_set_threadid(lrock->req->cstate, lrock->cid, threadid);
+        strarray_add(ids, threadid);
+        break;
+    }
+
+    case JMAP_TYPE_EMAIL: {
+        char emailid[JMAP_MAX_EMAILID_SIZE];
+        jmap_set_emailid(lrock->req->cstate, &lrock->guid,
+                         0, &lrock->internaldate, emailid);
+        strarray_add(ids, emailid);
+        break;
+    }
+
+    case JMAP_TYPE_ADDRESSBOOK: {
+        char abookid[JMAP_MAX_ADDRBOOKID_SIZE];
+        jmap_set_addrbookid(lrock->req->cstate, lrock->mbentry, abookid);
+        strarray_add(ids, abookid);
+        break;
+    }
+
+    case JMAP_TYPE_CONTACTCARD: {
+        struct carddav_data *cdata = NULL;
+        carddav_lookup_imapuid(lrock->carddav_db, lrock->mbentry,
+                               lrock->getblob->uid, &cdata, 0);
+        if (cdata) {
+            struct buf cardid = BUF_INITIALIZER;
+            jmap_set_contactid(lrock->req->cstate, cdata, &cardid);
+            strarray_add(ids, buf_cstring(&cardid));
+            buf_free(&cardid);
+        }
+        break;
+    }
+
+    case JMAP_TYPE_CALENDAR:
+        strarray_add(ids, strarray_nth(lrock->boxes, -1));
+        break;
+
+    case JMAP_TYPE_CALENDAREVENT: {
+        struct caldav_jscal_filter jscal_filter =
+            CALDAV_JSCAL_FILTER_INITIALIZER;
+        caldav_jscal_filter_by_imap_uid(&jscal_filter, lrock->getblob->uid);
+        caldav_jscal_filter_by_mbentry(&jscal_filter, lrock->mbentry);
+        struct caleventid_rock rock = { lrock->buf, ids };
+        caldav_foreach_jscal(lrock->caldav_db, lrock->req->accountid, &jscal_filter,
+                             NULL, NULL, 0, caleventid_cb, &rock);
+        caldav_jscal_filter_fini(&jscal_filter);
+        buf_reset(lrock->buf);
+        break;
+    }
+    }
+}
+
+struct report_blob_rock {
+    uint32_t datatypes;
+    hashu64_table *values;
+    json_t *dtvalue;
+};
+
+static void report_blob_cb(const jmap_data_type_t *dtype, void *rock)
+{
+    struct report_blob_rock *rrock = rock;
+
+    // if we don't want this datatype, skip
+    if (!(rrock->datatypes & dtype->kind)) return;
+
+    strarray_t *ids = hashu64_lookup(dtype->kind, rrock->values);
+    json_t *list = json_array();
+    for (int i = 0; i < strarray_size(ids); i++)
+        json_array_append_new(list, json_string(strarray_nth(ids, i)));
+    json_object_set_new(rrock->dtvalue, dtype->name, list);
+}
+
 static int jmap_blob_lookup(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get = JMAP_GET_INITIALIZER;
-    int32_t datatypes = 0;
+    uint32_t datatypes = 0;
     json_t *err = NULL;
     struct buf buf = BUF_INITIALIZER;
     json_t *jval;
@@ -631,33 +716,41 @@ static int jmap_blob_lookup(jmap_req_t *req)
         // these types both want to know the last item of the name
         mbname_t *mbname = NULL;
         const strarray_t *boxes = NULL;
-        if (datatypes & (DATATYPE_ADDRESSBOOK|DATATYPE_CALENDAR)) {
+        if (datatypes & (JMAP_TYPE_ADDRESSBOOK | JMAP_TYPE_CALENDAR)) {
             mbname = mbname_from_intname(mbentry->name);
             boxes = mbname_boxes(mbname);
         }
 
         // XXX: cache if userid is unchanged?  Should be always
         struct caldav_db *caldav_db = NULL;
-        if (datatypes & DATATYPE_CALENDAREVENT)
+        if (datatypes & JMAP_TYPE_CALENDAREVENT)
             caldav_db = caldav_open_mailbox(mbox);
 
         struct carddav_db *carddav_db = NULL;
-        if (datatypes & DATATYPE_CONTACTCARD)
+        if (datatypes & JMAP_TYPE_CONTACTCARD)
             carddav_db = carddav_open_mailbox(mbox);
 
         int j;
         for (j = 0; j < ptrarray_size(getblobs); j++) {
             struct getblob_rec *getblob = ptrarray_nth(getblobs, j);
+            struct lookup_blob_rock lrock = {
+                .req = req,
+                .datatypes = datatypes,
+                .found_ids = &found,
+                .buf = &buf,
+                .mbentry = mbentry,
+                .boxes = boxes,
+                .caldav_db = caldav_db,
+                .carddav_db = carddav_db,
+                .getblob = getblob
+            };
 
             /* Read message record */
-            struct message_guid guid;
-            struct timespec internaldate;
-            bit64 cid = 0;
             msgrecord_t *mr = NULL;
             r = msgrecord_find(mbox, getblob->uid, &mr);
-            if (!r) r = msgrecord_get_guid(mr, &guid);
-            if (!r) r = msgrecord_get_internaldate(mr, &internaldate);
-            if (!r) r = msgrecord_get_cid(mr, &cid);
+            if (!r) r = msgrecord_get_guid(mr, &lrock.guid);
+            if (!r) r = msgrecord_get_internaldate(mr, &lrock.internaldate);
+            if (!r) r = msgrecord_get_cid(mr, &lrock.cid);
             msgrecord_unref(&mr);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
@@ -665,81 +758,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
                 continue;
             }
 
-            const struct datatype_name *item;
-            int i = 0;
-            for (item = known_datatypes; item->name; item++) {
-                i++;
-                // if we don't want this datatype, skip
-                if (!(datatypes & item->typenum)) continue;
-                // if this isn't the right type, skip
-                if (mbtype_isa(mailbox_mbtype(mbox)) != item->mbtype) continue;
-
-                /* only create the values store if we have found at least
-                 * one item for this blobid */
-                strarray_t *values = hash_lookup(getblob->blob_id, &found);
-                if (!values) {
-                    values = xzmalloc(sizeof(strarray_t) * (NUM_DATATYPES + 1));
-                    hash_insert(getblob->blob_id, values, &found);
-                }
-                strarray_t *ids = values + i;
-
-                switch (item->typenum) {
-                case DATATYPE_MAILBOX: {
-                    char mboxid[JMAP_MAX_MAILBOXID_SIZE];
-                    jmap_set_mailboxid(req->cstate, mbentry, mboxid);
-                    strarray_add(ids, mboxid);
-                    break;
-                }
-
-                case DATATYPE_THREAD: {
-                    char threadid[JMAP_THREADID_SIZE];
-                    jmap_set_threadid(req->cstate, cid, threadid);
-                    strarray_add(ids, threadid);
-                    break;
-                    }
-
-                case DATATYPE_EMAIL: {
-                    char emailid[JMAP_MAX_EMAILID_SIZE];
-                    jmap_set_emailid(req->cstate, &guid,
-                                     0, &internaldate, emailid);
-                    strarray_add(ids, emailid);
-                    break;
-                    }
-
-                case DATATYPE_ADDRESSBOOK:
-                    strarray_add(ids, strarray_nth(boxes, -1));
-                    break;
-
-                case DATATYPE_CONTACTCARD: {
-                    struct carddav_data *cdata = NULL;
-                    carddav_lookup_imapuid(carddav_db, mbentry, getblob->uid, &cdata, 0);
-                    if (cdata) {
-                        struct buf cardid = BUF_INITIALIZER;
-                        jmap_set_contactid(req->cstate, cdata, &cardid);
-                        strarray_add(ids, buf_cstring(&cardid));
-                        buf_free(&cardid);
-                    }
-                    break;
-                    }
-
-                case DATATYPE_CALENDAR:
-                    strarray_add(ids, strarray_nth(boxes, -1));
-                    break;
-
-                case DATATYPE_CALENDAREVENT: {
-                    struct caldav_jscal_filter jscal_filter =
-                        CALDAV_JSCAL_FILTER_INITIALIZER;
-                    caldav_jscal_filter_by_imap_uid(&jscal_filter, getblob->uid);
-                    caldav_jscal_filter_by_mbentry(&jscal_filter, mbentry);
-                    struct caleventid_rock rock = { &buf, ids };
-                    caldav_foreach_jscal(caldav_db, req->accountid, &jscal_filter,
-                            NULL, NULL, 0, caleventid_cb, &rock);
-                    caldav_jscal_filter_fini(&jscal_filter);
-                    buf_reset(&buf);
-                    break;
-                    }
-                }
-            }
+            jmap_data_types_foreach(&lookup_blob_cb, &lrock);
         }
 
         if (caldav_db) caldav_close(caldav_db);
@@ -765,23 +784,17 @@ static int jmap_blob_lookup(jmap_req_t *req)
     /* Report out blobs */
     json_array_foreach(get.ids, i, jval) {
         const char *blob_id = json_string_value(jval);
-        strarray_t *values = hash_lookup(blob_id, &found);
+        hashu64_table *values = hash_lookup(blob_id, &found);
         if (values) {
-            json_t *dtvalue = json_object();
-            const struct datatype_name *item;
-            int j = 0;
-            for (item = known_datatypes; item->name; item++) {
-                j++;
-                // if we don't want this datatype, skip
-                if (!(datatypes & item->typenum)) continue;
-                strarray_t *ids = values + j;
-                json_t *list = json_array();
-                int k = 0;
-                for (k = 0; k < strarray_size(ids); k++)
-                    json_array_append_new(list, json_string(strarray_nth(ids, k)));
-                json_object_set_new(dtvalue, item->name, list);
-            }
-            json_array_append_new(get.list, json_pack("{s:s, s:o}", "id", blob_id, resname, dtvalue));
+            struct report_blob_rock rrock = {
+                .datatypes = datatypes,
+                .values = values,
+                .dtvalue = json_object()
+            };
+            jmap_data_types_foreach(&report_blob_cb, &rrock);
+            json_array_append_new(get.list,
+                                  json_pack("{s:s, s:o}", "id",
+                                            blob_id, resname, rrock.dtvalue));
         }
         else {
             json_array_append_new(get.not_found, json_string(blob_id));
