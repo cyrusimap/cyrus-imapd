@@ -42,7 +42,7 @@
 
 [cassandane]
 rootdir = /dev/shm/cass
-cleanup = no
+cleanup = pre
 
 # If we need do, we can put a list of (space-delimited) tests in this setting,
 # and those tests will be skipped.  In the past, we've used it for tests that
