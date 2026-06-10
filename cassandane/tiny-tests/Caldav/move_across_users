@@ -31,7 +31,7 @@ sub test_move_across_users
     $self->assert_not_null($CalendarId);
 
     xlog $self, "share to user";
-    $admintalk->setacl("user.manifold.#calendars.$ManCalendarId", "cassandane" => 'lrswipcdn');
+    $admintalk->setacl("user.manifold.#calendars.$ManCalendarId", "cassandane" => 'lrswicdn');
     my $talk = $self->{store}->get_client();
     $talk->subscribe("user.manifold.#calendars.$ManCalendarId");
 
@@ -69,20 +69,44 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
+    xlog $self, "add event to shared calendar";
     $CalDAV->Request('PUT', $href, $card1, 'Content-Type' => 'text/calendar');
 
     my $preman = $CalDAV->GetCalendar($mancal->{id});
     my $precas = $CalDAV->GetCalendar($CalendarId);
 
+    xlog $self, "move event from shared calendar to own calendar";
     $CalDAV->MoveEvent($href, $CalendarId);
 
-    my ($adds, $removes, $errors) = $CalDAV->SyncEvents($mancal->{id}, syncToken => $preman->{syncToken});
+    my ($adds, $removes, $errors, $manToken) =
+        $CalDAV->SyncEvents($mancal->{id}, syncToken => $preman->{syncToken});
     $self->assert_deep_equals([], $adds);
     $self->assert_equals(1, scalar @$removes);
     $self->assert_str_equals($href, $removes->[0]);
     $self->assert_deep_equals([], $errors);
 
-    ($adds, $removes, $errors) = $CalDAV->SyncEvents($CalendarId, syncToken => $precas->{syncToken});
+    ($adds, $removes, $errors, my $casToken) =
+        $CalDAV->SyncEvents($CalendarId, syncToken => $precas->{syncToken});
+
+    $self->assert_equals(1, scalar @$adds);
+    $self->assert_str_equals($adds->[0]{uid}, $uuid1);
+    $self->assert_deep_equals([], $removes);
+    $self->assert_deep_equals([], $errors);
+
+    xlog $self, "move event back to shared calendar";
+    $href = $CalDAV->fullpath("$CalendarId/$uuid1.ics");
+    $CalDAV->MoveEvent($href, $mancal->{id});
+
+    ($adds, $removes, $errors) =
+        $CalDAV->SyncEvents($CalendarId, syncToken => $casToken);
+
+    $self->assert_deep_equals([], $adds);
+    $self->assert_equals(1, scalar @$removes);
+    $self->assert_str_equals($href, $removes->[0]);
+    $self->assert_deep_equals([], $errors);
+
+    ($adds, $removes, $errors) =
+        $CalDAV->SyncEvents($mancal->{id}, syncToken => $manToken);
 
     $self->assert_equals(1, scalar @$adds);
     $self->assert_str_equals($adds->[0]{uid}, $uuid1);
