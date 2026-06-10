@@ -1134,6 +1134,11 @@ EXPORTED int search_query_run(search_query_t *query)
             .session = search_begin_session(query->state->mailbox, opts),
         };
 
+        /* Cache highest createdmodseq and index generation from session */
+        query->highest_createdmodseq =
+            search_session_get_highest_createdmodseq(ctx.session,
+                    &query->index_generation);
+
         hash_enumerate(&query->subs_by_indexed, subquery_run_indexed, &ctx);
 
         search_end_session(ctx.session);
