@@ -2426,7 +2426,6 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     }
 
     write = add_suppriv(all, "write", NULL, 0, "Write any object");
-    add_suppriv(write, "write-content", NULL, 0, "Write resource content");
 
     agg = add_suppriv(write, "write-properties", NULL, 0, "Write properties");
     ensure_ns(fctx->ns, NS_CYRUS, resp->parent, XML_NS_CYRUS, "CY");
@@ -2438,8 +2437,7 @@ int propfind_supprivset(const xmlChar *name, xmlNsPtr ns,
     agg = add_suppriv(write, "bind", NULL, 0, "Add new member to collection");
     add_suppriv(agg, "make-collection", fctx->ns[NS_CYRUS], 0,
                 "Make new collection");
-    add_suppriv(agg, "add-resource", fctx->ns[NS_CYRUS], 0,
-                "Add new resource");
+    add_suppriv(agg, "write-content", NULL, 0, "Write resource content");
 
     agg = add_suppriv(write, "unbind", NULL, 0,
                          "Remove member from collection");
@@ -2527,11 +2525,6 @@ static void add_privs(int rights, unsigned flags,
     else do_contained = 1;
 
     if (do_contained) {
-        if (rights & DACL_WRITECONT) {
-            priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-            xmlNewChild(priv, NULL, BAD_CAST "write-content", NULL);
-        }
-
         if (rights & (DACL_WRITEPROPS|DACL_BIND|DACL_UNBIND)) {
             ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
 
@@ -2561,7 +2554,7 @@ static void add_privs(int rights, unsigned flags,
 
             /* DAV:bind */
             if ((rights & DACL_BIND) == DACL_BIND ||
-                ((flags & PRIV_NOSUBCOL) && (rights & DACL_ADDRSRC))) {
+                ((flags & PRIV_NOSUBCOL) && (rights & DACL_WRITECONT))) {
                 priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
                 xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
 
@@ -2576,11 +2569,11 @@ static void add_privs(int rights, unsigned flags,
                     xmlNewChild(priv, ns[NS_CYRUS],
                                 BAD_CAST "make-collection", NULL);
                 }
-                if (rights & DACL_ADDRSRC) {
+                if (rights & DACL_WRITECONT) {
                     priv = xmlNewChild(parent, NULL,
                                        BAD_CAST "privilege", NULL);
-                    xmlNewChild(priv, ns[NS_CYRUS],
-                                BAD_CAST "add-resource", NULL);
+                    xmlNewChild(priv, NULL,
+                                BAD_CAST "write-content", NULL);
                 }
             }
 
@@ -4130,9 +4123,6 @@ int meth_acl(struct transaction_t *txn, void *params)
                                        BAD_CAST "remove-collection"))
                             rights |= DACL_RMCOL;
                         else if (!xmlStrcmp(priv->name,
-                                       BAD_CAST "add-resource"))
-                            rights |= DACL_ADDRSRC;
-                        else if (!xmlStrcmp(priv->name,
                                        BAD_CAST "remove-resource"))
                             rights |= DACL_RMRSRC;
                         else if (!xmlStrcmp(priv->name,
@@ -4612,12 +4602,11 @@ int meth_copy_move(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user on destination */
     rights = httpd_myrights(httpd_authstate, dest_tgt.mbentry);
-    if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
+    if (!(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = dest_tgt.path;
-        txn->error.rights =
-            !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
+        txn->error.rights = DACL_WRITECONT;
         ret = HTTP_NO_PRIVS;
         goto done;
     }
@@ -5471,12 +5460,11 @@ int meth_lock(struct transaction_t *txn, void *params)
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+    if (!(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
-        txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+        txn->error.rights = DACL_WRITECONT;
         return HTTP_NO_PRIVS;
     }
 
@@ -6686,12 +6674,11 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+    if (!(rights & DACL_WRITECONT)) {
         /* DAV:need-privileges */
         txn->error.precond = DAV_NEED_PRIVS;
         txn->error.resource = txn->req_tgt.path;
-        txn->error.rights =
-            !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+        txn->error.rights = DACL_WRITECONT;
         return HTTP_NO_PRIVS;
     }
 
@@ -7128,7 +7115,7 @@ int meth_patch(struct transaction_t *txn, void *params)
 int meth_put(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
-    int ret, r, precond, rights, reqd_rights;
+    int ret, r, precond, rights, reqd_rights = DACL_WRITECONT;
     const char **hdr, *etag;
     struct mime_type_t *mime = NULL;
     struct mailbox *mailbox = NULL;
@@ -7141,10 +7128,7 @@ int meth_put(struct transaction_t *txn, void *params)
     struct buf msg_buf = BUF_INITIALIZER;
     user_nslock_t *user_nslock = NULL;
 
-    if (txn->meth == METH_POST) {
-        reqd_rights = DACL_ADDRSRC;
-    }
-    else {
+    if (txn->meth != METH_POST) {
         /* Response should not be cached */
         txn->flags.cc |= CC_NOCACHE;
 
@@ -7161,8 +7145,6 @@ int meth_put(struct transaction_t *txn, void *params)
         /* Make sure method is allowed (only allowed on resources) */
         if (!((txn->req_tgt.allow & ALLOW_WRITE) && txn->req_tgt.resource))
             return HTTP_NOT_ALLOWED;
-
-        reqd_rights = DACL_WRITECONT;
 
         if (txn->req_tgt.namespace == &namespace_calendar) {
             /* JMAP introduced the right to update an event

@@ -84,129 +84,159 @@ The tables below show how the access controls are used by the CalDAV module.
       <caption>Mapping of IMAP Rights to WebDAV Privileges & HTTP Methods</caption>
       <tr>
         <th>IMAP rights</th>
-        <th colspan=2>WebDAV privileges</th>
+        <th colspan=3>WebDAV privileges</th>
         <th>HTTP methods</th>
       </tr>
       <tr>
-        <td>l - lookup
+        <td style="vertical-align:middle">l - lookup
           <br>r - read</td>
-        <td>DAV:read</td>
-        <td>DAV:read-current-user-privilege-set
-          <br>CALDAV:read-free-busy</td>
+        <td colspan=2 rowspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.1">DAV:read</a></td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.7">DAV:read-current-user-privilege-set</a></td>
         <td>GET/HEAD
-          <br>COPY/MOVE <small>(on source)</small>
-            <br>PROPFIND
-              <br>REPORT</td>
+          <br>COPY/MOVE
+            <br><small>(on source)</small>
+              <br>PROPFIND
+                <br>REPORT</td>
       </tr>
       <tr>
-        <td><s>s - seen</s></td>
-        <td colspan=2/>
+        <td style="vertical-align:middle">9 - freebusy
+          <br><small>(regular calendar collections ONLY)</small></td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc4791#section-6.1.1">CALDAV:read-free-busy</a></td>
+        <td>GET/HEAD
+          <br><small>(<a href="#freebusy-url">Freebusy URLs</a> ONLY)</small>
+            <br>REPORT
+              <br><small>(<a href="https://datatracker.ietf.org/doc/html/rfc4791#section-7.10">CALDAV:free-busy-query</a> ONLY)</small></td>
+      </tr>
+      <tr>
+        <td><s>s - seen</s>
+          <br><s>p - post</s></td>
+        <td colspan=4/>
         <td/>
       </tr>
       <tr>
-        <td>w - write
-          <br>n - write shared annotation</td>
-        <td colspan=2>DAV:write-properties</td>
-        <td>PROPPATCH
-          <br>COPY/MOVE <small>(on destination)</small></td>
+        <td style="vertical-align:middle">w - write</td>
+        <td rowspan=6 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.2">DAV:write</a></td>
+        <td rowspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.3">DAV:write-properties</a></td>
+        <td>CY:write-properties-collection</td>
+        <td rowspan=2>PROPPATCH
+          <br>COPY/MOVE
+            <br><small>(on destination)</small></td>
       </tr>
       <tr>
-        <td>i - insert</td>
-        <td colspan=2>DAV:write-content</td>
-        <td>PUT
-          <br>PATCH
-            <br>COPY/MOVE <small>(on destination resource)</small>
-              <br>LOCK
-                <br>UNLOCK <small>(lock owner ONLY)</small></td>
+        <td>n - write shared annotation</td>
+        <td>CY:write-properties-resource</td>
       </tr>
       <tr>
-        <td>p - post</td>
-        <td rowspan=2>DAV:bind</td>
-        <td>CYRUS:add-resource</td>
-        <td>POST</td>
+        <td style="vertical-align:middle">i - insert</td>
+        <td rowspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.9">DAV:bind</a></td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.4">DAV:write-content</a></td>
+        <td>POST
+          <br><small>(<a href="https://datatracker.ietf.org/doc/html/rfc5995#section-3.1">Add Member URI</a>)</small>
+            <br>PUT
+              <br>PATCH
+                <br>COPY/MOVE
+                  <br><small>(on destination resource)</small>
+                    <br>LOCK
+                      <br>UNLOCK
+                        <br><small>(lock owner ONLY)</small></td>
       </tr>
       <tr>
-        <td>k - create mailbox</td>
-        <td>CYRUS:make-collection</td>
+        <td style="vertical-align:middle">k - create mailbox</td>
+        <td style="vertical-align:middle">CY:make-collection</td>
         <td>MKCOL
           <br>MKCALENDAR
-            <br>COPY/MOVE <small>(on destination collection)</small></td>
+            <br>COPY/MOVE
+              <br><small>(on destination collection)</small></td>
       </tr>
       <tr>
-        <td>x - delete mailbox</td>
-        <td rowspan=2>DAV:unbind</td>
-        <td>CYRUS:remove-collection</td>
-        <td>DELETE <small>(collection)</small>
-          <br>MOVE <small>(on source collection)</small></td>
+        <td style="vertical-align:middle">x - delete mailbox</td>
+        <td rowspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.10">DAV:unbind</a></td>
+        <td style="vertical-align:middle">CY:remove-collection</td>
+        <td>DELETE
+          <br><small>(collection)</small>
+            <br>MOVE
+              <br><small>(on source collection)</small></td>
       </tr>
       <tr>
-        <td>t - delete message
+        <td style="vertical-align:middle">t - delete message
           <br>e - expunge</td>
-        <td>CYRUS:remove-resource</td>
-        <td>DELETE <small>(resource)</small>
-          <br>MOVE <small>(on source resource)</small></td>
+        <td style="vertical-align:middle">CY:remove-resource</td>
+        <td>DELETE
+          <br><small>(resource)</small>
+            <br>MOVE
+              <br><small>(on source resource)</small></td>
       </tr>
       <tr>
-        <td>a - admin</td>
-        <td>CYRUS:admin</td>
-        <td>DAV:read-acl
-          <br>DAV:write-acl
-          <br>DAV:share
-          <br>DAV:unlock</td>
+        <td style="vertical-align:middle">a - administer</td>
+        <td colspan=2 style="vertical-align:middle">CY:admin</td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.6">DAV:read-acl</a>
+          <br><a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.8">DAV:write-acl</a>
+          <br><a href="https://datatracker.ietf.org/doc/html/draft-pot-webdav-resource-sharing-00#section-7">DAV:share</a>
+          <br><a href="https://datatracker.ietf.org/doc/html/rfc3744#section-3.5">DAV:unlock</a></td>
         <td>ACL
-          <br>PROPFIND <small>(DAV:acl property ONLY)</small>
-          <br>UNLOCK <small>(ANY lock)</small></td>
+          <br>PROPFIND
+            <br><small>(<a href="https://datatracker.ietf.org/doc/html/rfc3744#section-5.5">DAV:acl property</a> ONLY)</small>
+              <br>UNLOCK
+                <br><small>(ANY lock)</small></td>
       </tr>
       <tr>
-        <td colspan=4><i>Regular Calendar Collections ONLY &#151;
-            read freebusy time?</i></td>
+        <td colspan=5 align='center'><b>Scheduling Outbox ONLY &#151;
+            implicitly create/send iTIP message?</b></td>
       </tr>
       <tr>
-        <td>9 - freebusy</td>
-        <td colspan=2>CALDAV:read-free-busy</td>
-        <td>REPORT <small>(CALDAV:free-busy-query ONLY)</small>
-          <br>GET/HEAD <small>(<a href="#freebusy-url">Freebusy URLs</a> ONLY)</small></td>
-      </tr>
-      <tr>
-        <td colspan=4><i>Scheduling Outbox ONLY &#151;
-            implicitly create/send iTIP message?</i></td>
-      </tr>
-      <tr>
-        <td>9 - freebusy</td>
-        <td rowspan=3>CALDAV:schedule-send</td>
-        <td>CALDAV:schedule-send-freebusy</td>
+        <td style="vertical-align:middle">9 - freebusy</td>
+        <td rowspan=3 colspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.2.1">CALDAV:schedule-send</a></td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.2.4">CALDAV:schedule-send-freebusy</a></td>
         <td>POST
           <br><small>(by organizer on scheduling Outbox)</small></td>
       </tr>
       <tr>
-        <td>8 - invite</td>
-        <td>CALDAV:schedule-send-invite</td>
-        <td>PUT/PATCH/DELETE
-          <br><small>(by organizer on calendar resource/collection)</small></td>
+        <td style="vertical-align:middle">8 - invite</td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.2.2">CALDAV:schedule-send-invite</a></td>
+        <td>PUT
+          <br>PATCH
+            <br>DELETE
+              <br><small>(by organizer on calendar resource/collection)</small></td>
       </tr>
       <tr>
-        <td>7 - reply</td>
-        <td>CALDAV:schedule-send-reply</td>
-        <td>PUT/PATCH/DELETE
-          <br><small>(by attendee on calendar resource/collection)</small></td>
+        <td style="vertical-align:middle">7 - reply</td>
+        <td style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.2.3">CALDAV:schedule-send-reply</a></td>
+        <td>PUT
+          <br>PATCH
+            <br>DELETE
+              <br><small>(by attendee on calendar resource/collection)</small></td>
       </tr>
       <tr>
-        <td colspan=4><i>Scheduling Inbox ONLY &#151;
-            implicitly deliver/process incoming iTIP message?</i></td>
+        <td colspan=5 align='center'><b>Scheduling Inbox ONLY &#151;
+            implicitly deliver/process incoming iTIP message?</b></td>
       </tr>
       <tr>
-        <td>9 - freebusy</td>
-        <td rowspan=3>CALDAV:schedule-deliver</td>
-        <td>CALDAV:schedule-query-freebusy</td>
+        <td style="vertical-align:middle">9 - freebusy</td>
+        <td rowspan=3 colspan=2 style="vertical-align:middle">
+          <a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.1.1">CALDAV:schedule-deliver</a></td>
+        <td><a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.1.4">CALDAV:schedule-query-freebusy</a></td>
         <td rowspan=3/>
       </tr>
       <tr>
-        <td>8 - invite</td>
-        <td>CALDAV:schedule-deliver-invite</td>
+        <td style="vertical-align:middle">8 - invite</td>
+        <td><a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.1.2">CALDAV:schedule-deliver-invite</a></td>
       </tr>
       <tr>
-        <td>7 - reply</td>
-        <td>CALDAV:schedule-deliver-reply</td>
+        <td style="vertical-align:middle">7 - reply</td>
+        <td><a href="https://datatracker.ietf.org/doc/html/rfc6638#section-6.1.3">CALDAV:schedule-deliver-reply</a></td>
       </tr>
     </table>
     <br>
@@ -224,7 +254,7 @@ The tables below show how the access controls are used by the CalDAV module.
         <td rowspan=2>Regular Calendar Collection</td>
         <td>owner</td>
         <td>DAV:all + CALDAV:read-free-busy</td>
-        <td align='right'>lrwipkxtan9</td>
+        <td align='right'>lrwikxtan9</td>
       </tr>
       <tr>
         <td>anyone</td>
@@ -235,7 +265,7 @@ The tables below show how the access controls are used by the CalDAV module.
         <td rowspan=2>Managed Attachments Collection</td>
         <td>owner</td>
         <td>DAV:all</td>
-        <td>lrwipkxtan</td>
+        <td>lrwikxtan</td>
       </tr>
       <tr>
         <td>anyone</td>
@@ -246,7 +276,7 @@ The tables below show how the access controls are used by the CalDAV module.
         <td rowspan=2>Scheduling Inbox</td>
         <td>owner</td>
         <td>DAV:all + CALDAV:schedule-deliver</td>
-        <td>lrwipkxtan789</td>
+        <td>lrwikxtan789</td>
       </tr>
       <tr>
         <td>anyone</td>
@@ -257,7 +287,7 @@ The tables below show how the access controls are used by the CalDAV module.
         <td>Scheduling Outbox</td>
         <td>owner</td>
         <td>DAV:all + CALDAV:schedule-send</td>
-        <td>lrwipkxtan789</td>
+        <td>lrwikxtan789</td>
       </tr>
     </table>
 
