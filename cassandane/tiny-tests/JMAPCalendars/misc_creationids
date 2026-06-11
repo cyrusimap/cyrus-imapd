@@ -16,6 +16,7 @@ sub test_misc_creationids
             isVisible => \1,
         }}}, 'R1'],
         ['CalendarEvent/set', { create => { "e1" => {
+            "version" => "2.0",
             calendarIds => {
                 '#c1' => JSON::true,
             },

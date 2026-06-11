@@ -23,9 +23,6 @@
 #include "xcal.h"
 #include "xstrlcpy.h"
 
-#define JSCAL_MAJOR_VERSION 2
-#define JSCAL_MINOR_VERSION 0
-
 // ---------------
 
 #define myicalcomponent_foreach_component(comp, comp_kind, subcomp, iter)      \
@@ -3428,23 +3425,6 @@ static bool is_utcdatetime(json_t *jval)
     return is_valid;
 }
 
-static bool is_supported_version(json_t *jversion)
-{
-    const char *s = json_string_value(jversion);
-    if (!s) return false;
-
-    uint32_t major;
-    const char *p;
-    if (parseuint32(s, &p, &major) < 0) return false;
-    if (*p++ != '.') return false;
-
-    uint32_t minor;
-    if (parseuint32(p, &p, &minor) < 0) return false;
-    if (*p != '\0') return false;
-
-    return major == JSCAL_MAJOR_VERSION;
-}
-
 static bool is_vendorext_key(const char *key)
 {
     // TODO this check could be more thoroughly
@@ -4503,7 +4483,7 @@ static void validate_entry(jscal_ctx_t *ctx,
             if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("version", key)) {
-            if (!is_supported_version(jval)) jmap_parser_invalid(parser, key);
+            // handled in validate_version
         }
         else if (!strcmp("virtualLocations", key)) {
             jmap_parser_push(parser, key);
@@ -4676,7 +4656,7 @@ static void validate_group(jscal_ctx_t *ctx,
             if (!is_utcdatetime(jval)) jmap_parser_invalid(parser, key);
         }
         else if (!strcmp("version", key)) {
-            if (!is_supported_version(jval)) jmap_parser_invalid(parser, key);
+            // handled in validate_version
         }
         // Extension properties
         else if (!strcmp("iCalendar", key)) {
@@ -4691,11 +4671,6 @@ static void validate_group(jscal_ctx_t *ctx,
 
     if (!json_object_get(jgroup, "entries"))
         jmap_parser_invalid(parser, "entries");
-
-    if (ctx->cfg.no_quirk && !json_object_get(jgroup, "version")) {
-        // We don't support version 1.0, aka RFC 8984.
-        jmap_parser_invalid(parser, "version");
-    }
 }
 
 static void group_to_ical(jscal_ctx_t *ctx,
@@ -4772,6 +4747,62 @@ static void group_to_ical(jscal_ctx_t *ctx,
     vendorexts_to_ical(ctx, jgroup, NULL, ical);
 }
 
+static void validate_version(jscal_ctx_t *ctx __attribute__((unused)),
+                             struct jmap_parser *parser,
+                             json_t *jobj)
+{
+    bool is_valid = false;
+
+    const char *version = json_string_value(json_object_get(jobj, "version"));
+    if (!version) goto done;
+
+    // Validate version number.
+    uint32_t major;
+    const char *p;
+    if (parseuint32(version, &p, &major) < 0) goto done;
+    if (*p++ != '.') goto done;
+
+    uint32_t minor;
+    if (parseuint32(p, &p, &minor) < 0) goto done;
+    if (*p != '\0') goto done;
+
+    // XXX we haven't fully fleshed out how to deal with JSCalendar data that
+    // is versioned higher than our supported version. The working assumption
+    // is that as the stewards of JSCalendar, we'll follow along all versions.
+    if (major != JSCAL_MAJOR_VERSION || minor > JSCAL_MINOR_VERSION)
+        goto done;
+
+    is_valid = true;
+
+    if (!strcmpsafe("Group", json_string_value(json_object_get(jobj, "@type"))))
+    {
+        /* draft-ietf-calext-jscalendarbis-16, Section 3.1.2:
+         *
+         * "For version "2.0" or higher, a Group object MUST set the "version"
+         * property, but the Event or Task objects that are values in its
+         * "entries" property MUST NOT set the "version" property. In contrast,
+         * an Event or Task object that is represented without an enclosing
+         * Group object MUST set the "version" property, unless specified
+         * otherwise. This is to prevent conflicting version values to occur
+         * in JSCalendar data."
+         */
+        json_t *jentry;
+        size_t i;
+        json_array_foreach(json_object_get(jobj, "entries"), i, jentry) {
+            if (json_object_get(jentry, "version")) {
+                jmap_parser_push_index(parser, "entries", i, NULL);
+                jmap_parser_invalid(parser, "version");
+                jmap_parser_pop(parser);
+            }
+        }
+    }
+
+done:
+    if (!is_valid) {
+        jmap_parser_invalid(parser, "version");
+    }
+}
+
 HIDDEN icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
                                     json_t *jobj,
                                     struct jmap_parser *parser)
@@ -4784,6 +4815,8 @@ HIDDEN icalcomponent *jscal_to_ical(jscal_cfg_t *cfg,
     if (!parser) parser = &myparser;
 
     icalcomponent *ical = NULL;
+
+    validate_version(&ctx, parser, jobj);
 
     const char *type = json_string_value(json_object_get(jobj, "@type"));
     if (!strcasecmpsafe(type, "Group")) {

@@ -14,6 +14,9 @@ extern "C" {
 
 #include "jmap_util.h"
 
+#define JSCAL_MAJOR_VERSION 2 /**< The current JSCalendar major version. */
+#define JSCAL_MINOR_VERSION 0 /**< The current JSCalendar minor version. */
+
 /** @brief Configuration for JSCalendar/iCalendar conversion */
 typedef struct {
     /**

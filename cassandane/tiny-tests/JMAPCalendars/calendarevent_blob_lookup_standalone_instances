@@ -13,6 +13,7 @@ sub test_calendarevent_blob_lookup_standalone_instances ($self)
     xlog $self, "create the first standalone instance";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
         i1 => {
+            version => '2.0',
             calendarIds => { $calid => JSON::true },
             uid => 'event1uid',
             title => 'instance1',
@@ -29,6 +30,7 @@ sub test_calendarevent_blob_lookup_standalone_instances ($self)
     xlog $self, "create a second standalone instance with the same uid";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
         i2 => {
+            version => '2.0',
             calendarIds => { $calid => JSON::true },
             uid => 'event1uid',
             title => 'instance2',

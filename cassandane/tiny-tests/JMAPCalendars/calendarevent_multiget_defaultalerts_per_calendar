@@ -54,6 +54,7 @@ sub test_calendarevent_multiget_defaultalerts_per_calendar
         ['CalendarEvent/set', {
             create => {
                 eventA1 => {
+                    version => '2.0',
                     uid => '5f0dec98-8952-418e-91fa-159cb2ba28da',
                     calendarIds => {
                         $calendarAId => JSON::true,
@@ -65,6 +66,7 @@ sub test_calendarevent_multiget_defaultalerts_per_calendar
                     useDefaultAlerts => JSON::true,
                 },
                 eventA2 => {
+                    version => '2.0',
                     uid => '68b31869-889e-49f2-ac6a-f94ce0179635',
                     calendarIds => {
                         $calendarAId => JSON::true,
@@ -76,6 +78,7 @@ sub test_calendarevent_multiget_defaultalerts_per_calendar
                     useDefaultAlerts => JSON::true,
                 },
                 eventB1 => {
+                    version => '2.0',
                     uid => 'b58fcc34-aca6-4ae5-a7d0-97411d1166a4',
                     calendarIds => {
                         $calendarBId => JSON::true,

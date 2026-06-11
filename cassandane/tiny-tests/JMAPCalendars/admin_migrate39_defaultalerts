@@ -166,6 +166,7 @@ sub assert_events ($self, $state)
             ['CalendarEvent/set', {
                 create => {
                     eventA => {
+                        version => "2.0",
                         calendarIds => {
                             $state->{calendarA}{id} => JSON::true,
                         },
@@ -176,6 +177,7 @@ sub assert_events ($self, $state)
                         useDefaultAlerts => JSON::true,
                     },
                     eventB1 => {
+                        version => "2.0",
                         calendarIds => {
                             $state->{calendarB}{id} => JSON::true,
                         },
@@ -186,6 +188,7 @@ sub assert_events ($self, $state)
                         useDefaultAlerts => JSON::true,
                     },
                     eventB2 => {
+                        version => "2.0",
                         calendarIds => {
                             $state->{calendarB}{id} => JSON::true,
                         },

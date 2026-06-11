@@ -23,6 +23,7 @@ sub test_calendarevent_set_standalone_instances_create
         ['CalendarEvent/set', {
             create => {
                 instance1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -70,6 +71,7 @@ sub test_calendarevent_set_standalone_instances_create
         ['CalendarEvent/set', {
             create => {
                 instance2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -104,6 +106,7 @@ sub test_calendarevent_set_standalone_instances_create
         ['CalendarEvent/set', {
             create => {
                 instance2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },

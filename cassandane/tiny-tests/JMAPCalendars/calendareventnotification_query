@@ -47,6 +47,7 @@ sub test_calendareventnotification_query
         ['CalendarEvent/set', {
             create => {
                 event1 => {
+                    version => '2.0',
                     title => 'event1',
                     calendarIds => {
                         $default_cal_id => JSON::true,
@@ -120,6 +121,7 @@ sub test_calendareventnotification_query
         ['CalendarEvent/set', {
             create => {
                 event2 => {
+                    version => '2.0',
                     title => 'event2',
                     calendarIds => {
                         $default_cal_id => JSON::true,

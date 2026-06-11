@@ -15,6 +15,7 @@ sub test_calendarevent_set_standalone_instances_update
         ['CalendarEvent/set', {
             create => {
                 instance1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -28,6 +29,7 @@ sub test_calendarevent_set_standalone_instances_update
                     recurrenceIdTimeZone => 'Europe/London',
                 },
                 instance2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },

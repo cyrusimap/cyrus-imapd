@@ -15,6 +15,7 @@ sub test_calendarevent_set_isdraft
         ['CalendarEvent/set', {
             create => {
                 1 => {
+                    "version" => "2.0",
                     calendarIds => {
                         $calid => JSON::true,
                     },
@@ -25,6 +26,7 @@ sub test_calendarevent_set_isdraft
                     "isDraft" => JSON::true,
                 },
                 2 => {
+                    "version" => "2.0",
                     calendarIds => {
                         $calid => JSON::true,
                     },

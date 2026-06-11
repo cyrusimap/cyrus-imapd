@@ -288,6 +288,7 @@ sub create_test ($self)
             accountId => 'owner',
             create => {
                 event1 => {
+                    version => '2.0',
                     calendarIds => {
                         Default => JSON::true,
                     },

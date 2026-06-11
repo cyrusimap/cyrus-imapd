@@ -16,6 +16,7 @@ sub test_calendarevent_changes_recreate_uid ($self)
     $res = $jmap->CallMethods([['CalendarEvent/set', {
         create => {
             "1" => {
+                "version" => "2.0",
                 uid => $uid,
                 calendarIds => {
                     $calId => JSON::true,
@@ -50,6 +51,7 @@ sub test_calendarevent_changes_recreate_uid ($self)
     $res = $jmap->CallMethods([['CalendarEvent/set', {
         create => {
             "1" => {
+                "version" => "2.0",
                 uid => $uid,
                 calendarIds => {
                     $calId => JSON::true,

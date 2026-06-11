@@ -1234,13 +1234,18 @@ static icalcomponent *alert_to_ical(jmap_req_t *req,
                 summary, description, email_recipient);
     }
 
+    struct buf buf = BUF_INITIALIZER;
+
     // Wrap the alert in a minimal JSCalendar Event.
+    buf_printf(&buf, "%d.%d", JSCAL_MAJOR_VERSION, JSCAL_MINOR_VERSION);
     json_t *jalerts = json_object();
     json_object_set(jalerts, id, jalert);
-    json_t *jevent = json_pack("{s:s s:s s:o}",
+    json_t *jevent = json_pack("{s:s s:s s:s s:o}",
                                "@type", "Event",
+                               "version", buf_cstring(&buf),
                                "start", "1970-01-01T00:00:00",
                                "alerts", jalerts);
+    buf_reset(&buf);
 
     jscal_cfg_t cfg = { 0 };
     cfg.emailalert_default_uri = email_recipient;
@@ -1284,6 +1289,7 @@ static icalcomponent *alert_to_ical(jmap_req_t *req,
 
     jmap_parser_fini(&myparser);
     json_decref(jevent);
+    buf_free(&buf);
     return valarm;
 }
 

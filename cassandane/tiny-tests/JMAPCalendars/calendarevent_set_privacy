@@ -39,6 +39,7 @@ sub test_calendarevent_set_privacy
             accountId => 'sharer',
             create => {
                 eventShared1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -48,6 +49,7 @@ sub test_calendarevent_set_privacy
                     privacy => 'public',
                 },
                 eventShared2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -61,6 +63,7 @@ sub test_calendarevent_set_privacy
         ['CalendarEvent/set', {
             create => {
                 eventOwned1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },

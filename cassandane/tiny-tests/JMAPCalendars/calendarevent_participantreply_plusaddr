@@ -45,6 +45,7 @@ sub test_calendarevent_participantreply_plusaddr
     xlog $self, "create scheduled event";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
+                            "version" => "2.0",
                             calendarIds => {
                                 $default_cal_id => JSON::true,
                             },
