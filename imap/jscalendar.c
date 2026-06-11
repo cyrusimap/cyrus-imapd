@@ -4677,19 +4677,6 @@ static void group_to_ical(jscal_ctx_t *ctx,
                           json_t *jgroup,
                           icalcomponent *ical)
 {
-    json_t *jentries = json_object_get(jgroup, "entries");
-    json_t *jentry;
-    size_t i;
-    json_array_foreach(jentries, i, jentry)
-    {
-        entry_to_ical(ctx, jentry, ical);
-    }
-
-    categories_to_ical(ctx, jgroup, ical);
-    description_to_ical(ctx, jgroup, ical);
-    keywords_to_ical(ctx, jgroup, ical);
-    links_to_ical(ctx, jgroup, ical);
-
     json_t *jval;
 
     if (JNOTNULL(jval = json_object_get(jgroup, "color"))) {
@@ -4743,6 +4730,19 @@ static void group_to_ical(jscal_ctx_t *ctx,
         icaltimetype t = utctime_to_icaltime(json_string_value(jval));
         icalcomponent_add_property(ical, icalproperty_new_lastmodified(t));
     }
+
+    json_t *jentries = json_object_get(jgroup, "entries");
+    json_t *jentry;
+    size_t i;
+    json_array_foreach(jentries, i, jentry)
+    {
+        entry_to_ical(ctx, jentry, ical);
+    }
+
+    categories_to_ical(ctx, jgroup, ical);
+    description_to_ical(ctx, jgroup, ical);
+    keywords_to_ical(ctx, jgroup, ical);
+    links_to_ical(ctx, jgroup, ical);
 
     vendorexts_to_ical(ctx, jgroup, NULL, ical);
 }
