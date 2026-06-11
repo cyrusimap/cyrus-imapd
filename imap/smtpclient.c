@@ -276,6 +276,11 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
     do {
         /* Read next reply line. */
         if (!prot_fgets(buf, 513, sm->backend->in)) {
+            /* No reply was read, so the previously-parsed response (e.g. the
+             * 354 go-ahead to DATA) is not a reply to this command; clear it
+             * so callers don't misreport it as the result. */
+            memset(sm->resp.code, 0, sizeof(sm->resp.code));
+            buf_reset(&sm->resp.text);
             r = IMAP_IOERROR;
             return r;
         }

@@ -859,6 +859,13 @@ static void _emailsubmission_create(jmap_req_t *req,
             break;
         }
 
+        case IMAP_IOERROR:
+            /* Transport failure talking to the submission server (e.g. the
+             * sendmail wrapper died mid-DATA). There is no SMTP reply
+             * describing this, and sm->resp may hold a stale reply.  Fall
+             * through to server error. */
+            break;
+
         default:
             *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
                                  "description", desc ? desc : error_message(r));

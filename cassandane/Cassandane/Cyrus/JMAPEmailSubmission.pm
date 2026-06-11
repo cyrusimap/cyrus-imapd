@@ -29,6 +29,7 @@ sub new
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  event_groups => 'mailbox message flags calendar applepushservice jmap',
                  jmapsubmission_deleteonsend => 'no',
+                 jmap_nonstandard_extensions => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
 

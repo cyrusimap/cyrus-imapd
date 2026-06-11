@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_smtp_drop ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    my $email = $self->default_user->mailboxes->inbox->new_email;
+
+    # The submission server accepts the envelope and the DATA go-ahead (354),
+    # then vanishes before replying.  Cyrus must report this as a transport
+    # failure, not parrot the stale 354 reply text back as a forbiddenToSend
+    # refusal.
+    $self->{instance}->set_smtpd({ end_data => ['drop'] });
+
+    xlog $self, "create email submission against a server that drops mid-DATA";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $email->id,
+                envelope => {
+                    mailFrom =>  { email => 'from@localhost'   },
+                    rcptTo   => [{ email => 'rcpt1@localhost'  }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+
+    my $err = $res->[0][1]->{notCreated}{1};
+    $self->assert_not_null($err);
+
+    xlog $self, "a dropped connection is a server failure, not a send refusal";
+    $self->assert_str_equals("serverFail", $err->{type});
+
+    xlog $self, "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+}
