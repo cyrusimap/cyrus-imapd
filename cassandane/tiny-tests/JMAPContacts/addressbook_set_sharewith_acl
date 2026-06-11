@@ -37,7 +37,7 @@ sub test_addressbook_set_sharewith_acl
         rights => {
             mayWrite => JSON::true,
         },
-        acl => 'switedn',
+        acl => 'witedn',
         wantRights => {
             mayWrite => JSON::true,
         },

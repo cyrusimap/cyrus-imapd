@@ -112,7 +112,9 @@ sub test_calendar_set_sharewith_acl
         $self->assert_deep_equals(\%mergedrights,
             $res->[1][1]{list}[0]{shareWith}{zztester});
         my %acl = @{$admin->getacl("user.cassandane.#calendars.$calendarId")};
-        $self->assert_str_equals($_->{acl}, $acl{aatester});
-        $self->assert_str_equals($_->{acl}, $acl{zztester});
+
+        my $shared_acl = $_->{acl} =~ s/s//r;
+        $self->assert_str_equals($shared_acl, $acl{aatester});
+        $self->assert_str_equals($shared_acl, $acl{zztester});
     }
 }
