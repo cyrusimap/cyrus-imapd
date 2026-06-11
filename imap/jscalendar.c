@@ -6384,12 +6384,6 @@ static void entry_from_ical(jscal_ctx_t *ctx,
         }
     }
 
-    // XXX quirk: the former implementation set title to an empty string
-    // if no title was set.
-    if (!ctx->cfg.no_quirk && JNULL(json_object_get(jobj, "title"))) {
-        json_object_set_new(jobj, "title", json_string(""));
-    }
-
     if ((prop = myicalcomponent_get_property(comp, ICAL_ORGANIZER_PROPERTY))) {
         icalparameter *param =
             myicalproperty_get_parameter(prop, ICAL_SENTBY_PARAMETER);

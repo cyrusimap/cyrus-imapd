@@ -22,7 +22,7 @@ sub test_calendarevent_set_notitle
     };
 
     my $ret = $self->createandget_event($event);
-    $self->assert_str_equals("", $ret->{title});
+    $self->assert(not exists $ret->{title});
     my $eventId= $ret->{id};
 
     my $res = $jmap->CallMethods([
