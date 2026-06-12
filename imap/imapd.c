@@ -6607,6 +6607,13 @@ static void cmd_thread(char *tag, int usinguid)
     if (searchargs->state & GETSEARCH_MODSEQ)
         condstore_enabled("THREAD MODSEQ");
 
+    if (n < 0) {
+        prot_printf(imapd_out,
+                    "%s NO Too many messages and/or references to Thread\r\n",
+                    tag);
+        goto done;
+    }
+
     search_reply_completed(tag, n, start);
 
   done:
