@@ -2271,6 +2271,7 @@ static void locations_to_ical(jscal_ctx_t *ctx,
                         maingeo_prop,
                         icalparameter_new_derived(ICAL_DERIVED_TRUE));
                 }
+                jsid_to_prop(maingeo_prop, key, false);
                 icalcomponent_add_property(comp, maingeo_prop);
             }
 
