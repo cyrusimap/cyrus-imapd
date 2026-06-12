@@ -24,7 +24,7 @@ Changes Since 2.5.6
 Security fixes
 --------------
 
-* CVE-2015-8077, CVE-2015-8078: protect against integer overflow in urlfetch
+* :cve:`CVE-2015-8077`, :cve:`CVE-2015-8078`: protect against integer overflow in urlfetch
   range checks
 
 SSL changes
