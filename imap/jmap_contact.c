@@ -8941,7 +8941,7 @@ static int _card_set_create(jmap_req_t *req,
 
     /* Accept members => NULL by removing it and treating it as not present */
     members = json_object_get(jcard, "members");
-    if (members && json_is_null(members)) {
+    if (json_is_null(members)) {
         json_object_del(jcard, "members");
         members = NULL;
     }
