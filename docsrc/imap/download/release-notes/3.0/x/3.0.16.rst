@@ -25,7 +25,7 @@ Changes Since 3.0.15
 Security fixes:
 ---------------
 
-* Fixed CVE-2021-33582_: Certain user inputs are used as hash table keys during
+* Fixed :cve:`CVE-2021-33582`: Certain user inputs are used as hash table keys during
   processing.  A poorly chosen string hashing algorithm meant that the user
   could control which bucket their data was stored in, allowing a malicious
   user to direct many inputs to a single bucket.  Each subsequent insertion to
@@ -38,8 +38,6 @@ Security fixes:
   precomputed.
 
   Discovered by Matthew Horsfall, Fastmail
-
-.. _CVE-2021-33582: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-33582
 
 Build fixes
 -----------

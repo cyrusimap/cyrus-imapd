@@ -31,7 +31,7 @@ this release, please report this to the mailing lists.  Thanks!
 Security fixes
 --------------
 
-* Fixed CVE-2019-18928: unauthenticated HTTP requests no longer inherit
+* Fixed :cve:`CVE-2019-18928`: unauthenticated HTTP requests no longer inherit
   authentication from the previous request on the same connection
 
 Build changes

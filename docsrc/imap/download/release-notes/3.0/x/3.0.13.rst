@@ -31,7 +31,7 @@ this release, please report this to the mailing lists.  Thanks!
 Security fixes
 --------------
 
-* Fixed CVE-2019-19783_: When creating a missing mailbox as part of a sieve
+* Fixed :cve:`CVE-2019-19783`: When creating a missing mailbox as part of a sieve
   'fileinto' directive, lmtpd would create it as administrator, bypassing ACL
   checks.
 
@@ -50,8 +50,6 @@ Security fixes
   lmtpd no longer creates these mailboxes as administrator, so users may no
   longer use a 'fileinto' directive to create a mailbox they couldn't create
   otherwise.
-
-.. _CVE-2019-19783: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783
 
 Build changes
 -------------
