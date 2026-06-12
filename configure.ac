@@ -2415,7 +2415,6 @@ Cyrus Server configured components
 
 External dependencies:
    ldap:               $have_ldap
-   openssl:            $with_ssl
    zlib:               $with_zlib
    jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
