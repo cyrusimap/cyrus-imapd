@@ -22,6 +22,6 @@ Changes to the Cyrus IMAP Server since 2.4.10
 *   Bug #3499 - options to disable namespaces to reduce load on big servers with no shared folders. Thanks Olivier ROLAND
 *   Changed skiplist to truncate old files after checkpoint, which can save disk space on tmpfs or small ssds when old copies were held open by other processes
 *   Made Cyrus more robust against corruption in mailboxes.db data, so it will return an error rather than crashing on invalid entries
-*   Fix for CVE-2011-3208, a remotely exploitable buffer overflow in nntpd - thanks Coverity
+*   Fix for :cve:`CVE-2011-3208`, a remotely exploitable buffer overflow in nntpd - thanks Coverity
 
 :ref:`imap-release-notes-2.4`
