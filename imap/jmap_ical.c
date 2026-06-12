@@ -4186,7 +4186,7 @@ static void repair_broken_ical(icalcomponent **icalp)
         // Wrap a single VEVENT in a VCALENDAR.
         myical =
             icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
-                                icalproperty_new_version("2.0"), (void *)0);
+                                icalproperty_new_version("2.0"), NULL);
         icalcomponent_add_component(myical, icalcomponent_clone(original_ical));
     }
     else myical = original_ical;
