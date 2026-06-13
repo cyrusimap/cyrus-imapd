@@ -504,8 +504,8 @@ if test "x$enable_xapian" != xno ; then
             AC_MSG_ERROR([\`$XAPIAN_CONFIG --ltlibs --cxxflags' doesn't work, aborting])
         fi
 
-        dnl Xapian requires CXX11
-        AX_CXX_COMPILE_STDCXX(11)
+        dnl Xapian requires CXX17
+        AX_CXX_COMPILE_STDCXX(17)
 
         dnl If AC_PROG_LIBTOOL (or the deprecated older version AM_PROG_LIBTOOL)
         dnl has already been expanded, enable libtool support now, otherwise add
