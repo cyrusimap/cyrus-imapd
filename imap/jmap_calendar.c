@@ -7188,6 +7188,18 @@ static search_expr_t *eventquery_textsearch_build(jmap_req_t *req,
             }
         }
 
+        if ((s = json_string_value(json_object_get(filter, "inCalendar")))) {
+            mbentry_t *mbentry = NULL;
+
+            calid_to_mbentry(req, s, &mbentry);
+            if (mbentry) {
+                search_expr_t *m = search_expr_new(this, SEOP_MATCH);
+                m->attr = search_attr_find("folder");
+                m->value.s = xstrdup(mbentry->name);
+                mboxlist_entry_free(&mbentry);
+            }
+        }
+
         if ((s = json_string_value(json_object_get(filter, "text")))) {
             e = search_expr_new(this, SEOP_OR);
             eventquery_textsearch_match(e, s, "caldescription");
@@ -7537,10 +7549,22 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
     struct caldav_jscal_filter *filter = caldav_jscal_filter_new();
     const char *s;
 
-    if (json_array_size(json_object_get(jfilter, "inCalendars"))) {
+    if (json_array_size(json_object_get(jfilter, "inCalendars")) ||
+        json_string_value(json_object_get(jfilter, "inCalendar"))) {
         size_t i;
         json_t *jval;
-        json_array_foreach(json_object_get(jfilter, "inCalendars"), i, jval) {
+        json_t *jcalendars = json_object_get(jfilter, "inCalendars");
+        json_t *jcalendar = json_object_get(jfilter, "inCalendar");
+
+        json_t *ids = json_array();
+        json_array_foreach(jcalendars, i, jval) {
+            json_array_append(ids, jval);
+        }
+        if (json_string_value(jcalendar)) {
+            json_array_append(ids, jcalendar);
+        }
+
+        json_array_foreach(ids, i, jval) {
             const char *id = json_string_value(jval);
             mbentry_t *mbentry = NULL;
 
@@ -7555,6 +7579,7 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
                         "calendarId=<%s>", id);
             }
         }
+        json_decref(ids);
 
         if (!ptrarray_size(&filter->mbentries))
             filter->op = CALDAV_JSCAL_FALSE;
@@ -7854,7 +7879,13 @@ static void calendarevent_validatefilter(jmap_req_t *req __attribute__((unused))
     json_t *arg;
 
     json_object_foreach(filter, field, arg) {
-        if (!strcmp(field, "inCalendars")) {
+        if (!strcmp(field, "inCalendar")) {
+            const char *id = json_string_value(arg);
+            if (!id || id[0] == '#') {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "inCalendars")) {
             if (!(json_is_array(arg) && json_array_size(arg))) {
                 jmap_parser_invalid(parser, field);
             }
