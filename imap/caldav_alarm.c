@@ -2011,7 +2011,11 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
            data->mboxname, data->imap_uid, data->type, data->num_retries);
 
     if (data->type == ALARM_UNSCHEDULED) {
-        process_unscheduled(data);
+        // process_unscheduled() emits a notification, which is a side-effect;
+        // on a replica (dryrun) we must not. These records are only created by
+        // the master's local futurerelease-cancel path, so they won't normally
+        // exist on a pure replica.
+        if (!dryrun) process_unscheduled(data);
         return;
     }
 
@@ -2099,9 +2103,11 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
 {
     int i;
 
-    // we don't process alarms on replicas
+    // On a replica we still process records, but in dryrun mode — no
+    // side-effects. We notice lastalarm changes replicated from the master
+    // and keep our local nextcheck advanced (e.g. the 30-day push-off).
     if (config_getswitch(IMAPOPT_REPLICAONLY))
-        return 0;
+        dryrun = 1;
 
     // temporarily disable alarms
     const char *suppress_file = config_getstring(IMAPOPT_CALDAV_ALARM_SUPPRESS_FILE);
@@ -2143,7 +2149,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
         int skipped_some = 0;
         int did_some = 0;
         int num_user_records = 0;
-        int skip_user = 0;
+        int user_dryrun = dryrun;
         char *userid = NULL;
         user_nslock_t *user_nslock = NULL;
         for (i = 0; i < rock.list.count; i++) {
@@ -2160,19 +2166,16 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
             // userid will be next to each other
             if (strcmpsafe(userid, mbname_userid(mbname))) {
                 num_user_records = 0;
-                skip_user = 0;
                 free(userid);
                 user_nslock_release(&user_nslock);
                 userid = xstrdup(mbname_userid(mbname));
-                if (user_isreplicaonly(userid)) {
-                    skip_user = 1;
-                    continue;
-                }
+                // replicaonly users are processed without side-effects, just
+                // like a fully replicaonly server: dryrun keeps their local
+                // nextcheck maintained instead of skipping them entirely.
+                user_dryrun = dryrun || user_isreplicaonly(userid);
                 user_nslock = user_nslock_lock(userid, LOCK_NONBLOCKING);
             }
             mbname_free(&mbname);
-
-            if (skip_user) continue;
 
             // if we failed to lock the user, or have done too many for this user, skip
             if (!user_nslock || ++num_user_records > MAX_CONSECUTIVE_ALARMS_PER_USER) {
@@ -2183,7 +2186,7 @@ EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp, int dryrun)
             }
 
             did_some++;
-            process_one_record(data, runtime, dryrun);
+            process_one_record(data, runtime, user_dryrun);
             caldav_alarm_fini(data);
             free(data);
         }
