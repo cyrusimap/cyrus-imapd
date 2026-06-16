@@ -1406,6 +1406,10 @@ static void message_parse_bodydisposition(const char *hdr, struct body *body)
  * next ';' or end of line, which should mark the next
  * parameter.
  */
+
+/* Without a cap, an attacker controls param count we handle, and our handling
+ * is O(N^2) -- rjbs, 2026-06-17 */
+#define RFC2231_MAX_PARAMS 128
 static void message_parse_params(const char *hdr, struct param **paramp)
 {
     struct param *param;
@@ -1414,6 +1418,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
     const char *value;
     int valuelen;
     char *p;
+    int nparams = 0;
 
     for (;;) {
         /* Skip over leading whitespace */
@@ -1498,6 +1503,10 @@ skip:
             if (*hdr == ';') hdr++;
             continue;
         }
+
+        /* Stop accepting parameters once we hit the cap (DoS guard) */
+        if (nparams++ >= RFC2231_MAX_PARAMS)
+            return;
 
         /* Save attribute/value pair */
         *paramp = param = (struct param *)xzmalloc(sizeof(struct param));

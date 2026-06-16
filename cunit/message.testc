@@ -697,6 +697,83 @@ static void test_rfc2231_extended_continuations(void)
     message_free_body(&body);
 }
 
+/*
+ * CYR-3126: message_parse_params() must cap the number of parameters it
+ * accepts so that the O(P^2) RFC 2231 folding in message_fold_params()
+ * cannot be driven by an attacker-controlled parameter count.  These two
+ * cases exercise message_parse_type() directly, which runs the parse +
+ * fold pipeline on a struct param list without building a whole message.
+ */
+
+/*
+ * A legitimate RFC 2231 continuation must still fold correctly: the cap and
+ * the DoS guard must not break normal multi-section folding.
+ */
+static void test_rfc2231_fold_under_cap(void)
+{
+    static const char hdr[] =
+        "application/x-stuff;\r\n"
+        "\tname*0=\"the first part \";\r\n"
+        "\tname*1=\"and the second part\"";
+    char *type = NULL;
+    char *subtype = NULL;
+    struct param *params = NULL;
+
+    message_parse_type(hdr, &type, &subtype, &params);
+
+    CU_ASSERT_STRING_EQUAL(type, "APPLICATION");
+    CU_ASSERT_STRING_EQUAL(subtype, "X-STUFF");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(params);
+    CU_ASSERT_STRING_EQUAL(params->attribute, "NAME");
+    CU_ASSERT_STRING_EQUAL(params->value, "the first part and the second part");
+    CU_ASSERT_PTR_NULL(params->next);
+
+    free(type);
+    free(subtype);
+    param_free(&params);
+}
+
+/*
+ * A header with far more than RFC2231_MAX_PARAMS parameters must parse
+ * without error and yield a bounded list.  We can't assert wall-clock time,
+ * so we assert the parameter count is capped.  Each parameter is an "aN*0"
+ * initial section, which is the worst case for message_fold_params().
+ */
+static void test_rfc2231_param_cap(void)
+{
+    /* Comfortably above RFC2231_MAX_PARAMS (128). -- claude, 2026-06-16 */
+    const int nattempted = 1000;
+    const int cap = 128;
+    struct buf hdr = BUF_INITIALIZER;
+    char *type = NULL;
+    char *subtype = NULL;
+    struct param *params = NULL;
+    struct param *p;
+    int count = 0;
+    int i;
+
+    buf_setcstr(&hdr, "application/x-stuff");
+    for (i = 0; i < nattempted; i++)
+        buf_printf(&hdr, "; a%d*0=x", i);
+
+    message_parse_type(buf_cstring(&hdr), &type, &subtype, &params);
+
+    CU_ASSERT_STRING_EQUAL(type, "APPLICATION");
+    CU_ASSERT_STRING_EQUAL(subtype, "X-STUFF");
+
+    for (p = params; p; p = p->next)
+        count++;
+
+    /* The cap drops everything past the limit, so the list is bounded
+     * well below the number of parameters we tried to smuggle in. */
+    CU_ASSERT(count <= cap);
+
+    free(type);
+    free(subtype);
+    param_free(&params);
+    buf_free(&hdr);
+}
+
 static void test_references(void)
 {
     static const char msg[] =
