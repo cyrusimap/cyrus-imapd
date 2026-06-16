@@ -10899,11 +10899,11 @@ static int _metadata_to_annotate(const strarray_t *entries,
         }
         strarray_append(newe, entry);
         if (depth == 1) {
-            strncat(entry, "/%", MAX_MAILBOX_NAME);
+            strncat(entry, "/%", sizeof(entry) - strlen(entry) - 1);
             strarray_append(newe, entry);
         }
         else if (depth == -1) {
-            strncat(entry, "/*", MAX_MAILBOX_NAME);
+            strncat(entry, "/*", sizeof(entry) - strlen(entry) - 1);
             strarray_append(newe, entry);
         }
     }
