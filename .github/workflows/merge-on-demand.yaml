@@ -285,8 +285,16 @@ jobs:
               body: `Merge failed. See the [action log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`,
             });
 
-            // Take the label back off so a retry is a clean re-apply,
-            // which also fires a fresh labeled event with a fresh snapshot.
+      # Take the label back off on *any* failure so a retry is a clean re-apply
+      # (which also fires a fresh labeled event with a fresh snapshot). This is
+      # its own step rather than part of "Comment on failure" because that step
+      # is skipped when the info step itself fails, e.g. a refused
+      # workflow-file PR.
+      - name: Remove label on failure
+        if: failure()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
