@@ -70,7 +70,7 @@ jobs:
         run: cyd makesite
       - name: Upload static files as artifact
         id: deployment
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: /tmp/CYRUS_DOCS_BUILD_DIR/cyrus-site/
   # Deployment job
