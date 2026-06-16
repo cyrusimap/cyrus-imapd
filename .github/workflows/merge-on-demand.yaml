@@ -191,13 +191,24 @@ jobs:
           # through to merge-and-close. Any other push failure is a genuine
           # error and aborts before base is touched, rather than silently
           # downgrading to a non-merged PR closure.
+          #
+          # --force-with-lease guards the small window between the fetch above
+          # and this push: if the contributor pushed again in those seconds we
+          # would otherwise clobber it with our rebase of the now-stale head.
+          # The explicit ref:sha form is required -- we fetched into FETCH_HEAD,
+          # not a remote-tracking ref, so a bare lease would have nothing to
+          # check against; HEAD_SHA is the commit the label approved.
           PUSHED_HEAD=false
           if [ "${CAN_PUSH_HEAD}" = "true" ]; then
-            if push_err=$(git push --force "${FORK_URL}" "pr-branch:${HEAD_REF}" 2>&1); then
+            if push_err=$(git push --force-with-lease="${HEAD_REF}:${HEAD_SHA}" "${FORK_URL}" "pr-branch:${HEAD_REF}" 2>&1); then
               PUSHED_HEAD=true
             elif printf '%s\n' "$push_err" | grep -qE 'without .workflows. permission'; then
               printf '%s\n' "$push_err" >&2
               echo "Head push rejected because it would update workflow files on the fork; landing on base and closing the PR instead." >&2
+            elif printf '%s\n' "$push_err" | grep -qiE 'stale info|\[rejected\]'; then
+              printf '%s\n' "$push_err" >&2
+              echo "PR branch moved since the label was applied; refusing to overwrite the new commits. Re-apply the label to merge the current head." >&2
+              exit 1
             else
               printf '%s\n' "$push_err" >&2
               echo "Head push failed for an unexpected reason; aborting before touching base." >&2
