@@ -112,6 +112,60 @@ static void test_fromurl_options(void)
     free(iurl.freeme);
 }
 
+static void test_fromurl_leading_semicolon(void)
+{
+    /*
+     * A relative URL that begins with ';' has an empty mailbox part, so
+     * 'src' is still at the start of url->freeme when the option scanner
+     * dereferences src[-1].  That used to read (and, if the preceding heap
+     * byte was '/', write) one byte before the allocation.  See CYR-3127.
+     * The value checks just pin the (unchanged) parse result; the point of
+     * the case is to exercise the src[-1] path under ASan/valgrind.
+     */
+    static const char URL[] = ";UID=1";
+    struct imapurl iurl;
+    int r;
+
+    memset(&iurl, 0x45, sizeof(iurl));
+    r = imapurl_fromURL(&iurl, URL);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NULL(iurl.mailbox);
+    CU_ASSERT_EQUAL(iurl.uid, 1);
+    free(iurl.freeme);
+}
+
+static void test_fromurl_bare_semicolon(void)
+{
+    /* Also reaches the src[-1] scan; malformed, so it must be rejected. */
+    static const char URL[] = ";";
+    struct imapurl iurl;
+    int r;
+
+    memset(&iurl, 0x45, sizeof(iurl));
+    r = imapurl_fromURL(&iurl, URL);
+    CU_ASSERT_EQUAL(r, -1);
+    free(iurl.freeme);
+}
+
+static void test_fromurl_relative_trim(void)
+{
+    /*
+     * The src[-1] access exists to trim a mailbox's trailing '/' before an
+     * options ';'.  Confirm the guarded form still does that for a normal
+     * relative URL.
+     */
+    static const char URL[] = "/INBOX/;UID=5";
+    struct imapurl iurl;
+    int r;
+
+    memset(&iurl, 0x45, sizeof(iurl));
+    r = imapurl_fromURL(&iurl, URL);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(iurl.mailbox, "INBOX");
+    CU_ASSERT_EQUAL(iurl.uid, 5);
+    free(iurl.freeme);
+}
+
 // TODO: {foo is invalid
 // TODO: imap:// is invalid
 // TODO: imap://server/ and imap://server

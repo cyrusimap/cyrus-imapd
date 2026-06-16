@@ -331,7 +331,10 @@ EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
             unsigned long ul;
             char *endp;
 
-            if (src[-1] == '/') src[-1] = '\0'; /* trim mailbox at /; */
+            /* Only trim a trailing '/' that's actually part of the mailbox;
+             * when the URL begins with ';' src sits at the buffer start and
+             * src[-1] would read before the allocation. */
+            if (src > mbox && src[-1] == '/') src[-1] = '\0'; /* trim mailbox at /; */
             *src++ = '\0'; /* break url at ; */
             if (step == 0 && !strncasecmp(src, "uidvalidity=", 12)) {
                 src += 12; /* skip uidvalidity= */
