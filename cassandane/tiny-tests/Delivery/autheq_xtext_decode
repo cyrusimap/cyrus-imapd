@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# When LMTP delivery carries "MAIL FROM ... AUTH=<identity>", the identity is
+# xtext-encoded per RFC 3461/4954: a "+XX" sequence is a hex escape for one
+# byte.  lmtpd decodes it and records the result in the Received: header as
+# "(authenticated user=...)".  A decoding bug once turned every "+XX" escape
+# into a NUL byte, truncating the identity at the first escape -- so this case
+# pins down that the escapes round-trip to the bytes they encode.
+
+sub test_autheq_xtext_decode ($self)
+{
+    # "fred+2Bbar" is xtext for "fred+bar"; "+2B" is the escape for '+'.
+    my $wire     = 'fred+2Bbar'; # the AUTH= value as sent on the wire
+    my $expected = 'fred+bar';   # what it should decode to
+
+    $self->{store}->set_fetch_attributes(qw(uid));
+    $self->{store}->set_folder('INBOX');
+
+    my $msg = $self->{gen}->generate(subject => "autheq $wire", uid => 1);
+    my $ret = $self->{instance}->deliver(
+        $msg,
+        user    => "cassandane",
+        auth_id => $wire,
+    );
+    $self->assert_num_equals(0, $ret);
+
+    my @received;
+    $self->{store}->read_begin();
+    while (my $got = $self->{store}->read_message()) {
+        push @received, @{ $got->get_headers('received') // [] };
+    }
+    $self->{store}->read_end();
+
+    $self->assert_num_not_equals(0, scalar @received);
+    $self->assert_num_equals(
+        1,
+        scalar(grep { /\(authenticated user=\Q$expected\E / } @received),
+        "no Received header records authenticated user=$expected",
+    );
+}
