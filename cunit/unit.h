@@ -20,6 +20,9 @@ extern int verbose;
 extern int config_read_string(const char *confdir,
                               struct buf *err,
                               const char *s);
+/* write a "configdirectory: %s\n" directive with an absolute path */
+extern void cunit_write_configdirectory_directive(int fd,
+                                                  const char *confdir);
 
 /* utilities for consistent test tmpdir behaviour */
 extern int cunit_tmpfile(char *buf, size_t len, const char *pattern);
