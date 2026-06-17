@@ -222,7 +222,7 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
         /* If we're only doing the authzid, put back the subfolder
            in case its used in the challenge/response calculation */
         n = strlen(popd_subfolder);
-        if (*out_ulen + n > out_max) {
+        if (*out_ulen + n >= out_max) {
             sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
             r = SASL_BUFOVER;
         }
