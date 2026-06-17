@@ -877,15 +877,18 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                    NULL, STRARRAY_TRIM);
 }
 
-static void config_add_overflowstring(const char *key, const char *value, int lineno)
+static void config_add_overflowstring(const char *key, const char *value, int lineno, struct buf *line)
 {
     char *newval = xstrdup(value);
-    if (newval != hash_insert(key, newval, &confighash)) {
+    char *oldval = hash_insert(key, newval, &confighash);
+    if (newval != oldval) {
+        free(oldval);
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                 "option '%s' was specified twice in config file "
                 "(second occurrence on line %d)",
                 key, lineno);
+        buf_free(line);
         fatal(errbuf, EX_CONFIG);
     }
 }
@@ -1081,7 +1084,7 @@ static void config_read_file(const char *filename)
              * some reason, we can do so with config_getoverflowstring().
              */
             if (imapopts[opt].deprecated_since) {
-                config_add_overflowstring(fullkey, p, lineno);
+                config_add_overflowstring(fullkey, p, lineno, line);
             }
 
             /* this is a known option */
@@ -1258,7 +1261,7 @@ static void config_read_file(const char *filename)
 */
 
             /* Put it in the overflow hash table */
-            config_add_overflowstring(key, p, lineno);
+            config_add_overflowstring(key, p, lineno, line);
         }
     }
 
