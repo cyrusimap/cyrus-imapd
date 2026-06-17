@@ -1523,4 +1523,40 @@ static void test_barelf_multipart(void)
     buf_free(&buf);
 }
 
+/* A long chain of nested message/rfc822 parts must not be parsed with
+ * unbounded recursion: doing so overflows the stack and crashes the
+ * parsing process (lmtpd, for a delivered message).  boundary_limit is
+ * meant to cap MIME nesting depth, but historically only the multipart
+ * path honored it while the message/rfc822 path recursed without limit.
+ */
+static void test_rfc822_recursion_bounded(void)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct body body;
+    struct body *part;
+    int depth = 0;
+    int r;
+    const int nlayers = 2000;
+    int i;
+
+    for (i = 0; i < nlayers; i++)
+        buf_appendcstr(&buf, "Content-Type: message/rfc822\r\n\r\n");
+    buf_appendcstr(&buf, "Content-Type: text/plain\r\n\r\nhello\r\n");
+
+    r = message_parse_mapped(buf_base(&buf), buf_len(&buf), &body, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Walk the chain of nested message/rfc822 subparts. */
+    for (part = &body; part->subpart; part = part->subpart)
+        depth++;
+
+    /* The depth must be bounded well below the number of layers we fed
+     * in (boundary_limit defaults to 1000). */
+    CU_ASSERT(depth < nlayers);
+    CU_ASSERT(depth <= 1100);
+
+    message_free_body(&body);
+    buf_free(&buf);
+}
+
 /* vim: set ft=c: */

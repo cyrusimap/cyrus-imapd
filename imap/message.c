@@ -72,7 +72,8 @@ static int message_parse_body(struct msg *msg,
                               struct body *body,
                               const char *defaultContentType,
                               strarray_t *boundaries,
-                              const char *efname);
+                              const char *efname,
+                              int nesting);
 static void message_parse_headers(struct msg *msg,
                                   struct body *body,
                                   const char *defaultContentType,
@@ -95,7 +96,8 @@ static void message_parse_rfc822space(const char **s);
 static void message_parse_multipart(struct msg *msg,
                                     struct body *body,
                                     strarray_t *boundaries,
-                                    const char *efname);
+                                    const char *efname,
+                                    int nesting);
 static void message_parse_content(struct msg *msg,
                                   struct body *body,
                                   strarray_t *boundaries,
@@ -453,7 +455,7 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
 
     if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
-                       DEFAULT_CONTENT_TYPE, NULL, efname);
+                       DEFAULT_CONTENT_TYPE, NULL, efname, 0);
 
     (*body)->filesize = msg.len;
 
@@ -490,7 +492,7 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.offset = 0;
     msg.encode = 0;
 
-    message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname);
+    message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname, 0);
 
     body->filesize = msg_len;
 
@@ -736,7 +738,8 @@ static void body_add_content_guid(const char *base, struct body *body)
 static int message_parse_body(struct msg *msg, struct body *body,
                               const char *defaultContentType,
                               strarray_t *boundaries,
-                              const char *efname)
+                              const char *efname,
+                              int nesting)
 {
     strarray_t newboundaries = STRARRAY_INITIALIZER;
     int sawboundary = 0;
@@ -772,20 +775,23 @@ static int message_parse_body(struct msg *msg, struct body *body,
     /* Recurse according to type */
     if (strcmpsafe(body->type, "MULTIPART") == 0) {
         if (!sawboundary) {
-            message_parse_multipart(msg, body, boundaries, efname);
+            message_parse_multipart(msg, body, boundaries, efname, nesting);
         }
     }
     else if (body_is_rfc822(body)) {
         const char *base = msg->base + msg->offset;
         body->subpart = (struct body *)xzmalloc(sizeof(struct body));
 
-        if (sawboundary) {
+        int limit = config_getint(IMAPOPT_BOUNDARY_LIMIT);
+
+        if (sawboundary || (limit && nesting >= limit)) {
             memset(body->subpart, 0, sizeof(struct body));
             message_parse_bodytype(DEFAULT_CONTENT_TYPE, body->subpart);
         }
         else {
             message_parse_body(msg, body->subpart,
-                               DEFAULT_CONTENT_TYPE, boundaries, efname);
+                               DEFAULT_CONTENT_TYPE, boundaries, efname,
+                               nesting + 1);
 
             /* Calculate our size/lines information */
             body->content_size = body->subpart->header_size +
@@ -1792,7 +1798,8 @@ static void message_parse_rfc822space(const char **s)
  * Parse the content of a MIME multipart body-part
  */
 static void message_parse_multipart(struct msg *msg, struct body *body,
-                                    strarray_t *boundaries, const char *efname)
+                                    strarray_t *boundaries, const char *efname,
+                                    int nesting)
 {
     struct body preamble, epilogue;
     struct param *boundary;
@@ -1839,7 +1846,8 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
         body->subpart = (struct body *)xrealloc((char *)body->subpart,
                                  (body->numparts+1)*sizeof(struct body));
         message_parse_body(msg, &body->subpart[body->numparts],
-                           defaultContentType, boundaries, efname);
+                           defaultContentType, boundaries, efname,
+                           nesting + 1);
         if (msg->offset == msg->len &&
             body->subpart[body->numparts].boundary_size == 0) {
             /* hit the end of the message, therefore end all pending
