@@ -2,6 +2,7 @@
 # See COPYING file at the root of the distribution for more details.
 package Cyrus::IMAPOptions::Option;
 use v5.28.0;
+use experimental 'signatures';
 use Moo;
 
 use Cyrus::IMAPOptions::AllowedValues;
@@ -91,10 +92,8 @@ has documentation => (
     predicate => 1,
 );
 
-around BUILDARGS => sub
+around BUILDARGS => sub ($orig, $class, @args)
 {
-    my ($orig, $class, @args) = @_;
-
     my $args = $class->$orig(@args);
 
     if (my $filename = delete $args->{from_file}) {
@@ -104,19 +103,15 @@ around BUILDARGS => sub
     return $args;
 };
 
-sub _type_allows_null
+sub _type_allows_null ($type)
 {
-    my ($type) = @_;
-
     state %allows_null = map { $_ => 1 } qw(BYTESIZE DURATION STRING STRINGLIST);
 
     return exists $allows_null{$type};
 }
 
-sub _from_file
+sub _from_file ($args, $filename)
 {
-    my ($args, $filename) = @_;
-
     open my $in, '<', $filename or die "$filename: $!";
 
     do {
@@ -167,10 +162,8 @@ sub _from_file
     }
 }
 
-sub BUILD
+sub BUILD ($self, $args)
 {
-    my ($self, $args) = @_;
-
     my $type = $self->type;
     my $dv = $self->default_value;
 
@@ -239,10 +232,8 @@ sub BUILD
     }
 }
 
-sub is_allowed_value
+sub is_allowed_value ($self, $value)
 {
-    my ($self, $value) = @_;
-
     if (defined $value) {
         if ($self->has_allowed_values) {
             return $self->allowed_values->allows($value);
@@ -257,10 +248,8 @@ sub is_allowed_value
     }
 }
 
-sub is_unreleased
+sub is_unreleased ($self)
 {
-    my ($self) = @_;
-
     my $is_unreleased = $self->last_modified eq 'UNRELEASED'
                         || ($self->has_deprecated_since
                             && $self->deprecated_since eq 'UNRELEASED');
@@ -268,17 +257,13 @@ sub is_unreleased
     return $is_unreleased;
 }
 
-sub can_have_units
+sub can_have_units ($self)
 {
-    my ($self) = @_;
-
     return exists $units{$self->type};
 }
 
-sub _parse_version
+sub _parse_version ($field, $version)
 {
-    my ($field, $version) = @_;
-
     if ($version =~ m{ ^ (\d+) \. (\d+) \. (\d+) $ }x) {
         my ($maj, $min, $rev) = (0 + $1, 0 + $2, 0 + $3);
 
@@ -296,10 +281,8 @@ sub _parse_version
     }
 }
 
-sub docs_default_value
+sub docs_default_value ($self)
 {
-    my ($self) = @_;
-
     my $dv = $self->default_value;
 
     if (not defined $dv) {
@@ -318,10 +301,8 @@ sub docs_default_value
     }
 }
 
-sub docs_default_unit
+sub docs_default_unit ($self)
 {
-    my ($self) = @_;
-
     my $type = $self->type;
 
     die "no default unit for $type" if not $self->can_have_units;
@@ -333,10 +314,8 @@ sub docs_default_unit
     return $units{$type}->{$k};
 }
 
-sub c_default_unit
+sub c_default_unit ($self)
 {
-    my ($self) = @_;
-
     if ($self->can_have_units) {
         return $self->has_default_unit
                ? "'" . $self->default_unit . "'"
@@ -347,59 +326,45 @@ sub c_default_unit
     }
 }
 
-sub _c_name
+sub _c_name ($name)
 {
-    my ($name) = @_;
-
     return 'IMAPOPT_' . uc($name);
 }
 
-sub c_name
+sub c_name ($self)
 {
-    my ($self) = @_;
-
     return _c_name($self->name);
 }
 
-sub _c_enum_name
+sub _c_enum_name ($name, $value)
 {
-    my ($name, $value) = @_;
-
     my $e = 'IMAP_ENUM_' . uc($name) . '_' . uc($value);
     $e =~ s/[^0-9A-Z_a-z]/_/g;
 
     return $e;
 }
 
-sub c_last_modified
+sub c_last_modified ($self)
 {
-    my ($self) = @_;
-
     return _parse_version('last_modified', $self->last_modified);
 }
 
-sub c_deprecated_since
+sub c_deprecated_since ($self)
 {
-    my ($self) = @_;
-
     return $self->has_deprecated_since
            ? '"' . $self->deprecated_since . '"'
            : 'NULL';
 }
 
-sub c_replaced_by
+sub c_replaced_by ($self)
 {
-    my ($self) = @_;
-
     return $self->has_replaced_by
            ? _c_name($self->replaced_by)
            : _c_name('ZERO');
 }
 
-sub c_default_value
+sub c_default_value ($self)
 {
-    my ($self) = @_;
-
     my $type = $self->type;
 
     if ($type eq 'BITFIELD') {
@@ -431,10 +396,8 @@ sub c_default_value
     }
 }
 
-sub c_allowed_values
+sub c_allowed_values ($self)
 {
-    my ($self) = @_;
-
     my $type = $self->type;
     my @allowed_values = ();
 
@@ -459,10 +422,8 @@ sub c_allowed_values
     return @allowed_values;
 }
 
-sub c_enum_defs
+sub c_enum_defs ($self)
 {
-    my ($self) = @_;
-
     my $type = $self->type;
     my $idx = 0;
     my @defs = ();

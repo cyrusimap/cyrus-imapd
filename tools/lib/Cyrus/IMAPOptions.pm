@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 package Cyrus::IMAPOptions;
+use experimental 'signatures';
 use Moo;
 
 use Cyrus::IMAPOptions::Option;
@@ -17,10 +18,8 @@ has forbid_unreleased => (
     default => '0',
 );
 
-around BUILDARGS => sub
+around BUILDARGS => sub ($orig, $class, @args)
 {
-    my ($orig, $class, @args) = @_;
-
     my $args = $class->$orig(@args);
 
     if (my $path = delete $args->{from_path}) {
@@ -30,10 +29,8 @@ around BUILDARGS => sub
     return $args;
 };
 
-sub _from_path
+sub _from_path ($args, $path)
 {
-    my ($args, $path) = @_;
-
     opendir my $dh, $path or die "$path: $!";
     while (readdir $dh) {
         next if m/^\./;
@@ -52,10 +49,8 @@ sub _from_path
     closedir $dh;
 }
 
-sub BUILD
+sub BUILD ($self, $args)
 {
-    my ($self, $args) = @_;
-
     foreach my $opt_name (keys $self->options->%*) {
         my $option = $self->options->{$opt_name};
 
@@ -72,10 +67,8 @@ sub BUILD
     }
 }
 
-sub check_unreleased
+sub check_unreleased ($self, $cmd)
 {
-    my ($self, $cmd) = @_;
-
     my $warned_unreleased;
 
     foreach my $option (values $self->options->%*) {
@@ -106,10 +99,8 @@ sub check_unreleased
     }
 }
 
-sub iterate
+sub iterate ($self, $callback, @rock)
 {
-    my ($self, $callback, @rock) = @_;
-
     foreach my $key (sort keys $self->options->%*) {
         $callback->($key, $self->options->{$key}, @rock);
     }

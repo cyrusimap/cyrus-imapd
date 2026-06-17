@@ -4,28 +4,26 @@ package Cyrus::IMAPOptions::App::Command::docs;
 use warnings;
 use strict;
 
+use experimental 'signatures';
+
 use Cyrus::IMAPOptions::App -command;
 
 use Cwd qw(abs_path);
 use File::Basename;
 use File::Spec::Functions;
 
-sub abstract { 'show imapoptions format documentation' }
+sub abstract () { 'show imapoptions format documentation' }
 
-sub execute
+sub execute ($self, $opt, $args)
 {
-    my ($self, $opt, $args) = @_;
-
     my @cmd = split /\s+/, $ENV{PAGER} || 'less';
     push @cmd, $self->_find_readme;
 
     exec { $cmd[0] } @cmd;
 }
 
-sub _find_readme
+sub _find_readme ($self)
 {
-    my ($self) = @_;
-
     my $readme = abs_path(catfile(dirname($self->app->full_arg0),
                                   '../lib/imapoptions/',
                                   'README.md'));

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-CMU
 # See COPYING file at the root of the distribution for more details.
 package Cyrus::IMAPOptions::AllowedValues;
+use experimental 'signatures';
 use Moo;
 
 use Types::Standard qw(ArrayRef HashRef Maybe Str Undef);
@@ -23,10 +24,8 @@ has _aliases => (
     predicate => 'has_aliases',
 );
 
-around BUILDARGS => sub
+around BUILDARGS => sub ($orig, $class, @args)
 {
-    my ($orig, $class, @args) = @_;
-
     my $args = $class->$orig(@args);
 
     if (my $str = delete $args->{from_string}) {
@@ -36,10 +35,8 @@ around BUILDARGS => sub
     return $args;
 };
 
-sub _from_string
+sub _from_string ($args, $str)
 {
-    my ($args, $str) = @_;
-
     my @raw = split qr/\s+/, $str;
 
     my @order;
@@ -74,15 +71,13 @@ sub _from_string
     $args->{_aliases} = \%aliases if %aliases;
 }
 
-sub values
+sub values ($self)
 {
-    return shift->_order->@*;
+    return $self->_order->@*;
 }
 
-sub values_and_aliases
+sub values_and_aliases ($self)
 {
-    my ($self) = @_;
-
     my @tuples;
 
     foreach my $value ($self->_order->@*) {
@@ -92,10 +87,8 @@ sub values_and_aliases
     return @tuples;
 }
 
-sub values_and_aliases_flat
+sub values_and_aliases_flat ($self)
 {
-    my ($self) = @_;
-
     my @flat;
 
     foreach my $value ($self->_order->@*) {
@@ -107,10 +100,8 @@ sub values_and_aliases_flat
     return @flat;
 }
 
-sub value_alias_strings
+sub value_alias_strings ($self)
 {
-    my ($self) = @_;
-
     my @strings;
 
     foreach my $value ($self->_order->@*) {
@@ -122,20 +113,16 @@ sub value_alias_strings
     return @strings;
 }
 
-sub count
+sub count ($self)
 {
-    my ($self) = @_;
-
     my $count = keys $self->_values->%*;
     $count += keys $self->_aliases->%* if $self->has_aliases;
 
     return $count;
 }
 
-sub allows
+sub allows ($self, $value)
 {
-    my ($self, $value) = @_;
-
     return exists $self->_values->{$value}
            || ($self->has_aliases && exists $self->_aliases->{$value});
 }
