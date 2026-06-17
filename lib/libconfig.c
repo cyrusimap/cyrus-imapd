@@ -62,7 +62,8 @@ extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
 /* prototype to allow for sane function ordering */
-static void config_read_file(const char *filename);
+static char *config_read_file(const char *filename, char *buf, size_t *bufsize);
+#define GROWSIZE 4096
 
 static void assert_not_deprecated(enum imapopt opt)
 {
@@ -642,7 +643,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         fatal("could not construct include file  hash table", EX_CONFIG);
     }
 
-    config_read_file(config_filename);
+    size_t bufsize = GROWSIZE;
+    char *read_buf = xmalloc(bufsize);
+
+    read_buf = config_read_file(config_filename, read_buf, &bufsize);
+    free(read_buf);
 
     free_hash_table(&includehash, NULL);
 
@@ -876,8 +881,6 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
                                    NULL, STRARRAY_TRIM);
 }
 
-#define GROWSIZE 4096
-
 static void config_add_overflowstring(const char *key, const char *value, int lineno, void *buf)
 {
     char *newval = xstrdup(value);
@@ -907,27 +910,24 @@ EXPORTED int config_parse_switch(const char *p)
     return -1;
 }
 
-static void config_read_file(const char *filename)
+static char *config_read_file(const char *filename, char *buf, size_t *bufsize)
 {
     FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
-    char *buf, errbuf[1024];
+    char errbuf[1024];
     const char *cyrus_path;
-    unsigned bufsize, len;
+    unsigned len;
     char *p, *q, *key, *fullkey, *srvkey;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
-
-    bufsize = GROWSIZE;
-    buf = xmalloc(bufsize);
 
     /* read in config file
        Check if we have CYRUS_PREFIX defined, and then use that config */
     cyrus_path = getenv("CYRUS_PREFIX");
     if (cyrus_path) {
-        strlcpy(buf, cyrus_path, bufsize);
-        strlcat(buf, filename, bufsize);
+        strlcpy(buf, cyrus_path, *bufsize);
+        strlcat(buf, filename, *bufsize);
         infile = fopen(buf, "r");
     }
 
@@ -955,7 +955,7 @@ static void config_read_file(const char *filename)
     }
 
     len = 0;
-    while (fgets(buf+len, bufsize-len, infile)) {
+    while (fgets(buf+len, *bufsize-len, infile)) {
         if (buf[len]) {
             len = strlen(buf);
             if (buf[len-1] == '\n') {
@@ -969,10 +969,10 @@ static void config_read_file(const char *filename)
                     continue;
                 }
             }
-            else if (!feof(infile) && len == bufsize-1) {
+            else if (!feof(infile) && len == *bufsize-1) {
                 /* line is longer than the buffer */
-                bufsize += GROWSIZE;
-                buf = xrealloc(buf, bufsize);
+                *bufsize += GROWSIZE;
+                buf = xrealloc(buf, *bufsize);
                 continue;
             }
         }
@@ -1023,7 +1023,7 @@ static void config_read_file(const char *filename)
         /* Look for directives */
         if (key[0] == '@') {
             if (!strcasecmp(key, "@include")) {
-                config_read_file(p);
+                buf = config_read_file(p, buf, bufsize);
                 continue;
             }
             else {
@@ -1288,7 +1288,7 @@ static void config_read_file(const char *filename)
     }
 
     fclose(infile);
-    free(buf);
+    return buf;
 }
 
 EXPORTED void config_toggle_debug(void)

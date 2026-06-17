@@ -1,3 +1,0 @@
-leak:__cunit_test_duplicate_overflow
-leak:__cunit_test_include_loop
-leak:__cunit_test_include_self
