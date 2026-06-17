@@ -31,7 +31,7 @@ this release, please report this to the mailing lists.  Thanks!
 Security fixes
 --------------
 
-* Fixed CVE-2019-11356: buffer overrun in httpd
+* Fixed :cve:`CVE-2019-11356`: buffer overrun in httpd
 
 Bug fixes
 ---------

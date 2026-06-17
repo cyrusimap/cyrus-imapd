@@ -106,7 +106,7 @@ change during the process.
 Security fixes
 ==============
 
-* Fixed CVE-2024-34055_:
+* Fixed :cve:`CVE-2024-34055`:
   Cyrus-IMAP through 3.8.2 and 3.10.0-beta2 allow authenticated attackers
   to cause unbounded memory allocation by sending many LITERALs in a
   single command.
@@ -142,8 +142,6 @@ Security fixes
   These limits may be set small without affecting message uploads, as the
   APPEND command's message literal is limited by ``maxmessagesize``, not by
   these new options.
-
-.. _CVE-2024-34055: https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2024-34055
 
 Significant bugfixes
 ====================

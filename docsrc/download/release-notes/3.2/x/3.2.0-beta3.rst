@@ -107,9 +107,9 @@ during the process.
 Security fixes
 ==============
 
-* Contains fix for `CVE-2017-14230 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230>`_
-* Contains fix for `CVE-2019-18928 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-18928>`_
-* Contains fix for `CVE-2019-19783 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-19783>`_
+* Contains fix for :cve:`CVE-2017-14230`
+* Contains fix for :cve:`CVE-2019-18928`
+* Contains fix for :cve:`CVE-2019-19783`
 
 
 Significant bugfixes
