@@ -4153,7 +4153,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
     /* Split credentials into auth scheme and response */
     slen = strcspn(creds, " ");
     if ((clientin = strchr(creds + slen, ' '))) {
-        while (strchr(" ", *++clientin));  /* Trim leading 1*SP */
+        while (*clientin == ' ') clientin++;
         clientinlen = strlen(clientin);
     }
 
