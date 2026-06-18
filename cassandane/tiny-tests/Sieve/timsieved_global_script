@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_timsieved_global_script
+    :MagicPlus
+    ($self)
+{
+    # Create a sieve script as an admin
+    my $client = $self->timsieved_client('admin');
+
+    my $name = 'test-script';
+    my $script = <<~"EOF";
+      require "imap4flags";
+      keep :flags "\\\\flagged";
+      EOF
+    my $slen = length($script);
+
+    timsieved_write($client, <<~"EOF");
+      PUTSCRIPT "$name" {$slen+}\r
+      $script
+      EOF
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    timsieved_write($client, "LISTSCRIPTS\n");
+    $self->assert_str_equals("\"$name\"\r\nOK\r\n", timsieved_read($client));
+
+    timsieved_write($client, "GETSCRIPT \"$name\"\n");
+    $self->assert_str_equals("{$slen}\r\n$script\r\nOK\r\n",
+                             timsieved_read($client));
+
+    # Make sure the script is stored in the #sieve mailbox
+    my $admintalk = $self->{adminstore}->get_client(NoLogin => 1);
+    $admintalk->login("admin+dav", "secret");
+
+    $admintalk->examine('#sieve');
+    my $res = $admintalk->fetch('1:*',
+                                '(BODY[HEADER.FIELDS (Subject)] BODY[TEXT])');
+    $self->assert_str_equals($name, $res->{1}{headers}{subject}[0]);
+    $self->assert_str_equals($script, $res->{1}{body});
+
+    # Create a shared mailbox and assign our global sieve script to it
+    my $mboxname = 'shared-mailbox';
+    $admintalk->create($mboxname);
+    $admintalk->setacl($mboxname, anyone => 'lrswp');
+
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/sieve';
+    $admintalk->setmetadata($mboxname, $entry, $name);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # Deliver a message to the shared mailbox
+    my $msg = $self->{gen}->generate(subject => "Test Message");
+    $self->{instance}->deliver($msg, users => [ "" ], folder => $mboxname);
+
+    # Make sure that the script was executed and the message is \Flagged
+    $admintalk->examine($mboxname);
+    $res = $admintalk->fetch('1:*', '(FLAGS)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals($res,
+                              { '1' => { 'flags' => [ '\\Recent', '\\Flagged'] }});
+}

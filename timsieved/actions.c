@@ -69,18 +69,21 @@ int actions_init(void)
 
 int actions_setuser(const char *userid)
 {
+    mbname_t *mbname = mbname_from_userid(userid);
     struct buf buf = BUF_INITIALIZER;
     int result;
 
-    sieved_userid = xstrdup(userid);
+    sieved_userid = xstrdup(userid); // for logging
 
     if (sieved_userisadmin) {
-        char *domain = NULL;
+        const char *domain = mbname_domain(mbname);
+
+        mbname_set_localpart(mbname, "");
 
         buf_setcstr(&buf, sieve_dir_config);
 
-        if (config_virtdomains && (domain = strrchr(userid, '@'))) {
-            char dhash = (char) dir_hash_c(++domain, config_fulldirhash);
+        if (config_virtdomains && domain) {
+            char dhash = (char) dir_hash_c(domain, config_fulldirhash);
             buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, dhash, domain);
         }
 
@@ -103,17 +106,18 @@ int actions_setuser(const char *userid)
         }
     }
 
-    if (result) return TIMSIEVE_FAIL;
+    if (!result) {
+        result = sieve_ensure_folder(mbname_userid(mbname),
+                                     &sieve_mailbox, /*silent*/0);
+        if (!result) {
+            sievedb = sievedb_open_mailbox(sieve_mailbox);
+            mailbox_unlock_index(sieve_mailbox, NULL);
+        }
+    }
 
-    sievedb = sievedb_open_userid(sieved_userid);
-    if (!sievedb) return TIMSIEVE_FAIL;
+    mbname_free(&mbname);
 
-    result = sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/0);
-    if (result) return TIMSIEVE_FAIL;
-
-    mailbox_unlock_index(sieve_mailbox, NULL);
-
-    return TIMSIEVE_OK;
+    return (sievedb ? TIMSIEVE_OK : TIMSIEVE_FAIL);
 }
 
 void actions_unsetuser(void)

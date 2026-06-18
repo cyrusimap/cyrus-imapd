@@ -547,6 +547,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     /* Create RFC 5322 header for script */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
+    if  (!userid) userid = xstrdup(strarray_nth(config_admins,0));
     if (strchr(userid, '@')) {
         buf_printf(&buf, "<%s>", userid);
     }
@@ -830,7 +831,8 @@ static int migrate_cb(const char *sievedir,
     return SIEVEDIR_OK;
 }
 
-EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr, int silent)
+EXPORTED int sieve_ensure_folder(const char *userid,
+                                 struct mailbox **mailboxptr, int silent)
 {
     const char *sievedir = user_sieve_path(userid);
     struct stat sbuf;
@@ -915,6 +917,7 @@ EXPORTED int sieve_script_rebuild(const char *userid,
                                   const char *sievedir, const char *script)
 {
     struct buf namebuf = BUF_INITIALIZER, *content_buf = NULL;
+    struct mailbox *mailbox = NULL;
     struct sieve_data *sdata = NULL;
     struct sieve_db *db = NULL;
     const char *content = NULL;
@@ -922,36 +925,31 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     struct stat bc_stat;
     int r;
 
-    db = sievedb_open_userid(userid);
-    if (!db) {
-        r = IMAP_INTERNAL;
-        goto done;
+    /* Open sieve mailbox and db */
+    r = sieve_ensure_folder(userid, &mailbox, 0/*silent*/);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open sieve mailbox for %s (%s)",
+               userid, error_message(r));
     }
+    else {
+        db = sievedb_open_mailbox(mailbox);
+        if (!db) r = IMAP_INTERNAL;
+    }
+
+    if (r) goto done;
 
     /* Lookup script in Sieve DB */
     r = sievedb_lookup_name(db, script, &sdata, 0);
     if (!r) {
-        char *mboxname = sieve_mboxname(userid);
-        struct mailbox *mailbox = NULL;
-
         lastupdated = sdata->lastupdated;
 
         content_buf = buf_new();
 
-        r = mailbox_open_irl(mboxname, &mailbox);
-        if (r) {
-            syslog(LOG_ERR, "IOERROR: failed to open %s (%s)",
-                   mboxname, error_message(r));
-        }
-        else {
-            r = sieve_script_fetch(mailbox, sdata, content_buf);
+        r = sieve_script_fetch(mailbox, sdata, content_buf);
 
-            if (!r) {
-                content = buf_cstring(content_buf);
-            }
+        if (!r) {
+            content = buf_cstring(content_buf);
         }
-        mailbox_close(&mailbox);
-        free(mboxname);
 
         if (r) goto done;
     }
@@ -1029,6 +1027,7 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     buf_destroy(content_buf);
     buf_free(&namebuf);
     sievedb_close(db);
+    mailbox_close(&mailbox);
 
     return r;
 }
@@ -1042,7 +1041,10 @@ EXPORTED char *sieve_mboxname(const char *userid)
 
     buf_setcstr(&boxbuf, config_getstring(IMAPOPT_SIEVE_FOLDER));
 
-    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    if (userid)
+        res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    else
+        res = buf_release(&boxbuf);
 
     buf_free(&boxbuf);
 
