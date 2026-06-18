@@ -20,6 +20,8 @@
 
 /* JMAP Core API Methods */
 static int jmap_core_echo(jmap_req_t *req);
+extern int jmap_pushsub_get(jmap_req_t *req);
+extern int jmap_pushsub_set(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_usercounters_get(jmap_req_t *req);
@@ -31,6 +33,18 @@ static jmap_method_t jmap_core_methods_standard[] = {
         JMAP_URN_CORE,
         &jmap_core_echo,
         0/*flags*/
+    },
+    {
+        "PushSubscription/get",
+        JMAP_URN_CORE,
+        &jmap_pushsub_get,
+        /*flags*/0
+    },
+    {
+        "PushSubscription/set",
+        JMAP_URN_CORE,
+        &jmap_pushsub_set,
+        JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -197,6 +211,9 @@ static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
     if (jmap_wantprop(get->props, "sieveScriptModSeq"))
         json_object_set_new(res, "sieveScriptModSeq",
                             json_integer(req->counters.sievemodseq));
+    if (jmap_wantprop(get->props, "pushSubscriptionModSeq"))
+        json_object_set_new(res, "pushSubscriptionModSeq",
+                            json_integer(req->counters.jmappushsubmodseq));
 
     if (jmap_wantprop(get->props, "mailDeletedModSeq"))
         json_object_set_new(res, "mailDeletedModSeq",
@@ -216,6 +233,9 @@ static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
     if (jmap_wantprop(get->props, "sieveScriptDeletedModSeq"))
         json_object_set_new(res, "sieveScriptDeletedModSeq",
                             json_integer(req->counters.sievedeletedmodseq));
+    if (jmap_wantprop(get->props, "pushSubscriptionDeletedModSeq"))
+        json_object_set_new(res, "pushSubscriptionDeletedModSeq",
+                            json_integer(req->counters.jmappushsubdeletedmodseq));
 
     if (jmap_wantprop(get->props, "mailFoldersModSeq"))
         json_object_set_new(res, "mailFoldersModSeq",
@@ -235,6 +255,9 @@ static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
     if (jmap_wantprop(get->props, "sieveScriptFoldersModSeq"))
         json_object_set_new(res, "sieveScriptFoldersModSeq",
                             json_integer(req->counters.sievefoldersmodseq));
+    if (jmap_wantprop(get->props, "pushSubscriptionFoldersModSeq"))
+        json_object_set_new(res, "pushSubscriptionFoldersModSeq",
+                            json_integer(req->counters.jmappushsubfoldersmodseq));
 
     if (jmap_wantprop(get->props, "mailFoldersDeletedModSeq"))
         json_object_set_new(res, "mailFoldersDeletedModSeq",
@@ -254,6 +277,9 @@ static void usercounters_get(jmap_req_t *req, struct jmap_get *get)
     if (jmap_wantprop(get->props, "sieveScriptFoldersDeletedModSeq"))
         json_object_set_new(res, "sieveScriptFoldersDeletedModSeq",
                             json_integer(req->counters.sievefoldersdeletedmodseq));
+    if (jmap_wantprop(get->props, "pushSubscriptionFoldersDeletedModSeq"))
+        json_object_set_new(res, "pushSubscriptionFoldersDeletedModSeq",
+                            json_integer(req->counters.jmappushsubfoldersdeletedmodseq));
 
     if (jmap_wantprop(get->props, "quotaModSeq"))
         json_object_set_new(res, "quotaModSeq",

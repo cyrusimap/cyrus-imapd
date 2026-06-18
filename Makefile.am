@@ -1133,6 +1133,8 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/caldav_alarm.h \
     imap/caldav_db.c \
     imap/caldav_db.h \
+    imap/calsched_support.c \
+    imap/calsched_support.h \
     imap/carddav_db.c \
     imap/carddav_db.h \
     imap/dav_util.c \
@@ -1143,8 +1145,8 @@ imap_libcyrus_imap_la_SOURCES += \
     imap/ical_support.h \
     imap/icu_wrap.h \
     imap/icu_wrap.cpp \
-    imap/calsched_support.c \
-    imap/calsched_support.h \
+    imap/pushsub_db.c \
+    imap/pushsub_db.h \
     imap/vcard_support.c \
     imap/vcard_support.h \
     imap/webdav_db.c \
@@ -1349,6 +1351,8 @@ JMAP_PROPS_BUILT_SOURCES = \
     imap/jmap_mail_thread_props.h \
     imap/jmap_notes_props.c \
     imap/jmap_notes_props.h \
+    imap/jmap_push_subscription_props.c \
+    imap/jmap_push_subscription_props.h \
     imap/jmap_quota_legacy_props.c \
     imap/jmap_quota_legacy_props.h \
     imap/jmap_quota_props.c \
@@ -1391,6 +1395,7 @@ imap_httpd_SOURCES += \
     imap/jmap_notif.h \
     imap/jmap_push.c \
     imap/jmap_push.h \
+    imap/jmap_push_subscription.c \
     imap/jmap_quota.c \
     imap/jmap_util.c \
     imap/jmap_util.h
@@ -1419,6 +1424,7 @@ imap_libcyrus_jmap_props_la_SOURCES = \
     imap/jmap_mail_thread_props.gperf \
     imap/jmap_mailbox_props.gperf \
     imap/jmap_notes_props.gperf \
+    imap/jmap_push_subscription_props.gperf \
     imap/jmap_quota_legacy_props.gperf \
     imap/jmap_quota_props.gperf
 
