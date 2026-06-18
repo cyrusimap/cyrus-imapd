@@ -1,6 +1,8 @@
-#include <stdlib.h>
 #include "cunit/unit.h"
 #include "parseaddr.h"
+
+#include <stdbool.h>
+#include <stdlib.h>
 
 static void test_single(void)
 {
@@ -763,6 +765,242 @@ static void test_quoted_crlf(void)
     CU_ASSERT_PTR_NULL(a->next);
 
     parseaddr_free(head);
+}
+
+static void dump_addr(const char *msg, const struct address *address)
+{
+    if (verbose > 1 && address) {
+        fprintf(stderr, "%s: %sname=<%s> route=<%s> mailbox=<%s> domain=<%s>\n",
+                        msg, address->invalid ? "(INVALID) " : "",
+                        address->name, address->route, address->mailbox,
+                        address->domain);
+    }
+}
+
+static void test_xs_singles(void)
+{
+    /* single-address inputs, based on Email::Address::XS tests */
+    static const struct {
+        const char *input;
+        bool expect_invalid;
+        const char *expect_name;
+        const char *expect_route;
+        const char *expect_mailbox;
+        const char *expect_domain;
+    } tests[] = {
+//         { "invalid_line", true, NULL, NULL, NULL, NULL },
+        { "Winston Smith <winston.smith@recdep.minitrue>",
+          false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+//         { "\"Winston Smith\" <winston.smith.@recdep.minitrue>",
+//        true, "Winston Smith", NULL, "winston.smith.", "recdep.minitrue" },
+        { "\"Winston Smith\" \"suffix\" suffix2 <winston.smith@recdep.minitrue>",
+          false, "Winston Smith suffix suffix2", NULL,
+          "winston.smith", "recdep.minitrue" },
+        { "winston.smith@recdep.minitrue",
+          false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+        { "<winston.smith@recdep.minitrue>",
+          false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+//         { "\"user@oceania\" : winston.smith@recdep.minitrue",
+//           false, NULL, NULL, "winston.smith", "recdep.minitrue" },
+        { "\"user@oceania\" <winston.smith@recdep.minitrue>",
+          false, "user@oceania", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"User <user@oceania>\" <winston.smith@recdep.minitrue>",
+          false, "User <user@oceania>", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"julia@outer\\\"party\"@ficdep.minitrue",
+          false, NULL, NULL, "julia@outer\"party", "ficdep.minitrue" },
+        { "(leading comment)\"Winston (Smith)\" <winston.smith@recdep.minitrue(.oceania)> (comment after)",
+          false, "Winston (Smith)", NULL, "winston.smith", "recdep.minitrue" },
+        { "Julia (Unknown) <julia(outer party)@ficdep.minitrue> (additional comment)",
+          false, "Julia", NULL, "julia", "ficdep.minitrue" },
+        { "Winston Smith( <user@oceania>, Julia) <winston.smith@recdep.minitrue>",
+          false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+        { "\"Winston Smith\" ( <user@oceania>, (Julia) <julia(outer(.)party)@ficdep.minitrue>, ) <winston.smith@recdep.minitrue>",
+          false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+//         { "Winston Smith <winston   .smith  @  recdep(comment).      minitrue>",
+//           false, "Winston Smith", NULL, "winston.smith", "recdep.minitrue" },
+        { "\302\257\302\257`\302\267.\302\245\302\253P\302\256\303\216\303\221\303\247\342\202\254\303\230fTh\342\202\254\303\220\303\205\302\256K\302\273\302\245.\302\267`\302\257\302\257 <email@example.com>",
+          false, "\302\257\302\257`\302\267.\302\245\302\253P\302\256\303\216\303\221\303\247\342\202\254\303\230fTh\342\202\254\303\220\303\205\302\256K\302\273\302\245.\302\267`\302\257\302\257",
+          NULL, "email", "example.com" },
+        { "\"(> \\\" \\\" <)                              ( ='o'= )                              (\\\")___(\\\")  sWeEtAnGeLtHePrInCeSsOfThEsKy\" <email2@example.com>",
+          false, "(> \" \" <)                              ( =\'o\'= )                              (\")___(\")  sWeEtAnGeLtHePrInCeSsOfThEsKy",
+          NULL, "email2", "example.com" },
+        { "\"(i)cRiStIaN(i)\" <email3@example.com>",
+          false, "(i)cRiStIaN(i)", NULL, "email3", "example.com" },
+        { "\"(S)MaNu_vuOLeAmMazZaReNimOe(*)MiAo(@)\" <email4@example.com>\n",
+          false, "(S)MaNu_vuOLeAmMazZaReNimOe(*)MiAo(@)",
+          NULL, "email4", "example.com" },
+        { "aaaa@", false, NULL, NULL, "aaaa", "unspecified-domain" },
+//         { "a(aa", true, NULL, NULL, NULL, NULL },
+        { "O\'Brien <o\'brien@thought.police.oceania>",
+          false, "O'Brien", NULL, "o'brien", "thought.police.oceania" },
+        { "\"Mr. Charrington\" <\"charrington\\\"@\\\"shop\"@thought.police.oceania>",
+          false, "Mr. Charrington", NULL,
+          "charrington\"@\"shop", "thought.police.oceania" },
+        { "\"Escape \\\" also , characters ;\" <user2@oceania>",
+          false, "Escape \" also , characters ;", NULL, "user2", "oceania" },
+        { "\"user5@oceania\\\" <user6@oceania> , \\\"\" <user4@oceania>",
+          false, "user5@oceania\" <user6@oceania> , \"",
+          NULL, "user4", "oceania" },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned i;
+
+    for (i = 0; i < n_tests; i++) {
+        struct address *actual = NULL;
+
+        parseaddr_list(tests[i].input, &actual);
+
+        dump_addr(tests[i].input, actual);
+
+        /* better have found exactly one address */
+        CU_ASSERT_PTR_NOT_NULL(actual);
+        CU_ASSERT_PTR_NULL(actual->next);
+
+        CU_ASSERT_EQUAL(actual->invalid, tests[i].expect_invalid);
+
+        if (tests[i].expect_name)
+            CU_ASSERT_STRING_EQUAL(actual->name, tests[i].expect_name);
+        else
+            CU_ASSERT_PTR_NULL(actual->name);
+
+        if (tests[i].expect_route)
+            CU_ASSERT_STRING_EQUAL(actual->route, tests[i].expect_route);
+        else
+            CU_ASSERT_PTR_NULL(actual->route);
+
+        if (tests[i].expect_mailbox)
+            CU_ASSERT_STRING_EQUAL(actual->mailbox, tests[i].expect_mailbox);
+        else
+            CU_ASSERT_PTR_NULL(actual->mailbox);
+
+        if (tests[i].expect_domain)
+            CU_ASSERT_STRING_EQUAL(actual->domain, tests[i].expect_domain);
+        else
+            CU_ASSERT_STRING_EQUAL(actual->domain, "unspecified-domain");
+
+        parseaddr_free(actual);
+    }
+}
+
+static void test_xs_multis(void)
+{
+    #define ADDRS(...) (const char *const[]){ __VA_ARGS__, NULL }
+    const struct {
+        const char *input;
+        const char *const *expect_addresses;
+    } tests[] = {
+        { "\"Winston Smith\" <winston.smith@recdep.minitrue>, Julia <julia@ficdep.minitrue>",
+          ADDRS("winston.smith@recdep.minitrue", "julia@ficdep.minitrue") },
+
+        { "\"Winston Smith\" <winston.smith@recdep.minitrue>, Julia <julia@ficdep.minitrue>, user@oceania",
+          ADDRS("winston.smith@recdep.minitrue",
+                "julia@ficdep.minitrue",
+                "user@oceania") },
+        { "(leading comment)\"Winston (Smith)\" <winston.smith@recdep.minitrue(.oceania)> (comment after), Julia (Unknown) <julia(outer party)@ficdep.minitrue> (additional comment)",
+          ADDRS("winston.smith@recdep.minitrue", "julia@ficdep.minitrue") },
+        { "\302\257\302\257`\302\267.\302\245\302\253P\302\256\303\216\303\221\303\247\342\202\254\303\230fTh\342\202\254\303\220\303\205\302\256K\302\273\302\245.\302\267`\302\257\302\257 <email@example.com>, \"(> \\\" \\\" <)                              ( ='o'= )                              (\\\")___(\\\")  sWeEtAnGeLtHePrInCeSsOfThEsKy\" <email2@example.com>, \"(i)cRiStIaN(i)\" <email3@example.com>, \"(S)MaNu_vuOLeAmMazZaReNimOe(*)MiAo(@)\" <email4@example.com>\n",
+          ADDRS("email@example.com", "email2@example.com",
+                "email3@example.com", "email4@example.com") },
+        { "\"Winston Smith\" <winston.smith@recdep.minitrue>, Julia <julia@ficdep.minitrue>, O\'Brien <o\'brien@thought.police.oceania>, \"Mr. Charrington\" <\"charrington\\\"@\\\"shop\"@thought.police.oceania>, \"Emmanuel Goldstein\" <goldstein@brotherhood.oceania>, user@oceania, \"Escape \\\" also , characters ;\" <user2@oceania>, \"user5@oceania\\\" <user6@oceania> , \\\"\" <user4@oceania>",
+            ADDRS("winston.smith@recdep.minitrue",
+                  "julia@ficdep.minitrue",
+                  "o'brien@thought.police.oceania",
+                  "charrington\"@\"shop@thought.police.oceania",
+                  "goldstein@brotherhood.oceania",
+                  "user@oceania",
+                  "user2@oceania",
+                  "user4@oceania") },
+        { "=?US-ASCII?Q?MIME=3A=3B?= : =?US-ASCII?Q?Winston=3A_Smith?= <winston.smith@recdep.minitrue>, =?US-ASCII?Q?Julia=3A=3B_?= <julia@ficdep.minitrue> ;",
+          ADDRS("=?US-ASCII?Q?MIME=3A=3B?=@unspecified-domain" /* group start */,
+                "winston.smith@recdep.minitrue",
+                "julia@ficdep.minitrue",
+                "" /* group end */)},
+        // XXX can't use 16-bit escapes in a char* literal in C, would need to
+        // XXX translate these escapes into utf8...
+//         { "\"\x{2764} \x{2600}\": \"\x{2606} \x{2602}\" <\"\x{263b} \x{265e}\"@\x{262f}.\x{262d}> (\x{2622} \x{20ac});",
+//            ADDRS("\"\x{2764} \x{2600}\"@unspecified-domain" /* group start */,
+//                  "\"\x{263b} \x{265e}\"@\x{262f}.\x{262d}",
+//                  "" /* group end */) },
+        { "\"Ministry of \\\"Truth\\\"\": \"Winston Smith\" ( <user@oceania>, (Julia _ (Unknown)) <julia_(outer(.)party)@ficdep.minitrue>, ) <winston.smith@recdep.minitrue>, (leading comment) Julia <julia@ficdep.minitrue>;, \"Thought Police\" (group name comment) : O\'Brien <o\'brien@thought.police.oceania>, Mr. (c)Charrington <(mr.)\"charrington\\\"@\\\"shop\"@thought.police.oceania> (junk shop);, user@oceania (unknown_display_name in comment), \"Escape \\\" also , characters\" <user2@oceania>, undisclosed-recipients:;, user3@oceania (nested (comment)), Brotherhood(s):\"Emmanuel Goldstein\"<goldstein@brotherhood.oceania>; , \"users@oceania\" : \"user5@oceania\\\" <user6@oceania> , \\\"\" <user4@oceania>;, \"\":;",
+          ADDRS("Ministry of \"Truth\"@unspecified-domain" /* group start */,
+                "winston.smith@recdep.minitrue",
+                "julia@ficdep.minitrue",
+                "" /* group end */,
+                "Thought Police@unspecified-domain" /* group start */,
+                "o'brien@thought.police.oceania",
+                "charrington\"@\"shop@thought.police.oceania",
+                "" /* group end */,
+                "user@oceania",
+                "user2@oceania",
+                "undisclosed-recipients@unspecified-domain" /* group start */,
+                "" /* group end */,
+                "user3@oceania",
+                "Brotherhood@unspecified-domain" /* group start */,
+                "goldstein@brotherhood.oceania",
+                "" /* group end */,
+                "users@oceania@unspecified-domain" /* group start */,
+                "user4@oceania",
+                "" /* group end */,
+                "@unspecified-domain" /* group start */,
+                "" /* group end */) },
+    };
+    #undef ADDRS
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    unsigned t;
+
+    for (t = 0; t < n_tests; t++) {
+        struct address_itr iter;
+        const char *expect;
+        unsigned i;
+
+        address_itr_init(&iter, tests[t].input, 0);
+
+        for (i = 0, expect = tests[t].expect_addresses[i];
+             ;
+             i++)
+        {
+            const struct address *addr;
+
+            addr = address_itr_next(&iter);
+            dump_addr(__func__, addr);
+
+            /* don't overrun expect_addresses if parser finds too many */
+            if (expect) expect = tests[t].expect_addresses[i];
+
+            if (expect) {
+                CU_ASSERT_PTR_NOT_NULL(addr);
+
+                if (addr) {
+                    /* n.b. only examining the address to keep test structure
+                     * manageable. this at least proves that the multi-address
+                     * parse didn't choke out completely.
+                     * hopefully test_xs_singles exercised the other fields
+                     * adequately!
+                     */
+                    if (*expect) {
+                        char *actual = address_get_all(addr, 0);
+                        CU_ASSERT_STRING_EQUAL(actual, expect);
+                        free(actual);
+                    }
+                    else {
+                        /* expect empty string as marker for group end */
+                        CU_ASSERT_PTR_NULL(addr->name);
+                        CU_ASSERT_PTR_NULL(addr->route);
+                        CU_ASSERT_PTR_NULL(addr->mailbox);
+                        CU_ASSERT_PTR_NULL(addr->domain);
+                    }
+                }
+            }
+            else {
+                CU_ASSERT_PTR_NULL(addr);
+            }
+
+            if (!addr)
+                break;
+        }
+
+        address_itr_fini(&iter);
+    }
 }
 
 /* vim: set ft=c: */
