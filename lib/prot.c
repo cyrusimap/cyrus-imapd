@@ -703,7 +703,7 @@ EXPORTED int prot_fill(struct protstream *s)
                 /* ignore EINTR if we've timed out */
                 (r == -1 && errno == EINTR && !signals_poll() && now >= read_timeout)) {
                 if (!s->dontblock) {
-                    s->error = xstrdup("idle for too long");
+                    s->error = xstrdup(PROT_IDLE_STRING);
                     return EOF;
                 } else {
                     errno = EAGAIN;
