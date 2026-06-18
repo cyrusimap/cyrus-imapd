@@ -981,11 +981,14 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
     struct get_alarm_rock rock =
         { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0, dryrun };
     struct icalperiodtype range = icalperiodtype_null_period();
-    /* Limit our recurrence expansion to a decade from today.
-       This will end up missing events that occur less frequent than
-       decennially, but what are the chances? */
+    /* Limit our recurrence expansion to 90 days from today.
+       process_alarm_cb() will stop expanding recurrences if the trigger
+       for a VALARM is in the future more than 60 days from today.  
+       However, if the master component does not include any VALARMS
+       the trigger check is not done and recurrence expansion would
+       otherwise continue until the libical-specified MAX year. */
     range.end = icaltime_today();
-    icaltime_adjust(&range.end, 10*365, 0, 0, 0);
+    icaltime_adjust(&range.end, 90, 0, 0, 0);
     icalcomponent_myforeach(ical, range, floatingtz, process_alarm_cb, &rock);
 
     if (myical) icalcomponent_free(myical);
