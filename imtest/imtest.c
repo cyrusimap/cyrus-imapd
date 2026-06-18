@@ -76,9 +76,7 @@ static char *output_socket = NULL;
 static int output_socket_opened = 0;
 static ino_t output_socket_ino = 0;
 
-#define CONFIGHASHSIZE 30 /* relatively small */
-
-static struct hash_table confighash;
+static struct hash_table confighash = HASH_TABLE_INITIALIZER;
 static int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
 
 extern int _sasl_debug;
@@ -2700,9 +2698,7 @@ int main(int argc, char **argv)
     char localip[60], remoteip[60];
     const char *haproxy_clientip = NULL;
 
-    if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
-        imtest_fatal("could not construct config hash table");
-    }
+    construct_hash_table(&confighash, 0, 0);
 
    /* do not buffer */
     setbuf(stdin, NULL);
