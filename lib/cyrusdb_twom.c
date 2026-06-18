@@ -231,11 +231,6 @@ static int myforeach(struct dbengine *db,
     int tmflags = 0;
 
     if (!tidptr) {
-        // we call out to the mupdate server within mailbox findall,
-        // which tries to lock the mailboxes.db!  This breaks unless
-        // we release the lock every time sadly, so add ALWAYSYIELD
-        // to match twoskip/skiplist et al behaviour
-        tmflags |= TWOM_ALWAYSYIELD;
         struct twom_db *tmdb = (struct twom_db *)db;
         return _errormap(twom_db_foreach(tmdb, prefix, prefixlen,
                                          goodp, cb, rock, tmflags));
@@ -351,6 +346,13 @@ static int delete(struct dbengine *db,
     return mywrite(db, key, keylen, NULL, 0, tidptr, tmflags);
 }
 
+static int yield(struct dbengine *db)
+{
+    struct twom_db *tmdb = (struct twom_db *)db;
+    int tmr = twom_db_yield(tmdb);
+    return _errormap(tmr);
+}
+
 HIDDEN struct cyrusdb_backend cyrusdb_twom =
 {
     "twom",                  /* name */
@@ -359,6 +361,8 @@ HIDDEN struct cyrusdb_backend cyrusdb_twom =
     &cyrusdb_generic_done,
     &cyrusdb_generic_archive,
     &cyrusdb_generic_unlink,
+
+    &yield,
 
     &myopen,
     &myclose,

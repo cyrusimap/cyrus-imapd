@@ -840,6 +840,8 @@ HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
     &cyrusdb_generic_noarchive,
     &cyrusdb_generic_unlink,
 
+    NULL, /*yield*/
+
     &myopen,
     &myclose,
 
