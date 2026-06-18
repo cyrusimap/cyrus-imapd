@@ -1518,7 +1518,7 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
             char *location = strconcat(config_servername, "!",
                                        mbentry->partition, (char *)NULL);
             r = mupdate_activate(mupdate_h, mbentry->name,
-                                 location, mbentry->acl);
+                                 location, mbentry->acl, mbentry->jmapid);
             free(location);
             if (r) {
                 syslog(LOG_ERR,
@@ -2156,7 +2156,8 @@ EXPORTED int mboxlist_createmailbox_version(const mbentry_t *mbentry, int minor_
 
         r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
         if (!r) r = mupdate_reserve(mupdate_h, mboxname, loc);
-        if (!r) r = mupdate_activate(mupdate_h, mboxname, loc, acl);
+        if (!r) r = mupdate_activate(mupdate_h, mboxname, loc,
+                                     acl, newmbentry->jmapid);
         if (r) {
             syslog(LOG_ERR, "MUPDATE: can't commit mailbox entry for '%s'",
                    mboxname);
@@ -3109,7 +3110,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             if (!r) r = mupdate_delete(mupdate_h, oldname);
             if (!r) r = mupdate_reserve(mupdate_h, newname, loc);
         }
-        if (!r) r = mupdate_activate(mupdate_h, newname, loc, newmbentry->acl);
+        if (!r) r = mupdate_activate(mupdate_h, newname, loc,
+                                     newmbentry->acl, newmbentry->jmapid);
         if (r) {
             syslog(LOG_ERR,
                    "MUPDATE: can't commit mailbox entry for '%s'",
@@ -3548,7 +3550,7 @@ EXPORTED int mboxlist_setacl(const struct namespace *namespace __attribute__((un
                    name);
         }
         else {
-            r = mupdate_activate(mupdate_h, name, buf, newacl);
+            r = mupdate_activate(mupdate_h, name, buf, newacl, mbentry->jmapid);
             if(r) {
                 syslog(LOG_ERR,
                        "MUPDATE: can't update mailbox entry for '%s'",
@@ -3655,7 +3657,7 @@ mboxlist_setacls(const char *name, const char *newacl, modseq_t foldermodseq, in
                    "cannot connect to mupdate server for syncacl on '%s'",
                    name);
         } else {
-            r = mupdate_activate(mupdate_h, name, buf, newacl);
+            r = mupdate_activate(mupdate_h, name, buf, newacl, mbentry->jmapid);
             if (r) {
                 syslog(LOG_ERR,
                        "MUPDATE: can't update mailbox entry for '%s'",
