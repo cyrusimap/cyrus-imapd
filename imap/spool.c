@@ -40,11 +40,26 @@ struct hdrcache_t {
 EXPORTED hdrcache_t spool_new_hdrcache(void)
 {
     hdrcache_t cache = xzmalloc(sizeof(struct hdrcache_t));
+    cache->cache = HASH_TABLE_INITIALIZER;
 
-    if (!construct_hash_table(&cache->cache, 4000, 0)) {
-        free(cache);
-        cache = NULL;
-    }
+    /* It is unclear what is a good default value here. It's unclear why
+     * previous (fixed size hashing) values were chosen. It's not even obvious
+     * what datasets our callers are throwing into these caches.
+     * Size was 4000 when the code was migrated to the common hash table code
+     * (commit 84468a8568a300a0, Jan 2011). Before that it started as 1019
+     * (commit 0fea6e133558a71e, June 1999), increased to 4009 by commit
+     * 4e4d3b3f377c8f4e in July 1999, described only as "SASL and other fixes"
+     *
+     * The size presumably was chosen to handle the worst case. Now hashes can
+     * grow, the trade off now is between good CPU cache locality (a smaller
+     * size), and not needing to resize several times during construction (a
+     * larger size)
+     *
+     * Aside from one unit test inserting 5000 entries (also added in Jan 2011),
+     * the most entries used in all the regression tests are 16. So 4000 is
+     * complete overkill. Analysis of my own inbox shows that 95% of mails have
+     * 63 or fewer headers so we'll go with 64, until we have a better plan. */
+    construct_hash_table(&cache->cache, 64, 0);
 
     return cache;
 }
