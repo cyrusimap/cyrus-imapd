@@ -257,7 +257,10 @@ static int octet_matches_(const char *text, size_t tlen,
             set_var(var_num, val_start, t, match_vars);
             break;
         case '\\':
-            c = *p++;
+            if (*p == '?' || *p == '*') {
+                /* escaped wildcard character */
+                c = *p++;
+            }
             /* falls through */
         default:
             if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
