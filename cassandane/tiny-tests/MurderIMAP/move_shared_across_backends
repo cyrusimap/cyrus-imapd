@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+sub test_move_shared_across_backends
+    :NoAltNamespace :IMAPMurder :needs_component_murder
+    ($self)
+{
+    my $shared = 'shared';
+
+    # create a shared folder on backend2
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    # grant full rights including expunge
+    $admintalk->setacl($shared, 'anyone', 'lrswipkxtecd');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # inject a message into the shared folder
+    my $frontend = $self->{frontend_store}->get_client();
+    $self->{frontend_store}->set_folder($shared);
+    $self->{frontend_store}->_select();
+    $self->{gen}->set_next_uid(1);
+    $self->make_message("Message A", store => $self->{frontend_store});
+
+    # verify the message is there
+    $frontend->select($shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+
+    # MOVE to INBOX (cross-backend)
+    $frontend->move('1', 'INBOX');
+    xlog $self, "move response: " . $frontend->get_last_completion_response();
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    # Verify directly on backend2: Mail::IMAPTalk does not update its
+    # internal EXISTS counter in response to an unsolicited EXPUNGE
+    # received during a MOVE.
+    my $backend2 = $self->{backend2_store}->get_client();
+    $backend2->select($shared);
+    $self->assert_num_equals(0, $backend2->get_response_code('exists'));
+
+    # verify the message is now in INBOX
+    $frontend->select('INBOX');
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+}
