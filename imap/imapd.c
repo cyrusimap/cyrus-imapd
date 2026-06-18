@@ -2543,6 +2543,7 @@ static void cmdloop(void)
                 }
             }
             else if (!strcmp(cmd.s, "Uidbatches")) {
+                /* draft-ietf-mailmaint-imap-uidbatches */
                 uint32_t size, low = 1, high = UINT32_MAX;
 
                 if (!imapd_index && !backend_current) goto nomailbox;
@@ -2550,13 +2551,24 @@ static void cmdloop(void)
                 if (c != ' ') goto missingargs;
                 c = getuint32(imapd_in, &size);
                 if (c <= EOF) goto missingargs;
+                /* Per Section 4:
+                 * Batch size and range values MUST be nznumber.
+                 * We reject 0 values with BAD and response code CLIENTBUG.
+                 */
+                if (!size) {
+                    prot_printf(imapd_out,
+                                "%s BAD [CLIENTBUG] Invalid batch size\r\n",
+                                tag.s);
+                    eatline(imapd_in, c);
+                    continue;
+                }
                 if (c == ' ' &&
                     /* Per Section 3.1.5:
                      * Servers MUST reject batch ranges that are in the wrong
                      * order with BAD and response code CLIENTBUG.
                      */
-                    ((c = getuint32(imapd_in, &low)) != ':' ||
-                     (c = getuint32(imapd_in, &high)) <= EOF ||
+                    ((c = getuint32(imapd_in, &low)) != ':'  || !low  ||
+                     (c = getuint32(imapd_in, &high)) <= EOF || !high ||
                      low > high)) {
                     prot_printf(imapd_out,
                                 "%s BAD [CLIENTBUG] Invalid batch range\r\n",

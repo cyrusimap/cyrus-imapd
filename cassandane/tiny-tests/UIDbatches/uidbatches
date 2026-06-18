@@ -115,6 +115,15 @@ sub test_uidbatches ($self)
     $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, 'X');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '0');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '0:5');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '5:0');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
     $res = $imaptalk->_imap_cmd('UIDBATCHES', 0, \%handlers, '10', '6:');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 
