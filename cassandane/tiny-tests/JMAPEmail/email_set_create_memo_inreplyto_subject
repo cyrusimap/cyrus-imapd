@@ -1,0 +1,131 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_create_memo_inreplyto_subject ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "Create message1";
+    my $message1Subject = 'message1';
+    my $message1MsgId = 'message1@local';
+
+    my $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    1 => {
+                        subject    => $message1Subject,
+                        messageId  => [$message1MsgId],
+                        mailboxIds => { '$inbox' => JSON::true },
+
+                        from       => [ { email => 'a@example.com' } ],
+                        to         => [ { email => 'b@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "test" } },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+    my $emailId1 =  $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($emailId1);
+    my $threadId1 = $res->[0][1]{created}{1}{threadId};
+    $self->assert_not_null($threadId1);
+
+    xlog $self, "Create message2 replying to message1 with different subject";
+    my $message2Subject = 'message2';
+    my $message2MsgId = 'message2@local';
+    $res = $jmap->CallMethods([
+        [
+            'Email/set',
+            {
+                create => {
+                    2 => {
+                        subject    => $message2Subject,
+                        messageId  => [$message2MsgId],
+                        references => [$message1MsgId],
+                        inReplyTo  => [$message1MsgId],
+                        mailboxIds => { '$inbox' => JSON::true },
+
+                        from       => [ { email => 'b@example.com' } ],
+                        to         => [ { email => 'a@example.com' } ],
+                        textBody   => [ { partId => '1' } ],
+                        bodyValues => { '1' => { value => "test" } },
+                    },
+                },
+            },
+            'R1'
+        ],
+    ]);
+    my $emailId2 =  $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($emailId2);
+    my $threadId2 = $res->[0][1]{created}{2}{threadId};
+    $self->assert_not_null($threadId2);
+
+    xlog $self, "Assert message2 has different threadId than message1";
+    $self->assert_str_not_equals($threadId1, $threadId2);
+
+    my @testCases = ({
+        subject => $message1Subject,
+        inReplyTo => $message1MsgId,
+        wantThreadId => $threadId1,
+    }, {
+        subject => $message2Subject,
+        inReplyTo => $message1MsgId,
+        wantThreadId => $threadId2, # message1-msgid is in References of thread 2
+    }, {
+        subject => 'foo',
+        inReplyTo => $message1MsgId,
+        wantThreadId => undef,
+    }, {
+        subject => $message1Subject,
+        inReplyTo => $message2MsgId,
+        wantThreadId => undef,
+    }, {
+        subject => $message2Subject,
+        inReplyTo => $message2MsgId,
+        wantThreadId => $threadId2,
+    }, {
+        subject => 'bar',
+        inReplyTo => $message2MsgId,
+        wantThreadId => undef,
+    });
+
+    foreach my $i (0..$#testCases) {
+        my $tc = $testCases[$i];
+
+        xlog $self, "Running testcase $i";
+        $res = $jmap->CallMethods([
+            [
+                'Email/set',
+                {
+                    create => {
+                        "memo$i" => {
+                            subject    => $tc->{subject},
+                            messageId  => ["memo$i\@local"],
+                            inReplyTo  => [$tc->{inReplyTo}],
+                            mailboxIds => { '$inbox' => JSON::true },
+                            from       => [ { email => 'b@example.com' } ],
+                            textBody   => [ { partId => '1' } ],
+                            bodyValues => { '1' => { value => "memo$i" } },
+                            keywords => { '$memo' => JSON::true  },
+                        },
+                    },
+                },
+                'R1'
+            ],
+        ]);
+
+        my $memoThreadId = $res->[0][1]{created}{"memo$i"}{threadId};
+
+        $self->assert_not_null($res->[0][1]{created}{"memo$i"});
+        if ($tc->{wantThreadId}) {
+            $self->assert_str_equals($tc->{wantThreadId}, $memoThreadId);
+        } else {
+            $self->assert_str_not_equals($threadId1, $memoThreadId);
+            $self->assert_str_not_equals($threadId2, $memoThreadId);
+        }
+    }
+}

@@ -35,7 +35,7 @@ EOF
                     name     => 'Email/query',
                     path     => '/ids'
                 },
-                properties => [ 'threadId', 'messageId' ],
+                properties => [ 'threadId', 'messageId', 'header:x-me-message-id' ],
             },
             'R2'
         ],
@@ -48,6 +48,7 @@ EOF
 
     my $memoSubject   = "non-matching-subject";
     my $memoInReplyTo = $res->[1][1]{list}[2]{messageId};
+    my $memoXMeMessageId = $res->[1][1]{list}[2]{'header:x-me-message-id'};
 
     xlog $self, 'Create email with non-matching subject and $memo keyword';
     $res = $jmap->CallMethods([
@@ -58,6 +59,7 @@ EOF
                     memo1 => {
                         subject    => $memoSubject,
                         inReplyTo  => $memoInReplyTo,
+                        'header:x-me-message-id' => $memoXMeMessageId,
                         mailboxIds => {
                             '$inbox' => JSON::true,
                         },

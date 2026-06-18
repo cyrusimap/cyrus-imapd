@@ -1,0 +1,145 @@
+#!perl
+use Cassandane::Tiny;
+use Sub::Install ();
+
+# If a user sends a message, and they get a reply with a different enough
+# subject, the conversation will be split into two threads. Memos should be
+# attacheable to each message individually. Make sure this works for two
+# different cases:
+#
+# - If the order of append is Sent, Reply
+# - If the order of append is Reply, Sent (as happens when importing...)
+
+my sub append_and_add_memos ($self, $first_to_append) {
+    state $counter = 0;
+
+    xlog $self, "Appending $first_to_append first...";
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $sent_mid = "<sent${counter}\@example.com>";
+    $counter++;
+
+    my $reply_mid = "<reply${counter}\@example.com>";
+    $counter++;
+
+    my $sent = <<~"EOF";
+        From: cassandane\@local
+        To: other\@local
+        Subject: Hello
+        Message-Id: $sent_mid
+
+        Hi
+        EOF
+
+    my $reply = <<~"EOF";
+        From: other\@local
+        To: cassandane\@local
+        Subject: Automated reply Hello
+        Message-Id: $reply_mid
+        In-Reply-To: $sent_mid
+        References: $sent_mid
+
+        Hi
+        EOF
+
+    s/\r?\n/\r\n/gs for ($sent, $reply);
+
+    if ($first_to_append eq 'sent') {
+        $imap->append("INBOX", $sent);
+        $imap->append("INBOX", $reply);
+    } else {
+        $imap->append("INBOX", $reply);
+        $imap->append("INBOX", $sent);
+    }
+
+    my $ems = $jmap->request([
+        [ "Email/query" => {}, 'a' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'a',
+                    name         => 'Email/query',
+                    path         => '/ids'
+                },
+                properties => ['threadId', 'subject', 'messageId', 'inReplyTo' ],
+            },
+        ],
+    ]);
+
+    my %by_subject = map {
+        $_->{subject} => $_,
+    } $ems->sentence_named("Email/get")->arguments->{list}->@*;
+
+    my $sent_thrid = $by_subject{"Hello"}->{threadId};
+    my $reply_thrid = $by_subject{"Automated reply Hello"}->{threadId};
+
+    $self->assert_not_null($sent_thrid);
+    $self->assert_not_null($reply_thrid);
+
+    # These were split because of the subject
+    $self->assert_not_equals($sent_thrid, $reply_thrid);
+
+    my %memo_base = (
+        mailboxIds    => { '$inbox' => JSON::true },
+        from          => [ { email => 'from@local' } ],
+        to            => [ { email => 'to@local' } ],
+        bodyStructure => {
+            type   => 'text/plain',
+            partId => 'part1',
+        },
+        bodyValues    => {
+            part1 => {
+                value => "a memo",
+            },
+        },
+        keywords      => {
+            '$memo' => JSON::true,
+        },
+    );
+
+    # Add a memo to both
+    my $memo1_mid = "<memo${counter}\@example.com>";
+    $counter++;
+
+    my $memo2_mid = "<memo${counter}\@example.com>";
+    $counter++;
+
+    my $res = $jmap->request([[
+        'Email/set',
+        {
+            create => {
+                "1" => {
+                    %memo_base,
+                    subject       => "Hello",
+                    messageId     => [ $memo1_mid ],
+                    inReplyTo     => [ $sent_mid  ],
+                },
+                "2" => {
+                    %memo_base,
+                    subject       => "Automated reply Hello",
+                    messageId     => [ $memo2_mid ],
+                    inReplyTo     => [ $reply_mid ],
+                },
+            },
+        },
+    ]]);
+
+    # Threads should match up to the message they are attached to
+    $self->assert_cmp_deeply(
+        {
+            1 => superhashof({ threadId => $sent_thrid  }),
+            2 => superhashof({ threadId => $reply_thrid }),
+        },
+        $res->sentence_named("Email/set")->arguments->{created},
+    );
+}
+
+for my $first_append (qw(sent reply)) {
+    Sub::Install::install_sub({
+      code => sub ($self) { append_and_add_memos($self, $first_append); },
+      as   => "test_email_set_create_memo_splitconv_append_${first_append}_first",
+    });
+}
