@@ -347,7 +347,7 @@ static void foreach_note(struct mailbox *mbox, hash_table *ids,
 
         void *data = NULL;
         const char *id = buf_cstring(&buf);
-        if (ids->size) {
+        if (ids) {
             /* Do we have this id? */
             data = hash_lookup(id, ids);
             if (!data) {
@@ -356,6 +356,9 @@ static void foreach_note(struct mailbox *mbox, hash_table *ids,
             }
 
             hash_del(id, ids);
+        }
+        else {
+            /* We have no list - act on everything */
         }
 
         proc(id, msg, data, rock);
@@ -389,6 +392,7 @@ static int jmap_note_get(jmap_req_t *req)
     hash_table ids = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     int rights;
+    bool specific_ids = false;
 
     jmap_get_parse(req, &parser, &notes_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
@@ -423,6 +427,7 @@ static int jmap_note_get(jmap_req_t *req)
         size_t i;
         json_t *val;
 
+        specific_ids = true;
         construct_hash_table(&ids, 32, 0);
         
         json_array_foreach(get.ids, i, val) {
@@ -432,12 +437,14 @@ static int jmap_note_get(jmap_req_t *req)
 
     if ((rights & JACL_READITEMS) == JACL_READITEMS) {
         struct get_rock grock = { &get, &buf };
-        foreach_note(mbox, &ids, &_notes_get_cb, &grock);
+        foreach_note(mbox, specific_ids ? &ids : NULL, &_notes_get_cb, &grock);
     }
 
-    /* Any remaining ids are not found */
-    hash_enumerate(&ids, &not_found_cb, get.not_found);
-    free_hash_table(&ids, NULL);
+    if (specific_ids) {
+        /* Any remaining ids are not found */
+        hash_enumerate(&ids, &not_found_cb, get.not_found);
+        free_hash_table(&ids, NULL);
+    }
 
     /* Build response */
     buf_reset(&buf);

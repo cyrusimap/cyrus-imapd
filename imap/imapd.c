@@ -13963,7 +13963,7 @@ static void list_data(struct listargs *listargs)
                                   imapd_authstate, list_cb, &rock);
 
             if (rock.subs) strarray_free(rock.subs);
-            if (rock.server_table.size)
+            if (config_mupdate_server)
                 free_hash_table(&rock.server_table, NULL);
         }
 

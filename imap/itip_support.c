@@ -864,7 +864,7 @@ static int deliver_merge_cancel(icalcomponent *ical,    // current iCalendar
     icalcomponent_kind kind = ICAL_NO_COMPONENT;
     icalproperty *prop;
     const char *recurid;
-    int num_canceled = 0;
+    size_t num_canceled = 0;
 
     /* Add each override component of current object to hash table */
     construct_hash_table(&override_table, 10, 1);
@@ -929,7 +929,7 @@ static int deliver_merge_cancel(icalcomponent *ical,    // current iCalendar
     }
 
     /* Did we cancel all instances? */
-    int ret = (num_canceled >= hash_numrecords(&override_table));
+    int ret = (num_canceled >= hash_count(&override_table));
 
     free_hash_table(&override_table, NULL);
 

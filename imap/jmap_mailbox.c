@@ -746,7 +746,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     if (rock->want) {
         hash_del(id, rock->want);
         // are we done looking?
-        if (!hash_numrecords(rock->want))
+        if (!hash_count(rock->want))
             return IMAP_OK_COMPLETED;
     }
 
@@ -2989,7 +2989,7 @@ static void _toposort_cb(const char *id, void *data, void *rock)
 static int _toposort(hash_table *parent_id_by_id, strarray_t *dst)
 {
     struct toposort topo = { parent_id_by_id, dst, HASH_TABLE_INITIALIZER, 0 };
-    construct_hash_table(&topo.visited, hash_numrecords(parent_id_by_id) + 1, 0);
+    construct_hash_table(&topo.visited, hash_count(parent_id_by_id) + 1, 0);
     hash_enumerate(topo.parent_id_by_id, _toposort_cb, &topo);
     free_hash_table(&topo.visited, NULL);
     free_hash_table(&topo.visited, NULL);

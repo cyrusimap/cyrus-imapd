@@ -146,25 +146,15 @@ static void icalcomps_init(struct icalcomps *comps, icalcomponent *ical)
 
 static void icalcomps_fini(struct icalcomps *comps)
 {
-    if (comps->by_uid.size) {
-        hash_iter *hit = hash_table_iter(&comps->by_uid);
-        while (hash_iter_next(hit)) {
-            ptrarray_t *complist = hash_iter_val(hit);
-            ptrarray_free(complist);
-        }
-        hash_iter_free(&hit);
-        free_hash_table(&comps->by_uid, NULL);
-    }
-    if (comps->by_uidrecurid.size) {
-        free_hash_table(&comps->by_uidrecurid, NULL);
-    }
+    free_hash_table(&comps->by_uid, (void (*)(void *)) &ptrarray_free);
+    free_hash_table(&comps->by_uidrecurid, NULL);
     buf_free(&comps->buf);
 }
 
 static icalcomponent *icalcomps_by_uidrecurid(struct icalcomps *comps,
                                               icalcomponent *ofcomp)
 {
-    if (!comps || !comps->by_uidrecurid.size) {
+    if (!comps || !hash_count(&comps->by_uidrecurid)) {
         return NULL;
     }
 
@@ -178,7 +168,7 @@ static icalcomponent *icalcomps_by_uidrecurid(struct icalcomps *comps,
 
 static ptrarray_t *icalcomps_by_uid(struct icalcomps *comps, const char *uid)
 {
-    if (!comps || !comps->by_uid.size) {
+    if (!comps) {
         return NULL;
     }
     return hash_lookup(uid, &comps->by_uid);
@@ -1157,12 +1147,8 @@ static void jstimezones_add_vtimezones(jstimezones_t *jstzones, icalcomponent *i
 
 static void jstimezones_fini(jstimezones_t *jstzones)
 {
-    if (jstzones->byjstzid.size) {
-        free_hash_table(&jstzones->byjstzid, NULL);
-    }
-    if (jstzones->bytzid.size) {
-        free_hash_table(&jstzones->bytzid, NULL);
-    }
+    free_hash_table(&jstzones->byjstzid, NULL);
+    free_hash_table(&jstzones->bytzid, NULL);
 
     jstimezones_entry_t *jstz;
     while ((jstz = ptrarray_pop(&jstzones->entries))) {
@@ -5747,7 +5733,7 @@ participant_to_ical(icalcomponent *comp,
          * original data already only contained an ORGANIZER. */
         json_t *jorga = participant_from_ical(orga, NULL, orga, NULL);
         if (participant_equals(jorga, jpart) &&
-                (hash_numrecords(caladdress_by_participant_id) > 1 ||
+                (hash_count(caladdress_by_participant_id) > 1 ||
                  allow_organizer_attendee_only)) {
             icalproperty_free(prop);
             prop = NULL;
