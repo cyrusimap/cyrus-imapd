@@ -93,15 +93,18 @@ static void prometheus_init(void)
 
     handle = xzmalloc(sizeof(*handle));
     r = mappedfile_open(&handle->mf, fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
-    if (r) goto error;
+    if (r) {
+        free(handle);
+        return;
+    }
 
     r = mappedfile_writelock(handle->mf);
     if (r) goto error;
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
-                        "actually wrote %d",
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
+                        SIZE_T_FMT " bytes, actually wrote %d",
                         sizeof(stats), r);
         goto error;
     }
@@ -117,13 +120,10 @@ static void prometheus_init(void)
     return;
 
 error:
-    if (handle) {
-        if (handle->mf) {
-            mappedfile_unlock(handle->mf);
-            mappedfile_close(&handle->mf);
-        }
-        free(handle);
-    }
+    if (handle->mf)
+        mappedfile_abort(&handle->mf);
+    free(handle);
+
     promhandle = NULL;
     prometheus_enabled = 0;
 }
@@ -203,8 +203,8 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* and write it out */
     r = mappedfile_pwrite(doneprocs, &accum, sizeof(accum), 0);
     if (r != sizeof(accum)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write " SIZE_T_FMT "bytes, "
-                        "actually wrote %d",
+        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
+                        SIZE_T_FMT " bytes, actually wrote %d",
                         sizeof(accum), r);
         goto done;
     }
