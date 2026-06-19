@@ -10,7 +10,7 @@ sub test_addannotation_same_emailid
     xlog $self, "Install script that files into two folders with an annotation";
     $self->{instance}->install_sieve_script(<<"EOF"
 require ["vnd.cyrus.addannotation", "fileinto", "copy"];
-addannotation "/vendor/cmu/cyrus-imapd/sieve-matched" "rule-a rule-b";
+addannotation "/comment" "rule-a rule-b";
 fileinto :copy "$target";
 keep;
 EOF
@@ -26,18 +26,18 @@ EOF
     xlog $self, "Fetch emailid + annotation from INBOX";
     $imaptalk->select("INBOX");
     my $inbox = $imaptalk->fetch(1,
-        '(emailid annotation (/vendor/cmu/cyrus-imapd/sieve-matched (value.shared)))');
+        '(emailid annotation (/comment (value.shared)))');
 
     xlog $self, "Fetch emailid + annotation from target";
     $imaptalk->select($target);
     my $tgt = $imaptalk->fetch(1,
-        '(emailid annotation (/vendor/cmu/cyrus-imapd/sieve-matched (value.shared)))');
+        '(emailid annotation (/comment (value.shared)))');
 
     xlog $self, "Both copies carry the annotation";
     $self->assert_str_equals('rule-a rule-b',
-        $inbox->{1}{annotation}{'/vendor/cmu/cyrus-imapd/sieve-matched'}{'value.shared'});
+        $inbox->{1}{annotation}{'/comment'}{'value.shared'});
     $self->assert_str_equals('rule-a rule-b',
-        $tgt->{1}{annotation}{'/vendor/cmu/cyrus-imapd/sieve-matched'}{'value.shared'});
+        $tgt->{1}{annotation}{'/comment'}{'value.shared'});
 
     xlog $self, "Both copies share the SAME emailid (annotation is not part of GUID)";
     $self->assert_str_equals($inbox->{1}{emailid}[0], $tgt->{1}{emailid}[0]);

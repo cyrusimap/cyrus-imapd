@@ -175,6 +175,8 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_addheader(interpreter, (sieve_add_header *) &stub_generic);
     sieve_register_deleteheader(interpreter,
                                 (sieve_delete_header *) &stub_generic);
+    sieve_register_addannotation(interpreter,
+                                 (sieve_add_annotation *) &stub_generic);
     sieve_register_fname(interpreter, (sieve_get_fname *) &stub_generic);
     sieve_register_envelope(interpreter, (sieve_get_envelope *) &stub_generic);
     sieve_register_environment(interpreter,

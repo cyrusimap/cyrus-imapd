@@ -24,6 +24,7 @@
 #include "auth.h"
 #include "duplicate.h"
 #include "global.h"
+#include "glob.h"
 #include "imapurl.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
@@ -136,6 +137,51 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (!index) spool_remove_header(head, m->hdrcache);
     else spool_remove_header_instance(head, index, m->hdrcache);
+
+    return SIEVE_OK;
+}
+
+/* is "entry" permitted by the sieve_allowed_annotations glob list? */
+static int addannotation_allowed(const char *entry)
+{
+    const char *globs = config_getstring(IMAPOPT_SIEVE_ALLOWED_ANNOTATIONS);
+    strarray_t *pats;
+    int i, allowed = 0;
+
+    if (!globs || !*globs) return 0;
+
+    pats = strarray_split(globs, " ", STRARRAY_TRIM);
+    for (i = 0; i < strarray_size(pats); i++) {
+        glob *g = glob_init(strarray_nth(pats, i), '/');
+        if (GLOB_MATCH(g, entry)) allowed = 1;
+        glob_free(&g);
+        if (allowed) break;
+    }
+    strarray_free(pats);
+
+    return allowed;
+}
+
+/* accumulates the annotation "entry" with value "value" on msg.
+   The owner-write permission is enforced downstream when the annotation
+   is stored via the append path under the recipient's auth context. */
+static int addannotation(void *mc, const char *entry,
+                         const char *attrib, const char *value)
+{
+    message_data_t *m = ((deliver_data_t *) mc)->m;
+    struct buf buf = BUF_INITIALIZER;
+
+    if (entry == NULL || value == NULL) return SIEVE_FAIL;
+
+    if (!addannotation_allowed(entry)) {
+        syslog(LOG_NOTICE, "sieve: addannotation entry %s not permitted "
+               "by sieve_allowed_annotations", entry);
+        return SIEVE_FAIL;
+    }
+
+    buf_setcstr(&buf, value);
+    setentryatt(&m->annotations, entry, attrib, &buf);
+    buf_free(&buf);
 
     return SIEVE_OK;
 }
@@ -1130,7 +1176,7 @@ static int sieve_fileinto(void *ac,
     }
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                          &imap4flags, NULL, userid, sd->authstate, md->id,
+                          &imap4flags, md->annotations, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader, mode,
                           intname, md->date, 0 /*savedate*/, quotaoverride, 0);
 
@@ -1154,7 +1200,7 @@ static int sieve_fileinto(void *ac,
             }
 
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                                  &imap4flags, NULL, userid, sd->authstate, md->id,
+                                  &imap4flags, md->annotations, userid, sd->authstate, md->id,
                                   userid, mdata->notifyheader, mode,
                                   intname, md->date, 0 /*savedate*/, quotaoverride, 0);
         }
@@ -1819,7 +1865,7 @@ static int sieve_keep(void *ac,
     }
 
     ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
-                          &imap4flags, NULL, authuser, authstate, md->id,
+                          &imap4flags, md->annotations, authuser, authstate, md->id,
                           userid, mydata->notifyheader, mode, intname, md->date,
                           0 /*savedate*/, quotaoverride, acloverride);
 
@@ -2322,6 +2368,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_headersection(interp, &getheadersection);
     sieve_register_addheader(interp, &addheader);
     sieve_register_deleteheader(interp, &deleteheader);
+    sieve_register_addannotation(interp, &addannotation);
     sieve_register_fname(interp, &getfname);
 
     sieve_register_envelope(interp, &getenvelope);
