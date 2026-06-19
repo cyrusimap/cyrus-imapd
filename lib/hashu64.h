@@ -2,6 +2,7 @@
 #define __CYRUS_HASHU64_H__
 
 #include <stddef.h>           /* For size_t     */
+#include <stdbool.h>
 
 #define HASHU64_TABLE_INITIALIZER (hashu64_table) { \
     .table = NULL, \
@@ -86,6 +87,16 @@ void hashu64_enumerate(hashu64_table *table,void (*func)(uint64_t ,void *,void *
 EXPORTED inline size_t hashu64_count(const hashu64_table *table)
 {
     return table->count;
+}
+
+/* true if construct_hash_table() has been called on this hash table
+ * false if the memory has only been initialized with HASH_TABLE_INITIALIZER
+ * undefined behaviour if the memory was not initialized in any way
+ * (this last part is unavoidable. It's C)
+ */
+EXPORTED inline bool hashu64_constructed(const hashu64_table *table)
+{
+    return !!table->table;
 }
 
 /*

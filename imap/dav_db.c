@@ -426,8 +426,16 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
     case MBTYPE_ADDRESSBOOK:
         if (mbentry->mbtype != rrock->last_mbtype) {
             rrock->last_mbtype = mbentry->mbtype;
-            free_hashu64_table(&rrock->cmodseqs, NULL);
-            construct_hashu64_table(&rrock->cmodseqs, 10240, 0);
+            size_t guess;
+            if (hashu64_constructed(&rrock->cmodseqs)) {
+                /* Take the size of the previous type as a starting size */
+                guess = hashu64_count(&rrock->cmodseqs);
+                free_hashu64_table(&rrock->cmodseqs, NULL);
+            } else {
+                /* Go with the default */
+                guess = 0;
+            }
+            construct_hashu64_table(&rrock->cmodseqs, guess, 0);
         }
         addproc = &mailbox_add_dav;
         writelock = 1; // write lock so we can delete stale index records
