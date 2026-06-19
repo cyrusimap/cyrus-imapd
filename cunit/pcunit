@@ -15,7 +15,9 @@ use warnings;
 
 use Time::HiRes qw(gettimeofday);
 use POSIX ":sys_wait_h";
-use File::Temp qw(tempfile);
+use File::Temp qw(tempfile tempdir);
+use File::Basename qw(dirname);
+use Cwd qw(abs_path);
 
 my $jobs = shift;
 if (defined $jobs) {
@@ -27,7 +29,8 @@ if (defined $jobs) {
     $jobs = 8;
 }
 
-chdir "cunit";
+my $srcdir = abs_path(dirname($0));
+my $unit = "$srcdir/unit";
 
 # Convert a list of tests into a list of just the suites that contain them
 # so we can run each suite in its own process.
@@ -43,7 +46,7 @@ chdir "cunit";
 #
 #     ('xsha1', 'xsyslog_ev')
 
-my $tests = `./unit -l`;
+my $tests = `$unit -l`;
 $tests =~ s/:.*//g;
 
 my %suites = map { $_ => 1 } split(/\n/, $tests);
@@ -64,7 +67,15 @@ while (@suites) {
 
     my $pid = fork;
     unless ($pid) {
-        exit system("./unit $next -v > $outfile 2>&1") >> 8;
+        my $tmpdir = tempdir("cyrus-cunit-XXXXXX",
+                             DIR => ($ENV{TMPDIR} || "/tmp"), CLEANUP => 1);
+        # Copy test data files to native Linux tmpdir so OpenSSL and others
+        # can read them without macOS virtioFS interference
+        system("cp $srcdir/*.pem $tmpdir/ 2>/dev/null");
+        chdir $tmpdir;
+        my $r = system("$unit $next -v > $outfile 2>&1") >> 8;
+        chdir "/"; # leave tmpdir before CLEANUP removes it
+        exit $r;
     }
 
     $children{$pid} = {

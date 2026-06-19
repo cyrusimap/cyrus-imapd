@@ -739,11 +739,15 @@ check-local:
 		test -z "$$VG" || vg="$(VALGRIND)" ; \
 		f="-v" ; \
 		test "x$$CUFORMAT" = xjunit && f="-x" ; \
-		cd cunit ; \
-		$$vg ./unit $$f ; \
+		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
+		trap "rm -rf $$tmpdir" EXIT ; \
+		cd $$tmpdir ; \
+		cp $(abs_srcdir)/cunit/*.pem ./ ; \
+		$$vg $(abs_builddir)/cunit/unit $$f ; \
 		retval=$$? ; \
 		if [ "x$$CUFORMAT" = xjunit ] ; then \
-			$(RM) -rf reports ; mkdir reports ; $(PERL) ./cunit-to-junit.pl ; \
+			$(RM) -rf reports ; mkdir reports ; $(PERL) $(abs_srcdir)/cunit/cunit-to-junit.pl ; \
+			cp -r reports $(abs_builddir)/cunit/ ; \
 		fi ; \
 		exit $$retval
 
@@ -759,18 +763,19 @@ check-discrete: cunit/unit
 	@echo "Running unit tests, one at a time"
 	@vg= ; \
 		test -z "$$VG" || vg="$(VALGRIND) --quiet --log-fd=3" ; \
-		cd cunit ; \
 		fails=0 ; \
 		tests=0 ; \
 		while read t ; do \
 			tests=$$(($$tests + 1)) ; \
-			if $$vg ./unit $$t >/dev/null 3>&2 2>/dev/null ; then \
+			tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") ; \
+			if (cd $$tmpdir && cp $(abs_srcdir)/cunit/*.pem ./ && $$vg $(abs_builddir)/cunit/unit $$t >/dev/null 3>&2 2>/dev/null) ; then \
 				echo "[  OK  ] $$t" ; \
 			else \
 				fails=$$(($$fails + 1)) ; \
 				echo "[FAILED] $$t" ; \
 			fi ; \
-		done < <( ./unit -l ) ; \
+			rm -rf $$tmpdir ; \
+		done < <( $(abs_builddir)/cunit/unit -l ) ; \
 		echo "$$fails/$$tests tests failed" ; \
 		exit $$fails
 
@@ -783,10 +788,12 @@ check-%: cunit/unit
 	@echo "Running unit tests for $*"
 	@vg= ; \
 		test -z "$$VG" || vg="$(VALGRIND)" ; \
-		cd cunit ; \
-		$$vg ./unit -v $* ; \
-		retval=$$? ; \
-		exit $$retval
+		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
+		trap "rm -rf $$tmpdir" EXIT ; \
+		cd $$tmpdir ; \
+		cp $(abs_srcdir)/cunit/*.pem ./ ; \
+		$$vg $(abs_builddir)/cunit/unit -v $* ; \
+		exit $$?
 
 endif
 
