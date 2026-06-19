@@ -770,6 +770,13 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
+        case B_ADDANNOTATION:
+            printf("ADDANNOTATION SCOPE(%d)", cmd.u.aan.scope);
+            print_string(" ENTRY", cmd.u.aan.entry);
+            print_string(" VALUE", cmd.u.aan.value);
+            break;
+
+
         case B_DELETEHEADER:
             printf("DELETEHEADER INDEX(%d)", cmd.u.dh.comp.index);
             print_comparator(&cmd.u.dh.comp);
@@ -1605,6 +1612,14 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             generate_switch(":last", (cmd.u.ah.index < 0), buf);
             generate_string(NULL, cmd.u.ah.name, buf);
             generate_string(NULL, cmd.u.ah.value, buf);
+            break;
+
+        case B_ADDANNOTATION:
+            *requires |= SIEVE_CAPA_ADDANNOTATION;
+            generate_token("addannotation", indent, buf);
+            generate_switch(":priv", cmd.u.aan.scope, buf);
+            generate_string(NULL, cmd.u.aan.entry, buf);
+            generate_string(NULL, cmd.u.aan.value, buf);
             break;
 
         case B_DELETEHEADER:

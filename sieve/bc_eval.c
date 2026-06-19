@@ -2373,6 +2373,22 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             break;
         }
 
+        case B_ADDANNOTATION:
+        {
+            const char *entry = cmd.u.aan.entry;
+            const char *value = cmd.u.aan.value;
+            int scope = cmd.u.aan.scope;
+
+            if (requires & BFE_VARIABLES) {
+                entry = parse_string(entry, variables);
+                value = parse_string(value, variables);
+            }
+
+            i->addannotation(m, entry,
+                             scope ? "value.priv" : "value.shared", value);
+            break;
+        }
+
         case B_DELETEHEADER:
         {
             const char *name = cmd.u.dh.name;
