@@ -77,6 +77,8 @@ static commandlist_t *build_addheader(sieve_script_t*, commandlist_t *c,
                                       char *name, char *value);
 static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
+static commandlist_t *build_addannotation(sieve_script_t*, commandlist_t *c,
+                                          char *entry, char *value);
 static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
                                    commandlist_t *c, arrayu64_t *times);
@@ -129,7 +131,7 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags caltags ikttags
+%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags aantags ntags itags sntags caltags ikttags
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1 recipients
@@ -231,6 +233,10 @@ extern void sieverestart(FILE *f);
 /* editheader - RFC 5293 */
 %token ADDHEADER DELETEHEADER
 %type <cl> ahtags dhtags
+
+/* vnd.cyrus.addannotation */
+%token ADDANNOTATION PRIV SHARED
+%type <cl> aantags
 
 /* [e]reject - RFC 5429 */
 %token <nval> REJCT EREJECT
@@ -483,6 +489,9 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DELETEHEADER dhtags string optstringlist
                                  { $$ = build_deleteheader(sscript,
                                                            $2, $3, $4); }
+        | ADDANNOTATION aantags string string
+                                 { $$ = build_addannotation(sscript,
+                                                            $2, $3, $4); }
 
         | reject string          { $$ = build_rej_err(sscript, $1, $2); }
         | NOTIFY ntags string    { $$ = build_notify(sscript, $2, $3); }
@@ -1029,6 +1038,13 @@ ahtags: /* empty */              { $$ = new_command(B_ADDHEADER, sscript); }
 
                                      $$->u.ah.index = -1;
                                  }
+        ;
+
+
+/* ADDANNOTATION tagged arguments */
+aantags: /* empty */             { $$ = new_command(B_ADDANNOTATION, sscript); }
+        | aantags PRIV           { $$ = $1; $$->u.aan.scope = 1; }
+        | aantags SHARED         { $$ = $1; $$->u.aan.scope = 0; }
         ;
 
 
@@ -2743,6 +2759,25 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
                              &c->u.dh.comp,
                              c->u.dh.name,
                              c->u.dh.values);
+
+    return c;
+}
+
+static commandlist_t *build_addannotation(sieve_script_t *sscript,
+                                          commandlist_t *c,
+                                          char *entry, char *value)
+{
+    assert(c && c->type == B_ADDANNOTATION);
+
+    verify_utf8(sscript, value);
+
+    c->u.aan.entry = entry;
+    c->u.aan.value = value;
+
+    c->nargs = bc_precompile(c->args, "iss",
+                             c->u.aan.scope,
+                             c->u.aan.entry,
+                             c->u.aan.value);
 
     return c;
 }
