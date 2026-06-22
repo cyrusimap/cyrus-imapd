@@ -13,6 +13,10 @@
 #include <stdlib.h>
 /* for strlen() */
 #include <string.h>
+/* strlcpy and strlcat might be in a BSD utility function library */
+#ifdef HAVE_BSD_STRING_H
+# include <bsd/string.h>
+#endif
 
 #ifndef HAVE_STRLCAT
 extern size_t strlcat(char *dst, const char *src, size_t len);
