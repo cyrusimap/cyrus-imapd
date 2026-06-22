@@ -1,0 +1,21 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_uidonly
+    ($self)
+{
+    my $frontend = $self->{frontend_store}->get_client();
+
+    my $res = $frontend->select('INBOX');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    xlog $self, "ENABLE UIDONLY";
+    $res = $frontend->_imap_cmd('ENABLE', 0, 'enabled', 'UIDONLY');
+    $self->assert_num_equals(1, $res->{uidonly});
+
+    xlog $self, "Attempt FETCH";
+    $res = $frontend->fetch('1:*', '(UID FLAGS)');
+    $self->assert_str_equals('bad', $frontend->get_last_completion_response());
+    # get_response_code() doesn't (yet) handle [UIDREQUIRED]
+    $self->assert_matches(qr/\[UIDREQUIRED\]/, $frontend->get_last_error());
+}

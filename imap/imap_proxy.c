@@ -48,6 +48,14 @@ static void imap_postcapability(struct backend *s)
     }
 }
 
+static void imap_postauth(struct backend *s)
+{
+    if (client_capa) {
+        /* Enable all capabilities enabled by the client on the new backend */
+        proxy_enable(s, client_capa);
+    }
+}
+
 static const struct tls_alpn_t imap_alpn_map[] = {
     { "imap", NULL, NULL },
     { "",     NULL, NULL },
@@ -80,7 +88,7 @@ struct protocol_t imap_protocol =
       { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
       { "N01 NOOP", "* ", "N01 OK" },
       { "Q01 LOGOUT", "* ", "Q01 " } } },
-  NULL
+  imap_postauth
 };
 
 void proxy_gentag(char *tag, size_t len)
@@ -1630,4 +1638,35 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
         item->available = server_available;
         item->total = server_total;
     }
+}
+
+void prot_print_client_capa(struct protstream *pout, unsigned capa)
+{
+    if (capa & CAPA_IMAP4REV2) {
+        prot_puts(pout, " IMAP4rev2");
+    }
+    if (capa & CAPA_CONDSTORE) {
+        prot_puts(pout, " CONDSTORE");
+    }
+    if (capa & CAPA_QRESYNC) {
+        prot_puts(pout, " QRESYNC");
+    }
+    if (capa & CAPA_UIDONLY) {
+        prot_puts(pout, " UIDONLY");
+    }
+    if (capa & CAPA_UTF8_ACCEPT) {
+        prot_puts(pout, " UTF8=ACCEPT");
+    }
+}
+
+void proxy_enable(struct backend *s, unsigned capa)
+{
+    char mytag[128];
+
+    /* Enable the specified capabilities on the backend */
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(s->out, "%s ENABLE", mytag);
+    prot_print_client_capa(s->out, capa);
+    prot_puts(s->out, "\r\n");
+    discard_until_tag(s, mytag, 0);
 }
