@@ -100,6 +100,7 @@ struct protocol_t {
            int (*logout)(struct backend *s);
        } spec;
     } u;
+    void (*post_auth)(struct backend *s);
 };
 
 #endif /* _INCLUDED_PROTOCOL_H */

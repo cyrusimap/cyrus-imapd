@@ -58,7 +58,8 @@ static struct protocol_t lmtp_protocol =
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       { NULL, NULL, NULL },
       { "NOOP", NULL, "250" },
-      { "QUIT", NULL, "221" } } }
+      { "QUIT", NULL, "221" } } },
+  NULL
 };
 
 /* unused for deliver.c, but needed to make lmtpengine.c happy */

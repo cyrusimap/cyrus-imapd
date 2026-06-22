@@ -79,7 +79,8 @@ struct protocol_t imap_protocol =
         NULL, AUTO_CAPA_AUTH_OK },
       { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
       { "N01 NOOP", "* ", "N01 OK" },
-      { "Q01 LOGOUT", "* ", "Q01 " } } }
+      { "Q01 LOGOUT", "* ", "Q01 " } } },
+  NULL
 };
 
 void proxy_gentag(char *tag, size_t len)

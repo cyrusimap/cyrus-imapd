@@ -51,7 +51,8 @@ static const struct tls_alpn_t http_alpn_map[] = {
 
 HIDDEN struct protocol_t http_protocol =
 { "http", "HTTP", http_alpn_map, TYPE_SPEC,
-  { .spec = { &login, &ping, &logout } }
+  { .spec = { &login, &ping, &logout } },
+  NULL
 };
 
 

@@ -101,7 +101,8 @@ static struct protocol_t sieve_protocol =
         &sieve_parsesuccess, AUTO_CAPA_AUTH_SSF },
       { NULL, NULL, NULL },
       { NULL, NULL, NULL },
-      { "LOGOUT", NULL, "OK" } } }
+      { "LOGOUT", NULL, "OK" } } },
+  NULL
 };
 
 /* Returns TRUE if we are done */

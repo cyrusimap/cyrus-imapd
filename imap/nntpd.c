@@ -239,7 +239,8 @@ static struct protocol_t nntp_protocol =
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess, 0 },
       { NULL, NULL, NULL },
       { "DATE", NULL, "111" },
-      { "QUIT", NULL, "205" } } }
+      { "QUIT", NULL, "205" } } },
+  NULL
 };
 
 static int read_response(struct backend *s, int force_notfatal, char **result)

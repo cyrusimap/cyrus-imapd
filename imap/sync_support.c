@@ -100,7 +100,8 @@ static struct protocol_t imap_csync_protocol =
         &imap_sasl_parsesuccess, AUTO_CAPA_AUTH_OK },
       { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
       { "N01 NOOP", "* ", "N01 OK" },
-      { "Q01 LOGOUT", "* ", "Q01 " } } }
+      { "Q01 LOGOUT", "* ", "Q01 " } } },
+  NULL
 };
 
 static struct protocol_t csync_protocol =
@@ -118,7 +119,8 @@ static struct protocol_t csync_protocol =
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
       { "COMPRESS DEFLATE", NULL, "OK" },
       { "NOOP", NULL, "OK" },
-      { "EXIT", NULL, "OK" } } }
+      { "EXIT", NULL, "OK" } } },
+  NULL
 };
 
 struct sync_action {
