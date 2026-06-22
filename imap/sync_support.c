@@ -6946,6 +6946,17 @@ static int do_folders(struct sync_client_state *sync_cs,
         if (r == 0) {
             if (tombstone->mbtype & MBTYPE_DELETED) {
                 mboxlist_entry_free(&tombstone);
+                if (sync_cs->userid) {
+                    char *rfolder_userid = mboxname_to_userid(rfolder->name);
+                    int foreign = rfolder_userid && strcmp(rfolder_userid, sync_cs->userid) != 0;
+                    free(rfolder_userid);
+                    if (foreign) {
+                        syslog(LOG_NOTICE, "SYNCNOTICE: skipping delete of %s (foreign user, syncing %s)",
+                               rfolder->name, sync_cs->userid);
+                        r = 0;
+                        continue;
+                    }
+                }
                 r = sync_do_folder_delete(sync_cs, rfolder->name);
                 if (r) {
                     syslog(LOG_ERR, "SYNCERROR: sync_do_folder_delete(): failed: %s (%s)",
@@ -7024,6 +7035,15 @@ static int do_folders(struct sync_client_state *sync_cs,
         for (i = 0; i < ptrarray_size(&mbentry_byid->name_history); i++) {
             const former_name_t *histitem = ptrarray_nth(&mbentry_byid->name_history, i);
             if (sync_folder_lookup_byname(replica_folders, histitem->name)) continue;
+            /* Skip history entries from a different user's namespace — a cross-user
+             * rename leaves former names in other users' namespaces, which must not
+             * be used as intermediate rename targets on the replica. */
+            char *hist_userid = mboxname_to_userid(histitem->name);
+            char *cur_userid = mboxname_to_userid(mbentry_byid->name);
+            int same_user = !strcmpsafe(hist_userid, cur_userid);
+            free(hist_userid);
+            free(cur_userid);
+            if (!same_user) continue;
             // add a rename from old name to the temporary name
             sync_rename_list_add(rename_folders, item->uniqueid, item->oldname,
                                  histitem->name, item->part, histitem->uidvalidity);
@@ -7268,6 +7288,13 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     struct mboxinfo *info = (struct mboxinfo *)rock;
     int r = 0;
+
+    if (mbentry->mbtype & MBTYPE_DELETED) {
+        /* Tombstone: deletion is signalled via the UUID lookup in do_folders;
+         * processing name_history here would pollute mboxname_list with names
+         * from other users' namespaces. */
+        return 0;
+    }
 
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_SIEVE &&
         !(info->flags & SYNC_FLAG_SIEVE_MAILBOX)) {
