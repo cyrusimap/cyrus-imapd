@@ -1,6 +1,13 @@
 Description:
 
-Added a new experimental httpd module "convert" that converts between
+Added support for the latest versions of IETF drafts:
+
+- draft-ietf-jmap-calendars
+- draft-ietf-calext-jscalendarbis
+- draft-ietf-calext-jscalendar-icalendar
+- draft-ietf-calext-icalendar-jscalendar-extensions
+
+Also added a new experimental httpd module "convert" that converts between
 media types for selected content types. Initially it only converts between
 iCalendar and JSCalendar, according to the definition of the IETF draft
 draft-ietf-calext-jscalendar-icalendar. This module is not meant for
