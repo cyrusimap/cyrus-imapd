@@ -1237,7 +1237,7 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
     long http_err;
     const char **hdr;
     hdrcache_t resp_hdrs = NULL;
-    struct body_t resp_body;
+    struct body_t resp_body = { 0 };
     struct http_connection be_conn;
     struct transaction_t be_txn;
 
@@ -1280,8 +1280,6 @@ EXPORTED int http_proxy_h2_connect(struct backend *be, struct transaction_t *txn
     buf_free(&be_txn.buf);
 
     /* Read response from backend */
-    resp_body.flags = 0;
-
     r = http_read_response(be, METH_GET, &code,
                            &resp_hdrs, &resp_body, &txn->error.desc);
     if (r || (resp_body.flags & BODY_CLOSE)) {
