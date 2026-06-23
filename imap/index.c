@@ -1074,13 +1074,14 @@ static int _fetch_setseen(struct index_state *state,
     return 0;
 }
 
-/* seq can be NULL - means "ALL" */
-EXPORTED int index_fetchresponses(struct index_state *state,
-                                  seqset_t *seq,
-                                  int usinguid,
-                                  struct conversations_state *convstate,
-                                  const struct fetchargs *fetchargs,
-                                  int *fetchedsomething)
+/* non-locking, non-updating - just do a fetch on the state
+ * we already have. seq can be NULL - means "ALL"  */
+static int index_fetchresponses(struct index_state *state,
+                                seqset_t *seq,
+                                int usinguid,
+                                struct conversations_state *convstate,
+                                const struct fetchargs *fetchargs,
+                                int *fetchedsomething)
 {
     uint32_t msgno, start, end;
     struct index_map *im;
