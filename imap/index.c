@@ -1234,12 +1234,13 @@ EXPORTED int index_fetch(struct index_state *state,
     }
 
     if (fetchargs->vanished) {
-        struct vanished_params v = {0};
-        v.sequence = sequence;
-        v.uidvalidity = state->mailbox->i.uidvalidity;
-        v.modseq = fetchargs->changedsince;
-        v.match_seq = fetchargs->match_seq;
-        v.match_uid = fetchargs->match_uid;
+        struct vanished_params v = {
+            .sequence = sequence,
+            .uidvalidity = state->mailbox->i.uidvalidity,
+            .modseq = fetchargs->changedsince,
+            .match_seq = fetchargs->match_seq,
+            .match_uid = fetchargs->match_uid
+        };
         /* XXX - return error unless usinguid? */
         vanishedlist = index_vanished(state, &v);
     }
