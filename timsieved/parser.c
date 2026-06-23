@@ -725,10 +725,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   if (sasl_result!=SASL_OK)
   {
-      /* convert to user error code */
-      if(sasl_result == SASL_NOUSER)
-          sasl_result = SASL_BADAUTH;
-      *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
+      *errmsg = cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/1);
       loginlog_bad(sieved_clienthost, NULL, mech, NULL, *errmsg);
       goto reset;
   }
@@ -739,7 +736,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   {
     *errmsg = "Internal SASL error";
     syslog(LOG_ERR, "SASL: sasl_getprop SASL_USERNAME: %s",
-           sasl_errstring(sasl_result, NULL, NULL));
+           cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0));
     goto reset;
   }
   username = xstrdup((const char *) canon_user);
@@ -777,7 +774,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
                   if (sasl_result!=SASL_OK) {
                       *errmsg = "Internal SASL error";
                       syslog(LOG_ERR, "SASL: sasl_getprop SASL_AUTHUSER: %s",
-                             sasl_errstring(sasl_result, NULL, NULL));
+                             cyrus_sasl_errmsg(sieved_saslconn, sasl_result, /*for_client*/0));
                       goto reset;
                   }
                   authname = xstrdup((const char *) canon_user);

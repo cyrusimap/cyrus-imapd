@@ -141,7 +141,15 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
         if (wildmat(service, pat)) {
             /* match ==> we're done */
             ret = !not;
-            if (msgbuf) strlcpy(msgbuf, msg, bufsiz);
+            if (msgbuf) {
+                char *p;
+                strlcpy(msgbuf, msg, bufsiz);
+                /* Replace control characters (incl. CR/LF/TAB) with spaces so
+                   the message is safe to embed in line-based protocol responses */
+                for (p = msgbuf; *p; p++) {
+                    if ((unsigned char)*p < 0x20) *p = ' ';
+                }
+            }
             break;
         }
     }

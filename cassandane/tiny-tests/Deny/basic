@@ -5,27 +5,33 @@ sub test_basic ($self)
 {
     xlog $self, "Test the cyr_deny utility with the imap service";
 
+    # Matches userdeny_db.c default_message when cyr_deny omits -m
+    my $default_deny_message = 'Access to this service has been blocked';
+
     # Data thanks to hipsteripsum.me
     my @cases = ({
             # test default options
             user => 'helvetica',
             opts => [ ],
             can_login => 0,
+            expect_deny_message => $default_deny_message,
         },{
             # test the -s option with our service
             user => 'portland',
             opts => [ '-s', 'imap' ],
             can_login => 0,
+            expect_deny_message => $default_deny_message,
         },{
             # test the -s option with another service
             user => 'stumptown',
             opts => [ '-s', 'godard' ],
             can_login => 1,
         },{
-            # test the -m option
+            # test the -m option (client-visible deny text)
             user => 'mustache',
             opts => [ '-m', 'Bugger off, you' ],
             can_login => 0,
+            expect_deny_message => 'Bugger off, you',
         },{
             # control case - no cyr_deny command run
             user => 'vegan',
@@ -65,7 +71,10 @@ sub test_basic ($self)
             xlog $self, "Expecting this to fail";
             eval { $store->get_client(); };
             my $exception = $@;
-            $self->assert_matches(qr/no - login failed: authorization failure/i, $exception);
+            my $expect = $case->{expect_deny_message};
+            $self->assert_not_null($expect);
+            $self->assert_matches(qr/login failed:/i, $exception);
+            $self->assert_matches(qr/\Q$expect\E/i, $exception);
         }
     }
 }

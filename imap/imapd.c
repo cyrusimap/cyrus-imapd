@@ -3123,17 +3123,14 @@ static void cmd_login(char *tag, char *user)
                                  passwd,
                                  strlen(passwd))) != SASL_OK) {
         loginlog_bad(imapd_clienthost, canon_user, "plaintext", NULL,
-                     sasl_errdetail(imapd_saslconn));
+                     cyrus_sasl_errmsg(imapd_saslconn, r, /*for_client*/0));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
 
-        /* Don't allow user probing */
-        if (r == SASL_NOUSER) r = SASL_BADAUTH;
-
-        if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
+        if ((reply = cyrus_sasl_errmsg(imapd_saslconn, r, /*for_client*/1)) != NULL) {
             prot_printf(imapd_out, "%s NO Login failed: %s\r\n", tag, reply);
         } else {
             prot_printf(imapd_out, "%s NO Login failed: %d\r\n", tag, r);
@@ -3147,7 +3144,7 @@ static void cmd_login(char *tag, char *user)
         r = sasl_getprop(imapd_saslconn, SASL_USERNAME, &val);
 
         if(r != SASL_OK) {
-            if ((reply = sasl_errstring(r, NULL, NULL)) != NULL) {
+            if ((reply = cyrus_sasl_errmsg(imapd_saslconn, r, /*for_client*/1)) != NULL) {
                 prot_printf(imapd_out, "%s NO Login failed: %s\r\n",
                             tag, reply);
             } else {
@@ -3233,7 +3230,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
                 sasl_getprop(imapd_saslconn, SASL_USERNAME, (const void **) &userid);
 
             loginlog_bad(imapd_clienthost, userid, authtype, NULL,
-                         sasl_errdetail(imapd_saslconn));
+                         cyrus_sasl_errmsg(imapd_saslconn, sasl_result, /*for_client*/0));
 
             prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE);
@@ -3241,10 +3238,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
                 sleep(failedloginpause);
             }
 
-            /* Don't allow user probing */
-            if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
-
-            errorstring = sasl_errstring(sasl_result, NULL, NULL);
+            errorstring = cyrus_sasl_errmsg(imapd_saslconn, sasl_result, /*for_client*/1);
             if (errorstring) {
                 prot_printf(imapd_out, "%s NO %s\r\n", tag, errorstring);
             } else {

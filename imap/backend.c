@@ -760,7 +760,7 @@ static int backend_login(struct backend *ret, const char *userid,
 
         if ((r = backend_authenticate(ret, userid, cb, &my_status))) {
             syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-                   sasl_errstring(r, NULL, NULL));
+                   cyrus_sasl_errmsg(ret->saslconn, r, /*for_client*/0));
             free(old_mechlist);
             return -1;
         }

@@ -73,6 +73,10 @@ extern int mysasl_proxy_policy(sasl_conn_t *conn,
                                unsigned urlen __attribute__((unused)),
                                struct propctx *propctx __attribute__((unused)));
 
+/* Prefer SASL connection detail (includes sasl_seterror text, e.g. user_deny.db
+ * message from mysasl_proxy_policy); else generic catalog string for error code */
+extern const char *cyrus_sasl_errmsg(sasl_conn_t *conn, int sasl_err_code, int for_client);
+
 /* check if `authstate' is a valid member of class */
 extern int global_authisa(struct auth_state *authstate,
                           enum imapopt opt);

@@ -1450,9 +1450,11 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
         /* Tell client to authenticate */
         if (sasl_result == SASL_CONTINUE)
             txn->error.desc = "Continue authentication exchange";
-        else if (sasl_result) txn->error.desc = "Authentication failed";
-        else txn->error.desc =
-                 "Must authenticate to access the specified target";
+        else if (sasl_result && !txn->error.desc)
+            txn->error.desc = "Authentication failed";
+        else if (!sasl_result && !txn->error.desc)
+            txn->error.desc =
+                "Must authenticate to access the specified target";
 
         return HTTP_UNAUTHORIZED;
     }
@@ -1688,6 +1690,13 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
             r = http_auth(hdr[0], txn);
             if ((r < 0) || !txn->auth_chal.scheme) {
                 /* Auth failed - reinitialize */
+                const char *emsg = cyrus_sasl_errmsg(httpd_saslconn, r, /*for_client*/1);
+
+                if (emsg && *emsg) {
+                    buf_reset(&txn->buf);
+                    buf_appendcstr(&txn->buf, emsg);
+                    txn->error.desc = buf_cstring(&txn->buf);
+                }
                 syslog(LOG_DEBUG, "auth failed - reinit");
                 reset_saslconn(&httpd_saslconn);
                 txn->auth_chal.scheme = NULL;
@@ -1747,6 +1756,13 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
         r = proxy_authz(&authzid, txn);
         if (r) {
             /* Proxy authz failed - reinitialize */
+            const char *emsg = cyrus_sasl_errmsg(httpd_saslconn, r, /*for_client*/1);
+
+            if (emsg && *emsg) {
+                buf_reset(&txn->buf);
+                buf_appendcstr(&txn->buf, emsg);
+                txn->error.desc = buf_cstring(&txn->buf);
+            }
             syslog(LOG_DEBUG, "proxy authz failed - reinit");
             reset_saslconn(&httpd_saslconn);
             txn->auth_chal.scheme = NULL;
@@ -4018,7 +4034,7 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
     if (status) {
         loginlog_bad(txn->conn->clienthost, httpd_authid, NULL,
                      txn->auth_chal.scheme->name,
-                     sasl_errdetail(httpd_saslconn));
+                     cyrus_sasl_errmsg(httpd_saslconn, status, /*for_client*/0));
         return status;
     }
 
@@ -4305,7 +4321,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
             if (*user == '\0')  // TB can send "Authorization: Basic Og=="
                 txn->error.desc = "All-whitespace username.";
             loginlog_bad(txn->conn->clienthost, realuser, NULL, "Basic",
-                         sasl_errdetail(httpd_saslconn));
+                         cyrus_sasl_errmsg(httpd_saslconn, status, /*for_client*/0));
             free(realuser);
 
             /* Don't allow user probing */
@@ -4369,7 +4385,7 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         /* Failure - probably bad client response */
         if ((status != SASL_OK) && (status != SASL_CONTINUE)) {
             syslog(LOG_ERR, "SASL failed: %s",
-                   sasl_errstring(status, NULL, NULL));
+                   cyrus_sasl_errmsg(httpd_saslconn, status, /*for_client*/0));
             return status;
         }
 

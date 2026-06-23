@@ -1063,14 +1063,12 @@ void lmtpmode(struct lmtp_func *func,
                           }
 
                           loginlog_bad(cd.clienthost, userid, mech, NULL,
-                                       sasl_errdetail(cd.conn));
+                                       cyrus_sasl_errmsg(cd.conn, r, /*for_client*/0));
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
 
                           prot_printf(pout, "501 5.5.4 %s\r\n",
-                                      sasl_errstring((r == SASL_NOUSER ?
-                                                      SASL_BADAUTH : r),
-                                                     NULL, NULL));
+                                      cyrus_sasl_errmsg(cd.conn, r, /*for_client*/1));
                       }
                   }
 

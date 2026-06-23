@@ -1464,11 +1464,10 @@ static void cmd_authenticate(struct conn *C,
                 sasl_getprop(C->saslconn, SASL_USERNAME, (const void **) &userid);
 
             loginlog_bad(C->clienthost, userid, mech, NULL,
-                         sasl_errdetail(C->saslconn));
+                         cyrus_sasl_errmsg(C->saslconn, r, /*for_client*/0));
 
             prot_printf(C->pout, "%s NO \"%s\"\r\n", tag,
-                        sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),
-                                       NULL, NULL));
+                        cyrus_sasl_errmsg(C->saslconn, r, /*for_client*/1));
         }
 
         reset_saslconn(C);
