@@ -26,9 +26,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define TIMSIEVE_FAIL -1
-#define TIMSIEVE_OK 0
-
 int main(int argc, char **argv)
 {
     FILE *instream;
