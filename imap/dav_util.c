@@ -19,7 +19,6 @@
 #include "times.h"
 #include "user.h"
 #include "util.h"
-#include "xstrnchr.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -151,7 +150,7 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         cte = "8bit";
     }
     else {
-        cte = strnchr(data, '\0', datalen) ? "binary" : "8bit";
+        cte = memchr(data, '\0', datalen) ? "binary" : "8bit";
     }
     fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
 

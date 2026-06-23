@@ -55,7 +55,6 @@
 #include "xapian_wrap.h"
 #include "xmalloc.h"
 #include "xsha1.h"
-#include "xstrnchr.h"
 
 
 /* generated headers are not necessarily in current directory */
