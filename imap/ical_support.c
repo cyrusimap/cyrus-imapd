@@ -388,15 +388,15 @@ static int icalrecur_compare(struct icalrecurrencetype *a,
     cmp = a->skip - b->skip;
     if (cmp) return cmp;
 
-    short i;
-    for (i = 0; i < ICAL_BY_NUM_PARTS; i++) {
+    for (int i = 0; i < ICAL_BY_NUM_PARTS; i++) {
         cmp = a->by[i].size - b->by[i].size;
         if (cmp) return cmp;
 
-        if (a->by[i].size)
+        if (a->by[i].size) {
             cmp = memcmp(a->by[i].data, b->by[i].data,
                          a->by[i].size * sizeof(a->by[i].data[0]));
-        if (cmp) return cmp;
+            if (cmp) return cmp;
+        }
     }
 
     return 0;
