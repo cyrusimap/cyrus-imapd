@@ -8,31 +8,20 @@ sub test_calendarevent_get_organizer
     my ($id, $ical) = $self->icalfile('organizer');
 
     my $event = $self->putandget_vevent($id, $ical);
-    my $wantParticipants = {
-        'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+    my $wantParticipants = hashbag(
+        ignore() => {
             '@type' => 'Participant',
             name => 'Organizer',
             roles => {
                 'owner' => JSON::true,
             },
-            sendTo => {
-                imip => 'mailto:organizer@local',
-            },
-            expectReply => JSON::false,
-            participationStatus => 'needs-action',
+            calendarAddress => 'mailto:organizer@local',
         },
-        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+        ignore() => {
             '@type' => 'Participant',
-            roles => {
-                'attendee' => JSON::true,
-            },
-            sendTo => {
-                imip => 'mailto:attendee@local',
-            },
-            expectReply => JSON::false,
-            participationStatus => 'needs-action',
+            calendarAddress => 'mailto:attendee@local',
         },
-    };
-    $self->assert_deep_equals($wantParticipants, $event->{participants});
-    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+    );
+    $self->assert_cmp_deeply($wantParticipants, $event->{participants});
+    $self->assert_equals('mailto:organizer@local', $event->{organizerCalendarAddress});
 }

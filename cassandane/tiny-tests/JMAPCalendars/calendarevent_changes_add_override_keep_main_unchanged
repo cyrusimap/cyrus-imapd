@@ -6,7 +6,6 @@ sub test_calendarevent_changes_add_override_keep_main_unchanged
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $imap = $self->{store}->get_client();
 
@@ -79,7 +78,7 @@ EOF
     ]);
     $state = $res->[0][1]{newState};
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
-    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRule});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
     $imip = <<'EOF';
@@ -133,6 +132,6 @@ EOF
         }, 'R2'],
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
-    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRules});
+    $self->assert_not_null($res->[1][1]{list}[0]{recurrenceRule});
     $self->assert_not_null($res->[1][1]{list}[0]{recurrenceOverrides});
 }

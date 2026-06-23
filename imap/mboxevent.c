@@ -111,6 +111,7 @@ static struct mboxevent event_template =
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_COMPACT_CALIDS, "vnd.fastmail.compactCalendarIds", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_JMAP_EMAIL, "vnd.fastmail.jmapEmail", EVENT_PARAM_JSON, { 0 }, 0 },
@@ -330,6 +331,7 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
         gettimeofday(&mboxevent->timestamp, NULL);
 
     FILL_UNSIGNED_PARAM(mboxevent, EVENT_PID, getpid());
+    FILL_UNSIGNED_PARAM(mboxevent, EVENT_COMPACT_CALIDS, true);
 
     if (mboxevent_expected_param(type, EVENT_SESSIONID)) {
         FILL_STRING_PARAM(mboxevent, EVENT_SESSIONID, xstrdup(session_id()));

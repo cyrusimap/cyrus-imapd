@@ -39,6 +39,7 @@
 #include "sessionid.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "xsha1.h"
 #include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
@@ -1273,6 +1274,79 @@ EXPORTED const char *makeuuid()
     }
 #endif
     return res;
+}
+
+EXPORTED const char *makeuuid5(const char *nsuuidstr,
+                               unsigned const char *value,
+                               size_t len)
+{
+#ifdef HAVE_LIBUUID
+    uuid_t nsuuidbin;
+    if (!nsuuidstr || uuid_parse(nsuuidstr, nsuuidbin) < 0)
+        return NULL;
+
+    uuid_t uuidbin;
+    uuid_generate_sha1(uuidbin, nsuuidbin, (const char*)value, len);
+
+    static char uuidstr[UUID_STR_LEN];
+    uuid_unparse_lower(uuidbin, uuidstr);
+    return uuidstr;
+#else
+    if (!nsuuidstr || strlen(nsuuidstr) != 36) // 32 hex + 4 '-'
+        return NULL;
+
+    // Decode namespace ID.
+    char nsuuid[16] = { 0 };
+    char hex[32] = { 0 };
+    size_t i, j;
+    for (i = 0, j = 0; i < 36; i++) {
+        switch (i) {
+        case 8:
+        case 13:
+        case 18:
+        case 23:
+            if (nsuuidstr[i] != '-') return NULL;
+            break;
+        default:
+            if (!isxdigit(nsuuidstr[i])) return NULL;
+            hex[j++] = nsuuidstr[i];
+        }
+    }
+    hex_to_bin(hex, sizeof(hex), nsuuid);
+
+    // Generate SHA1 digest from namespace and value.
+    unsigned char digest[SHA1_DIGEST_LENGTH];
+    SHA1_CTX h;
+    SHA1Init(&h);
+    SHA1Update(&h, nsuuid, sizeof(nsuuid));
+    SHA1Update(&h, value, len);
+    SHA1Final(digest, &h);
+
+    // Create uuid from digest, see RFC 9562, Section 5.5.
+    unsigned char uuid[16];
+    memcpy(uuid, digest, sizeof(uuid));
+    uuid[6] = 0x50 | (uuid[6] & 0x0f); // ver
+    uuid[8] = 0x80 | (uuid[8] & 0x3f); // var
+
+    // Encode uuid.
+    static char uuidstr[37];
+    bin_to_hex(uuid, sizeof(uuid), hex, BH_LOWER);
+    for (i = 0, j = 0; i < 32; i++) {
+        switch (i) {
+        case 8:
+        case 12:
+        case 16:
+        case 20:
+            uuidstr[j++] = '-';
+            // fallthrough
+        default:
+            uuidstr[j++] = hex[i];
+        }
+    }
+    uuidstr[sizeof(uuidstr) - 1] = '\0';
+
+    return uuidstr;
+#endif
 }
 
 static int is_tcp_socket(int fd)

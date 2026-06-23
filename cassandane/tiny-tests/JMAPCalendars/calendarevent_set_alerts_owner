@@ -13,7 +13,7 @@ sub test_calendarevent_set_alerts_owner
     my $res = $ownerJmap->CallMethods([
         ['Calendar/set', {
             update => {
-                Default => {
+                $default_cal_id => {
                     shareWith => {
                         sharee => {
                             mayReadItems => JSON::true,
@@ -43,6 +43,7 @@ sub test_calendarevent_set_alerts_owner
             accountId => 'cassandane',
             create => {
                 event => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -66,7 +67,6 @@ sub test_calendarevent_set_alerts_owner
                     alerts => {
                         ownerAlert => {
                             '@type' => 'Alert',
-                            uid => '97d7c889-272f-4ce3-8d21-4a32b17ecece',
                             trigger => {
                                 '@type' => 'OffsetTrigger',
                                 relativeTo => 'start',

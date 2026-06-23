@@ -25,6 +25,7 @@ sub test_calendarprincipal_getavailability_showdetails
         ['CalendarEvent/set', {
             create => {
                 event1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -34,10 +35,11 @@ sub test_calendarprincipal_getavailability_showdetails
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
                     status => 'confirmed',
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
                         count => 12,
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         "2020-08-26T09:00:00" => {
                             start => "2020-08-26T13:00:00",
@@ -45,6 +47,7 @@ sub test_calendarprincipal_getavailability_showdetails
                     },
                 },
                 event2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -55,6 +58,7 @@ sub test_calendarprincipal_getavailability_showdetails
                     duration => "PT3H",
                 },
                 event3 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -66,6 +70,7 @@ sub test_calendarprincipal_getavailability_showdetails
                     freeBusyStatus => 'free',
                 },
                 event4 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -77,6 +82,7 @@ sub test_calendarprincipal_getavailability_showdetails
                     status => 'tentative',
                 },
                 event5 => {
+                    version => '2.0',
                     calendarIds => {
                         $invisibleCalendarId => JSON::true,
                     },

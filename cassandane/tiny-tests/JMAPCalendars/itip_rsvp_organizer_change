@@ -6,7 +6,6 @@ sub test_itip_rsvp_organizer_change
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $uid = '7e017102-0caf-490a-bbdf-422141d34e75';
 
@@ -37,7 +36,7 @@ UID:7e017102-0caf-490a-bbdf-422141d34e75
 DTEND;TZID=America/New_York:20210923T183000
 TRANSP:OPAQUE
 SUMMARY:test
-DTSTART;TZID=American/New_York:20210923T153000
+DTSTART;TZID=America/New_York:20210923T153000
 DTSTAMP:20210923T034327Z
 SEQUENCE:0
 ORGANIZER;CN=Test User;X-JMAP-ID=organizerA:MAILTO:organizerA@example.net
@@ -76,7 +75,7 @@ EOF
     my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
     $self->assert_not_null($notif);
     my $notif_payload = decode_json($notif->{MESSAGE});
-    my $expect_id = encode_eventid($uid);
+    my $expect_id = $eventId;
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REPLY', $notif_payload->{method});
 
@@ -88,22 +87,19 @@ EOF
         ['CalendarEvent/set', {
             update => {
                 $eventId => {
-                    replyTo => {
-                        imip => 'mailto:organizerB@example.net',
-                    },
+                    organizerCalendarAddress => 'mailto:organizerB@example.net',
                     'participants/organizerA' => undef,
                 },
             }
         }, 'R1'],
         ['CalendarEvent/get', {
             ids => [ $eventId ],
-            properties => [ 'replyTo' ],
+            properties => [ 'organizerCalendarAddress' ],
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_deep_equals({
-        imip => 'mailto:organizerB@example.net',
-    }, $res->[1][1]{list}[0]{replyTo});
+    $self->assert_str_equals('mailto:organizerB@example.net',
+            $res->[1][1]{list}[0]{organizerCalendarAddress});
 
     xlog "Assert that iTIP notification is sent";
     $data = $self->{instance}->getnotify();

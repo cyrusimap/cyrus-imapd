@@ -4006,14 +4006,10 @@ static int jmap_mailbox_set(jmap_req_t *req)
     }
 
     modseq_t old_modseq = jmap_modseq(req, MBTYPE_EMAIL, 0);
-    if (set.super.if_in_state) {
-        const char *if_in_state = set.super.if_in_state;
-        if ((USER_COMPACT_EMAILIDS(req->cstate) &&  // check for mandatory prefix
-             *if_in_state++ != JMAP_STATE_STRING_PREFIX) ||
-            atomodseq_t(if_in_state) != old_modseq) {
-            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-            goto done;
-        }
+    if (set.super.if_in_state &&
+        !jmap_state_matches(req->cstate, set.super.if_in_state, old_modseq)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
     }
 
     set.super.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);

@@ -256,6 +256,12 @@ static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
                                    const char *desc, const char *color);
 static void end_icalendar(struct buf *buf);
 
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color);
+
+static void end_jcal(struct buf *buf);
+
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
 
 // clang-format off
@@ -1513,14 +1519,16 @@ static int caldav_delete_cal(struct transaction_t *txn,
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && !is_draft)
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, ical, NULL, SCHED_MECH_CALDAV);
+                              cdata->organizer, ical, NULL,
+                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
                 sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            ical, NULL, SCHED_MECH_CALDAV);
+                            ical, NULL,
+                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
 
         free(sched_userid);
@@ -1533,9 +1541,13 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (ical) {
             icalcomponent *comp = icalcomponent_get_first_real_component(ical);
             if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                struct jmap_caleventid eid = {
+                    .createdmodseq = cdata->dav.createdmodseq,
+                    .ical_uid = cdata->ical_uid
+                };
                 int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
                     httpd_authstate, mailbox_name(mailbox),
-                    cdata->ical_uid, &schedule_addresses, is_draft, ical, NULL);
+                    &eid, &schedule_addresses, is_draft, ical, NULL);
                 if (r2) {
                     xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
                             "error=%s", error_message(r2));
@@ -3221,14 +3233,16 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, calendar))
                 sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                              cdata->organizer, oldical, ical, SCHED_MECH_CALDAV);
+                              cdata->organizer, oldical, ical,
+                              cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, calendar) && strarray_size(&schedule_addresses))
                 sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                            oldical, ical, SCHED_MECH_CALDAV);
+                            oldical, ical,
+                            cdata->dav.createdmodseq, SCHED_MECH_CALDAV);
         }
 
         free(sched_userid);
@@ -4136,6 +4150,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (ret) goto done;
     }
 
+    /* The createdmodseq for use in notifications (as the JMAP ID)
+     * and the index record is either the createdmodseq of any
+     * existing record, or the next modseq for the calendar data type.
+     */
+    modseq_t cmodseq = cdata->dav.imap_uid ? cdata->dav.createdmodseq :
+        mboxname_nextmodseq(txn->req_tgt.mbentry->name, 0, MBTYPE_CALENDAR, 0);
+
     switch (kind) {
     case ICAL_VEVENT_COMPONENT:
     case ICAL_VTODO_COMPONENT:
@@ -4192,7 +4213,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && !is_draft)
                         sched_request(cal_ownerid, sched_userid, &schedule_addresses,
-                                      organizer, oldical, ical, SCHED_MECH_CALDAV);
+                                      organizer, oldical, ical,
+                                      cmodseq, SCHED_MECH_CALDAV);
                 }
             }
             else {
@@ -4211,7 +4233,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses) && !is_draft)
                         sched_reply(cal_ownerid, sched_userid, &schedule_addresses,
-                                    oldical, ical, SCHED_MECH_CALDAV);
+                                    oldical, ical, cmodseq, SCHED_MECH_CALDAV);
                 }
             }
 
@@ -4233,26 +4255,33 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    /* Set SENT-BY property */
+    /* Set SENT-BY parameter */
     if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
         const char *sentby = *hdr;
         if (!strncasecmp(sentby, "mailto:", 7)) {
             sentby += 7;
         }
 
-        // XXX could use SENT-BY parameter as defined in RFC5545?
         for (comp = icalcomponent_get_first_real_component(ical);
              comp;
              comp = icalcomponent_get_next_component(ical,
                  icalcomponent_isa(comp))) {
 
+            // Use SENT-BY parameter as defined in RFC5545
+            icalproperty *orga =
+                icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+            if (orga) {
+                icalproperty_remove_parameter_by_kind(orga, ICAL_SENTBY_PARAMETER);
+                icalproperty_add_parameter(orga, icalparameter_new_sentby(sentby));
+            }
+
+            // XXX set legacy extension property until jmap_ical.c is removed
             // Remove any stale SENT-BY properties
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(sentby));
@@ -4302,8 +4331,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Store resource at target */
     if (!ret) {
-        ret = caldav_store_resource(txn, ical, mailbox, resource,
-                                    cdata->dav.createdmodseq,
+        ret = caldav_store_resource(txn, ical, mailbox, resource, cmodseq,
                                     db, flags, httpd_userid, NULL, NULL,
                                     &schedule_addresses);
 
@@ -4322,8 +4350,13 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 oldical = caldav_record_to_ical(mailbox, cdata,
                         NULL, NULL);
             }
+
+            struct jmap_caleventid eid = {
+                .createdmodseq = cmodseq,
+                .ical_uid = uid
+            };
             int r2 = jmap_create_caldaveventnotif(txn, httpd_userid,
-                    httpd_authstate, mailbox_name(mailbox), uid,
+                    httpd_authstate, mailbox_name(mailbox), &eid,
                     &schedule_addresses, is_draft, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -8326,4 +8359,45 @@ static int meth_options_cal(struct transaction_t *txn, void *params)
     };
 
     return meth_options(txn, oparams->parse_path);
+}
+
+static const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
+                              const char *prodid, const char *name,
+                              const char *desc, const char *color)
+{
+    icalcomponent *ical;
+    icalproperty *prop;
+    json_t *jprops;
+    char *jbuf;
+    size_t flags = JSON_PRESERVE_ORDER;
+
+    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+
+    /* Add toplevel properties */
+    ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
+    jprops = json_array();
+
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+
+        json_array_append_new(jprops, icalproperty_as_jcal_array(prop));
+    }
+    icalcomponent_free(ical);
+
+    jbuf = json_dumps(jprops, flags);
+    json_decref(jprops);
+
+    /* Begin jCal stream */
+    buf_reset(buf);
+    buf_printf(buf, "[ \"vcalendar\",\r\n%s, [\r\n", jbuf);
+    free(jbuf);
+
+    return ",";
+}
+
+static void end_jcal(struct buf *buf)
+{
+    /* End jCal stream */
+    buf_setcstr(buf, "]]\r\n");
 }

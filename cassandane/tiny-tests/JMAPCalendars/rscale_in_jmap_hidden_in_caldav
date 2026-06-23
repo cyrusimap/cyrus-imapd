@@ -6,13 +6,14 @@ sub test_rscale_in_jmap_hidden_in_caldav
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $admin = $self->{adminstore}->get_client();
 
     my $calid = $self->default_user->calendars->default->id;
+    my $href = $self->default_user->calendars->default->properties->{'x-href'};
     my $event =  {
+        "version" => "2.0",
         calendarIds => {
             $calid => JSON::true,
         },
@@ -20,20 +21,15 @@ sub test_rscale_in_jmap_hidden_in_caldav
         "start"=> "2015-11-07T09:00:00",
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
-        "locations" => {
-            "loc1" => {
-                "timeZone" => "Europe/Berlin",
-                "relativeTo" => "end",
-            },
-        },
+        "endTimeZone" => "Europe/Berlin",
         "showWithoutTime"=> JSON::false,
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "prodId" => "foo",
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" => "monthly",
             count => 12,
-        }],
+        },
     };
 
     my $ret = $self->createandget_event($event);
@@ -62,23 +58,18 @@ sub test_rscale_in_jmap_hidden_in_caldav
     $self->assert_not_null($ret);
 
     # rscale should now be in jmap
-    $self->assert_deep_equals([
-        {
-            '@type' => 'RecurrenceRule',
+    $self->assert_deep_equals({
+            '@type' => "RecurrenceRule",
             count          => 12,
-            firstDayOfWeek => 'mo',
             frequency      => 'monthly',
-            interval       => 1,
-            rscale         => 'gregorian',
-            skip           => 'omit'
-        }],
-        $ret->{recurrenceRules},
+        },
+        $ret->{recurrenceRule},
     );
 
     # XXX Net-CalDAV talk needs to update
     # Make sure we have no rscale through caldav, most clients can't
     # handle it
-    my $events = $caldav->GetEvents("$calid");
+    my $events = $caldav->GetEvents($href);
     $self->assert_deep_equals(
         {
             count => 12,

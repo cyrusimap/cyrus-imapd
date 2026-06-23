@@ -6,7 +6,6 @@ sub test_calendarevent_query_date
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $calid = $self->default_user->calendars->default->id;
@@ -15,6 +14,7 @@ sub test_calendarevent_query_date
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         # Start: 2016-01-01 End: 2016-01-03
                         "1" => {
+                            "version" => "2.0",
                             calendarIds => {
                                 $calid => JSON::true,
                             },
@@ -105,6 +105,7 @@ sub test_calendarevent_query_date
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         # Start: 2017-01-01T08:00:00Z End: eternity
                         "1" => {
+                            "version" => "2.0",
                             calendarIds => {
                                 $calid => JSON::true,
                             },
@@ -114,9 +115,9 @@ sub test_calendarevent_query_date
                             "showWithoutTime" => JSON::true,
                             "start" => "2017-01-01T00:00:00",
                             "duration" => "P1D",
-                            "recurrenceRules" => [{
+                            "recurrenceRule" => {
                                 "frequency" => "yearly",
-                            }],
+                            },
                         },
                     }}, "R1"]]);
     # Assert both events are found

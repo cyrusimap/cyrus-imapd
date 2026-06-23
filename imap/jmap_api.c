@@ -1319,8 +1319,19 @@ static char *_state_string(int prefixed_state, modseq_t modseq)
 EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
                                  int mbtype, int flags)
 {
-    int prefixed_state =
-        (mbtype == MBTYPE_EMAIL) && USER_COMPACT_EMAILIDS(req->cstate);
+    int prefixed_state = 0;
+
+    if (USER_COMPACT_EMAILIDS(req->cstate)) {
+        switch (mbtype) {
+        case MBTYPE_EMAIL:
+        case MBTYPE_CALENDAR:
+            prefixed_state = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
 
     // if we were not given a modseq, look it up by mbtype
     if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
@@ -2468,10 +2479,8 @@ HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
 
 
     if (comp.property && !comp_cb(req, &comp, comp_rock, err)) {
-        struct buf buf = BUF_INITIALIZER;
         json_array_append_new(unsupported,
-                json_string(jmap_parser_path(parser, &buf)));
-        buf_free(&buf);
+                json_string(jmap_parser_path(parser)));
     }
 }
 
@@ -3641,4 +3650,15 @@ EXPORTED void jmap_report_isdefault(struct jmap_set *set, const char *name,
         json_object_set_new(set->updated, id,
                             json_pack("{s:b}", "isDefault", isdef));
     }
+}
+
+HIDDEN bool jmap_state_matches(struct conversations_state *cstate,
+                                 const char *if_in_state, modseq_t modseq)
+{
+    if (USER_COMPACT_EMAILIDS(cstate) &&  // check for mandatory prefix
+        *if_in_state++ != JMAP_STATE_STRING_PREFIX) {
+        return false;
+    }
+
+    return atomodseq_t(if_in_state) == modseq;
 }

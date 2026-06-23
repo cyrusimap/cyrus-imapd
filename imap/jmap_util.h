@@ -7,6 +7,7 @@
 
 #include <jansson.h>
 
+#include "caldav_db.h"
 #include "carddav_db.h"
 #include "hash.h"
 #include "ical_support.h"
@@ -27,14 +28,20 @@ extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name
                               int mandatory, json_t *invalid, const char *fmt,
                               void *dst);
 
-#define PATCH_NO_REMOVE   (1<<0) // only relevant for create
-#define PATCH_ALLOW_ARRAY (1<<1)
+#define PATCH_NO_REMOVE     (1<<0) // only relevant for create
+#define PATCH_ALLOW_ARRAY   (1<<1)
+#define PATCH_KEEP_EXISTING (1<<2) // only relevant for apply
 
 /* Apply patch to a deep copy of val and return the result.
  * Return NULL on error. If invalid is a JSON array, then
  * the erroneous path in patch is appended as JSON string */
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
                                       json_t *invalid, unsigned flags);
+
+/* Apply patch to object val. If invalid is a JSON array, then
+ * any erroneous path in patch is appended as JSON string */
+extern void jmap_patchobject_applym(json_t *dst, json_t *patch,
+                                    json_t *invalid, unsigned flags);
 
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
@@ -84,9 +91,10 @@ extern void jmap_parser_push_index(struct jmap_parser *parser,
                                    const char *prop, size_t index, const char *name);
 extern void jmap_parser_push_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_pop(struct jmap_parser *parser);
-extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
+extern const char* jmap_parser_path(struct jmap_parser *parser);
+extern const char* jmap_parser_path_at(struct jmap_parser *parser, const char *subpath);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
-HIDDEN void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path);
+extern void jmap_parser_invalid_path(struct jmap_parser *parser, const char *path);
 extern void jmap_parser_serverset(struct jmap_parser *parser, const char *prop, json_t *val);
 
 extern json_t *jmap_server_error(int r);
@@ -200,15 +208,34 @@ extern void jmap_set_contactid(struct conversations_state *cstate,
                                const struct carddav_data *cdata,
                                struct buf *cid);
 
+#define JMAP_CALENDARID_PREFIX 'C'
+#define JMAP_CALENDARID_SIZE JMAP_MAILBOXID_SIZE
+
+#define JMAP_MAX_CALENDARID_SIZE MAX(JMAP_CALENDARID_SIZE, MAX_MAILBOX_NAME+1)
+
+extern void jmap_set_calendarid(struct conversations_state *cstate,
+                                const mbentry_t *mbentry, char *calid);
+
 #ifdef HAVE_ICAL
 struct jmap_caleventid {
     const char *raw; /* as requested by client */
     const char *ical_uid;
     const char *ical_recurid;
     char *_alloced[2];
+    modseq_t createdmodseq;
 };
 
-extern struct jmap_caleventid *jmap_caleventid_decode(const char *id) __attribute__((nonnull, returns_nonnull, warn_unused_result));
+/*
+ * Decode a CalendarEvent ID into its createdmodseq and recurrence-id
+ * components.
+ * If 'db' is non-NULL, a caldav.db lookup will be done to resolve the
+ * createdmodseq into an iCalendar UID.
+ * If 'cdata' is non-NULL, the calendar data from the caldav.db lookup
+ * will be returned to the caller.
+ */
+extern struct jmap_caleventid *jmap_caleventid_lookup(const char *id,
+                                                      struct caldav_db *db,
+                                                      struct caldav_data **cdata) __attribute__((nonnull(1), returns_nonnull, warn_unused_result));
 
 extern const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf);
 

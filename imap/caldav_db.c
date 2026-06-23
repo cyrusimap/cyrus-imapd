@@ -432,6 +432,30 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 }
 
 
+#define CMD_SELCMODSEQ CMD_READFIELDS \
+    " WHERE createdmodseq = :cmodseq AND mailbox != :inbox AND alive = 1;"
+
+EXPORTED int caldav_lookup_by_cmodseq(struct caldav_db *caldavdb,
+                                      modseq_t cmodseq,
+                                      struct caldav_data **result)
+{
+    struct sqldb_bindval bval[] = {
+        { ":cmodseq", SQLITE_INTEGER, { .i = cmodseq } },
+        { ":inbox",   SQLITE_TEXT,    { .s = caldavdb->sched_inbox } },
+        { NULL,       SQLITE_NULL,    { .s = NULL } } };
+    static struct caldav_data cdata;
+    struct read_rock rrock = { caldavdb, &cdata, 0, NULL, NULL };
+    int r;
+
+    *result = memset(&cdata, 0, sizeof(struct caldav_data));
+
+    r = sqldb_exec(caldavdb->db, CMD_SELCMODSEQ, bval, &read_cb, &rrock);
+    if (!r && !cdata.dav.rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
 #define CMD_SELMBOX CMD_READFIELDS \
     " WHERE mailbox = :mailbox AND alive = 1;"
 
@@ -647,16 +671,16 @@ static void check_mattach_cb(icalcomponent *comp, void *rock)
 
 #define CMD_UPSERT_JSCALOBJS                                            \
     "INSERT INTO jscal_objs ("                                          \
-    "  rowid, ical_recurid, alive, modseq, createdmodseq,"              \
+    "  rowid, ical_recurid, alive, modseq, added_at_modseq,"            \
     "  dtstart, dtend, ical_guid )"                                     \
     " VALUES ("                                                         \
-    "  :rowid, :ical_recurid, :alive, :modseq, :createdmodseq,"         \
+    "  :rowid, :ical_recurid, :alive, :modseq, :added_at_modseq,"       \
     "  :dtstart, :dtend, :ical_guid )"                                  \
     " ON CONFLICT (rowid, ical_recurid) DO"                             \
     " UPDATE SET"                                                       \
     "  alive        = :alive,"                                          \
     "  modseq       = :modseq,"                                         \
-    "  createdmodseq = :createdmodseq,"                                 \
+    "  added_at_modseq = :added_at_modseq,"                             \
     "  dtstart      = :dtstart,"                                        \
     "  dtend        = :dtend,"                                          \
     "  ical_guid    = :ical_guid;"                                      \
@@ -669,7 +693,7 @@ static int caldav_upsert_jscal(struct caldav_db *caldavdb,
         { ":ical_recurid",  SQLITE_TEXT,     { .s = jscal->ical_recurid } },
         { ":alive",         SQLITE_INTEGER,  { .i = jscal->alive } },
         { ":modseq",        SQLITE_INTEGER,  { .i = jscal->modseq  } },
-        { ":createdmodseq", SQLITE_INTEGER,  { .i = jscal->createdmodseq } },
+        { ":added_at_modseq", SQLITE_INTEGER,  { .i = jscal->added_at_modseq } },
         { ":dtstart",       SQLITE_TEXT,     { .s = jscal->dtstart } },
         { ":dtend",         SQLITE_TEXT,     { .s = jscal->dtend } },
         { ":ical_guid",     SQLITE_TEXT,     { .s = jscal->ical_guid } },
@@ -679,7 +703,7 @@ static int caldav_upsert_jscal(struct caldav_db *caldavdb,
 }
 
 #define CMD_SELJSCALOBJS                                          \
-    "SELECT rowid, ical_recurid, alive, modseq, createdmodseq,"   \
+    "SELECT rowid, ical_recurid, alive, modseq, added_at_modseq,"   \
     "  dtstart, dtend, ical_guid "                                \
     "FROM jscal_objs "                                            \
     "WHERE rowid = :rowid ORDER BY ical_recurid ASC;"
@@ -699,7 +723,7 @@ static int read_jscals_cb(sqlite3_stmt *stmt, void *vrock)
     jscal.ical_recurid = strarray_nth(rock->strpool, -1);
     jscal.alive = sqlite3_column_int(stmt, 2);
     jscal.modseq = sqlite3_column_int64(stmt, 3);
-    jscal.createdmodseq = sqlite3_column_int64(stmt, 4);
+    jscal.added_at_modseq = sqlite3_column_int64(stmt, 4);
     strarray_append(rock->strpool, (const char *) sqlite3_column_text(stmt, 5));
     jscal.dtstart = strarray_nth(rock->strpool, -1);
     strarray_append(rock->strpool, (const char *) sqlite3_column_text(stmt, 6));
@@ -715,7 +739,7 @@ static int read_jscals_cb(sqlite3_stmt *stmt, void *vrock)
     " jscal_objs.ical_recurid,"   \
     " jscal_objs.alive,"          \
     " jscal_objs.modseq,"         \
-    " jscal_objs.createdmodseq,"  \
+    " jscal_objs.added_at_modseq,"  \
     " jscal_objs.dtstart,"        \
     " jscal_objs.dtend,"          \
     " jscal_objs.ical_guid,"
@@ -764,7 +788,7 @@ static int read_jscal_cb(sqlite3_stmt *stmt, void *rock)
     jscal->ical_recurid = (const char *) sqlite3_column_text(stmt, 19);
     jscal->alive = sqlite3_column_int(stmt, 20);
     jscal->modseq = sqlite3_column_int64(stmt, 21);
-    jscal->createdmodseq = sqlite3_column_int64(stmt, 22);
+    jscal->added_at_modseq = sqlite3_column_int64(stmt, 22);
     jscal->dtstart = (const char *) sqlite3_column_text(stmt, 23);
     jscal->dtend = (const char *) sqlite3_column_text(stmt, 24);
     jscal->ical_guid = (const char *) sqlite3_column_text(stmt, 25);
@@ -1155,7 +1179,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
                 .dtend = cdata->dtend,
                 .alive = cdata->dav.alive,
                 .modseq = cdata->dav.modseq,
-                .createdmodseq = cdata->dav.createdmodseq,
+                .added_at_modseq = cdata->dav.createdmodseq,
                 .ical_guid = ical_guid,
             };
             dynarray_append(&new_jscals, &jscal);
@@ -1182,7 +1206,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
             .cdata.dav.rowid = cdata->dav.rowid,
             .alive = cdata->dav.alive,
             .modseq = cdata->dav.modseq,
-            .createdmodseq = cdata->dav.createdmodseq,
+            .added_at_modseq = cdata->dav.createdmodseq,
             .ical_guid = ical_guid,
         };
 
@@ -1200,6 +1224,10 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
     hashset_free(&seen_recurids);
     qsort(new_jscals.data, new_jscals.count,
             sizeof(struct caldav_jscal), jscal_cmp_ical_recurid);
+
+    /* An empty old set means we're (re)building this resource's jscal rows
+     * from scratch -- a dav_reconstruct or the jscalendar-bis backfill. */
+    int rebuilding = dynarray_size(&old_jscals) == 0;
 
     /* Determine which rows to insert and update. We never delete here. */
     int old_i = 0;
@@ -1223,6 +1251,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
 
         if (!new_jscal->ical_recurid[0]) {
             // old standalone instances got replaced with main event
+            new_jscal->added_at_modseq = cdata->dav.modseq;
             ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
@@ -1237,7 +1266,7 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
         else {
             // new standalone instance got added
-            new_jscal->createdmodseq = cdata->dav.modseq;
+            new_jscal->added_at_modseq = cdata->dav.modseq;
             ptrarray_append(&upsert, new_jscal);
             new_i++;
         }
@@ -1252,9 +1281,14 @@ EXPORTED int caldav_writeical_jmap(struct caldav_db *caldavdb,
         }
     }
     for ( ; new_i < dynarray_size(&new_jscals); new_i++) {
-        // any new entry for which no old entry exists it newly created
+        /* A new entry with no old counterpart is new in this write -- unless
+         * we're rebuilding, when every row is pre-existing and takes the
+         * resource createdmodseq, which is exactly right for the main event,
+         * and a safe lower bound for standalone instances, whose true
+         * createdmodseq can't be recovered. */
         struct caldav_jscal *new_jscal = dynarray_nth(&new_jscals, new_i);
-        new_jscal->createdmodseq = cdata->dav.modseq;
+        new_jscal->added_at_modseq = rebuilding ? cdata->dav.createdmodseq
+                                                : cdata->dav.modseq;
         ptrarray_append(&upsert, new_jscal);
     }
 
@@ -1341,16 +1375,36 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
     }
     cdata->comp_flags.transp = transp;
 
-    /* Determine JSCalendar privacy */
-    cdata->comp_flags.privacy = 0;
-    prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
+    /* Determine privacy */
+    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+    prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
     if (prop) {
-        const char *val = icalproperty_get_value_as_string(prop);
-        if (val) {
-            if (!strcasecmp(val, "secret"))
+        switch (icalproperty_get_class(prop)) {
+            case ICAL_CLASS_CONFIDENTIAL:
                 cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-            else if (!strcasecmp(val, "private"))
+                break;
+            case ICAL_CLASS_PUBLIC:
+                cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+                break;
+            default:
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+        }
+    }
+    else {
+        // Between 2022 and 2026, Cyrus used X-JMAP-PRIVACY for the
+        // JSCalendar "privacy" property.
+        // See 7ed6bbcd64b550eee9903b91c213442243edfebb
+        prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
+        if (prop) {
+            const char *val = icalproperty_get_value_as_string(prop);
+            if (val) {
+                if (!strcasecmp(val, "secret"))
+                    cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
+                else if (!strcasecmp(val, "public"))
+                    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
+                else
+                    cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
+            }
         }
     }
 

@@ -6,7 +6,6 @@ sub test_calendarevent_get_recurrenceinstances
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $calid = $self->default_user->calendars->default->id;
@@ -16,6 +15,7 @@ sub test_calendarevent_get_recurrenceinstances
         ['CalendarEvent/set', {
             create => {
                 "1" => {
+                    version => '2.0',
                     calendarIds => {
                         $calid => JSON::true,
                     },
@@ -26,13 +26,10 @@ sub test_calendarevent_get_recurrenceinstances
                     start => "2019-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
                         count => 5,
-                    }, {
-                        frequency => 'daily',
-                        count => 2,
-                    }],
+                    },
                     recurrenceOverrides => {
                         '2019-01-15T09:00:00' => {
                             title => 'override1',
@@ -48,14 +45,15 @@ sub test_calendarevent_get_recurrenceinstances
             }
         }, 'R1']
     ]);
+    my $event1Id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($event1Id);
 
     my @ids = (
-        encode_eventid('event1uid','20190108T090000'),
-        encode_eventid('event1uid','20190115T090000'),
-        encode_eventid('event1uid','20190110T120000'),
-        encode_eventid('event1uid','20190122T090000'), # is excluded
-        encode_eventid('event1uid','20191201T090000'), # does not exist
-        encode_eventid('event1uid','20190102T090000'), # from second rrule
+        encode_eventid($event1Id,'20190108T090000'),
+        encode_eventid($event1Id,'20190115T090000'),
+        encode_eventid($event1Id,'20190110T120000'),
+        encode_eventid($event1Id,'20190122T090000'), # is excluded
+        encode_eventid($event1Id,'20191201T090000'), # does not exist
     );
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
@@ -63,7 +61,7 @@ sub test_calendarevent_get_recurrenceinstances
                 properties => ['start', 'title', 'recurrenceId'],
         }, 'R1'],
     ]);
-    $self->assert_num_equals(4, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
 
     $self->assert_str_equals($ids[0], $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('2019-01-08T09:00:00', $res->[0][1]{list}[0]{start});
@@ -77,10 +75,6 @@ sub test_calendarevent_get_recurrenceinstances
     $self->assert_str_equals($ids[2], $res->[0][1]{list}[2]{id});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{start});
     $self->assert_str_equals('2019-01-10T12:00:00', $res->[0][1]{list}[2]{recurrenceId});
-
-    $self->assert_str_equals($ids[5], $res->[0][1]{list}[3]{id});
-    $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{start});
-    $self->assert_str_equals('2019-01-02T09:00:00', $res->[0][1]{list}[3]{recurrenceId});
 
     $self->assert_num_equals(2, scalar @{$res->[0][1]{notFound}});
     $self->assert_str_equals($ids[3], $res->[0][1]{notFound}[0]);

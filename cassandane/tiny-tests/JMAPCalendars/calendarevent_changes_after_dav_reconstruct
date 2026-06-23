@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+# An event that already existed at sinceState must be reported as updated.
+# This is a regression test for bugs in createdmodseq tracking that misreported
+# some events as created.
+sub test_calendarevent_changes_after_dav_reconstruct ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $calid = $self->default_user->calendars->default->id;
+
+    xlog $self, "baseline state, before the event exists";
+    my $res = $jmap->CallMethods([['CalendarEvent/get', { ids => [] }, 'R1']]);
+    my $state0 = $res->[0][1]{state};
+
+    xlog $self, "create an event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+        1 => {
+            version => '2.0',
+            calendarIds => { $calid => JSON::true },
+            title => 'original',
+            start => '2026-02-01T12:00:00',
+            timeZone => 'Europe/Berlin',
+            duration => 'PT1H',
+        },
+    }}, 'R1']]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # State after creation but before the edit: the event's createdmodseq is
+    # <= this, so a /changes since here must classify it as updated.
+    my $state_after_create = $res->[0][1]{newState};
+
+    xlog $self, "edit the event so its modseq advances past its createdmodseq";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
+        $id => { title => 'edited' },
+    }}, 'R1']]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog $self, "rebuild dav.db from scratch (reproduces the migration backfill)";
+    $self->{instance}->run_command({ cyrus => 1 }, 'dav_reconstruct', 'cassandane');
+
+    xlog $self, "the event existed at sinceState, so it is updated, not created";
+    $res = $jmap->CallMethods([['CalendarEvent/changes', {
+        sinceState => $state_after_create,
+    }, 'R1']]);
+    $self->assert_deep_equals([$id], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+}

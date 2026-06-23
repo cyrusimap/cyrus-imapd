@@ -52,14 +52,15 @@
     " alive INTEGER,"                                                   \
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
-    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
+    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"  \
+    "CREATE INDEX IF NOT EXISTS idx_ical_cmodseq ON ical_objs ( createdmodseq );"
 
 #define CMD_CREATE_JSCALOBJS                                            \
     "CREATE TABLE IF NOT EXISTS jscal_objs ("                           \
     " rowid INTEGER NOT NULL,"                                          \
     " ical_recurid TEXT NOT NULL DEFAULT '',"                           \
     " modseq INTEGER NOT NULL,"                                         \
-    " createdmodseq INTEGER NOT NULL,"                                  \
+    " added_at_modseq INTEGER NOT NULL,"                                \
     " dtstart TEXT NOT NULL,"                                           \
     " dtend TEXT NOT NULL,"                                             \
     " alive INTEGER NOT NULL,"                                          \
@@ -90,7 +91,8 @@
     " UNIQUE( mailbox, imap_uid ),"                                     \
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_vcard_fn ON vcard_objs ( fullname );" \
-    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );"
+    "CREATE INDEX IF NOT EXISTS idx_vcard_uid ON vcard_objs ( vcard_uid );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_cmodseq ON vcard_objs ( createdmodseq );"
 
 #define CMD_CREATE_EM                                                   \
     "CREATE TABLE IF NOT EXISTS vcard_emails ("                         \
@@ -243,7 +245,18 @@
 
 #define CMD_DBUPGRADEv15 \
     "DROP TABLE ical_jmapcache;" \
-    CMD_CREATE_JSCALOBJS CMD_CREATE_JSCALCACHE \
+    "CREATE TABLE IF NOT EXISTS jscal_objs ("                           \
+    " rowid INTEGER NOT NULL,"                                          \
+    " ical_recurid TEXT NOT NULL DEFAULT '',"                           \
+    " modseq INTEGER NOT NULL,"                                         \
+    " createdmodseq INTEGER NOT NULL,"                                  \
+    " dtstart TEXT NOT NULL,"                                           \
+    " dtend TEXT NOT NULL,"                                             \
+    " alive INTEGER NOT NULL,"                                          \
+    " ical_guid TEXT NOT NULL,"                                         \
+    " PRIMARY KEY (rowid, ical_recurid)"                                \
+    " FOREIGN KEY (rowid) REFERENCES ical_objs (rowid) ON DELETE CASCADE );" \
+    CMD_CREATE_JSCALCACHE \
     "INSERT INTO jscal_objs" \
     " SELECT rowid, '', modseq, createdmodseq, dtstart, dtend, alive, '' FROM ical_objs;"
 
@@ -253,6 +266,21 @@
 
 #define CMD_DBUPGRADEv17                                                \
     "CREATE INDEX IF NOT EXISTS idx_vcard_objs ON vcard_emails ( objid );"
+
+/* The rename is to match the rename of the struct to avoid confusion with
+ * ical_objs.  The update is to repair data affected by bugs in rebuild. */
+#define CMD_DBUPGRADEv18                                                \
+    "ALTER TABLE jscal_objs RENAME COLUMN createdmodseq TO added_at_modseq;" \
+    "UPDATE jscal_objs SET added_at_modseq ="                           \
+    "  (SELECT createdmodseq FROM ical_objs"                            \
+    "    WHERE ical_objs.rowid = jscal_objs.rowid)"                     \
+    " WHERE ical_recurid = '';"
+
+/* Compact jmap ids encode createdmodseq, so id lookups query against it.
+ * Without these indexes every lookup is a full table scan. */
+#define CMD_DBUPGRADEv19                                                \
+    "CREATE INDEX IF NOT EXISTS idx_ical_cmodseq ON ical_objs ( createdmodseq );" \
+    "CREATE INDEX IF NOT EXISTS idx_vcard_cmodseq ON vcard_objs ( createdmodseq );"
 
 static int sievedb_upgrade(sqldb_t *db);
 
@@ -273,10 +301,12 @@ static const struct sqldb_upgrade davdb_upgrade[] = {
   { 15, CMD_DBUPGRADEv15, NULL },
   { 16, CMD_DBUPGRADEv16, NULL },
   { 17, CMD_DBUPGRADEv17, NULL },
+  { 18, CMD_DBUPGRADEv18, NULL },
+  { 19, CMD_DBUPGRADEv19, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 17
+#define DB_VERSION 19
 
 static sqldb_t *reconstruct_db;
 

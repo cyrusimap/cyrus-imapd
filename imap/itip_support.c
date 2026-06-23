@@ -743,8 +743,10 @@ static int deliver_merge_request(const char *attendee,
                 icalproperty_add_parameter(prop, param);
             }
 
-            /* Copy over JMAP privacy from current component to iTIP component */
-                        prop =
+            /* Copy over privacy from current component to iTIP component */
+            prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+            // CLASS takes precedence over legacy X-JMAP-PRIVACY.
+            if (!prop) prop =
                 icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
@@ -780,9 +782,12 @@ static int deliver_merge_request(const char *attendee,
                                                icalproperty_clone(prop));
                 }
 
-                /* Inherit JMAP privacy from master */
-                prop = icalcomponent_get_x_property_by_name(master,
-                                                            JMAPICAL_XPROP_PRIVACY);
+                /* Inherit privacy from master */
+                prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY);
+                // CLASS takes precedence over legacy X-JMAP-PRIVACY.
+                if (!prop) prop =
+                    icalcomponent_get_x_property_by_name(master,
+                            JMAPICAL_XPROP_PRIVACY);
                 if (prop) {
                     icalcomponent_add_property(new_comp,
                                                icalproperty_clone(prop));
@@ -1015,6 +1020,11 @@ HIDDEN void itip_strip_personal_data(icalcomponent *comp, bool remove_transp)
             if (!ical_categories_is_color(prop)) break;
 
             GCC_FALLTHROUGH
+
+        case ICAL_CLASS_PROPERTY:
+            icalcomponent_remove_property(comp, prop);
+            icalproperty_free(prop);
+            break;
 
         case ICAL_COLOR_PROPERTY:
             icalcomponent_remove_property(comp, prop);
@@ -1369,8 +1379,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
                 if (!r) {
                     comp = icalcomponent_get_first_real_component(ical);
                     if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+                        struct jmap_caleventid eid = {
+                            .createdmodseq = record.createdmodseq,
+                            .ical_uid = uid
+                        };
                         int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                                mailbox_name(mailbox), uid,
+                                mailbox_name(mailbox), &eid,
                                 &recipient_addresses, 0, oldical, NULL);
                         if (r2) {
                             xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",
@@ -1444,23 +1458,30 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
         defaultalarms_fini(&defalarms);
     }
 
-    /* Set SENT-BY property */
+    /* Set SENT-BY parameter */
     if (mailfrom && ical) {
         char *val = address_get_all(mailfrom, 0);
 
-        // XXX could use SENT-BY parameter as defined in RFC5545?
         for (comp = icalcomponent_get_first_real_component(ical);
              comp;
              comp = icalcomponent_get_next_component(ical,
                  icalcomponent_isa(comp))) {
 
+            // Use SENT-BY parameter as defined in RFC5545
+            icalproperty *orga =
+                icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+            if (orga) {
+                icalproperty_remove_parameter_by_kind(orga, ICAL_SENTBY_PARAMETER);
+                icalproperty_add_parameter(orga, icalparameter_new_sentby(val));
+            }
+
+            // XXX set legacy extension property until jmap_ical.c is removed
             // Remove any stale SENT-BY properties
             while ((prop = icalcomponent_get_x_property_by_name(comp,
                             JMAPICAL_XPROP_SENTBY))) {
                 icalcomponent_remove_property(comp, prop);
                 icalproperty_free(prop);
             }
-
             prop = icalproperty_new(ICAL_X_PROPERTY);
             icalproperty_set_x_name(prop, JMAPICAL_XPROP_SENTBY);
             icalproperty_set_value(prop, icalvalue_new_text(val));
@@ -1480,8 +1501,18 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         comp = icalcomponent_get_first_real_component(ical);
         if (comp && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
+            struct jmap_caleventid eid = {
+                .createdmodseq = cdata->dav.createdmodseq,
+                .ical_uid = uid
+            };
+            if (!eid.createdmodseq) {
+                /* Fetch new index record for createdmodseq */
+                struct index_record record;
+                mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
+                eid.createdmodseq = record.createdmodseq;
+            }
             int r2 = jmap_create_caldaveventnotif(&txn, userid, authstate,
-                    mailbox_name(mailbox), uid,
+                    mailbox_name(mailbox), &eid,
                     &recipient_addresses, 0, oldical, ical);
             if (r2) {
                 xsyslog(LOG_ERR, "jmap_create_caldaveventnotif failed",

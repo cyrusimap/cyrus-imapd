@@ -101,9 +101,7 @@ EOF
         timeZone => 'Europe/Berlin',
         mayGetAvailability => JSON::true,
         accountId => 'cassandane',
-        sendTo => {
-            imip => 'mailto:cassandane@example.com',
-        },
+        calendarAddress => 'mailto:cassandane@example.com',
     }, $p);
     $self->assert_deep_equals(['nope'], $res->[0][1]{notFound});
 }

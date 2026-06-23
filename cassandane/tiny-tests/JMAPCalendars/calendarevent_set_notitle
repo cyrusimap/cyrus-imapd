@@ -6,10 +6,10 @@ sub test_calendarevent_set_notitle
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $calid = $self->default_user->calendars->default->id;
     my $event =  {
+        "version" => "2.0",
         calendarIds => {
             $calid => JSON::true,
         },
@@ -23,7 +23,7 @@ sub test_calendarevent_set_notitle
     };
 
     my $ret = $self->createandget_event($event);
-    $self->assert_str_equals("", $ret->{title});
+    $self->assert(not exists $ret->{title});
     my $eventId= $ret->{id};
 
     my $res = $jmap->CallMethods([

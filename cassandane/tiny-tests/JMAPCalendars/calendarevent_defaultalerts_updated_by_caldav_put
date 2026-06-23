@@ -125,6 +125,7 @@ sub create_jevent ($self)
         ['CalendarEvent/set', {
             create => {
                 $eventUid => {
+                    version => "2.0",
                     uid => $eventUid,
                     calendarIds => {
                         $default_cal_id => JSON::true,

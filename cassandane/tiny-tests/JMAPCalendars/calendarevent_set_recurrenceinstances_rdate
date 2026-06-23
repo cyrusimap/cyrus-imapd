@@ -6,7 +6,6 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
     my $calid = $self->default_user->calendars->default->id;
@@ -16,6 +15,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
         ['CalendarEvent/set', {
             create => {
                 "1" => {
+                    version => '2.0',
                     calendarIds => {
                         $calid => JSON::true,
                     },
@@ -26,10 +26,11 @@ sub test_calendarevent_set_recurrenceinstances_rdate
                     start => "2019-01-01T09:00:00",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'weekly',
                         count => 5,
-                    }],
+                    },
+
                     recurrenceOverrides => {
                         '2019-01-10T14:00:00' => {}
                     },
@@ -41,7 +42,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $self->assert_not_null($eventId1);
 
     xlog $self, "Delete RDATE by setting it excluded";
-    my $overrideId1 = encode_eventid('event1uid','20190110T140000');
+    my $overrideId1 = encode_eventid($eventId1,'20190110T140000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {

@@ -6,11 +6,11 @@ sub test_calendarevent_set_participants_recur
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $calid = $self->default_user->calendars->default->id;
 
     my $event =  {
+        "version" => "2.0",
         calendarIds => {
             $calid => JSON::true,
         },
@@ -19,31 +19,19 @@ sub test_calendarevent_set_participants_recur
         "duration"=> "PT1H",
         "timeZone" => "Europe/London",
         "showWithoutTime"=> JSON::false,
-        "recurrenceRules"=> [{
+        "recurrenceRule"=> {
             "frequency"=> "weekly",
-        }],
-        "replyTo" => {
-            "imip" => "mailto:foo\@local",
         },
+        "organizerCalendarAddress" => "mailto:foo\@local",
         "participants" => {
             'bar' => {
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 expectReply => JSON::true,
-                sendTo => {
-                    imip => 'mailto:bar@local',
-                },
+                calendarAddress => 'mailto:bar@local',
             },
             'bam' => {
                 email => 'bam@local',
-                roles => {
-                    'attendee' => JSON::true,
-                },
                 expectReply => JSON::true,
-                sendTo => {
-                    imip => 'mailto:bam@local',
-                },
+                calendarAddress => 'mailto:bam@local',
             },
         },
     };
@@ -54,7 +42,7 @@ sub test_calendarevent_set_participants_recur
 
     my $barParticipantId;
     while (my ($key, $value) = each(%{$ret->{participants}})) {
-        if ($value->{sendTo}{imip} eq 'mailto:bar@local') {
+        if ($value->{calendarAddress} eq 'mailto:bar@local') {
             $barParticipantId = $key;
             last;
         }

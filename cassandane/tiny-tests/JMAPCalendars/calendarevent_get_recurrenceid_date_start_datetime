@@ -6,7 +6,6 @@ sub test_calendarevent_get_recurrenceid_date_start_datetime
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
 
@@ -55,8 +54,9 @@ EOF
         '2016-09-02T16:15:14' => {
             title => 'testWithDateTimeRecurId',
         },
-        '2016-09-03T16:15:14' => {
+        '2016-09-03T00:00:00' => {
             title => 'testWithDateRecurId',
+            start => '2016-09-03T16:15:14',
         },
     }, $event->{recurrenceOverrides});
 }

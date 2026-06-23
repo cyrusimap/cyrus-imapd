@@ -689,6 +689,7 @@ cunit_TESTS += \
     cunit/times.testc \
     cunit/tok.testc \
     cunit/dynarray.testc \
+    cunit/util.testc \
     cunit/xsha1.testc
 
 if HTTPD
@@ -1267,6 +1268,7 @@ imap_httpd_SOURCES = \
     imap/http_carddav.c \
     imap/http_carddav.h \
     imap/http_cgi.c \
+    imap/http_convert.c \
     imap/http_dav.c \
     imap/http_dav.h \
     imap/http_dav_sharing.c \
@@ -1393,7 +1395,9 @@ imap_httpd_SOURCES += \
     imap/jmap_push.h \
     imap/jmap_quota.c \
     imap/jmap_util.c \
-    imap/jmap_util.h
+    imap/jmap_util.h \
+    imap/jscalendar.c \
+    imap/jscalendar.h
 
 imap_httpd_LDADD += imap/libcyrus_jmap_props.la
 noinst_LTLIBRARIES += imap/libcyrus_jmap_props.la
@@ -1813,7 +1817,7 @@ master_master_SOURCES = \
     master/event.c \
     master/event.h \
     master/service.h
-master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM)
+master_master_LDADD = lib/libcyrus_min.la $(LIBS) $(GCOV_LIBS) $(LIBM) $(SSL_LIBS)
 
 
 netnews_remotepurge_SOURCES = \

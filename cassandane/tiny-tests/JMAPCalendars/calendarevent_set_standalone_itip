@@ -23,6 +23,7 @@ sub test_calendarevent_set_standalone_itip
         ['CalendarEvent/set', {
             create => {
                 instance1 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -34,17 +35,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[0]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'tentative',
                             expectReply => JSON::true,
                         },
@@ -78,7 +72,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_str_equals('TENTATIVE',
         $attendees->[0]->parameters()->{'PARTSTAT'});
 
-    my $expect_id = encode_eventid($uid, $details[0]->{recurid});
+    my $expect_id = $instance1Id;
     $self->assert_not_null($notif_payload->{id});
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REPLY', $notif_payload->{method});
@@ -91,6 +85,7 @@ sub test_calendarevent_set_standalone_itip
         ['CalendarEvent/set', {
             create => {
                 instance2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -102,17 +97,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[1]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'accepted',
                             expectReply => JSON::true,
                         },
@@ -146,7 +134,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_str_equals('ACCEPTED',
         $attendees->[0]->parameters()->{'PARTSTAT'});
 
-    $expect_id = encode_eventid($uid, $details[1]->{recurid});
+    $expect_id = $instance2Id;
     $self->assert_not_null($notif_payload->{id});
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REPLY', $notif_payload->{method});
@@ -188,7 +176,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_str_equals('DECLINED',
         $attendees->[0]->parameters()->{'PARTSTAT'});
 
-    $expect_id = encode_eventid($uid, $details[1]->{recurid});
+    $expect_id = $instance2Id;
     $self->assert_not_null($notif_payload->{id});
     $self->assert_str_equals($expect_id, $notif_payload->{id});
     $self->assert_str_equals('REPLY', $notif_payload->{method});
@@ -201,6 +189,7 @@ sub test_calendarevent_set_standalone_itip
         ['CalendarEvent/set', {
             create => {
                 instance2 => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -212,17 +201,10 @@ sub test_calendarevent_set_standalone_itip
                     duration => 'PT1H',
                     recurrenceId => $details[2]->{start},
                     recurrenceIdTimeZone => 'Europe/London',
-                    replyTo => {
-                        imip => 'mailto:organizer@example.com',
-                    },
+                    organizerCalendarAddress => 'mailto:organizer@example.com',
                     participants => {
                         cassandane => {
-                            roles => {
-                                attendee => JSON::true,
-                            },
-                            sendTo => {
-                                imip => 'mailto:cassandane@example.com',
-                            },
+                            calendarAddress => 'mailto:cassandane@example.com',
                             participationStatus => 'needs-action',
                             expectReply => JSON::true,
                         },

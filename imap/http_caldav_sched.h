@@ -97,16 +97,19 @@ extern void schedule_one_attendee(const char *cal_ownerid, const char *sched_use
                                   const char *organizer, const char *attendee,
                                   icaltimetype h_cutoff,
                                   icalcomponent *oldical, icalcomponent *newical,
+                                  modseq_t createdmodseq,
                                   enum sched_mechanism mech);
 
 extern void sched_request(const char *cal_ownerid, const char *sched_userid,
                           const strarray_t *schedule_addresses,
                           const char *organizer,
                           icalcomponent *oldical, icalcomponent *newical,
+                          modseq_t createdmodseq,
                           enum sched_mechanism mech);
 extern void sched_reply(const char *cal_ownerid, const char *sched_userid,
                         const strarray_t *schedule_addresses,
                         icalcomponent *oldical, icalcomponent *newical,
+                        modseq_t createdmodseq,
                         enum sched_mechanism mech);
 extern void sched_deliver(const char *cal_ownerid, const char *sched_userid,
                           const char *sender, const char *recipient,

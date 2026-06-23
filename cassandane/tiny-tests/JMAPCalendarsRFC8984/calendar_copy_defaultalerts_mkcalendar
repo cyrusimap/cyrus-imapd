@@ -1,0 +1,149 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_copy_defaultalerts_mkcalendar
+    :min_version_3_9
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $caldav = $self->{caldav};
+
+    xlog $self, "No default alerts are set on default calendar";
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$default_cal_id],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Create calendar test1 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test1");
+    my $admintalk = $self->{adminstore}->get_client();
+    my $stat = $admintalk->status("user.cassandane.#calendars.test1",
+                                  '(mailboxid)');
+    # Replace mailbox prefix with calendar prefix
+    my $calid1 = 'C' . substr($stat->{mailboxid}[0], 1);
+
+    xlog $self, "New calendar does not have default alerts";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$calid1],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Set default alarms on test1";
+    my $defaultAlertsWithTime1 = {
+        'e905cd3a-fdb7-413a-b7fa-1cd9daad501d' => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT15M',
+            },
+            action => 'display',
+        }
+    };
+    my $defaultAlertsWithoutTime1 = {
+        '04c2bcfa-c35c-410c-83f5-27fba35257b3' => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => 'PT0S',
+            },
+            action => 'display',
+        }
+    };
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $calid1 => {
+                    defaultAlertsWithTime => $defaultAlertsWithTime1,
+                    defaultAlertsWithoutTime => $defaultAlertsWithoutTime1,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$calid1});
+
+    xlog $self, "Create calendar test2 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test2");
+    $stat = $admintalk->status("user.cassandane.#calendars.test2",
+                                  '(mailboxid)');
+    # Replace mailbox prefix with calendar prefix
+    my $calid2 = 'C' . substr($stat->{mailboxid}[0], 1);
+
+    xlog $self, "New calendar inherits default alerts from test1";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$calid2],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals($defaultAlertsWithTime1,
+        $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_deep_equals($defaultAlertsWithoutTime1,
+        $res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+
+    xlog $self, "Set default alarms with time on Default alert";
+    my $defaultAlertsWithTime2 = {
+        'e905cd3a-fdb7-413a-b7fa-1cd9daad501d' => {
+            '@type' => 'Alert',
+            trigger => {
+                '@type' => 'OffsetTrigger',
+                relativeTo => 'start',
+                offset => '-PT30M',
+            },
+            action => 'display',
+        }
+    };
+    $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    defaultAlertsWithTime => $defaultAlertsWithTime2,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    xlog $self, "Create calendar test3 over CalDAV";
+    $res = $caldav->Request('MKCALENDAR', "/dav/calendars/user/cassandane/test3");
+    $stat = $admintalk->status("user.cassandane.#calendars.test3",
+                                  '(mailboxid)');
+    # Replace mailbox prefix with calendar prefix
+    my $calid3 = 'C' . substr($stat->{mailboxid}[0], 1);
+
+    xlog $self, "New calendar inherits default alerts from Default";
+    $res = $jmap->CallMethods([
+        ['Calendar/get', {
+            ids => [$calid3],
+            properties => [
+                'defaultAlertsWithTime',
+                'defaultAlertsWithoutTime',
+            ],
+        }, 'R1'],
+    ]);
+    $self->assert_deep_equals($defaultAlertsWithTime2,
+        $res->[0][1]{list}[0]{defaultAlertsWithTime});
+    $self->assert_null($res->[0][1]{list}[0]{defaultAlertsWithoutTime});
+}

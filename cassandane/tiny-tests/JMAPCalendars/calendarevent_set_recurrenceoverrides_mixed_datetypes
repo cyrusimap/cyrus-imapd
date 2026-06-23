@@ -16,7 +16,7 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
             start    => "2018-05-02T17:00:00",
             timeZone => "Europe/Vienna",
             duration => "PT1H",
-            showWithoutTime => JSON::false,
+            showWithoutTime => undef,
         }
     };
 
@@ -60,7 +60,7 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
         start => "2019-10-02T15:00:00",
         timeZone => "Europe/London",
         duration => "PT2H",
-        showWithoutTime => JSON::false,
+        showWithoutTime => undef,
     };
     $event = $res->[1][1]{list}[0];
     $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});

@@ -6,7 +6,6 @@ sub test_calendarevent_set_caldav
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $caldav = $self->{caldav};
 
@@ -18,10 +17,12 @@ sub test_calendarevent_set_caldav
                         }
              }}, "R1"]]);
     my $calid = $res->[0][1]{created}{"1"}{id};
+    my $calhref = $res->[0][1]{created}{"1"}{'x-href'};
 
     xlog $self, "create event in calendar";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
+                            "version" => "2.0",
                             calendarIds => {
                                 $calid => JSON::true,
                             },
@@ -74,17 +75,16 @@ DTEND;VALUE=DATE:20151009
 END:VEVENT
 END:VCALENDAR
 EOF
-    my $eventId2 = encode_eventid($uid2);
 
     xlog $self, "PUT event with UID $uid2";
-    $res = $caldav->Request('PUT', "$calid/$uid2.ics", $ical, 'Content-Type' => 'text/calendar');
+    $res = $caldav->Request('PUT', "$calhref/$uid2.ics", $ical, 'Content-Type' => 'text/calendar');
 
     xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
-    $self->assert_equals($eventId2, $res->[0][1]{created}[0]);
+    my $eventId2 = $res->[0][1]{created}[0];
     $state = $res->[0][1]{newState};
 
     xlog $self, "get x-href of event $eventId2";
@@ -130,7 +130,7 @@ EOF
  <a:prop><a:resourcetype/></a:prop>
 </a:propfind>
 EOF
-    $res = $caldav->Request('PROPFIND', "$calid", $xml,
+    $res = $caldav->Request('PROPFIND', "$calhref", $xml,
         'Content-Type' => 'application/xml',
         'Depth' => '1'
     );

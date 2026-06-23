@@ -6,11 +6,11 @@ sub test_calendarevent_set_recurrence_bymonthday
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $calid = $self->default_user->calendars->default->id;
 
     my $event =  {
+        "version" => "2.0",
         "uid" => "90c2697e-acbc-4508-9e72-6b8828e8d9f3",
         calendarIds => {
             $calid => JSON::true,
@@ -22,12 +22,12 @@ sub test_calendarevent_set_recurrence_bymonthday
         "title" => "Recurrence test",
         "description" => "",
         "showWithoutTime" => JSON::false,
-        "recurrenceRules" => [{
+        "recurrenceRule" => {
             "frequency" => "monthly",
             "byMonthDay" => [
                 -1
             ]
-        }],
+        },
     };
 
     my $ret = $self->createandget_event($event);

@@ -74,6 +74,7 @@ EOF
         ['CalendarEvent/set', {
             create => {
                 event => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },

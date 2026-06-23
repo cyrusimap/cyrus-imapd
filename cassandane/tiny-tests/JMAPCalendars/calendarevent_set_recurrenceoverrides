@@ -6,16 +6,11 @@ sub test_calendarevent_set_recurrenceoverrides
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $calid = $self->default_user->calendars->default->id;
 
-    my $recurrenceRules = [{
-        frequency => "monthly",
-        count => 12,
-    }];
-
     my $event =  {
+        "version" => "2.0",
         calendarIds => {
             $calid => JSON::true,
         },
@@ -26,6 +21,7 @@ sub test_calendarevent_set_recurrenceoverrides
         "timeZone" => "Europe/London",
         "showWithoutTime"=> JSON::false,
         "freeBusyStatus"=> "busy",
+        "mainLocationId" => "locA",
         "locations" => {
             locA => {
                 "name" => "location A",
@@ -45,7 +41,10 @@ sub test_calendarevent_set_recurrenceoverrides
                 rel => 'enclosure',
             },
         },
-        "recurrenceRules" => $recurrenceRules,
+        "recurrenceRule" => {
+            frequency => "monthly",
+            count => 12,
+        },
         "recurrenceOverrides" => {
             "2016-02-01T09:00:00" => { excluded => JSON::true },
             "2016-02-03T09:00:00" => {},
@@ -69,7 +68,7 @@ sub test_calendarevent_set_recurrenceoverrides
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarIds} = $ret->{calendarIds};
-    delete $event->{recurrenceOverrides}{"2016-07-01T09:00:00"}; # ignore patch with 'uid'
+    delete $event->{recurrenceOverrides}{"2016-07-01T09:00:00"}{uid}; # ignore 'uid' pointer in patch
     $self->assert_normalized_event_equals($event, $ret);
 
     $ret = $self->updateandget_event({

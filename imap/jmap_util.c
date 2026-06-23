@@ -4,6 +4,7 @@
 
 #include <config.h>
 
+#include <assert.h>
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
@@ -124,15 +125,19 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val,
-                                        json_t *patch,
-                                        json_t *invalid,
-                                        unsigned flags)
+EXPORTED void jmap_patchobject_applym(json_t *dst,
+                                      json_t *patch,
+                                      json_t *invalid,
+                                      unsigned flags)
 {
     const char *path;
-    json_t *newval, *dst;
+    json_t *newval;
 
-    dst = json_deep_copy(val);
+    // TODO RFC 8620, Section 5.3 states:
+    // There MUST NOT be two patches in the PatchObject where the
+    // pointer of one is the prefix of the pointer of the other, e.g.,
+    // "alerts/1/offset" and "alerts".
+
     json_object_foreach(patch, path, newval) {
         /* Start traversal at root object */
         json_t *it = dst;
@@ -172,7 +177,12 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
                 r = 0;
             }
             else {
-                r = json_object_set(it, ref, newval);
+                if ((flags & PATCH_KEEP_EXISTING) && json_object_get(it, ref)) {
+                    r = 0;
+                }
+                else {
+                    r = json_object_set(it, ref, newval);
+                }
             }
 
             free(ref);
@@ -180,10 +190,25 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
 
         if (r != 0) {
             if (invalid) json_array_append_new(invalid, json_string(path));
-            json_decref(dst);
-            return NULL;
         }
     }
+}
+
+EXPORTED json_t* jmap_patchobject_apply(json_t *val,
+                                        json_t *patch,
+                                        json_t *invalid,
+                                        unsigned flags)
+{
+    json_t *dst = json_deep_copy(val);
+
+    invalid = invalid ? json_incref(invalid) : json_array();
+    size_t prev_invalid_size = json_array_size(invalid);
+    jmap_patchobject_applym(dst, patch, invalid, flags);
+    if (json_array_size(invalid) > prev_invalid_size) {
+        json_decref(dst);
+        dst = NULL;
+    }
+    json_decref(invalid);
 
     return dst;
 }
@@ -476,27 +501,41 @@ HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
     bv_clear(&parser->is_encoded, strarray_size(&parser->path));
 }
 
-HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
+HIDDEN const char* jmap_parser_path(struct jmap_parser *parser)
 {
     int i;
-    buf_reset(buf);
+    buf_reset(&parser->buf);
 
     for (i = 0; i < parser->path.count; i++) {
         const char *p = strarray_nth(&parser->path, i);
         if (!bv_isset(&parser->is_encoded, i) && jmap_pointer_needsencode(p)) {
             char *tmp = jmap_pointer_encode(p);
-            buf_appendcstr(buf, tmp);
+            buf_appendcstr(&parser->buf, tmp);
             free(tmp);
-        }
-        else {
-            buf_appendcstr(buf, p);
+        } else {
+            buf_appendcstr(&parser->buf, p);
         }
         if ((i + 1) < parser->path.count) {
-            buf_appendcstr(buf, "/");
+            buf_appendcstr(&parser->buf, "/");
         }
     }
 
-    return buf_cstring(buf);
+    return buf_cstring(&parser->buf);
+}
+
+HIDDEN const char* jmap_parser_path_at(struct jmap_parser *parser, const char *subpath)
+{
+    // Build base path.
+    const char *base = jmap_parser_path(parser);
+    size_t base_len = buf_len(&parser->buf);
+
+    if (subpath) {
+        if (*subpath != '/' && base_len && base[base_len-1] != '/')
+            buf_putc(&parser->buf, '/');
+        buf_appendcstr(&parser->buf, subpath);
+    }
+
+    return buf_cstring(&parser->buf);
 }
 
 HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
@@ -505,7 +544,7 @@ HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
         jmap_parser_push(parser, prop);
 
     json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
+            json_string(jmap_parser_path(parser)));
 
     if (prop)
         jmap_parser_pop(parser);
@@ -523,7 +562,7 @@ HIDDEN void jmap_parser_serverset(struct jmap_parser *parser,
         jmap_parser_push(parser, prop);
 
     json_object_set_new(parser->serverset,
-            jmap_parser_path(parser, &parser->buf), val);
+            jmap_parser_path(parser), val);
 
     if (prop)
         jmap_parser_pop(parser);
@@ -1349,6 +1388,24 @@ EXPORTED void jmap_set_contactid(struct conversations_state *cstate,
     }
 }
 
+EXPORTED void jmap_set_calendarid(struct conversations_state *cstate,
+                                  const mbentry_t *mbentry, char *calid)
+{
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        strlcpy(calid, mbentry->jmapid, JMAP_MAX_CALENDARID_SIZE);
+        // replace MAILBOXID prefix with CALENDAR prefix
+        calid[0] = JMAP_CALENDARID_PREFIX;
+    }
+    else {
+        // last segment of mailbox name
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        const strarray_t *boxes = mbname_boxes(mbname);
+        const char *id = strarray_nth(boxes, -1);
+        strlcpy(calid, id, JMAP_MAX_CALENDARID_SIZE);
+        mbname_free(&mbname);
+    }
+}
+
 EXPORTED char *jmap_role_to_specialuse(const char *role)
 {
     if (!role) return NULL;
@@ -1359,30 +1416,43 @@ EXPORTED char *jmap_role_to_specialuse(const char *role)
 }
 
 #ifdef HAVE_ICAL
-EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
+EXPORTED struct jmap_caleventid *jmap_caleventid_lookup(const char *id,
+                                                        struct caldav_db *db,
+                                                        struct caldav_data **cdatap)
 {
     struct jmap_caleventid *eid = xzmalloc(sizeof(struct jmap_caleventid));
+
     eid->raw = id;
 
-    int has_recurid = 0;
-    int is_base64 = 0;
+    bool has_recurid = false;
+    bool is_base64 = false;
+    bool old_style = false;
     const char *p = id;
 
     // read prefix
     if (*p != 'E')
         goto done;
+
+    if (*(p+1) == 'M') {
+        goto uid;
+    }
+
     p++;
     if (*p == 'R') {
-        has_recurid = 1;
+        has_recurid = true;
         p++;
     }
     if (*p == 'B') {
-        is_base64 = 1;
+        is_base64 = true;
+        old_style = true;
         p++;
     }
-    if (*p != '-')
+    if (*p == '-') {
+        old_style = true;
+        p++;
+    }
+    else if (old_style)
         goto done;
-    p++;
 
     // read recurid
     if (has_recurid) {
@@ -1403,9 +1473,33 @@ EXPORTED struct jmap_caleventid *jmap_caleventid_decode(const char *id)
         }
     }
 
+uid:
     // read uid
-    eid->ical_uid = eid->_alloced[0] = is_base64 ?
-        jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+    if (old_style) {
+        eid->ical_uid = eid->_alloced[0] = is_base64 ?
+            jmap_decode_base64_nopad(p, strlen(p)) : xstrdup(p);
+    }
+    else if (*p++ == 'E' && *p++ == 'M') {
+        MODSEQ_FROM_JMAPID(p, &eid->createdmodseq);
+
+        if (db) {
+            struct caldav_data *mycdata = NULL;
+            int r = caldav_lookup_by_cmodseq(db, eid->createdmodseq, &mycdata);
+            if (r || !mycdata || !mycdata->ical_uid) {
+                if (r != CYRUSDB_NOTFOUND) {
+                    syslog(LOG_ERR,
+                           "caldav_lookup_by_modseq(%s => " MODSEQ_FMT ") failed: %s",
+                           p, eid->createdmodseq, error_message(r));
+                }
+            }
+            else {
+                eid->ical_uid = eid->_alloced[0] = xstrdup(mycdata->ical_uid);
+
+                if (cdatap) *cdatap = mycdata;
+            }
+        }
+        return eid;
+    }
 
 done:
     if (!eid->ical_uid) {
@@ -1414,6 +1508,19 @@ done:
         xzfree(eid->_alloced[1]);
         eid->ical_recurid = NULL;
         eid->ical_uid = eid->_alloced[0] = xstrdup(id);
+    }
+
+    if (db && cdatap) {
+        int r = caldav_lookup_uid(db, eid->ical_uid, cdatap);
+        if (r || !*cdatap || !(*cdatap)->ical_uid) {
+            if (r != CYRUSDB_NOTFOUND) {
+                syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s",
+                       eid->ical_uid, error_message(r));
+            }
+
+            xzfree(eid->_alloced[0]);
+            eid->ical_uid = NULL;
+        }
     }
 
     return eid;
@@ -1432,63 +1539,61 @@ EXPORTED void jmap_caleventid_free(struct jmap_caleventid **eidptr)
 
 EXPORTED const char *jmap_caleventid_encode(const struct jmap_caleventid *eid, struct buf *buf)
 {
-    buf_reset(buf);
-
-    int need_base64 = 0;
-    const char *c;
-    for (c = eid->ical_uid; *c; c++) {
-        if (!isascii(*c) || !(isalnum(*c) || *c == '-' || *c == '_')) {
-            need_base64 = 1;
-            break;
-        }
-    }
-
     int has_recurid = eid->ical_recurid && eid->ical_recurid[0];
 
-    buf_putc(buf, 'E');
-    if (has_recurid)
-        buf_putc(buf, 'R');
-    if (need_base64)
-        buf_putc(buf, 'B');
-    buf_putc(buf, '-');
+    buf_reset(buf);
 
     if (has_recurid) {
+        buf_putc(buf, 'E');
+        buf_putc(buf, 'R');
         buf_appendcstr(buf, eid->ical_recurid);
         buf_putc(buf, '-');
     }
 
-    if (need_base64) {
-        char *tmp = jmap_encode_base64_nopad(eid->ical_uid, strlen(eid->ical_uid));
-        buf_appendcstr(buf, tmp);
-        free(tmp);
-    }
-    else {
-        buf_appendcstr(buf, eid->ical_uid);
-    }
+    buf_putc(buf, 'E');
+    buf_putc(buf, 'M');
+    MODSEQ_TO_JMAPID(buf, eid->createdmodseq);
 
     return buf_cstring(buf);
 }
+
 
 EXPORTED void jmap_alertid_encode(icalcomponent *valarm, struct buf *idbuf)
 {
     buf_reset(idbuf);
     const char *id = NULL;
-
     icalproperty *prop;
-    for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
 
-        if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+    // Look for jscalendarbis id.
+    for (prop = icalcomponent_get_first_property(valarm, ICAL_IANA_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(valarm, ICAL_IANA_PROPERTY)) {
+
+        if (!strcasecmp(icalproperty_get_iana_name(prop), "JSID")) {
             id = icalproperty_get_value_as_string(prop);
             break;
         }
     }
 
+    // Fall back to legacy implementation id.
+    if (!id) {
+        for (prop = icalcomponent_get_first_property(valarm, ICAL_X_PROPERTY);
+             prop;
+             prop = icalcomponent_get_next_property(valarm, ICAL_X_PROPERTY)) {
+
+            if (!strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ID)) {
+                id = icalproperty_get_value_as_string(prop);
+                break;
+            }
+        }
+    }
+
+    // Fall back to UID property value.
     if (!id) {
         id = icalcomponent_get_uid(valarm);
     }
 
+    // Fall back to generated id.
     char keybuf[2*SHA1_DIGEST_LENGTH+1];
     if (!id) {
         unsigned char dest[SHA1_DIGEST_LENGTH];
@@ -1519,4 +1624,3 @@ EXPORTED int jmap_is_valid_id(const char *id)
     }
     return 1;
 }
-

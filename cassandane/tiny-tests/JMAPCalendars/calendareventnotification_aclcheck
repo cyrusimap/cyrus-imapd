@@ -6,7 +6,6 @@ sub test_calendareventnotification_aclcheck
     ($self)
 {
     my $jmap = $self->default_user->jmap;
-    my $default_cal_id = $self->default_user->calendars->default->id;
 
     my $admin = $self->{adminstore}->get_client();
 
@@ -19,6 +18,7 @@ sub test_calendareventnotification_aclcheck
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $jmap->CallMethods([
@@ -32,7 +32,7 @@ sub test_calendareventnotification_aclcheck
                             mayReadItems => JSON::true,
                             mayUpdatePrivate => JSON::true,
                             mayWriteOwn => JSON::true,
-                            mayAdmin => JSON::false
+                            mayShare => JSON::false
                         },
                     },
                 },
@@ -59,6 +59,7 @@ sub test_calendareventnotification_aclcheck
         ['CalendarEvent/set', {
             create => {
                 sharedEvent => {
+                    version => '2.0',
                     title => 'sharedEvent',
                     calendarIds => {
                         $sharedCalendarId => JSON::true,
@@ -67,6 +68,7 @@ sub test_calendareventnotification_aclcheck
                     duration => 'PT1H',
                 },
                 unsharedEvent => {
+                    version => '2.0',
                     title => 'unsharedEvent',
                     calendarIds => {
                         $unsharedCalendarId => JSON::true,

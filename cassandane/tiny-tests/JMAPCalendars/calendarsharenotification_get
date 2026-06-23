@@ -19,6 +19,7 @@ sub test_calendarsharenotification_get
         'urn:ietf:params:jmap:calendars',
         'urn:ietf:params:jmap:principals',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/jscalendarbis',
     ]);
 
     my $res = $manjmap->CallMethods([
@@ -73,7 +74,7 @@ sub test_calendarsharenotification_get
             mayWriteAll => JSON::false,
             mayRSVP => JSON::false,
             mayDelete => JSON::false,
-            mayAdmin => JSON::false,
+            mayShare => JSON::false,
             mayUpdatePrivate => JSON::false,
             mayWriteOwn => JSON::false,
         },

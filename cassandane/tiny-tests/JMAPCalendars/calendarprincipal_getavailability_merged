@@ -13,6 +13,7 @@ sub test_calendarprincipal_getavailability_merged
             create => {
                 # 09:00 to 10:30: Two events adjacent to each other.
                 'event-0900-1000' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -22,6 +23,7 @@ sub test_calendarprincipal_getavailability_merged
                     duration => "PT1H",
                 },
                 'event-1000-1030' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -32,6 +34,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 # 05:00 to 08:00: One event completely overlapping the other.
                 'event-0500-0800' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -41,6 +44,7 @@ sub test_calendarprincipal_getavailability_merged
                     duration => "PT3H",
                 },
                 'event-0600-0700' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -51,6 +55,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 # 01:00 to 03:00: One event partially overlapping the other.
                 'event-0100-0200' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -60,6 +65,7 @@ sub test_calendarprincipal_getavailability_merged
                     duration => "PT1H",
                 },
                 'event-0130-0300' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -70,6 +76,7 @@ sub test_calendarprincipal_getavailability_merged
                 },
                 # 12:00 to 13:30: Overlapping events with differing busyStatus.
                 'event-1200-1300-tentative' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -80,6 +87,7 @@ sub test_calendarprincipal_getavailability_merged
                     status => 'tentative',
                 },
                 'event-1200-1330-confirmed' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },
@@ -90,6 +98,7 @@ sub test_calendarprincipal_getavailability_merged
                     status => 'confirmed',
                 },
                 'event-1200-1230-unavailable' => {
+                    version => '2.0',
                     calendarIds => {
                         $default_cal_id => JSON::true,
                     },

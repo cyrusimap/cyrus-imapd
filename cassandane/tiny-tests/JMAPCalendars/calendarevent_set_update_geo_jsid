@@ -1,0 +1,53 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_update_geo_jsid
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create VEVENT with GEO property having JSID set";
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+PRODID:-//FOO//bar//EN
+VERSION:2.0
+BEGIN:VEVENT
+GEO;JSID=loc1:45.5;-93.3
+DTSTAMP:20060102T030405Z
+UID:22df8747-fd94-4657-988c-f2696d3cd763
+DTSTART:20060102T030405Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    my $res = $caldav->Request('PUT', "Default/test.ics", $ical, 'Content-Type' => 'text/calendar');
+
+    xlog $self, "Get and update event over JMAP";
+    $res = $jmap->request([
+        [ "CalendarEvent/query", { }, "a" ],
+        [ "CalendarEvent/get", {
+            '#ids' => {
+                resultOf => "a",
+                name => "CalendarEvent/query",
+                path => "/ids",
+            },
+        }, "b", ],
+    ]);
+    my $event = $res->sentence_named('CalendarEvent/get')->arguments->{list}[0];
+
+    $res = $jmap->request([
+        [ "CalendarEvent/set", {
+            update => {
+                $event->{id} => {
+                    title => 'test',
+                },
+            },
+        }, "a" ],
+    ]);
+    my ($updated_id) = $res->single_sentence->as_set->updated_ids;
+    $self->assert_str_equals($event->{id}, $updated_id);
+
+    xlog $self, "Assert that JSID parameter is preserved on GEO property";
+    $res = $caldav->Request('GET', "Default/test.ics");
+    $self->assert_matches(qr/GEO;JSID=loc1:/, $res->{content});
+}

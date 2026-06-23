@@ -206,11 +206,12 @@ static json_t *icalvalue_as_json_object(const icalvalue *value)
 /*
  * Add an iCalendar parameter to an existing JSON object.
  */
-static void icalparameter_as_json_object_member(icalparameter *param,
-                                                json_t *jparams)
+EXPORTED void icalparameter_to_jcal_parameter(icalparameter *param,
+                                              json_t *jparams)
 {
     icalparameter_kind kind;
     const char *kind_string, *value_string;
+    if (!jparams) jparams = json_null();
 
     kind = icalparameter_isa(param);
 
@@ -252,10 +253,10 @@ static void icalparameter_as_json_object_member(icalparameter *param,
 /*
  * Construct a JSON array for an iCalendar property.
  */
-static json_t *icalproperty_as_json_array(icalproperty *prop)
+EXPORTED json_t *icalproperty_as_jcal_array(icalproperty *prop)
 {
     icalproperty_kind prop_kind;
-    const char *x_name, *property_name = NULL;
+    const char *property_name = NULL;
     icalparameter *param;
     const char *type = NULL;
     const icalvalue *value;
@@ -264,10 +265,11 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
     if (!prop) return NULL;
 
     prop_kind = icalproperty_isa(prop);
-    x_name = icalproperty_get_x_name(prop);
 
-    if (prop_kind == ICAL_X_PROPERTY && x_name)
-        property_name = x_name;
+    if (prop_kind == ICAL_X_PROPERTY)
+        property_name = icalproperty_get_x_name(prop);
+    else if (prop_kind == ICAL_IANA_PROPERTY)
+        property_name = icalproperty_get_iana_name(prop);
     else
         property_name = icalproperty_kind_to_string(prop_kind);
 
@@ -293,7 +295,7 @@ static json_t *icalproperty_as_json_array(icalproperty *prop)
 
         if (icalparameter_isa(param) == ICAL_VALUE_PARAMETER) continue;
 
-        icalparameter_as_json_object_member(param, jparams);
+        icalparameter_to_jcal_parameter(param, jparams);
     }
     json_array_append_new(jprop, jparams);
 
@@ -354,7 +356,7 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
         break;
 
     case ICAL_X_COMPONENT:
-        kind_string = ""; //comp->x_name;
+        kind_string = icalcomponent_get_x_name(comp);
         break;
 
     default:
@@ -377,7 +379,7 @@ EXPORTED json_t *icalcomponent_as_jcal_array(icalcomponent *comp)
          p;
          p = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
 
-        json_array_append_new(jprops, icalproperty_as_json_array(p));
+        json_array_append_new(jprops, icalproperty_as_jcal_array(p));
     }
     json_array_append_new(jcomp, jprops);
 
@@ -618,7 +620,7 @@ static icalvalue *json_object_to_icalvalue(json_t *jvalue,
 /*
  * Construct an iCalendar property from a JSON array.
  */
-static icalproperty *json_array_to_icalproperty(json_t *jprop)
+EXPORTED icalproperty *jcal_array_as_icalproperty(json_t *jprop)
 {
     json_t *jtype, *jparams, *jvaltype, *jvalue;
     const char *propname, *typestr, *key;
@@ -762,7 +764,14 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
     }
 
     /* Create new component */
-    comp = icalcomponent_new(kind);
+    if (kind == ICAL_X_COMPONENT) {
+        char *x_name = ucase(xstrdup(type));
+        comp = icalcomponent_new_x(x_name);
+        free(x_name);
+    }
+    else {
+        comp = icalcomponent_new(kind);
+    }
     if (!comp) {
         syslog(LOG_ERR, "Creation of new %s component failed", type);
         return NULL;
@@ -771,7 +780,7 @@ EXPORTED icalcomponent *jcal_array_as_icalcomponent(json_t *jobj)
     /* Add properties */
     for (i = 0; i < json_array_size(jprops); i++) {
         icalproperty *prop =
-            json_array_to_icalproperty(json_array_get(jprops, i));
+            jcal_array_as_icalproperty(json_array_get(jprops, i));
 
         if (!prop) goto error;
 
@@ -819,47 +828,4 @@ EXPORTED icalcomponent *jcal_string_as_icalcomponent(const struct buf *buf)
     json_decref(jcal);
 
     return ical;
-}
-
-
-EXPORTED const char *begin_jcal(struct buf *buf, struct mailbox *mailbox,
-                                const char *prodid, const char *name,
-                                const char *desc, const char *color)
-{
-    icalcomponent *ical;
-    icalproperty *prop;
-    json_t *jprops;
-    char *jbuf;
-    size_t flags = JSON_PRESERVE_ORDER;
-
-    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-
-    /* Add toplevel properties */
-    ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
-    jprops = json_array();
-
-    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
-
-        json_array_append_new(jprops, icalproperty_as_json_array(prop));
-    }
-    icalcomponent_free(ical);
-
-    jbuf = json_dumps(jprops, flags);
-    json_decref(jprops);
-
-    /* Begin jCal stream */
-    buf_reset(buf);
-    buf_printf(buf, "[ \"vcalendar\",\r\n%s, [\r\n", jbuf);
-    free(jbuf);
-
-    return ",";
-}
-
-
-EXPORTED void end_jcal(struct buf *buf)
-{
-    /* End jCal stream */
-    buf_setcstr(buf, "]]\r\n");
 }

@@ -23,6 +23,7 @@ sub test_calendarevent_set_utcstart_recur
         ['CalendarEvent/set', {
             create => {
                 1 => {
+                    version => '2.0',
                     uid => 'eventuid1local',
                     calendarIds => {
                         $default_cal_id => JSON::true,
@@ -31,10 +32,11 @@ sub test_calendarevent_set_utcstart_recur
                     utcStart => "2019-12-10T23:30:00Z",
                     duration => "PT1H",
                     timeZone => "Australia/Melbourne",
-                    recurrenceRules => [{
+                    recurrenceRule => {
                         frequency => 'daily',
                         count => 5,
-                    }],
+                    },
+
                 },
             },
         }, 'R1'],
@@ -77,7 +79,7 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_str_equals('PT1H', $event->{duration});
 
     # Updating utcStart on an expanded recurrence instance is OK.
-    my $eventInstanceId = encode_eventid('eventuid1local', '20191213T123000');
+    my $eventInstanceId = encode_eventid($eventId, '20191213T123000');
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
