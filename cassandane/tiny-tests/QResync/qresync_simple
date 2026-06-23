@@ -14,6 +14,7 @@ sub test_qresync_simple ($self)
     }
 
     my $talk = $self->{store}->get_client();
+    $talk->uid(1);
     $talk->select("INBOX");
     my $uidvalidity = $talk->get_response_code('uidvalidity');
 
@@ -32,4 +33,18 @@ sub test_qresync_simple ($self)
     @vanished = $talk->get_response_code('vanished');
     $self->assert_num_equals(23, $talk->get_response_code('exists'));
     $self->assert_equals("5:10,25:45", $vanished[0][1]);
+
+    xlog $self, "Mark last messages \\Deleted";
+    my $res = $talk->store('*', '+flags', '(\\Deleted)');
+    my $modseq = $res->{50}{modseq}[0];
+
+    xlog $self, "Expunge message";
+    $talk->expunge();
+    @vanished = $talk->get_response_code('vanished');
+    $self->assert_equals("50", $vanished[0][0]);
+
+    xlog $self, "Fetch vanished changedsince";
+    $talk->fetch('1:*', '(uid)', "(changedsince $modseq vanished)");   
+    @vanished = $talk->get_response_code('vanished');
+    $self->assert_equals("50", $vanished[0][1]);
 }
