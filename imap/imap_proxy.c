@@ -110,6 +110,9 @@ struct backend *proxy_findinboxserver(const char *userid)
     return s;
 }
 
+#define PIPE_FLAG_FORCE_NOTFATAL (1<<0)
+#define PIPE_FLAG_DISCARD        (1<<1)
+
 /* pipe_response() reads from 's->in' until either the tagged response
    starting with 'tag' appears, or if 'tag' is NULL, to the end of the
    current line.  If 'include_last' is set, the last/tagged line is included
@@ -123,13 +126,15 @@ struct backend *proxy_findinboxserver(const char *userid)
    even though it is in 95% of the cases, a good idea...
 */
 static int pipe_response(struct backend *s, const char *tag, int include_last,
-                         int force_notfatal)
+                         unsigned flags)
 {
     char buf[2048];
     char eol[128];
     unsigned sl;
     int cont = 0, last = !tag, r = PROXY_OK;
     size_t taglen = 0;
+    unsigned force_notfatal = flags & PIPE_FLAG_FORCE_NOTFATAL;
+    unsigned discard        = flags & PIPE_FLAG_DISCARD;
 
     s->timeout->mark = time(NULL) + IDLE_TIMEOUT;
 
@@ -201,14 +206,16 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 
             /* write out this part, but we have to keep reading until we
                hit the end of the line */
-            if (!last || include_last) prot_write(imapd_out, buf, sl);
+            if (!discard && (!last || include_last))
+                prot_write(imapd_out, buf, sl);
             cont = 1;
             continue;
         } else {                /* we got the end of the line */
             int i;
             int litlen = 0, islit = 0;
 
-            if (!last || include_last) prot_write(imapd_out, buf, sl);
+            if (!discard && (!last || include_last))
+                prot_write(imapd_out, buf, sl);
 
             /* now we have to see if this line ends with a literal */
             if (sl < 64) {
@@ -244,7 +251,8 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
                         /* EOF or other error */
                         return -1;
                     }
-                    if (!last || include_last) prot_write(imapd_out, buf, j);
+                    if (!discard && (!last || include_last))
+                        prot_write(imapd_out, buf, j);
                     litlen -= j;
                 }
 
@@ -263,6 +271,11 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
     } while (!last || cont);
 
     return r;
+}
+
+int discard_until_tag(struct backend *s, const char *tag, int force_notfatal)
+{
+    return pipe_response(s, tag, 0, PIPE_FLAG_DISCARD | force_notfatal);
 }
 
 int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal)

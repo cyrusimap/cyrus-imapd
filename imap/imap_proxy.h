@@ -38,6 +38,7 @@ void proxy_gentag(char *tag, size_t len);
 
 struct backend *proxy_findinboxserver(const char *userid);
 
+int discard_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_command(struct backend *s, int optimistic_literal);
