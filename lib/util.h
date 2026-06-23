@@ -146,15 +146,15 @@ extern const unsigned char convert_to_uppercase[256];
 }
 
 #define MODSEQ_FROM_JMAPID(jmapid, modseqp) {                                   \
-        /* use a fixed modseq-sized decode buffer */                            \
-        size_t size = sizeof(modseq_t);                                         \
-        char decstr[size];                                                      \
-        struct buf decbuf = { decstr, 0, size, 0 };                             \
+        struct buf decbuf = BUF_INITIALIZER;                                    \
         charset_decode(&decbuf, jmapid, strlen(jmapid), ENCODING_BASE64JMAPID); \
-        /* right-align the network-order decoded data */                        \
+        /* right-align the network-order decoded data; ignore an id that        \
+         * decodes to more bytes than a modseq_t (it can not be valid) */       \
         modseq_t u64 = 0;                                                       \
-        int len = buf_len(&decbuf);                                             \
-        memcpy((void *) &u64 + (size - len), buf_base(&decbuf), len);           \
+        size_t len = buf_len(&decbuf);                                          \
+        if (len && len <= sizeof(u64))                                          \
+            memcpy((char *) &u64 + (sizeof(u64) - len), buf_base(&decbuf), len);\
+        buf_free(&decbuf);                                                      \
         *modseqp = ntohll(u64);                                                 \
 }
 
