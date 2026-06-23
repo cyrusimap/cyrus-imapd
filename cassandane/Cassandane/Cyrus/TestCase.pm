@@ -613,6 +613,9 @@ sub _create_instances
                 lmtp_admins => 'mailproxy',
                 proxy_authname => 'mailproxy',
                 proxy_password => 'mailproxy',
+                # Make sure the backend will advertise support for UTF8=ACCEPT
+                reject8bit => 'off',
+                munge8bit => 'off',
             );
         }
 
@@ -709,6 +712,9 @@ sub _create_instances
                     "localhost:$backend1_service_port localhost:$backend2_service_port",
                 proxy_authname => 'mailproxy',
                 proxy_password => 'mailproxy',
+                # Make sure the frontend will advertise support for UTF8=ACCEPT
+                reject8bit => 'off',
+                munge8bit => 'off',
             );
 
             my $cyrus_other_prefix = $cassini->val('cyrus other', 'prefix');
@@ -784,6 +790,9 @@ sub _create_instances
                 sasl_mech_list => 'PLAIN',
                 proxy_authname => 'mailproxy',
                 proxy_password => 'mailproxy',
+                # Make sure the backend will advertise support for UTF8=ACCEPT
+                reject8bit => 'off',
+                munge8bit => 'off',
             );
 
             $backend2_params{description} = "murder backend2 for test $class.$name";

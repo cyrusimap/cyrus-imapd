@@ -4707,25 +4707,6 @@ out:
     quota_free(&q);
 }
 
-static void prot_print_client_capa(struct protstream *pout, unsigned capa)
-{
-    if (capa & CAPA_IMAP4REV2) {
-        prot_puts(pout, " IMAP4rev2");
-    }
-    if (capa & CAPA_CONDSTORE) {
-        prot_puts(pout, " CONDSTORE");
-    }
-    if (capa & CAPA_QRESYNC) {
-        prot_puts(pout, " QRESYNC");
-    }
-    if (capa & CAPA_UIDONLY) {
-        prot_puts(pout, " UIDONLY");
-    }
-    if (capa & CAPA_UTF8_ACCEPT) {
-        prot_puts(pout, " UTF8=ACCEPT");
-    }
-}
-
 static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                                struct index_init *init)
 {
@@ -4930,15 +4911,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
         if (r) {
             prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
             goto done;
-        }
-
-        if (client_capa) {
-            /* Enable client capabilities on new backend */
-            proxy_gentag(mytag, sizeof(mytag));
-            prot_printf(backend_current->out, "%s Enable", mytag);
-            prot_print_client_capa(backend_current->out, client_capa);
-            prot_puts(backend_current->out, "\r\n");
-            pipe_until_tag(backend_current, mytag, 0);
         }
 
         /* Send SELECT command to backend */
@@ -14793,7 +14765,7 @@ static void cmd_enable(char *tag)
     }
 
     /* filter out already enabled extensions */
-    new_capa ^= client_capa;
+    new_capa &= ~client_capa;
 
     if (new_capa & (CAPA_UTF8_ACCEPT | CAPA_IMAP4REV2)) {
         imapd_namespace.isutf8 = 1;
@@ -14806,24 +14778,18 @@ static void cmd_enable(char *tag)
         }
     }
 
-    if (ptrarray_size(&backend_cached)) {
+    if (new_capa) {
         /* ENABLE on all remote mailboxes */
         for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
-            struct backend *be = ptrarray_nth(&backend_cached, i);
-
-            prot_printf(be->out, "%s ENABLE", tag);
-            prot_print_client_capa(be->out, new_capa);
-            prot_puts(be->out, "\r\n");
-            pipe_until_tag(be, tag, 0);
+            proxy_enable(ptrarray_nth(&backend_cached, i), new_capa);
         }
     }
-    else {
-        /* RFC 9051, 6.3.1:
-         * The ENABLED response is sent even if no extensions were enabled. */
-        prot_puts(imapd_out, "* ENABLED");
-        prot_print_client_capa(imapd_out, new_capa);
-        prot_puts(imapd_out, "\r\n");
-    }
+
+    /* RFC 9051, 6.3.1:
+     * The ENABLED response is sent even if no extensions were enabled. */
+    prot_puts(imapd_out, "* ENABLED");
+    prot_print_client_capa(imapd_out, new_capa);
+    prot_puts(imapd_out, "\r\n");
 
     /* track the new capabilities */
     client_capa |= new_capa;

@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_append_utf8 ($self)
+{
+    my $result;
+
+    my $frontend = $self->{frontend_store}->get_client();
+    my $MsgTxt = <<EOF;
+From: blah\@xyz.com
+To: whoever\@whereever.com
+Subject: you are a ☀
+
+Hello
+EOF
+    $MsgTxt =~ s/\n/\015\012/g;
+
+    xlog $self, "ENABLE UTF8=ACCEPT";
+    my $res = $frontend->_imap_cmd('ENABLE', 0, "enabled", "UTF8=ACCEPT");
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+
+    xlog $self, "Append message with UTF-8 header to mailbox";
+    $res = $frontend->_imap_cmd('APPEND', 0, "", "INBOX",
+                                'UTF8', [ { Literal => $MsgTxt } ]);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+}

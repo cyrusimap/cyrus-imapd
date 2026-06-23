@@ -98,7 +98,8 @@ static const struct tls_alpn_t http_alpn_map[] = {
 
 static struct protocol_t http =
 { "http", "HTTP", http_alpn_map, TYPE_SPEC,
-  { .spec = { &login, &ping, &logout } }
+  { .spec = { &login, &ping, &logout } },
+  NULL
 };
 
 static int extractor_connect(struct extractor_ctx *ext)

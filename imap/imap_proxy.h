@@ -38,6 +38,7 @@ void proxy_gentag(char *tag, size_t len);
 
 struct backend *proxy_findinboxserver(const char *userid);
 
+int discard_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_including_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_command(struct backend *s, int optimistic_literal);
@@ -64,4 +65,8 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 int annotate_store_proxy(const char *server, const char *mbox_pat,
                          struct entryattlist *entryatts);
 char *find_free_server(void);
+
+void prot_print_client_capa(struct protstream *pout, unsigned capa);
+
+void proxy_enable(struct backend *s, unsigned capa);
 #endif /* _IMAP_PROXY_H */

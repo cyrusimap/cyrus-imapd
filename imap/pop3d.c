@@ -142,7 +142,8 @@ static struct protocol_t pop3_protocol =
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
       { NULL, NULL, NULL },
       { "NOOP", NULL, "+OK" },
-      { "QUIT", NULL, "+OK" } } }
+      { "QUIT", NULL, "+OK" } } },
+  NULL
 };
 
 static void bitpipe(void);

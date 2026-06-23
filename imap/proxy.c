@@ -154,6 +154,11 @@ EXPORTED struct backend * proxy_findserver(const char *server,          /* hostn
                                              time(NULL) + IDLE_TIMEOUT,
                                              backend_timeout, ret);
         }
+
+        if (prot->post_auth) {
+            /* do post-auth processing */
+            prot->post_auth(ret);
+        }
     }
 
     ret->current = current;
