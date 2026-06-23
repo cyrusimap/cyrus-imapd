@@ -3356,13 +3356,13 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                 simple_hdr(txn, "Content-Disposition", "%s; filename*=%s",
                         resp_body->dispo.attach ? "attachment" : "inline",
                         encfname);
+                free(encfname);
             }
             else {
                 simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
                         resp_body->dispo.attach ? "attachment" : "inline",
                         resp_body->dispo.fname);
             }
-            free(encfname);
         }
         if (txn->resp_body.enc.type) {
             /* Construct Content-Encoding header */
