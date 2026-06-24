@@ -77,6 +77,14 @@ static int begin_headers_cb(nghttp2_session *session,
     syslog(LOG_DEBUG, "http2_begin_headers_cb(id=%d, type=%d)",
            frame->hd.stream_id, frame->hd.type);
 
+    /* Create header cache */
+    hdrcache_t hdrs = spool_new_hdrcache();
+    if (!hdrs) {
+        syslog(LOG_ERR, "Unable to create header cache");
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+
+    /* Create HTTP transaction */
     struct transaction_t *txn = xzmalloc(sizeof(struct transaction_t));
 
     txn->conn = (struct http_connection *) user_data;
@@ -84,6 +92,7 @@ static int begin_headers_cb(nghttp2_session *session,
     txn->flags.ver = VER_2;
     txn->flags.vary = VARY_AE;
     txn->req_line.ver = HTTP2_VERSION;
+    txn->req_hdrs = hdrs;
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         zlib_init(txn);
@@ -91,13 +100,7 @@ static int begin_headers_cb(nghttp2_session *session,
         zstd_init(txn);
     }
 
-    /* Create header cache */
-    if (!(txn->req_hdrs = spool_new_hdrcache())) {
-        syslog(LOG_ERR, "Unable to create header cache");
-        return NGHTTP2_ERR_CALLBACK_FAILURE;
-    }
-
-
+    /* Create HTTP/2 stream */
     struct http2_stream *strm = xzmalloc(sizeof(struct http2_stream));
 
     strm->id = frame->hd.stream_id;
