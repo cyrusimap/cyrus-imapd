@@ -1033,7 +1033,8 @@ static icalcomponent *xml_element_to_icalcomponent(xmlNodePtr xcomp)
     node = xmlFirstElementChild(xcomp);
     if (!node || xmlStrcmp(node->name, BAD_CAST "properties")) {
         syslog(LOG_WARNING,
-               "Expected <properties> XML element, received %s", node->name);
+               "Expected <properties> XML element, received %s",
+               node ? (const char *) node->name : "NULL");
         goto error;
     }
     for (xprop = xmlFirstElementChild(node); xprop;
