@@ -997,11 +997,9 @@ static int find_p(void *rock, const char *key, size_t keylen,
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxid, *entry, *userid;
     unsigned int uid;
-    int r;
 
-    r = split_key(frock->d, key, keylen, &mboxid,
-                  &uid, &entry, &userid);
-    if (r < 0)
+    if (split_key(frock->d, key, keylen, &mboxid,
+                  &uid, &entry, &userid) < 0)
         return 0;
 
     if (!userid)
