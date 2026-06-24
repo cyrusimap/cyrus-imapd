@@ -1161,8 +1161,6 @@ static int jmap_sieve_query(jmap_req_t *req)
     }
     ptrarray_fini(&frock.matches);
 
-    if (parsed_filter) jmap_filter_free(parsed_filter, &free);
-
     /* Build response */
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT, mailbox->i.highestmodseq);
@@ -1172,6 +1170,7 @@ static int jmap_sieve_query(jmap_req_t *req)
     jmap_ok(req, jmap_query_reply(&query));
 
 done:
+    if (parsed_filter) jmap_filter_free(parsed_filter, &free);
     if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_query_fini(&query);
