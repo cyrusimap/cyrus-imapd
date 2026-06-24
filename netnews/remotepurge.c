@@ -29,6 +29,7 @@
 #include <pwd.h>
 
 #include "prot.h"
+#include "lib/libconfig.h"
 #include "lib/times.h"
 
 #include "imclient.h"
