@@ -107,8 +107,7 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
     }
 
     /* Prevent ACLs for empty identifiers */
-    if (strlen(identifier) == 0) {
-        if (newidentifier) free(newidentifier);
+    if (*identifier == '\0') {
         return -1;
     }
 
