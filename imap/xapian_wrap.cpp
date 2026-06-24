@@ -2694,7 +2694,7 @@ static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapia
         Xapian::QueryParser queryparser;
         queryparser.set_stemmer(stemmer);
         for(size_t i = 0; i < snipgen->queries->size(); ++i) {
-            q |= queryparser.parse_query((*snipgen->queries)[i], flags);;
+            q |= queryparser.parse_query((*snipgen->queries)[i], flags);
         }
     }
 
