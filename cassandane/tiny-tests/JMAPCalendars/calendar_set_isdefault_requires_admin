@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_isdefault_requires_admin
+    :min_version_3_1
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog $self, "create shared account";
+    my $sharer = $self->{instance}->create_user('sharer');
+
+    my $orig_default = $sharer->calendars->default;
+    my $shared_cal   = $sharer->calendars->create({ name => 'Attack Target' });
+
+    $orig_default->share_with(cassandane => [ qw( mayReadItems mayWriteAll ) ]);
+
+    # Granting mayAdmin on a single shared calendar must not be enough to flip
+    # the account's default calendar -- that is per-account state and requires
+    # admin on the calendar home, not on the target alone.
+    $shared_cal->share_with(cassandane => [ qw( mayReadItems mayWriteAll mayAdmin ) ]);
+
+    xlog $self, "as cassandane, attempt to flip sharer's default via onSuccessSetIsDefault";
+    $jmap->CallMethods([
+        [ 'Calendar/set' => {
+            accountId => 'sharer',
+            onSuccessSetIsDefault => $shared_cal->id,
+        }, "R1" ],
+    ]);
+
+    xlog $self, "re-read the default; it must not have changed";
+    my $res = $sharer->jmap->CallMethods([
+        [ 'Calendar/get' => { accountId => 'sharer' }, "R1" ],
+    ]);
+    my ($current_default) = grep { $_->{isDefault} } @{ $res->[0][1]{list} };
+    $self->assert_not_null($current_default);
+    $self->assert_str_equals($orig_default->{id}, $current_default->{id});
+}
