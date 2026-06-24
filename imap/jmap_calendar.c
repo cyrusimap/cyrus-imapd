@@ -2198,9 +2198,7 @@ static void setcalendars_update(jmap_req_t *req,
     /* Make sure we don't mess up special calendars */
     if (!mbname || jmap_calendar_isspecial(mbname)) {
         *err = json_pack("{s:s}", "type", "notFound");
-        mbname_free(&mbname);
-        free(mboxname);
-        return;
+        goto done;
     }
 
     /* Parse and validate properties. */
