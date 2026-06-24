@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+sub test_move_shared_across_backends_no_expunge_acl
+    :NoAltNamespace :IMAPMurder :needs_component_murder
+    ($self)
+{
+    my $shared = 'shared';
+
+    # create a shared folder on backend2
+    my $admintalk = $self->{backend2_adminstore}->get_client();
+    $admintalk->create($shared);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    # grant rights without expunge ('e' is missing)
+    $admintalk->setacl($shared, 'anyone', 'lrswipkxtcd');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # inject a message into the shared folder
+    my $frontend = $self->{frontend_store}->get_client();
+    $self->{frontend_store}->set_folder($shared);
+    $self->{frontend_store}->_select();
+    $self->{gen}->set_next_uid(1);
+    $self->make_message("Message A", store => $self->{frontend_store});
+
+    # verify the message is there
+    $frontend->select($shared);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+
+    # MOVE to INBOX (cross-backend) should fail without expunge right
+    $frontend->move('1', 'INBOX');
+    $self->assert_matches(qr{Permission denied}, $frontend->get_last_error());
+
+    # verify the message is still in the source
+    $frontend->select($shared);
+    $self->assert_num_equals(1, $frontend->get_response_code('exists'));
+}

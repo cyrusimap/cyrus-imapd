@@ -53,8 +53,8 @@ int proxy_fetch(char *sequence, int usinguid, unsigned items,
                                 void *datap, void *rock),
                 void *rock);
 
-void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
-                int usinguid, struct backend *s);
+int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
+                int usinguid, struct backend *s, int ismove);
 
 int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
                        size_t maxsize, unsigned long *size, const char **parseerr);

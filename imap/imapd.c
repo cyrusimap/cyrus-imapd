@@ -6680,7 +6680,16 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
             /* this is the hard case; we have to fetch the messages and append
                them to the other mailbox */
 
-            proxy_copy(tag, sequence, name, myrights, usinguid, s);
+            /* need permission to delete from source if it's a move */
+            if (ismove && backend_current->context && !(cyrus_acl_myrights(imapd_authstate, ((mbentry_t *)backend_current->context)->acl) & ACL_EXPUNGE)) {
+                r = IMAP_PERMISSION_DENIED;
+                goto done;
+            }
+
+            /* Return value ignored: the tagged response has already been sent to
+             * the client.  The int return is reserved for a future compensation
+             * path if expunge fails after a successful append. */
+            proxy_copy(tag, sequence, name, myrights, usinguid, s, ismove);
             goto cleanup;
         }
         /* XXX  end of separate proxy-only code */
