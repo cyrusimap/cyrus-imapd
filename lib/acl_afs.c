@@ -170,9 +170,6 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
         strncpy(newacl, *acl, (thisid - *acl));
         /* Append the remaining ACL string. Zero-terminates the string. */
         strcpy(newacl + (thisid - *acl), nextid);
-
-        free(*acl);
-        *acl = newacl;
     }
     else {
         /* Replace any existing entry for 'identifier' */
@@ -184,11 +181,11 @@ EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
         (void) cyrus_acl_masktostr(access, newacl + strlen(newacl));
         strcat(newacl, "\t");
         strcat(newacl, nextid);
-        free(*acl);
-        *acl = newacl;
     }
+    free(*acl);
+    *acl = newacl;
 
-    if (newidentifier) free(newidentifier);
+    free(newidentifier);
     return 0;
 }
 
