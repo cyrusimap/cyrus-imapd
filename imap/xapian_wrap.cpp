@@ -192,9 +192,7 @@ static void remove_legacy_metadata(Xapian::WritableDatabase& db)
                 doc.remove_value(SLOT_DOCLANGS);
             }
         }
-        catch (Xapian::DocNotFoundError e) {
-            // ignore
-        }
+        catch (const Xapian::DocNotFoundError&) {}
     }
 }
 
@@ -543,9 +541,7 @@ EXPORTED int xapian_compact_dbs(const char *dest, const char **sources)
                     }
                     else need_metadata = true;
                 }
-                catch (Xapian::DocNotFoundError e) {
-                    // ignore
-                }
+                catch (const Xapian::DocNotFoundError&) {}
             }
             if (need_metadata) {
                 /* At least one document didn't have its index version set.
