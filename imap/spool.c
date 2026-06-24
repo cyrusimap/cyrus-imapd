@@ -296,9 +296,9 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
     return hdr;
 }
 
-EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
 {
-    struct header_t *hdr = __spool_cache_header(name, body, raw, cache);
+    struct header_t *hdr = __spool_cache_header(name, body, NULL, cache);
 
     /* link header at head of list */
     hdr->next = cache->head;
@@ -307,12 +307,6 @@ EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcac
     else cache->tail = hdr;
 
     cache->head = hdr;
-}
-
-
-EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
-{
-    spool_prepend_header_raw(name, body, NULL, cache);
 }
 
 EXPORTED void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache)

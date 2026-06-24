@@ -12,7 +12,6 @@ typedef struct hdrcache_t *hdrcache_t;
 
 hdrcache_t spool_new_hdrcache(void);
 void spool_prepend_header(char *name, char *body, hdrcache_t cache);
-void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache);
 void spool_append_header(char *name, char *body, hdrcache_t cache);
 void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache);
 #define spool_cache_header(n, b, c) spool_append_header(n, b, c)
