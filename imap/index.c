@@ -147,8 +147,11 @@ static void index_thread_refs(struct index_state *state,
                               unsigned *msgno_list, unsigned int nmsg,
                               int usinguid);
 
+#define SEQ_PARSE_USINGUID 1
+#define SEQ_PARSE_VANISHED 2
+
 static seqset_t *_parse_sequence(struct index_state *state,
-                                 const char *sequence, int usinguid);
+                                 const char *sequence, unsigned mode);
 static void massage_header(char *hdr);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
@@ -936,7 +939,7 @@ seqset_t *index_vanished(struct index_state *state,
     if (params->modseq >= state->highestmodseq) return NULL;
 
     outlist = seqset_init(0, SEQ_SPARSE);
-    seq = _parse_sequence(state, params->sequence, 1);
+    seq = _parse_sequence(state, params->sequence, SEQ_PARSE_VANISHED);
 
     /* XXX - use match_seq and match_uid */
 
@@ -7339,7 +7342,7 @@ EXPORTED int index_hasrights(const struct index_state *state, int rights)
  * Parse a sequence into an array of sorted & merged ranges.
  */
 static seqset_t *_parse_sequence(struct index_state *state,
-                                 const char *sequence, int usinguid)
+                                 const char *sequence, unsigned mode)
 {
     unsigned maxval;
 
@@ -7354,11 +7357,16 @@ static seqset_t *_parse_sequence(struct index_state *state,
        "*" represents the largest number in use.
        In the case of message sequence numbers,
        it is the number of messages in a non-empty mailbox.
-       In the case of unique identifiers,
+       In the case of vanished unique identifiers (RFC 7162, Section 3.2.6),
+       it is the mailbox's current UIDNEXT value.
+       Otherwise, in the case of unique identifiers,
        it is the unique identifier of the last message in the mailbox
        or, if the mailbox is empty, the mailbox's current UIDNEXT value.
     */
-    if (usinguid) {
+    if (mode == SEQ_PARSE_VANISHED) {
+        maxval = state->last_uid + 1;
+    }
+    else if (mode == SEQ_PARSE_USINGUID) {
         if (state->exists) maxval = index_getuid(state, state->exists);
         else maxval = state->last_uid + 1;
     }
