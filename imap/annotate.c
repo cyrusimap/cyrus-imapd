@@ -905,12 +905,10 @@ static const char *key_as_string(const annotate_db_t *d,
 {
     const char *mboxid, *entry, *userid;
     unsigned int uid;
-    int r;
     static struct buf buf = BUF_INITIALIZER;
 
     buf_reset(&buf);
-    r = split_key(d, key, keylen, &mboxid, &uid, &entry, &userid);
-    if (r)
+    if (split_key(d, key, keylen, &mboxid, &uid, &entry, &userid))
         buf_appendcstr(&buf, "invalid");
     else
         buf_printf(&buf, "{ mboxid=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
