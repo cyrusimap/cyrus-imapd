@@ -1,0 +1,134 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test asserts how the FN property value is derived from Card
+# properties. It creates a Card with just a uid and then, in a sequence
+# of updates, sets the contributing properties one at a time in order of
+# increasing precedence. If the precedence in the implementation changes
+# on purpose then this test must get updated, too.
+sub test_card_set_derive_fn
+    ($self)
+{
+    my $user    = $self->default_user;
+    my $jmap    = $user->jmap;
+    my $carddav = $user->carddav;
+
+    my $uid  = 'ae2640cc-3142-4dd9-95cc-310625844001';
+    my $href = "Default/$uid.vcf";
+
+    my $phone = '+1-202-555-3142';
+    my $email = 'derive-fn@example.com';
+    my $nick  = 'NickFN3142';
+    my $org   = 'OrgFN3142';
+    my $full  = 'Full Name FN3142';
+
+    # Helper function to fetch the vCard and assert the FN property.
+    my $assert_fn = sub {
+        my ($want_fn, $derived) = @_;
+
+        my $got   = $carddav->Request('GET', $href, '',
+                                      'Accept' => 'text/vcard; version=4.0');
+        my $vcard = $got->{content};
+        $vcard =~ s/\r?\n[ \t]+//gs;    # unfold long properties
+
+        if ($derived) {
+            $self->assert_matches(
+                qr/\r\nFN;DERIVED=TRUE:\Q$want_fn\E\r\n/, $vcard);
+        }
+        else {
+            $self->assert_matches(qr/\r\nFN:\Q$want_fn\E\r\n/, $vcard);
+            $self->assert_does_not_match(qr/\r\nFN;[^\r\n]*DERIVED/, $vcard);
+        }
+    };
+
+    my $card_id;
+
+    # Helper function to apply an update to the Card.
+    my $update_card = sub {
+        my ($update) = @_;
+
+        my $res = $jmap->request([
+            ['ContactCard/set', {
+                update => { $card_id => $update },
+            }, 'R1'],
+        ]);
+        $self->assert_not_null(
+            $res->single_sentence->as_set->updated->{$card_id});
+    };
+
+    xlog $self, "create a Card with only a uid";
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    uid     => $uid,
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $created = $res->single_sentence->as_set->created->{1};
+    $self->assert_not_null($created);
+    $card_id = $created->{id};
+
+    xlog $self, "Test FN derived from uid";
+    $assert_fn->($uid, 1);
+
+    xlog $self, "Test FN derived from phones[].number";
+    $update_card->({
+        phones => { p1 => { '@type' => 'Phone', number => $phone } },
+    });
+    $assert_fn->($phone, 1);
+
+    xlog $self, "Test FN derived from emails[].address";
+    $update_card->({
+        emails => { e1 => { '@type' => 'EmailAddress', address => $email } },
+    });
+    $assert_fn->($email, 1);
+
+    xlog $self, "Test FN derived from nicknames[].name";
+    $update_card->({
+        nicknames => { n1 => { '@type' => 'Nickname', name => $nick } },
+    });
+    $assert_fn->($nick, 1);
+
+    xlog $self, "Test FN derived from organizations[].name";
+    $update_card->({
+        organizations => { o1 => { '@type' => 'Organization', name => $org } },
+    });
+    $assert_fn->($org, 1);
+
+    xlog $self, "Test FN derived from concatenated Name components";
+    $update_card->({
+        name => {
+            '@type'   => 'Name',
+            isOrdered => JSON::true,
+            components => [
+                { kind => 'given',   value => 'Name' },
+                { kind => 'surname', value => 'Components' },
+            ],
+        },
+    });
+    $assert_fn->('Name Components', 1);
+
+    xlog $self, "Test empty Name.full falls through to the components";
+    $update_card->({
+        name => {
+            '@type'   => 'Name',
+            full      => '',
+            isOrdered => JSON::true,
+            components => [
+                { kind => 'given',   value => 'Empty' },
+                { kind => 'surname', value => 'Full' },
+            ],
+        },
+    });
+    $assert_fn->('Empty Full', 1);
+
+    xlog $self, "Test FN is the explicit Name.full (not derived)";
+    $update_card->({
+        name => { '@type' => 'Name', full => $full },
+    });
+    $assert_fn->($full, 0);
+}

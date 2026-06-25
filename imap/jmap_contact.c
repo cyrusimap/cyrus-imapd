@@ -6487,6 +6487,62 @@ struct jscomps_args {
     struct buf *derived;
 };
 
+static void _jsname_concat_components(json_t *name, struct buf *buf)
+{
+    json_t *comps = json_object_get(name, "components");
+
+    buf_reset(buf);
+
+    if (json_boolean_value(json_object_get(name, "isOrdered"))) {
+        const char *defsep =
+            json_string_value(json_object_get(name, "defaultSeparator"));
+        const char *sep = NULL;
+
+        if (!defsep) defsep = " ";
+
+        for (size_t i = 0; i < json_array_size(comps); i++) {
+            json_t *comp = json_array_get(comps, i);
+            const char *kind = json_string_value(json_object_get(comp, "kind"));
+            const char *val = json_string_value(json_object_get(comp, "value"));
+
+            if (kind && !strcmp(kind, "separator")) {
+                sep = val;
+            }
+            else {
+                if (buf_len(buf)) buf_appendcstr(buf, sep ? sep : defsep);
+                if (val) buf_appendcstr(buf, val);
+                sep = NULL;
+            }
+        }
+    }
+    else {
+        static const unsigned fn_order[] = {
+            VCARD_N_PREFIX, VCARD_N_GIVEN, VCARD_N_ADDITIONAL,
+            VCARD_N_FAMILY, VCARD_N_SUFFIX
+        };
+        for (size_t f = 0; f < sizeof(fn_order) / sizeof(fn_order[0]); f++) {
+            for (size_t i = 0; i < json_array_size(comps); i++) {
+                json_t *comp = json_array_get(comps, i);
+                const char *kind =
+                    json_string_value(json_object_get(comp, "kind"));
+                const struct comp_kind *ckind =
+                    kind ? _field_name_to_kind(kind, n_comp_kinds) : NULL;
+                const char *val =
+                    json_string_value(json_object_get(comp, "value"));
+
+                if (!ckind || !val || !*val) continue;
+
+                if (ckind->idx == fn_order[f] ||
+                    ((ckind->flags & FIELD_BWD) &&
+                     ckind->alt_idx == fn_order[f])) {
+                    if (buf_len(buf)) buf_putc(buf, ' ');
+                    buf_appendcstr(buf, val);
+                }
+            }
+        }
+    }
+}
+
 static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                                         vcardcomponent *card,
                                         struct jscomps_args *args)
@@ -6657,13 +6713,6 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
                         vcardstructured_num_fields(jscomps), entry);
             }
 
-            if (args->derived && isordered) {
-                /* Create derived value from ordered fields */
-                if (i) buf_appendcstr(args->derived, sep ? sep : defsep);
-                buf_appendcstr(args->derived, val);
-                sep = NULL;
-            }
-
             /* Also add values from extended fields to legacy fields */
             if (ckind->flags & FIELD_BWD) {
                 field = vcardstructured_field_at(vals, ckind->alt_idx);
@@ -6688,24 +6737,9 @@ static vcardproperty *_jscomps_to_vcard(struct jmap_parser *parser, json_t *obj,
         goto fail;
     }
 
-    if (args->derived && !isordered) {
-        /* Build derived FN in display order: prefix given given2 family suffix */
-        static const unsigned fn_order[] = {
-            VCARD_N_PREFIX, VCARD_N_GIVEN, VCARD_N_ADDITIONAL,
-            VCARD_N_FAMILY, VCARD_N_SUFFIX
-        };
-
-        for (size_t f = 0; f < sizeof(fn_order)/sizeof(fn_order[0]); f++) {
-            vcardstrarray *sa = vcardstructured_field_at(vals, fn_order[f]);
-            for (size_t v = 0; sa && v < vcardstrarray_size(sa); v++) {
-                const char *val = vcardstrarray_element_at(sa, v);
-                if (val && *val) {
-                    if (buf_len(args->derived))
-                        buf_putc(args->derived, ' ');
-                    buf_appendcstr(args->derived, val);
-                }
-            }
-        }
+    if (args->derived) {
+        /* Derive the full-name string from the components */
+        _jsname_concat_components(obj, args->derived);
     }
 
     if (!needs_extended) {
@@ -6803,7 +6837,11 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
     jprop = json_object_get(jval, "full");
     if (json_is_string(jprop)) {
         buf_setcstr(&buf, json_string_value(jprop));
-        fullName = buf_cstring(&buf);
+        buf_trim(&buf);
+
+        if (buf_len(&buf)) {
+            fullName = buf_cstring(&buf);
+        }
     }
     else if (jprop || !json_object_get(jval, "components")) {
         jmap_parser_invalid(parser, "full");
@@ -6816,7 +6854,9 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         goto done;
     }
 
-    if (!fullName) args.derived = &buf;
+    /* Only derive the full-name string here when it is emitted as a
+       localized FN below; otherwise _jscard_derive_fn() derives it once. */
+    if (!fullName && l10n->lang && *l10n->lang) args.derived = &buf;
 
     prop = _jscomps_to_vcard(parser, jval, card, &args);
 
@@ -6870,18 +6910,15 @@ static unsigned _jsname_to_vcard(struct jmap_parser *parser, json_t *jval,
         }
     }
 
-    if (buf_len(&buf)) {
-        /* Add FN property */
+    if (l10n->lang && *l10n->lang && buf_len(&buf)) {
+        /* Add localized FN property; non-localized FN is derived later */
         prop = vcardproperty_vanew_fn(
             buf_cstring(&buf),
             !fullName ? vcardparameter_new_derived(VCARD_DERIVED_TRUE) : 0,
             NULL);
         vcardcomponent_add_property(card, prop);
-
-        if (l10n->lang && *l10n->lang) {
-            vcardproperty_add_parameter(prop,
-                                        vcardparameter_new_language(l10n->lang));
-        }
+        vcardproperty_add_parameter(prop,
+                                    vcardparameter_new_language(l10n->lang));
     }
 
     json_object_del(jval, "@type");
@@ -8242,6 +8279,97 @@ static void reject_reserved_props(json_t *jsobj, struct jmap_parser *parser)
     }
 }
 
+/* Determine the value for the default (non-localized) FN property. */
+static void _jscard_derive_fn(json_t *arg, const char *deflang,
+                              vcardcomponent *card,
+                              struct buf *fn, bool *is_derived)
+{
+    json_t *name = json_object_get(arg, "name");
+
+    if (!json_is_object(name) && deflang) {
+        /* No base name: fall back to the default-language localized name,
+           stored under a language-tagged key (see PROP_LANG_TAG_PREFIX). */
+        struct buf key = BUF_INITIALIZER;
+        buf_printf(&key, "%s%s:name", PROP_LANG_TAG_PREFIX, deflang);
+        name = json_object_get(arg, buf_cstring(&key));
+        buf_free(&key);
+    }
+
+    buf_reset(fn);
+    *is_derived = true;
+
+    if (json_is_object(name)) {
+        // Use provided full name, if set.
+        const char *full = json_string_value(json_object_get(name, "full"));
+
+        if (full) {
+            /* Use the verbatim full name, but ignore whitespace-only values. */
+            buf_setcstr(fn, full);
+            buf_trim(fn);
+            if (buf_len(fn)) {
+                buf_setcstr(fn, full);
+                *is_derived = false;
+            }
+        }
+
+        // Derive FN from Name components.
+        if (!buf_len(fn)) _jsname_concat_components(name, fn);
+    }
+
+    if (!buf_len(fn)) {
+        // Derive FN from non-name properties.
+        static const struct {
+            const char *prop;
+            const char *key;
+        } derive_props[] = {
+            { "organizations", "name" },
+            { "nicknames",     "name" },
+            { "emails",        "address" },
+            { "phones",        "number" },
+        };
+
+        for (size_t i = 0;
+             !buf_len(fn) && i < sizeof(derive_props) / sizeof(derive_props[0]);
+             i++) {
+            json_t *jprop = json_object_get(arg, derive_props[i].prop);
+
+            const char *id;
+            json_t *jobj;
+            json_object_foreach (jprop, id, jobj) {
+                const char *val = json_string_value(
+                    json_object_get(jobj, derive_props[i].key));
+
+                if (val) {
+                    buf_setcstr(fn, val);
+                    buf_trim(fn);
+                    if (buf_len(fn)) break;
+                }
+            }
+        }
+    }
+
+    if (!buf_len(fn)) {
+        // Derive FN from UID.
+        vcardproperty *uidprop =
+            vcardcomponent_get_first_property(card, VCARD_UID_PROPERTY);
+        if (uidprop) {
+            const char *val = vcardproperty_get_value_as_string(uidprop);
+
+            if (val) {
+                /* Strip the "urn:uuid:" URI scheme, if present. */
+                if (!strncmp(val, VCARD_MEMBER_URI_PREFIX,
+                             VCARD_MEMBER_URI_PREFIX_LEN))
+                    val += VCARD_MEMBER_URI_PREFIX_LEN;
+                buf_setcstr(fn, val);
+                buf_trim(fn);
+            }
+        }
+    }
+
+    // Fallback to "No Name".
+    if (!buf_len(fn)) buf_setcstr(fn, "No Name");
+}
+
 static int _jscard_to_vcard(struct jmap_req *req,
                             struct carddav_data *cdata,
                             const char *mboxname,
@@ -8259,6 +8387,8 @@ static int _jscard_to_vcard(struct jmap_req *req,
     hash_table groups = HASH_TABLE_INITIALIZER;
     hash_table l10n_by_key = HASH_TABLE_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
+    struct buf fn = BUF_INITIALIZER;
+    bool fn_is_derived = false;
     unsigned has_localized_name = 0;
     int r = 0;
 
@@ -8352,6 +8482,9 @@ static int _jscard_to_vcard(struct jmap_req *req,
             }
         }
     }
+
+    /* Derive the FN value before the properties get removed from arg */
+    _jscard_derive_fn(arg, deflang, card, &fn, &fn_is_derived);
 
     json_object_foreach(arg, key, jval) {
         struct l10n_by_id_t l10n = { deflang, NULL, NULL };
@@ -8750,12 +8883,27 @@ static int _jscard_to_vcard(struct jmap_req *req,
     /* Set group label on grouped properties */
     hash_enumerate(&groups, &_set_groups, NULL);
 
-    if (!vcardcomponent_get_first_property(card, VCARD_FN_PROPERTY)) {
-        /* Need to construct an FN property */
-        vcardproperty *prop =
-            vcardproperty_vanew_fn("No Name",
-                                   vcardparameter_new_derived(VCARD_DERIVED_TRUE),
-                                   NULL);
+    /* Add the default FN derived from the Card unless one was already set.
+     * (Localized FNs carry a LANGUAGE parameter; the default one does not.) */
+    bool have_default_fn = false;
+    vcardproperty *fnprop;
+    for (fnprop = vcardcomponent_get_first_property(card, VCARD_FN_PROPERTY);
+         fnprop;
+         fnprop = vcardcomponent_get_next_property(card, VCARD_FN_PROPERTY)) {
+        if (!vcardproperty_get_first_parameter(fnprop, VCARD_LANGUAGE_PARAMETER)) {
+            have_default_fn = true;
+            break;
+        }
+    }
+
+    if (!have_default_fn) {
+        vcardproperty *prop = vcardproperty_new_fn(buf_cstring(&fn));
+
+        if (fn_is_derived) {
+            vcardproperty_add_parameter(prop,
+                    vcardparameter_new_derived(VCARD_DERIVED_TRUE));
+        }
+
         vcardcomponent_add_property(card, prop);
         record_is_dirty = 1;
     }
@@ -8767,6 +8915,7 @@ static int _jscard_to_vcard(struct jmap_req *req,
     free_hash_table(&groups, (void (*)(void *)) &ptrarray_free);
     free_hash_table(&l10n_by_key, NULL);
     buf_free(&buf);
+    buf_free(&fn);
     jmap_parser_fini(&parser);
 
     return r;
