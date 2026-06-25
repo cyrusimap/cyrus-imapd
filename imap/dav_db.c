@@ -396,15 +396,12 @@ struct recon_rock {
  */
 static int _dav_reconstruct_mb(const mbentry_t *mbentry,
                                void *rock
-#ifndef WITH_JMAP
+#if !defined(WITH_DAV) && !defined(WITH_JMAP) && !defined(USE_SIEVE)
                                           __attribute__((unused))
 #endif
                               )
 {
-#ifdef WITH_JMAP
     struct recon_rock *rrock = (struct recon_rock *) rock;
-    struct buf attrib = BUF_INITIALIZER;
-#endif
     int (*addproc)(struct mailbox *, hashu64_table *) = NULL;
     int writelock = 0;
     int r = 0;
@@ -435,7 +432,8 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
         addproc = &mailbox_add_email_alarms;
         break;
 
-    case MBTYPE_EMAIL:
+    case MBTYPE_EMAIL: {
+        struct buf attrib = BUF_INITIALIZER;
         r = annotatemore_lookup(mbentry->name, "/specialuse", rrock->userid, &attrib);
         if (!r && buf_len(&attrib)) {
             strarray_t *specialuse =
@@ -448,6 +446,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
         }
         buf_free(&attrib);
         break;
+    }
 #endif
     }
 
