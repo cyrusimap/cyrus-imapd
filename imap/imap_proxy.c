@@ -42,10 +42,9 @@ static void proxy_part_filldata(partlist_t *part_list, int idx);
 
 static void imap_postcapability(struct backend *s)
 {
-    if (CAPA(s, CAPA_SASL_IR)) {
-        /* server supports initial response in AUTHENTICATE command */
-        s->prot->u.std.sasl_cmd.maxlen = USHRT_MAX;
-    }
+    /* server supports initial response in AUTHENTICATE command
+       keep this per-backend: avoid leaking SASL-IR capability across hosts. */
+    s->prot->u.std.sasl_cmd.maxlen = CAPA(s, CAPA_SASL_IR) ? USHRT_MAX : 0;
 }
 
 static void imap_postauth(struct backend *s)
