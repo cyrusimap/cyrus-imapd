@@ -251,8 +251,6 @@ extern void icalcomponent_set_jmapid(icalcomponent *comp, const char *id);
 
 extern bool ical_is_valid_color(const char *val, bool allow_alpha);
 
-#endif /* HAVE_ICAL */
-
 /**
  * Looks up a property parameter by name.
  *
@@ -266,4 +264,7 @@ extern bool ical_is_valid_color(const char *val, bool allow_alpha);
  */
 extern vcardparameter *vcardproperty_get_parameter_by_name(vcardproperty *prop,
                                                            const char *name);
+
+#endif /* HAVE_ICAL */
+
 #endif /* ICAL_SUPPORT_H */
