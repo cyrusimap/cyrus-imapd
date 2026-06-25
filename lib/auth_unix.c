@@ -40,7 +40,7 @@ static int mymemberof(const struct auth_state *auth_state, const char *identifie
 
     if (strcmp(identifier, auth_state->userid) == 0) return 3;
 
-    if (!strncmp(identifier, "group:", 6) && strarray_contains(&auth_state->groups, identifier+6)) return 2;
+    if (strarray_contains(&auth_state->groups, identifier)) return 2;
 
     return 0;
 }
@@ -164,6 +164,7 @@ static struct auth_state *mynewstate(const char *identifier)
     struct auth_state *newstate;
     struct passwd *pwd;
     struct group *grp;
+    const char *groupname = NULL;
 #if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
     gid_t gid, *groupids = NULL;
     int ret, ngroups = 10, oldngroups;
@@ -173,7 +174,7 @@ static struct auth_state *mynewstate(const char *identifier)
 
     identifier = mycanonifyid(identifier, 0);
     if (!identifier) return 0;
-    if (!strncmp(identifier, "group:", 6)) return 0;
+    if (!strncmp(identifier, "group:", 6)) groupname = identifier + 6;
 
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
@@ -182,6 +183,33 @@ static struct auth_state *mynewstate(const char *identifier)
 
     if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
         return newstate;
+
+    if (groupname) {
+        grp = getgrnam(groupname);
+        if (!grp) {
+            return newstate;
+        }
+
+        /*
+         * For group: identifiers, auth_groups() must return member userids so
+         * reverse ACL code can bump each affected user's raclmodseq.
+         */
+        for (char **mem = grp->gr_mem; mem && *mem; mem++) {
+            strarray_append(&newstate->groups, *mem);
+        }
+
+        /* Include users for whom this group is primary gid. */
+        setpwent();
+        while ((pwd = getpwent())) {
+            if (pwd->pw_gid == grp->gr_gid) {
+                strarray_append(&newstate->groups, pwd->pw_name);
+            }
+        }
+        endpwent();
+
+        strarray_uniq(&newstate->groups);
+        return newstate;
+    }
 
     pwd = getpwnam(identifier);
 
@@ -208,7 +236,8 @@ static struct auth_state *mynewstate(const char *identifier)
     while (ngroups--) {
         if (pwd || groupids[ngroups] != gid) {
             if ((grp = getgrgid(groupids[ngroups])))
-                strarray_append(&newstate->groups, grp->gr_name);
+                strarray_appendm(&newstate->groups,
+                                 strconcat("group:", grp->gr_name, NULL));
         }
     }
 
@@ -223,7 +252,8 @@ err:
         }
 
         if (*mem || (pwd && pwd->pw_gid == grp->gr_gid))
-            strarray_append(&newstate->groups, grp->gr_name);
+            strarray_appendm(&newstate->groups,
+                             strconcat("group:", grp->gr_name, NULL));
     }
     endgrent();
 #endif /* HAVE_GETGROUPLIST */
@@ -239,6 +269,9 @@ static void myfreestate(struct auth_state *auth_state)
 
 static strarray_t *mygroups(const struct auth_state *auth_state)
 {
+    if (!auth_state) 
+        return strarray_new();
+
     return strarray_dup(&auth_state->groups);
 }
 
