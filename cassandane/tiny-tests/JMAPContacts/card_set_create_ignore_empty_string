@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_create_ignore_empty_string
+    ($self)
+{
+    my $abook = $self->default_user->addressbooks->default;
+
+    xlog $self, "create a card with empty-string values";
+    my $card = $abook->create_card({
+        '@type' => 'Card',
+        name => 'John Doe',
+        addresses => {
+            k23 => {
+                '@type' => 'Address',
+                contexts => { private => JSON::true },
+                pref => 1,
+                components => [
+                    { kind => 'name', value => 'FOO BAR' },
+                ],
+                countryCode => '',
+            },
+        },
+        personalInfo => {
+            'PERSINFO-1' => {
+                '@type' => 'PersonalInfo',
+                kind => 'interest',
+                value => 'music',
+                level => '',
+            },
+            'PERSINFO-2' => {
+                '@type' => 'PersonalInfo',
+                kind => 'hobby',
+                value => 'reading',
+                label => '',
+            },
+        },
+    });
+
+    $self->assert_not_null($card->id);
+
+    my $vcard = $card->as_vcard4_struct;
+    my $props = $vcard->{properties};
+
+    xlog $self, "an empty countryCode must not emit an empty-valued CC parameter";
+    my $adr = $props->{adr};
+    $self->assert_not_null($adr);
+    $self->assert_num_equals(1, scalar @$adr);
+    $self->assert(
+        !exists $adr->[0]{params}{cc},
+        "ADR property must not have a CC parameter for an empty countryCode"
+    );
+
+    xlog $self, "an empty level must not emit an empty-valued LEVEL parameter";
+    my $interest = $props->{interest};
+    $self->assert_not_null($interest);
+    $self->assert_num_equals(1, scalar @$interest);
+    $self->assert(
+        !exists $interest->[0]{params}{level},
+        "INTEREST property must not have a LEVEL parameter for an empty level"
+    );
+
+    xlog $self, "an empty label must not emit an empty X-ABLabel property";
+    $self->assert(
+        !exists $props->{'x-ablabel'},
+        "an empty label must not emit an X-ABLabel property"
+    );
+}

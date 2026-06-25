@@ -6094,38 +6094,58 @@ static void _jsparam_to_vcard(struct jmap_parser *parser,
                 }
             }
 
-            param = new = vcardparameter_new(VCARD_LEVEL_PARAMETER);
-            vcardparameter_set_value_from_string(param, val);
+            if (*val) {
+                param = new = vcardparameter_new(VCARD_LEVEL_PARAMETER);
+                vcardparameter_set_value_from_string(param, val);
+            }
+            else {
+                /* Treat an empty string the same as an absent value rather
+                   than emitting an empty-valued parameter (e.g. LEVEL=) */
+                jprop = NULL;
+            }
         }
         break;
 
     case VCARD_X_PARAMETER:
         /* label translates to a grouped X-ABLabel property */
         if (json_is_string(jprop)) {
-            vcardproperty *label = vcardproperty_new(VCARD_X_PROPERTY);
-            vcardproperty_set_value(label,
-                    vcardvalue_new_text(json_string_value(jprop)));
-            const char *group;
+            const char *val = json_string_value(jprop);
 
-            vcardproperty_set_x_name(label, VCARD_APPLE_LABEL_PROPERTY);
-            vcardcomponent_add_property(vcardproperty_get_parent(prop), label);
+            if (*val) {
+                vcardproperty *label = vcardproperty_new(VCARD_X_PROPERTY);
+                vcardproperty_set_value(label, vcardvalue_new_text(val));
+                const char *group;
 
-            buf_setcstr(&buf, vcardproperty_get_property_name(prop));
-            buf_truncate(&buf, MIN(5, buf_len(&buf)));
-            buf_printf(&buf, "%u", (*groupnum)++);
-            group = buf_lcase(&buf);
+                vcardproperty_set_x_name(label, VCARD_APPLE_LABEL_PROPERTY);
+                vcardcomponent_add_property(vcardproperty_get_parent(prop), label);
 
-            vcardproperty_set_group(label, group);
-            vcardproperty_set_group(prop, group);
+                buf_setcstr(&buf, vcardproperty_get_property_name(prop));
+                buf_truncate(&buf, MIN(5, buf_len(&buf)));
+                buf_printf(&buf, "%u", (*groupnum)++);
+                group = buf_lcase(&buf);
+
+                vcardproperty_set_group(label, group);
+                vcardproperty_set_group(prop, group);
+            }
+            /* Treat an empty string the same as an absent value rather than
+               emitting an empty X-ABLabel property */
             jprop = NULL;
         }
         break;
 
     default:
         if (json_is_string(jprop)) {
-            param = new = vcardparameter_new(pkind);
-            vcardparameter_set_value_from_string(param,
-                                                 json_string_value(jprop));
+            const char *val = json_string_value(jprop);
+
+            if (*val) {
+                param = new = vcardparameter_new(pkind);
+                vcardparameter_set_value_from_string(param, val);
+            }
+            else {
+                /* Treat an empty string the same as an absent value rather
+                   than emitting an empty-valued parameter (e.g. CC="") */
+                jprop = NULL;
+            }
         }
         break;
     }
