@@ -3360,6 +3360,47 @@ static void jscomps_from_vcard(json_t *obj, vcardproperty *prop,
 
     param = vcardproperty_get_first_parameter(prop, VCARD_JSCOMPS_PARAMETER);
     if (param) {
+        /* Validate the JSCOMPS references. If any is false, ignore JSCOMPS. */
+        vcardstructuredtype *jscomps = vcardparameter_get_jscomps(param);
+        size_t num_jscomps = vcardstructured_num_fields(jscomps);
+        size_t num_comp_kinds = 0;
+
+        while (comp_kinds[num_comp_kinds].name) num_comp_kinds++;
+
+        for (i = 1; i < num_jscomps; i++) {
+            sa = vcardstructured_field_at(jscomps, i);
+            val = vcardstrarray_element_at(sa, 0);
+            if (!val) break;
+
+            if (*val == 's') {
+                /* separator: must carry a value */
+                if (!vcardstrarray_element_at(sa, 1)) break;
+            }
+            else {
+                int field_idx = atoi(val);
+                int val_idx = 0;
+
+                if (field_idx < 0 ||
+                    field_idx >= (int) vcardstructured_num_fields(st) ||
+                    field_idx >= (int) num_comp_kinds) break;
+
+                if (vcardstrarray_size(sa) > 1)
+                    val_idx = atoi(vcardstrarray_element_at(sa, 1));
+
+                val = vcardstrarray_element_at(
+                        vcardstructured_field_at(st, field_idx), val_idx);
+                if (!val || !*val) break;
+            }
+        }
+
+        if (i < num_jscomps) {
+            /* Bogus reference: drop the JSCOMPS parameter */
+            vcardproperty_remove_parameter_by_ref(prop, param);
+            param = NULL;
+        }
+    }
+
+    if (param) {
         /* Order components per JSCOMPS */
         vcardstructuredtype *jscomps = vcardparameter_get_jscomps(param);
 
