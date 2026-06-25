@@ -4311,6 +4311,11 @@ static int http_auth(const char *creds, struct transaction_t *txn)
         char *plus;
         char *domain;
 
+        if (!clientin) {
+            syslog(LOG_ERR, "Basic auth: Missing token68");
+            return SASL_BADPARAM;
+        }
+
         /* Split credentials into <user> ':' <pass>.
          * We are working with base64 buffer, so we can modify it.
          */

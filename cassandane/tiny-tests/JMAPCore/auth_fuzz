@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64;
+
+sub test_auth_fuzz($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+
+    my $auth = $jmap->get_client_session;
+    $self->assert($auth->is_success, 'default success');
+    $self->assert_str_equals('200', $auth->http_response->code, 'default 200');
+
+    my $correct_auth = $jmap->ua->get_default_header('Authorization');
+    my ($token68) = $correct_auth =~ /\ABasic\s+(\S+)/i
+        or die "Can't parse <$correct_auth>";
+    my ($user, $pass) = split ':', decode_base64($token68);
+
+    $jmap->ua->set_default_header('Authorization', undef);
+
+    $auth = $jmap->get_client_session;
+    $self->assert(!$auth->is_success, "no authorization");
+    $self->assert_str_equals('401', $auth->http_response->code,
+                             "no authorization 401");
+
+    # rfc9110 states that the Authorization header has exactly 1 space, but our
+    # implementation is "liberal in what it accepts" and accepts 1+ spaces
+
+    my @fuzz = (
+        ['bonus space',  "bAsIc  $token68"],
+        ['bonus spaces', "BASIC   $token68"],
+        ['percent',      \"$user%percent:$pass"],
+        ['plus',         \"$user+plus:$pass"],
+        ['percent plus', \"$user%percent+plus:$pass"],
+    );
+
+    for my $case (@fuzz) {
+        my ($desc, $header) = @$case;
+        $header = 'Basic ' . encode_base64($$header, "") if ref $header;
+        $jmap->ua->set_default_header('Authorization', $header);
+
+        $auth = $jmap->get_client_session;
+        $self->assert($auth->is_success, "$desc success");
+        $self->assert_str_equals('200', $auth->http_response->code, "$desc 200");
+    }
+
+    @fuzz = (
+        ['tab',             "Basic\t$token68"],
+        ['space after',     "Basic $token68 "],
+        ['tab after',       "Basic $token68\t"],
+        ['no token',        "Basic"],
+        ['trailing space',  "Basic "],
+        ['trailing spaces', "Basic  "],
+        ['unknown scheme',  "Bogus"],
+        ['bad base64',      "Basic ~~"],
+        ['no colon',        \"$user"],
+
+        # This hits this return in SASL's _canonuser_internal():
+        #   utils->seterror(utils->conn, 0, "All-whitespace username.");
+        #   return SASL_FAIL;
+        # which then takes this path in auth_check_hdrs():
+        #   else if (r == SASL_FAIL) {
+        #     ret = HTTP_SERVER_ERROR;
+        # which is a 500:
+        ['just colon',      "Basic Og==", '500'],
+        # This takes the same path:
+        ['empty user',      \":$pass", 500],
+
+        # There's no real password checking in our testing setup, so can't test:
+        # ['empty password', \"$user:"],
+    );
+
+    for my $case (@fuzz) {
+        my ($desc, $header, $code) = @$case;
+        $header = 'Basic ' . encode_base64($$header, "") if ref $header;
+        $code //= '401';
+        $jmap->ua->set_default_header('Authorization', $header);
+
+        $auth = $jmap->get_client_session;
+        $self->assert(!$auth->is_success, "$desc denied");
+        $self->assert_str_equals($code, $auth->http_response->code, "$desc $code");
+    }
+}
