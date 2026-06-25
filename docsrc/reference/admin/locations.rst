@@ -102,7 +102,7 @@ Metadata Partitions
 -------------------
 
 Metadata is information used to process the mailbox data, rather than
-the contents of the messages withing the mailbox.  Examples include
+the contents of the messages within the mailbox.  Examples include
 headers, caches, indexes, etc.
 
     * :imapdconf:`metapartition-name`

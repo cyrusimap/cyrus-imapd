@@ -38,7 +38,7 @@ Release notes
 Write up the release notes, and add them to the appropriate location under
 ``docsrc/download/release-notes/``.  They will not yet be linked up.
 Build the documentation locally with ``make doc-html``, then check the new
-release notes file in your brower to make sure it's correct and complete.
+release notes file in your browser to make sure it's correct and complete.
 It will be in ``doc/html/download/release-notes/...``.
 
 Commit the new release notes with a message like ``docs: release notes for

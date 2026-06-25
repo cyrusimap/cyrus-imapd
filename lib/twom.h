@@ -41,7 +41,7 @@ enum twom_ret {
 // we don't reuse flags for different operations (e.g. open, fetch, foreach), as
 // there's 32 bits of space available - though not all flags have meaning in all contexts.
 enum twom_flagspec {
-    TWOM_CREATE          = 1<<0,    /* Create the database if not existant */
+    TWOM_CREATE          = 1<<0,    /* Create the database if not existent */
     TWOM_SHARED          = 1<<1,    /* Open in shared lock mode */
     TWOM_NOCSUM          = 1<<2,    /* Don't check checksums on read */
     TWOM_NOSYNC          = 1<<3,    /* Don't msync/fsync on write */

@@ -194,7 +194,7 @@ correctly is (provided there is no interleaved DELETE in another session):
      A002 SELECT INBOX.new
 </pre></li>
 
-<li>Accesses to non-existant mailboxes are rare.</li>
+<li>Accesses to non-existent mailboxes are rare.</li>
 </ul>
 
 <h3>3.2 Authentication</h3>
@@ -353,7 +353,7 @@ recovery can activate the mailbox in mupdate instead)
 <p> Failure modes: Above, all back end inconsistencies result in the
 next CREATE attempt failing.  The earlier MUPDATE inconsistency results
 in any attempts to CREATE the mailbox on another back end failing.  The
-latter one makes the mailbox unreachable and un-createable.  Though, this
+latter one makes the mailbox unreachable and un-creatable.  Though, this
 is safer than potentially having the mailbox appear in two places when
 the failed backend comes back up.</p>
 

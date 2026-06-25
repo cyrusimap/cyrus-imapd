@@ -7,7 +7,7 @@ Changes to the Cyrus IMAP Server since 2.3.14
 *   Fixed CERT VU#336053 - Potential buffer overflow in Sieve.
 *   Added new cyr_df tool for reporting Cyrus spool partition disk space usage.
 *   Fixed a crash when selecting a folder after using the SCAN command
-*   Split mupdate_synchronize() into network scarfing and mailbox comparision pieces. This allows us to not lock out the mailboxes.db and mupdate clients while scarfing the UPDATE response, which can be quite time consuming over slow links.
+*   Split mupdate_synchronize() into network scarfing and mailbox comparison pieces. This allows us to not lock out the mailboxes.db and mupdate clients while scarfing the UPDATE response, which can be quite time consuming over slow links.
 *   Added support for MUPDATE COMPRESS and IMAP COMPRESS commands which help speed up bulk data commands over slow links. Inspired by work of Dave Cridland <dave@cridland.net>
 *   Allow frontend servers in a Murder to proxy the CREATE, DELETE, SETACL, SETQUOTA, and GETQUOTA commands for toplevel mailboxes. In order for a frontend to know where to CREATE a toplevel mailbox, either the defaultserver option must be set (ALL new toplevel mailboxes are created on this particular server), or the serverlist option must be set (new toplevel mailboxes are created on whichever server has the most available spool space).
 *   Use delayed expunge in ipurge to avoid corrupting cache file and as a bonus make it unexpungable.

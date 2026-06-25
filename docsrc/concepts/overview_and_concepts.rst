@@ -565,7 +565,7 @@ Message Delivery
 Mail transport agents such as Sendmail, Postfix, or Exim communicate
 with the Cyrus server via LMTP (the Local Mail Transport Protocol)
 implemented by the LMTP daemon.  This can be done either directly by the
-MTA (prefered, for performance reasons) or via the ``deliver`` LMTP
+MTA (preferred, for performance reasons) or via the ``deliver`` LMTP
 client.
 
 Local Mail Transfer Protocol (lmtp)

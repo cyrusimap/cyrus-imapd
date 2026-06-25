@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_service_noexe ($self)
 {
-    xlog $self, "single service with a non-existant executable";
+    xlog $self, "single service with a non-existent executable";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->{instance}->add_service(
                     name => 'B',

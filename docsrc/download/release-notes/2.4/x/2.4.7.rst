@@ -8,13 +8,13 @@ Changes to the Cyrus IMAP Server since 2.4.6
 *   Fixed Bug #3392 - allowing INBOX.INBOX to be created if the case didn't match
 *   Fixed Bug #3404 - incorrect LIST "" "user" response
 *   Fixed Bug #3417 - crash on zero-byte quota file
-*   Fixed numberous bugs with mailbox upgrades
+*   Fixed numerous bugs with mailbox upgrades
 *   Fixed replication errors, which have been reported many times on the mailing list, but don't have bug numbers.
-*   Increated "paranoia" about record ordering in mailbox, which would have detected some bad bugs in replication that caused the infinite runaway mailbox filling reported in 2.4.6 and below
+*   Increased "paranoia" about record ordering in mailbox, which would have detected some bad bugs in replication that caused the infinite runaway mailbox filling reported in 2.4.6 and below
 *   Increased syslogging detail about replication issues
 *   Fixed reconstruct crash with zero-byte index file
 *   Fixed cyradm perl library path finding
-*   Fixed incorrect use of LITERAL+ formats in our responses to clients. Unreported, but could be causing wierd hard-to-track-down bugs out there
+*   Fixed incorrect use of LITERAL+ formats in our responses to clients. Unreported, but could be causing weird hard-to-track-down bugs out there
 *   Fixed append immediately on create
 *   Upgraded Unicode database to version 6.0
 *   Fixed reconstruct crash on folder names with many digits (i.e. ebay auction numbers)

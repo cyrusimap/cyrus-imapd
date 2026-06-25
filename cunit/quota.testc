@@ -428,7 +428,7 @@ static void test_update_useds(void)
     q.root = (char *) QUOTAROOT;
     memset(quota_diff, 0, sizeof(quota_diff));
 
-    /* updating a NULL or empty or non-existant root returns the error */
+    /* updating a NULL or empty or non-existent root returns the error */
     quota_diff[QUOTA_STORAGE] = 10*1024;
     quota_diff[QUOTA_MESSAGE] = 2;
     quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;

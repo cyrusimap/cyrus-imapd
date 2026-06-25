@@ -367,7 +367,7 @@ out on the cyrus-devel list in June 2010.
 
 ..
 
-    Very occasionally, it may be permissable to use 'goto' from within
+    Very occasionally, it may be permissible to use 'goto' from within
     a complicated or multiply-nested loop, to the top of a loop, but
     only if using another control structure is *less* clear.
 

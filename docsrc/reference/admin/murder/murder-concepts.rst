@@ -344,7 +344,7 @@ Operations on the Mailbox List
     next CREATE attempt failing. The earlier MUPDATE inconsistency
     results in any attempts to CREATE the mailbox on another backend
     failing. The latter one makes the mailbox unreachable and
-    un-createable. Though, this is safer than potentially having the
+    un-creatable. Though, this is safer than potentially having the
     mailbox appear in two places when the failed backend comes back
     up.
 

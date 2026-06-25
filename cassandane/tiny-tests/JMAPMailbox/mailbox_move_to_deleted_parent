@@ -30,7 +30,7 @@ sub test_mailbox_move_to_deleted_parent
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_null($res->[0][1]{notDestroyed});
 
-    # Try to move "B" under a non-existant mailbox
+    # Try to move "B" under a non-existent mailbox
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $idB => { parentId => "nosuchid" },

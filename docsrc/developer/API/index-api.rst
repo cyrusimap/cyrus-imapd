@@ -54,7 +54,7 @@ re-written.
 Also, memory is now cheap. Rather than using locks to ensure
 consistency, we just keep a copy of the ``struct index_record`` for even
 message in the index, stored in memory. Since these are about 100 bytes
-each, a 1 million email mailbox will take rougly 100Mb of memory. That's
+each, a 1 million email mailbox will take roughly 100Mb of memory. That's
 not too bad on a modern server, and that's a **huge** mailbox.
 
 So - the model works like this:

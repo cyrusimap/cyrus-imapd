@@ -71,7 +71,7 @@ Options
 
 .. option:: -p partition, --partition=partition
 
-    Search for the listed (non-existant) mailboxes on the indicated
+    Search for the listed (nonexistent) mailboxes on the indicated
     *partition*. Create the mailboxes in the database in addition to
     reconstructing them. (not compatible with the use of wildcards)
 

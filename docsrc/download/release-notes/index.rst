@@ -34,8 +34,8 @@ Series 3.14
 
     3.13/index
 
-Supported Verions
------------------
+Supported Versions
+------------------
 
 The latest stable version is |imap_stable_release_notes|.  Its documentation
 can be found at :cyrus-stable:`/`.

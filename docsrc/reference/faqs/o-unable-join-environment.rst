@@ -1,7 +1,7 @@
 "unable to join environment" error
 ----------------------------------
 
-This error is caused if you build Berkley DB 4 with threading support, 
+This error is caused if you build Berkeley DB 4 with threading support,
 but do not then link the pthreads library to Cyrus. This is commonly 
 caused by a Linux distribution which supplies the pre-threaded library 
 version. 

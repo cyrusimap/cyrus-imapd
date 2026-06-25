@@ -65,7 +65,7 @@ Changes to the Cyrus IMAP Server since 2.1.10
 
 Changes to the Cyrus IMAP Server since 2.1.9
 
-*   support Berkley DB 4.1
+*   support Berkeley DB 4.1
 *   more portable use of errno throughout
 *   timsieved now does telemetry logging
 *   libcyrus.a no longer supplies fs_get() and fs_give()
@@ -112,7 +112,7 @@ Changes to the Cyrus IMAP Server since 2.1.4
 *   The RENAME command has been almost entirely rewritten. Now we rely on mailbox-level locking instead of locking the entire mailboxes file for the duration of the rename. ctl_cyrusdb -r now also cleans up "reserved" mailboxes that may appear in the event of a crash.
 *   ctl_mboxlist can now dump only a particular partition
 *   The configuration subsystem now uses a hash table to speed up lookups of options. Additionally, the hash table implementation has been updated to possibly take advantage of memory pools.
-*   Many bugfixes related to the Cyrus Murder. Includes improvments to subscription handling as well as correct merging of seen state on mailbox moves.
+*   Many bugfixes related to the Cyrus Murder. Includes improvements to subscription handling as well as correct merging of seen state on mailbox moves.
 *   Can now configure an external debugger (debug_command option in imapd.conf.
 *   Misc. autoconf-related fixes (most notably those related to sasl_checkapop and O_DSYNC).
 *   Misc. locking-related fixes.
@@ -125,7 +125,7 @@ Changes to the Cyrus IMAP Server since 2.1.3
 *   Some warning fixes.
 *   fdatasync() is no longer required.
 *   Fixed a bug in imap/append.c that would show itself if a message was being delivered to five or more different partitions.
-*   Deliveries now don't create a redudant temporary file using tmpfile(); the staging directory is used instead. (Ken Murchison)
+*   Deliveries now don't create a redundant temporary file using tmpfile(); the staging directory is used instead. (Ken Murchison)
 *   Fix a possible crashing bug in squatter. (Ken Murchison)
 *   Deleting a user now also removes their Sieve scripts.
 *   cyrusdb_skiplist: release locks during iteration. Should prevent denial of service attacks and possibly increase performance.
