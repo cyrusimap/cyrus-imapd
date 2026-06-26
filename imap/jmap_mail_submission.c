@@ -1043,6 +1043,8 @@ static void _emailsubmission_update(jmap_req_t *req,
     json_t *precond_err = jmap_set_precondition(set, id, sub);
     if (precond_err) {
         *set_err = precond_err;
+        json_decref(sub);
+        sub = NULL;
         goto done;
     }
 
