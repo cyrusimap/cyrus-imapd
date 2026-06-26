@@ -43,6 +43,11 @@
 #include "ptrarray.h"
 #include "sievedir.h"
 #include "xunlink.h"
+#include "conversations.h"
+#include "msgrecord.h"
+#include "charset.h"
+#include "hash.h"
+#include "retry.h"
 
 #include "caldav_alarm.h"
 
@@ -2393,13 +2398,60 @@ done:
 
 /* =======================  server-side sync  =========================== */
 
+/* Link a single message file into the reserve stage.  Returns 0 on success,
+ * or an IMAP error if the file couldn't be verified or staged (in which case
+ * the caller should just move on to another copy). */
+static int reserve_one(const char *part, struct mailbox *mailbox,
+                       const struct index_record *record,
+                       struct sync_msgid *item,
+                       struct sync_msgid_list *part_list)
+{
+    const char *mailbox_msg_path, *stage_msg_path;
+    struct index_record record2;
+    int r;
+
+    mailbox_msg_path = mailbox_record_fname(mailbox, record);
+    stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
+                                        &record->guid);
+
+    /* check that the sha1 of the file on disk is correct */
+    memset(&record2, 0, sizeof(struct index_record));
+    r = message_parse(mailbox_msg_path, &record2);
+    if (r) {
+        xsyslog(LOG_ERR, "IOERROR: parse failed",
+                         "filename=<%s>",
+                         mailbox_msg_path);
+        return r;
+    }
+    if (!message_guid_equal(&record->guid, &record2.guid)) {
+        xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
+                        "filename=<%s>",
+                        mailbox_msg_path);
+        return IMAP_IOERROR;
+    }
+
+    if (cyrus_copyfile(mailbox_msg_path, stage_msg_path, COPYFILE_MKDIR|COPYFILE_NODIRSYNC) != 0) {
+        xsyslog(LOG_ERR, "IOERROR: link failed",
+                         "mailbox_msg_path=<%s> stage_msg_path=<%s>",
+                         mailbox_msg_path, stage_msg_path);
+        return IMAP_IOERROR;
+    }
+
+    item->size = record->size;
+    item->fname = xstrdup(stage_msg_path); /* track the correct location */
+    item->is_archive = (record->internal_flags & FLAG_INTERNAL_ARCHIVED) ? 1 : 0;
+    item->need_upload = 0;
+    part_list->toupload--;
+
+    return 0;
+}
+
 static void reserve_folder(const char *part, const char *mboxname,
                     struct sync_msgid_list *part_list)
 {
     struct mailbox *mailbox = NULL;
     int r;
     struct sync_msgid *item;
-    const char *mailbox_msg_path, *stage_msg_path;
     int num_reserved;
 
 redo:
@@ -2425,39 +2477,8 @@ redo:
             continue;
 
         /* Attempt to reserve this message */
-        mailbox_msg_path = mailbox_record_fname(mailbox, record);
-        stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
-                                            &record->guid);
-
-        /* check that the sha1 of the file on disk is correct */
-        struct index_record record2;
-        memset(&record2, 0, sizeof(struct index_record));
-        r = message_parse(mailbox_msg_path, &record2);
-        if (r) {
-            xsyslog(LOG_ERR, "IOERROR: parse failed",
-                             "filename=<%s>",
-                             mailbox_msg_path);
+        if (reserve_one(part, mailbox, record, item, part_list))
             continue;
-        }
-        if (!message_guid_equal(&record->guid, &record2.guid)) {
-            xsyslog(LOG_ERR, "IOERROR: guid mismatch on parse",
-                            "filename=<%s>",
-                            mailbox_msg_path);
-            continue;
-        }
-
-        if (cyrus_copyfile(mailbox_msg_path, stage_msg_path, COPYFILE_MKDIR|COPYFILE_NODIRSYNC) != 0) {
-            xsyslog(LOG_ERR, "IOERROR: link failed",
-                             "mailbox_msg_path=<%s> stage_msg_path=<%s>",
-                             mailbox_msg_path, stage_msg_path);
-            continue;
-        }
-
-        item->size = record->size;
-        item->fname = xstrdup(stage_msg_path); /* track the correct location */
-        item->is_archive = (record->internal_flags & FLAG_INTERNAL_ARCHIVED) ? 1 : 0;
-        item->need_upload = 0;
-        part_list->toupload--;
         num_reserved++;
 
         /* already found everything, drop out */
@@ -2474,6 +2495,365 @@ redo:
     mailbox_iter_done(&iter);
 
     mailbox_close(&mailbox);
+}
+
+/* Extract a message that exists only as an embedded sub-part (e.g. a
+ * message/rfc822 attachment whose decoded content hashes to the GUID we
+ * want) and stage those bytes.  Only used when no whole-message copy of the
+ * GUID exists anywhere in the user's account. */
+static int reserve_one_part(const char *part, struct mailbox *mailbox,
+                            const struct index_record *record, const char *partid,
+                            struct sync_msgid *item,
+                            struct sync_msgid_list *part_list)
+{
+    msgrecord_t *mr = NULL;
+    struct body *body = NULL;
+    struct buf blob = BUF_INITIALIZER;
+    char *decbuf = NULL;
+    const struct body *mypart = NULL;
+    ptrarray_t parts = PTRARRAY_INITIALIZER;
+    const char *base;
+    size_t len;
+    int encoding;
+    struct message_guid guid;
+    const char *stage_msg_path;
+    int fd, i, r;
+
+    mr = msgrecord_from_index_record(mailbox, record);
+    if (!mr) return IMAP_INTERNAL;
+
+    r = msgrecord_extract_bodystructure(mr, &body);
+    if (r) goto done;
+
+    r = msgrecord_get_body(mr, &blob);
+    if (r) goto done;
+
+    /* walk the body parts looking for the one whose content GUID matches */
+    ptrarray_push(&parts, body);
+    while ((mypart = ptrarray_shift(&parts))) {
+        if (!message_guid_cmp(&item->guid, &mypart->content_guid))
+            break;
+        if (!mypart->subpart)
+            continue;
+        ptrarray_push(&parts, mypart->subpart);
+        for (i = 1; i < mypart->numparts; i++)
+            ptrarray_push(&parts, mypart->subpart + i);
+    }
+    ptrarray_fini(&parts);
+    if (!mypart) {
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+
+    /* decode the part content - this is what hashes to the content GUID */
+    base = buf_base(&blob) + mypart->content_offset;
+    len = mypart->content_size;
+    encoding = mypart->charset_enc & 0xff;
+    if (!encoding && mypart->encoding)
+        encoding = encoding_lookupname(mypart->encoding);
+    base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
+    if (!base) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* verify the extracted bytes really do hash to the GUID we want */
+    message_guid_generate(&guid, base, len);
+    if (!message_guid_equal(&item->guid, &guid)) {
+        xsyslog(LOG_ERR, "IOERROR: guid mismatch on extracted part",
+                         "mailbox=<%s> uid=<%u> part=<%s>",
+                         mailbox_name(mailbox), record->uid, partid);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    stage_msg_path = dlist_reserve_path(part, /*isarchive*/0, &item->guid);
+    fd = open(stage_msg_path, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+    if (fd < 0) {
+        xsyslog(LOG_ERR, "IOERROR: create failed",
+                         "stage_msg_path=<%s>", stage_msg_path);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+    if (retry_write(fd, base, len) != (ssize_t)len) {
+        xsyslog(LOG_ERR, "IOERROR: write failed",
+                         "stage_msg_path=<%s>", stage_msg_path);
+        close(fd);
+        xunlink(stage_msg_path);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+    close(fd);
+
+    item->size = len;
+    item->fname = xstrdup(stage_msg_path);
+    item->is_archive = 0;
+    item->need_upload = 0;
+    part_list->toupload--;
+    r = 0;
+
+ done:
+    free(decbuf);
+    buf_free(&blob);
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    if (mr) msgrecord_unref(&mr);
+    return r;
+}
+
+/* a candidate location (folder + uid) where a wanted GUID may be found */
+struct reserve_candidate {
+    uint32_t uid;
+    struct sync_msgid *item;
+    char *part;            /* NULL: whole message; else MIME part-id to extract */
+};
+
+/* a sub-part candidate stashed until we know there's no whole-message copy */
+struct reserve_pending {
+    char *mboxname;
+    uint32_t uid;
+    char *part;
+};
+
+struct reserve_collect_rock {
+    hash_table *buckets;            /* mboxname -> ptrarray<reserve_candidate*> */
+    struct sync_msgid *item;        /* GUID currently being looked up */
+    int has_whole;                  /* did this GUID have a whole-message copy? */
+    ptrarray_t pending_parts;       /* reserve_pending* for the current GUID */
+};
+
+static void reserve_bucket_add(hash_table *buckets, const char *mboxname,
+                               uint32_t uid, struct sync_msgid *item,
+                               const char *part)
+{
+    ptrarray_t *cands = hash_lookup(mboxname, buckets);
+    struct reserve_candidate *cand;
+
+    if (!cands) {
+        cands = ptrarray_new();
+        hash_insert(mboxname, cands, buckets);
+    }
+
+    cand = xzmalloc(sizeof(struct reserve_candidate));
+    cand->uid = uid;
+    cand->item = item;
+    cand->part = part ? xstrdup(part) : NULL;
+    ptrarray_append(cands, cand);
+}
+
+static void reserve_free_bucket(void *data)
+{
+    ptrarray_t *cands = (ptrarray_t *)data;
+    struct reserve_candidate *cand;
+
+    while ((cand = ptrarray_pop(cands))) {
+        free(cand->part);
+        free(cand);
+    }
+    ptrarray_free(cands);
+}
+
+/* conversations_guid_foreach callback: record where each copy lives without
+ * opening any mailboxes */
+static int reserve_collect_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct reserve_collect_rock *crock = (struct reserve_collect_rock *)rock;
+    const char *mboxname;
+
+    /* only consider live copies */
+    if (rec->version > 0 &&
+        (rec->system_flags & FLAG_DELETED ||
+         rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
+        return 0;
+
+    mboxname = conv_guidrec_mboxname(rec);
+    if (!mboxname)
+        return 0;
+
+    if (rec->part) {
+        /* only useful if there's no whole-message copy - decide once we've
+         * seen every record for this GUID */
+        struct reserve_pending *p = xzmalloc(sizeof(struct reserve_pending));
+        p->mboxname = xstrdup(mboxname);
+        p->uid = rec->uid;
+        p->part = xstrdup(rec->part);
+        ptrarray_append(&crock->pending_parts, p);
+    }
+    else {
+        crock->has_whole = 1;
+        reserve_bucket_add(crock->buckets, mboxname, rec->uid, crock->item, NULL);
+    }
+
+    return 0;
+}
+
+struct reserve_guid_ref {
+    struct sync_msgid *item;
+    char rep[2*MESSAGE_GUID_SIZE+1];
+};
+
+static int reserve_cmp_guidrep(const void *a, const void *b)
+{
+    return strcmp(((const struct reserve_guid_ref *)a)->rep,
+                  ((const struct reserve_guid_ref *)b)->rep);
+}
+
+static int reserve_cmp_uid(const void **a, const void **b)
+{
+    uint32_t ua = (*(const struct reserve_candidate **)a)->uid;
+    uint32_t ub = (*(const struct reserve_candidate **)b)->uid;
+    if (ua < ub) return -1;
+    if (ua > ub) return 1;
+    return 0;
+}
+
+struct reserve_bucket_ref {
+    const char *mboxname;
+    ptrarray_t *cands;
+};
+
+static int reserve_cmp_bucket(const void *a, const void *b)
+{
+    /* most candidates first */
+    return ptrarray_size(((const struct reserve_bucket_ref *)b)->cands) -
+           ptrarray_size(((const struct reserve_bucket_ref *)a)->cands);
+}
+
+/* Use the user's conversations DB to locate the wanted GUIDs and link them
+ * into the stage, opening each containing mailbox at most once.  Returns 0 if
+ * the conversations DB was consulted (caller need not scan that user's
+ * folders), or an error if conversations are unavailable for the user. */
+static int reserve_via_conversations(const char *userid, const char *partition,
+                                     struct sync_msgid_list *part_list)
+{
+    struct conversations_state *cstate = NULL;
+    hash_table buckets = HASH_TABLE_INITIALIZER;
+    struct reserve_collect_rock crock;
+    struct reserve_guid_ref *guids = NULL;
+    struct reserve_bucket_ref *refs = NULL;
+    struct sync_msgid *msgid;
+    strarray_t *keys = NULL;
+    size_t nguids = 0, nbuckets, i;
+    int r;
+
+    r = conversations_open_user(userid, 1 /*shared*/, &cstate);
+    if (r) return r;   /* caller falls back to a folder scan */
+
+    construct_hash_table(&buckets, 1024, 0);
+
+    /* Phase A: collect candidate locations, looking GUIDs up in sorted order
+     * so reads into the G<guid>-keyed conversations DB stay forward-only. */
+    guids = xmalloc(part_list->count * sizeof(struct reserve_guid_ref));
+    for (msgid = part_list->head; msgid; msgid = msgid->next) {
+        if (!msgid->need_upload) continue;
+        guids[nguids].item = msgid;
+        strcpy(guids[nguids].rep, message_guid_encode(&msgid->guid));
+        nguids++;
+    }
+    qsort(guids, nguids, sizeof(struct reserve_guid_ref), reserve_cmp_guidrep);
+
+    memset(&crock, 0, sizeof(crock));
+    crock.buckets = &buckets;
+
+    for (i = 0; i < nguids; i++) {
+        struct reserve_pending *p;
+
+        crock.item = guids[i].item;
+        crock.has_whole = 0;
+        conversations_guid_foreach(cstate, guids[i].rep, reserve_collect_cb, &crock);
+
+        /* promote sub-part copies only when no whole-message copy exists */
+        if (!crock.has_whole) {
+            int j;
+            for (j = 0; j < ptrarray_size(&crock.pending_parts); j++) {
+                p = ptrarray_nth(&crock.pending_parts, j);
+                reserve_bucket_add(&buckets, p->mboxname, p->uid,
+                                   crock.item, p->part);
+            }
+        }
+        while ((p = ptrarray_pop(&crock.pending_parts))) {
+            free(p->mboxname);
+            free(p->part);
+            free(p);
+        }
+    }
+    ptrarray_fini(&crock.pending_parts);
+    free(guids);
+
+    /* Phase B: process mailboxes with the most matches first, opening each
+     * once and reading its UIDs in ascending (forward-only) order. */
+    keys = hash_keys(&buckets);
+    nbuckets = keys->count;
+    refs = xmalloc(nbuckets * sizeof(struct reserve_bucket_ref));
+    for (i = 0; i < nbuckets; i++) {
+        refs[i].mboxname = strarray_nth(keys, i);
+        refs[i].cands = hash_lookup(refs[i].mboxname, &buckets);
+    }
+    qsort(refs, nbuckets, sizeof(struct reserve_bucket_ref), reserve_cmp_bucket);
+
+    for (i = 0; i < nbuckets; i++) {
+        struct mailbox *mailbox = NULL;
+        ptrarray_t *cands = refs[i].cands;
+        int j;
+
+        if (!part_list->toupload) break;
+
+        /* Skip this mailbox entirely if every GUID it could supply has
+         * already been found in an earlier (more-loaded) mailbox.  Without
+         * this we'd open every listed mailbox even once nothing remains to be
+         * gained from them - which is the common case once a requested GUID
+         * simply doesn't exist locally, since then toupload never reaches 0. */
+        for (j = 0; j < ptrarray_size(cands); j++) {
+            struct reserve_candidate *cand = ptrarray_nth(cands, j);
+            if (cand->item->need_upload) break;
+        }
+        if (j == ptrarray_size(cands)) continue;
+
+        ptrarray_sort(cands, reserve_cmp_uid);
+
+        r = mailbox_open_irl(refs[i].mboxname, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
+        if (r) continue;
+
+        for (j = 0; j < ptrarray_size(cands); j++) {
+            struct reserve_candidate *cand = ptrarray_nth(cands, j);
+            struct index_record record;
+
+            /* already found from an earlier (more loaded) mailbox? */
+            if (!cand->item->need_upload) continue;
+
+            if (mailbox_find_index_record(mailbox, cand->uid, &record))
+                continue;
+            if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
+                continue;
+
+            if (cand->part) {
+                /* reserve_one_part locates and verifies by content GUID */
+                reserve_one_part(partition, mailbox, &record, cand->part,
+                                 cand->item, part_list);
+            }
+            else {
+                /* guard against a stale conversations DB pointing this uid at
+                 * a different message than the GUID we want */
+                if (!message_guid_equal(&record.guid, &cand->item->guid))
+                    continue;
+                reserve_one(partition, mailbox, &record, cand->item, part_list);
+            }
+
+            if (!part_list->toupload) break;
+        }
+
+        mailbox_close(&mailbox);
+    }
+
+    free(refs);
+    strarray_free(keys);
+    free_hash_table(&buckets, reserve_free_bucket);
+    conversations_commit(&cstate);
+
+    return 0;
 }
 
 static int sync_apply_reserve(struct dlist *kl,
@@ -2508,8 +2888,41 @@ static int sync_apply_reserve(struct dlist *kl,
         sync_name_list_add(folder_names, i->sval);
     }
 
+    /* First, try to satisfy the GUIDs via the conversations DB: it indexes
+     * GUID -> (folder, uid), so for the typical "a few messages" RESERVE we
+     * avoid scanning entire mailboxes.  Do this once per distinct user owning
+     * the listed folders, and mark that user's folders as handled.  If a user
+     * has no conversations DB, leave their folders for the scan below. */
+    for (folder = folder_names->head; folder; folder = folder->next) {
+        char *userid;
+        struct sync_name *f2;
+
+        if (!part_list->toupload) break;
+        if (folder->mark) continue;
+
+        userid = mboxname_to_userid(folder->name);
+        if (!userid) continue;
+
+        if (reserve_via_conversations(userid, partition, part_list)) {
+            /* conversations unavailable for this user - leave for the scan */
+            free(userid);
+            continue;
+        }
+
+        /* the conversations lookup covered all of this user's folders */
+        for (f2 = folder; f2; f2 = f2->next) {
+            char *u2 = mboxname_to_userid(f2->name);
+            if (u2 && !strcmp(u2, userid))
+                f2->mark = 1;
+            free(u2);
+        }
+        free(userid);
+    }
+
     for (folder = folder_names->head; folder; folder = folder->next) {
         if (!part_list->toupload) break;
+        if (folder->mark)
+            continue;
         if (mboxlist_lookup(folder->name, &mbentry, 0))
             continue;
         if (strcmpsafe(mbentry->partition, partition)) {
