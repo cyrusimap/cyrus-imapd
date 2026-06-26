@@ -293,6 +293,53 @@ static void test_patchobject_invalid(void)
 #undef TESTCASE
 }
 
+static void test_precondition(void)
+{
+#define TESTCASE(_cur, _patch, _want) \
+    { \
+        json_t *jcur = json_loads((_cur), JSON_DECODE_ANY, NULL); \
+        json_t *jpatch = json_loads((_patch), JSON_DECODE_ANY, NULL); \
+        CU_ASSERT_EQUAL((_want), jmap_precondition_check(jcur, jpatch)); \
+        json_decref(jpatch); \
+        json_decref(jcur); \
+    }
+
+    /* exact scalar match -> no-op -> precondition holds */
+    TESTCASE("{\"a\":1,\"b\":2}", "{\"a\":1}", JMAP_PRECOND_MATCH);
+
+    /* scalar differs -> mismatch */
+    TESTCASE("{\"a\":1}", "{\"a\":2}", JMAP_PRECOND_MISMATCH);
+
+    /* null matches absent property -> no-op -> holds */
+    TESTCASE("{\"a\":1}", "{\"b\":null}", JMAP_PRECOND_MATCH);
+
+    /* null does NOT match present property -> mismatch */
+    TESTCASE("{\"a\":1}", "{\"a\":null}", JMAP_PRECOND_MISMATCH);
+
+    /* nested pointer match (keywords/$seen present) -> holds */
+    TESTCASE("{\"keywords\":{\"$seen\":true}}",
+             "{\"keywords/$seen\":true}", JMAP_PRECOND_MATCH);
+
+    /* nested pointer: condition requires absent ($seen null) but present -> mismatch */
+    TESTCASE("{\"keywords\":{\"$seen\":true}}",
+             "{\"keywords/$seen\":null}", JMAP_PRECOND_MISMATCH);
+
+    /* nested pointer: condition requires absent and it IS absent -> holds */
+    TESTCASE("{\"keywords\":{\"$flagged\":true}}",
+             "{\"keywords/$seen\":null}", JMAP_PRECOND_MATCH);
+
+    /* pointer into non-existent parent -> invalid */
+    TESTCASE("{\"a\":1}", "{\"x/y\":1}", JMAP_PRECOND_INVALID);
+
+    /* whole-object array equality -> holds */
+    TESTCASE("{\"a\":[1,2,3]}", "{\"a\":[1,2,3]}", JMAP_PRECOND_MATCH);
+
+    /* whole-object array differs -> mismatch */
+    TESTCASE("{\"a\":[1,2,3]}", "{\"a\":[1,2]}", JMAP_PRECOND_MISMATCH);
+
+#undef TESTCASE
+}
+
 static void test_decode_to_utf8(void)
 {
     struct testcase {

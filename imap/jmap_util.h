@@ -39,6 +39,19 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);
 
+enum jmap_precondition {
+    JMAP_PRECOND_MATCH = 0,   /* applying patch is a no-op: precondition holds */
+    JMAP_PRECOND_MISMATCH,    /* valid pointer(s), value differs */
+    JMAP_PRECOND_INVALID      /* pointer not valid for the object type */
+};
+
+/* Evaluate a precondition PatchObject against an object's current Foo/get
+ * representation. Returns JMAP_PRECOND_MATCH iff applying `patch` to `current`
+ * would leave it unchanged (every pointer already matches, null matching
+ * absent). */
+extern enum jmap_precondition jmap_precondition_check(json_t *current,
+                                                      json_t *patch);
+
 /* Return non-zero src and its RFC 6901 encoding differ */
 extern int jmap_pointer_needsencode(const char *src);
 

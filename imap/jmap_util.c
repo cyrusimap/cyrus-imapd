@@ -188,6 +188,37 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val,
     return dst;
 }
 
+EXPORTED enum jmap_precondition jmap_precondition_check(json_t *current,
+                                                        json_t *patch)
+{
+    if (!json_is_object(patch))
+        return JMAP_PRECOND_INVALID;
+
+    /* An empty precondition is vacuously satisfied. */
+    if (!json_object_size(patch))
+        return JMAP_PRECOND_MATCH;
+
+    json_t *invalid = json_array();
+    json_t *patched = jmap_patchobject_apply(current, patch, invalid, 0);
+    enum jmap_precondition res;
+
+    if (!patched || json_array_size(invalid)) {
+        /* pointer not valid for this object type */
+        res = JMAP_PRECOND_INVALID;
+    }
+    else if (json_equal(current, patched)) {
+        /* applying the patch changed nothing: precondition holds */
+        res = JMAP_PRECOND_MATCH;
+    }
+    else {
+        res = JMAP_PRECOND_MISMATCH;
+    }
+
+    if (patched) json_decref(patched);
+    json_decref(invalid);
+    return res;
+}
+
 static void jmap_patchobject_set(json_t *diff, struct buf *path,
                                  const char *key, json_t *val)
 {
