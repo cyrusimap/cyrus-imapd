@@ -48,7 +48,6 @@
 #include "xml_support.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "xstrnchr.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"

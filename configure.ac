@@ -198,9 +198,19 @@ saved_CFLAGS="$CFLAGS"
 saved_CXXFLAGS="$CXXFLAGS"
 CFLAGS="$CFLAGS -Wno-error"
 CXXFLAGS="$CXXFLAGS -Wno-error"
+
+dnl strlcat and strlcpy might be available on Linux systems in libbsd
+AC_CHECK_HEADERS(bsd/string.h)
+AC_SEARCH_LIBS([strlcat], [bsd], [
+    AC_DEFINE(HAVE_STRLCAT,[],[Define to 1 if you have the `strlcat' function.])
+], [])
+AC_SEARCH_LIBS([strlcpy], [bsd], [
+    AC_DEFINE(HAVE_STRLCPY,[],[Define to 1 if you have the `strlcpy' function.])
+], [])
+
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdalign.h stdarg.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise strsep memmem memrchr)
-AC_CHECK_FUNCS(strlcat strlcpy strnchr getgrouplist fmemopen pselect futimens futimes getline)
+AC_REPLACE_FUNCS(strcasecmp posix_fadvise strsep memmem memrchr)
+AC_CHECK_FUNCS(getgrouplist fmemopen pselect futimens futimes getline)
 AC_HEADER_DIRENT
 CFLAGS="$saved_CFLAGS"
 CXXFLAGS="$saved_CXXFLAGS"
