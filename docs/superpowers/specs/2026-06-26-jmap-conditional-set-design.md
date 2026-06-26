@@ -103,8 +103,9 @@ existing `ifInState` check and **before** any modification:
    `jmap_precondition_check`.
 3. On `JMAP_PRECOND_MISMATCH`: add `{"type":"stateMismatch"}` to
    `not_updated`/`not_destroyed` for that id and skip it.
-   On `JMAP_PRECOND_INVALID`: add `{"type":"invalidPatch"}` (optionally with the
-   offending pointer in `description`) and skip it.
+   On `JMAP_PRECOND_INVALID`: add `{"type":"invalidPatch"}` and skip it.
+   SetErrors are bare (`type` only) — the client re-`get`s to learn current
+   state — so we do not echo the offending pointer in `description`.
 4. On `JMAP_PRECOND_MATCH`: proceed with the update/destroy as normal.
 
 Per-object independence is satisfied because each id is handled in its own
@@ -141,8 +142,9 @@ point for each.
   (the whole-method `stateMismatch` remains reserved for `ifInState`).
 - `invalidPatch` vs `stateMismatch` is decided entirely by
   `jmap_precondition_check` so the distinction is consistent across datatypes.
-- No object values are leaked: SetErrors carry only `type` and optional
-  `description` (and `description` must not echo current property values).
+- No object values are leaked: SetErrors carry only `type` (bare). We do not
+  populate `description`, so there is no risk of echoing current property values
+  or the conditioned pointers.
 - Access control: a precondition referencing a property the caller cannot read
   is handled by the existing read path for that datatype (it would not appear in
   the `Foo/get` representation), consistent with the draft's intent that
