@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_ifunchangedby
+    :min_version_3_3 :JMAPExtensions :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    my $script1 = "keep;\r\n";
+    my $script2 = "discard;\r\n";
+
+    # Create a script and activate it (so isActive=true)
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => { "A" => { data => [{'data:asText' => $script1}] } }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => { name => "myscript", blobId => "#A" }
+            },
+            onSuccessActivateScript => "#1"
+         }, "R1"],
+    ], \@using);
+    my $id = $res->[1][1]{created}{1}{id};
+    $self->assert_not_null($id);
+    # Confirm it was activated
+    $self->assert_equals(JSON::true, $res->[1][1]{created}{1}{isActive});
+
+    # Precondition MATCHES (isActive is true) -> update proceeds
+    $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => { "B" => { data => [{'data:asText' => $script2}] } }
+         }, "RB"],
+        ['SieveScript/set', {
+            ifUnchangedBy => { $id => { 'isActive' => JSON::true } },
+            update => { $id => { blobId => "#B" } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert(exists $res->[1][1]{updated}{$id});
+    $self->assert_null($res->[1][1]{notUpdated}{$id});
+
+    # Precondition MISMATCH (isActive is true, not false) -> notUpdated stateMismatch
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            ifUnchangedBy => { $id => { 'isActive' => JSON::false } },
+            update => { $id => { name => "myscript" } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Precondition MATCHES for destroy (deactivate first, then destroy with matching precond)
+    $res = $jmap->CallMethods([
+        ['SieveScript/set', {
+            onSuccessDeactivatescript => JSON::true
+        }, "Rdeact"],
+        ['SieveScript/set', {
+            ifUnchangedBy => { $id => { 'isActive' => JSON::false } },
+            destroy => [ $id ],
+        }, 'R4'],
+    ], \@using);
+    $self->assert_not_null($res->[1][1]{destroyed});
+    $self->assert_str_equals($id, $res->[1][1]{destroyed}[0]);
+}

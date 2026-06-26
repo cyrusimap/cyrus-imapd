@@ -318,6 +318,16 @@ static void vacation_update(struct jmap_req *req,
 
     vacation = vacation_read(req, mailbox, sdata, &status);
 
+    if (set->if_unchanged_by && json_object_get(set->if_unchanged_by, "singleton")) {
+        json_t *precond_err = jmap_set_precondition(set, "singleton", vacation);
+        if (precond_err) {
+            json_object_set_new(set->not_updated, "singleton", precond_err);
+            json_decref(vacation);
+            json_decref(invalid);
+            return;
+        }
+    }
+
     prop = json_object_get(patch, "isEnabled");
     if (!json_is_boolean(prop))
         json_array_append_new(invalid, json_string("isEnabled"));
