@@ -5025,6 +5025,7 @@ static int updateevent_apply_patch(jmap_req_t *req,
                                    struct updateevent *update,
                                    json_t *invalid,
                                    json_t *serverset,
+                                   struct jmap_set *set,
                                    json_t **err)
 
 
@@ -5096,6 +5097,17 @@ static int updateevent_apply_patch(jmap_req_t *req,
         goto done;
     }
     update->old_event = json_deep_copy(old_event);
+
+    /* Check ifUnchangedBy precondition */
+    if (set) {
+        json_t *precond_err = jmap_set_precondition(set, update->eid->raw,
+                                                    update->old_event);
+        if (precond_err) {
+            *err = precond_err;
+            r = 0;
+            goto done;
+        }
+    }
 
     json_object_del(old_event, "updated");
 
@@ -5234,6 +5246,7 @@ static void setcalendarevents_update(jmap_req_t *req,
                                      struct caldav_db *db,
                                      int send_scheduling_messages,
                                      json_t *serverset,
+                                     struct jmap_set *set,
                                      json_t **err)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -5505,7 +5518,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     update.mbentry = mbentry;
     update.cdata = cdata;
     update.schedule_addresses = &schedule_addresses;
-    r = updateevent_apply_patch(req, &update, parser.invalid, serverset, err);
+    r = updateevent_apply_patch(req, &update, parser.invalid, serverset, set, err);
     if (json_array_size(parser.invalid) || *err) {
         r = 0;
         goto done;
@@ -5706,7 +5719,8 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      struct mailbox *schedinbox,
                                      struct jmap_caleventid *eid,
                                      struct caldav_db *db,
-                                     int send_scheduling_messages)
+                                     int send_scheduling_messages,
+                                     struct jmap_set *set)
 {
     int r = 0;
 
@@ -5756,7 +5770,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *update = NULL;
         json_t *err = NULL;
         setcalendarevents_update(req, notifmbox, schedinbox, event_patch, eid, db,
-                send_scheduling_messages, update, &err);
+                send_scheduling_messages, update, NULL, &err);
         json_decref(event_patch);
         json_decref(update);
         if (err) {
@@ -5867,6 +5881,18 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         old_event = jmapical_tojmap(oldical, NULL, jmapctx);
         jmapical_context_free(&jmapctx);
         newical = NULL;
+    }
+
+    /* Check ifUnchangedBy precondition (guarded: only when set for this id) */
+    if (set && old_event &&
+            set->if_unchanged_by &&
+            json_object_get(set->if_unchanged_by, eid->raw)) {
+        json_t *precond_err = jmap_set_precondition(set, eid->raw, old_event);
+        if (precond_err) {
+            json_object_set_new(set->not_destroyed, eid->raw, precond_err);
+            r = 0;
+            goto done;
+        }
     }
 
     /* Handle scheduling. */
@@ -6068,7 +6094,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, notifmbox, schedinbox, eid, db, send_itip);
+        r = setcalendarevents_destroy(req, notifmbox, schedinbox, eid, db, send_itip, &set);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_destroyed, eid->raw, err);
@@ -6082,6 +6108,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         } else if (r) {
             goto done;
         }
+
+        /* Skip if precondition check already added to not_destroyed */
+        if (json_object_get(set.not_destroyed, eid->raw)) continue;
 
         /* Report calendar event as destroyed. */
         json_array_append_new(set.destroyed, json_string(eid->raw));
@@ -6143,7 +6172,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_t *update = json_object();
         json_t *err = NULL;
         setcalendarevents_update(req, notifmbox, schedinbox, arg, eid, db,
-                send_itip, update, &err);
+                send_itip, update, &set, &err);
         if (err) {
             json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(update);
@@ -7994,7 +8023,7 @@ static int jmap_calendarevent_participantreply(struct jmap_req *req)
     buf_free(&buf);
 
     /* Apply patch */
-    r = updateevent_apply_patch(req, &update, parser.invalid, NULL, &err);
+    r = updateevent_apply_patch(req, &update, parser.invalid, NULL, NULL, &err);
     if (err || r || json_array_size(parser.invalid)) {
         syslog(LOG_NOTICE, "failed to patch RSVP into event");
         goto done;

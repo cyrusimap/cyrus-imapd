@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', { properties => ['id'] }, 'R0'],
+    ], \@using);
+    my $calId = $res->[0][1]{list}[0]{id};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { "1" => {
+            calendarIds => { $calId => JSON::true },
+            '@type' => 'Event', uid => 'event-ifu-1',
+            title => 'Original',
+            start => '2026-07-01T09:00:00',
+            duration => 'PT1H', timeZone => 'Etc/UTC',
+        }}}, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    # MATCH -> proceeds
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            ifUnchangedBy => { $id => { title => 'Original' } },
+            update => { $id => { title => 'Updated' } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    # MISMATCH -> stateMismatch
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            ifUnchangedBy => { $id => { title => 'Original' } },
+            update => { $id => { title => 'Again' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+}
