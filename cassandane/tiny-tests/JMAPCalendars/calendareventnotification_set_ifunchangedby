@@ -1,0 +1,128 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendareventnotification_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $caldav = $self->{caldav};
+    my $admin = $self->{adminstore}->get_client();
+
+    $admin->create("user.manifold");
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
+    my $mantalk = $manifold_user->caldav;
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:conditional',
+    ]);
+
+    # Share calendar with manifold
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                            mayUpdatePrivate => JSON::true,
+                            mayWriteOwn => JSON::true,
+                            mayAdmin => JSON::false,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    # Create a calendar event via CalDAV PUT with an external sender,
+    # so it generates a CalendarEventNotification for manifold
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:20160928T160000Z
+DURATION:PT1H
+UID:notif-ifunchangedby-test-uid
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:ifUnchangedBy test event
+LAST-MODIFIED:20150928T132434Z
+END:VEVENT
+END:VCALENDAR
+EOF
+    $caldav->Request('PUT',
+        '/dav/calendars/user/cassandane/Default/ifunchangedby-test.ics',
+        $ical, 'Content-Type' => 'text/calendar',
+               'Schedule-Sender-Address' => 'itipsender@local',
+               'Schedule-Sender-Name' => 'iTIP Sender',
+    );
+
+    # Fetch notification as manifold
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+        }, 'R1'],
+    ]);
+    $self->{instance}->getsyslog(); # ignore seen.db DBERROR
+    my $notif = $res->[0][1]{list}[0];
+    $self->assert_not_null($notif);
+    my $notifId = $notif->{id};
+    $self->assert_not_null($notifId);
+
+    # Precondition MISMATCH (wrong changedBy name) -> stateMismatch, not destroyed
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/set', {
+            accountId => 'cassandane',
+            ifUnchangedBy => { $notifId => { changedBy => { name => 'wrong name' } } },
+            destroy => [$notifId],
+        }, 'R2'],
+    ]);
+    $self->{instance}->getsyslog();
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_str_equals('stateMismatch',
+        $res->[0][1]{notDestroyed}{$notifId}{type});
+
+    # Confirm notification still exists
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+            ids => [$notifId],
+        }, 'R3'],
+    ]);
+    $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    # Precondition MATCHES -> destroyed
+    my $changedBy = $notif->{changedBy};
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/set', {
+            accountId => 'cassandane',
+            ifUnchangedBy => { $notifId => { changedBy => $changedBy } },
+            destroy => [$notifId],
+        }, 'R4'],
+    ]);
+    $self->{instance}->getsyslog();
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    # Confirm notification is gone
+    $res = $manjmap->CallMethods([
+        ['CalendarEventNotification/get', {
+            accountId => 'cassandane',
+            ids => [$notifId],
+        }, 'R5'],
+    ]);
+    $self->{instance}->getsyslog();
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{notFound});
+}

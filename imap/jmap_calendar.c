@@ -9064,6 +9064,17 @@ static int jmap_principal_set(struct jmap_req *req)
             continue;
         }
         json_decref(invalid);
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            json_t *cur = buildprincipal(req, NULL, NULL, JACL_ALL, id);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur);
+            json_decref(cur);
+            if (precond_err) {
+                json_object_set_new(set.not_updated, id, precond_err);
+                continue;
+            }
+        }
         /* Update princpial */
         const char *tzid = json_string_value(json_object_get(jarg, "timeZone"));
         if (tzid) {
@@ -9977,6 +9988,8 @@ static void notif_set(struct jmap_req *req,
                       const mbentry_t *notifmb,
                       int set_seen,
                       modseq_t statemodseq,
+                      json_t*(*tojmap)(jmap_req_t*, message_t*, hash_table*, void*),
+                      void *tojmap_rock,
                       json_t **err)
 {
     struct mailbox *notifmbox = NULL;
@@ -10045,6 +10058,21 @@ static void notif_set(struct jmap_req *req,
         struct index_record record;
         r = conversations_guid_foreach(req->cstate, id, find_notifuid_cb, &rock);
         if (rock.uid) {
+            /* ifUnchangedBy precondition check */
+            if (set->if_unchanged_by &&
+                    json_object_get(set->if_unchanged_by, id)) {
+                message_t *msg = message_new_from_mailbox(notifmbox, rock.uid);
+                if (msg) {
+                    json_t *cur = tojmap(req, msg, NULL, tojmap_rock);
+                    message_unref(&msg);
+                    json_t *precond_err = jmap_set_precondition(set, id, cur);
+                    json_decref(cur);
+                    if (precond_err) {
+                        json_object_set_new(set->not_destroyed, id, precond_err);
+                        continue;
+                    }
+                }
+            }
             r = mailbox_find_index_record(notifmbox, rock.uid, &record);
             if (!r) {
                 if (set_seen) {
@@ -10442,7 +10470,8 @@ static int jmap_sharenotification_set(struct jmap_req *req)
         goto done;
     }
 
-    notif_set(req, &set, notifmb, 0, req->counters.davnotificationmodseq, &err);
+    notif_set(req, &set, notifmb, 0, req->counters.davnotificationmodseq,
+              sharenotif_tojmap, NULL, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -11161,7 +11190,13 @@ static int jmap_calendareventnotification_set(struct jmap_req *req)
         goto done;
     }
 
-    notif_set(req, &set, notifmb, 1, req->counters.jmapnotificationmodseq, &err);
+    char *notfrom = jmap_caleventnotif_format_fromheader(req->userid);
+    struct eventnotif_tojmap_rock eventnotif_rock = {
+        strcmp(req->accountid, req->userid), notfrom
+    };
+    notif_set(req, &set, notifmb, 1, req->counters.jmapnotificationmodseq,
+              eventnotif_tojmap, &eventnotif_rock, &err);
+    free(notfrom);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -11358,6 +11393,8 @@ done:
 
 static int jmap_participantidentity_set(struct jmap_req *req)
 {
+    /* ParticipantIdentity is fully immutable; all operations are rejected,
+     * so ifUnchangedBy is not applicable here. */
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set = JMAP_SET_INITIALIZER;
     json_t *err = NULL;

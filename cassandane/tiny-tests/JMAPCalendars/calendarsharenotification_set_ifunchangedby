@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarsharenotification_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $manifold_user = $self->{instance}->create_user_without_setup('manifold');
+    my $mantalk = $manifold_user->caldav;
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:conditional',
+    ]);
+
+    # Share a calendar to create a ShareNotification for manifold
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                $default_cal_id => {
+                    name => 'sharedcal',
+                    "shareWith/manifold" => {
+                        mayReadFreeBusy => JSON::true,
+                        mayReadItems => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$default_cal_id});
+
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {}, 'R1'],
+    ]);
+    my $notif = $res->[0][1]{list}[0];
+    my $notifId = $notif->{id};
+    $self->assert_not_null($notifId);
+
+    # Precondition MISMATCH -> stateMismatch, not destroyed
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/set', {
+            ifUnchangedBy => { $notifId => { changedBy => { name => 'wrongname' } } },
+            destroy => [$notifId],
+        }, 'R2'],
+    ]);
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_str_equals('stateMismatch',
+        $res->[0][1]{notDestroyed}{$notifId}{type});
+
+    # Confirm notification still exists
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+            ids => [$notifId],
+        }, 'R3'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+
+    # Precondition MATCHES (use the actual changedBy.name) -> destroyed
+    my $changedBy = $notif->{changedBy};
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/set', {
+            ifUnchangedBy => { $notifId => { changedBy => $changedBy } },
+            destroy => [$notifId],
+        }, 'R4'],
+    ]);
+    $self->assert_deep_equals([$notifId], $res->[0][1]{destroyed});
+
+    # Confirm notification is gone
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+            ids => [$notifId],
+        }, 'R5'],
+    ]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_deep_equals([$notifId], $res->[0][1]{notFound});
+}
