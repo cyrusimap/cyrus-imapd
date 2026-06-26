@@ -1,0 +1,112 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_ifunchangedby
+    :min_version_3_13 :needs_component_calalarmd
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    my $res = $jmap->CallMethods([ ['Identity/get', {}, 'R1'] ]);
+    my $identityid = $res->[0][1]{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email") or die;
+
+    $res = $jmap->CallMethods([ ['Email/query', {}, 'R1'] ]);
+    my $emailid = $res->[0][1]{ids}[0];
+
+    xlog $self, "Create a pending submission via holdfor";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            create => { '1' => {
+                identityId => $identityid,
+                emailId    => $emailid,
+                envelope   => {
+                    mailFrom => {
+                        email      => 'from@localhost',
+                        parameters => { holdfor => "300" },
+                    },
+                    rcptTo => [{ email => 'rcpt@localhost' }],
+                },
+            }},
+        }, 'R1'],
+    ], \@using);
+    my $subid = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($subid);
+
+    xlog $self, "Confirm undoStatus is pending";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/get', { ids => [$subid] }, 'R2'],
+    ], \@using);
+    $self->assert_str_equals('pending', $res->[0][1]{list}[0]{undoStatus});
+
+    # Precondition MATCHES -> update proceeds (cancel succeeds)
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            ifUnchangedBy => { $subid => { undoStatus => 'pending' } },
+            update => { $subid => { undoStatus => 'canceled' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{updated}{$subid});
+
+    xlog $self, "Confirm undoStatus is now canceled";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/get', { ids => [$subid] }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('canceled', $res->[0][1]{list}[0]{undoStatus});
+
+    # Precondition MISMATCH (stale undoStatus) -> stateMismatch, no change
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            ifUnchangedBy => { $subid => { undoStatus => 'pending' } },
+            update => { $subid => { undoStatus => 'canceled' } },
+        }, 'R5'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$subid});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$subid}{type});
+
+    xlog $self, "Create a second pending submission for destroy tests";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            create => { 'd1' => {
+                identityId => $identityid,
+                emailId    => $emailid,
+                envelope   => {
+                    mailFrom => {
+                        email      => 'from@localhost',
+                        parameters => { holdfor => "300" },
+                    },
+                    rcptTo => [{ email => 'rcpt@localhost' }],
+                },
+            }},
+        }, 'RD1'],
+    ], \@using);
+    my $did = $res->[0][1]{created}{d1}{id};
+    $self->assert_not_null($did);
+
+    # Destroy: precondition MISMATCH -> stateMismatch, not destroyed
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            ifUnchangedBy => { $did => { undoStatus => 'final' } },
+            destroy => [ $did ],
+        }, 'RD2'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notDestroyed}{$did}{type});
+
+    # Destroy: precondition MATCHES -> destroyed
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            ifUnchangedBy => { $did => { undoStatus => 'pending' } },
+            destroy => [ $did ],
+        }, 'RD3'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($did, $res->[0][1]{destroyed}[0]);
+}

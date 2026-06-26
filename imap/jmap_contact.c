@@ -1769,30 +1769,25 @@ struct getaddressbooks_rock {
     int skip_hidden;
 };
 
-static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
+/* Build a JSON representation of an addressbook from its mbentry.
+ * props selects which properties to include; NULL means all properties.
+ * default_addrbookname is used to determine isDefault / myRights.
+ * Returns a new json_t (caller owns). */
+static json_t *addressbook_torepr(jmap_req_t *req,
+                                  const mbentry_t *mbentry,
+                                  hash_table *props,
+                                  const char *default_addrbookname)
 {
-    struct getaddressbooks_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
-    int r = 0;
-
-    /* Only addressbooks... */
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) return 0;
-
-    /* ...which are at least readable or visible... */
-    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
-        return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
-
-    // needed for some fields
-    int rights = jmap_myrights_mbentry(rock->req, mbentry);
-
-    /* OK, we want this one... */
+    int rights = jmap_myrights_mbentry(req, mbentry);
     json_t *obj = json_object();
+    struct buf attrib = BUF_INITIALIZER;
+    int r = 0;
 
     char id[JMAP_MAX_ADDRBOOKID_SIZE];
     jmap_set_addrbookid(req->cstate, mbentry, id);
     json_object_set_new(obj, "id", json_string(id));
 
-    if (jmap_wantprop(rock->get->props, "cyrusimap.org:href")) {
+    if (jmap_wantprop(props, "cyrusimap.org:href")) {
         // XXX - should the x-ref for a shared addressbook point
         // to the authenticated user's addressbook home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
@@ -1800,8 +1795,7 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
-    struct buf attrib = BUF_INITIALIZER;
-    if (jmap_wantprop(rock->get->props, "name")) {
+    if (jmap_wantprop(props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -1811,15 +1805,15 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         if (r || !attrib.len) {
             mbname_t *mbname = mbname_from_intname(mbentry->name);
             const strarray_t *boxes = mbname_boxes(mbname);
-            const char *id = strarray_nth(boxes, boxes->count-1);
-            buf_setcstr(&attrib, id);
+            const char *boxid = strarray_nth(boxes, boxes->count-1);
+            buf_setcstr(&attrib, boxid);
             mbname_free(&mbname);
         }
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "description")) {
+    if (jmap_wantprop(props, "description")) {
         buf_reset(&attrib);
         static const char *description_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">addressbook-description";
@@ -1830,7 +1824,7 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "sortOrder")) {
+    if (jmap_wantprop(props, "sortOrder")) {
         buf_reset(&attrib);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
         int sort_order = 0;
@@ -1849,12 +1843,12 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "isDefault")) {
-        bool is_default = !strcmp(rock->default_addrbookname, mbentry->name);
+    if (jmap_wantprop(props, "isDefault")) {
+        bool is_default = !strcmp(default_addrbookname, mbentry->name);
         json_object_set_new(obj, "isDefault", json_boolean(is_default));
     }
 
-    if (jmap_wantprop(rock->get->props, "isSubscribed")) {
+    if (jmap_wantprop(props, "isSubscribed")) {
         int is_subscribed;
         if (mboxname_userownsmailbox(req->userid, mbentry->name)) {
             /* Users always subscribe their own addressbooks */
@@ -1867,28 +1861,47 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
-    if (jmap_wantprop(rock->get->props, "myRights")) {
-        if (!strcmp(rock->default_addrbookname, mbentry->name)) {
+    if (jmap_wantprop(props, "myRights")) {
+        int r2 = rights;
+        if (!strcmp(default_addrbookname, mbentry->name)) {
             /* We don't allow deleting the default addressbook */
-            rights &= ~JACL_DELETE;
+            r2 &= ~JACL_DELETE;
         }
-        json_object_set_new(obj, "myRights", addressbookrights_to_jmap(rights));
+        json_object_set_new(obj, "myRights", addressbookrights_to_jmap(r2));
     }
 
-    if (jmap_wantprop(rock->get->props, "shareWith")) {
+    if (jmap_wantprop(props, "shareWith")) {
         json_t *sharewith =
             jmap_get_sharewith(mbentry, addressbookrights_to_jmap);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (jmap_wantprop(rock->get->props, "mailboxUniqueId")) {
+    if (jmap_wantprop(props, "mailboxUniqueId")) {
         json_object_set_new(obj, "mailboxUniqueId", json_string(mbentry->uniqueid));
     }
 
+    buf_free(&attrib);
+    return obj;
+}
+
+static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct getaddressbooks_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+
+    /* Only addressbooks... */
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) return 0;
+
+    /* ...which are at least readable or visible... */
+    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
+        return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
+
+    json_t *obj = addressbook_torepr(req, mbentry,
+                                     rock->get->props,
+                                     rock->default_addrbookname);
     json_array_append_new(rock->get->list, obj);
 
-    buf_free(&attrib);
-    return r;
+    return 0;
 }
 
 static const char *default_addrbookname_annot =
@@ -2696,6 +2709,23 @@ static int jmap_addressbook_set(struct jmap_req *req)
             }
             abookid = newabookid;
         }
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            mbentry_t *precond_mbentry = NULL;
+            abookid_to_mbentry(req, abookid, &precond_mbentry);
+            if (precond_mbentry) {
+                json_t *cur = addressbook_torepr(req, precond_mbentry,
+                                                 NULL, default_addrbookname);
+                mboxlist_entry_free(&precond_mbentry);
+                json_t *precond_err = jmap_set_precondition(&set, id, cur);
+                json_decref(cur);
+                if (precond_err) {
+                    json_object_set_new(set.not_destroyed, id, precond_err);
+                    continue;
+                }
+            }
+        }
         json_t *err = NULL;
         setaddressbooks_destroy(req, abookid, default_addrbookname,
                                 setargs.on_destroy_remove_contents, &err);
@@ -2743,6 +2773,23 @@ static int jmap_addressbook_set(struct jmap_req *req)
                 continue;
             }
             abookid = newabookid;
+        }
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            mbentry_t *precond_mbentry = NULL;
+            abookid_to_mbentry(req, abookid, &precond_mbentry);
+            if (precond_mbentry) {
+                json_t *cur = addressbook_torepr(req, precond_mbentry,
+                                                 NULL, default_addrbookname);
+                mboxlist_entry_free(&precond_mbentry);
+                json_t *precond_err = jmap_set_precondition(&set, id, cur);
+                json_decref(cur);
+                if (precond_err) {
+                    json_object_set_new(set.not_updated, id, precond_err);
+                    continue;
+                }
+            }
         }
         json_t *record = NULL, *err = NULL;
         setaddressbooks_update(req, abookid, arg, &record, &err);

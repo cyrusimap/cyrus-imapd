@@ -578,53 +578,27 @@ calendar_sharewith_to_rights_iter:
 static const char sched_enabled_annot[] =
     DAV_ANNOT_NS "<" XML_NS_CYRUS ">scheduling-enabled";
 
-static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
+/* Build a JSON representation of a calendar from its mbentry.
+ * props selects which properties to include; NULL means all properties.
+ * default_cal_mboxname is used to determine isDefault / myRights.
+ * Returns a new json_t (caller owns). */
+static json_t *calendar_torepr(jmap_req_t *req,
+                                const mbentry_t *mbentry,
+                                hash_table *props,
+                                const char *default_cal_mboxname)
 {
-    struct getcalendars_rock *rock = vrock;
-    jmap_req_t *req = rock->req;
-    mbname_t *mbname = NULL;
-    int r = 0;
-
-    /* Only calendars... */
-    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) return 0;
-
-    /* ...which are at least readable or visible... */
-    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
-        return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
-
-    // needed for some fields
-    int rights = jmap_myrights_mbentry(rock->req, mbentry);
-
-    /* ...and contain VEVENTs. */
+    int rights = jmap_myrights_mbentry(req, mbentry);
     struct buf attrib = BUF_INITIALIZER;
-    static const char *calcompset_annot =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-    unsigned long supported_components = -1; /* ALL component types by default. */
-    r = annotatemore_lookupmask_mbe(mbentry, calcompset_annot,
-                                    rock->req->accountid, &attrib);
-    if (attrib.len) {
-        supported_components = strtoul(buf_cstring(&attrib), NULL, 10);
-        buf_free(&attrib);
-    }
-    if (!(supported_components & CAL_COMP_VEVENT)) {
-        goto done;
-    }
-
-    /* OK, we want this one... */
-    mbname = mbname_from_intname(mbentry->name);
-    /* ...unless it's one of the special names. */
-    if (jmap_calendar_isspecial(mbname)) {
-        r = 0;
-        goto done;
-    }
+    int r = 0;
 
     json_t *obj = json_object();
 
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *id = strarray_nth(boxes, boxes->count-1);
     json_object_set_new(obj, "id", json_string(id));
 
-    if (jmap_wantprop(rock->get->props, "x-href")) {
+    if (jmap_wantprop(props, "x-href")) {
         // XXX - should the x-ref for a shared calendar point
         // to the authenticated user's calendar home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
@@ -632,7 +606,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
-    if (jmap_wantprop(rock->get->props, "name")) {
+    if (jmap_wantprop(props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -644,7 +618,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "description")) {
+    if (jmap_wantprop(props, "description")) {
         buf_reset(&attrib);
         static const char *description_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">description";
@@ -655,30 +629,30 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "color")) {
-        struct buf attrib = BUF_INITIALIZER;
+    if (jmap_wantprop(props, "color")) {
+        struct buf color_attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotatemore_lookupmask_mbe(mbentry, color_annot,
-                                        req->userid, &attrib);
+                                        req->userid, &color_attrib);
         if (!r) {
             /* Verify we have a valid color name, or 6- or 8-digit hex value */
-            const char *color = buf_base(&attrib);
+            const char *color = buf_base(&color_attrib);
 
             if (ical_is_valid_color(color, true /*allow_alpha*/)) {
-                if (*color == '#' && buf_len(&attrib) == 9) {
+                if (*color == '#' && buf_len(&color_attrib) == 9) {
                     /* Trim the alpha channel off of 8-digit hex */
-                    buf_truncate(&attrib, 7);
-                    color = buf_cstring(&attrib);
+                    buf_truncate(&color_attrib, 7);
+                    color = buf_cstring(&color_attrib);
                 }
 
                 json_object_set_new(obj, "color", json_string(color));
             }
         }
-        buf_free(&attrib);
+        buf_free(&color_attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "sortOrder")) {
+    if (jmap_wantprop(props, "sortOrder")) {
         long sort_order = 0;
         buf_reset(&attrib);
         static const char *order_annot =
@@ -701,7 +675,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "isVisible")) {
+    if (jmap_wantprop(props, "isVisible")) {
         int is_visible = 1;
         buf_reset(&attrib);
         static const char *visible_annot =
@@ -725,7 +699,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "schedulingEnabled")) {
+    if (jmap_wantprop(props, "schedulingEnabled")) {
         json_t *is_enabled = json_true();
         buf_reset(&attrib);
         r = annotatemore_lookupmask_mbe(mbentry,
@@ -742,7 +716,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "isSubscribed")) {
+    if (jmap_wantprop(props, "isSubscribed")) {
         int is_subscribed;
         if (mboxname_userownsmailbox(req->userid, mbentry->name)) {
             /* Users always subscribe their own calendars */
@@ -755,12 +729,12 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
-    if (jmap_wantprop(rock->get->props, "isDefault")) {
-        bool is_default = !strcmp(mbentry->name, rock->default_cal_mboxname);
+    if (jmap_wantprop(props, "isDefault")) {
+        bool is_default = !strcmp(mbentry->name, default_cal_mboxname);
         json_object_set_new(obj, "isDefault", json_boolean(is_default));
     }
 
-    if (jmap_wantprop(rock->get->props, "includeInAvailability")) {
+    if (jmap_wantprop(props, "includeInAvailability")) {
         buf_reset(&attrib);
         static const char *transp_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
@@ -781,21 +755,21 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime") ||
-        jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
+    if (jmap_wantprop(props, "defaultAlertsWithTime") ||
+        jmap_wantprop(props, "defaultAlertsWithoutTime")) {
 
         json_t *with_time = NULL, *without_time = NULL;
         getcalendar_defaultalerts(mbentry->name, req->userid,
                 &with_time, &without_time);
 
-        if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime"))
+        if (jmap_wantprop(props, "defaultAlertsWithTime"))
             json_object_set_new(obj, "defaultAlertsWithTime", with_time);
 
-        if (jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime"))
+        if (jmap_wantprop(props, "defaultAlertsWithoutTime"))
             json_object_set_new(obj, "defaultAlertsWithoutTime", without_time);
     }
 
-    if (jmap_wantprop(rock->get->props, "timeZone")) {
+    if (jmap_wantprop(props, "timeZone")) {
         buf_reset(&attrib);
         static const char *tzid_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
@@ -839,26 +813,73 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (jmap_wantprop(rock->get->props, "myRights")) {
-        if (!strcmp(rock->default_cal_mboxname, mbentry->name)) {
+    if (jmap_wantprop(props, "myRights")) {
+        int r2 = rights;
+        if (!strcmp(default_cal_mboxname, mbentry->name)) {
             /* We don't allow deleting the default calendar */
-            rights &= ~JACL_DELETE;
+            r2 &= ~JACL_DELETE;
         }
         json_object_set_new(obj, "myRights",
-                calendarrights_to_jmap(rights,
-                    !strcmp(rock->req->userid, rock->req->accountid)));
+                calendarrights_to_jmap(r2,
+                    !strcmp(req->userid, req->accountid)));
     }
 
-    if (jmap_wantprop(rock->get->props, "shareWith")) {
+    if (jmap_wantprop(props, "shareWith")) {
         json_t *sharewith = jmap_get_sharewith(mbentry,
                 calendarrights_to_sharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (jmap_wantprop(rock->get->props, "mailboxUniqueId")) {
+    if (jmap_wantprop(props, "mailboxUniqueId")) {
         json_object_set_new(obj, "mailboxUniqueId",
                             json_string(mbentry->uniqueid));
     }
+
+    buf_free(&attrib);
+    mbname_free(&mbname);
+    return obj;
+}
+
+static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct getcalendars_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+    mbname_t *mbname = NULL;
+    int r = 0;
+
+    /* Only calendars... */
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) return 0;
+
+    /* ...which are at least readable or visible... */
+    if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
+        return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
+
+    /* ...and contain VEVENTs. */
+    struct buf attrib = BUF_INITIALIZER;
+    static const char *calcompset_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+    unsigned long supported_components = -1; /* ALL component types by default. */
+    r = annotatemore_lookupmask_mbe(mbentry, calcompset_annot,
+                                    rock->req->accountid, &attrib);
+    if (attrib.len) {
+        supported_components = strtoul(buf_cstring(&attrib), NULL, 10);
+        buf_free(&attrib);
+    }
+    if (!(supported_components & CAL_COMP_VEVENT)) {
+        goto done;
+    }
+
+    /* OK, we want this one... */
+    mbname = mbname_from_intname(mbentry->name);
+    /* ...unless it's one of the special names. */
+    if (jmap_calendar_isspecial(mbname)) {
+        r = 0;
+        goto done;
+    }
+
+    json_t *obj = calendar_torepr(req, mbentry,
+                                   rock->get->props,
+                                   rock->default_cal_mboxname);
 
     json_array_append_new(rock->get->list, obj);
 
@@ -2203,6 +2224,26 @@ static int jmap_calendar_set(struct jmap_req *req)
         bool has_ext_props =
             json_is_true(json_object_get(set.update_external, id));
 
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            char *precond_mboxname = caldav_mboxname(req->accountid, calid);
+            mbentry_t *precond_mbentry = NULL;
+            jmap_mboxlist_lookup(precond_mboxname, &precond_mbentry, NULL);
+            free(precond_mboxname);
+            if (precond_mbentry) {
+                json_t *cur = calendar_torepr(req, precond_mbentry,
+                                              NULL, default_cal_mboxname);
+                mboxlist_entry_free(&precond_mbentry);
+                json_t *precond_err = jmap_set_precondition(&set, id, cur);
+                json_decref(cur);
+                if (precond_err) {
+                    json_object_set_new(set.not_updated, id, precond_err);
+                    continue;
+                }
+            }
+        }
+
         json_t *record = NULL, *err = NULL;
         setcalendars_update(req, calid, arg, has_ext_props, &record, &err);
         if (!err) {
@@ -2230,6 +2271,25 @@ static int jmap_calendar_set(struct jmap_req *req)
                 continue;
             }
             calid = newcalid;
+        }
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            char *precond_mboxname = caldav_mboxname(req->accountid, calid);
+            mbentry_t *precond_mbentry = NULL;
+            jmap_mboxlist_lookup(precond_mboxname, &precond_mbentry, NULL);
+            free(precond_mboxname);
+            if (precond_mbentry) {
+                json_t *cur = calendar_torepr(req, precond_mbentry,
+                                              NULL, default_cal_mboxname);
+                mboxlist_entry_free(&precond_mbentry);
+                json_t *precond_err = jmap_set_precondition(&set, id, cur);
+                json_decref(cur);
+                if (precond_err) {
+                    json_object_set_new(set.not_destroyed, id, precond_err);
+                    continue;
+                }
+            }
         }
         json_t *err = NULL;
         setcalendars_destroy(req, calid, default_cal_mboxname,
