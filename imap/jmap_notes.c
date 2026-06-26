@@ -700,22 +700,28 @@ static void _notes_update_cb(const char *id, message_t *msg,
                    id, error_message(r));
         }
         else {
-          json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
-
-            if (new_note) {
-                r = _note_create(msg_mailbox(msg), new_note,
-                                 msg_createdmodseq(msg), &updated_note);
-                json_decref(new_note);
+            err = jmap_set_precondition(set, id, note);
+            if (err) {
+                /* precondition failed - err already set, skip update */
             }
             else {
-                r = IMAP_INTERNAL;
-                syslog(LOG_ERR, "jmap: Notes/update(%s) patch: %s",
-                       id, error_message(r));
+                json_t *new_note = jmap_patchobject_apply(note, patch, NULL, 0);
+
+                if (new_note) {
+                    r = _note_create(msg_mailbox(msg), new_note,
+                                     msg_createdmodseq(msg), &updated_note);
+                    json_decref(new_note);
+                }
+                else {
+                    r = IMAP_INTERNAL;
+                    syslog(LOG_ERR, "jmap: Notes/update(%s) patch: %s",
+                           id, error_message(r));
+                }
             }
         }
         json_decref(note);
 
-        if (!r) {
+        if (!err && !r) {
             const struct index_record *record = msg_record(msg);
             struct mailbox *mailbox = msg_mailbox(msg);
             struct index_record newrecord;
@@ -759,16 +765,35 @@ static void _notes_destroy_cb(const char *id, message_t *msg,
                             read_only ? "notFound" : "forbidden");
     }
     else {
-        const struct index_record *record = msg_record(msg);
-        struct index_record newrecord;
-
-        memcpy(&newrecord, record, sizeof(struct index_record));
-        newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-
-        int r = mailbox_rewrite_index_record(msg_mailbox(msg), &newrecord);
-        if (r) {
-            err = json_pack("{s:s, s:s}", "type", "serverFail",
+        /* Check ifUnchangedBy precondition for destroy if one exists */
+        if (set->if_unchanged_by &&
+                json_object_get(set->if_unchanged_by, id)) {
+            json_t *note = json_pack("{s:s}", "id", id);
+            int r = _note_get(msg, note, NULL, 1/*want_created*/, srock->buf);
+            if (!r) {
+                err = jmap_set_precondition(set, id, note);
+            }
+            else {
+                syslog(LOG_ERR, "jmap: Notes/destroy(%s) fetch: %s",
+                       id, error_message(r));
+                err = json_pack("{s:s, s:s}", "type", "serverFail",
                                 "description", error_message(r));
+            }
+            json_decref(note);
+        }
+
+        if (!err) {
+            const struct index_record *record = msg_record(msg);
+            struct index_record newrecord;
+
+            memcpy(&newrecord, record, sizeof(struct index_record));
+            newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+            int r = mailbox_rewrite_index_record(msg_mailbox(msg), &newrecord);
+            if (r) {
+                err = json_pack("{s:s, s:s}", "type", "serverFail",
+                                    "description", error_message(r));
+            }
         }
     }
 
