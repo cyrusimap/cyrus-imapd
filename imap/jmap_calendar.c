@@ -10065,12 +10065,16 @@ static void notif_set(struct jmap_req *req,
                 if (msg) {
                     json_t *cur = tojmap(req, msg, NULL, tojmap_rock);
                     message_unref(&msg);
-                    json_t *precond_err = jmap_set_precondition(set, id, cur);
-                    json_decref(cur);
-                    if (precond_err) {
-                        json_object_set_new(set->not_destroyed, id, precond_err);
-                        continue;
+                    if (cur) {
+                        json_t *precond_err = jmap_set_precondition(set, id, cur);
+                        json_decref(cur);
+                        if (precond_err) {
+                            json_object_set_new(set->not_destroyed, id, precond_err);
+                            continue;
+                        }
                     }
+                    /* cur == NULL: notification not representable
+                     * (filtered/expunged/invisible); proceed with destroy */
                 }
             }
             r = mailbox_find_index_record(notifmbox, rock.uid, &record);
