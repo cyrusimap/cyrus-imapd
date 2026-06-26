@@ -33,6 +33,7 @@
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
 #include "imap/jmap_data_types.h"
+#include "imap/jmap_util.h"
 
 
 static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
@@ -1890,6 +1891,17 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
         }
 
+        /* ifUnchangedBy (urn:ietf:params:jmap:conditional) */
+        else if (jmap_is_using(req, JMAP_URN_CONDITIONAL) &&
+                 !strcmp(key, "ifUnchangedBy")) {
+            if (json_is_object(arg)) {
+                set->if_unchanged_by = arg;   /* borrowed, like create/update */
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ifUnchangedBy");
+            }
+        }
+
         /* create */
         else if (!strcmp(key, "create")) {
             if (json_is_object(arg)) {
@@ -2021,6 +2033,25 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+    }
+}
+
+HIDDEN json_t *jmap_set_precondition(struct jmap_set *set,
+                                     const char *id, json_t *current)
+{
+    if (!set->if_unchanged_by) return NULL;
+
+    json_t *patch = json_object_get(set->if_unchanged_by, id);
+    if (!patch) return NULL;
+
+    switch (jmap_precondition_check(current, patch)) {
+    case JMAP_PRECOND_MATCH:
+        return NULL;
+    case JMAP_PRECOND_INVALID:
+        return json_pack("{s:s}", "type", "invalidPatch");
+    case JMAP_PRECOND_MISMATCH:
+    default:
+        return json_pack("{s:s}", "type", "stateMismatch");
     }
 }
 
