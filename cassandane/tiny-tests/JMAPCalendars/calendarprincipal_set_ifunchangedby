@@ -1,0 +1,71 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarprincipal_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Set an initial timeZone for the authenticated user principal
+    my $res = $jmap->CallMethods([
+        ['Principal/set', {
+            update => {
+                cassandane => {
+                    timeZone => 'Europe/London',
+                },
+            },
+        }, 'R1'],
+    ], \@using);
+    $self->assert_deep_equals({}, $res->[0][1]{updated}{cassandane});
+
+    # Precondition MATCHES current timeZone -> update proceeds
+    $res = $jmap->CallMethods([
+        ['Principal/set', {
+            ifUnchangedBy => { cassandane => { timeZone => 'Europe/London' } },
+            update => {
+                cassandane => {
+                    timeZone => 'Australia/Melbourne',
+                },
+            },
+        }, 'R2'],
+    ], \@using);
+    $self->assert_deep_equals({}, $res->[0][1]{updated}{cassandane});
+
+    # Verify the timeZone changed
+    $res = $jmap->CallMethods([
+        ['Principal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R3'],
+    ], \@using);
+    $self->assert_str_equals('Australia/Melbourne',
+        $res->[0][1]{list}[0]{timeZone});
+
+    # Precondition MISMATCH (stale timeZone) -> stateMismatch, no change
+    $res = $jmap->CallMethods([
+        ['Principal/set', {
+            ifUnchangedBy => { cassandane => { timeZone => 'Europe/London' } },
+            update => {
+                cassandane => {
+                    timeZone => 'Asia/Tokyo',
+                },
+            },
+        }, 'R4'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{cassandane});
+    $self->assert_str_equals('stateMismatch',
+        $res->[0][1]{notUpdated}{cassandane}{type});
+
+    # Verify timeZone is still Australia/Melbourne (not Asia/Tokyo)
+    $res = $jmap->CallMethods([
+        ['Principal/get', {
+            ids => ['cassandane'],
+            properties => ['timeZone'],
+        }, 'R5'],
+    ], \@using);
+    $self->assert_str_equals('Australia/Melbourne',
+        $res->[0][1]{list}[0]{timeZone});
+}
