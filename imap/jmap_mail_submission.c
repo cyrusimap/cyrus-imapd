@@ -1026,10 +1026,29 @@ static json_t *fetch_submission(jmap_req_t *req, message_t *msg)
     return sub;
 }
 
+/* The stored submission has none of the properties EmailSubmission/get
+   computes, and a precondition is evaluated against the /get representation */
+static void add_computed_props(json_t *sub, const char *id,
+                               const struct index_record *record)
+{
+    const char *undostatus = "pending";
+    char datestr[RFC3339_DATETIME_MAX];
+
+    if (record->system_flags & FLAG_ANSWERED) undostatus = "final";
+    else if (record->system_flags & FLAG_FLAGGED) undostatus = "canceled";
+
+    time_to_rfc3339(record->internaldate.tv_sec, datestr, RFC3339_DATETIME_MAX);
+
+    json_object_set_new(sub, "id", json_string(id));
+    json_object_set_new(sub, "undoStatus", json_string(undostatus));
+    json_object_set_new(sub, "sendAt", json_string(datestr));
+}
+
 static void _emailsubmission_update(jmap_req_t *req,
                                     struct mailbox *submbox,
                                     const char *id,
                                     json_t *emailsubmission,
+                                    struct jmap_set *set,
                                     json_t **set_err,
                                     char **emailid)
 {
@@ -1050,6 +1069,14 @@ static void _emailsubmission_update(jmap_req_t *req,
         if (!r) r = IMAP_IOERROR;
 
         *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
+        goto done;
+    }
+
+    add_computed_props(sub, id, record);
+
+    json_t *precond_err = jmap_set_precondition(set, id, sub);
+    if (precond_err) {
+        *set_err = precond_err;
         goto done;
     }
 
@@ -1144,6 +1171,7 @@ static void _emailsubmission_update(jmap_req_t *req,
 static void _emailsubmission_destroy(jmap_req_t *req,
                                      struct mailbox *submbox,
                                      const char *id,
+                                     struct jmap_set *set,
                                      json_t **set_err,
                                      char **emailid)
 {
@@ -1164,6 +1192,14 @@ static void _emailsubmission_destroy(jmap_req_t *req,
         if (!r) r = IMAP_IOERROR;
 
         *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
+        goto done;
+    }
+
+    add_computed_props(sub, id, record);
+
+    json_t *precond_err = jmap_set_precondition(set, id, sub);
+    if (precond_err) {
+        *set_err = precond_err;
         goto done;
     }
 
@@ -1536,7 +1572,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         id = json_string_value(jsubmissionId);
         json_t *set_err = NULL;
         char *emailid = NULL;
-        _emailsubmission_destroy(req, submbox, id, &set_err, &emailid);
+        _emailsubmission_destroy(req, submbox, id, &set, &set_err, &emailid);
         if (set_err) {
             json_object_set_new(set.not_destroyed, id, set_err);
             free(emailid);
@@ -1575,7 +1611,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_t *set_err = NULL;
         char *emailid = NULL;
         _emailsubmission_update(req, submbox, id,
-                                jsubmission, &set_err, &emailid);
+                                jsubmission, &set, &set_err, &emailid);
         if (set_err) {
             json_object_set_new(set.not_updated, id, set_err);
             free(emailid);
