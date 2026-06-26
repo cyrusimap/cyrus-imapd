@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mbox_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Create a mailbox
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => { "1" => { name => "TestBox" } },
+        }, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # Precondition MATCHES current name -> update proceeds
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            ifUnchangedBy => { $id => { name => 'TestBox' } },
+            update => { $id => { name => 'UpdatedBox' } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    # Precondition MISMATCH (stale name) -> stateMismatch, mailbox unchanged
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            ifUnchangedBy => { $id => { name => 'TestBox' } },
+            update => { $id => { name => 'ShouldNotUpdate' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Confirm mailbox still has the name from the successful update
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { ids => [$id] }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('UpdatedBox', $res->[0][1]{list}[0]{name});
+}

@@ -662,6 +662,17 @@ done:
     return obj;
 }
 
+/* Build the full JMAP representation of a mailbox by id, the same way
+ * Mailbox/get does, for use in ifUnchangedBy precondition checks. */
+static json_t *_mbox_current_repr(jmap_req_t *req, const char *mbox_id)
+{
+    const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mbox_id);
+    if (!mbentry) return NULL;
+    /* roles/props/sublist NULL => full representation, matching Mailbox/get.
+     * Owner always gets _SHAREDMBOX_SHARED (Mailbox/set requires ownership). */
+    return _mbox_get(req, mbentry, NULL, NULL, _SHAREDMBOX_SHARED, NULL);
+}
+
 struct jmap_mailbox_get_cb_rock {
     jmap_req_t *req;
     struct jmap_get *get;
@@ -3143,6 +3154,17 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         }
         /* Update */
         else {
+            /* Check ifUnchangedBy precondition before updating */
+            if (set->super.if_unchanged_by &&
+                    json_object_get(set->super.if_unchanged_by, args->mbox_id)) {
+                json_t *cur = _mbox_current_repr(req, args->mbox_id);
+                json_t *err = jmap_set_precondition(&set->super, args->mbox_id, cur);
+                if (cur) json_decref(cur);
+                if (err) {
+                    json_object_set_new(set->super.not_updated, args->mbox_id, err);
+                    continue;
+                }
+            }
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
             _mbox_update(req, args, mode, &result, update_intermediaries);
             if (result.err) {
@@ -3172,6 +3194,17 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     /* Run destroy operations */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
+        /* Check ifUnchangedBy precondition before destroying */
+        if (set->super.if_unchanged_by &&
+                json_object_get(set->super.if_unchanged_by, mbox_id)) {
+            json_t *cur = _mbox_current_repr(req, mbox_id);
+            json_t *err = jmap_set_precondition(&set->super, mbox_id, cur);
+            if (cur) json_decref(cur);
+            if (err) {
+                json_object_set_new(set->super.not_destroyed, mbox_id, err);
+                continue;
+            }
+        }
         struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
         _mbox_destroy(req, mbox_id, set, mode, &result, update_intermediaries);
         if (result.err) {
