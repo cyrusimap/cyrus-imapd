@@ -199,6 +199,21 @@ HIDDEN void jmap_sieve_capabilities(json_t *account_capabilities)
     }
 }
 
+static json_t *sievescript_torepr(struct sieve_data *sdata)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *sieve = json_pack("{s:s s:s s:b}",
+                              "id", sdata->id,
+                              "name", sdata->name,
+                              "isActive", sdata->isactive);
+
+    buf_printf(&buf, "G%s", sdata->contentid);
+    json_object_set_new(sieve, "blobId", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+
+    return sieve;
+}
+
 static int getscript(void *rock, struct sieve_data *sdata)
 {
     struct jmap_get *get = (struct jmap_get *) rock;
@@ -540,6 +555,16 @@ static void set_update(struct jmap_req *req,
         goto done;
     }
 
+    if (set->if_unchanged_by && json_object_get(set->if_unchanged_by, id)) {
+        json_t *cur = sievescript_torepr(sdata);
+        json_t *precond_err = jmap_set_precondition(set, id, cur);
+        json_decref(cur);
+        if (precond_err) {
+            json_object_set_new(set->not_updated, id, precond_err);
+            goto done;
+        }
+    }
+
     arg = json_object_get(jsieve, "isActive");
     if (arg) {
         if (!json_is_boolean(arg))
@@ -611,15 +636,22 @@ static void set_destroy(const char *id,
     else if (r != CYRUSDB_OK) {
         r = IMAP_INTERNAL;
     }
-    else if (sdata->isactive) {
-        err = json_pack("{s:s}", "type", "scriptIsActive");
-    }
-    else if (!strcmp(sdata->name, JMAP_URN_VACATION)) {
-        err = json_pack("{s:s s:s}", "type", "forbidden",
-                        "description", "MUST use VacationResponse/set method");
-    }
-    else if ((r = sieve_script_remove(mailbox, sdata))) {
-        err = jmap_server_error(r);
+    else {
+        if (set->if_unchanged_by && json_object_get(set->if_unchanged_by, id)) {
+            json_t *cur = sievescript_torepr(sdata);
+            err = jmap_set_precondition(set, id, cur);
+            json_decref(cur);
+        }
+        if (!err && sdata->isactive) {
+            err = json_pack("{s:s}", "type", "scriptIsActive");
+        }
+        else if (!err && !strcmp(sdata->name, JMAP_URN_VACATION)) {
+            err = json_pack("{s:s s:s}", "type", "forbidden",
+                            "description", "MUST use VacationResponse/set method");
+        }
+        else if (!err && (r = sieve_script_remove(mailbox, sdata))) {
+            err = jmap_server_error(r);
+        }
     }
 
     if (err) {
