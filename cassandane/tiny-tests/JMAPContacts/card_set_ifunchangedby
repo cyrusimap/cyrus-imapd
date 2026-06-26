@@ -1,0 +1,102 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_set_ifunchangedby
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    # Create a card
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => { "1" => {
+                '@type' => 'Card', version => '1.0',
+                uid => 'ae2640cc-234a-4dd9-95cc-3106258445b9',
+                name => { full => 'John Doe' },
+                nicknames => { k391 => { '@type' => 'Nickname', name => 'Johnny' } },
+            }},
+        }, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    # Precondition MATCHES current value -> update proceeds
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $id => { 'nicknames/k391/name' => 'Johnny' } },
+            update => { $id => { 'nicknames/k391/name' => 'Johnny Boy' } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{updated}{$id});
+
+    # Precondition MISMATCH (stale expected value) -> stateMismatch, no change
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $id => { 'nicknames/k391/name' => 'Johnny' } },
+            update => { $id => { 'nicknames/k391/name' => 'Nope' } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{updated}{$id});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Invalid pointer -> invalidPatch
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $id => { 'bogus/pointer' => 1 } },
+            update => { $id => { 'nicknames/k391/name' => 'X' } },
+        }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('invalidPatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Capability NOT in using -> ifUnchangedBy is an unknown argument
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $id => { 'nicknames/k391/name' => 'stale' } },
+            update => { $id => { 'nicknames/k391/name' => 'Whatever' } },
+        }, 'R5'],
+    ]);  # default using, no conditional
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+
+    # -- Destroy sub-cases --
+
+    # Re-create a fresh card for destroy tests
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            create => { "d1" => {
+                '@type' => 'Card', version => '1.0',
+                uid => 'bb2640cc-234a-4dd9-95cc-3106258445b9',
+                name => { full => 'Jane Doe' },
+                nicknames => { k1 => { '@type' => 'Nickname', name => 'Janie' } },
+            }},
+        }, 'RD1'],
+    ], \@using);
+    my $did = $res->[0][1]{created}{d1}{id};
+    $self->assert_not_null($did);
+
+    # Destroy: precondition MISMATCH -> stateMismatch, card not destroyed
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $did => { 'nicknames/k1/name' => 'WrongName' } },
+            destroy => [ $did ],
+        }, 'RD2'],
+    ], \@using);
+    $self->assert_null($res->[0][1]{destroyed});
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notDestroyed}{$did}{type});
+
+    # Destroy: precondition MATCHES -> card is destroyed
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            ifUnchangedBy => { $did => { 'nicknames/k1/name' => 'Janie' } },
+            destroy => [ $did ],
+        }, 'RD3'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_str_equals($did, $res->[0][1]{destroyed}[0]);
+}
