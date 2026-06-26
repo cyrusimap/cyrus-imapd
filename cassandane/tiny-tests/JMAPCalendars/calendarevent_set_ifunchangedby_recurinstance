@@ -1,0 +1,80 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_ifunchangedby_recurinstance
+    :min_version_3_13
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/get', { properties => ['id'] }, 'R0'],
+    ], \@using);
+    my $calId = $res->[0][1]{list}[0]{id};
+
+    # Create first recurring event (for MATCHING precondition test)
+    my $uid1 = 'event-ifu-recur-1';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { "1" => {
+            calendarIds => { $calId => JSON::true },
+            '@type' => 'Event', uid => $uid1,
+            title => 'Recurring',
+            start => '2026-07-01T09:00:00',
+            duration => 'PT1H', timeZone => 'Europe/Vienna',
+            recurrenceRules => [{ '@type' => 'RecurrenceRule',
+                frequency => 'daily', count => 3 }],
+        }}}, 'R1'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
+
+    # Instance id for second occurrence (2026-07-02), recurid in local time
+    my $instanceId = encode_eventid($uid1, '20260702T090000');
+
+    # MATCHING precondition: destroy succeeds (instance gets excluded)
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            ifUnchangedBy => { $instanceId => { title => 'Recurring' } },
+            destroy => [$instanceId],
+        }, 'R2'],
+    ], \@using);
+    $self->assert_deep_equals([$instanceId], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{notDestroyed}{$instanceId});
+
+    # Create second recurring event (for MISMATCHING precondition test)
+    my $uid2 = 'event-ifu-recur-2';
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { "2" => {
+            calendarIds => { $calId => JSON::true },
+            '@type' => 'Event', uid => $uid2,
+            title => 'Recurring2',
+            start => '2026-08-01T09:00:00',
+            duration => 'PT1H', timeZone => 'Europe/Vienna',
+            recurrenceRules => [{ '@type' => 'RecurrenceRule',
+                frequency => 'daily', count => 3 }],
+        }}}, 'R3'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{created}{"2"}{id});
+
+    # Instance id for second occurrence (2026-08-02), recurid in local time
+    my $instanceId2 = encode_eventid($uid2, '20260802T090000');
+
+    # MISMATCHING precondition: destroy rejected with stateMismatch,
+    # instance must still be present
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            ifUnchangedBy => { $instanceId2 => { title => 'WrongTitle' } },
+            destroy => [$instanceId2],
+        }, 'R4'],
+    ], \@using);
+    $self->assert_str_equals('stateMismatch',
+        $res->[0][1]{notDestroyed}{$instanceId2}{type});
+    $self->assert_null($res->[0][1]{destroyed});
+
+    # Confirm instance still present (via get)
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { ids => [$instanceId2] }, 'R5'],
+    ], \@using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+}

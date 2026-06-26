@@ -3158,8 +3158,13 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
             if (set->super.if_unchanged_by &&
                     json_object_get(set->super.if_unchanged_by, args->mbox_id)) {
                 json_t *cur = _mbox_current_repr(req, args->mbox_id);
+                if (!cur) {
+                    json_object_set_new(set->super.not_updated, args->mbox_id,
+                            json_pack("{s:s}", "type", "notFound"));
+                    continue;
+                }
                 json_t *err = jmap_set_precondition(&set->super, args->mbox_id, cur);
-                if (cur) json_decref(cur);
+                json_decref(cur);
                 if (err) {
                     json_object_set_new(set->super.not_updated, args->mbox_id, err);
                     continue;
@@ -3198,8 +3203,13 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         if (set->super.if_unchanged_by &&
                 json_object_get(set->super.if_unchanged_by, mbox_id)) {
             json_t *cur = _mbox_current_repr(req, mbox_id);
+            if (!cur) {
+                json_object_set_new(set->super.not_destroyed, mbox_id,
+                        json_pack("{s:s}", "type", "notFound"));
+                continue;
+            }
             json_t *err = jmap_set_precondition(&set->super, mbox_id, cur);
-            if (cur) json_decref(cur);
+            json_decref(cur);
             if (err) {
                 json_object_set_new(set->super.not_destroyed, mbox_id, err);
                 continue;

@@ -2714,16 +2714,19 @@ static int jmap_addressbook_set(struct jmap_req *req)
                 json_object_get(set.if_unchanged_by, id)) {
             mbentry_t *precond_mbentry = NULL;
             abookid_to_mbentry(req, abookid, &precond_mbentry);
-            if (precond_mbentry) {
-                json_t *cur = addressbook_torepr(req, precond_mbentry,
-                                                 NULL, default_addrbookname);
-                mboxlist_entry_free(&precond_mbentry);
-                json_t *precond_err = jmap_set_precondition(&set, id, cur);
-                json_decref(cur);
-                if (precond_err) {
-                    json_object_set_new(set.not_destroyed, id, precond_err);
-                    continue;
-                }
+            if (!precond_mbentry) {
+                json_object_set_new(set.not_destroyed, id,
+                        json_pack("{s:s}", "type", "notFound"));
+                continue;
+            }
+            json_t *cur = addressbook_torepr(req, precond_mbentry,
+                                             NULL, default_addrbookname);
+            mboxlist_entry_free(&precond_mbentry);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur);
+            json_decref(cur);
+            if (precond_err) {
+                json_object_set_new(set.not_destroyed, id, precond_err);
+                continue;
             }
         }
         json_t *err = NULL;
@@ -2779,16 +2782,19 @@ static int jmap_addressbook_set(struct jmap_req *req)
                 json_object_get(set.if_unchanged_by, id)) {
             mbentry_t *precond_mbentry = NULL;
             abookid_to_mbentry(req, abookid, &precond_mbentry);
-            if (precond_mbentry) {
-                json_t *cur = addressbook_torepr(req, precond_mbentry,
-                                                 NULL, default_addrbookname);
-                mboxlist_entry_free(&precond_mbentry);
-                json_t *precond_err = jmap_set_precondition(&set, id, cur);
-                json_decref(cur);
-                if (precond_err) {
-                    json_object_set_new(set.not_updated, id, precond_err);
-                    continue;
-                }
+            if (!precond_mbentry) {
+                json_object_set_new(set.not_updated, id,
+                        json_pack("{s:s}", "type", "notFound"));
+                continue;
+            }
+            json_t *cur = addressbook_torepr(req, precond_mbentry,
+                                             NULL, default_addrbookname);
+            mboxlist_entry_free(&precond_mbentry);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur);
+            json_decref(cur);
+            if (precond_err) {
+                json_object_set_new(set.not_updated, id, precond_err);
+                continue;
             }
         }
         json_t *record = NULL, *err = NULL;
