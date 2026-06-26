@@ -1,0 +1,38 @@
+Description:
+
+Added JMAP conditional-set support via the new
+`urn:ietf:params:jmap:conditional` capability
+(draft-gondwana-jmap-conditional).  Foo/set methods now accept an
+optional `ifUnchangedBy` argument: a map of object id to a PatchObject
+representing the state the caller last saw.  Before applying any
+requested change, the server checks whether applying that patch to the
+current server-side object would be a no-op.  If the object has changed
+since the client last fetched it the per-object SetError
+`stateMismatch` is returned; if the patch itself is structurally
+invalid, `invalidPatch` is returned.  The check is per-object and
+composes with the existing `ifInState` whole-method guard.
+
+Datatypes covered: ContactCard, Email, CalendarEvent, Mailbox, Note,
+SieveScript, VacationResponse, EmailSubmission, AddressBook, Calendar,
+CalendarNotification, and Principal.
+
+
+Documentation:
+
+https://www.ietf.org/archive/id/draft-gondwana-jmap-conditional.txt
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+Nothing required; the capability is advertised automatically.
+Clients that do not send `ifUnchangedBy` are unaffected.
+
+
+GitHub issue:
+
+None
