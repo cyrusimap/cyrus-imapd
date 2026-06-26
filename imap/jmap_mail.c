@@ -13379,11 +13379,49 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
 }
 
 
+/* Build the scoped current representation used for ifUnchangedBy checks.
+ * Returns a JSON object with keywords (flag->true) and mailboxIds (id->true),
+ * or NULL if the email is unknown. Caller owns the result. */
+static json_t *_email_current_repr(jmap_req_t *req, const char *email_id)
+{
+    const char *guidrep = _guid_from_id(req->cstate, email_id);
+    if (!guidrep) return NULL;
+
+    json_t *mailboxids_raw = _email_mailboxes(req, NULL, guidrep);
+    if (!json_object_size(mailboxids_raw)) {
+        json_decref(mailboxids_raw);
+        return NULL;
+    }
+
+    /* _email_mailboxes returns id -> {added/removed}; reduce to id -> true
+     * to match the mailboxIds shape in set patches. */
+    json_t *mids = json_object();
+    const char *mid;
+    json_t *jv;
+    json_object_foreach(mailboxids_raw, mid, jv) {
+        json_object_set_new(mids, mid, json_true());
+    }
+    json_decref(mailboxids_raw);
+
+    struct email_getcontext getctx = { 0 };
+    json_t *keywords = NULL;
+    _email_get_keywords(req, &getctx, guidrep, &keywords);
+    _email_getcontext_fini(&getctx);
+    if (!keywords) keywords = json_object();
+
+    json_t *repr = json_pack("{s:s s:o s:o}",
+                             "id", email_id,
+                             "mailboxIds", mids,
+                             "keywords", keywords);
+    return repr;
+}
+
 /* Execute the sequence of JMAP Email/set/{update} arguments in bulk. */
 static void _email_update_bulk(jmap_req_t *req,
                                json_t *update,
                                json_t *updated,
                                json_t *not_updated,
+                               json_t *if_unchanged_by,
                                json_t *debug)
 {
     struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
@@ -13466,6 +13504,28 @@ static void _email_update_bulk(jmap_req_t *req,
                         "properties", parser.invalid));
         }
 
+        /* Check ifUnchangedBy precondition */
+        if (!json_array_size(parser.invalid) &&
+                !json_object_get(not_updated, email_id) &&
+                if_unchanged_by &&
+                json_object_get(if_unchanged_by, email_id)) {
+            json_t *cur_repr = _email_current_repr(req, email_id);
+            json_t *precond_err = NULL;
+            if (!cur_repr) {
+                precond_err = json_pack("{s:s}", "type", "notFound");
+            }
+            else {
+                /* Reuse jmap_set_precondition via a temporary set struct */
+                struct jmap_set tmpset = JMAP_SET_INITIALIZER;
+                tmpset.if_unchanged_by = if_unchanged_by;
+                precond_err = jmap_set_precondition(&tmpset, email_id, cur_repr);
+                json_decref(cur_repr);
+            }
+            if (precond_err) {
+                json_object_set_new(not_updated, email_id, precond_err);
+            }
+        }
+
         /* Add update to batch */
         if (!json_array_size(parser.invalid) &&
                 !json_object_get(not_updated, email_id)) {
@@ -13507,7 +13567,8 @@ static void _email_update_bulk(jmap_req_t *req,
 static void _email_destroy_bulk(jmap_req_t *req,
                                 json_t *destroy,
                                 json_t *destroyed,
-                                json_t *not_destroyed)
+                                json_t *not_destroyed,
+                                json_t *if_unchanged_by)
 {
     ptrarray_t *mboxrecs = NULL;
     strarray_t email_ids = STRARRAY_INITIALIZER;
@@ -13528,6 +13589,34 @@ static void _email_destroy_bulk(jmap_req_t *req,
         strarray_append(&email_ids, json_string_value(jval));
     }
     _email_mboxrecs_read(req, req->cstate, &email_ids, not_destroyed, &mboxrecs);
+
+    /* Check ifUnchangedBy preconditions before any deletion.
+     * _email_multiexpunge already skips ids already in not_destroyed. */
+    if (if_unchanged_by) {
+        for (i = 0; i < ptrarray_size(mboxrecs); i++) {
+            struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
+            int j;
+            for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
+                if (json_object_get(not_destroyed, uidrec->email_id)) continue;
+                if (!json_object_get(if_unchanged_by, uidrec->email_id)) continue;
+                json_t *cur_repr = _email_current_repr(req, uidrec->email_id);
+                json_t *precond_err = NULL;
+                if (!cur_repr) {
+                    precond_err = json_pack("{s:s}", "type", "notFound");
+                }
+                else {
+                    struct jmap_set tmpset = JMAP_SET_INITIALIZER;
+                    tmpset.if_unchanged_by = if_unchanged_by;
+                    precond_err = jmap_set_precondition(&tmpset, uidrec->email_id, cur_repr);
+                    json_decref(cur_repr);
+                }
+                if (precond_err) {
+                    json_object_set_new(not_destroyed, uidrec->email_id, precond_err);
+                }
+            }
+        }
+    }
 
     /* Check mailbox ACL for shared accounts.
        Also prevent removal from $Scheduled mailbox */
@@ -13615,7 +13704,8 @@ static int jmap_email_set(jmap_req_t *req)
 
     set.old_state = jmap_state_string(req, old_modseq, MBTYPE_EMAIL, 0);
 
-    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
+    _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed,
+                        set.if_unchanged_by);
 
     json_t *email;
     const char *creation_id;
@@ -13638,7 +13728,8 @@ static int jmap_email_set(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
         debug_bulkupdate = json_object();
     }
-    _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
+    _email_update_bulk(req, set.update, set.updated, set.not_updated,
+                       set.if_unchanged_by, debug_bulkupdate);
 
     set.new_state = jmap_state_string(req, 0, MBTYPE_EMAIL, JMAP_MODSEQ_RELOAD);
 

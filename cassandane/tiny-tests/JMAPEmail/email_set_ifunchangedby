@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_set_ifunchangedby
+    :min_version_3_13 :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'urn:ietf:params:jmap:conditional';
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { properties => ['id'] }, 'R0'],
+    ], \@using);
+    my $inbox = $res->[0][1]{list}[0]{id};
+
+    # Create an email (unread: no $seen)
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => {
+            mailboxIds => { $inbox => JSON::true },
+            from => [{ name => "S", email => 's@local' }],
+            subject => "hi",
+            bodyStructure => { type => 'text/plain', partId => 'p' },
+            bodyValues => { p => { value => "body" } },
+            keywords => { '$flagged' => JSON::true },
+        }}}, 'R1'],
+    ], \@using);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    # Precondition: $flagged is set -> matches -> update proceeds
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            ifUnchangedBy => { $id => { 'keywords/$flagged' => JSON::true } },
+            update => { $id => { 'keywords/$answered' => JSON::true } },
+        }, 'R2'],
+    ], \@using);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    # Precondition: expect $seen present, but it's absent -> mismatch
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            ifUnchangedBy => { $id => { 'keywords/$seen' => JSON::true } },
+            update => { $id => { 'keywords/$draft' => JSON::true } },
+        }, 'R3'],
+    ], \@using);
+    $self->assert_str_equals('stateMismatch',
+                             $res->[0][1]{notUpdated}{$id}{type});
+
+    # Draft example 4.2: destroy only if unread (keywords/$seen null).
+    # Currently unread -> precondition holds -> destroy succeeds.
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            ifUnchangedBy => { $id => { 'keywords/$seen' => undef } },
+            destroy => [ $id ],
+        }, 'R4'],
+    ], \@using);
+    $self->assert_deep_equals([ $id ], $res->[0][1]{destroyed});
+}
