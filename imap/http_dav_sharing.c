@@ -845,6 +845,8 @@ static int dav_store_notification(struct transaction_t *txn,
                                NULL, NULL);
     }
 
+    dlist_free(&dl);
+
 done:
     buf_destroy(xmlbuf);
     mboxlist_entry_free(&mbentry);
