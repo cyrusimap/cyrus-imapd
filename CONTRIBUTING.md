@@ -66,7 +66,7 @@ review, you can look at some recently merged or closed pull requests.
 Cyrus is free software that comes with no guarantees, but we try to fix bugs
 when they're found.  The policy on that is something like this:
 
-* We release a new **development snapshot** of Cyrus about once a month.  While
+* We release a new **development snapshot** of Cyrus once a month.  While
   we won't make a release that doesn't *compile*, all other bets are off.  If
   we discover a critical security problem in a development snapshot, we'll just
   merge the fix when it's ready.  Running these in production is *your*
