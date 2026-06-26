@@ -149,6 +149,9 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
     json_object_set_new(account_capabilities,
             JMAP_URN_CORE, json_object());
 
+    json_object_set_new(account_capabilities,
+            JMAP_URN_CONDITIONAL, json_object());
+
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(account_capabilities,
                 JMAP_PERFORMANCE_EXTENSION, json_object());
