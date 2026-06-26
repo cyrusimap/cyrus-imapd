@@ -704,6 +704,7 @@ static int _card_set_create(jmap_req_t *req,
                             json_t *item, jmap_contact_errors_t *errors);
 
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
+                            struct jmap_set *set,
                             const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors);
@@ -799,6 +800,33 @@ static int jmap_card_set(struct jmap_req *req)
         mboxlist_entry_free(&mbentry);
         if (r) goto done;
 
+        /* Check ifUnchangedBy precondition for destroy */
+        if (set.if_unchanged_by && json_object_get(set.if_unchanged_by, id)) {
+            struct index_record record;
+            r = mailbox_find_index_record(mailbox, olduid, &record);
+            if (r) goto done;
+            vcardcomponent *vcard = record_to_vcard(mailbox, &record);
+            if (!vcard) {
+                r = HTTP_UNPROCESSABLE;
+                goto done;
+            }
+            /* the same representation _card_set_update() compares against */
+            jscontact_ctx_t fromctx = {
+                .mailbox = mailbox,
+                .record = &record,
+                .ignore_derived_props = true,
+                .set_vcard_convprops = true,
+            };
+            json_t *cur_obj = _card_from_vcard(req, &fromctx, vcard);
+            vcardcomponent_free(vcard);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur_obj);
+            json_decref(cur_obj);
+            if (precond_err) {
+                json_object_set_new(set.not_destroyed, id, precond_err);
+                continue;
+            }
+        }
+
         syslog(LOG_NOTICE,
                "jmap: remove %s %s/%s",
                cdata->kind == CARDDAV_KIND_GROUP ? "group" : "contact",
@@ -892,7 +920,7 @@ static int jmap_card_set(struct jmap_req *req)
         // cards get rejected.
         reject_or_remove_convprops(arg, invalid,
                 jmap_is_using(req, JMAP_CONTACTS_EXTENSION));
-        r = _card_set_update(req, set.apply_empty_updates,
+        r = _card_set_update(req, set.apply_empty_updates, &set,
                              uid, arg, db, &mailbox, &item, &errors);
         if (r) {
             json_t *err;
@@ -949,8 +977,8 @@ static int jmap_card_set(struct jmap_req *req)
             continue;
         }
 
-        /* Report contact as updated. */
-        json_object_set_new(set.updated, uid, item);
+        /* Report contact as updated (skip if precondition already set error). */
+        if (item) json_object_set_new(set.updated, uid, item);
     }
 
 
@@ -4242,6 +4270,7 @@ done:
 }
 
 static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
+                            struct jmap_set *set,
                             const char *id, json_t *jcard,
                             struct carddav_db *db, struct mailbox **mailbox,
                             json_t **item, jmap_contact_errors_t *errors)
@@ -4439,6 +4468,15 @@ static int _card_set_update(jmap_req_t *req, bool apply_empty_updates,
 
         /* Remove old "updated" */
         json_object_del(old_obj, "updated");
+
+        /* Check ifUnchangedBy precondition */
+        json_t *precond_err = jmap_set_precondition(set, id, old_obj);
+        if (precond_err) {
+            json_object_set_new(set->not_updated, id, precond_err);
+            json_decref(old_obj);
+            r = 0;
+            goto done;
+        }
 
         /* Apply the patch as provided */
         new_obj = jmap_patchobject_apply(old_obj, jcard, invalid, 0);
