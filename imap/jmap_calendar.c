@@ -2384,6 +2384,26 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
             calid = newcalid;
         }
+        /* ifUnchangedBy precondition check */
+        if (set.if_unchanged_by &&
+                json_object_get(set.if_unchanged_by, id)) {
+            mbentry_t *precond_mbentry = NULL;
+            calid_to_mbentry(req, calid, &precond_mbentry);
+            if (!precond_mbentry) {
+                json_object_set_new(set.not_destroyed, id,
+                        json_pack("{s:s}", "type", "notFound"));
+                continue;
+            }
+            json_t *cur = calendar_torepr(req, precond_mbentry,
+                                          NULL, default_cal_mboxname);
+            mboxlist_entry_free(&precond_mbentry);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur);
+            json_decref(cur);
+            if (precond_err) {
+                json_object_set_new(set.not_destroyed, id, precond_err);
+                continue;
+            }
+        }
         json_t *err = NULL;
         setcalendars_destroy(req, calid, default_cal_mboxname,
                              setargs.on_destroy_remove_events, &err);
@@ -2440,20 +2460,21 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* ifUnchangedBy precondition check */
         if (set.if_unchanged_by &&
                 json_object_get(set.if_unchanged_by, id)) {
-            char *precond_mboxname = caldav_mboxname(req->accountid, calid);
             mbentry_t *precond_mbentry = NULL;
-            jmap_mboxlist_lookup(precond_mboxname, &precond_mbentry, NULL);
-            free(precond_mboxname);
-            if (precond_mbentry) {
-                json_t *cur = calendar_torepr(req, precond_mbentry,
-                                              NULL, default_cal_mboxname);
-                mboxlist_entry_free(&precond_mbentry);
-                json_t *precond_err = jmap_set_precondition(&set, id, cur);
-                json_decref(cur);
-                if (precond_err) {
-                    json_object_set_new(set.not_updated, id, precond_err);
-                    continue;
-                }
+            calid_to_mbentry(req, calid, &precond_mbentry);
+            if (!precond_mbentry) {
+                json_object_set_new(set.not_updated, id,
+                        json_pack("{s:s}", "type", "notFound"));
+                continue;
+            }
+            json_t *cur = calendar_torepr(req, precond_mbentry,
+                                          NULL, default_cal_mboxname);
+            mboxlist_entry_free(&precond_mbentry);
+            json_t *precond_err = jmap_set_precondition(&set, id, cur);
+            json_decref(cur);
+            if (precond_err) {
+                json_object_set_new(set.not_updated, id, precond_err);
+                continue;
             }
         }
 
@@ -6595,12 +6616,18 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *err = NULL;
         setcalendarevents_update(req, notifmbox, schedinbox, event_patch,
                                  eid, cdata, db,
-                                 send_scheduling_messages, update, NULL, &err);
+                                 send_scheduling_messages, update, set, &err);
         json_decref(event_patch);
         json_decref(update);
         if (err) {
-            r = IMAP_INTERNAL;
-            json_decref(err);
+            if (set) {
+                /* Precondition fired: report as notDestroyed, not as error */
+                json_object_set_new(set->not_destroyed, eid->raw, err);
+            }
+            else {
+                r = IMAP_INTERNAL;
+                json_decref(err);
+            }
         }
         return r;
     }
@@ -10872,19 +10899,18 @@ static void notif_set(struct jmap_req *req,
             if (set->if_unchanged_by &&
                     json_object_get(set->if_unchanged_by, id)) {
                 message_t *msg = message_new_from_mailbox(notifmbox, rock.uid);
-                if (msg) {
-                    json_t *cur = tojmap(req, msg, NULL, tojmap_rock);
-                    message_unref(&msg);
-                    if (cur) {
-                        json_t *precond_err = jmap_set_precondition(set, id, cur);
-                        json_decref(cur);
-                        if (precond_err) {
-                            json_object_set_new(set->not_destroyed, id, precond_err);
-                            continue;
-                        }
-                    }
-                    /* cur == NULL: notification not representable
-                     * (filtered/expunged/invisible); proceed with destroy */
+                json_t *cur = msg ? tojmap(req, msg, NULL, tojmap_rock) : NULL;
+                if (msg) message_unref(&msg);
+                if (!cur) {
+                    json_object_set_new(set->not_destroyed, id,
+                            json_pack("{s:s}", "type", "notFound"));
+                    continue;
+                }
+                json_t *precond_err = jmap_set_precondition(set, id, cur);
+                json_decref(cur);
+                if (precond_err) {
+                    json_object_set_new(set->not_destroyed, id, precond_err);
+                    continue;
                 }
             }
             r = mailbox_find_index_record(notifmbox, rock.uid, &record);
