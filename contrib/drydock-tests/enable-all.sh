@@ -28,7 +28,6 @@ _autoreconf
     --with-ldap=/usr || \
     exit 124
 
-make lex-fix
 make -j4 || :
 make check || :
 
