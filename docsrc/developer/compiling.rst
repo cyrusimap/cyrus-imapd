@@ -323,8 +323,6 @@ Compile
     --enable-replication --enable-murder \
     --enable-idled --prefix=/usr/cyrus
 
-    make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
-
     make
 
 The ``--prefix`` option sets where Cyrus is installed to.

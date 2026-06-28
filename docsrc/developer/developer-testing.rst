@@ -167,8 +167,6 @@ Configure the environment.
     --enable-idled --enable-xapian --enable-calalarmd \
     --enable-backup
 
-    make lex-fix   # you need this if compile fails with errors from sieve/sieve.c
-
 And finally, make it.
 
 If you're testing across versions, the binsymlinks is necessary as older Cyrus doesn't have the binaries in the new locations. This uses the default install path of ``/usr/cyrus/``. It can be useful to also have ``/usr/cyrus25``, ``/usr/cyrus24``, etc, if you're testing with older versions as well.

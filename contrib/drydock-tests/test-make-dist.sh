@@ -50,8 +50,6 @@ for branch in `git branch --contains ${commit} | sed -e 's/  //g' -e 's/* //g'`;
 
     ./configure --enable-maintainer-mode || exit 124
 
-    make lex-fix
-
     make -j4 || exit 125
     make dist || exit 126
 
