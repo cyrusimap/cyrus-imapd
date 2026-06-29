@@ -6,6 +6,8 @@
 #include <config.h>
 #endif
 
+#include <stdio.h>
+
 #include "bc_parse.h"
 #include "strarray.h"
 #include "arrayu64.h"
@@ -667,6 +669,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 {
     int opcode = ntohl(bc[pos++].op);
     int has_index = 0;
+    char prefixed_fmt[MAX_ARGS+2];
 
     memset(test, 0, sizeof(test_t));
     test->type = opcode;
@@ -786,10 +789,8 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 
             if (has_index) {
                 if (opcode == BC_CURRENTDATE) {
-                    /* parse, but ignore, index as first argument */
-                    static char buf[MAX_ARGS+1] = "_";
-
-                    fmt = strcat(buf, fmt);
+                    snprintf(prefixed_fmt, sizeof(prefixed_fmt), "_%s", fmt);
+                    fmt = prefixed_fmt;
                 }
             }
             else if (opcode == BC_DATE) {
