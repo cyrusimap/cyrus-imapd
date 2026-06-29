@@ -1821,7 +1821,7 @@ static int set_up(void)
     buf_printf(&myconfig, "configdirectory: %s/conf\n", DBDIR);
 
     /* certs are in current directory */
-    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pm\n", cwd);
+    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pem\n", cwd);
     buf_printf(&myconfig, "tls_server_cert: %s/cert.pem\n", cwd);
     buf_printf(&myconfig, "tls_server_key: %s/key.pem\n", cwd);
 
