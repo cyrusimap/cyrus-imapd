@@ -1,0 +1,8 @@
+Name: sieve_allowed_annotations
+Type: STRING
+Default-Value: /vendor/* /comment
+Last-Modified: UNRELEASED
+
+Space-separated list of glob patterns for annotation entry names that the
+Sieve "addannotation" command (vnd.cyrus.addannotation) is permitted to set
+on delivered messages.

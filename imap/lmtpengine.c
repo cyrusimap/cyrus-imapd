@@ -35,6 +35,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "times.h"
+#include "annotate.h"
 #include "global.h"
 #include "prometheus.h"
 #include "xmalloc.h"
@@ -225,6 +226,8 @@ static int msg_new(message_data_t **m, const struct namespace *ns)
 
     ret->hdrcache = spool_new_hdrcache();
 
+    ret->annotations = NULL;
+
     ret->ns = ns;
 
     *m = ret;
@@ -266,6 +269,8 @@ static void msg_free(message_data_t *m)
     }
 
     spool_free_hdrcache(m->hdrcache);
+
+    if (m->annotations) freeentryatts(m->annotations);
 
     free(m);
 }
