@@ -20,9 +20,6 @@ Getting Started
     process
     quickstart
     overview
-    compiling
-    developer-testing
-    coverage
 
 Contributing
 ============
