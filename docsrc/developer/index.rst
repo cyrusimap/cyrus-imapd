@@ -18,17 +18,8 @@ Getting Started
     :maxdepth: 1
 
     process
+    quickstart
     overview
-    compiling
-    /installing
-    developer-testing
-    coverage
-    jmap
-
-.. toctree::
-    :hidden:
-
-    install-xapian
 
 Contributing
 ============
@@ -37,7 +28,6 @@ Contributing
     :maxdepth: 1
 
     Contributing to the documentation <documentation>
-    Documentation style guide </styles>
     The CUnit (C) test suite <cunit>
     The Cassandane (Perl) test suite <cassandane>
 
@@ -51,13 +41,10 @@ details about how Cyrus is implemented.
 .. toctree::
     :maxdepth: 1
 
-    namespaces
-    libraries
     Cyrus APIs <API>
     Annotator protocol <annotator-protocol>
     Replication protocol <replication-protocol>
     Thoughts & Notes <thoughts>
-    Guidance for Developers <guidance>
 
 This :download:`diagram <images/master-state-machine.svg>` shows
 the Master State Machine.
@@ -69,5 +56,3 @@ Releasing
     :maxdepth: 1
 
     releasing
-    major-releasing
-    snapshot-releasing

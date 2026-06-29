@@ -4,11 +4,8 @@
 Setup
 =====
 
+So you want to set up Cyrus.
 
-.. toctree::
-    :maxdepth: 2
-
-    developer/compiling
-    installing
-    download/upgrade
-    concepts/deployment
+You'll need to :ref:`compile <compiling>` it, `install <installing>`_ it,
+maybe `upgrade from the last release <download/upgrade>`_, and `deploy
+<concepts/deployment>`_ it.

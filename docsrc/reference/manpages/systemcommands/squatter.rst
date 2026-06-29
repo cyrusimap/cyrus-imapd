@@ -408,7 +408,3 @@ See Also
 ========
 
 :cyrusman:`imapd.conf(5)`, :cyrusman:`cyrus.conf(5)`
-
-.. only:: html
-
-    :ref:`configuring-xapian`

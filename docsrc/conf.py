@@ -330,7 +330,6 @@ import glob, os, io
 # Which paths relate to which man page sections
 pathset = [
     ("reference/manpages/systemcommands/", 8),
-    ("developer/libraries/", 3),
     ("reference/manpages/usercommands/", 1),
     ("reference/manpages/configs/", 5),
 ]
