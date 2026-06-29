@@ -29,6 +29,17 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Mint a token for the merge bot app
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.MERGE_BOT_APP_ID }}
+          private-key: ${{ secrets.MERGE_BOT_PRIVATE_KEY }}
+          # This token does exactly one thing: the push to protected master,
+          # which may carry .github/workflows/ changes.  Scope it to just that.
+          permission-contents: write
+          permission-workflows: write
+
       - name: Check permission and get PR details
         id: info
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
@@ -82,33 +93,6 @@ jobs:
             // bouncing it back to the maintainer.
             const canPushHead = headRepo === baseRepo || pr.maintainer_can_modify;
 
-            // GITHUB_TOKEN is a GitHub App token, which GitHub forbids from
-            // pushing changes under .github/workflows/ (the "workflows"
-            // permission can't be granted to it).  We're not going to be able to
-            // merge-on-demand this PR, so just refuse up front.
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-              per_page: 100,
-            });
-
-            const touchesWorkflows = files.some(f =>
-              f.filename.startsWith('.github/workflows/') ||
-              (f.previous_filename || '').startsWith('.github/workflows/')
-            );
-
-            if (touchesWorkflows) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: 'Cannot merge: this PR changes files under `.github/workflows/`, which the merge bot\'s token is not permitted to push. Please merge it by hand.',
-              });
-              core.setFailed('PR modifies workflow files');
-              return;
-            }
-
             core.setOutput('head_ref',      pr.head.ref);
             core.setOutput('head_sha',      pr.head.sha);
             core.setOutput('head_repo',     headRepo);
@@ -121,6 +105,11 @@ jobs:
         with:
           ref: ${{ steps.info.outputs.base_ref }}
           fetch-depth: 0
+          # Don't leave the Actions token wired into .git/config as an auth
+          # header.  We drive auth through the credential helper instead, so
+          # each push can pick its own token: the Actions token for the fork
+          # head, the app token for protected base.
+          persist-credentials: false
 
       - name: Configure git
         if: steps.info.outputs.proceed == 'true'
@@ -140,7 +129,11 @@ jobs:
         id: merge
         if: steps.info.outputs.proceed == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The credential helper hands git whatever GITHUB_TOKEN holds.  We
+          # default it to the Actions token (for fetches and the fork-head
+          # push) and override it with APP_TOKEN inline for the base push.
+          GITHUB_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
           HEAD_REF:  ${{ steps.info.outputs.head_ref }}
           HEAD_SHA:  ${{ steps.info.outputs.head_sha }}
           HEAD_REPO: ${{ steps.info.outputs.head_repo }}
@@ -183,14 +176,17 @@ jobs:
           # still land the merge on base and let "Comment on success" close
           # the PR with a note.
           #
-          # The head push can be rejected even when CAN_PUSH_HEAD is true and
-          # the PR touches no workflow files: rebasing onto base pulls in
-          # base's own changes under .github/workflows/, and GITHUB_TOKEN may
-          # not push those to the fork. The base push is unaffected (base
-          # already has them), so for that one expected rejection we fall
-          # through to merge-and-close. Any other push failure is a genuine
-          # error and aborts before base is touched, rather than silently
-          # downgrading to a non-merged PR closure.
+          # Two tokens, by design: the head push goes out under GITHUB_TOKEN,
+          # the Actions token, which GitHub lets act as the PR's maintainer
+          # (via "Allow edits from maintainers") to push to the fork -- the one
+          # thing the app token can't do.  The base push uses APP_TOKEN, which
+          # is on master's bypass list and may write .github/workflows/ -- the
+          # two things GITHUB_TOKEN can't do.  Each covers the other's gap.
+          #
+          # The one thing that still might fail is pushing workflow changes to
+          # the PR's fork.  When that happens, we just merge the rebased work
+          # to the target and close the PR, which will show up with a "closed"
+          # marker instead of "merged".  Not ideal, but fine.
           #
           # --force-with-lease guards the small window between the fetch above
           # and this push: if the contributor pushed again in those seconds we
@@ -216,7 +212,7 @@ jobs:
             fi
           fi
 
-          git push origin "${BASE_REF}"
+          GITHUB_TOKEN="$APP_TOKEN" git push origin "${BASE_REF}"
 
           echo "auto_merged=${PUSHED_HEAD}"  >> "$GITHUB_OUTPUT"
 
@@ -249,9 +245,9 @@ jobs:
                 + ' noted above.';
               body += canPushHead
                 ? ' (The rebased commits could not be pushed back to the PR'
-                  + ' branch: the rebase pulled in changes under'
-                  + ' `.github/workflows/` that this bot is not permitted to'
-                  + ' push.)'
+                  + ' branch, because the branch includes changes under'
+                  + ' `.github/workflows/` that GitHub will not let this bot'
+                  + ' push to the fork.)'
                 : ' (Enabling "Allow edits from maintainers" on future PRs'
                   + ' lets the bot update the branch so GitHub records them as'
                   + ' merged.)';
@@ -288,8 +284,8 @@ jobs:
       # Take the label back off on *any* failure so a retry is a clean re-apply
       # (which also fires a fresh labeled event with a fresh snapshot). This is
       # its own step rather than part of "Comment on failure" because that step
-      # is skipped when the info step itself fails, e.g. a refused
-      # workflow-file PR.
+      # is skipped when the info step itself fails, e.g. a labeler without push
+      # access or a deleted fork.
       - name: Remove label on failure
         if: failure()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
