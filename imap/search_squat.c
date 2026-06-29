@@ -335,14 +335,37 @@ static void *get_internalised(search_builder_t *bx
 
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock);
 
-static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
+/* SQUAT has no shared index lock to hold across builders, so the
+ * session just carries the parameters begin_search() needs. */
+struct search_session {
+    struct mailbox *mailbox;
+    int opts;
+};
+
+static search_session_t *begin_session(struct mailbox *mailbox, int opts)
+{
+    if (!mailbox) return NULL;
+    search_session_t *session = xzmalloc(sizeof(*session));
+    session->mailbox = mailbox;
+    session->opts = opts;
+    return session;
+}
+
+static void end_session(search_session_t *session)
+{
+    free(session);
+}
+
+static search_builder_t *begin_search(search_session_t *session)
 {
     SquatBuilderData *bb;
     SquatSearchIndex* index;
     const char *fname;
     int fd;
 
-    if (!mailbox) return NULL;
+    if (!session) return NULL;
+    struct mailbox *mailbox = session->mailbox;
+    int opts = session->opts;
 
     if ((opts & SEARCH_MULTIPLE)) {
         syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
@@ -1019,8 +1042,11 @@ static int can_match(enum search_op matchop, enum search_part partnum)
 const struct search_engine squat_search_engine = {
     "SQUAT",
     0,
+    begin_session,
+    end_session,
     begin_search,
     end_search,
+    /* session_get_highest_createdmodseq */NULL,
     begin_update,
     end_update,
     /* begin_snippets */NULL,
