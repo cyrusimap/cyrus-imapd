@@ -12129,12 +12129,12 @@ static int sync_mailbox(struct xfer_header *xfer,
 
         /* does it need a rename? */
         if (strcmp(mfolder->name, rfolder->name) ||
-            strcmp(topart, rfolder->part)) {
+            strcmp(topart, rfolder->partition)) {
             /* bail and retry */
             syslog(LOG_NOTICE,
                    "XFER: rename %s!%s -> %s!%s during final sync"
                    " - must try XFER again",
-                   mfolder->name, mfolder->part, rfolder->name, rfolder->part);
+                   mfolder->name, mfolder->partition, rfolder->name, rfolder->partition);
             r = IMAP_AGAIN;
             goto cleanup;
         }
@@ -12143,7 +12143,7 @@ static int sync_mailbox(struct xfer_header *xfer,
     sync_find_reserve_messages(mailbox, fromuid, mailbox->i.last_uid, part_list);
 
     reserve = reserve_guids->head;
-    r = sync_reserve_partition(&xfer->sync_cs, reserve->part,
+    r = sync_reserve_partition(&xfer->sync_cs, reserve->partition,
                                replica_folders, reserve->list);
     if (r) {
         syslog(LOG_ERR, "sync_mailbox(): reserve partition failed: %s '%s'",
@@ -14944,7 +14944,7 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
     for (res = l->head; res; res = res->next) {
         for (msg = res->list->head; msg; msg = msg->next) {
             if (!msg->fname) continue;
-            pl = partition_list_add(res->part, pl);
+            pl = partition_list_add(res->partition, pl);
 
             xunlink(msg->fname);
         }
