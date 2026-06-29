@@ -16,55 +16,18 @@ CUnit test suite.
 2. Running the tests
 --------------------
 
-This section takes you through the process of running Cyrus' unit tests.
+In day-to-day development you don't run the CUnit suite by hand: ``dar build``
+(or ``cyd build`` inside the container) compiles Cyrus with the tests enabled
+and runs them as part of the build.  See the :ref:`developer quickstart
+<developer-quickstart>` for that workflow.
 
-2.1. Consider using cyrus-docker
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The CUnit tests live in ``cyrus-imapd/cunit/``.  They're written in C, like the
+rest of Cyrus, and use the `CUnit library from SourceForge
+<https://cunit.sourceforge.net/>`__ with some home-grown wrappers.  The rest of
+this section explains what happens when the tests run and how to dig into a
+failure.
 
-Before you proceed with the instructions below, consider whether you could just
-use cyrus-docker, cyd, and dar.  Those tools let you hack on Cyrus without
-setting up your own development environment.  They're documented on `the
-developer overview page </developer/overview>`.
-
-2.2. Setting up the machine
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Cyrus' unit tests are all located in a new directory,
-``cyrus-imapd/cunit/``. They're written in C, like the remainder of
-Cyrus, and use the `CUnit library from
-SourceForge <https://cunit.sourceforge.net/>`__, with some home grown
-wrappers and other improvements to make our lives easier.
-
-Your first step is step is to ensure that the CUnit library (including
-the headers) is installed. Some modern operating systems already have
-CUnit, for example on Ubuntu you can just do:
-
-::
-
-    me@ubuntu> sudo apt-get install libcunit1-dev
-
-Alternately, you can download the CUnit source, build it and install it.
-It's not a complicated or difficult library, this shouldn't take long.
-When you've done, install it in ``/usr/include`` and ``/usr/lib``.
-
-2.3 Configure script
-^^^^^^^^^^^^^^^^^^^^
-
-Because of the dependency on the CUnit library, the tests are disabled
-by default; this means you need enable them with an option to the
-``configure`` script:
-
-::
-
-    me@mybox> ./configure --enable-unit-tests
-    ...
-    checking for CU\_initialize\_registry in -lcunit... yes
-    checking CUnit/CUnit.h usability... yes
-    checking CUnit/CUnit.h presence... yes
-    checking for CUnit/CUnit.h... yes
-    ...
-
-2.4 Make
+2.1 Make
 ^^^^^^^^
 
 First you need to build Cyrus itself, using the traditional ``all:``
@@ -140,7 +103,7 @@ Let's take a closer look at what's happening here.
     it ran and how many passed and failed. The key thing to look at here
     is the rightmost column, it should be all zero.
 
-2.5 Using Valgrind
+2.2 Using Valgrind
 ^^^^^^^^^^^^^^^^^^
 
 Some failure modes are subtle, and cannot be detected in the C code
@@ -201,7 +164,7 @@ useful. I would have made running the tests under Valgrind the only
 option for the ``check:`` target, except that Valgrind is not available
 on all of Cyrus' supported platforms.
 
-2.6 The tests are failing
+2.3 The tests are failing
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 So you've noticed that some of the tests are failing. Let me make the
@@ -228,7 +191,7 @@ most benefit out of unit testing
    report <http://ci.cyrusimap.org/job/cyrus-imapd-master/887/cobertura/>`__
    and consider writing tests for the existing code.
 
-2.7 Debugging a test
+2.4 Debugging a test
 ^^^^^^^^^^^^^^^^^^^^
 
 With the new Cyrus build system, the file ``cunit/unit`` is no longer an
