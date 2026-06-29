@@ -73,16 +73,10 @@ void dlist_makefile(struct dlist *dl,
 
 /* parse fields */
 int dlist_toatom(struct dlist *dl, const char **valp);
-int dlist_toflag(struct dlist *dl, const char **valp);
 int dlist_tonum32(struct dlist *dl, uint32_t *valp);
-int dlist_tonum(struct dlist *dl, bit64 *valp);
 int dlist_todate(struct dlist *dl, time_t *valp);
-int dlist_tohex32(struct dlist *dl, uint32_t *valp);
-int dlist_tohex(struct dlist *dl, bit64 *valp);
 int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp);
 /* these two don't actually do anything except check type */
-int dlist_tolist(struct dlist *dl, struct dlist **valp);
-int dlist_tokvlist(struct dlist *dl, struct dlist **valp);
 int dlist_toguid(struct dlist *dl, struct message_guid **valp);
 int dlist_tofile(struct dlist *dl,
                  const char **partp, struct message_guid **guidp,
@@ -163,8 +157,6 @@ int dlist_getbuf(struct dlist *parent, const char *name,
                  struct buf *buf);
 int dlist_getlist(struct dlist *parent, const char *name,
                   struct dlist **valp);
-int dlist_getkvlist(struct dlist *parent, const char *name,
-                    struct dlist **valp);
 int dlist_getguid(struct dlist *parent, const char *name,
                   struct message_guid **valp);
 int dlist_getfile(struct dlist *parent, const char *name,
