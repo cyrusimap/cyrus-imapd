@@ -1471,7 +1471,7 @@ dnl
                                 [Do we have support for xmlBufferDetach()?]))
                 ])
 
-        PKG_CHECK_MODULES([ICAL], [libical >= 3.99.99], [
+        PKG_CHECK_MODULES([ICAL], [libical >= 4.0], [
                 AC_DEFINE(HAVE_ICAL,[],[Build CalDAV support into httpd?])
                 LIBS="$LIBS ${ICAL_LIBS} -licalvcard"
                 with_ical=yes
