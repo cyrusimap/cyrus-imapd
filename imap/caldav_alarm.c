@@ -1138,6 +1138,15 @@ static int caldav_alarm_bump_nextcheck(struct caldav_alarm_data *data,
 
     if (!last_run) last_run = data->last_run;
 
+    /* nothing to do if the row already holds these values (e.g. a replica
+     * re-checking an overdue futurerelease/snooze record whose time never
+     * changes) -- avoid a pointless INSERT OR REPLACE every run */
+    if (nextcheck == data->nextcheck &&
+        num_retries == data->num_retries &&
+        last_run == data->last_run &&
+        !strcmpsafe(last_err, data->last_err))
+        return 0;
+
     return update_alarmdb(data->mboxname, data->imap_uid, nextcheck, data->type,
                           data->num_rcpts, num_retries, last_run, last_err);
 }
