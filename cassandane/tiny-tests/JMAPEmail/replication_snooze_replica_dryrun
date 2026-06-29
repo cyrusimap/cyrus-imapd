@@ -1,0 +1,96 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replication_snooze_replica_dryrun
+    :min_version_3_13 :needs_component_calalarmd
+    :needs_component_sieve :needs_component_replication :JMAPExtensions
+    ($self)
+{
+    # A replicaonly replica processes snoozed emails in dryrun mode. The same
+    # failover invariants as delayed send apply (see the futurerelease test in
+    # JMAPEmailSubmission):
+    #
+    #  1. the replica must NOT unsnooze the message itself -- only the master
+    #     does -- so the alarm-db record must survive a dryrun run.
+    #  2. an overdue record must stay DUE (nextcheck not pushed into the
+    #     future). The unsnooze is replicated, so a healthy replica simply has
+    #     the record deleted; but if replication is behind (the failover case),
+    #     a promoted replica must awaken the message on its very next run rather
+    #     than waiting. The cheap ~10s re-poll until then is the acceptable cost.
+    my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for the
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $inboxId = $self->getinbox()->{id};
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
+
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    xlog $self, "create snooze mailbox";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => { "1" => {
+            name => "snoozed", parentId => undef, role => "snoozed"
+        }}}, "R2"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $snoozedId = $res->[0][1]{created}{"1"}{id};
+
+    xlog $self, "snooze the message";
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$inboxId" => undef,
+                "mailboxIds/$snoozedId" => $JSON::true,
+                "snoozed" => { "until" => $datestr },
+            }}
+        }, 'R3']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    xlog $self, "snooze is in the master alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+    $self->run_replication();
+
+    xlog $self, "snooze replicated to the replica alarmdb, due at the wakeup time";
+    my $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+    my $oldcheck = $replicadata->[0]{nextcheck};
+
+    xlog $self, "run calalarmd on the replicaonly replica well past the wakeup";
+    my $runtime = $maildate->epoch() + 90;
+    # sanity: the record is overdue at our chosen runtime. n.b. POSIX shadows
+    # assert(), so express comparisons via assert_num_equals on a boolean.
+    $self->assert_num_equals(1, ($oldcheck <= $runtime) ? 1 : 0,
+        "wakeup $oldcheck should be at/before run time $runtime");
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $runtime);
+
+    xlog $self, "replica did NOT unsnooze: the alarm-db record still exists";
+    $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+
+    xlog $self, "replica did NOT unsnooze: message still snoozed on the master";
+    $res = $jmap->CallMethods([['Email/get',
+        { ids => [ $emailId ], properties => [ 'mailboxIds', 'snoozed' ]}, "R4"]]);
+    my $msg = $res->[0][1]->{list}[0];
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_equals($datestr, $msg->{snoozed}{'until'});
+
+    xlog $self, "overdue record stays due so a promoted replica awakens it immediately";
+    my $newcheck = $replicadata->[0]{nextcheck};
+    $self->assert_num_equals(1, ($newcheck <= $runtime) ? 1 : 0,
+        "replica nextcheck $newcheck should stay at/before run time $runtime");
+}
