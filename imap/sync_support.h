@@ -52,7 +52,7 @@ struct sync_msgid_list {
 
 struct sync_reserve {
     struct sync_reserve *next;
-    char *part;
+    char *partition;
     struct sync_msgid_list *list;
 };
 
@@ -65,7 +65,7 @@ struct sync_reserve_list {
 struct sync_reserve_list *sync_reserve_list_create(int hash_size);
 
 struct sync_msgid_list *sync_reserve_partlist(struct sync_reserve_list *list,
-                                              const char *part);
+                                              const char *partition);
 
 void sync_reserve_list_free(struct sync_reserve_list **list);
 
@@ -77,7 +77,7 @@ struct sync_folder {
     char *uniqueid;
     char *name;
     uint32_t mbtype;
-    char *part;
+    char *partition;
     char *acl;
     uint32_t last_uid;
     modseq_t highestmodseq;
@@ -109,7 +109,7 @@ struct sync_folder_list *sync_folder_list_create(void);
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          const char *uniqueid, const char *name,
                                          uint32_t mbtype,
-                                         const char *part, const char *acl,
+                                         const char *partition, const char *acl,
                                          uint32_t options,
                                          uint32_t uidvalidity,
                                          uint32_t last_uid,
@@ -300,9 +300,9 @@ const char *sync_restore(struct dlist *kin,
 int sync_do_annotation(struct sync_client_state *sync_cs, const char *mboxname);
 int sync_do_mailboxes(struct sync_client_state *sync_cs,
                       struct sync_name_list *mboxname_list,
-                      const char *topart, int flags);
+                      const char *topartition, int flags);
 int sync_do_user(struct sync_client_state *sync_cs,
-                 const char *userid, const char *topart);
+                 const char *userid, const char *topartition);
 int sync_do_meta(struct sync_client_state *sync_cs, const char *userid);
 
 int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
@@ -313,15 +313,15 @@ int sync_response_parse(struct sync_client_state *sync_cs, const char *cmd,
                         struct sync_quota_list *quota_list);
 int sync_find_reserve_messages(struct mailbox *mailbox,
                                uint32_t fromuid, uint32_t touid,
-                               struct sync_msgid_list *part_list);
+                               struct sync_msgid_list *partition_list);
 int sync_reserve_partition(struct sync_client_state *sync_cs, char *partition,
                            struct sync_folder_list *replica_folders,
-                           struct sync_msgid_list *part_list);
+                           struct sync_msgid_list *partition_list);
 
 int sync_do_update_mailbox(struct sync_client_state *sync_cs,
                            struct sync_folder *local,
                            struct sync_folder *remote,
-                           const char *topart,
+                           const char *topartition,
                            struct sync_reserve_list *reserve_guids);
 
 int sync_do_folder_delete(struct sync_client_state *sync_cs,
