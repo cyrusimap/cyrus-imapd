@@ -920,15 +920,7 @@ seqset_t *index_vanished(struct index_state *state,
     seqset_t *seq;
 
     /* check uidvalidity match */
-    /* XXX Seems like uidvalidity_is_max never gets set to anything but zero.
-     * XXX What was its purpose?  Can we get rid of it?
-     */
-    if (params->uidvalidity_is_max) {
-        if (params->uidvalidity < mailbox->i.uidvalidity) return NULL;
-    }
-    else {
-        if (params->uidvalidity != mailbox->i.uidvalidity) return NULL;
-    }
+    if (params->uidvalidity != mailbox->i.uidvalidity) return NULL;
 
     /* No recently expunged messages */
     if (params->modseq >= state->highestmodseq) return NULL;

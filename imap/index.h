@@ -39,7 +39,6 @@ struct vanished_params {
     const char *match_seq;
     const char *match_uid;
     const char *sequence;
-    int uidvalidity_is_max;
 };
 
 struct index_init {
