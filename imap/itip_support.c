@@ -463,6 +463,13 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             icalcomponent_get_first_property(itip, ICAL_DTSTAMP_PROPERTY);
         icaltimetype recurid = icalcomponent_get_recurrenceid_with_zone(itip);
 
+        /* RFC 5546 mandates both ATTENDEE and DTSTAMP in a REPLY component.
+         * Skip any malformed component (rather than crash). */
+        if (!dtstamp ||
+            !icalcomponent_get_first_invitee(itip)) {
+            continue;
+        }
+
         if (icaltime_is_null_time(recurid)) {
             comp = master;
         }
