@@ -192,7 +192,7 @@ libexec_PROGRAMS += \
     imap/lmtpd \
     imap/pop3d \
     imap/backupcyrusd \
-		imap/calalarmd \
+    imap/calalarmd \
     imap/promstatsd \
     imap/smmapd \
     ptclient/ptloader
