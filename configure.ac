@@ -2375,13 +2375,11 @@ Cyrus Server configured components
    gssapi:             $gssapi
    autocreate:         $enable_autocreate
    idled:              $enable_idled
-   httpd:              yes
    murder:             $enable_murder
    nntpd:              $enable_nntp
    replication:        $enable_replication
    sieve:              $enable_sieve
    srs:                $enable_srs
-   calalarmd:          yes
    jmap:               $enable_jmap
    com_err:            $with_com_err
 
@@ -2397,8 +2395,6 @@ External dependencies:
    wslay:              $with_wslay
    brotli:             $with_brotli
    zstd:               $with_zstd
-   xml2:               $with_xml2
-   ical:               $with_ical
    shapelib:           $with_shapelib
    icu4c:              $with_icu4c
    chardet:            $with_chardet
@@ -2408,7 +2404,6 @@ External dependencies:
 Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
-   sqlite:             $use_sqlite
 
 Search engine:
    squat:              $enable_squat
