@@ -1,0 +1,117 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_shared_etag
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Create second user";
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtean");
+
+    xlog $self, "Provision second calendar user";
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog $self, "Share default calendar to cassandane";
+    $admintalk->setacl("user.test.#calendars.Default", "cassandane" => 'lrswin');
+
+    xlog $self, "Subscribe to shared calendar";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->subscribe("user.test.#calendars.Default");
+
+    xlog $self, "Get calendars as cassandane";
+    my $CalDAV = $self->{caldav};
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedId = $CasCal->[1]{href};
+
+    my $href = "$sharedId/uid1.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+UID:uid1
+SUMMARY:HasUID1
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog $self, "PUT the event on the shared calendar";
+    # annoyingly there's no "Request" that tells you the headers, so:
+    my %Headers = (
+        'Content-Type' => 'text/calendar',
+        'Authorization' => $CalDAV->auth_header(),
+        'Prefer' => 'return=representation'
+    );
+
+    my $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers
+    });
+
+    $self->assert_num_equals(201, $Response->{status});
+    my $etag = $Response->{headers}{etag};
+    my $content = $Response->{content};
+    $self->assert_not_null($etag);
+    $self->assert_not_null($content);
+
+    xlog $self, "GET the event on the shared calendar";
+    $Response = $CalDAV->{ua}->request('GET', $CalDAV->request_url($href), {
+        headers => \%Headers,
+    });
+
+    # the returned etags should be the same
+    $self->assert_num_equals(200, $Response->{status});
+    my $etag2 = $Response->{headers}{etag};
+    $self->assert_not_null($etag2);
+    $self->assert_str_equals($etag2, $etag);
+
+    # the returned content should be the same
+    my $content2 = $Response->{content};
+    $self->assert_not_null($content2);
+    $self->assert_str_equals($content2, $content);
+
+    # change the per-user content and update the event
+    xlog $self, "PUT the updated event on the shared calendar";
+    $card =~ s/OPAQUE/TRANSPARENT/s;
+
+    $Response = $CalDAV->{ua}->request('PUT', $CalDAV->request_url($href), {
+        content => $card,
+        headers => \%Headers,
+    });
+
+    # the returned etag should be different from the original
+    $self->assert_num_equals(200, $Response->{status});
+    $etag = $Response->{headers}{etag};
+    $self->assert_not_null($etag);
+    $self->assert_str_not_equals($etag2, $etag);
+
+    xlog $self, "GET the updated event on the shared calendar";
+    $Response = $CalDAV->{ua}->request('HEAD', $CalDAV->request_url($href), {
+        headers => \%Headers,
+    });
+
+    # the returned etags should be the same
+    $self->assert_num_equals(200, $Response->{status});
+    $etag2 = $Response->{headers}{etag};
+    $self->assert_not_null($etag2);
+    $self->assert_str_equals($etag2, $etag);
+}
