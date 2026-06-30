@@ -1,7 +1,7 @@
 Name: specialuse_nochildren
 Type: STRING
-Default-Value: \\Scheduled \\Snooze
-Last-Modified: 3.6.0
+Default-Value: \\Scheduled \\Snoozed
+Last-Modified: UNRELEASED
 
 Whitespace separated list of special-use attributes that may not contain
 child folders.  If set, mailboxes with any of these attributes may not have

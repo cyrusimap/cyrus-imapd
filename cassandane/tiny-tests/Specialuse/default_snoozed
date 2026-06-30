@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+# The default specialuse_protect and specialuse_nochildren lists must name
+# the \Snoozed special-use (with the trailing "d"), as that is the only
+# spelling the server ever applies.  This runs with the stock defaults, so it
+# would fail if the option defaults ever drifted back to "\Snooze".
+sub test_default_snoozed ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("Snoozed", "(USE (\\Snoozed))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    # specialuse_nochildren: must not be allowed to create a child
+    $imaptalk->create("Snoozed.child");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # specialuse_protect: must not be allowed to delete it
+    $imaptalk->delete("Snoozed");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+
+    # specialuse_protect: must not be allowed to reparent it
+    $imaptalk->create("Other");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    $imaptalk->rename("Snoozed", "Other.Snoozed");
+    $self->assert_equals('no', $imaptalk->get_last_completion_response());
+}
