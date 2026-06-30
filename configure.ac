@@ -1590,10 +1590,6 @@ AS_IF([test "x$with_zoneinfo_dir" != "x"],
                          [Default zoneinfo_dir]))
 
 dnl
-dnl Calendar alarm support is mandatory as of Cyrus 3.13.5
-dnl
-
-dnl
 dnl see if we're compiling with JMAP support
 dnl
 AC_ARG_ENABLE(jmap,
