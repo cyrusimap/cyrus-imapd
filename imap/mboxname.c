@@ -2360,7 +2360,6 @@ EXPORTED char *mboxname_conf_getpath_legacy(const mbname_t *mbname,
     char c[2], d[2];
 
     const char *root = config_getstring(IMAPOPT_MBOXNAME_USERPATH);
-    if (!root) root = config_dir;
 
     if (mbname->localpart) {
         if (mbname->domain) {
@@ -2439,7 +2438,6 @@ EXPORTED char *mboxid_conf_getpath(const char *mboxid, const char *suffix)
     mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mboxid);
 
     const char *root = config_getstring(IMAPOPT_MBOXNAME_USERPATH);
-    if (!root) root = config_dir;
 
     if (suffix) {
         fname = strconcat(root,

@@ -5,21 +5,26 @@
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <unistd.h>
+
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 #include <CUnit/Automated.h>
+
 #if HAVE_VALGRIND_VALGRIND_H
 #include <valgrind/valgrind.h>
 #endif
-#include <setjmp.h>
 
 #include "cunit/unit.h"
 #include "cunit/unit-registry.h"
 #include "cunit/unit-timeout.h"
 
+#include "lib/assert.h"
+#include "lib/buf.h"
 #include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "lib/retry.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
@@ -278,16 +283,44 @@ CU_BOOL CU_assertFormatImplementation(
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
-EXPORTED void config_read_string(const char *s)
+EXPORTED void config_read_string(const char *confdir, const char *s)
 {
     char fname[] = "/tmp/cyrus-cunit-configXXXXXX";
-    int fd = mkstemp(fname);
+    struct buf opt_confdir = BUF_INITIALIZER;
+    int fd;
 
-    retry_write(fd, s, strlen(s));
+    /* n.b. you should almost always set a confdir, unless you're testing
+     * the fact that cyrus fatals when it's not set!
+     */
+    if (confdir) {
+        if (confdir[0] == '/') {
+            buf_printf(&opt_confdir, "configdirectory: %s\n", confdir);
+        }
+        else {
+            char cwd[PATH_MAX];
+            if (!getcwd(cwd, sizeof(cwd))) {
+                /* if this fails there's not much we can do about it now */
+                perror("getcwd");
+                abort();
+            }
+            buf_printf(&opt_confdir, "configdirectory: %s/%s\n", cwd, confdir);
+        }
+    }
+
+    /* write config to the tmp file and then read it normally */
+    fd = mkstemp(fname);
+    retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
+    buf_free(&opt_confdir);
+    if (s) {
+        retry_write(fd, s, strlen(s));
+    }
     config_reset();
     config_read(fname, 0);
     xunlink(fname);
     close(fd);
+
+    /* make sure libcyrus configdirectory is properly initialised */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
 }
 
 static void run_tests(void)

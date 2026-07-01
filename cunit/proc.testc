@@ -26,17 +26,14 @@ static int set_up(void)
 {
     char myconfigdir_template[] = "/tmp/cyrus-cunit-proctestc-XXXXXX";
     char *dir;
-    struct buf myconfig = BUF_INITIALIZER;
 
     dir = mkdtemp(myconfigdir_template);
     if (!dir) return errno;
 
     myconfigdir = xstrdup(dir);
-    buf_printf(&myconfig, "configdirectory: %s\n", myconfigdir);
 
-    config_read_string(buf_cstring(&myconfig));
+    config_read_string(myconfigdir, NULL);
 
-    buf_free(&myconfig);
     return 0;
 }
 

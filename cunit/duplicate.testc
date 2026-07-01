@@ -8,7 +8,6 @@
 #include "imap/global.h"
 #include "imap/imap_err.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "libconfig.h"
 
 #define DBDIR                   "test-duplicate-dbdir"
@@ -279,10 +278,7 @@ static int set_up(void)
         }
     }
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     cyrusdb_init();
     config_duplicate_db = "skiplist";

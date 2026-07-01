@@ -4,7 +4,6 @@
 #include <assert.h>
 #include "cunit/unit.h"
 #include "lib/libconfig.h"
-#include "lib/libcyr_cfg.h"
 #include "lib/xunlink.h"
 #include "imap/mboxname.h"
 #include "imap/mailbox.h"
@@ -1066,10 +1065,7 @@ static const char *old_config_defdomain;
 static int set_up(void)
 {
     /* need basic configuration */
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     /*
      * TODO: this is pretty hacky.  There should be some

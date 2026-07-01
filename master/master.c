@@ -86,7 +86,6 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define MAX_READY_FAILS              5
 #define MAX_READY_FAIL_INTERVAL     10  /* 10 seconds */
 
-#define FNAME_PROM_STATS_DIR        "/stats" /* keep in sync with prometheus.h */
 #define FNAME_PROM_MASTER_REPORT    "master.txt"
 
 struct service *Services = NULL;
@@ -2387,18 +2386,11 @@ static void init_prom_report(struct timeval now)
     prom_prev_report.tv_sec = now.tv_sec - prom_frequency; /* next report asap */
     prom_prev_report.tv_usec = 0;
 
-    if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
-        if (tmp[0] == '/' && tmp[1] != '\0') {
-            buf_setcstr(&buf, tmp);
-            if (buf.s[buf.len-1] != '/')
-                buf_putc(&buf, '/');
-            buf_appendcstr(&buf, FNAME_PROM_MASTER_REPORT);
-        }
-    }
-    else if ((tmp = config_getstring(IMAPOPT_CONFIGDIRECTORY))) {
+    tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR);
+    if (tmp[0] == '/' && tmp[1] != '\0') {
         buf_setcstr(&buf, tmp);
-        buf_appendcstr(&buf, FNAME_PROM_STATS_DIR);
-        buf_putc(&buf, '/');
+        if (buf.s[buf.len-1] != '/')
+            buf_putc(&buf, '/');
         buf_appendcstr(&buf, FNAME_PROM_MASTER_REPORT);
     }
 

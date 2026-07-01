@@ -7,7 +7,6 @@
 #include "retry.h"
 #include "strarray.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "lib/util.h"       /* for VECTOR_SIZE */
 //#include "message.h"      /* for VECTOR_SIZE */
 #include "xmalloc.h"
@@ -1413,9 +1412,7 @@ static int set_up(void)
         return e;
     }
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "conversations_keep_existing: false\n"
     );
 
