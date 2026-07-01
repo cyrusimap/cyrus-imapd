@@ -248,6 +248,9 @@ magic(DelayedDelete => sub {
 magic(UnixHierarchySep => sub {
     shift->config_set(unixhierarchysep => 'yes');
 });
+magic(QuotaUseConversations => sub {
+    shift->config_set(quota_use_conversations => 'yes');
+});
 magic(ImmediateExpunge => sub {
     shift->config_set(expunge_mode => 'immediate');
 });

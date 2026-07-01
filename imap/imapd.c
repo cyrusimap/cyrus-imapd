@@ -4568,6 +4568,9 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
                     tag, url, parseerr);
     } else if (r) {
         const char *respcode = "";
+        /* release the selected mailbox before the TRYCREATE check below, which
+         * may need to take the user namespace lock */
+        index_release(imapd_index);
         if (r == IMAP_MAILBOX_NOTSUPPORTED) {
             respcode = "[CANNOT] ";
         }

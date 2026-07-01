@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+# A NONEXISTENT failure deep in the APPEND path triggers a TRYCREATE check,
+# which runs the quota check.  With quota_use_conversations enabled that opens
+# the conversations DB and takes the user namespace lock.  By that point
+# imapd_check() has re-opened the selected mailbox, leaving it parked with its
+# namelock held (but its nslock released), so taking the nslock must not trip
+# the lock-ordering assertion in user_nslock_lock().
+#
+# We provoke the late NONEXISTENT by deleting the target between APPEND's
+# initial existence check and the point where it opens the mailbox to write:
+# the synchronising literal gives a second connection a window to delete it
+# (which is exactly what happens when a client deletes a folder while another
+# session is appending to it).
+#
+# Invariant: APPEND to a mailbox that is deleted out from under us, while
+# another mailbox is selected, returns TRYCREATE without crashing the server.
+sub test_append_trycreate_deleted_race
+    :QuotaUseConversations
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog $self, "Give the user a quota root so the TRYCREATE check runs quota";
+    $admintalk->setquota('user.cassandane', [storage => 100000]) || die $@;
+
+    my $mimeMessage = <<'EOF';
+From: <from@local>
+To: to@local
+Subject: test
+Date: Mon, 13 Apr 2020 15:34:03 +0200
+MIME-Version: 1.0
+Content-Type: text/plain
+
+test
+EOF
+    $mimeMessage =~ s/\r?\n/\r\n/gs;
+
+    xlog $self, "Create the target mailbox so the initial APPEND check passes";
+    $imaptalk->create('INBOX.Sample') || die $@;
+
+    xlog $self, "Select INBOX so it gets re-opened (and parked) during APPEND";
+    $imaptalk->select('INBOX');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # drive the APPEND by hand so we can pause at the synchronising literal
+    my $sock = $imaptalk->{Socket};
+    my $len = length($mimeMessage);
+    $sock->print("zz1 APPEND INBOX.Sample {$len}\r\n");
+    $sock->flush();
+
+    xlog $self, "Wait for the continuation request";
+    my $cont = '';
+    while ($cont !~ /\r\n/) {
+        my $buf;
+        die "no continuation: $cont" unless sysread($sock, $buf, 4096);
+        $cont .= $buf;
+    }
+    $self->assert_matches(qr/^\+/, $cont);
+
+    xlog $self, "Delete the target out from under the in-flight APPEND";
+    $admintalk->delete('user.cassandane.Sample') || die $@;
+
+    xlog $self, "Now send the message body, completing the APPEND";
+    $sock->print($mimeMessage . "\r\n");
+    $sock->flush();
+
+    my $resp = '';
+    while ($resp !~ /^zz1 /m) {
+        my $buf;
+        die "no tagged response: $resp" unless sysread($sock, $buf, 4096);
+        $resp .= $buf;
+    }
+    xlog $self, "APPEND response: $resp";
+    $self->assert_matches(qr/^zz1 NO /m, $resp);
+    $self->assert_matches(qr/TRYCREATE/, $resp);
+
+    xlog $self, "Server is still alive (did not assert/crash)";
+    my $checktalk = $self->{store}->get_client();
+    $checktalk->status('INBOX', ['messages']);
+    $self->assert_str_equals('ok', $checktalk->get_last_completion_response());
+}
+
+1;
