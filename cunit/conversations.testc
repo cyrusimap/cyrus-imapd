@@ -1179,7 +1179,7 @@ static void test_dump(void)
     struct conversations_state *state = NULL;
     int fd;
     FILE *fp;
-    char filename[64];
+    char *filename = NULL;
     char msgid[40];
     strarray_t mboxnames = STRARRAY_INITIALIZER;
     conversation_id_t cid;
@@ -1192,8 +1192,7 @@ static void test_dump(void)
 #define N_CID_TO_FOLDER 333
     struct stat sb;
 
-    strcpy(filename, "/tmp/cyrus-conv.datXXXXXX");
-    fd = mkstemp(filename);
+    fd = cunit_tmpfile(&filename, "cyrus-conv.datXXXXXX");
     CU_ASSERT_FATAL(fd >= 0);
     fp = fdopen(fd, "r+");
     CU_ASSERT_PTR_NOT_NULL_FATAL(fp);
@@ -1324,6 +1323,7 @@ static void test_dump(void)
 
     fclose(fp);
     xunlink(filename);
+    free(filename);
     strarray_fini(&mboxnames);
     arrayu64_fini(&cids);
 #undef N_MSGID_TO_CID

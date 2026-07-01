@@ -142,15 +142,14 @@ static void test_fill(void)
     hdrcache_t cache;
     const char **val;
     int fd;
-    char tempfile[32];
+    char *tempfile = NULL;
     int r;
     struct protstream *pin;
     FILE *fout;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&tempfile, "spooltestAXXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -210,6 +209,7 @@ static void test_fill(void)
     fclose(fout);
     prot_free(pin);
     xunlink(tempfile);
+    free(tempfile);
 }
 
 static void test_folded_headers(void)
@@ -223,15 +223,14 @@ static void test_folded_headers(void)
     hdrcache_t cache;
     const char **val;
     int fd;
-    char tempfile[32];
+    char *tempfile = NULL;
     int r;
     struct protstream *pin;
     FILE *fout;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&tempfile, "spooltestAXXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -274,6 +273,7 @@ static void test_folded_headers(void)
     fclose(fout);
     prot_free(pin);
     xunlink(tempfile);
+    free(tempfile);
 }
 
 static void test_empty_headers(void)
@@ -296,15 +296,14 @@ static void test_empty_headers(void)
     hdrcache_t cache;
     const char **val;
     int fd;
-    char tempfile[32];
+    char *tempfile = NULL;
     int r;
     struct protstream *pin;
     FILE *fout;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&tempfile, "spooltestAXXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -392,6 +391,7 @@ static void test_empty_headers(void)
     fclose(fout);
     prot_free(pin);
     xunlink(tempfile);
+    free(tempfile);
 }
 
 /* BZ3640: headers with NULL bytes shall be rejected. */
@@ -411,15 +411,14 @@ static void test_fill_null(void)
 
     hdrcache_t cache;
     int fd;
-    char tempfile[32];
+    char *tempfile = NULL;
     int r;
     struct protstream *pin;
     FILE *fout;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&tempfile, "spooltestAXXXXXX");
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -441,6 +440,7 @@ static void test_fill_null(void)
     fclose(fout);
     prot_free(pin);
     xunlink(tempfile);
+    free(tempfile);
 }
 
 /* BZ3386: insert more unique headers than the internal limit of 4009
