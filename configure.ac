@@ -1967,9 +1967,9 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl Under VPATH builds the source and build directories are not the same,
     dnl so the built unit tests can't easily find their data files.
     dnl Solution: just link them into the build directory at the same path.
-    AC_CONFIG_LINKS([cunit/cacert.pem:cunit/cacert.pem])
-    AC_CONFIG_LINKS([cunit/cert.pem:cunit/cert.pem])
-    AC_CONFIG_LINKS([cunit/key.pem:cunit/key.pem])
+    AC_CONFIG_LINKS([cunit/data/cacert.pem:cunit/data/cacert.pem])
+    AC_CONFIG_LINKS([cunit/data/cert.pem:cunit/data/cert.pem])
+    AC_CONFIG_LINKS([cunit/data/key.pem:cunit/data/key.pem])
 
     dnl We also need cunit/pcunit for faster tests under VPATH builds
     AC_CONFIG_LINKS([cunit/pcunit:cunit/pcunit])

@@ -1819,9 +1819,9 @@ static int set_up(void)
      * -> certs are in current directory
      * -> disable SSL session caching
      */
-    buf_printf(&myconfig, "tls_server_ca_file: %s/cacert.pem\n", cwd);
-    buf_printf(&myconfig, "tls_server_cert: %s/cert.pem\n", cwd);
-    buf_printf(&myconfig, "tls_server_key: %s/key.pem\n", cwd);
+    buf_printf(&myconfig, "tls_server_ca_file: %s/data/cacert.pem\n", cwd);
+    buf_printf(&myconfig, "tls_server_cert: %s/data/cert.pem\n", cwd);
+    buf_printf(&myconfig, "tls_server_key: %s/data/key.pem\n", cwd);
     buf_printf(&myconfig, "tls_session_timeout: 0\n");
 
     config_read_string(DBDIR"/conf", buf_cstring(&myconfig));

@@ -71,7 +71,8 @@ while (@suites) {
                              DIR => ($ENV{TMPDIR} || "/tmp"), CLEANUP => 1);
         # Copy test data files to native Linux tmpdir so OpenSSL and others
         # can read them without macOS virtioFS interference
-        system("cp $srcdir/*.pem $tmpdir/ 2>/dev/null");
+        mkdir "$tmpdir/data";
+        system("cp $srcdir/data/* $tmpdir/data/ 2>/dev/null");
         chdir $tmpdir;
         my $r = system("$unit $next -v > $outfile 2>&1") >> 8;
         chdir "/"; # leave tmpdir before CLEANUP removes it
