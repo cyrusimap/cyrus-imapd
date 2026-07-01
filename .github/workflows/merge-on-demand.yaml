@@ -40,6 +40,20 @@ jobs:
           permission-contents: write
           permission-workflows: write
 
+      # A second, separately-scoped token for everything the bot *says*:
+      # comments, closing the PR, and taking the label back off.  We keep it
+      # apart from the push token above so that highly-privileged token stays
+      # single-purpose; this one can only talk, not write code.  Both resolve
+      # to the same app, so the bot posts under its own name and avatar.
+      - name: Mint a comment token for the merge bot app
+        id: comment-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.MERGE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.MERGE_BOT_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+
       - name: Check permission and get PR details
         id: info
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -224,6 +238,7 @@ jobs:
         if: success() && steps.info.outputs.proceed == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          github-token: ${{ steps.comment-token.outputs.token }}
           script: |
             // These interpolations are all our own values (12-hex SHAs and
             // the literal "true"/"false"), never user input, so embedding
@@ -273,6 +288,7 @@ jobs:
         if: failure() && steps.info.outcome == 'success'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          github-token: ${{ steps.comment-token.outputs.token }}
           script: |
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -290,6 +306,7 @@ jobs:
         if: failure()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          github-token: ${{ steps.comment-token.outputs.token }}
           script: |
             try {
               await github.rest.issues.removeLabel({
