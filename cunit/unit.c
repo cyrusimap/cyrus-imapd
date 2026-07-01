@@ -350,6 +350,31 @@ EXPORTED int cunit_tmpfile(char *buf, size_t len, const char *pattern)
     return fd;
 }
 
+EXPORTED char *cunit_tmpdir(char *buf, size_t len, const char *pattern)
+{
+    const char *sys_tmpdir;
+    int r;
+
+    sys_tmpdir = getenv("CYRUS_CUNIT_TMPDIR");
+    if (!sys_tmpdir || !sys_tmpdir[0]) sys_tmpdir = getenv("TMPDIR");
+    if (!sys_tmpdir || !sys_tmpdir[0]) sys_tmpdir = "/tmp";
+
+    r = snprintf(buf, len, "%s/%s", sys_tmpdir, pattern);
+    if (r < 0 || (unsigned) r >= len) {
+        fputs("cunit_tmpdir: buffer too small\n", stderr);
+        memset(buf, 0, len);
+        return NULL;
+    }
+
+    if (!mkdtemp(buf)) {
+        perror("mkdtemp");
+        memset(buf, 0, len);
+        return NULL;
+    }
+
+    return buf;
+}
+
 static void run_tests(void)
 {
     int i;

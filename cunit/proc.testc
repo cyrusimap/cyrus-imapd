@@ -12,6 +12,7 @@
 #include "lib/proc.h"
 #include "lib/util.h"
 
+/* this is not re-entrant, but nor is cunit, so it can't hurt. */
 static char *myconfigdir = NULL;
 
 /* copied declarations: these must match same in lib/proc.c */
@@ -24,11 +25,10 @@ struct proc_handle {
 
 static int set_up(void)
 {
-    char myconfigdir_template[] = "/tmp/cyrus-cunit-proctestc-XXXXXX";
-    char *dir;
+    char dir[PATH_MAX] = {0};
 
-    dir = mkdtemp(myconfigdir_template);
-    if (!dir) return errno;
+    if (!cunit_tmpdir(dir, sizeof(dir), "cyrus-cunit-proctestc-XXXXXX"))
+        return -1;
 
     myconfigdir = xstrdup(dir);
 
@@ -60,7 +60,7 @@ static int tear_down(void)
 
 static const char *predict_handle_fname(pid_t pid)
 {
-    static char buf[1024];
+    static char buf[PATH_MAX];
 
     memset(buf, 0, sizeof buf);
     snprintf(buf, sizeof buf, "%s%s/%u", myconfigdir, FNAME_PROCDIR, pid);

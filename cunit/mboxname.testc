@@ -59,6 +59,10 @@ static void test_mboxname_hash(void)
     static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
     char s[MAX_MAILBOX_PATH];
 
+    /* n.b. these hardcoded /tmp paths are only used for string matching,
+     * no need for cunit_tmpdir() here!
+     */
+
     mboxname_hash(s, MAX_MAILBOX_PATH, "/tmp", FRED);
     CU_ASSERT_STRING_EQUAL(s, "/tmp/fred");
 
