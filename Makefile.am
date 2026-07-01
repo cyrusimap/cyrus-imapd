@@ -720,7 +720,7 @@ check_PROGRAMS += cunit/unit
 # This applies to all check rules except check-fast.
 check-local: cunit/run
 	@echo "Running unit tests"
-	$(PERL) cunit/run --verbose
+	$(PERL) cunit/run --verbose --tmpdir=$(CYRUS_CUNIT_TMPDIR)
 
 # Run every test individually, as if you had run them one at a time as
 # `make check-suitename:testname` manually.  Mainly useful for detecting
@@ -729,7 +729,7 @@ check-local: cunit/run
 # vice-versa, some state is leaking between tests!
 check-discrete: cunit/run cunit/unit
 	@echo "Running unit tests, one at a time"
-	$(PERL) cunit/run --discrete
+	$(PERL) cunit/run --discrete --tmpdir=$(CYRUS_CUNIT_TMPDIR)
 
 # Fast perl runner for cunit in parallel
 # (n.b. does not support Valgrind)
@@ -742,12 +742,12 @@ check-fast: cunit/pcunit cunit/unit
 #     make check-backend:starttls  # run 'starttls' from the backend suite
 check-%: cunit/run cunit/unit
 	@echo "Running unit tests for $*"
-	$(PERL) cunit/run --verbose $*
+	$(PERL) cunit/run --verbose --tmpdir=$(CYRUS_CUNIT_TMPDIR) $*
 
 # As per check-discrete, with named suites or tests
 check-discrete-%: cunit/run cunit/unit
 	@echo "Running unit tests for $*, one at a time"
-	$(PERL) cunit/run --discrete $*
+	$(PERL) cunit/run --discrete --tmpdir=$(CYRUS_CUNIT_TMPDIR) $*
 
 endif # CUNIT
 

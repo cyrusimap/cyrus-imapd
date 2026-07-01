@@ -1937,6 +1937,18 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl We also need cunit/pcunit for faster tests under VPATH builds
     AC_CONFIG_LINKS([cunit/pcunit:cunit/pcunit])
 
+    dnl Need a path to a temporary directory
+    AC_ARG_VAR([CYRUS_CUNIT_TMPDIR], [temporary directory for cunit [default: TMPDIR]])
+    AC_ARG_VAR([TMPDIR], [temporary directory [default: /tmp]])
+    AS_IF([test -n "$CYRUS_CUNIT_TMPDIR"], [],
+          [test -n "$TMPDIR"], [CYRUS_CUNIT_TMPDIR=$TMPDIR],
+          [CYRUS_CUNIT_TMPDIR=/tmp]);
+
+    dnl Don't automatically create a tmpdir!
+    dnl Instead, assert that it already exists.
+    AC_CHECK_FILE([$CYRUS_CUNIT_TMPDIR], [],
+                  [AC_MSG_ERROR([$CYRUS_CUNIT_TMPDIR not found])])
+
     USE_MAINTAINER_MODE=yes
 fi
 
@@ -2433,6 +2445,7 @@ Build info:
    ldflags:            $LDFLAGS
    libm:               $LIBM
    unit tests (cunit): $enable_unit_tests
+   CYRUS_CUNIT_TMPDIR: $CYRUS_CUNIT_TMPDIR
    perl:               $PERL
    xxd:                $XXD
    release checks:     $enable_release_checks
