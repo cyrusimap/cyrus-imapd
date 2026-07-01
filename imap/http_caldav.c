@@ -4343,6 +4343,22 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #ifdef WITH_JMAP
         if (kind == ICAL_VEVENT_COMPONENT &&
             calendar_has_sharees(mailbox->mbentry)) {
+            if (txn->resp_body.etag) {
+                /*
+                 * txn->resp_body.etag points to the output of
+                 * message_guid_encode(), which uses a static buffer.
+                 * Sub-functions of jmap_create_caldaveventnotif() will call
+                 * message_guid_encode() thereby overwriting our ETag.
+                 * So, we make a copy of the ETag into our temp buffer
+                 * to preserve it.
+                 * Note that we make sure that the temp buffer doesn't
+                 * already contain data.
+                 */
+                assert(!buf_len(&txn->buf));
+                buf_setcstr(&txn->buf, txn->resp_body.etag);
+                txn->resp_body.etag = buf_cstring(&txn->buf);
+            }
+
             if (!oldical && cdata->dav.imap_uid) {
                 syslog(LOG_NOTICE, "LOADING ICAL %u", cdata->dav.imap_uid);
                 /* Load message containing the resource and parse iCal data */
