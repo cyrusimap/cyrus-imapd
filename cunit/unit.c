@@ -285,7 +285,7 @@ CU_BOOL CU_assertFormatImplementation(
 
 EXPORTED void config_read_string(const char *confdir, const char *s)
 {
-    char fname[] = "/tmp/cyrus-cunit-configXXXXXX";
+    char fname[PATH_MAX] = {0};
     struct buf opt_confdir = BUF_INITIALIZER;
     int fd;
 
@@ -308,7 +308,8 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
     }
 
     /* write config to the tmp file and then read it normally */
-    fd = mkstemp(fname);
+    fd = cunit_tmpfile(fname, sizeof(fname), "cyrus-cunit-configXXXXXX");
+    if (!fd) fatal("cunit_tmpfile", errno);
     retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
     buf_free(&opt_confdir);
     if (s) {
@@ -321,6 +322,32 @@ EXPORTED void config_read_string(const char *confdir, const char *s)
 
     /* make sure libcyrus configdirectory is properly initialised */
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
+}
+
+EXPORTED int cunit_tmpfile(char *buf, size_t len, const char *pattern)
+{
+    const char *tmpdir;
+    int fd, r;
+
+    tmpdir = getenv("CYRUS_CUNIT_TMPDIR");
+    if (!tmpdir || !tmpdir[0]) tmpdir = getenv("TMPDIR");
+    if (!tmpdir || !tmpdir[0]) tmpdir = "/tmp";
+
+    r = snprintf(buf, len, "%s/%s", tmpdir, pattern);
+    if (r < 0 || (unsigned) r >= len) {
+        fputs("cunit_tmpfile: buffer too small\n", stderr);
+        memset(buf, 0, len);
+        return -1;
+    }
+
+    fd = mkstemp(buf);
+    if (fd == -1) {
+        perror("mkstemp");
+        memset(buf, 0, len);
+        return -1;
+    }
+
+    return fd;
 }
 
 static void run_tests(void)
