@@ -355,6 +355,28 @@ EXPORTED int cunit_tmpfile(char **pfname, const char *pattern)
     return fd;
 }
 
+EXPORTED char *cunit_tmpdir(const char *pattern)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *sys_tmpdir;
+    char *tmpdir;
+
+    sys_tmpdir = getenv("CYRUS_CUNIT_TMPDIR");
+    if (!sys_tmpdir) sys_tmpdir = getenv("TMPDIR");
+    if (!sys_tmpdir) sys_tmpdir = "/tmp";
+
+    buf_printf(&buf, "%s/%s", sys_tmpdir, pattern);
+    tmpdir = buf_release(&buf);
+
+    if (!mkdtemp(tmpdir)) {
+        perror("mkdtemp");
+        free(tmpdir);
+        return NULL;
+    }
+
+    return tmpdir;
+}
+
 static void run_tests(void)
 {
     int i;

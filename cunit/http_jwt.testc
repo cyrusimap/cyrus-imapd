@@ -65,8 +65,8 @@ static const char RSA_PRIVATE_KEY_PEM[] =
 
 static void test_init_multi(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dname);
 
     char *fnames[2] = {
         strconcat(dname, "/hmac.pem", NULL),
@@ -92,13 +92,14 @@ static void test_init_multi(void)
     free(fnames[0]);
     free(fnames[1]);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
 static void test_init_nokeys(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dname);
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -113,6 +114,7 @@ static void test_init_nokeys(void)
     xunlink(fname);
     free(fname);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
@@ -156,8 +158,8 @@ static void token(struct buf *buf,
 
 static void test_validate(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dname);
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -315,6 +317,7 @@ static void test_validate(void)
     xunlink(fname);
     free(fname);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
@@ -337,8 +340,8 @@ static void test_validate(void)
 
 static void test_validate_claims_no_max_age(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(dname);
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -387,13 +390,14 @@ static void test_validate_claims_no_max_age(void)
     xunlink(fname);
     free(fname);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
 static void test_validate_claims_with_max_age(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL(dname);
 
     char *fname = strconcat(dname, "/key.pem", NULL);
     FILE *fp = fopen(fname, "w");
@@ -441,6 +445,7 @@ static void test_validate_claims_with_max_age(void)
     xunlink(fname);
     free(fname);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
@@ -448,8 +453,8 @@ static void test_validate_claims_with_max_age(void)
 
 static void test_auth(void)
 {
-    char dname[] = "/tmp/cyrus-cunit-XXXXXX";
-    CU_ASSERT_PTR_NOT_NULL(mkdtemp(dname));
+    char *dname = cunit_tmpdir("cyrus-cunit-XXXXXX");
+    CU_ASSERT_PTR_NOT_NULL(dname);
 
     char *fnames[2] = {
         strconcat(dname, "/hmac.pem", NULL),
@@ -512,6 +517,7 @@ static void test_auth(void)
     free(fnames[0]);
     free(fnames[1]);
     rmdir(dname);
+    free(dname);
     http_jwt_reset();
 }
 
