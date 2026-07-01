@@ -338,10 +338,10 @@ EXTRA_DIST = \
     contrib/squatrunner.pl \
     contrib/mupdate-test.pl \
     contrib/squatrunner.txt \
-    cunit/cacert.pem \
-    cunit/cert.pem \
     cunit/cunit.pl \
-    cunit/key.pem \
+    cunit/data/cacert.pem \
+    cunit/data/cert.pem \
+    cunit/data/key.pem \
     cunit/pcunit \
     cunit/vg.supp \
     doc/legacy/murder.png \
@@ -729,7 +729,8 @@ check-local:
 		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
 		trap "rm -rf $$tmpdir" EXIT ; \
 		cd $$tmpdir ; \
-		cp $(abs_srcdir)/cunit/*.pem ./ ; \
+		mkdir data ; \
+		cp $(abs_srcdir)/cunit/data/* data/ ; \
 		$$vg $(abs_builddir)/cunit/unit -v ; \
 		retval=$$? ; \
 		exit $$retval
@@ -751,7 +752,7 @@ check-discrete: cunit/unit
 		while read t ; do \
 			tests=$$(($$tests + 1)) ; \
 			tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") ; \
-			if (cd $$tmpdir && cp $(abs_srcdir)/cunit/*.pem ./ && $$vg $(abs_builddir)/cunit/unit $$t >/dev/null 3>&2 2>/dev/null) ; then \
+			if (cd $$tmpdir && mkdir data && cp $(abs_srcdir)/cunit/data/* data/ && $$vg $(abs_builddir)/cunit/unit $$t >/dev/null 3>&2 2>/dev/null) ; then \
 				echo "[  OK  ] $$t" ; \
 			else \
 				fails=$$(($$fails + 1)) ; \
@@ -774,7 +775,8 @@ check-%: cunit/unit
 		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
 		trap "rm -rf $$tmpdir" EXIT ; \
 		cd $$tmpdir ; \
-		cp $(abs_srcdir)/cunit/*.pem ./ ; \
+		mkdir data ; \
+		cp $(abs_srcdir)/cunit/data/* data/ ; \
 		$$vg $(abs_builddir)/cunit/unit -v $* ; \
 		exit $$?
 
