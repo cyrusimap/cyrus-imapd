@@ -40,9 +40,6 @@
 # endif
 #endif
 
-
-#define FNAME_PROCDIR "/proc"
-
 /* n.b. setproctitle might come from setproctitle.c, or might come from a
  * system library
  */
@@ -52,26 +49,23 @@ extern void setproctitle(const char *fmt, ...)
 static char *proc_getpath(pid_t pid, int isnew)
 {
     struct buf buf = BUF_INITIALIZER;
+    const char *procpath;
 
-    if (config_getstring(IMAPOPT_PROC_PATH)) {
-        const char *procpath = config_getstring(IMAPOPT_PROC_PATH);
+    procpath = config_getstring(IMAPOPT_PROC_PATH);
 
-        if (procpath[0] != '/')
-            fatal("proc path must be fully qualified", EX_CONFIG);
+    /* belt and suspenders: libconfig defaults it if it wasn't set */
+    assert(procpath != NULL);
 
-        if (strlen(procpath) < 2)
-            fatal("proc path must not be '/'", EX_CONFIG);
+    if (procpath[0] != '/')
+        fatal("proc_path must be fully qualified", EX_CONFIG);
 
-        buf_setcstr(&buf, procpath);
+    if (!procpath[1])
+        fatal("proc_path must not be '/'", EX_CONFIG);
 
-        if (buf.s[buf.len-1] != '/')
-            buf_putc(&buf, '/');
-    }
-    else {
-        buf_setcstr(&buf, config_dir);
-        buf_appendcstr(&buf, FNAME_PROCDIR);
+    buf_setcstr(&buf, procpath);
+
+    if (buf.s[buf.len-1] != '/')
         buf_putc(&buf, '/');
-    }
 
     if (pid)
         buf_printf(&buf, "%u", pid);

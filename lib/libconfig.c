@@ -654,6 +654,12 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
         fatal("configdirectory option not specified in configuration file",
               EX_CONFIG);
     }
+    else if (config_dir[0] != '/') {
+        fatal("configdirectory must be fully qualified", EX_CONFIG);
+    }
+    else if (!config_dir[1]) {
+        fatal("configdirectory must not be '/'", EX_CONFIG);
+    }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
         /* Scan options to see if we need to replace {configdirectory} */

@@ -15,7 +15,7 @@
 extern int verbose;
 
 /* initialise libconfig from a string */
-extern void config_read_string(const char *s);
+extern void config_read_string(const char *confdir, const char *s);
 
 /*
  * The standard CUnit assertion *EQUAL* macros have a flaw: they do

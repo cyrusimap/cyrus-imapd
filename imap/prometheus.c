@@ -43,23 +43,18 @@ EXPORTED const char *prometheus_stats_dir(void)
 
     if (buf_len(&statsdir) > 0) return buf_cstring(&statsdir);
 
-    if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
-        if (tmp[0] != '/')
-            fatal("prometheus_stats_dir must be fully qualified", EX_CONFIG);
+    tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR);
 
-        if (strlen(tmp) < 2)
-            fatal("prometheus_stats_dir must not be '/'", EX_CONFIG);
+    if (tmp[0] != '/')
+        fatal("prometheus_stats_dir must be fully qualified", EX_CONFIG);
 
-        buf_setcstr(&statsdir, tmp);
+    if (!tmp[1])
+        fatal("prometheus_stats_dir must not be '/'", EX_CONFIG);
 
-        if (statsdir.s[statsdir.len-1] != '/')
-            buf_putc(&statsdir, '/');
-    }
-    else {
-        buf_setcstr(&statsdir, config_dir);
-        buf_appendcstr(&statsdir, FNAME_PROM_STATS_DIR);
+    buf_setcstr(&statsdir, tmp);
+
+    if (statsdir.s[statsdir.len-1] != '/')
         buf_putc(&statsdir, '/');
-    }
 
     return buf_cstring(&statsdir);
 }

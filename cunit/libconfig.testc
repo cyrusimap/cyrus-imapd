@@ -8,6 +8,7 @@
 
 #include "cunit/unit.h"
 
+#include "lib/buf.h"
 #include "lib/libconfig.h"
 #include "lib/retry.h"
 #include "lib/xmalloc.h"
@@ -36,8 +37,7 @@ static void test_int(void)
     int32_t boundary_limit = -1;
     int32_t conversations_max_thread = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "boundary_limit: 120\n"
         /* conversations_max_thread: 100 (default) */
     );
@@ -57,8 +57,7 @@ static void test_string(void)
     const char *autocreate_sieve_script = NULL;
     const char *addressbookprefix = NULL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreate_sieve_folders: Junk | Trash\n"
         /* autocreate_sieve_script: NULL (default) */
         /* addressbookprefix: #addressbooks (default) */
@@ -85,8 +84,7 @@ static void test_switch(void)
     int allowapop = -1;
     int allownewnews = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "allowanonymouslogin: 1\n"
         /* allowapop: 1 (default) */
         /* allownewnews: 0 (default) */
@@ -109,8 +107,7 @@ static void test_stringlist_value(void)
 {
     const char *annotation_db = NULL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "annotation_db: skiplist\n"
     );
 
@@ -123,8 +120,7 @@ static void test_stringlist_default(void)
 {
     const char *annotation_db = NULL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* annotation_db: twoskip (default) */
     );
 
@@ -136,8 +132,7 @@ static void test_stringlist_default(void)
 static void test_stringlist_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "annotation_db: junk\n"
     );
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "invalid value 'junk' for annotation_db in line 2");
@@ -147,8 +142,7 @@ static void test_enum_value(void)
 {
     int delete_mode = -1; /* an int, so we can start with a sentinel */
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "delete_mode: immediate\n"
     );
 
@@ -160,8 +154,7 @@ static void test_enum_default(void)
 {
     int delete_mode = -1; /* an int, so we can start with a sentinel */
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* delete_mode: delayed (default) */
     );
 
@@ -172,8 +165,7 @@ static void test_enum_default(void)
 static void test_enum_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "delete_mode: junk\n"
     );
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "invalid value 'junk' for delete_mode in line 2");
@@ -183,8 +175,7 @@ static void test_bitfield_value(void)
 {
     uint64_t httpmodules = UINT64_MAX;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "httpmodules: carddav freebusy jmap\n"
     );
 
@@ -199,8 +190,7 @@ static void test_bitfield_value_wide(void)
 {
     uint64_t sieve_extensions = UINT64_MAX;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "sieve_extensions: vnd.cyrus.implicit_keep_target\n"
     );
 
@@ -222,8 +212,7 @@ static void test_bitfield_default(void)
 {
     uint64_t httpmodules = UINT64_MAX;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* httpmodules: "" (default) */
     );
 
@@ -234,8 +223,7 @@ static void test_bitfield_default(void)
 static void test_bitfield_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "httpmodules: caldav junk\n"
     );
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "invalid value 'junk' for httpmodules in line 2");
@@ -245,8 +233,7 @@ static void test_duration_value_days(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: 3d\n"
     );
 
@@ -258,8 +245,7 @@ static void test_duration_value_hours(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: 3h\n"
     );
 
@@ -271,8 +257,7 @@ static void test_duration_value_minutes(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: 45m\n"
     );
 
@@ -284,8 +269,7 @@ static void test_duration_value_seconds(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: 25s\n"
     );
 
@@ -297,8 +281,7 @@ static void test_duration_value_combined(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: 1h30m\n"
     );
 
@@ -320,8 +303,7 @@ static void test_duration_value_nounits(void)
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "imapidlepoll: 13\n"
         "timeout: 13\n"
         "archive_after: 13\n"
@@ -339,8 +321,7 @@ static void test_duration_value_negative(void)
 {
     int32_t caldav_historical_age = 0xdeadbeef;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "caldav_historical_age: -1\n"
     );
 
@@ -352,8 +333,7 @@ static void test_duration_default(void)
 {
     int32_t timeout = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* timeout: 32m (default) */
     );
 
@@ -365,8 +345,7 @@ static void test_duration_nodefault(void)
 {
     int32_t plaintextloginpause = -1;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* plaintextloginpause: <none> (default) */
     );
 
@@ -377,8 +356,7 @@ static void test_duration_nodefault(void)
 static void test_duration_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "timeout: junk\n"
     );
     CU_EXPECT_CYRFATAL_END(EX_CONFIG, "unparsable duration 'junk' for timeout in line 2");
@@ -491,8 +469,7 @@ static void test_bytesize_value_gibibytes(void)
 {
     int64_t archive_maxsize = -1LL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_maxsize: 1G\n"
     );
 
@@ -504,8 +481,7 @@ static void test_bytesize_value_mebibytes(void)
 {
     int64_t archive_maxsize = -1LL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_maxsize: 3M\n"
     );
 
@@ -517,8 +493,7 @@ static void test_bytesize_value_kibibytes(void)
 {
     int64_t archive_maxsize = -1LL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_maxsize: 45K\n"
     );
 
@@ -530,8 +505,7 @@ static void test_bytesize_value_bytes(void)
 {
     int64_t archive_maxsize = -1LL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_maxsize: 25B\n"
     );
 
@@ -552,8 +526,7 @@ static void test_bytesize_value_nounits(void)
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "maxmessagesize: 13\n"
         "archive_maxsize: 13\n"
     );
@@ -579,8 +552,7 @@ static void test_bytesize_value_negative(void)
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     unsigned i;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "maxmessagesize: -1\n"
         "archive_maxsize: -1\n"
     );
@@ -597,8 +569,7 @@ static void test_bytesize_default(void)
 {
     int64_t archive_maxsize = -1LL;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* archive_maxsize: 1024 K (default) */
     );
 
@@ -609,8 +580,7 @@ static void test_bytesize_default(void)
 static void test_bytesize_invalid(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_maxsize: junk\n"
     );
     CU_EXPECT_CYRFATAL_END(
@@ -806,41 +776,80 @@ static void test_bytesize_parse(void)
 static void test_magic_configdirectory_value(void)
 {
     const char *idlesocket = NULL;
+    struct buf expect = BUF_INITIALIZER;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "idlesocket: {configdirectory}/some/thing\n"
     );
 
     idlesocket = config_getstring(IMAPOPT_IDLESOCKET);
     CU_ASSERT_PTR_NOT_NULL(idlesocket);
-    CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/some/thing");
+
+    buf_printf(&expect, "%s/some/thing", config_dir);
+    CU_ASSERT_STRING_EQUAL(idlesocket, buf_cstring(&expect));
+    buf_free(&expect);
 }
 
 static void test_magic_configdirectory_default(void)
 {
     const char *idlesocket = NULL;
+    struct buf expect = BUF_INITIALIZER;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf", NULL
         /* idlesocket: {configdirectory}/socket/idle (default) */
     );
 
     idlesocket = config_getstring(IMAPOPT_IDLESOCKET);
     CU_ASSERT_PTR_NOT_NULL(idlesocket);
-    CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/socket/idle");
+
+    buf_printf(&expect, "%s/socket/idle", config_dir);
+    CU_ASSERT_STRING_EQUAL(idlesocket, buf_cstring(&expect));
+    buf_free(&expect);
 }
 
 static void test_configdirectory_missing(void)
 {
     CU_EXPECT_CYRFATAL_BEGIN
-    config_read_string(
-        /* configdirectory not specified */
+    config_read_string(NULL, /* configdirectory not specified! */
         "annotation_db: twoskip\n"
     );
     CU_EXPECT_CYRFATAL_END(
         EX_CONFIG,
         "configdirectory option not specified in configuration file"
+    );
+}
+
+static void test_configdirectory_relative(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(NULL,
+        "configdirectory: "DBDIR"/conf\n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "configdirectory must be fully qualified"
+    );
+}
+
+static void test_configdirectory_root(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string("/", NULL);
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "configdirectory must not be '/'"
+    );
+}
+
+static void test_configdirectory_empty(void)
+{
+    CU_EXPECT_CYRFATAL_BEGIN
+    config_read_string(NULL,
+        "configdirectory: \n"
+    );
+    CU_EXPECT_CYRFATAL_END(
+        EX_CONFIG,
+        "empty option value on line 1 of configuration file"
     );
 }
 
@@ -851,8 +860,7 @@ static void test_deprecated_int(void)
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreatequotamsg: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -870,8 +878,7 @@ static void test_deprecated_int(void)
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreate_quota_messages: 12\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
@@ -882,8 +889,7 @@ static void test_deprecated_int(void)
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreatequotamsg: 12\n"
         "autocreate_quota_messages: 15\n"
     );
@@ -901,8 +907,7 @@ static void test_deprecated_string(void)
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tlscache_db_path: foo\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -921,8 +926,7 @@ static void test_deprecated_string(void)
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tls_sessions_db_path: foo\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
@@ -934,8 +938,7 @@ static void test_deprecated_string(void)
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tlscache_db_path: foo\n"
         "tls_sessions_db_path: bar\n"
     );
@@ -957,8 +960,7 @@ static void test_deprecated_stringlist(void)
 
     /* set the deprecated name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tlscache_db: sql\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -977,8 +979,7 @@ static void test_deprecated_stringlist(void)
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tls_sessions_db: sql\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
@@ -990,8 +991,7 @@ static void test_deprecated_stringlist(void)
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "tlscache_db: sql\n"
         "tls_sessions_db: twoskip\n"
     );
@@ -1011,8 +1011,7 @@ static void test_deprecated_duration(void)
 
     /* set the deprecated name only */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_days: 8\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -1030,8 +1029,7 @@ static void test_deprecated_duration(void)
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_after: 12d\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
@@ -1042,8 +1040,7 @@ static void test_deprecated_duration(void)
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "archive_days: 7\n"
         "archive_after: 12d\n"
     );
@@ -1062,8 +1059,7 @@ static void test_deprecated_bytesize(void)
 
     /* set the deprecated name only */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreatequota: 8\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 1);
@@ -1081,8 +1077,7 @@ static void test_deprecated_bytesize(void)
 
     /* set the new name */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreate_quota: 12M\n"
     );
     CU_ASSERT_SYSLOG(/*all*/0, 0);
@@ -1093,8 +1088,7 @@ static void test_deprecated_bytesize(void)
 
     /* set both names to different values */
     CU_SYSLOG_MATCH("Option '.*' is deprecated");
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "autocreatequota: 7\n"
         "autocreate_quota: 12M\n"
     );
@@ -1109,8 +1103,7 @@ static void test_partition_sanity_ok(void)
 {
     int r;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "partition-foo: /srv/foo\n"
         "archivepartition-foo: /srv/archive/foo\n"
         "metapartition-foo: /srv/meta/foo\n"
@@ -1131,8 +1124,7 @@ static void test_partition_sanity_bad_subdirs(void)
 {
     int r;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "partition-foo: /srv/foo\n"
         "archivepartition-foo: /srv/foo/archive\n" /* bad */
         "metapartition-foo: /srv/foo/meta\n" /* bad */
@@ -1154,8 +1146,7 @@ static void test_partition_sanity_bad_dups(void)
 {
     int r;
 
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "partition-foo: /srv/foo\n"
         "t1searchpartition-foo: /srv/foo\n" /* uh oh */
         "partition-bar: /srv/bar\n"
