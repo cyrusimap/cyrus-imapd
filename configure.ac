@@ -1974,6 +1974,9 @@ if test "$enable_unit_tests" = "yes" ; then
     dnl We also need cunit/pcunit for faster tests under VPATH builds
     AC_CONFIG_LINKS([cunit/pcunit:cunit/pcunit])
 
+    AC_ARG_VAR([CYRUS_CUNIT_TMPDIR])
+    AC_ARG_VAR([TMPDIR])
+
     USE_MAINTAINER_MODE=yes
 fi
 
