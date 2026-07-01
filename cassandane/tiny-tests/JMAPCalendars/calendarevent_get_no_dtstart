@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+# A VEVENT with no DTSTART (as produced by some clients) must not crash
+# CalendarEvent/get.
+sub test_calendarevent_get_no_dtstart ($self)
+{
+
+    my $uid = guid_string();
+    my $ical = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//WeirdCal//WeirdCal 2026.7//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+UID:$uid
+SEQUENCE:0
+DTSTAMP:20240408T162456Z
+TRANSP:TRANSPARENT
+LAST-MODIFIED:20240408T162440Z
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $event = $self->putandget_vevent($uid, $ical);
+    $self->assert_not_null($event);
+    $self->assert_null($event->{start});
+}

@@ -2917,6 +2917,11 @@ static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
 {
     icaltimezone *utc = icaltimezone_get_utc_timezone();
 
+    /* An event without a start (e.g. a VEVENT with no DTSTART) has no
+     * start to convert, so there is nothing to derive utcStart/utcEnd
+     * from. */
+    if (!startstr) return;
+
     /* Read start */
     struct jmapical_datetime startdt = JMAPICAL_DATETIME_INITIALIZER;
     if (jmapical_localdatetime_from_string(startstr, &startdt) == -1) return;
