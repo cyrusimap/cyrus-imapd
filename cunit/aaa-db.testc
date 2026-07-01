@@ -4,7 +4,6 @@
 #include "imap/global.h"
 #include "retry.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "util.h"
 #include "hash.h"
 
@@ -40,37 +39,17 @@ static int fexists(const char *fname)
     return r;
 }
 
-static char *make_basedir(const char * const *reldirs)
+static char *make_basedir(const char *const *reldirs)
 {
-    int r;
-    int unique = 0;
-    const char *tmpdir;
-    char *basedir;
-    char path[PATH_MAX];
-    const char * const *d;
+    char *basedir = NULL;
+    const char *const *d;
 
-    tmpdir = getenv("TMPDIR");
-    if (!tmpdir)
-        tmpdir = "/tmp";
+    basedir = cunit_tmpdir("cunit-db-test.XXXXXX");
 
-    for (;;) {
-        if (unique)
-            snprintf(path, sizeof(path), "%s/cunit-db-test.%d.%d", tmpdir, getpid(), unique);
-        else
-            snprintf(path, sizeof(path), "%s/cunit-db-test.%d", tmpdir, getpid());
+    for (d = reldirs; *d; d++) {
+        char path[PATH_MAX];
+        int r;
 
-        r = mkdir(path, 0700);
-        if (!r)
-            break;      /* success! */
-        if (errno != EEXIST) {
-            perror(path);
-            return NULL;
-        }
-        unique++;
-    }
-    basedir = xstrdup(path);
-
-    for (d = reldirs ; *d ; d++) {
         snprintf(path, sizeof(path), "%s/%s", basedir, *d);
         r = mkdir(path, 0700);
         if (r < 0) {
@@ -1911,9 +1890,8 @@ static int set_up(void)
     if (!basedir)
         return -1;
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, basedir);
-    snprintf(buf, sizeof(buf), "configdirectory: %s/conf\n", basedir);
-    config_read_string(buf);
+    snprintf(buf, sizeof(buf), "%s/conf", basedir);
+    config_read_string(buf, NULL);
 
     cyrusdb_init();
 
@@ -1938,12 +1916,9 @@ static int tear_down(void)
         if (r) r = -1;
     }
 
-    free(filename);
-    filename = NULL;
-    free(filename2);
-    filename2 = NULL;
-    free(basedir);
-    basedir = NULL;
+    xzfree(filename);
+    xzfree(filename2);
+    xzfree(basedir);
 
     return r;
 }

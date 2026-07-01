@@ -12,6 +12,7 @@
 #include "lib/proc.h"
 #include "lib/util.h"
 
+/* this is not re-entrant, but nor is cunit, so it can't hurt. */
 static char *myconfigdir = NULL;
 
 /* copied declarations: these must match same in lib/proc.c */
@@ -24,19 +25,11 @@ struct proc_handle {
 
 static int set_up(void)
 {
-    char myconfigdir_template[] = "/tmp/cyrus-cunit-proctestc-XXXXXX";
-    char *dir;
-    struct buf myconfig = BUF_INITIALIZER;
+    myconfigdir = cunit_tmpdir("cyrus-cunit-proctestc-XXXXXX");
+    if (!myconfigdir) return errno;
 
-    dir = mkdtemp(myconfigdir_template);
-    if (!dir) return errno;
+    config_read_string(myconfigdir, NULL);
 
-    myconfigdir = xstrdup(dir);
-    buf_printf(&myconfig, "configdirectory: %s\n", myconfigdir);
-
-    config_read_string(buf_cstring(&myconfig));
-
-    buf_free(&myconfig);
     return 0;
 }
 

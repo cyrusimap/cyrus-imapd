@@ -5,21 +5,26 @@
 #include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <unistd.h>
+
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 #include <CUnit/Automated.h>
+
 #if HAVE_VALGRIND_VALGRIND_H
 #include <valgrind/valgrind.h>
 #endif
-#include <setjmp.h>
 
 #include "cunit/unit.h"
 #include "cunit/unit-registry.h"
 #include "cunit/unit-timeout.h"
 
+#include "lib/assert.h"
+#include "lib/buf.h"
 #include "lib/libconfig.h"
+#include "lib/libcyr_cfg.h"
 #include "lib/retry.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
@@ -278,16 +283,98 @@ CU_BOOL CU_assertFormatImplementation(
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
-EXPORTED void config_read_string(const char *s)
+EXPORTED void config_read_string(const char *confdir, const char *s)
 {
-    char fname[] = "/tmp/cyrus-cunit-configXXXXXX";
-    int fd = mkstemp(fname);
+    char *fname = NULL;
+    struct buf opt_confdir = BUF_INITIALIZER;
+    int fd;
 
-    retry_write(fd, s, strlen(s));
+    /* n.b. you should almost always set a confdir, unless you're testing
+     * the fact that cyrus fatals when it's not set!
+     */
+    if (confdir) {
+        if (confdir[0] == '/') {
+            buf_printf(&opt_confdir, "configdirectory: %s\n", confdir);
+        }
+        else {
+            char cwd[PATH_MAX];
+            if (!getcwd(cwd, sizeof(cwd))) {
+                /* if this fails there's not much we can do about it now */
+                perror("getcwd");
+                abort();
+            }
+            buf_printf(&opt_confdir, "configdirectory: %s/%s\n", cwd, confdir);
+        }
+    }
+
+    /* write config to the tmp file and then read it normally */
+    fd = cunit_tmpfile(&fname, "cyrus-cunit-configXXXXXX");
+    retry_write(fd, buf_cstring(&opt_confdir), buf_len(&opt_confdir));
+    buf_free(&opt_confdir);
+    if (s) {
+        retry_write(fd, s, strlen(s));
+    }
     config_reset();
     config_read(fname, 0);
     xunlink(fname);
+    free(fname);
     close(fd);
+
+    /* make sure libcyrus configdirectory is properly initialised */
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);
+}
+
+EXPORTED int cunit_tmpfile(char **pfname, const char *pattern)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *tmpdir;
+    char *fname;
+    int fd;
+
+    tmpdir = getenv("CYRUS_CUNIT_TMPDIR");
+    if (!tmpdir) tmpdir = getenv("TMPDIR");
+    if (!tmpdir) tmpdir = "/tmp";
+
+    buf_printf(&buf, "%s/%s", tmpdir, pattern);
+    fname = buf_release(&buf);
+    fd = mkstemp(fname);
+
+    if (fd == -1) {
+        perror("mkstemp");
+        free(fname);
+        if (pfname)
+            *pfname = NULL;
+        return -1;
+    }
+
+    if (pfname)
+        *pfname = fname;
+    else
+        free(fname);
+
+    return fd;
+}
+
+EXPORTED char *cunit_tmpdir(const char *pattern)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *sys_tmpdir;
+    char *tmpdir;
+
+    sys_tmpdir = getenv("CYRUS_CUNIT_TMPDIR");
+    if (!sys_tmpdir) sys_tmpdir = getenv("TMPDIR");
+    if (!sys_tmpdir) sys_tmpdir = "/tmp";
+
+    buf_printf(&buf, "%s/%s", sys_tmpdir, pattern);
+    tmpdir = buf_release(&buf);
+
+    if (!mkdtemp(tmpdir)) {
+        perror("mkdtemp");
+        free(tmpdir);
+        return NULL;
+    }
+
+    return tmpdir;
 }
 
 static void run_tests(void)

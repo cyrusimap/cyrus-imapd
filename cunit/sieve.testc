@@ -20,8 +20,8 @@
 #include "map.h"
 #include "util.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "libconfig.h"
+#include "libcyr_cfg.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
@@ -553,9 +553,7 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
 
 static int set_up(void)
 {
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
+    config_read_string(DBDIR"/conf",
         "defaultpartition: "PARTITION"\n"
         "partition-"PARTITION": "DBDIR"/data\n"
         "sievenotifier: mailto\n"
@@ -593,7 +591,7 @@ static void context_setup(sieve_test_context_t *ctx,
     int fd;
     sieve_script_t *scr = NULL;
     bytecode_info_t *bytecode = NULL;
-    char tempfile[32];
+    char *tempfile = NULL;
 
     memset(ctx, 0, sizeof(*ctx));
 
@@ -622,8 +620,7 @@ static void context_setup(sieve_test_context_t *ctx,
 
     r = sieve_generate_bytecode(&bytecode, scr);
     CU_ASSERT(r > 0);
-    strcpy(tempfile, "/tmp/sievetest-BC-XXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&tempfile, "sievetest-BC-XXXXXX");
     CU_ASSERT(fd >= 0);
     r = sieve_emit_bytecode(fd, bytecode);
     CU_ASSERT(r > 0);
@@ -634,6 +631,7 @@ static void context_setup(sieve_test_context_t *ctx,
     r = sieve_script_load(tempfile, &ctx->exe);
     CU_ASSERT_EQUAL(r, SIEVE_OK);
     xunlink(tempfile);
+    free(tempfile);
 }
 
 static void context_cleanup(sieve_test_context_t *ctx)
@@ -719,17 +717,14 @@ static sieve_test_message_t *sieve_test_message_new(const char *text, int len)
     FILE *fout;
     int fd;
     int r;
-    char tempfile[32];
 
     msg = xzmalloc(sizeof(sieve_test_message_t));
     msg->text = text;
     msg->length = len;
     msg->headers = spool_new_hdrcache();
 
-    strcpy(tempfile, "/tmp/sievetest-MS-XXXXXX");
-    fd = mkstemp(tempfile);
+    fd = cunit_tmpfile(&msg->filename, "sievetest-MS-XXXXXX");
     CU_ASSERT(fd >= 0);
-    msg->filename = xstrdup(tempfile);
     r = retry_write(fd, text, len);
     CU_ASSERT_EQUAL(r, len);
     lseek(fd, SEEK_SET, 0);

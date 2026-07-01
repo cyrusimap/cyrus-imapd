@@ -15,7 +15,11 @@
 extern int verbose;
 
 /* initialise libconfig from a string */
-extern void config_read_string(const char *s);
+extern void config_read_string(const char *confdir, const char *s);
+
+/* utilities for consistent test tmpdir behaviour */
+extern int cunit_tmpfile(char **pfname, const char *pattern);
+extern char *cunit_tmpdir(const char *pattern);
 
 /*
  * The standard CUnit assertion *EQUAL* macros have a flaw: they do
