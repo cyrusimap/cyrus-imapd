@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test OBJECTID+ activation via SELECT (OBJECTID)
+#
+sub test_objectidplus_select_activation
+    :AltNamespace :Conversations :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+
+    # SELECT with OBJECTID parameter activates the extension
+    # The untagged OK should contain OBJECTID response code
+    $talk->select('foo', '(OBJECTID)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}

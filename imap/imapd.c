@@ -414,6 +414,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "OBJECTID+",             CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-mailmaint-imap-objectid-bis */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
       { .statep = &imapd_preview_enabled }                    },
@@ -4707,8 +4708,24 @@ out:
     quota_free(&q);
 }
 
+static void objectidplus_enabled(const char *cmd __attribute__((unused)))
+{
+    if (!(client_capa & CAPA_OBJECTIDPLUS)) {
+        client_capa |= CAPA_OBJECTIDPLUS;
+        client_behavior_mask |= CB_OBJECTID;
+        prot_printf(imapd_out, "* ENABLED OBJECTID+\r\n");
+    }
+}
+
+/* Parsed OBJECTID parameters from SELECT/EXAMINE */
+struct select_objectid {
+    char *mailboxid;    /* MAILBOXID for ID-based selection, or NULL */
+    char *accountid;    /* ACCOUNTID for scoping, or NULL */
+};
+
 static int parse_select_params(char *tag, char *cmd, int allowdeleted,
-                               struct index_init *init)
+                               struct index_init *init,
+                               struct select_objectid *objid)
 {
     struct vanished_params *v = &init->vanished;
     int r = IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -4780,6 +4797,46 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                  */
                 client_behavior_mask |= CB_ANNOTATE;
             }
+            else if (!strcmp(arg.s, "OBJECTID")) {
+                objectidplus_enabled("SELECT (OBJECTID)");
+                /* check for optional (MAILBOXID id ACCOUNTID id) */
+                if (c == ' ') {
+                    c = prot_getc(imapd_in);
+                    if (c == '(') {
+                        /* parse key-value pairs */
+                        for (;;) {
+                            c = getword(imapd_in, &arg);
+                            if (c != ' ') break;
+                            if (!arg.s[0]) break;
+                            c = getword(imapd_in, &parm1);
+                            if (c != ' ') break;
+                            ucase(arg.s);
+                            if (!strcmp(arg.s, "MAILBOXID")) {
+                                free(objid->mailboxid);
+                                objid->mailboxid = buf_release(&parm1);
+                            }
+                            else if (!strcmp(arg.s, "ACCOUNTID")) {
+                                free(objid->accountid);
+                                objid->accountid = buf_release(&parm1);
+                            }
+                            /* ignore unrecognised keys per spec */
+                        }
+                        if (c != ')') {
+                            prot_printf(imapd_out,
+                                "%s BAD Invalid OBJECTID parameter in %s\r\n",
+                                tag, cmd);
+                            eatline(imapd_in, c);
+                            return r;
+                        }
+                        c = prot_getc(imapd_in);
+                    }
+                    else {
+                        /* not a '(' — put it back, it's the next param */
+                        prot_ungetc(c, imapd_in);
+                        c = ' ';
+                    }
+                }
+            }
             else if (allowdeleted &&
                      !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
                 init->want_expunged = 1;
@@ -4846,8 +4903,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     memset(&init, 0, sizeof(struct index_init));
 
-    r = parse_select_params(tag, cmd, allowdeleted, &init);
-    if (r) return;
+    struct select_objectid objid = { NULL, NULL };
+    r = parse_select_params(tag, cmd, allowdeleted, &init, &objid);
+    if (r) {
+        free(objid.mailboxid);
+        free(objid.accountid);
+        return;
+    }
 
     if (imapd_index) {
         maybe_autoexpunge();
@@ -4877,10 +4939,42 @@ static void cmd_select(char *tag, char *cmd, char *name)
         name = normalize_mboxname(name, NULL);
     }
 
-    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) {
-        goto done;
+    /* ID-based mailbox selection: try to find mailbox by MAILBOXID,
+     * optionally scoped by ACCOUNTID */
+    char *intname = NULL;
+    if (objid.mailboxid) {
+        if (mboxlist_lookup_by_jmapid(imapd_userid, objid.mailboxid,
+                                      &mbentry, NULL) == 0
+            || mboxlist_lookup_by_uniqueid(objid.mailboxid,
+                                           &mbentry, NULL) == 0) {
+            int accountid_ok = 1;
+            if (objid.accountid) {
+                char *found_userid = mboxname_to_userid(mbentry->name);
+                if (found_userid) {
+                    accountid_ok = !strcmp(found_userid, objid.accountid);
+                    free(found_userid);
+                }
+                else {
+                    accountid_ok = 0;
+                }
+            }
+            if (accountid_ok) {
+                intname = xstrdup(mbentry->name);
+            }
+            else {
+                mboxlist_entry_free(&mbentry);
+            }
+        }
+    }
+    free(objid.mailboxid);
+    free(objid.accountid);
+
+    if (!mbentry) {
+        intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+        r = mlookup(tag, name, intname, &mbentry);
+        if (r == IMAP_MAILBOX_MOVED) {
+            goto done;
+        }
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
@@ -5475,6 +5569,13 @@ badannotation:
             else goto badatt;
             break;
 
+        case 'O':
+            if (!strcmp(fetchatt.s, "OBJECTID")) {
+                fa->fetchitems |= FETCH_OBJECTID;
+            }
+            else goto badatt;
+            break;
+
         case 'P':
             if (imapd_preview_enabled && !strcmp(fetchatt.s, "PREVIEW")) {
                 fa->fetchitems |= FETCH_PREVIEW;
@@ -5800,8 +5901,14 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior_mask |= CB_ANNOTATE;
 
-    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID))
+    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID)) {
         client_behavior_mask |= CB_OBJECTID;
+    }
+
+    if (fetchargs.fetchitems & FETCH_OBJECTID) {
+        client_behavior_mask |= CB_OBJECTID;
+        objectidplus_enabled("FETCH OBJECTID");
+    }
 
     if (fetchargs.fetchitems & FETCH_PREVIEW)
         client_behavior_mask |= CB_PREVIEW;
@@ -5822,7 +5929,8 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
         (fetchargs.fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
-                                 FETCH_EMAILID | FETCH_THREADID))) {
+                                 FETCH_EMAILID | FETCH_THREADID |
+                                 FETCH_OBJECTID))) {
         r = conversations_open_user(imapd_userid, readonly, &convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
@@ -7373,7 +7481,10 @@ localcreate:
         list_data(&listargs);
     }
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
+    // ACCOUNTID_NEEDS_FIXING
+    const char *userid = mbname_userid(mbname);
+    prot_print_objectids(imapd_out, !!(client_capa & CAPA_OBJECTIDPLUS),
+                         tag, mailboxid, userid);
 
     imapd_check(NULL, 0);
 
@@ -8292,8 +8403,32 @@ respond:
             }
         }
 
-        prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                    error_message(IMAP_OK_COMPLETED));
+        if (client_capa & CAPA_OBJECTIDPLUS) {
+            /* Re-read the mbentry after rename to get updated jmapid */
+            mbentry_t *renamedmbentry = NULL;
+            int r2 = mboxlist_lookup(newmailboxname, &renamedmbentry, NULL);
+            if (!r2 && renamedmbentry) {
+                char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+                // ACCOUNTID_NEEDS_FIXING
+                char *userid = mboxname_to_userid(newmailboxname);
+                struct conversations_state *cstate =
+                    conversations_get_user(imapd_userid);
+                jmap_set_mailboxid(cstate, renamedmbentry, mailboxid);
+                prot_print_objectids(imapd_out, true /*compound*/,
+                                     tag, mailboxid, userid);
+                free(userid);
+                mboxlist_entry_free(&renamedmbentry);
+            }
+            else {
+                prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                            error_message(IMAP_OK_COMPLETED));
+                mboxlist_entry_free(&renamedmbentry);
+            }
+        }
+        else {
+            prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                        error_message(IMAP_OK_COMPLETED));
+        }
     }
 
 done:
@@ -9653,6 +9788,10 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
             statusitems |= STATUS_MAILBOXID;
         }
+        else if (!strcmp(arg.s, "objectid")) {
+            statusitems |= STATUS_OBJECTID;
+            objectidplus_enabled("STATUS (OBJECTID)");
+        }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
         }
@@ -9736,6 +9875,12 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_OBJECTID) {         /* draft-ietf-mailmaint-imap-objectid-bis */
+        char sepstr[2] = { sepchar, '\0' };
+        prot_print_objectids(imapd_out, true /*compound*/,
+                             sepstr, sd->mailboxid, sd->accountid);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
@@ -14078,7 +14223,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity", "unseen",
                     "highestmodseq", "appendlimit", "size", "mailboxid",
                     "deleted", "deleted-storage",
-                    "", "", "",  // placeholders for unused bits
+                    "objectid", "", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
@@ -14758,6 +14903,10 @@ static void cmd_enable(char *tag)
         else if (!strcasecmp(arg.s, "uidonly")) {
             client_behavior_mask |= CB_UIDONLY;
             new_capa |= CAPA_UIDONLY;
+        }
+        else if (!strcasecmp(arg.s, "objectid+")) {
+            client_behavior_mask |= CB_OBJECTID;
+            new_capa |= CAPA_OBJECTIDPLUS;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
             client_behavior_mask |= CB_UTF8ACCEPT;
@@ -15784,7 +15933,8 @@ static void push_updates(int idling)
                 /* Open conv.db if we need it */
                 if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
                     (fa->fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
-                                       FETCH_EMAILID | FETCH_THREADID))) {
+                                       FETCH_EMAILID | FETCH_THREADID |
+                                       FETCH_OBJECTID))) {
                     int r = conversations_open_user(imapd_userid, 1/*shared*/,
                                                     &convstate);
                     if (r) {
