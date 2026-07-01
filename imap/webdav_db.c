@@ -4,7 +4,6 @@
 
 #include <config.h>
 
-#ifdef WITH_DAV
 
 #include <syslog.h>
 #include <string.h>
@@ -504,17 +503,3 @@ EXPORTED int webdav_get_updates(struct webdav_db *webdavdb,
     return r;
 }
 
-#else
-
-EXPORTED int webdav_init(void)
-{
-    return 0;
-}
-
-
-EXPORTED int webdav_done(void)
-{
-    return 0;
-}
-
-#endif /* WITH_DAV */

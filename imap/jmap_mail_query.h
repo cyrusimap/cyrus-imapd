@@ -12,7 +12,6 @@
 #include "jmap_mail_query_parse.h"
 #include "jmap_util.h"
 
-#ifdef WITH_DAV
 
 #include <time.h>
 
@@ -146,6 +145,5 @@ extern void jmap_get_card_emails(strarray_t *card_uids, unsigned card_kind,
                                  ptrarray_t *abook_sets,
                                  strarray_t *emails, strarray_t **member_uids);
 
-#endif /* WITH_DAV */
 
 #endif /* JMAP_MAIL_QUERY_H */

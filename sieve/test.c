@@ -579,7 +579,6 @@ static int jmapquery(void *ic __attribute__((unused)), void *sc, void *mc, const
 }
 #endif
 
-#ifdef WITH_DAV
 static int processcal(void *ac, void *ic __attribute__((unused)), void *sc,
                       void *mc, const char **errmsg __attribute__((unused)))
 {
@@ -828,7 +827,6 @@ static int processcal(void *ac, void *ic __attribute__((unused)), void *sc,
 
     return SIEVE_OK;
 }
-#endif
 
 static sieve_vacation_t vacation = {
     0,                          /* min response */
@@ -1027,9 +1025,7 @@ int main(int argc, char *argv[])
 #ifdef WITH_JMAP
     sieve_register_jmapquery(i, &jmapquery);
 #endif
-#ifdef WITH_DAV
     sieve_register_processcal(i, &processcal);
-#endif
 
     res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {

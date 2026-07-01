@@ -64,7 +64,6 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 }
 
 
-#ifdef WITH_DAV
 
 #include "annotate.h"
 #include "carddav_db.h"
@@ -1827,7 +1826,6 @@ done:
     return matches ? 1 : 0;
 }
 
-#endif /* WITH_DAV */
 
 static void headermatch_normalize(struct jmap_headermatch *hm, struct buf *val)
 {

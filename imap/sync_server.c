@@ -34,9 +34,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
-#ifdef WITH_DAV
 #include "dav_db.h"
-#endif /* WITH_DAV */
 #include "dlist.h"
 #include "global.h"
 #include "hash.h"

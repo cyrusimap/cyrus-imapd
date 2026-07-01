@@ -297,10 +297,18 @@ via configure.
 
 Sieve is enabled by default.
 
-CalDAV, CardDAV, WebDAV, JMAP
-#############################
+JMAP
+####
 
-    ``./configure --enable-http --enable-calalarmd --enable-jmap``
+    ``./configure --enable-jmap``
+
+.. note::
+
+    HTTP, CalDAV, CardDAV, WebDAV and the calendar alarm daemon are
+    always built and no longer require configure options.  libical,
+    libxml2 and SQLite3 are required build dependencies for every Cyrus
+    build (see the table above).  JMAP remains optional because it also
+    requires Xapian.
 
 Murder
 ######
@@ -322,8 +330,8 @@ Compile
     autoreconf -i -s   # generates a configure script, and its various dependencies
 
     ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC" \
-    --enable-coverage --enable-calalarmd --enable-autocreate \
-    --enable-nntp --enable-http --enable-unit-tests \
+    --enable-coverage --enable-autocreate \
+    --enable-nntp --enable-unit-tests \
     --enable-replication --enable-murder \
     --enable-idled --prefix=/usr/cyrus
 

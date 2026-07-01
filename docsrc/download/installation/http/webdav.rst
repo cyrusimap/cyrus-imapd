@@ -7,9 +7,10 @@ WebDAV
 Configuration
 =============
 
-When enabled, the WebDAV module allows Cyrus to function as a storage server.
-This module uses a subset of the mailbox hierarchy as collections, the toplevel
-of which is specified by the :imapdconf:`davdriveprefix` option. The public
+When ``webdav`` is included in the :imapdconf:`httpmodules` option, the
+WebDAV module allows Cyrus to function as a storage server.  This module
+uses a subset of the mailbox hierarchy as collections, the toplevel of
+which is specified by the :imapdconf:`davdriveprefix` option. The public
 storage hierarchy lives at the toplevel of the shared mailbox namespace. A
 user's personal storage hierarchy will be a child of their Inbox.
 

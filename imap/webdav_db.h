@@ -13,7 +13,6 @@ int webdav_init(void);
 /* done with all webdav operations for this process */
 int webdav_done(void);
 
-#ifdef WITH_DAV
 
 #include "dav_db.h"
 #include "mboxlist.h"
@@ -94,6 +93,5 @@ int webdav_get_updates(struct webdav_db *webdavdb,
                        modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
                        int max_records, webdav_cb_t *cb, void *rock);
 
-#endif /* WITH_DAV */
 
 #endif /* WEBDAV_DB_H */

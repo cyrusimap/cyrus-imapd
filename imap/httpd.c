@@ -71,9 +71,7 @@
 
 #include "master/service.h"
 
-#ifdef WITH_DAV
 #include "http_dav.h"
-#endif
 
 #include <libxml/tree.h>
 #include <libxml/HTMLtree.h>
@@ -551,7 +549,6 @@ struct namespace_t *http_namespaces[] = {
     &namespace_convert,
 #endif
     &namespace_tzdist,          /* MUST be before namespace_calendar!! */
-#ifdef WITH_DAV
     &namespace_calendar,
     &namespace_freebusy,
     &namespace_addressbook,
@@ -561,7 +558,6 @@ struct namespace_t *http_namespaces[] = {
     &namespace_applepush,       /* MUST be after namespace_cal & addr */
     &namespace_ischedule,
     &namespace_domainkey,
-#endif /* WITH_DAV */
     &namespace_rss,
     &namespace_dblookup,
     &namespace_admin,
@@ -3035,13 +3031,11 @@ HIDDEN void log_request(long code, struct transaction_t *txn)
         buf_printf(logbuf, "%sallow-origin", sep);
         sep = "; ";
     }
-#ifdef WITH_DAV
     else if (txn->error.precond) {
         buf_printf(logbuf, "%sprecond=", sep);
         dav_precond_as_string(logbuf, &txn->error);
         sep = "; ";
     }
-#endif
     else if (txn->error.desc) {
         buf_printf(logbuf, "%serror=%s", sep, txn->error.desc);
         sep = "; ";
@@ -3873,7 +3867,6 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
     txn->flags.vary &= ~(VARY_BRIEF | VARY_PREFER);
     txn->resp_body.prefs = 0;
 
-#ifdef WITH_DAV
     if (code != HTTP_UNAUTHORIZED && txn->error.precond) {
         xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
@@ -3883,7 +3876,6 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
             return;
         }
     }
-#endif /* WITH_DAV */
 
     if (!txn->error.desc) {
         switch (code) {
@@ -5096,7 +5088,6 @@ static int meth_propfind_root(struct transaction_t *txn,
 {
     assert(txn);
 
-#ifdef WITH_DAV
     /* Apple iCal and Evolution both check "/" */
     if (!strcmp(txn->req_uri->path, "/") ||
         !strcmp(txn->req_uri->path, "/dav/")) {
@@ -5126,7 +5117,6 @@ static int meth_propfind_root(struct transaction_t *txn,
         txn->req_tgt.allow |= ALLOW_DAV;
         return meth_propfind(txn, &root_params);
     }
-#endif /* WITH_DAV */
 
     return HTTP_NOT_ALLOWED;
 }
