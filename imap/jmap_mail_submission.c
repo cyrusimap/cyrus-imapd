@@ -43,6 +43,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req);
 static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 static int jmap_identity_get(jmap_req_t *req);
+static int jmap_identity_changes(jmap_req_t *req);
 
 // clang-format off
 static jmap_method_t jmap_emailsubmission_methods_standard[] = {
@@ -80,6 +81,12 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
         "Identity/get",
         JMAP_URN_SUBMISSION,
         &jmap_identity_get,
+        /*flags*/0
+    },
+    {
+        "Identity/changes",
+        JMAP_URN_SUBMISSION,
+        &jmap_identity_changes,
         /*flags*/0
     },
     { NULL, NULL, NULL, 0}
@@ -2308,5 +2315,34 @@ static int jmap_identity_get(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    return 0;
+}
+
+static int jmap_identity_changes(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes = JMAP_CHANGES_INITIALIZER;
+    json_t *err = NULL;
+
+    jmap_changes_parse(req, &parser, /*minmodseq*/0, NULL, NULL, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* The Cyrus Identity object is basically a stub with no mutable state, so
+     * its state string is hardcoded to "0".  No /changes from another state
+     * can make any sense.  Give up. */
+    if (changes.since_modseq != 0) {
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        goto done;
+    }
+
+    changes.new_modseq = 0;
+    jmap_ok(req, jmap_changes_reply(&changes));
+
+done:
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     return 0;
 }
