@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+use POSIX qw(_exit);
+use Fcntl qw(:flock);
+use File::Temp qw(tempfile);
+
+sub test_create_subs_db_in_two_procs_slow
+    :NoAltNameSpace
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $creator = $user->imap;
+
+    my $mbpath = $self->{instance}->run_mbpath('-u', "cassandane");
+    my $subdb = $mbpath->{user}->{sub};
+
+    for my $suffix (1..500) {
+        $creator->create("INBOX.Test$suffix") || die "Failed to create a folder?!";
+
+        my $conn1 = $user->imap;
+        my $conn2 = $user->imap;
+
+        my (undef, $tmp) = tempfile;
+
+        # Lock a file exclusively in the parent, then have two children wait
+        # on it with shared locks. Then unlock them both in the parent so they
+        # execute at almost the same time. Gives us a good chance of failure.
+        open(my $fh, '>', $tmp) or die "Failed to open lockfile $tmp: $!\n";
+        $self->assert_equals(1, flock($fh, LOCK_EX));
+
+        $self->assert_equals(1, unlink($subdb));
+
+        if (!fork) {
+          close($fh);
+          open(my $fh, '>', $tmp) or die "Failed to open lockfile $tmp: $!\n";
+          flock($fh, LOCK_SH);
+
+          $conn1->subscribe("INBOX.Test$suffix");
+          _exit(0);
+        }
+
+        if (!fork) {
+          close($fh);
+          open(my $fh, '>', $tmp) or die "Failed to open lockfile $tmp: $!\n";
+          flock($fh, LOCK_SH);
+
+          $conn2->subscribe("INBOX.Test$suffix");
+          _exit(0);
+        }
+
+        undef $fh;
+
+        wait();
+        wait();
+    }
+}
