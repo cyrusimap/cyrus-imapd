@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+
+use Cyrus::Backup;
+use DBI;
+
+# A folder deleted within MAX_AGE must survive compaction as deleted (so it is
+# still restorable), then be reclaimed once its deletion timestamp ages past
+# MAX_AGE.
+sub test_compress_deleted_folder_ages_out
+    :min_version_3_13 :want_service_backupcyrusd
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create("INBOX.Keep");
+    $talk->create("INBOX.Disposable");
+    $self->{store}->set_folder("INBOX.Keep");
+    $self->make_message("Keep msg 1") or die;
+    $self->{store}->set_folder("INBOX.Disposable");
+    $self->make_message("Disposable msg 1") or die;
+
+    my ($meta, $data, $service, $servername) = $self->_backup_setup();
+    $self->_do_backup($meta, $data, $service, $servername);
+
+    # Delete Disposable and back up again so it's recorded as deleted.
+    $talk->delete("INBOX.Disposable");
+    $self->{instance}->run_command({ cyrus => 1 },
+        'cyr_expire', '-X' => '0', '-D' => '0');
+    $self->_do_backup($meta, $data, $service, $servername);
+
+    my $disposable_meta_bytes = sub {
+        my $dbh = $self->_open_backup_db($meta);
+        my ($mb) = $dbh->selectrow_array(
+            "SELECT COALESCE(SUM(size + stale), 0) FROM fmeta WHERE folderid IN "
+            . "(SELECT folderid FROM imap WHERE name = 'INBOX.Disposable')");
+        $dbh->disconnect;
+        return $mb;
+    };
+
+    # Compress within the grace window: the folder stays recorded as deleted
+    # and keeps its metadata.
+    sleep 1;
+    Cyrus::Backup::CompressBackup($meta, $data, 'cassandane', undef, 101);
+
+    my $dbh = $self->_open_backup_db($meta);
+    my ($deleted_ts) = $dbh->selectrow_array(
+        "SELECT deleted FROM imap WHERE name = 'INBOX.Disposable' AND deleted != 0");
+    $dbh->disconnect;
+    $self->assert($deleted_ts, 'deleted folder retained within grace');
+    $self->assert_num_gt(0, $disposable_meta_bytes->(),
+        'deleted folder metadata retained within grace');
+
+    # Age the deletion past MAX_AGE, then compress again: now it is reclaimed.
+    my $old = time() - $Cyrus::Backup::MAX_AGE - 86400;
+    my $rw = DBI->connect("dbi:SQLite:dbname=$meta/backupstate.sqlite3",
+        undef, undef, { RaiseError => 1 });
+    $rw->do("UPDATE imap SET deleted = ? WHERE name = 'INBOX.Disposable'", {}, $old);
+    $rw->disconnect;
+
+    sleep 1;
+    Cyrus::Backup::CompressBackup($meta, $data, 'cassandane', undef, 101);
+
+    $dbh = $self->_open_backup_db($meta);
+    my ($still) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM imap WHERE name = 'INBOX.Disposable'");
+    $dbh->disconnect;
+    $self->assert_num_equals(0, $still,
+        'aged-out deleted folder reclaimed after MAX_AGE');
+    $self->assert_num_equals(0, $disposable_meta_bytes->(),
+        'aged-out deleted folder metadata reclaimed');
+}
