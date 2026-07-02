@@ -6529,6 +6529,15 @@ static void entry_from_ical(jscal_ctx_t *ctx,
                 "cyrusimap.org:unguessableTimezones", jtimezones);
     }
 
+    // XXX quirk: a VEVENT without DTSTART is bogus. But in case such
+    // data exists on disk, emulate what the former implementation did.
+    if (!json_object_get(jobj, "start")
+        && icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT
+        && !ctx->cfg.no_quirk)
+    {
+        json_object_set_new(jobj, "start", json_string("0000-00-00T00:00:00"));
+    }
+
     buf_free(&buf);
 }
 
