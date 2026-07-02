@@ -5994,7 +5994,7 @@ static int mboxlist_upgrade_subs_work(const char *userid,
 
     /* create new db file name */
     buf_setcstr(&buf, subsfname);
-    buf_appendcstr(&buf, ".NEW");
+    buf_appendcstr(&buf, ".UPGRADE");
     newsubsfname = buf_release(&buf);
 
     /* open new db file */
@@ -6075,16 +6075,11 @@ static int mboxlist_upgrade_subs(const char *userid,
     int curr_version;
     int r = 0;
 
-    if (!subsdb_needs_upgrade(userid, subsfname, *subs, NULL))
-        return 0;
-
     // lock the subs namespace - we'll hold this lock while we upgrade.
     char *lockname = strconcat("$SUBS_UPGRADE$", userid, (char *)NULL);
     r = mboxname_lock(lockname, &upgradelock, LOCK_EXCLUSIVE);
     if (r) goto done;
 
-    /* if it no longer needs upgrading, we lost the race and someone else
-     * already upgraded the DB.  Bonus. */
     if (subsdb_needs_upgrade(userid, subsfname, *subs, &curr_version)) {
         xsyslog(LOG_NOTICE, "upgrading user subscriptions",
                             "userid=<%s> subsfname=<%s>"
