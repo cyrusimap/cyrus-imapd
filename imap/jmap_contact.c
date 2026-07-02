@@ -998,7 +998,7 @@ static int contact_textfilter_match(struct contact_textfilter *f, const char *te
     }
 
     /* Validate loose term search */
-    if (!termset->size) {
+    if (!hash_constructed(termset)) {
         /* Extract terms from text and store result in termset */
         xapian_doc_t *doc = xapian_doc_new();
         xapian_doc_index_text(doc, text, strlen(text));
@@ -4816,7 +4816,7 @@ static json_t *jmap_card_from_vcard(const char *userid,
         goto done;
 
     /* Don't combine geographical props unless at least one ADR has GROUP set */
-    if (hash_numrecords(&adrs) == 1 && hash_lookup("", &adrs)) {
+    if (hash_count(&adrs) == 1 && hash_lookup("", &adrs)) {
         strarray_free(hash_del("", &adrs));
     }
 

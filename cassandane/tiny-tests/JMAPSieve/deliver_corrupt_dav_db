@@ -1,0 +1,125 @@
+#!perl
+use Cassandane::Tiny;
+use Path::Tiny;
+
+# This test is based on email_query_fromanycontact_ignore_localpartonly but
+# modified to trigger an error path.
+#
+# Creating the contact creates a dav.db on disk
+# The method install_sieve_script directly calls sievec to compile the sieve
+# script, and stores both the source script and the bytecode version on disk
+#
+# The test then finds and scribbles on dav.db
+#
+# After this, a call to deliver
+# * fails to open dav.db
+# * assumes that what's on disk is good enough
+# * runs with what it has
+# * that bytecode-on-disk needs to load contacts
+# * that fails (fails to open dav.db)
+# * sieve filtering aborted; fallback to default delivery (to INBOX)
+#
+# We might consider the above detailed behaviour a bug - if the dav.db can't be
+# opened to check that the script is current, instead of running with a possibly
+# stale script, should we instead immediately do the "fallback to default
+# delivery"?
+#
+# Or instead, should we aggressively uncache the script from disk when the
+# dav.db is updated - ie move the staleness check into the write path?
+#
+# Either way, the end behaviour of *this* test should be the same - if the
+# dav.db is corrupt then sieve should not run, and delivery should be to INBOX
+# The precise why of how it happens might be wrong. (And we need other tests to
+# validate behaviour for an on-disk cached sieve script that didn't need dav.db)
+
+sub test_deliver_corrupt_dav_db
+    :min_version_3_3 :JMAPExtensions
+    :needs_component_sieve
+    ($self)
+{
+    my $contactId1 = $self->default_user->contacts->create({
+        emails => {
+            personal => {
+                contexts => { private => JSON::true },
+                address => 'email'
+            }
+        },
+    });
+    $self->assert_not_null($contactId1);
+
+    xlog "Assert JMAP sieve ignores localpart-only contacts";
+    $self->{store}->get_client()->create("INBOX.matches") or die;
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["x-cyrus-jmapquery", "x-cyrus-log", "variables", "fileinto"];
+if
+  allof( not string :is "${stop}" "Y",
+    jmapquery text:
+  {
+    "operator" : "NOT",
+    "conditions" : [
+        {
+           "fromAnyContact" : true
+        }
+    ]
+  }
+.
+  )
+{
+  fileinto "INBOX.matches";
+}
+EOF
+    );
+
+    # This is what is supposed to happen, given the sieve filter above.
+    # We keep this code in to confirm that the correct behaviour of the sieve
+    # filter. This call to ->deliver() isn't needed to create a dav.db on disk.
+    my $msg1 = $self->{gen}->generate(from => Cassandane::Address->new(
+            localpart => 'email', domain => 'local'
+    ), subject => 'Message 1');
+
+    $self->{instance}->deliver($msg1);
+    $self->{store}->set_fetch_attributes('uid');
+    $self->{store}->set_folder('INBOX.matches');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    my @found;
+    path($self->{instance}->{basedir})->visit(
+        sub ($path, $) {
+          return if $path->is_dir();
+          # We have to "corrupt" the file on disk. If we simply remove it then a
+          # fresh (valid) SQLlite database is created on the next call to
+          # sqlite3_open_v2()
+          # Instead, with a corrupt file sqlite3_open_v2() succeeds but the call
+          # sqlite3_exec(open->db, "PRAGMA user_version;", ...) fais and logs.
+          if($path->basename() eq 'dav.db') {
+            push @found, $path;
+            $path->spew("this space for rent\n");
+          }
+        },
+        { recurse => 1 }
+    );
+    $self->assert_num_equals(1, scalar @found, 'exactly one dav.db found');
+
+    # We repeat the above delivery, and test that the outcome differs:
+    my $msg2 = $self->{gen}->generate(from => Cassandane::Address->new(
+            localpart => 'email', domain => 'local'
+    ), subject => 'Message 2');
+    $msg2->set_attribute(uid => 1);
+
+    $self->{instance}->getsyslog();
+    $self->{instance}->deliver($msg2);
+    my @lines = $self->{instance}->getsyslog();
+    # Exactly what we log might change if we change the implementation. But I
+    # think it better to write a potentially fragile test, because with it we
+    # see whether the expected code paths are still reached.
+    # Cassandane::Instance::_check_syslog() faults these if it sees them:
+    my @dberror = grep /: DBERROR: get user version failed: sessionid=<[^>]+> fname=<\Q$found[0]\E> error=<file is not a database>/, @lines;
+    $self->assert_num_equals(2, scalar @dberror, '2 expected fatal log lines found');
+    # The actual error we're trying to reach doesn't default to a test failure:
+    my @carddav_error = grep /: jmap: carddav_open_userid\(cassandane\) failed$/, @lines;
+    $self->assert_num_equals(1, scalar @carddav_error, 'carddav_open_userid logged failure');
+
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}

@@ -1,10 +1,13 @@
-/* +++Date last modified: 05-Jul-1997 */
 #ifndef __CYRUS_HASHU64_H__
 #define __CYRUS_HASHU64_H__
 
 #include <stddef.h>           /* For size_t     */
 
-#define HASHU64_TABLE_INITIALIZER {0, NULL, NULL}
+#define HASHU64_TABLE_INITIALIZER {NULL, NULL, 0, 0, 0}
+
+#ifndef EXPORTED
+#define EXPORTED __attribute__((visibility("default")))
+#endif
 
 /*
 ** A hash table consists of an array of these buckets.  Each bucket
@@ -17,22 +20,22 @@ typedef struct bucketu64 bucketu64;
 
 /*
 ** This is what you actually declare an instance of to create a table.
-** You then call 'construct_table' with the address of this structure,
-** and a guess at the size of the table.  Note that more nodes than this
-** can be inserted in the table, but performance degrades as this
-** happens.  Performance should still be quite adequate until 2 or 3
-** times as many nodes have been inserted as the table was created with.
+** You then call 'construct_hashu64_table' with the address of this structure,
+** and a guess at the size of the table, or 0 to use the default size.
 */
 
 typedef struct hashu64_table {
-    size_t size;
     bucketu64 **table;
     struct mpool *pool;
+    size_t count;
+    uint32_t chaff;
+    uint8_t size_log2;
 } hashu64_table;
 
 /*
-** This is used to construct the table.  If it doesn't succeed, it sets
-** the table's size to 0, and the pointer to the table to NULL.
+** This is used to construct the table.  If it can't allocate sufficient memory
+** it will terminate the program with the diagnostic "Virtual memory exhausted".
+** If size is 0 it allocates a suitable default size.
 */
 
 hashu64_table *construct_hashu64_table(hashu64_table *table, size_t size,
@@ -72,18 +75,21 @@ void *hashu64_del(uint64_t key,hashu64_table *table);
 void hashu64_enumerate(hashu64_table *table,void (*func)(uint64_t ,void *,void *),
                     void *rock);
 
+/* counts the number of nodes in the hash table */
 
-/* just count how many items are in the table */
-size_t hashu64_count(hashu64_table *table);
+EXPORTED inline size_t hashu64_count(const hashu64_table *table)
+{
+    return table->count;
+}
 
 /*
 ** Frees a hash table.  For each node that was inserted in the table,
 ** it calls the function whose address it was passed, with a pointer
 ** to the data that was in the table.  The function is expected to
 ** free the data.  Typical usage would be:
-** free_table(&table, free);
+** free_hashu64_table(&table, free);
 ** if the data placed in the table was dynamically allocated, or:
-** free_table(&table, NULL);
+** free_hashu64_table(&table, NULL);
 ** if not.  ( If the parameter passed is NULL, it knows not to call
 ** any function with the data. )
 */
