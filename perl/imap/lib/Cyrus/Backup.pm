@@ -462,6 +462,22 @@ sub CompressBackup {
       }
       if ($key =~ m{^imap/}) {
         $header->{linkname} =~ s{^folders/}{};
+        # A deletion marker links to nowhere, so a state rebuilt from the new
+        # file alone can't tell which folder it was: folderid('') is 0, no imap
+        # row is recreated, and the folder's metadata is reclaimed before
+        # MAX_AGE. Replay the folder's real link immediately before the marker
+        # so the rebuilt state keeps the name->folderid mapping. The marker's
+        # own mtime still drives ageing -- once it passes ExpireTime the loop
+        # above stops keeping it and the folder finally drops.
+        if ($header->{linkname} eq '' and $cur->{folderid}) {
+          my ($unq) = $state->dbh->selectrow_array(
+            "SELECT uniqueid FROM folders WHERE folderid = ?", {}, $cur->{folderid});
+          if ($unq) {
+            my $lh = $ts->AddLink($key, $unq, mtime => $cur->{deleted});
+            $outstate->addheader($lh, $lh->{_pos});
+            $outpos = $ts->OutPos();
+          }
+        }
       }
       if ($key =~ m{^files/}) {
         # then make sure we only get one copy of it

@@ -3,12 +3,18 @@ use Cassandane::Tiny;
 
 use Cyrus::Backup;
 
-# Regression test: deleted folders must stay deleted after compression.
+# Regression test: a deleted folder must survive compression as *deleted* --
+# neither coming back to life nor vanishing early.
 #
-# Before the fix, the imap row's offset was not updated when a folder was
-# deleted, so CompressBackup's StreamCopy matched the creation entry (keeping
-# it with deleted=0) and dropped the deletion entry.  After compression the
-# folder silently reappeared.
+# The deletion marker links to nowhere, so a state rebuilt from the compacted
+# file can't tell which folder it was (folderid('') is 0). Originally that
+# dropped the deletion entry and kept the creation entry, so the folder
+# reappeared live. Making the deletion win then swung the other way: the marker
+# was kept but its folderid was lost, so the folder was purged immediately and
+# its data reclaimed well before MAX_AGE. The fix replays the folder's real
+# link just before the marker during compaction, so the deletion record (and
+# the folder's data) is retained, with its timestamp, until it genuinely ages
+# out.
 sub test_compress_deleted_folder
     :min_version_3_13 :want_service_backupcyrusd
     ($self)
@@ -74,12 +80,22 @@ sub test_compress_deleted_folder
     $self->assert_num_lt($size_before, $size_after,
         'compressed tar is smaller');
 
-    # THE KEY ASSERTION: Disposable must not reappear after compression
-    my ($disp_after) = $dbh->selectrow_array(
-        "SELECT COUNT(*) FROM imap WHERE name = 'INBOX.Disposable'",
+    # Disposable must not come back to life...
+    my ($disp_live) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM imap WHERE name = 'INBOX.Disposable' AND deleted = 0",
     );
-    $self->assert_num_equals(0, $disp_after,
-        'Disposable folder removed from imap after compress');
+    $self->assert_num_equals(0, $disp_live,
+        'Disposable folder not live after compress');
+
+    # ...but it must stay recorded as deleted, with its original timestamp, so
+    # it's still restorable until the deletion ages past MAX_AGE.
+    my ($disp_deleted_after) = $dbh->selectrow_array(
+        "SELECT deleted FROM imap WHERE name = 'INBOX.Disposable' AND deleted != 0",
+    );
+    $self->assert($disp_deleted_after,
+        'Disposable retained as deleted after compress (within grace)');
+    $self->assert_num_equals($disp_deleted, $disp_deleted_after,
+        'deletion timestamp preserved across compress');
 
     # Keep folder should still be present with all its messages
     my ($keep_count) = $dbh->selectrow_array(
