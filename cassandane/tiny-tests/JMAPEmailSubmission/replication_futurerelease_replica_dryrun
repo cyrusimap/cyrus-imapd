@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replication_futurerelease_replica_dryrun
+    :min_version_3_13 :needs_component_calalarmd :needs_component_replication
+    ($self)
+{
+    # A replicaonly replica processes delayed-send (futurerelease) submissions
+    # in dryrun mode. The failover invariants (master dies at an inopportune
+    # time, e.g. right at the send time):
+    #
+    #  1. the replica must NOT send the message itself -- only the master does
+    #     -- so the alarm-db record must survive a dryrun run.
+    #  2. an overdue record must stay DUE (nextcheck not pushed into the
+    #     future). The master's "sent" flag is replicated, so if replication is
+    #     healthy the record is simply deleted; if it is NOT (the case that
+    #     leads to a failover), a promoted replica must fire the send on its
+    #     very next run rather than waiting -- users want fast delivery. The
+    #     cheap ~10s re-poll until the flag replicates is the acceptable cost.
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Identity/get', {}, "R1"]]);
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog $self, "Generate an email via IMAP";
+    $self->make_message("foo", body => "an email\r\nwithCRLF\r\n") or die;
+
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    my $now = DateTime->now();
+
+    xlog $self, "create a delayed (held) email submission";
+    $res = $jmap->CallMethods([['EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => { "holdfor" => "30" },
+                    },
+                    rcptTo => [{ email => 'rcpt1@localhost' }],
+                },
+            },
+        }
+    }, "R1"]]);
+    my $msgsubid = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($msgsubid);
+
+    xlog $self, "submission is in the master alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
+    $self->run_replication();
+
+    xlog $self, "submission replicated to the replica alarmdb, due at the send time";
+    my $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+    my $oldcheck = $replicadata->[0]{nextcheck};
+
+    xlog $self, "run calalarmd on the replicaonly replica well past the send time";
+    my $runtime = $now->epoch() + 120;
+    # sanity: our chosen runtime is past the stored send time, so the record is
+    # overdue when the replica processes it. n.b. JMAPEmailSubmission.pm
+    # "use POSIX" shadows the assert() method, so the assert_num_lt/gt helpers
+    # can't be used here; express comparisons via assert_num_equals on a boolean.
+    $self->assert_num_equals(1, ($oldcheck <= $runtime) ? 1 : 0,
+        "send time $oldcheck should be at/before run time $runtime");
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $runtime);
+
+    xlog $self, "replica did NOT send: the alarm-db record still exists";
+    $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+
+    xlog $self, "replica did NOT send: master submission is still pending";
+    $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid ] }, "R2"]]);
+    $self->assert_str_equals('pending', $res->[0][1]->{list}[0]->{undoStatus});
+
+    xlog $self, "overdue record stays due so a promoted replica sends immediately";
+    my $newcheck = $replicadata->[0]{nextcheck};
+    $self->assert_num_equals(1, ($newcheck <= $runtime) ? 1 : 0,
+        "replica nextcheck $newcheck should stay at/before run time $runtime");
+}

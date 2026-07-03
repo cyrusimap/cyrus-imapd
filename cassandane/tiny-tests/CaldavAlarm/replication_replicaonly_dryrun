@@ -1,0 +1,126 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replication_replicaonly_dryrun
+    :min_version_3_13
+    :needs_component_replication
+    ($self)
+{
+    # The replica is replicaonly (no :NoReplicaOnly magic), so calalarmd must
+    # process records there in dryrun mode: no alarm fired, but the local
+    # nextcheck is still advanced. We use an event 120 days out so its alarm
+    # always lands in the ">60 days, check again in 30 days" push-off path,
+    # which the master advances locally without bumping modseq (so it is not
+    # replicated) -- exactly the case this feature keeps in sync.
+    $self->assert_not_null($self->{replica});
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $now = DateTime->now();
+    $now->set_time_zone('Australia/Sydney');
+    # bump everything forward so a slow run doesn't fire anything early
+    $now->add(DateTime::Duration->new(seconds => 300));
+
+    # event starts 120 days out: its alarm is always >60 days from any runtime
+    # used below, so it hits the push-off and never actually fires
+    my $startdt = $now->clone();
+    $startdt->add(DateTime::Duration->new(days => 120));
+    my $start = $startdt->strftime('%Y%m%dT%H%M%S');
+
+    my $enddt = $startdt->clone();
+    $enddt->add(DateTime::Duration->new(seconds => 60));
+    my $end = $enddt->strftime('%Y%m%dT%H%M%S');
+
+    my $uuid = "574E2CD0-2D2A-4554-8B63-C7504481D3A9";
+    my $href = "$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.11.1//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Sydney
+BEGIN:STANDARD
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:19700101T000000
+RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10
+TZOFFSETFROM:+1000
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:OPAQUE
+DTEND;TZID=Australia/Sydney:$end
+UID:$uuid
+DTSTAMP:20160420T141259Z
+SEQUENCE:0
+SUMMARY:main
+DTSTART;TZID=Australia/Sydney:$start
+CREATED:20160420T141217Z
+BEGIN:VALARM
+TRIGGER:PT0S
+ACTION:DISPLAY
+SUMMARY: My alert
+DESCRIPTION:My alarm has triggered
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # process on the master: computes nextcheck via push-off (~now + 30d) and
+    # writes the lastalarm annotation. Nothing fires (event is far away).
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch());
+    $self->assert_alarms();
+
+    # replicate so the replica sees the record + lastalarm annotation; the
+    # replica's sync sets its nextcheck from the replicated lastalarm
+    $self->run_replication();
+
+    # both ends now have exactly one alarm-db entry
+    my $masterdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$masterdata);
+    my $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+
+    # the replica's nextcheck starts at the master's pushed-off value (~now+30d).
+    # n.b. CaldavAlarm.pm "use POSIX" shadows the assert() method, so the
+    # assert_num_lt/gt helpers (which call $self->assert) can't be used here;
+    # express comparisons via assert_num_equals on a boolean instead.
+    my $oldcheck = $replicadata->[0]{nextcheck};
+    $self->assert_num_equals(1, ($oldcheck < $now->epoch() + 40 * 86400) ? 1 : 0,
+                  "replica nextcheck $oldcheck should start below now+40d");
+
+    # clear notifications on both ends, then run calalarmd on the replicaonly
+    # replica at a time past the stored nextcheck
+    $self->{instance}->getnotify();
+    $self->{replica}->getnotify();
+    my $runtime = $now->epoch() + 40 * 86400;
+    $self->{replica}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $runtime);
+
+    # NO side effects: no alarm fired on the replica (assert_alarms collects
+    # notifications from both the master and the replica)
+    $self->assert_alarms();
+
+    # but the replica advanced its OWN nextcheck (push-off from the new runtime
+    # => ~runtime + 30d). Under the old code calalarmd returned immediately on a
+    # replica and this value would be unchanged at ~now+30d.
+    $replicadata = $self->{replica}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$replicadata);
+    my $newcheck = $replicadata->[0]{nextcheck};
+    # advanced from the old value, and now past the run time (under the old
+    # code calalarmd returned immediately on a replica, leaving it unchanged)
+    $self->assert_num_equals(1, ($newcheck > $oldcheck) ? 1 : 0,
+                  "replica nextcheck should advance ($oldcheck -> $newcheck)");
+    $self->assert_num_equals(1, ($newcheck > $runtime) ? 1 : 0,
+                  "replica nextcheck $newcheck should be past run time $runtime");
+}
