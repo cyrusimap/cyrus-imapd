@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_anchoroffset_oob ($self)
+{
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog $self, "create three emails in INBOX";
+    $store->set_folder("INBOX");
+    for my $i (1..3) {
+        my $dt = DateTime->new(
+            year => 2016, month => 11, day => $i,
+            hour => 7, time_zone => 'Etc/UTC',
+        );
+        $self->make_message("msg$i", date => $dt, body => "body $i",
+                            store => $store) || die;
+    }
+
+    xlog $self, "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog $self, "collect the real Email IDs";
+    my $res = $jmap->request([
+        ['Email/query', { sort => [{ property => "receivedAt" }] } ],
+    ]);
+    my $ids = $res->single_sentence('Email/query')->arguments->{ids};
+    $self->assert_num_equals(3, scalar @$ids);
+    my %real = map { $_ => 1 } @$ids;
+
+    # Anchor on the second message and skip far past the end of the 3-entry
+    # result buffer.  We'll expect zero results, but also that the "position"
+    # value got clamped at maxindex+1.
+    xlog $self, "query with a positive anchorOffset past the end of the results";
+    $res = $jmap->request([
+        ['Email/query', {
+            sort         => [{ property => "receivedAt" }],
+            anchor       => $ids->[1],
+            anchorOffset => 10,
+            limit        => 5,
+            calculateTotal => JSON::true,
+        }],
+    ]);
+
+    my $query_res = $res->single_sentence('Email/query')->arguments;
+    my $got = $query_res->{ids};
+    $self->assert_not_null($got);
+
+    xlog $self, "no fabricated (out-of-bounds) IDs are returned";
+    for my $id (@$got) {
+        $self->assert($real{$id}, "returned id $id is a real message");
+    }
+
+    xlog $self, "the window is clamped to the end of the results";
+    $self->assert_num_equals(0, scalar @$got);
+    $self->assert_num_equals(3, $query_res->{position});
+    $self->assert_num_equals(3, $query_res->{total});
+}
