@@ -469,6 +469,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     return 0;
 }
 
+/* bump the prometheus delay counter for the given alarm type
+ * (defined later in this file; forward-declared for use in process_alarm_cb) */
+static void bump_send_delay_metric(uint32_t type, time_t delay);
+
 static int process_alarm_cb(icalcomponent *comp,
                             icaltimetype start, icaltimetype end,
                             icaltimetype recurid,
@@ -607,7 +611,21 @@ static int process_alarm_cb(icalcomponent *comp,
                        data->mboxname, data->imap_uid,
                        icaltime_as_ical_string(start), alarmno,
                        summary);
-                send_alarm(data, comp, alarm, start, end, recurid, is_standalone, alarmtime);
+                int sr = send_alarm(data, comp, alarm, start, end,
+                                    recurid, is_standalone, alarmtime);
+                if (!sr) {
+                    struct auditlog_send as = {
+                        .action = "calalarmd.send.imip",
+                        .outcome = "sent",
+                        .userid = data->userid,
+                        .scheduled = check,
+                        .sent = data->now,
+                        .subject = summary,
+                        .caluid = icalcomponent_get_uid(comp),
+                    };
+                    auditlog_send(&as);
+                    bump_send_delay_metric(ALARM_CALENDAR, data->now - check);
+                }
             }
         }
 
