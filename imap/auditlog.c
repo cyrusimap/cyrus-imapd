@@ -330,6 +330,40 @@ EXPORTED void auditlog_sieve(const char *action,
     auditlog_finish(&lf);
 }
 
+EXPORTED void auditlog_send(const struct auditlog_send *s)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+
+    if (!config_auditlog) return;
+
+    auditlog_begin(&lf, s->action);
+
+    if (s->userid)
+        logfmt_push(&lf, "u.username", s->userid);
+
+    logfmt_push(&lf, "send.outcome", s->outcome);
+    logfmt_pushf(&lf, "send.scheduled", TIME_T_FMT, s->scheduled);
+    logfmt_pushf(&lf, "send.time", TIME_T_FMT, s->sent);
+    logfmt_pushf(&lf, "send.delay", "%lld",
+                 (long long)(s->sent - s->scheduled));
+    logfmt_pushf(&lf, "send.retries", "%u", s->num_retries);
+
+    if (s->num_rcpts)
+        logfmt_pushf(&lf, "send.numrcpts", "%u", s->num_rcpts);
+    if (s->msgid)
+        logfmt_push(&lf, "msg.id", s->msgid);
+    if (s->from)
+        logfmt_push(&lf, "msg.from", s->from);
+    if (s->to)
+        logfmt_push(&lf, "msg.to", s->to);
+    if (s->subject)
+        logfmt_push_utf8(&lf, "msg.subject", s->subject);
+    if (s->caluid)
+        logfmt_push(&lf, "cal.uid", s->caluid);
+
+    auditlog_finish(&lf);
+}
+
 EXPORTED void auditlog_traffic(uint64_t bytes_in, uint64_t bytes_out)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;
