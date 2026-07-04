@@ -1505,7 +1505,31 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
 
     r = mboxlist_update_entry_full(mbentry->name, mbentry, &tid, silent);
 
-    /* commit the change to mupdate */
+    /* Commit (or abort) the local change BEFORE talking to mupdate.  We must
+     * not hold the mailboxes.db lock across the mupdate network round-trip:
+     * mupdate may itself need to lock the mailboxes.db (deadlock), and twom
+     * won't yield a write lock.  This means local and mupdate are no longer
+     * atomic - if mupdate fails the local change stays, matching the behaviour
+     * of mboxlist_setacl and friends. */
+    if (tid) {
+        if (r) {
+            r2 = cyrusdb_abort(mbdb, tid);
+            if (r2)
+                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+        } else {
+            r2 = cyrusdb_commit(mbdb, tid);
+            if (r2)
+                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
+                                 "error=<%s>", cyrusdb_strerror(r2));
+            if (r2) r = r2;
+            else
+                mboxname_setmodseq(mbentry->name, mbentry->foldermodseq,
+                                   mbentry->mbtype, MBOXMODSEQ_ISFOLDER);
+        }
+    }
+
+    /* commit the change to mupdate (local lock released above) */
     if (!r && !localonly && config_mupdate_server) {
         mupdate_handle *mupdate_h = NULL;
 
@@ -1527,23 +1551,6 @@ EXPORTED int mboxlist_update_full(const mbentry_t *mbentry, int localonly, int s
             }
         }
         mupdate_disconnect(&mupdate_h);
-    }
-
-    if (tid) {
-        if (r) {
-            r2 = cyrusdb_abort(mbdb, tid);
-            if (r2)
-                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
-        } else {
-            r2 = cyrusdb_commit(mbdb, tid);
-            if (r2)
-                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
-        }
-        if (!r)
-            mboxname_setmodseq(mbentry->name, mbentry->foldermodseq, mbentry->mbtype,
-                               MBOXMODSEQ_ISFOLDER);
     }
 
     return r;

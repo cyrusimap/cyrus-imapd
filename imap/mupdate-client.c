@@ -513,6 +513,11 @@ EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
         return MUPDATE_BADPARAM;
     }
 
+    if (mboxlist_yield()) {
+        syslog(LOG_ERR, "%s: databases locked", __func__);
+        return MUPDATE_FAIL;
+    }
+
     prot_printf(handle->conn->out,
                 "X%u NOOP\r\n", handle->tagn++);
 
