@@ -2084,6 +2084,20 @@ static int process_snoozed(struct caldav_alarm_data *data,
         caldav_alarm_bump_nextcheck(data, runtime + 300, runtime, error_message(r));
     }
 
+    if (!r) {
+        char *userid = mboxname_to_userid(mailbox_name(mailbox));
+        struct auditlog_send as = {
+            .action = "calalarmd.send.snooze",
+            .outcome = "unsnoozed",
+            .userid = userid,
+            .scheduled = wakeup,
+            .sent = runtime,
+        };
+        auditlog_send(&as);
+        bump_send_delay_metric(ALARM_SNOOZE, runtime - wakeup);
+        free(userid);
+    }
+
  done:
     if (snoozed) json_decref(snoozed);
 
