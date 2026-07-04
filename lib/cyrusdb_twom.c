@@ -109,8 +109,7 @@ static void _delayed_checkpoint(void *rock)
     init.flags = drock->flags;
     int r = _errormap(twom_db_open(drock->fname, &init, &db, NULL));
     if (r == CYRUSDB_NOTFOUND) {
-        syslog(LOG_INFO, "twom: no file to delayed checkpoint for %s",
-               drock->fname);
+        // the file is gone - it's fine to lose this race, nothing to do
         return;
     }
     else if (r) {
