@@ -614,6 +614,9 @@ static int process_alarm_cb(icalcomponent *comp,
                 int sr = send_alarm(data, comp, alarm, start, end,
                                     recurid, is_standalone, alarmtime);
                 if (!sr) {
+                    /* outcome "sent" reflects successful dispatch to the
+                     * notification subsystem; send_alarm() can't report
+                     * downstream delivery failure */
                     struct auditlog_send as = {
                         .action = "calalarmd.send.imip",
                         .outcome = "sent",
