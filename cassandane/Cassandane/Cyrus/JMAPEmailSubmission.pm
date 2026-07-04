@@ -31,7 +31,8 @@ sub new
                  jmapsubmission_deleteonsend => 'no',
                  jmap_nonstandard_extensions => 'yes',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 httpallowcompress => 'no',
+                 auditlog => 'yes');
 
     my $self = $class->SUPER::new({
         config => $config,
