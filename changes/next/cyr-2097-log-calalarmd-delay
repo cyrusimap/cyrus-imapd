@@ -1,0 +1,29 @@
+Description:
+
+calalarmd now logs the scheduled-vs-actual send delay for every send it
+performs, via a new "auditlog.calalarmd.send.*" audit event (actions
+futurerelease, snooze, and imip) that includes a machine-parseable
+"send.delay" field in seconds plus the username and message detail. It
+also exports three bucketed prometheus counters -
+cyrus_calalarmd_futurerelease_delay_total,
+cyrus_calalarmd_snooze_delay_total and cyrus_calalarmd_imip_delay_total -
+each labelled by delay band (ontime/late/slow/verylate), so send backlog
+can be graphed and alerted on.
+
+Documentation:
+
+None (audit events and prometheus metrics are self-documented in the source:
+imap/auditlog.c and imap/promdata.p).
+
+Config changes:
+
+None. The audit lines require the existing "auditlog" option; the prometheus
+counters require the existing "prometheus_enabled" option.
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None
