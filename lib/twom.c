@@ -46,6 +46,13 @@
 /* release lock in foreach at least every N records */
 #define FOREACH_LOCK_RELEASE 1024
 
+/* When re-locking during a long foreach we normally use TWOM_ONELOCK to skip
+ * the header "gate" lock and save syscalls.  But the gate is what lets a
+ * waiting writer fend off new readers, so if we ALWAYS skipped it a busy set
+ * of overlapping foreaches would starve writers indefinitely.  So every N
+ * re-locks we fall back to the full double-lock, bounding writer starvation. */
+#define FOREACH_GATE_RELOCKS 64
+
 /* type aliases */
 #define LLU long long unsigned int
 #define LU long unsigned int
@@ -133,6 +140,7 @@ struct twom_txn {
     struct tm_file *file;
     size_t end;
     uint64_t counter;
+    uint64_t nlocks;
     unsigned readonly:1;
     unsigned nosync:1;
     unsigned noyield:1;
@@ -2184,7 +2192,10 @@ static int myreplay(struct twom_txn *txn,
         if (txn->counter > db->foreach_lock_release) {
             r = unlock(db, file);
             if (r) return r;
-            r = read_lock(db, &txn, file, /*flags*/TWOM_ONELOCK);
+            /* as in twom_cursor_next: mostly ONELOCK, but periodically take
+             * the full double-lock so we don't starve a waiting writer */
+            int lockflags = (txn->nlocks++ % FOREACH_GATE_RELOCKS) ? TWOM_ONELOCK : 0;
+            r = read_lock(db, &txn, file, lockflags);
             if (r) return r;
             txn->counter = 0;
         }
@@ -2714,7 +2725,11 @@ int twom_cursor_next(struct twom_cursor *cur,
         }
 
         if (!txn->file->has_datalock) {
-            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, TWOM_ONELOCK);
+            /* usually re-lock cheaply with ONELOCK (skipping the header gate),
+             * but every FOREACH_GATE_RELOCKS re-locks take the full double-lock
+             * so a writer waiting on the gate isn't starved by this foreach */
+            int lockflags = (txn->nlocks++ % FOREACH_GATE_RELOCKS) ? TWOM_ONELOCK : 0;
+            r = read_lock(txn->db, &txn, txn->mvcc ? txn->file : NULL, lockflags);
             if (r) return r;
             txn->counter = 0;
         }
