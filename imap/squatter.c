@@ -886,7 +886,7 @@ static int audit_one(const char *mboxname, bitvector_t *unindexed)
     if (r) goto done;
 
 done:
-    r2 = rx->end_mailbox(rx, mailbox);
+    r2 = rx->end_mailbox(rx, mailbox, /*has_more*/false);
     mailbox_close(&mailbox);
     if (!r) r = r2;
     return r;

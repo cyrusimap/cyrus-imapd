@@ -792,6 +792,32 @@ static void read_highest_createdmodseq_at_dir(const char *userid,
     free(fname);
 }
 
+/* Store the highest createdmodseq and index generation in the indexed.db
+ * located in the xapian database directory dir. */
+static int store_highest_createdmodseq_at_dir(const char *userid,
+                                              const char *dir,
+                                              modseq_t highest_createdmodseq,
+                                              uint64_t index_generation)
+{
+    char *fname = indexeddb_fname(dir);
+    struct indexeddb *idb = NULL;
+
+    int r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
+    if (!r && (idb->highest_createdmodseq != highest_createdmodseq ||
+                idb->index_generation != index_generation)) {
+        idb->highest_createdmodseq = highest_createdmodseq;
+        idb->index_generation = index_generation;
+        r = store_indexeddb_highest_createdmodseq(idb);
+    }
+    if (idb) {
+        int r2 = indexeddb_close(&idb, r);
+        if (!r) r = r2;
+    }
+
+    free(fname);
+    return r;
+}
+
 /*
  * Merge the indexed.db of all search tiers activetiers[1..n] into the
  * indexed.db of the top tier.
@@ -2419,7 +2445,7 @@ out:
     return r;
 }
 
-static int flush(search_text_receiver_t *rx)
+static int flush_internal(search_text_receiver_t *rx, bool has_more)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
@@ -2440,14 +2466,15 @@ static int flush(search_text_receiver_t *rx)
         tr->commits++;
     }
 
-    /* We write out the indexed list for the mailbox only after successfully
-     * updating the index, to avoid a future instance not realising that
-     * there are unindexed messages should we fail to index. We also write
-     * the highest createdmodseq and bump the index generation, if required */
-    if (tr->indexed) {
-        if (tr->batch_lowest_createdmodseq &&
-                tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
-            /* This batch indexed a message that has a lower createdmodseq
+    /* Update the highest createdmodseq and bump the index generation to
+     * cover all batches indexed since begin_mailbox. This must only happen
+     * once the mailbox update is complete (has_more is false): a message
+     * indexed by a later batch of the same update may have a lower
+     * createdmodseq than the highest createdmodseq of an earlier batch,
+     * which would spuriously invalidate the index generation. */
+    if (!has_more && tr->batch_highest_createdmodseq) {
+        if (tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
+            /* This update indexed a message that has a lower createdmodseq
              * than the highest createdmodseq in the index. This means we
              * either reindexed a message, fully or partially, or a message got
              * added to the index that wasn't indexed before but the highest
@@ -2467,20 +2494,45 @@ static int flush(search_text_receiver_t *rx)
         /* Update the highest createdmodseq */
         if (tr->batch_highest_createdmodseq > tr->highest_createdmodseq)
             tr->highest_createdmodseq = tr->batch_highest_createdmodseq;
+    }
 
-        /* Write to the database */
+    /* We write out the indexed list for the mailbox only after successfully
+     * updating the index, to avoid a future instance not realising that
+     * there are unindexed messages should we fail to index. This also
+     * persists the highest createdmodseq and index generation. */
+    if (tr->indexed) {
         r = write_indexed(strarray_nth(tr->activedirs, 0),
                 mailbox_name(tr->super.mailbox), tr->super.mailbox->i.uidvalidity,
                 mailbox_uniqueid(tr->super.mailbox), tr->indexed,
                 tr->highest_createdmodseq, tr->index_generation,
                 tr->super.verbose);
         if (r) goto out;
+    }
+    else if (!has_more && tr->batch_highest_createdmodseq && tr->activedirs) {
+        /* There is no indexed list to write, but an earlier batch of this
+         * update still indexed messages whose highest createdmodseq and
+         * index generation we must persist. */
+        r = store_highest_createdmodseq_at_dir(mbname_userid(tr->super.mbname),
+                strarray_nth(tr->activedirs, 0),
+                tr->highest_createdmodseq, tr->index_generation);
+        if (r) goto out;
+    }
+
+    if (!has_more) {
         tr->batch_highest_createdmodseq = 0;
         tr->batch_lowest_createdmodseq = 0;
     }
 
 out:
     return r;
+}
+
+static int flush(search_text_receiver_t *rx)
+{
+    /* A flush via the receiver API is always intermediate: more batches may
+     * follow, and the mailbox update is only complete once end_mailbox is
+     * called. The highest createdmodseq is committed from end_mailbox_update. */
+    return flush_internal(rx, /*has_more*/true);
 }
 
 static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
@@ -3083,12 +3135,15 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 
 static int end_mailbox_update(search_text_receiver_t *rx,
                               struct mailbox *mailbox
-                            __attribute__((unused)))
+                            __attribute__((unused)),
+                              bool has_more)
 {
     xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
     int r = 0;
 
-    r = flush(rx);
+    /* flush_internal handles updating the highest createdmodseq and index
+     * generation once the mailbox update is complete, see has_more. */
+    r = flush_internal(rx, has_more);
 
     /* flush before cleaning up, since indexed data is written by flush */
     seqset_free(&tr->indexed);
@@ -3337,7 +3392,8 @@ static int end_message_snippets(search_text_receiver_t *rx,
 
 static int end_mailbox_snippets(search_text_receiver_t *rx,
                                 struct mailbox *mailbox
-                                    __attribute__((unused)))
+                                    __attribute__((unused)),
+                                bool has_more __attribute__((unused)))
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 

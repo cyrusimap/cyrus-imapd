@@ -6096,11 +6096,13 @@ static int _snippet_tr_end_message(search_text_receiver_t *rx, uint8_t indexleve
         sr->next->end_message(sr->next, indexlevel) : 0;
 }
 
-static int _snippet_tr_end_mailbox(search_text_receiver_t *rx, struct mailbox *mailbox)
+static int _snippet_tr_end_mailbox(search_text_receiver_t *rx,
+                                   struct mailbox *mailbox,
+                                   bool has_more)
 {
     struct snippet_receiver *sr = (struct snippet_receiver*) rx;
     return sr->next->end_mailbox ?
-        sr->next->end_mailbox(sr->next, mailbox) : 0;
+        sr->next->end_mailbox(sr->next, mailbox, has_more) : 0;
 }
 
 static int _snippet_tr_flush(search_text_receiver_t *rx)
@@ -6289,7 +6291,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
         }
-        int r2 = srx->end_mailbox(srx, mbox);
+        int r2 = srx->end_mailbox(srx, mbox, /*has_more*/false);
         if (!r) r = r2;
 
         json_object_clear(snippet);

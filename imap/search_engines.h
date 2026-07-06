@@ -5,6 +5,8 @@
 #ifndef INCLUDED_SEARCH_ENGINES_H
 #define INCLUDED_SEARCH_ENGINES_H
 
+#include <stdbool.h>
+
 #include "mailbox.h"
 #include "message_guid.h"
 #include "util.h"
@@ -115,7 +117,12 @@ struct search_text_receiver {
 #define SEARCH_INDEXLEVEL_BEST SEARCH_INDEXLEVEL_ATTACH
 #define SEARCH_INDEXLEVEL_MAX (SEARCH_INDEXLEVEL_PARTIAL - 1)
     int (*end_message)(search_text_receiver_t *, uint8_t indexlevel);
-    int (*end_mailbox)(search_text_receiver_t *, struct mailbox *);
+    /* Finish indexing a mailbox. If has_more is true, this indicates that the
+     * same mailbox will get reopened with more messages, so search engines
+     * may defer updating the index state until the. This mostly is relevant
+     * for two-phased attachment extraction and indexing. */
+    int (*end_mailbox)(search_text_receiver_t *, struct mailbox *,
+                       bool has_more);
     int (*flush)(search_text_receiver_t *);
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
     int (*index_charset_flags)(int base_flags);

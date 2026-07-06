@@ -533,8 +533,9 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     if (!dynarray_size(&attachparts))
         goto done;
 
-    // Release mailbox lock
-    r = rx->end_mailbox(rx, mailbox);
+    // Release mailbox lock. Indexing this mailbox is not complete yet,
+    // it resumes after extracting attachments.
+    r = rx->end_mailbox(rx, mailbox, /*has_more*/true);
     if (r) goto done;
     mailbox_close(&mailbox);
 
@@ -592,7 +593,7 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     free(mycachedir);
     free(mboxname);
     {
-        int r2 = rx->end_mailbox(rx, mailbox);
+        int r2 = rx->end_mailbox(rx, mailbox, /*has_more*/false);
         if (r) return r;
         if (r2) return r2;
     }
