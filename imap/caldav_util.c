@@ -967,26 +967,8 @@ static void preserve_jmap_permissions(icalcomponent *ical,
 {
     icalcomponent *comp;
 
-    /* Remove any JMAP permissions */
-    for (comp = icalcomponent_get_first_component(ical, kind);
-         comp;
-         comp = icalcomponent_get_next_component(ical, kind)) {
-
-        icalproperty *prop, *nextprop;
-
-        for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
-                prop; prop = nextprop) {
-
-            nextprop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY);
-
-            if (!strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITESELF) ||
-                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_MAYINVITEOTHERS) ||
-                !strcmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_HIDEATTENDEES)) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
-            }
-        }
-    }
+    /* NOTE: JMAP permission X- properties have been stripped in
+       either caldav_put() or sched_deliver_local() */
 
     /* Insert existing JMAP permissions */
     for (comp = icalcomponent_get_first_component(ical, kind);

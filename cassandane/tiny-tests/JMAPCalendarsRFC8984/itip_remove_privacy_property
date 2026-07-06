@@ -37,6 +37,9 @@ UID:7e017102-0caf-490a-bbdf-422141d34e75
 TRANSP:OPAQUE
 SUMMARY:test
 CLASS:PRIVATE
+X-JMAP-ID:EM123
+X-JMAP-HIDE-ATTENDEES:true
+X-JMAP-MAY-INVITE-OTHERS:true
 DTSTART;TZID=American/New_York:20210923T153000
 DURATION:PT1H
 DTSTAMP:20210923T034327Z
@@ -57,13 +60,18 @@ EOF
         }, 'R1'],
     ]);
     my $eventId = $res->[0][1]{list}[0]{id};
-    $self->assert_str_equals('public', $res->[0][1]{list}[0]->{privacy});
+    $self->assert_null($res->[0][1]{list}[0]->{privacy});
     my $xhref = $res->[0][1]{list}[0]{'x-href'};
     $self->assert_not_null($xhref);
 
     xlog $self, "Assert privacy property is not present in iCalendar";
     my $caldavResponse = $caldav->Request('GET', $xhref);
     $self->assert($caldavResponse->{content} !~ /CLASS:PRIVATE/);
+
+    xlog $self, "Assert JMAP X- properties are not present in iCalendar";
+    $self->assert($caldavResponse->{content} !~ /X-JMAP-ID:EM123/);
+    $self->assert($caldavResponse->{content} !~ /X-JMAP-HIDE-ATTENDEES:true/);
+    $self->assert($caldavResponse->{content} !~ /X-JMAP-MAY-INVITE-OTHERS:true/);
 
     xlog $self, "Clear notifications";
     $self->{instance}->getnotify();
