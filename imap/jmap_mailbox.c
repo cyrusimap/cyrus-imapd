@@ -2141,7 +2141,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         }
         else {
             syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
-            jmap_parser_invalid(&parser, "name");
+            result->err = json_pack("{s:s}", "type", "alreadyExists");
             goto done;
         }
     }
@@ -2234,7 +2234,10 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
 done:
-    if (json_array_size(parser.invalid)) {
+    if (result->err) {
+        /* already set above (e.g. alreadyExists) */
+    }
+    else if (json_array_size(parser.invalid)) {
         result->err = json_pack("{s:s}", "type", "invalidProperties");
         json_object_set(result->err, "properties", parser.invalid);
     }
@@ -2530,7 +2533,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 }
                 else {
                     syslog(LOG_ERR, "jmap: mailbox already exists: %s", newmboxname);
-                    jmap_parser_invalid(&parser, "name");
+                    result->err = json_pack("{s:s}", "type", "alreadyExists");
                     goto done;
                 }
             }
@@ -2653,11 +2656,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     if (r) goto done;
 
 done:
-    if (json_array_size(parser.invalid)) {
+    if (result->err) {
+        /* already set above (e.g. alreadyExists, notFound, forbidden) */
+    }
+    else if (json_array_size(parser.invalid)) {
         result->err = json_pack("{s:s}", "type", "invalidProperties");
         json_object_set(result->err, "properties", parser.invalid);
     }
-    else if (r && result->err == NULL) {
+    else if (r) {
         result->err = jmap_server_error(r);
     }
     jmap_parser_fini(&parser);
