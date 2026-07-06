@@ -122,6 +122,62 @@ HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)
     " because the active Sieve script does not" \
     " properly include the '" JMAP_URN_VACATION "' script."
 
+/* for checking the subject contains only things we can put in qstring */
+static int sieve_qstring_safe(const char *s)
+{
+    if (!s) return 1;
+    for (const unsigned char *p = (const unsigned char *) s; *p; p++) {
+        if (*p < 0x20 || *p == 0x7f) return 0;
+    }
+    return 1;
+}
+
+static void sieve_emit_qstring(struct buf *out, const char *s)
+{
+    buf_putc(out, '"');
+    for (const unsigned char *p = (const unsigned char *) s; *p; p++) {
+        if (*p == '"' || *p == '\\') buf_putc(out, '\\');
+        buf_putc(out, *p);
+    }
+    buf_putc(out, '"');
+}
+
+/* Sieve "multi-line" text is terminated by a line containing only `.`,
+ * and per RFC 5228 sec. 2.4.2.2 lines beginning with `.` MUST be
+ * dot-stuffed (the leading `.` doubled).  Without dot-stuffing a body
+ * containing `\r\n.\r\n` ends the multi-line block early and the bytes
+ * that follow are parsed as further Sieve commands.  We also normalize
+ * bare CR/LF to CRLF so a body line ending in just LF + `.` + LF still
+ * gets stuffed.
+ */
+static void sieve_emit_unterminated_multiline(struct buf *out, const char *s)
+{
+    const unsigned char *p = (const unsigned char *) s;
+    int at_line_start = 1;
+
+    while (*p) {
+        if (at_line_start && *p == '.') {
+            buf_putc(out, '.');
+            at_line_start = 0;
+        }
+
+        if (*p == '\r') {
+            buf_appendcstr(out, "\r\n");
+            if (p[1] == '\n') p++;
+            at_line_start = 1;
+        }
+        else if (*p == '\n') {
+            buf_appendcstr(out, "\r\n");
+            at_line_start = 1;
+        }
+        else {
+            buf_putc(out, *p);
+            at_line_start = 0;
+        }
+        p++;
+    }
+}
+
 static json_t *vacation_read(jmap_req_t *req, struct mailbox *mailbox,
                              struct sieve_data *sdata, unsigned *status)
 {
@@ -336,8 +392,11 @@ static void vacation_update(struct jmap_req *req,
         json_array_append_new(invalid, json_string("toDate"));
 
     prop = json_object_get(patch, "subject");
-    if (JNOTNULL(prop) && !json_is_string(prop))
+    if (JNOTNULL(prop) &&
+        (!json_is_string(prop)
+         || !sieve_qstring_safe(json_string_value(prop)))) {
         json_array_append_new(invalid, json_string("subject"));
+    }
 
     prop = json_object_get(patch, "textBody");
     if (JNOTNULL(prop) && !json_is_string(prop))
@@ -414,7 +473,10 @@ static void vacation_update(struct jmap_req *req,
 
     /* Add vacation action */
     buf_appendcstr(&data, "  vacation");
-    if (subject) buf_printf(&data, " :subject \"%s\"", subject);
+    if (subject) {
+        buf_appendcstr(&data, " :subject ");
+        sieve_emit_qstring(&data, subject);
+    }
     /* XXX  Need to add :addresses */
     /* XXX  Should we add :fcc ? */
 
@@ -430,15 +492,18 @@ static void vacation_update(struct jmap_req *req,
                    "\r\n--%s\r\n", boundary, boundary);
         buf_appendcstr(&data,
                        "Content-Type: text/plain; charset=utf-8\r\n\r\n");
-        buf_printf(&data, "%s\r\n\r\n--%s\r\n", textBody, boundary);
+        sieve_emit_unterminated_multiline(&data, textBody);
+        buf_printf(&data, "\r\n\r\n--%s\r\n", boundary);
         buf_appendcstr(&data,
                        "Content-Type: text/html; charset=utf-8\r\n\r\n");
-        buf_printf(&data, "%s\r\n\r\n--%s--\r\n", htmlBody, boundary);
+        sieve_emit_unterminated_multiline(&data, htmlBody);
+        buf_printf(&data, "\r\n\r\n--%s--\r\n", boundary);
         free(text);
     }
     else {
-        buf_printf(&data, " text:\r\n%s",
-                   textBody ? textBody : DEFAULT_MESSAGE);
+        buf_appendcstr(&data, " text:\r\n");
+        sieve_emit_unterminated_multiline(&data,
+                             textBody ? textBody : DEFAULT_MESSAGE);
     }
     buf_appendcstr(&data, "\r\n.\r\n;\r\n}\r\n");
 

@@ -1,0 +1,135 @@
+#!perl
+use Cassandane::Tiny;
+
+# VacationResponse/set builds a Sieve script by splicing the client-supplied
+# `subject`, `textBody`, and `htmlBody` into it.  Confirm those values are
+# neutralized, so that Sieve metacharacters in them stay inert data and are
+# never parsed as Sieve syntax:
+#
+#   1. `subject` becomes the argument to `:subject`, a Sieve quoted-string.
+#      A `"` in the value must be backslash-escaped so it cannot close the
+#      string early and let the rest be parsed as further tokens
+#      (`; redirect "..."`).
+#
+#   2. `textBody`/`htmlBody` become a `text:` multi-line section, terminated
+#      by a line containing only `.`.  A `.`-only line in the value must be
+#      dot-stuffed (RFC 5228 sec. 2.4.2.2) so it cannot end the section early
+#      and let the bytes that follow be parsed as actions.  Note that we do
+#      *not* expect the value's own bytes to vanish: an injected `redirect`
+#      line is supposed to survive verbatim, but only as text *inside* the
+#      literal -- that is exactly what these tests assert.
+
+sub _vacation_script ($self, $name, $update) {
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->request({
+        methodCalls => [
+            ['VacationResponse/set', { update => { singleton => $update } }, 'R1'],
+            ['SieveScript/get',      { properties => ['name', 'blobId'] }, 'R2'],
+        ],
+        using => [
+            'urn:ietf:params:jmap:core',
+            'urn:ietf:params:jmap:vacationresponse',
+            'urn:ietf:params:jmap:sieve',
+            'urn:ietf:params:jmap:blob',
+            'https://cyrusimap.org/ns/jmap/sieve',
+        ]
+    });
+
+    my $vr_args = $res->sentence_named('VacationResponse/set')->arguments;
+    my $ss_args = $res->sentence_named('SieveScript/get')->arguments;
+
+    $self->assert(exists $vr_args->{updated}{singleton},
+        "[$name] update succeeded: " . Data::Dumper::Dumper($vr_args // {})
+    );
+
+    my ($vacation) = grep {
+        $_->{name} eq 'urn:ietf:params:jmap:vacationresponse'
+    } $ss_args->{list}->@*;
+    $self->assert_not_null($vacation,
+        "[$name] vacation script present in SieveScript list",
+    );
+
+    my $dl = $jmap->Download('cassandane', $vacation->{blobId});
+    $self->assert_str_equals(
+        '200',
+        $dl->{status},
+        "[$name] script blob downloaded",
+    );
+
+    return $dl->{content};
+}
+
+# The `subject` value must reach the script only as the (escaped) argument to
+# `:subject`, with each `"` backslashed so nothing spills out as separate
+# tokens.  We assert the exact escaped quoted-string is present.
+sub _assert_sieve_subject ($self, $name, $subject, $escaped) {
+    my $script = $self->_vacation_script(
+        $name,
+        { isEnabled => JSON::true, subject => $subject, textBody => 'x' },
+    );
+
+    $self->assert(
+        index($script, ":subject $escaped") >= 0,
+        "[$name] subject emitted as escaped quoted-string `$escaped`\n"
+            . "----- script begin -----\n$script\n----- script end -----"
+    );
+}
+
+# The `textBody` value must reach the script only as text inside the `text:`
+# multi-line literal.  We locate the literal's start and its terminator (the
+# first `.`-only line after the start) and assert the injected needle lands
+# between them.  If a `.`-only line in the body were *not* dot-stuffed, the
+# terminator would appear before the needle and this assertion would fail --
+# which is exactly how the pre-fix, injectable script behaved.
+sub _assert_sieve_body_literal ($self, $name, $body, $needle) {
+    my $script = $self->_vacation_script(
+        $name,
+        { isEnabled => JSON::true, textBody => $body },
+    );
+
+    my $context = "----- script begin -----\n$script\n----- script end -----";
+
+    my $start = index($script, " text:\r\n");
+    $self->assert($start >= 0, "[$name] found start of text: literal\n$context");
+
+    my $end = index($script, "\r\n.\r\n", $start);
+    $self->assert($end > $start, "[$name] found text: literal terminator\n$context");
+
+    my $at = index($script, $needle, $start);
+    $self->assert(
+        $at >= 0 && $at < $end,
+        "[$name] injected `$needle` stays inside the text: literal,"
+            . " before its terminator\n$context"
+    );
+}
+
+sub test_vacation_set_sieve_injection
+    :JMAPExtensions
+    ($self)
+{
+    # A `"` in the subject previously closed the Sieve string early and let
+    # `; redirect "..."` be parsed as an unrelated action.  Now every `"` is
+    # backslash-escaped, so the whole value stays inside the quoted-string.
+    $self->_assert_sieve_subject(
+        'subject_quote',
+        q{Out " ; redirect "evil@example.com" ; #},
+        q{"Out \" ; redirect \"evil@example.com\" ; #"},
+    );
+
+    # A `.`-only line in the body previously ended the `text:` section early,
+    # and the bytes that followed were parsed as further Sieve commands.  Now
+    # the `.` line is dot-stuffed, so the injected `redirect` survives only as
+    # text inside the literal.
+    my $payload =
+          "Out of office.\r\n"
+        . ".\r\n"
+        . qq{redirect "evil\@example.com";\r\n}
+        . "text:\r\nstuff\r\n";
+
+    $self->_assert_sieve_body_literal(
+        'body_dot_terminator',
+        $payload,
+        qq{redirect "evil\@example.com"},
+    );
+}
