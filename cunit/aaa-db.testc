@@ -4,7 +4,6 @@
 #include "imap/global.h"
 #include "retry.h"
 #include "cyrusdb.h"
-#include "libcyr_cfg.h"
 #include "util.h"
 #include "hash.h"
 
@@ -1911,9 +1910,8 @@ static int set_up(void)
     if (!basedir)
         return -1;
 
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, basedir);
-    snprintf(buf, sizeof(buf), "configdirectory: %s/conf\n", basedir);
-    config_read_string(buf);
+    snprintf(buf, sizeof(buf), "%s/conf", basedir);
+    config_read_string(buf, NULL);
 
     cyrusdb_init();
 

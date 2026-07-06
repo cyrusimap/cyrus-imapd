@@ -17,9 +17,7 @@ _Static_assert(sizeof(X256) == 256 + 1, "X266 is wrong length");
 static int set_up(void)
 {
     /* need basic configuration for session_id() */
-    config_read_string(
-        "configdirectory: "DBDIR"/conf\n"
-    );
+    config_read_string(DBDIR"/conf", NULL);
 
     /* don't get confused by pollution from other tests */
     session_clear_id();
