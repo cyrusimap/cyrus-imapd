@@ -2432,8 +2432,15 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 
         uint8_t level = LEVEL(nextptr);
         for (i = 1; i < level; i++) {
-            /* check the old pointer was to here */
-            if (next[i] != next[0]) {
+            /* check the old pointer was to here.  On a read-only
+             * transaction a higher-level pointer into the future (at or
+             * past our snapshot end) is a "future link" left by a writer
+             * that extended the file after we started, or by a crashed
+             * write transaction: recovery on a write lock would re-stitch
+             * it, so tolerate it here and resync rather than reporting
+             * broken linkage. */
+            if (next[i] != next[0]
+                && !(txn->readonly && next[i] >= loc->end)) {
                 db->error("broken linkage for consistent",
                           "fname=<%s> offset=<%08llX> level=<%d>"
                           " expected=<%08llX>",
@@ -2454,6 +2461,11 @@ static int consistent1(struct twom_txn *txn, struct tm_loc *loc)
 
     for (i = 0; i < MAXLEVEL; i++) {
         if (next[i]) {
+            /* as above: a higher-level future link left dangling at the
+             * tail (a pointer at or past our snapshot end) is fine for a
+             * read-only transaction; recovery would zero it. */
+            if (i && txn->readonly && next[i] >= loc->end)
+                continue;
             db->error("broken tail for consistent",
                       "filename=<%s> offset=<%08llX> level=<%d>",
                       db->fname, (LLU)next[i], i);
@@ -3011,7 +3023,11 @@ static int twom_txn_consistent(struct twom_txn *txn)
 {
     struct tm_loc *loc = (struct tm_loc *)twom_zmalloc(sizeof(struct tm_loc));
     loc->file = txn->file;
-    loc->end = loc->file->written_size;
+    /* check the transaction's own committed snapshot.  For a read-write
+     * transaction txn->end == written_size, so this is unchanged; for a
+     * read-only transaction it is the committed size at begin, which is
+     * exactly the region recovery would validate on a write lock. */
+    loc->end = txn->end;
     int r = consistent1(txn, loc);
     free(loc);
     return r;
