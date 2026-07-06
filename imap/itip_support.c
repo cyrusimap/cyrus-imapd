@@ -1161,9 +1161,12 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     const char *uid = icalcomponent_get_uid(itip);
     caldav_lookup_uid(caldavdb, uid, &cdata);
 
-    /* Strip VALARMs, TRANSP (unless new invite), COLOR, and CATEGORIES (if color) */
+    /* Strip VALARMs, TRANSP (unless new invite),
+       COLOR, and CATEGORIES (if color),
+       and JMAP X- properties */
     for (; comp; comp = icalcomponent_get_next_component(itip, kind)) {
         itip_strip_personal_data(comp, !!cdata->dav.imap_uid);
+        icalcomponent_strip_jmap_xprops(comp);
     }
 
     if (cdata->dav.mailbox) {
