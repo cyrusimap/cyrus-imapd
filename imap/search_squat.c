@@ -924,7 +924,8 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
 
 static int end_mailbox(search_text_receiver_t *rx,
                        struct mailbox *mailbox
-                            __attribute__((unused)))
+                            __attribute__((unused)),
+                       bool has_more __attribute__((unused)))
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
     struct stat sb;

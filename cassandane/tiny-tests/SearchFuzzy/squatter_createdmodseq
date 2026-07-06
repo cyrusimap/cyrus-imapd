@@ -224,6 +224,72 @@ sub test_squatter_createdmodseq_partials
     $self->assert_num_not_equals(0, scalar @{$uids});
 }
 
+sub test_squatter_createdmodseq_attachments
+    :SearchAttachmentExtractor
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    my $extractor_url = URI->new($self->{instance}->{config}->get('search_attachment_extractor_url'));
+
+    xlog "Start extractor server";
+    my $handler = sub ($conn, $req) {
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } else {
+            my $res = HTTP::Response->new(200);
+            $res->content("hellofromextractor");
+            $conn->send_response($res);
+        }
+    };
+    $self->{instance}->start_httpd($handler, $extractor_url->port());
+
+    xlog $self, "Create message";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert createdmodseq in squatter";
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_not_equals(0, $index_generation);
+
+    xlog $self, "Create message with attachment, followed by plain message";
+    $self->create_message_in_mailbox("INBOX", {
+        subject => "attachmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n"
+        },
+    });
+    $createdmodseq = $self->create_message_in_mailbox("INBOX");
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog "Assert attachment is indexed";
+    my $uids = $talk->search('fuzzy', 'xattachmentbody', 'hellofromextractor');
+    $self->assert_num_not_equals(0, scalar @{$uids});
+
+    xlog $self, "Assert index generation did not change";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+}
+
 sub test_squatter_createdmodseq_reindex
     ($self)
 {
