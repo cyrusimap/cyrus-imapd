@@ -2454,6 +2454,14 @@ static int flush(search_text_receiver_t *rx)
              * createdmodseq suggested we had. We need to invalidate the
              * index generation. */
             tr->index_generation++;
+            xsyslog_ev(LOG_INFO, "bumping index generation",
+                    lf_s("mailbox", mailbox_name(tr->super.mailbox)),
+                    lf_llu("batch_lowest_createdmodseq",
+                        tr->batch_lowest_createdmodseq),
+                    lf_llu("batch_highest_createdmodseq",
+                        tr->batch_highest_createdmodseq),
+                    lf_llu("highest_createdmodseq", tr->highest_createdmodseq),
+                    lf_llu("index_generation", tr->index_generation));
         }
 
         /* Update the highest createdmodseq */

@@ -5194,6 +5194,13 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         if (!since_highest_createdmodseq || !highest_createdmodseq ||
                 since_index_generation != index_generation ||
                 highest_createdmodseq < since_highest_createdmodseq) {
+            xsyslog_ev(LOG_INFO, "cannot calculate changes: search index changed",
+                    lf_s("accountid", req->accountid),
+                    lf_llu("since_highest_createdmodseq",
+                        since_highest_createdmodseq),
+                    lf_llu("since_index_generation", since_index_generation),
+                    lf_llu("highest_createdmodseq", highest_createdmodseq),
+                    lf_llu("index_generation", index_generation));
             *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                           "description", "search index changed");
             goto done;
@@ -5447,6 +5454,13 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         if (!since_highest_createdmodseq || !highest_createdmodseq ||
                 since_index_generation != index_generation ||
                 highest_createdmodseq < since_highest_createdmodseq) {
+            xsyslog_ev(LOG_INFO, "cannot calculate changes: search index changed",
+                    lf_s("accountid", req->accountid),
+                    lf_llu("since_highest_createdmodseq",
+                        since_highest_createdmodseq),
+                    lf_llu("since_index_generation", since_index_generation),
+                    lf_llu("highest_createdmodseq", highest_createdmodseq),
+                    lf_llu("index_generation", index_generation));
             *err = json_pack("{s:s s:s}", "type", "cannotCalculateChanges",
                                           "description", "search index changed");
             goto done;
