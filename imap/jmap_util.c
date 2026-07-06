@@ -19,6 +19,7 @@
 #include "global.h"
 #include "hash.h"
 #include "index.h"
+#include "jmap_api.h"
 #include "jmap_ical.h"
 #include "jmap_util.h"
 #include "json_support.h"
@@ -1624,3 +1625,41 @@ EXPORTED int jmap_is_valid_id(const char *id)
     }
     return 1;
 }
+
+/* These live in the base library (not jmap_api.c, which is http-daemon only)
+ * so that mboxevent.c can build vnd.fastmail.jmapStates state strings the same
+ * way the JMAP API does, including the "J" prefix some states carry when
+ * the user has compact ids. */
+EXPORTED char *jmap_state_string_prefixed(int prefixed_state, modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    if (prefixed_state) {
+        // add mandatory prefix
+        buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
+    }
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+
+    return buf_release(&buf);
+}
+
+EXPORTED char *jmap_state_string_cstate(struct conversations_state *cstate,
+                                        modseq_t modseq, int mbtype)
+{
+    int prefixed_state = 0;
+
+    if (USER_COMPACT_EMAILIDS(cstate)) {
+        switch (mbtype) {
+        case MBTYPE_EMAIL:
+        case MBTYPE_CALENDAR:
+            prefixed_state = 1;
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    return jmap_state_string_prefixed(prefixed_state, modseq);
+}
+

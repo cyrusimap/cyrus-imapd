@@ -32,6 +32,7 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/jmap_err.h"
+
 #include "imap/jmap_data_types.h"
 
 
@@ -1303,40 +1304,13 @@ HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
     return modseq;
 }
 
-static char *_state_string(int prefixed_state, modseq_t modseq)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    if (prefixed_state) {
-        // add mandatory prefix
-        buf_putc(&buf, JMAP_STATE_STRING_PREFIX);
-    }
-    buf_printf(&buf, MODSEQ_FMT, modseq);
-
-    return buf_release(&buf);
-}
-
 EXPORTED char *jmap_state_string(jmap_req_t *req, modseq_t modseq,
                                  int mbtype, int flags)
 {
-    int prefixed_state = 0;
-
-    if (USER_COMPACT_EMAILIDS(req->cstate)) {
-        switch (mbtype) {
-        case MBTYPE_EMAIL:
-        case MBTYPE_CALENDAR:
-            prefixed_state = 1;
-            break;
-
-        default:
-            break;
-        }
-    }
-
     // if we were not given a modseq, look it up by mbtype
     if (!modseq) modseq = jmap_modseq(req, mbtype, flags);
 
-    return _state_string(prefixed_state, modseq);
+    return jmap_state_string_cstate(req->cstate, modseq, mbtype);
 }
 
 HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
@@ -2151,9 +2125,9 @@ HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();
     char *old_state =
-        _state_string(changes->prefixed_state, changes->since_modseq);
+        jmap_state_string_prefixed(changes->prefixed_state, changes->since_modseq);
     char *new_state =
-        _state_string(changes->prefixed_state, changes->new_modseq);
+        jmap_state_string_prefixed(changes->prefixed_state, changes->new_modseq);
 
     json_object_set_new(res, "oldState", json_string(old_state));
     json_object_set_new(res, "newState", json_string(new_state));
