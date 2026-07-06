@@ -341,7 +341,6 @@ EXTRA_DIST = \
     cunit/cacert.pem \
     cunit/cert.pem \
     cunit/cunit.pl \
-    cunit/cunit-to-junit.pl \
     cunit/key.pem \
     cunit/pcunit \
     cunit/vg.supp \
@@ -727,18 +726,12 @@ check-local:
 	@echo "Running unit tests"
 	@vg= ; \
 		test -z "$$VG" || vg="$(VALGRIND)" ; \
-		f="-v" ; \
-		test "x$$CUFORMAT" = xjunit && f="-x" ; \
 		tmpdir=$$(mktemp -d "$${TMPDIR:-/tmp}/cyrus-cunit-XXXXXX") || exit 1 ; \
 		trap "rm -rf $$tmpdir" EXIT ; \
 		cd $$tmpdir ; \
 		cp $(abs_srcdir)/cunit/*.pem ./ ; \
-		$$vg $(abs_builddir)/cunit/unit $$f ; \
+		$$vg $(abs_builddir)/cunit/unit -v ; \
 		retval=$$? ; \
-		if [ "x$$CUFORMAT" = xjunit ] ; then \
-			$(RM) -rf reports ; mkdir reports ; $(PERL) $(abs_srcdir)/cunit/cunit-to-junit.pl ; \
-			cp -r reports $(abs_builddir)/cunit/ ; \
-		fi ; \
 		exit $$retval
 
 # Run every test individually, as if you had run them one at a time as
