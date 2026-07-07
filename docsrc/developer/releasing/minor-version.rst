@@ -49,32 +49,7 @@ branch changes along the way.
 Pre-release testing
 ===================
 
-1. Ensure your git repository is clean, using something like ``git clean -dfx``.
-   Note that this command will destroy any uncommitted work you might have,
-   so make sure your ducks are in line before proceeding.
-2. Generate a configure script: ``autoreconf -i -s``
-3. Generate everything else: ``./configure --enable-maintainer-mode`` (you do not
-   need any other options at this stage).
-4. Run ``make distcheck``.  This will generate a distribution tarball, and
-   test it in various ways.  It takes about 10-15 mins to run, depending on
-   your hardware.  If this command fails*, you are not ready to release --
-   fix the problems, get them tested and committed, then restart the
-   pre-release testing.
-5. ``make distcheck`` can only test so much (it doesn't know about cunit or
-   cassandane), so you also need to check the tarball against those.
-
-   i.    The tarball will be called something like ``cyrus-imapd-3.12.2-rc2-23-g0241b22.tar.gz``
-         (this corresponds to the ``git describe`` output).
-   ii.   Extract it: ``tar xfz cyrus-imapd-*.tar.gz`` (substitute version for ``*``).
-   iii.  Change into the directory: ``cd cyrus-imapd-*``
-   iv.   Configure it: ``./configure [...]`` (provide the same arguments you would
-         when building for Cassandane at any other time).
-   v.    Compile it: ``make -j4`` -- it should build correctly.
-   vi.   Run the unit tests: ``make -j4 check`` -- they should pass.
-   vii.  Install it to your Cassandane prefix: ``make install``
-   viii. Then run Cassandane normally -- it should pass.
-   ix.   If any of this fails, fix it, commit it, land it upstream, then
-         restart the pre-release testing.
+.. include:: /assets/release-distcheck.rst
 
 Linking up release notes
 ========================
