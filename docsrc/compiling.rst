@@ -49,7 +49,7 @@ required to build a functional cyrus-imapd.
     `jansson`_, libjansson-dev
     `libbsd`_, libbsd-dev
     `libtool`_, libtool
-    `openssl`_ :ref:`(Note about versions) <openssl-versions>`, libssl-dev
+    `openssl`_, libssl-dev
     `perl`_, perl
     `perl App-Cmd`_, libapp-cmd-perl
     `perl Moo`_, libmoo-perl
@@ -277,9 +277,6 @@ Compile
     make
 
 The ``--prefix`` option sets where Cyrus is installed to.
-
-Having problems with :ref:`compilation <compilationerrors>` or
-:ref:`linking <linker-warnings>`?
 
 If you're running on Debian, and you install to ``/usr/local``, you may need to
 update your library loader. Edit ``/etc/ld.so.conf.d/x86_64-linux-gnu.conf`` so
