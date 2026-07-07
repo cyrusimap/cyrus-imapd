@@ -48,10 +48,11 @@ struct comp_flags {
     unsigned tzbyref      : 1;          /* VTIMEZONEs by reference */
     unsigned mattach      : 1;          /* Has managed ATTACHment(s) */
     unsigned shared       : 1;          /* Is shared (per-user-data stripped) */
-    unsigned defaultalerts : 1;         /* Has default alerts property set */
-    unsigned mayinviteself : 1;         /* Users may invite themselves */
+    unsigned defaultalerts   : 1;       /* Has default alerts property set */
+    unsigned mayinviteself   : 1;       /* Users may invite themselves */
     unsigned mayinviteothers : 1;       /* Attending users may invite others */
-    unsigned privacy      : 2;          /* Privacy of calendar object (see below) */
+    unsigned privacy         : 2;       /* Privacy of calendar object (see below) */
+    unsigned hideattendees   : 1;       /* Hide other attendees */
 };
 
 /* Status values */

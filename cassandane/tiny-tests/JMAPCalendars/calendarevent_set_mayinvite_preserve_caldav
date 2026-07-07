@@ -41,12 +41,13 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
                     },
                     mayInviteSelf => JSON::true,
                     mayInviteOthers => JSON::true,
+                    hideAttendees => JSON::true,
                 },
             },
         }, 'R1'],
         ['CalendarEvent/get', {
             ids => ['#event'],
-            properties => ['mayInviteSelf', 'mayInviteOthers'],
+            properties => ['mayInviteSelf', 'mayInviteOthers', 'hideAttendees'],
         }, 'R2'],
     ]);
     my $eventId = $res->[0][1]{created}{event}{id};
@@ -54,6 +55,7 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
     my $href = $res->[0][1]{created}{event}{'x-href'};
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteSelf});
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mayInviteOthers});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{hideAttendees});
 
     xlog "remove mayInviteSelf via CalDAV";
     my $ical = $caldav->Request('GET', $href)->{content};
@@ -67,15 +69,20 @@ sub test_calendarevent_set_mayinvite_preserve_caldav
         grep { !($_ =~ m/X-JMAP-MAY-INVITE-OTHERS;VALUE=BOOLEAN:TRUE/) }
         split(/\r\n/, $ical)
     );
+    $ical = join("\r\n",
+        grep { !($_ =~ m/X-JMAP-HIDE-ATTENDEES;VALUE=BOOLEAN:TRUE/) }
+        split(/\r\n/, $ical)
+    );
     $res = $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
     xlog "assert mayInviteSelf and mayInviteOthers are preserved";
     $res = $jmap->CallMethods([
         ['CalendarEvent/get', {
             ids => [$eventId],
-            properties => ['mayInviteSelf', 'mayInviteOthers'],
+            properties => ['mayInviteSelf', 'mayInviteOthers', 'hideAttendees'],
         }, 'R2'],
     ]);
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteSelf});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mayInviteOthers});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{hideAttendees});
 }
