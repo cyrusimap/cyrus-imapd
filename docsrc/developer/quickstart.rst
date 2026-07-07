@@ -58,7 +58,7 @@ some command with args`` to run arbitrary commands inside the container.
 When you're done with the container, ``dar prune`` will destroy it.
 
 ``dar test`` is for running Cassandane tests.  Roughly speaking, each test is a
-file in ``./cassandane/tiny-test/{SuiteName}`` and contains one Perl
+file in ``./cassandane/tiny-tests/{SuiteName}`` and contains one Perl
 subroutine.  Each suite has common code in a perl module file in
 ``./cassandane/Cassandane/Cyrus``.
 
@@ -69,10 +69,57 @@ SuiteName.exact_test_name``.
 Writing tests
 =============
 
-The short version is:  tests are very easy to write, especially if you start by
-copying a similar test and editing from there.  Most tests are `Cassandane
-tests <developer-cassandane>`_, written in Perl, and designed to test a
-complete (temporary) Cyrus install.  Some tests are tighter, focused, `cunit
-tests <developer-cunit>`_ written in C.
+The short version is:  tests are easy to write, especially if you start by
+copying a similar test and editing from there.  Most tests are :ref:`Cassandane
+tests <developer-cassandane>`, written in Perl, and designed to test a complete
+(temporary) Cyrus install.  Some tests are tighter, focused :ref:`cunit tests
+<developer-cunit>` written in C.
 
-.. TODO - flesh this out with the basics, linking to deeper docs
+A Cassandane test lives in one file under
+``./cassandane/tiny-tests/{SuiteName}/``, holds a single ``test_`` subroutine,
+and starts with ``use Cassandane::Tiny;``:
+
+.. code-block:: perl
+
+    #!perl
+    use Cassandane::Tiny;
+
+    sub test_my_new_feature
+        ($self)
+    {
+        my $user = $self->default_user;
+        my $jmap = $user->jmap;
+
+        # ...create test data, make requests, and assert on the results...
+    }
+
+Drop the file in the suite's directory and it's picked up automatically by the
+suite's module in ``./cassandane/Cassandane/Cyrus/``.  Run just your new test
+with ``dar test SuiteName.my_new_feature``.
+
+Conventions
+-----------
+
+Write new tests with the grain of the existing ones:
+
+* **Use the test-data factories, not raw admin plumbing.**  Get objects from
+  ``$user->addressbooks``, ``->calendars``, ``->contacts``, ``->emails``, and
+  ``->mailboxes`` (each has ``->create`` and ``->get``), and create nested data
+  with methods like ``->create_card``.  Reach for ``admintalk`` and ``setacl``
+  only when the low-level path is itself what you're testing.
+* **Share with** ``->share_with``\ **, not ACLs by hand:**
+  ``$abook->share_with($user => [ 'mayRead', 'mayWrite' ])``.  It sets the exact
+  rights for that sharee in one call -- a second call *replaces* rather than
+  adds to them, so grant everything a user needs at once.
+* **Use the default user when one will do.**  ``$self->default_user`` is already
+  set up; only ``$self->{instance}->create_user('name')`` a second user when the
+  test actually needs one (for example, to test sharing).
+* **Gate version-specific tests.**  You can mark tests with an attribute like
+  ``:min_version_x_y_z`` (``y`` and ``z`` optional) so it's skipped when
+  Cassandane runs against an older server.  Because by default the tests run
+  against the Cyrus in the branch with the test in it, you really only need
+  these attributes on tests that run against an external Cyrus, like a
+  replication test.
+
+For a full example, the helper classes, and the JMAP client, see :ref:`the
+Cassandane reference <developer-cassandane>`.
