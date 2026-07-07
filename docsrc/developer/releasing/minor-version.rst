@@ -19,8 +19,6 @@ detailed at :ref:`releasing-major-version`.
 Prerequisites
 =============
 
-.. startblob releaseprereqs
-
 You will need a GPG key that you can use for signing.  Ellie doesn't remember
 off the top of her head how to create one of these, so for now just read the
 manual like she did. :)
@@ -29,8 +27,6 @@ Once you have a GPG key, it's helpful to upload your public key to
 `the MIT key-server <http://pgp.mit.edu>`_
 
 And you need permission to send to the cyrus-announce mailing list.
-
-.. endblob releaseprereqs
 
 Release notes
 =============
