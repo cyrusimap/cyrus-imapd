@@ -5,7 +5,7 @@ package Cassandane::Cyrus::JMAPSieve;
 use strict;
 use warnings;
 use DateTime;
-use JSON;
+use JSON::XS;
 use JSON::XS;
 use Data::Dumper;
 use Storable 'dclone';

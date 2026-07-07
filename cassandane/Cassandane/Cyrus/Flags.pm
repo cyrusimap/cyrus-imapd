@@ -10,7 +10,7 @@ use Data::Dumper;
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
-use JSON;
+use JSON::XS;
 
 sub new
 {

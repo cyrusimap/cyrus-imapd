@@ -5,7 +5,7 @@ package Cassandane::Cyrus::Mboxgroups;
 use strict;
 use warnings;
 use Cwd qw(realpath);
-use JSON;
+use JSON::XS;
 use Data::Dumper;
 
 use base qw(Cassandane::Cyrus::TestCase);

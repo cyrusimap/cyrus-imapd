@@ -5,7 +5,7 @@ package Cassandane::Cyrus::MboxEvent;
 use strict;
 use warnings;
 use Data::Dumper;
-use JSON;
+use JSON::XS;
 
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;

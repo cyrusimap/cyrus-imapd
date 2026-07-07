@@ -4,7 +4,7 @@
 package Cassandane::Cyrus::JMAPQuota;
 use strict;
 use warnings;
-use JSON;
+use JSON::XS;
 use JSON::XS;
 use Data::Dumper;
 

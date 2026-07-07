@@ -4,7 +4,7 @@ use strict;
 
 package AnnotateInlinedCIDs;
 use Cyrus::Annotator::Daemon;
-use JSON;
+use JSON::XS;
 use URI::Escape;
 our @ISA = qw(Cyrus::Annotator::Daemon);
 

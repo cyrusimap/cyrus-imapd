@@ -13,7 +13,7 @@ our $VERSION = '0.01';
 use Text::VCardFast qw(vcard2hash hash2vcard);
 use Encode qw(decode_utf8 encode_utf8);
 use MIME::Base64 qw(decode_base64 encode_base64);
-use JSON;
+use JSON::XS;
 use Scalar::Util qw(looks_like_number);
 
 use Exporter 'import';

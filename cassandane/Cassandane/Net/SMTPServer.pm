@@ -10,7 +10,7 @@ use Net::Server::PreFork;
 use Net::XmtpServer;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
-use JSON;
+use JSON::XS;
 
 use base qw(Net::XmtpServer Net::Server::PreFork);
 

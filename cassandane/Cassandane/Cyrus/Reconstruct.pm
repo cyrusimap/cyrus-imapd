@@ -7,7 +7,7 @@ use warnings;
 use Data::Dumper;
 use File::Copy;
 use IO::File;
-use JSON;
+use JSON::XS;
 use Cwd qw(abs_path);
 
 use base qw(Cassandane::Cyrus::TestCase);

@@ -4,7 +4,7 @@
 package Cassandane::BuildInfo;
 use strict;
 use warnings;
-use JSON;
+use JSON::XS;
 
 use Cassandane::Cassini;
 use Cassandane::Util::Log;

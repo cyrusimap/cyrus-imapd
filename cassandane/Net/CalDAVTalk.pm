@@ -16,7 +16,7 @@ use Text::VCardFast qw(vcard2hash);
 use XML::Spice;
 use Digest::SHA qw(sha1_hex);
 use URI::Escape qw(uri_unescape);
-use JSON;
+use JSON::XS;
 
 our $BATCHSIZE = 100;
 

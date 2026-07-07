@@ -12,7 +12,7 @@ use Carp;
 use Text::JSContact qw(vcard_to_jscontact jscontact_to_vcard);
 use XML::Spice;
 use URI::Escape qw(uri_unescape);
-use JSON;
+use JSON::XS;
 
 
 =head1 NAME

@@ -4,7 +4,7 @@ package Cassandane::Test::NewTestUrl;
 use strict;
 use warnings;
 
-use JSON;
+use JSON::XS;
 use LWP::UserAgent;
 
 use base qw(Cassandane::Unit::TestCase);

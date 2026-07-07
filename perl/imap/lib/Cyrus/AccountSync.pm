@@ -7,7 +7,7 @@ use strict;
 use warnings;
 
 use Digest::SHA qw(sha1_hex);
-use JSON;
+use JSON::XS;
 use Cyrus::Mbname;
 use Data::Dumper;
 use Data::UUID;

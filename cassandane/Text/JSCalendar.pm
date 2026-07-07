@@ -20,7 +20,7 @@ use MIME::Types;
 use Digest::SHA qw(sha1_hex);
 use URI::Escape qw(uri_unescape);
 use Data::Dumper;
-use JSON;
+use JSON::XS;
 
 use Text::JSCalendar::TimeZones;
 
