@@ -1,15 +1,15 @@
-.. _imap-developer-major-releasing:
+.. _releasing-major-version:
 
-=====================================
-Releasing Cyrus IMAP - major releases
-=====================================
+======================================
+Releasing a new major version of Cyrus
+======================================
 
 .. contents::
 
 These instructions describe the process of turning what was the master
 branch into a new release series, and making the first release from it.
 
-For normal point releases, see :ref:`imap-developer-releasing`
+For normal point releases, see :ref:`releasing-minor-version`
 
 Prerequisites
 =============
@@ -40,43 +40,7 @@ Make sure master is good
 
 With the master branch checked out and up to date:
 
-1. Ensure your git repository is clean, using something like
-   ``git clean -xfd``.  Note that this command will destroy any uncommitted
-   work you might have, so make sure your ducks are in line before proceeding.
-2. Generate a configure script: ``autoreconf -i -s``
-3. Generate everything else: ``./configure --enable-maintainer-mode`` (you do
-   not need any other options at this stage).
-4. Run ``make distcheck``.  This will generate a distribution tarball, and
-   test it in various ways.  It takes about 10-15 mins to run, depending on
-   your hardware.  If you usually build Cyrus with a script that sets PATH etc,
-   you will need to provide the same environment at this step.  For example,
-   ellie uses an alias like this for this step:
-
-   ``alias distcheck="PATH=/usr/local/cyruslibs/bin:$PATH make distcheck"``.
-
-   If ``make distcheck`` fails, you are not ready to proceed -- fix the
-   problems, get them tested and committed, then restart this testing.
-5. ``make distcheck`` can only test so much (it doesn't know about cunit or
-   cassandane), so you also need to check the tarball against those.
-
-   i.    The tarball will be called something like
-         ``cyrus-imapd-3.0.0-rc2-23-g0241b22.tar.gz``
-         (this corresponds to the ``git describe`` output).
-   ii.   Extract it: ``tar xfz cyrus-imapd-*.tar.gz``
-         (substitute version for ``*``).
-   iii.  Change into the directory: ``cd cyrus-imapd-*``
-   iv.   Configure it: ``./configure [...]`` (provide the same arguments and
-         environment that you would when building for Cassandane at any other
-         time).
-   v.    Compile it: ``make -j4`` -- it should build correctly.
-   vi.   Run the unit tests: ``make -j4 check`` -- they should pass.
-   vii.  Install it to your Cassandane prefix: ``make install``
-   viii. Change into the `cassandane` directory within the extracted source
-         (not the git source!): ``cd cassandane``
-   ix.   Build Cassandane's binary components: ``make -j4``
-   x.    Run Cassandane: ``./testrunner.pl``
-   xi.   If any of this fails, get it fixed and merged, then redo this testing
-
+.. include:: /assets/release-distcheck.rst
 
 Forking the new series branch
 =============================
@@ -317,7 +281,7 @@ This work mostly happens on the new branch.
    files (except for the template) should be removed -- they are no longer
    changes.  The history is a bit easier to read later if you commit the
    doc updates and the removal of the changes files in the same commit.
-8. Follow the :ref:`imap-developer-releasing` instructions to get
+8. Follow the :ref:`releasing-developer-snapshot` instructions to get
    `cyrus-imapd-<series>.0-beta1` released.
 
 Subsequent betas
@@ -348,7 +312,7 @@ Oh boy, we've come a long way, haven't we!
 
 For this one, we've got a little more housekeeping to do.
 
-1. Follow the :ref:`imap-developer-releasing` normal release process as
+1. Follow the :ref:`releasing-minor-version` normal release process as
    previous, again copy-and-updating the release notes from the last release
    candidate, except this time you're actually doing `<series>.0`, with no
    alpha, beta, or rc qualifiers.  Don't send the announcement email just

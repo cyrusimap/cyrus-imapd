@@ -1897,12 +1897,8 @@ endif
 # Each new version of flex seems to generate new sign-comparison
 # warnings, while they switch code around between int/yy_size_t.
 #
-# This is a pain because most of us Cyrus devs build with -Werror.
-#
-# Instead of continuing to maintain an ever-growing, increasingly
-# precarious set of post-hoc fixes (see: the former lex-fix rule),
-# let's just ignore sign-comparison warnings from flex-generated
-# sources only.
+# This is a pain because most of us Cyrus devs build with -Werror,
+# so we ignore sign-comparison warnings from flex-generated sources.
 sieve_libcyrus_sieve_lex_la_SOURCES = \
     sieve/addr-lex.l \
     sieve/sieve-lex.l \
@@ -1988,10 +1984,6 @@ timsieved_timsieved_SOURCES = \
     timsieved/timsieved.c
 
 timsieved_timsieved_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
-
-# The lex-fix rule is now obsolete, but let's leave a crumb here for a
-# while so that custom build scripts that expect it to exist don't choke.
-lex-fix:
 
 snapshot::
 	@echo "Creating snapshot $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
