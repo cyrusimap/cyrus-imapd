@@ -1,0 +1,171 @@
+#!@PERL@
+# SPDX-License-Identifier: BSD-3-Clause-CMU
+# See COPYING file at the root of the distribution for more details.
+use v5.28.0;
+use warnings;
+
+use experimental 'signatures';
+
+use File::Temp qw(tempdir);
+use Getopt::Long::Descriptive;
+
+# filled in by configure
+my $top_srcdir = "@abs_top_srcdir@";
+my $top_builddir = "@abs_top_builddir@";
+
+my ($opt, $usage) = describe_options(
+    '%c %o <tests>',
+    [ 'tmpdir|t=s',  'working directories will be created under this path' ],
+    [],
+    [ 'discrete|d',  'run each test in its own process' ],
+    [ 'valgrind|g',  'run tests under valgrind' ],
+    [ 'verbose|v',   'run tests verbosely' ],
+    [ 'help',        'show usage message and exit' ],
+);
+
+if ($opt->help) {
+    print $usage->text;
+    exit;
+}
+
+my $maybe_vg = '';
+if ($opt->valgrind or $ENV{VG}) {
+    $maybe_vg = join q{ }, "$top_srcdir/libtool --mode=execute valgrind",
+                           '--tool=memcheck',
+                           '--leak-check=full',
+                           "--suppressions=$top_srcdir/cunit/vg.supp",
+                           '--error-exitcode=75';
+}
+
+my $tmpdir = $opt->tmpdir
+             || $ENV{CYRUS_CUNIT_TMPDIR}
+             || $ENV{TMPDIR}
+             || '/tmp';
+
+if ($opt->discrete) {
+    exit run_discrete(@ARGV);
+}
+else {
+    exit run(@ARGV);
+}
+
+sub run (@tests)
+{
+    # run named tests (or all tests) in a single process
+    my $cmd = join q{ }, $maybe_vg,
+                         "$top_builddir/cunit/unit",
+                         $opt->verbose ? '-v' : (),
+                         @tests;
+
+    setup_workdir();
+    my $r = system($cmd) >> 8;
+    leave_workdir();
+
+    return $r;
+}
+
+sub run_discrete (@tests)
+{
+    # run named tests (or all tests) each in their own process
+    @tests = get_discrete_tests(@tests);
+
+    if ($maybe_vg) {
+        # run valgrind with error output (only) on fd 3, so we can handle it
+        # separately from the cunit/unit output
+        $maybe_vg = join q{ }, $maybe_vg, '--quiet', '--log-fd=3';
+    }
+
+    my $interrupted = 0;
+    local $SIG{INT} = sub { $interrupted = 1 };
+
+    my $ran = 0;
+    my $failed = 0;
+    foreach my $test (@tests) {
+        last if $interrupted;
+
+        # shell redirection order is significant:
+        # - silence cunit/unit's stdout and stderr
+        # - redirect valgrind's error output to stderr
+        my $cmd = join q{ }, $maybe_vg,
+                             "$top_builddir/cunit/unit",
+                             $test,
+                             '>/dev/null',
+                             '3>&2',
+                             '2>/dev/null';
+
+        setup_workdir();
+        my $r = system $cmd;
+        # SIGINT is ignored by perl while system executes, so to reliably catch
+        # interrupts, we must also check if the command was interrupted
+        if (($r & 127) == 2) {
+            $interrupted = 1;
+        }
+        $r >>= 8;
+        leave_workdir();
+        $ran ++;
+
+        if ($r) {
+            $failed ++;
+            print "[FAILED] $test\n";
+        }
+        elsif ($interrupted) {
+            $ran --;
+            print "[ INTR ] $test\n";
+        }
+        else {
+            print "[  OK  ] $test\n";
+        }
+    }
+
+    print "$failed/$ran tests failed\n";
+
+    return $failed;
+}
+
+sub get_discrete_tests (@tests)
+{
+    my @all_tests = map { chomp; $_ } qx{$top_builddir/cunit/unit -l};
+
+    if (!@tests) {
+        # default is to run all tests
+        return @all_tests;
+    }
+    else {
+        my @discrete_tests;
+
+        foreach my $test (@tests) {
+            if ($test =~ m/:/) {
+                # test contains a test name, use as is
+                push @discrete_tests, $test;
+            }
+            else {
+                # test contains only a suite name, expand it
+                push @discrete_tests, grep { m/^$test:/ } @all_tests;
+            }
+        }
+
+        return @discrete_tests;
+    }
+}
+
+sub setup_workdir ()
+{
+    my $workdir = tempdir("cyrus-cunit-XXXXXX", DIR => $tmpdir, CLEANUP => 1);
+
+    mkdir "$workdir/data";
+    system("cp $top_builddir/cunit/data/* $workdir/data/");
+    chdir $workdir;
+
+    # many tests create their own temporary files or directories.  arrange
+    # for them to be created under this workdir by plumbing it through as
+    # CYRUS_CUNIT_TMPDIR
+    $ENV{CYRUS_CUNIT_TMPDIR} = $workdir;
+}
+
+sub leave_workdir ()
+{
+    # make sure we're not still in workdir when CLEANUP goes to remove it
+    chdir '/';
+}
+
+# vim: set ft=perl :

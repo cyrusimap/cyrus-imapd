@@ -1845,6 +1845,7 @@ AX_PROG_PERL_MODULES([App::Cmd], [], [AC_MSG_ERROR([Need perl module App::Cmd])]
 # These scripts need their perl shebang set.  They don't use any Cyrus modules,
 # so they don't need a full fixsearchpath.pl run; it's enough to just let
 # configure substitute the shebangs and set the mode.
+AC_CONFIG_FILES([cunit/run],    [chmod +x cunit/run])
 AC_CONFIG_FILES([tools/mkimap], [chmod +x tools/mkimap])
 AC_CONFIG_FILES([tools/rehash], [chmod +x tools/rehash])
 
