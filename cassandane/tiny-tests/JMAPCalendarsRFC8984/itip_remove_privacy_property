@@ -36,7 +36,7 @@ CREATED:20210923T034327Z
 UID:7e017102-0caf-490a-bbdf-422141d34e75
 TRANSP:OPAQUE
 SUMMARY:test
-X-JMAP-PRIVACY:PRIVATE
+CLASS:PRIVATE
 DTSTART;TZID=American/New_York:20210923T153000
 DURATION:PT1H
 DTSTAMP:20210923T034327Z
@@ -57,13 +57,13 @@ EOF
         }, 'R1'],
     ]);
     my $eventId = $res->[0][1]{list}[0]{id};
-    $self->assert_null($res->[0][1]{list}[0]->{privacy});
+    $self->assert_str_equals('public', $res->[0][1]{list}[0]->{privacy});
     my $xhref = $res->[0][1]{list}[0]{'x-href'};
     $self->assert_not_null($xhref);
 
     xlog $self, "Assert privacy property is not present in iCalendar";
     my $caldavResponse = $caldav->Request('GET', $xhref);
-    $self->assert($caldavResponse->{content} !~ /X-JMAP-PRIVACY:PRIVATE/);
+    $self->assert($caldavResponse->{content} !~ /CLASS:PRIVATE/);
 
     xlog $self, "Clear notifications";
     $self->{instance}->getnotify();
@@ -88,7 +88,7 @@ EOF
 
     xlog $self, "Assert privacy property is not present in iTIP REPLY";
     my $msg = decode_json($imip->{MESSAGE});
-    $self->assert($msg->{ical} !~ /X-JMAP-PRIVACY:PRIVATE/);
+    $self->assert($msg->{ical} !~ /CLASS:PRIVATE/);
 
     xlog $self, "Organizer updates invite with recurrence override";
 
@@ -108,7 +108,7 @@ CREATED:20210923T034327Z
 UID:7e017102-0caf-490a-bbdf-422141d34e75
 TRANSP:OPAQUE
 SUMMARY:test
-X-JMAP-PRIVACY:PRIVATE
+CLASS:PRIVATE
 DTSTART;TZID=American/New_York:20210923T153000
 DURATION:PT1H
 DTSTAMP:20210923T034327Z
@@ -122,7 +122,7 @@ CREATED:20210923T034327Z
 UID:7e017102-0caf-490a-bbdf-422141d34e75
 TRANSP:OPAQUE
 SUMMARY:test
-X-JMAP-PRIVACY:PRIVATE
+CLASS:PRIVATE
 RECURRENCE-ID;TZID=American/New_York:20210924T153000
 DTSTART;TZID=American/New_York:20210924T163000
 DURATION:PT1H

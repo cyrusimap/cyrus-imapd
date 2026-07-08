@@ -1390,23 +1390,6 @@ EXPORTED int caldav_writeical(struct caldav_db *caldavdb, struct caldav_data *cd
                 cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
         }
     }
-    else {
-        // Between 2022 and 2026, Cyrus used X-JMAP-PRIVACY for the
-        // JSCalendar "privacy" property.
-        // See 7ed6bbcd64b550eee9903b91c213442243edfebb
-        prop = icalcomponent_get_x_property_by_name(comp, JMAPICAL_XPROP_PRIVACY);
-        if (prop) {
-            const char *val = icalproperty_get_value_as_string(prop);
-            if (val) {
-                if (!strcasecmp(val, "secret"))
-                    cdata->comp_flags.privacy = CAL_PRIVACY_SECRET;
-                else if (!strcasecmp(val, "public"))
-                    cdata->comp_flags.privacy = CAL_PRIVACY_PUBLIC;
-                else
-                    cdata->comp_flags.privacy = CAL_PRIVACY_PRIVATE;
-            }
-        }
-    }
 
     /* Get span of component set and check for managed attachments */
     span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, &recurring,
