@@ -9,13 +9,61 @@ sub test_calendarevent_get_virtuallocations_conference
 
     my $event = $self->putandget_vevent($id, $ical);
     my $virtualLocations = $event->{virtualLocations};
-    $self->assert_num_equals(2, scalar (values %{$virtualLocations}));
+    $self->assert_num_equals(5, scalar (values %{$virtualLocations}));
 
     my $loc1 = $virtualLocations->{loc1};
-    $self->assert_str_equals('Moderator dial-in', $loc1->{name});
-    $self->assert_str_equals('tel:+123451', $loc1->{uri});
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => 'Moderator dial-in',
+            uri => 'tel:+123451',
+            features => {
+                phone => JSON::true,
+                moderator => JSON::true,
+            }
+        }),
+        $loc1
+    );
 
     my $loc2 = $virtualLocations->{loc2};
-    $self->assert_str_equals('Chat room', $loc2->{name});
-    $self->assert_str_equals('xmpp:chat123@conference.example.com', $loc2->{uri});
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => 'Chat room',
+            uri => 'xmpp:chat123@conference.example.com',
+            features => {
+                chat => JSON::true,
+            }
+        }),
+        $loc2
+    );
+
+    my $loc3 = $virtualLocations->{loc3};
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => 'Bad Feature 1',
+            uri => 'https://example.com',
+        }),
+        $loc3
+    );
+
+    my $loc4 = $virtualLocations->{loc4};
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => 'Bad Feature 2',
+            uri => 'https://example.com',
+        }),
+        $loc4
+    );
+
+    my $loc5 = $virtualLocations->{loc5};
+    $self->assert_cmp_deeply(
+        superhashof({
+            name => 'Bad Feature 3',
+            uri => 'https://example.com',
+            features => {
+                audio => JSON::true,
+                video => JSON::true,
+            }
+        }),
+        $loc5
+    );
 }

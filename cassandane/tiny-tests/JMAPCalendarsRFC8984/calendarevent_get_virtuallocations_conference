@@ -9,7 +9,7 @@ sub test_calendarevent_get_virtuallocations_conference
 
     my $event = $self->putandget_vevent($id, $ical);
     my $virtualLocations = $event->{virtualLocations};
-    $self->assert_num_equals(2, scalar (values %{$virtualLocations}));
+    $self->assert_num_equals(5, scalar (values %{$virtualLocations}));
 
     my $loc1 = $virtualLocations->{loc1};
     $self->assert_str_equals('Moderator dial-in', $loc1->{name});

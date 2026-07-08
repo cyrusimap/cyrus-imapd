@@ -6297,9 +6297,10 @@ static void virtuallocations_from_ical(jscal_ctx_t *ctx
                      i++) {
                     icalparameter_feature feature =
                         icalparameter_get_feature_nth(param, i);
-                    if (feature != ICAL_FEATURE_X) {
-                        buf_setcstr(&buf,
-                                    icalparameter_enum_to_string(feature));
+                    const char *feature_str =
+                        icalparameter_enum_to_string(feature);
+                    if (feature_str) {
+                        buf_setcstr(&buf, feature_str);
                         json_object_set_new(
                             jfeatures, buf_lcase(&buf), json_true());
                     }
