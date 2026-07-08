@@ -95,4 +95,26 @@ sub test_mailbox_set_sharewith
         $res->[0][1]{notUpdated}{$inboxId}{type});
     $self->assert_cmp_deeply(['shareWith/sharee/unknownRight'],
         $res->[0][1]{notUpdated}{$inboxId}{properties});
+
+    xlog $self, "Try to give access to a bogus userid";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', {
+                    update => { $inboxId => {
+                        shareWith => {
+                            "../v/victim" => {
+                                mayRead => JSON::true
+                            }
+                        },
+             }}}, "R1"]
+    ], $using);
+    $self->assert_cmp_deeply(
+        {
+            $inboxId => {
+                type => 'invalidProperties',
+                properties => [
+                    "shareWith/..~1v~1victim"
+                ]
+            }
+        },
+        $res->[0][1]{notUpdated});
 }
