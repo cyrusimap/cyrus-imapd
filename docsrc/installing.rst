@@ -237,6 +237,24 @@ locations, etc.) and initialization::
     }
 
 
+Configuring Xapian
+==================
+
+Xapian requires a running :cyrusman:`squatter(8)` instance:
+
+* In :cyrusman:`cyrus.conf(5)` set up a daemon squatter to run: ::
+
+    DAEMON {
+      # run a rolling squatter
+      squatter cmd="squatter -R"
+    }
+
+* Enable sync logging: Set ``sync_log: on`` in :cyrusman:`imapd.conf(5)`.
+* Add a squatter sync log channel: ``sync_log_channels: squatter`` in :cyrusman:`imapd.conf(5)`.
+
+You also need (at least one) search tier. Add this to :cyrusman:`imapd.conf(5)`.
+
+
 Launch Cyrus
 ============
 
